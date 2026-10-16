@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import type { MergeRequestProvenance } from '@knowledge/contracts';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import type { StorageService } from '../storage/storage.service.js';
 import type { DocumentsService } from './documents.service.js';
@@ -29,6 +30,15 @@ export interface DraftMergeRequestInput {
    * an issue's `merge_request_id`. A failure here rolls the whole draft back.
    */
   onCreated?: (mergeRequestId: string) => Promise<void>;
+  /** Who opened it when a person did not (issue #73): `agent` for a finding, `captured` for a capture or a chat save. */
+  provenance?: MergeRequestProvenance;
+  /** The `knowledge_captures` row, for a capture's merge request. */
+  captureId?: string;
+  /**
+   * The page was created head-less for this draft and is nothing until it
+   * merges (#73, Option A): mark it so every list leaves it out until then.
+   */
+  newPage?: boolean;
 }
 
 /**
@@ -66,8 +76,12 @@ export async function openDraftMergeRequest(deps: DraftMergeRequestDeps, input: 
         input.documentId,
         { sourceBranch: input.branch, title: input.title, description: input.description.slice(0, 4_000) },
         input.userId,
+        { provenance: input.provenance, captureId: input.captureId },
       );
       const mergeRequestId = mr.mergeRequest.mergeRequestId;
+      if (input.newPage) {
+        await deps.prisma.document.update({ where: { id: input.documentId }, data: { pendingMergeRequestId: mergeRequestId } });
+      }
       if (input.onCreated) await input.onCreated(mergeRequestId);
       return mergeRequestId;
     },

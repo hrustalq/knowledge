@@ -1,5 +1,6 @@
 import type { ApiErrorPayload, RevisionInfo } from '@knowledge/contracts/core';
 import type { CompareResponse } from '@knowledge/contracts/documents';
+import type { MergeRequestProvenance } from '@knowledge/contracts/captures';
 
 // ---------------------------------------------------------------------------
 
@@ -67,6 +68,10 @@ export interface MergeRequestInfo {
   createdAt: string;
   mergedAt: string | null;
   closedAt: string | null;
+  /** Who opened it: a person, an agent's finding, or an agent-session capture (issue #73). */
+  provenance: MergeRequestProvenance;
+  /** The `knowledge_captures` row it came from, when `provenance` is `captured` and a capture opened it. */
+  captureId: string | null;
 }
 
 export interface CreateMergeRequestResponse {
@@ -116,6 +121,8 @@ export interface ListWorkspaceMergeRequestsRequest {
   targetBranch?: string;
   /** Case-insensitive title substring match. */
   search?: string;
+  /** Only merge requests opened this way, e.g. `captured` for agent-session captures. */
+  provenance?: MergeRequestProvenance;
   cursor?: string;
   limit?: number;
 }

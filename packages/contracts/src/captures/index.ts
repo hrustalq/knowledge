@@ -71,3 +71,112 @@ export function captureStateFor(status: CaptureStatus, mergeRequestStatus: strin
   if (mergeRequestStatus === 'closed') return 'closed';
   return 'proposed';
 }
+
+// ---------------------------------------------------------------- the capture calls (phase 2)
+
+/** The page-text kinds a `knowledge_capture_note` takes; `decision` and `answer` have their own tools. */
+export const CAPTURE_NOTE_KINDS = ['gotcha', 'convention', 'howto'] as const;
+export type CaptureNoteKind = (typeof CAPTURE_NOTE_KINDS)[number];
+
+/** The kinds that become page text, and so are deduplicated against pages. */
+export const CAPTURE_PAGE_KINDS: ReadonlySet<CaptureKind> = new Set(['decision', 'gotcha', 'convention', 'howto', 'answer']);
+
+export const CAPTURE_TITLE_MAX_CHARS = 300;
+/** Alternatives, related pages, `appliesTo` paths, aliases, citations: each list at most this long. */
+export const CAPTURE_LIST_MAX = 20;
+/** One list item, at most. */
+export const CAPTURE_ITEM_MAX_CHARS = 500;
+
+export interface DecisionCapturePayload {
+  context: string;
+  decision: string;
+  consequences?: string;
+  alternatives?: string[];
+  relatedDocumentIds?: string[];
+}
+
+export interface NoteCapturePayload {
+  body: string;
+  /** Repository paths or entity keys the note is about. */
+  appliesTo?: string[];
+}
+
+export interface GlossaryCapturePayload {
+  term: string;
+  definition: string;
+  aliases?: string[];
+  /** A page that defines the term in full. */
+  documentId?: string;
+}
+
+export interface RelationCapturePayload {
+  documentId: string;
+  /** AUTHORABLE_RELATION_TYPES. */
+  type: string;
+  targetKey: string;
+  rationale: string;
+}
+
+export interface AnswerCapturePayload {
+  question: string;
+  answer: string;
+  /** At least one: an answer is written back only with the pages it stands on. */
+  citedDocumentIds: string[];
+}
+
+interface CaptureRequestBase {
+  workspaceId: string;
+  session: CaptureSession;
+}
+
+/**
+ * One capture, as the MCP tools and `POST /v1/captures` send it. The project
+ * is required where nothing else names one: a relation takes its page's, an
+ * answer its first cited page's unless it names one.
+ */
+export type CreateCaptureRequest = CaptureRequestBase &
+  (
+    | ({ kind: 'decision'; projectId: string; title: string } & DecisionCapturePayload)
+    | ({ kind: CaptureNoteKind; projectId: string; title: string } & NoteCapturePayload)
+    | ({ kind: 'glossary'; projectId: string } & GlossaryCapturePayload)
+    | ({ kind: 'relation' } & RelationCapturePayload)
+    | ({ kind: 'answer'; projectId?: string; title?: string } & AnswerCapturePayload)
+  );
+
+/** A page dedupe compared the capture with. `score` is raw cosine from the vector leg. */
+export interface CaptureSimilar {
+  documentId: string;
+  title: string;
+  score: number;
+}
+
+/** What a capture call answers: where the capture went, and what it was compared with. */
+export interface CaptureResult {
+  captureId: string;
+  state: CaptureState;
+  outcome: CaptureOutcome | null;
+  mergeRequestId: string | null;
+  targetDocumentId: string | null;
+  glossaryTermId: string | null;
+  /** The merge request, or the page a duplicate points at; null for a staged term. */
+  webUrl: string | null;
+  similar: CaptureSimilar[];
+}
+
+/** One row of the captures list. */
+export interface CaptureInfo extends CaptureResult {
+  workspaceId: string;
+  projectId: string;
+  kind: CaptureKind;
+  title: string;
+  session: CaptureSession;
+  createdBy: string;
+  apiKeyId: string | null;
+  error: string | null;
+  createdAt: string;
+}
+
+export interface ListCapturesResponse {
+  captures: CaptureInfo[];
+  nextCursor: string | null;
+}

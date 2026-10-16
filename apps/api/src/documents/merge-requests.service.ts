@@ -8,6 +8,7 @@ import type {
   MergeMergeRequestResponse,
   MergeRequestDiffResponse,
   MergeRequestInfo,
+  MergeRequestProvenance,
   MergeRequestStatus,
   MergeStrategy,
   RevisionInfo,
@@ -72,10 +73,16 @@ export class MergeRequestsService {
     private readonly permissions: PermissionService,
   ) {}
 
+  /**
+   * `opts.provenance` says who opened it when that is not a person (issue
+   * #73): an agent's finding, or an agent-session capture with its row id. An
+   * argument, not a DTO field — no REST caller may claim to be an agent.
+   */
   async create(
     documentId: string,
     dto: CreateMergeRequestDto,
     authorId: string = AUTHOR_ID_STUB,
+    opts: { provenance?: MergeRequestProvenance; captureId?: string } = {},
   ): Promise<CreateMergeRequestResponse> {
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
     if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
@@ -113,6 +120,8 @@ export class MergeRequestsService {
         title: dto.title,
         description: dto.description ?? null,
         authorId,
+        ...(opts.provenance ? { provenance: opts.provenance } : {}),
+        ...(opts.captureId ? { captureId: opts.captureId } : {}),
       },
       include: MR_INCLUDE,
     });
@@ -177,6 +186,7 @@ export class MergeRequestsService {
         ? { targetBranch: { name: { contains: query.targetBranch, mode: 'insensitive' as const } } }
         : {}),
       ...(query.search ? { title: { contains: query.search, mode: 'insensitive' as const } } : {}),
+      ...(query.provenance ? { provenance: query.provenance } : {}),
     };
     const [rows, statusCounts] = await Promise.all([
       this.prisma.mergeRequest.findMany({
@@ -355,12 +365,13 @@ export class MergeRequestsService {
     const sourceHead = mr.sourceBranch.headRevisionId;
     const targetHead = mr.targetBranch.headRevisionId;
     if (!sourceHead) throw new BadRequestException(t('error.mergeRequest.branchNoRevisions', { branch: mr.sourceBranch.name }));
-    if (!targetHead) throw new BadRequestException(t('error.mergeRequest.targetNoRevisions', { branch: mr.targetBranch.name }));
 
-    const compare = await this.compare.compare(mr.documentId, targetHead, sourceHead, 'merge-base', {
-      structural: true,
-      semantic: opts.semantic ?? false,
-    });
+    // A page's first merge request (a capture, a chat save) has nothing on the
+    // target yet: the whole source is the change (#73).
+    const options = { structural: true, semantic: opts.semantic ?? false };
+    const compare = targetHead
+      ? await this.compare.compare(mr.documentId, targetHead, sourceHead, 'merge-base', options)
+      : await this.compare.compareWithNothing(mr.documentId, sourceHead, options);
     return { mergeRequest: await this.toDetail(mr), compare };
   }
 
@@ -542,6 +553,12 @@ export class MergeRequestsService {
         if (flipped.count === 0) {
           throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
         }
+        // A page that existed only as this merge request is a page now (#73):
+        // it joins the tree, the lists and search with the merge.
+        await this.prisma.document.updateMany({
+          where: { id: mr.documentId, pendingMergeRequestId: mr.id },
+          data: { pendingMergeRequestId: null },
+        });
         return result;
       },
       { timeout: 30_000, maxWait: 10_000 },
@@ -670,6 +687,8 @@ export class MergeRequestsService {
       createdAt: mr.createdAt.toISOString(),
       mergedAt: mr.mergedAt?.toISOString() ?? null,
       closedAt: mr.closedAt?.toISOString() ?? null,
+      provenance: mr.provenance as MergeRequestProvenance,
+      captureId: mr.captureId,
     };
   }
 

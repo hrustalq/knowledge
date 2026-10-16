@@ -161,7 +161,7 @@ watch(branchFilter, () => void load())
     <Card v-if="compare">
       <CardHeader>
         <CardTitle class="text-base">
-          {{ t('revisions.compareTitle', { from: compare.from.revisionId.slice(0, 8), to: compare.to.revisionId.slice(0, 8) }) }}
+          {{ t('revisions.compareTitle', { from: compare.from?.revisionId.slice(0, 8) ?? '∅', to: compare.to.revisionId.slice(0, 8) }) }}
           <span class="ml-2 text-xs font-normal text-muted-foreground">
             +{{ compare.summary.additions }} / −{{ compare.summary.deletions }}
             <template v-if="compare.mergeBaseRevisionId"> · {{ t('revisions.mergeBaseAt', { id: compare.mergeBaseRevisionId.slice(0, 8) }) }}</template>

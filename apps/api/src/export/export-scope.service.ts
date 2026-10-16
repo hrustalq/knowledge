@@ -7,6 +7,7 @@ import { AccessService } from '../auth/access.service.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { visibilityWhere } from '../permissions/access-scope.js';
+import { LISTED_PAGE } from '../common/listed-page.js';
 
 export interface ExportScopeInput {
   workspaceId: string;
@@ -60,7 +61,7 @@ export class ExportScopeService {
     if (input.scope === 'project') {
       if (!input.projectId) return [];
       return this.prisma.document.findMany({
-        where: { workspaceId: input.workspaceId, projectId: input.projectId, archivedAt: null, AND: [visible] },
+        where: { workspaceId: input.workspaceId, projectId: input.projectId, archivedAt: null, ...LISTED_PAGE, AND: [visible] },
         select,
       });
     }
@@ -74,7 +75,7 @@ export class ExportScopeService {
       return [{ id: root.id, parentId: root.parentId, title: root.title, position: root.position, category: root.category }];
     }
     return this.prisma.document.findMany({
-      where: { workspaceId: input.workspaceId, archivedAt: null, path: { startsWith: root.path }, AND: [visible] },
+      where: { workspaceId: input.workspaceId, archivedAt: null, ...LISTED_PAGE, path: { startsWith: root.path }, AND: [visible] },
       select,
     });
   }

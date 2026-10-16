@@ -14,6 +14,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { MR_PROVENANCES, type MergeRequestProvenance } from '@knowledge/contracts';
 import { vmsg } from '../../common/validation.js';
 
 /**
@@ -145,6 +146,11 @@ export class ListMergeRequestsQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({ enum: MR_PROVENANCES, description: 'Only merge requests opened this way, e.g. captured (issue #73)' })
+  @IsOptional()
+  @IsIn(MR_PROVENANCES)
+  provenance?: MergeRequestProvenance;
 
   @ApiPropertyOptional({ description: 'Opaque cursor from a previous page' })
   @IsOptional()

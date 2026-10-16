@@ -224,7 +224,8 @@ export interface CompareRevisionRef {
 }
 export interface CompareResponse {
   documentId: string;
-  from: CompareRevisionRef;
+  /** Null when there is nothing to compare against — a page's first merge request: every line of `to` is added. */
+  from: CompareRevisionRef | null;
   to: CompareRevisionRef;
   comparisonMode: CompareMode;
   /** Present in merge-base mode; the nearest common ancestor actually diffed against. */

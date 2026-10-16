@@ -81,6 +81,25 @@ module.exports = {
       to: { path: '^src/documents/documents\\.module\\.ts$', reachable: true },
     },
     {
+      name: 'worker-loads-no-captures',
+      comment:
+        'Captures (issue #73) open merge requests as the person who captured, so they run API-side ' +
+        'only. CapturesCoreModule is controller-free for the MCP tool set, not for the worker.',
+      severity: 'error',
+      from: { path: '^src/worker\\.module\\.ts$' },
+      to: { path: '^src/captures/', reachable: true },
+    },
+    {
+      name: 'documents-imports-no-captures',
+      comment:
+        'Captures build on documents (merge requests, relation proposals), never the reverse: ' +
+        'MergeRequestsService knows a capture only as a plain `captureId` argument. A reach back ' +
+        'closes a module cycle through DocumentsModule.',
+      severity: 'error',
+      from: { path: '^src/documents/' },
+      to: { path: '^src/captures/' },
+    },
+    {
       name: 'mcp-loads-no-processor',
       comment:
         'The MCP server is a read/act surface over stdio, not a job runner. It legitimately ' +

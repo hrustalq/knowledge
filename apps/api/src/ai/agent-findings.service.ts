@@ -209,6 +209,7 @@ export class AgentFindingsService {
             : ''),
         markdown,
         userId: principal.userId,
+        provenance: 'agent',
         onCreated: (id) => this.writeBack(runId, index, id),
       });
 
@@ -431,6 +432,7 @@ export class AgentFindingsService {
           ),
         },
         principal,
+        { provenance: 'agent' },
       );
 
       // The page already declared everything the finding proposed — someone got

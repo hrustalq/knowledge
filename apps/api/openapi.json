@@ -5816,6 +5816,20 @@
             }
           },
           {
+            "name": "provenance",
+            "required": false,
+            "in": "query",
+            "description": "Only merge requests opened this way, e.g. captured (issue #73)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "manual",
+                "agent",
+                "captured"
+              ]
+            }
+          },
+          {
             "name": "cursor",
             "required": false,
             "in": "query",

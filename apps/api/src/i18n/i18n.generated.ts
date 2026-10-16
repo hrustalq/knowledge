@@ -179,6 +179,37 @@ export type I18nTranslations = {
             "agentOffered": string;
         };
     };
+    "capture": {
+        "heading": {
+            "context": string;
+            "decision": string;
+            "consequences": string;
+            "alternatives": string;
+            "related": string;
+            "appliesTo": string;
+            "question": string;
+            "answer": string;
+            "sources": string;
+            "captured": string;
+        };
+        "kind": {
+            "decision": string;
+            "gotcha": string;
+            "convention": string;
+            "howto": string;
+            "glossary": string;
+            "relation": string;
+            "answer": string;
+        };
+        "mergeRequest": {
+            "title": string;
+            "intro": string;
+            "amends": string;
+            "newPage": string;
+            "similar": string;
+            "rationale": string;
+        };
+    };
     "chat": {
         "help": string;
         "helpTime": string;
@@ -440,7 +471,6 @@ export type I18nTranslations = {
             "sameBranches": string;
             "sourceNotFinalized": string;
             "branchNoRevisions": string;
-            "targetNoRevisions": string;
             "notOpenForEdit": string;
             "notOpenForApproval": string;
             "notOpenForClose": string;
@@ -885,6 +915,18 @@ export type I18nTranslations = {
             "alreadyGranted": string;
             "levelAboveRole": string;
             "requestSelf": string;
+        };
+        "capture": {
+            "disabled": string;
+            "projectNotFound": string;
+            "projectNotAllowed": string;
+            "unreadablePages": string;
+            "noCitations": string;
+            "relationType": string;
+            "tooLong": string;
+            "secretDetected": string;
+            "rateLimited": string;
+            "workspaceRateLimited": string;
         };
     };
     "import": {

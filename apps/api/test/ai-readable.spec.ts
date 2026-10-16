@@ -49,13 +49,20 @@ describe('scope predicate', () => {
   });
 
   it('lists only pages open to the whole workspace; one page the guard admitted reads whatever it is (#76)', () => {
-    expect(readableDocumentsWhere({ workspaceId: 'w' })).toEqual({ workspaceId: 'w', restrictedBy: { isEmpty: true } });
+    // A page still behind its first merge request is not listed either (#73).
+    expect(readableDocumentsWhere({ workspaceId: 'w' })).toEqual({
+      workspaceId: 'w',
+      restrictedBy: { isEmpty: true },
+      pendingMergeRequestId: null,
+    });
     expect(readableDocumentsWhere({ workspaceId: 'w', projectId: 'p' })).toEqual({
       workspaceId: 'w',
       projectId: 'p',
       restrictedBy: { isEmpty: true },
+      pendingMergeRequestId: null,
     });
     expect(readableDocumentsWhere({ workspaceId: 'w', documentId: 'd' })).not.toHaveProperty('restrictedBy');
+    expect(readableDocumentsWhere({ workspaceId: 'w', documentId: 'd' })).not.toHaveProperty('pendingMergeRequestId');
     expect(listedProjectsWhere('w')).toEqual({ workspaceId: 'w', restricted: false });
   });
 });

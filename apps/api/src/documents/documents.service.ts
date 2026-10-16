@@ -59,6 +59,7 @@ import { t } from '../i18n/t.js';
 import { WORKSPACE_READER } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
+import { LISTED_PAGE } from '../common/listed-page.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -492,7 +493,9 @@ export class DocumentsService {
         ...(categories.length ? { category: { in: categories } } : {}),
         ...(projectIds.length ? { projectId: { in: projectIds } } : {}),
         ...(taggedIds ? { id: { in: taggedIds } } : {}),
-        // Pages the caller may not open are not in the list at all (#76).
+        // Pages the caller may not open are not in the list at all (#76), nor
+        // a page that is still only a merge request (#73).
+        ...LISTED_PAGE,
         AND: [visibilityWhere(scope)],
       },
       orderBy: { createdAt: 'desc' },
@@ -1187,6 +1190,8 @@ export class DocumentsService {
       workspaceId,
       ...(projectId ? { projectId } : {}),
       ...(opts.includeArchived ? {} : { archivedAt: null }),
+      // A page that is still only a merge request joins the tree when it merges (#73).
+      ...LISTED_PAGE,
       AND: [visibilityWhere(access)],
     };
     const lazy = typeof opts.depth === 'number';

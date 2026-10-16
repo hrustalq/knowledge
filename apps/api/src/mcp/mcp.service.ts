@@ -60,6 +60,8 @@ import { keepFrontmatter } from '../common/frontmatter.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
 import { MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
 import { renderSkill, type McpWhoami } from './skill.js';
+import { registerCaptureTools } from './capture-tools.js';
+import { CaptureService } from '../captures/capture.service.js';
 
 /**
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
@@ -100,6 +102,15 @@ export const MCP_SERVER_VERSION = '0.23.0';
  *   knowledge_create_document   → a new page with inline markdown
  *   knowledge_feedback          → rate an answer built from knowledge_search (docs/features/38)
  *   knowledge_report_issue      → report a page as wrong / stale; checked by the sentinel (docs/features/38)
+ *
+ *   Agent-session memory (issue #73, capture-tools.ts) — writes propose, never publish:
+ *   knowledge_capture_decision      → a decision + rationale → merge request (new page or amended page)
+ *   knowledge_capture_note          → a gotcha / convention / how-to → merge request
+ *   knowledge_propose_glossary_term → a term → the captures inbox, approved by an editor
+ *   knowledge_propose_relation      → a frontmatter relation → merge request
+ *   knowledge_propose_answer        → a cited answer → merge request
+ *   knowledge_find_similar          → the nearest pages by raw cosine, before capturing
+ *   knowledge_list_captures         → captures and where they went
  *
  * Two transports, one tool set (docs/features/33). `buildServer(principal)`
  * binds every tool to a caller: each one runs the same `requireRole` its REST
@@ -147,6 +158,7 @@ export class McpService {
     private readonly resourceAccess: ResourceAccessService,
     private readonly accessRequests: AccessRequestsService,
     private readonly learnings: AgentLearningsService,
+    private readonly captures: CaptureService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -1379,6 +1391,14 @@ export class McpService {
         },
       );
     }
+
+    registerCaptureTools(server, {
+      captures: this.captures,
+      principal,
+      guard,
+      workspaceOfDocument: (id) => this.access.workspaceOfDocument(id),
+      json: (value) => this.json(value),
+    });
 
     return { server, tools: settleTools(handles, principal) };
   }

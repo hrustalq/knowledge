@@ -94,6 +94,7 @@ function harness(opts: {
     assistantMessage: { findMany: vi.fn(async () => thread) },
     project: { findFirst: vi.fn(async () => ({ id: 'p-first' })) },
     documentRevision: { findUnique: vi.fn(async () => ({ id: 'rev-2', s3Key: 'k/source.md' })) },
+    document: { update: vi.fn(async () => ({})) },
   };
   let roleChecks = 0;
   const access = {
@@ -185,7 +186,12 @@ describe('save as a page', () => {
     const [, body] = h.storage.putObjectText.mock.calls[0] as unknown as [string, string];
     expect(body).toMatch(/^---\nsource: '?chat:telegram'?\ngeneratedBy: drafter\n---\n/);
     expect(body).toContain('[Deploy guide](/documents/d1)');
-    expect(h.mergeRequests.create).toHaveBeenCalledWith('doc-new', expect.objectContaining({ title: 'Deploying' }), 'u-editor');
+    expect(h.mergeRequests.create).toHaveBeenCalledWith('doc-new', expect.objectContaining({ title: 'Deploying' }), 'u-editor', {
+      provenance: 'captured',
+      captureId: undefined,
+    });
+    // Hidden from every list until the merge request merges (#73, Option A).
+    expect(h.prisma.document.update).toHaveBeenCalledWith({ where: { id: 'doc-new' }, data: { pendingMergeRequestId: 'mr-1' } });
 
     expect(h.settled).toEqual([{ status: 'published', title: 'Deploying', documentId: 'doc-new', mergeRequestId: 'mr-1' }]);
     expect(h.edited).toEqual([

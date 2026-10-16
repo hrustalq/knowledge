@@ -18215,6 +18215,178 @@
         ]
       }
     },
+    "/v1/documents/{id}/component/usages": {
+      "get": {
+        "operationId": "ComponentsController_usagesOf",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "symbols",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated export names a use must import; replaces the page's declared `symbols` when given",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Usage sites to list; defaults to 200",
+            "schema": {
+              "minimum": 1,
+              "maximum": 1000,
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Where the code this page declares is used, at the connector's indexed head: each importing file, what it imports, and the pages documenting it. Pages the caller may not open are counted, never titled. 404 when the page declares no component",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/v1/code-usages": {
+      "get": {
+        "operationId": "CodeUsagesController_list",
+        "parameters": [
+          {
+            "name": "symbols",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated export names a use must import; replaces the page's declared `symbols` when given",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Usage sites to list; defaults to 200",
+            "schema": {
+              "minimum": 1,
+              "maximum": 1000,
+              "type": "number"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "required": true,
+            "in": "query",
+            "description": "A file, a directory or a glob, relative to the repository root",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repository",
+            "required": false,
+            "in": "query",
+            "description": "owner/repo, or any tail of the connector's URL; optional when the workspace has one code connector",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Where a file, directory or glob is used in one of the workspace's code connectors, the pages documenting each usage site, and the component pages covering the path. Pages the caller may not open are counted, never titled",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
     "/v1/documents/{id}/markdown": {
       "get": {
         "operationId": "AiReadableController_markdown",

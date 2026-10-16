@@ -377,6 +377,9 @@
     "fileNotFound": "{path} нет в снимке репозитория",
     "notAFile": "{path} — каталог, а не файл"
   },
+  "component": {
+    "notDeclared": "Страница {id} не объявляет компонент: добавьте блок `component:` во frontmatter"
+  },
   "web": {
     "notFound": "Правило источников {id} не найдено",
     "invalidPattern": "«{pattern}» — не домен. Укажите узел, например docs.example.com",

@@ -171,7 +171,8 @@ export class ComponentsService {
     };
   }
 
-  private async codeConnectors(workspaceId: string): Promise<CodeConnectorRef[]> {
+  /** The workspace's codebase connectors that name a repository, oldest first. */
+  async codeConnectors(workspaceId: string): Promise<CodeConnectorRef[]> {
     const rows = await this.prisma.connector.findMany({
       where: { workspaceId, kind: 'codebase' },
       select: { id: true, config: true },

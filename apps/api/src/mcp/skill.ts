@@ -269,6 +269,11 @@ from the code, not remembered.${
       : ''
   }
 
+Before editing a file, ${toolRef('knowledge_code_usages')} with its \`path\` lists the files that import it and the pages
+documenting each of them, plus the component pages declaring it. Those are the callers and the docs your change reaches.
+A component page declares its code in a \`component:\` frontmatter block (\`paths\`, optional \`symbols\`), and
+\`knowledge_impact_analysis("component:<name>")\` walks the same usages through the graph.
+
 ${writeFlows}
 ${captureMemory}${plainMarkdown}
 ## Rules

@@ -375,6 +375,9 @@
     "fileNotFound": "{path} is not in the repository snapshot",
     "notAFile": "{path} is a directory, not a file"
   },
+  "component": {
+    "notDeclared": "Page {id} declares no component: add a `component:` block to its frontmatter"
+  },
   "web": {
     "notFound": "Source policy {id} not found",
     "invalidPattern": "“{pattern}” is not a domain — write a host such as docs.example.com",

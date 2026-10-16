@@ -66,6 +66,8 @@ import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderSkill, type McpWhoami } from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
 import { CaptureService } from '../captures/capture.service.js';
+import { MAX_USAGE_LIMIT } from '../components/component-match.js';
+import { ComponentUsagesService } from '../components/component-usages.service.js';
 
 /**
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
@@ -86,6 +88,7 @@ export const MCP_SERVER_VERSION = '0.24.0';
  *   knowledge_find_relations    → knowledge.find_relations    (Phase 4)
  *   knowledge_impact_analysis   → knowledge.impact_analysis   (Phase 4)
  *   knowledge_trace_relation    → knowledge.trace_relation    (Phase 4)
+ *   knowledge_code_usages       → where code is used, and the pages documenting it (#236)
  *   knowledge_create_relation   → knowledge.create_relation   (Phase 4, curated)
  *   knowledge_query_graph       → knowledge.query_graph       (Phase 5, audited)
  *   knowledge_get_historical_context → knowledge.get_historical_context (Phase 5)
@@ -163,6 +166,7 @@ export class McpService {
     private readonly accessRequests: AccessRequestsService,
     private readonly learnings: AgentLearningsService,
     private readonly captures: CaptureService,
+    private readonly componentUsages: ComponentUsagesService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -787,6 +791,51 @@ export class McpService {
       async ({ workspaceId, entityId, direction, maxDepth }) => {
         await guard.ws(workspaceId, 'viewer');
         return this.json(await this.entities.impactAnalysis(await guard.scope(workspaceId), entityId, direction ?? 'dependents', maxDepth ?? 3));
+      },
+    );
+
+    // Read-only (#236, phase 3), the twin of GET /v1/documents/:id/component/usages
+    // and GET /v1/code-usages: both viewer. Pages are resolved under the
+    // caller's scope, so a page they cannot open is a count, never a title.
+    server.registerTool(
+      'knowledge_code_usages',
+      {
+        description:
+          'Where code is used, from a codebase connector\'s import index at its indexed head: every file importing ' +
+          'the given path (a file, directory or glob) or the code a component page declares, what each imports, and ' +
+          'the pages documenting each usage site — component pages covering it first, else its repo wiki module ' +
+          'page. Also lists the component pages covering the path. Give documentId, or workspaceId + path. Use it ' +
+          'before editing a file, to find which callers and which docs a change reaches. TS/JS resolves relative ' +
+          'imports, tsconfig path aliases and workspace packages; other languages relative imports only.',
+        inputSchema: {
+          documentId: z.string().uuid().optional().describe('A component page: its declared paths and symbols'),
+          workspaceId: z.string().uuid().optional().describe('With path'),
+          path: z.string().min(1).max(1000).optional().describe('A file, directory or glob, relative to the repository root'),
+          repository: z
+            .string()
+            .max(500)
+            .optional()
+            .describe('With path: owner/repo; optional when the workspace has exactly one code connector'),
+          symbols: z
+            .array(z.string().min(1))
+            .max(50)
+            .optional()
+            .describe('Only uses importing one of these names; with documentId, replaces the declared symbols'),
+          limit: z.number().int().min(1).max(MAX_USAGE_LIMIT).optional(),
+        },
+      },
+      async ({ documentId, workspaceId, path, repository, symbols, limit }) => {
+        if (!documentId === !path) throw new Error('Give exactly one of documentId or path');
+        if (documentId) {
+          await guard.doc(documentId, 'viewer');
+          const scope = await guard.scope(await this.access.workspaceOfDocument(documentId));
+          return this.json(await this.componentUsages.forDocument(scope, documentId, { symbols, limit }));
+        }
+        if (!workspaceId) throw new Error('path needs a workspaceId');
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(
+          await this.componentUsages.forPath(await guard.scope(workspaceId), { path: path!, repository, symbols, limit }),
+        );
       },
     );
 

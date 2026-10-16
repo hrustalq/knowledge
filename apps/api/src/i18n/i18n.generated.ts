@@ -753,6 +753,9 @@ export type I18nTranslations = {
             "fileNotFound": string;
             "notAFile": string;
         };
+        "component": {
+            "notDeclared": string;
+        };
         "web": {
             "notFound": string;
             "invalidPattern": string;

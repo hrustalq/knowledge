@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { Prisma, type ConnectorRun, type ConnectorRunItem } from '@prisma/client';
 import {
   allowedItemEvents,
+  isApiSpecKind,
   allowedRunEvents,
   type ConnectorItemAction,
   type ConnectorItemEventType,
@@ -20,7 +21,7 @@ import { StorageService } from '../storage/storage.service.js';
 import { ConnectorProducer } from './connector.producer.js';
 import type { RunWarning } from './connector-sync.service.js';
 import type { ItemDraft } from './connector-staging.service.js';
-import { sha256 } from './connector-markdown.js';
+import { sha256, stagedObject } from './connector-markdown.js';
 import { MAX_WARNINGS, toRunInfo } from './connectors.service.js';
 
 /**
@@ -81,7 +82,15 @@ export class ConnectorItemsService {
         .catch(() => null);
     }
 
-    return { item: toItemInfo(item), markdown, incoming, localHead };
+    // An `unchanged` item was never fetched, so its draft does not say it is a
+    // spec (#78); the page it agrees with does, and the pane needs to know.
+    const info = toItemInfo(item);
+    if (!info.specKind && item.documentId) {
+      const kind = (await this.prisma.document.findUnique({ where: { id: item.documentId }, select: { kind: true } }))?.kind;
+      if (isApiSpecKind(kind)) info.specKind = kind;
+    }
+
+    return { item: info, markdown, incoming, localHead };
   }
 
   // --- edit ---
@@ -103,9 +112,9 @@ export class ConnectorItemsService {
 
     if (patch.markdown !== undefined) {
       const run = await this.requireRun(runId);
-      const key =
-        item.stagedKey ?? this.storage.connectorItemObjectKey(run.workspaceId, runId, item.id, 'staged.md');
-      await this.storage.putObjectText(key, patch.markdown, 'text/markdown');
+      const staged = stagedObject((item.draft as ItemDraft | null)?.spec, 'staged');
+      const key = item.stagedKey ?? this.storage.connectorItemObjectKey(run.workspaceId, runId, item.id, staged.name);
+      await this.storage.putObjectText(key, patch.markdown, staged.contentType);
       data.stagedKey = key;
       data.contentHash = sha256(patch.markdown);
       const draft: ItemDraft = { ...((item.draft as ItemDraft | null) ?? {}), edited: true };
@@ -467,6 +476,7 @@ export function toItemInfo(row: ConnectorRunItem): ConnectorRunItemInfo {
     warnings: draft.warnings ?? [],
     aiOp: draft.aiOp ?? null,
     edited: draft.edited ?? false,
+    specKind: draft.spec?.kind ?? null,
     documentId: row.documentId,
     error: row.error,
     updatedAt: row.updatedAt.toISOString(),

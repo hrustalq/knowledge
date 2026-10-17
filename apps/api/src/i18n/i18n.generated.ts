@@ -340,6 +340,8 @@ export type I18nTranslations = {
             "description": string;
             "wikiTitle": string;
             "wikiDescription": string;
+            "specTitle": string;
+            "specDescription": string;
         };
         "warning": {
             "passthrough": string;
@@ -372,6 +374,13 @@ export type I18nTranslations = {
                 "truncated": string;
                 "tagNotFound": string;
                 "unavailable": string;
+            };
+            "apiSpec": {
+                "bundled": string;
+                "remote": string;
+                "missing": string;
+                "outside": string;
+                "unreadable": string;
             };
         };
         "pushVersionMessage": string;
@@ -752,6 +761,7 @@ export type I18nTranslations = {
             "identityNotFound": string;
             "identityNotMember": string;
             "guidanceNotARepository": string;
+            "specNoAssist": string;
         };
         "routeNotFound": string;
         "validationFailed": string;

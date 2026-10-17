@@ -14,7 +14,9 @@
     "title": "{name}: incoming change to \"{title}\"",
     "description": "This page and its counterpart in {name} both changed since the last sync, so nothing was overwritten. The external version is on this branch; review it against the current page and merge if it should win.\n\nSource: {url}",
     "wikiTitle": "{name}: regenerated \"{title}\"",
-    "wikiDescription": "The repo wiki regenerated this page from {name} because the code it describes changed. Nothing on the page has changed yet: review the new version on this branch and merge it to publish.\n\nGenerated from commit {commit} (unit {unit}).\nSource: {url}\n\nA newer regeneration of this page closes this merge request and opens its own."
+    "wikiDescription": "The repo wiki regenerated this page from {name} because the code it describes changed. Nothing on the page has changed yet: review the new version on this branch and merge it to publish.\n\nGenerated from commit {commit} (unit {unit}).\nSource: {url}\n\nA newer regeneration of this page closes this merge request and opens its own.",
+    "specTitle": "{name}: API spec \"{title}\" changed",
+    "specDescription": "The API spec file this page mirrors changed in {name}. A synced spec never overwrites the page directly: review the API changes tab, breaking changes first, and merge to publish.\n\nSource: {url}\n\nA newer change to the same file closes this merge request and opens its own."
   },
   "warning": {
     "passthrough": "{text}",
@@ -47,6 +49,13 @@
       "truncated": "This release has {total} commits; the page lists the newest {limit}.",
       "tagNotFound": "The tag {tag} is no longer in the repository, so its release notes could not be generated.",
       "unavailable": "Release history could not be read: {error}"
+    },
+    "apiSpec": {
+      "bundled": "Relative $ref files were bundled into this one document.",
+      "remote": "{ref} (in {file}) points outside the repository and was not fetched; the spec cannot be imported until it is bundled or removed.",
+      "missing": "{ref} (in {file}) names a file that is not in the repository snapshot.",
+      "outside": "{ref} (in {file}) climbs out of the repository and was not followed.",
+      "unreadable": "{ref} (in {file}) points at something the referenced file does not contain."
     }
   },
   "pushVersionMessage": "Updated from the knowledge base",

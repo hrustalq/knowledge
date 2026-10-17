@@ -1,4 +1,11 @@
-import type { ConnectorCapabilities, ConnectorKind, ExternalAclAudience, Locale } from '@knowledge/contracts';
+import type {
+  ApiSpecKind,
+  ApiSpecSyntax,
+  ConnectorCapabilities,
+  ConnectorKind,
+  ExternalAclAudience,
+  Locale,
+} from '@knowledge/contracts';
 import { safeFetch } from '../../common/safe-fetch.js';
 import { t } from '../../i18n/t.js';
 
@@ -44,7 +51,14 @@ export interface ExternalAttachment {
 export interface ExternalDocument {
   ref: ExternalRef;
   title: string;
+  /** The page body — or, when `spec` is set, the spec text exactly as it will be stored. */
   markdown: string;
+  /**
+   * An API spec file rather than a page (#78). The sync creates a document of
+   * this kind, stores the text with no frontmatter, and delivers every later
+   * change by merge request.
+   */
+  spec?: { kind: ApiSpecKind; syntax: ApiSpecSyntax };
   frontmatter?: Record<string, unknown>;
   attachments?: ExternalAttachment[];
   /** What the conversion could not carry. Surfaced verbatim on the run. */
@@ -163,8 +177,11 @@ export interface ConnectorAdapter {
    */
   readonly capabilities: ConnectorCapabilities;
 
-  /** Cheap round trip proving the credential and config reach something. */
-  testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }>;
+  /**
+   * Cheap round trip proving the credential and config reach something. A git
+   * adapter may also name the spec files it saw (#78), for the dialog to offer.
+   */
+  testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string; apiSpecSuggestions?: string[] }>;
 
   /** Enumerate the connector's scope. Paginates internally; the caller bounds it. */
   list(ctx: ConnectorContext): AsyncIterable<ExternalRef>;

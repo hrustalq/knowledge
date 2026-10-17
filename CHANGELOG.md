@@ -118,6 +118,21 @@ in the pull request that introduces them — see
   acknowledgement covers the branch as it was: a later push needs a new one.
   `GET /v1/merge-requests/:id/api-changes` returns the diff, the linked pages
   and whether a merge would be refused. (#78)
+- Markdown / Git and Codebase connectors can sync API spec files. List them
+  under **API specs**, comma-separated globs matched from the repository root
+  (`openapi.yaml, specs/**/*.json`); a file under them that declares
+  `openapi`, `swagger` or `asyncapi` becomes a spec document, and one that
+  does not (a schema fragment) is skipped. A spec split across files is
+  bundled into one document: relative `$ref`s to files in the same snapshot
+  are inlined, and a remote `$ref` is reported on the run and never fetched.
+  The first sync creates the spec page; after that, **a changed spec always
+  arrives as a merge request**, in every sync mode, so the API changes tab and
+  the breaking-change gate see it before readers do. A newer change to the
+  same file replaces the open merge request. The connection test lists the
+  spec files it finds, and the setup dialog offers to add them. Specs are
+  never pushed back to the repository, and the AI clean-up and merge assists
+  are not offered on them. Connectors that name no specs sync exactly what
+  they did. (#78)
 
 ### Changed
 

@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, type Connector, type ConnectorLink, type ConnectorRun, type ConnectorRunItem } from '@prisma/client';
 import {
+  SUPERSEDING_CONFLICT_REASONS,
+  apiSpecContentType,
   isWikiUnitKey,
   wikiDelivery,
   wikiEnabled,
@@ -12,8 +14,8 @@ import { DocumentsService } from '../documents/documents.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
-import type { ConnectorAdapter, ConnectorContext, ExternalRef } from './adapters/connector.types.js';
-import { composeMarkdown, sha256 } from './connector-markdown.js';
+import type { ConnectorAdapter, ConnectorContext, ExternalDocument, ExternalRef } from './adapters/connector.types.js';
+import { composeMarkdown, sha256, stagedObject } from './connector-markdown.js';
 import { ConnectorAclService } from './connector-acl.service.js';
 import type { StoredAcl } from './connector-acl.js';
 
@@ -25,6 +27,8 @@ export interface ItemDraft {
   aiOp?: 'cleanup' | 'merge';
   /** Set once a person edited it by hand. */
   edited?: boolean;
+  /** An API spec file (#78): stored as written, created as a spec document, updated by merge request. */
+  spec?: ExternalDocument['spec'];
 }
 
 export interface StageOutcome {
@@ -124,16 +128,20 @@ export class ConnectorStagingService {
     // Both copies are written now: `staged.md` is what will be applied and may be
     // edited or rewritten by a model; `incoming.md` never changes, so "what did
     // the far side actually send" survives every later edit.
-    const stagedKey = this.storage.connectorItemObjectKey(row.workspaceId, run.id, item.id, 'staged.md');
-    const incomingKey = this.storage.connectorItemObjectKey(row.workspaceId, run.id, item.id, 'incoming.md');
-    await this.storage.putObjectText(stagedKey, markdown, 'text/markdown');
-    await this.storage.putObjectText(incomingKey, markdown, 'text/markdown');
+    const staged = stagedObject(doc.spec, 'staged');
+    const incoming = stagedObject(doc.spec, 'incoming');
+    const stagedKey = this.storage.connectorItemObjectKey(row.workspaceId, run.id, item.id, staged.name);
+    const incomingKey = this.storage.connectorItemObjectKey(row.workspaceId, run.id, item.id, incoming.name);
+    await this.storage.putObjectText(stagedKey, markdown, staged.contentType);
+    await this.storage.putObjectText(incomingKey, markdown, incoming.contentType);
 
     // What mirroring will do to this page is said before anyone approves it.
     const warnings = [...doc.warnings, ...(acl ? await this.acl.preview(row, acl) : [])];
+    const { spec: _previous, ...prior } = (item.draft as ItemDraft | null) ?? {};
     const draft: ItemDraft = {
-      ...((item.draft as ItemDraft | null) ?? {}),
+      ...prior,
       ...(warnings.length > 0 ? { warnings } : {}),
+      ...(doc.spec ? { spec: doc.spec } : {}),
     };
 
     ctx.debug('item: staged', { id: item.externalId, action, hash: hash.slice(0, 12) });
@@ -172,9 +180,10 @@ export class ConnectorStagingService {
 
     const localHash = await this.headContentHash(link.documentId);
     let localChanged = localHash !== null && link.contentHash !== null && localHash !== link.contentHash;
-    // A merged repo wiki merge request (docs/features/46) moved the head to
-    // what this connector generated. That is not a local edit: it is the
-    // connector's own page, arrived by review instead of by a direct write.
+    // A merged repo wiki merge request (docs/features/46), or a merged spec
+    // change (#78), moved the head to what this connector sent. That is not a
+    // local edit: it is the connector's own page, arrived by review instead of
+    // by a direct write.
     if (localChanged && localHash && (await this.isOurRegeneration(link.documentId, localHash))) localChanged = false;
 
     if (!localChanged || row.conflict === 'external-wins') return 'update';
@@ -199,6 +208,7 @@ export class ConnectorStagingService {
     const markdown = await this.storage.getObjectText(item.stagedKey);
     const hash = sha256(markdown);
     const link = item.linkId ? await this.prisma.connectorLink.findUnique({ where: { id: item.linkId } }) : null;
+    const spec = specOf(item);
 
     if (!link) {
       await this.createPage(row, run, item, markdown, hash);
@@ -226,6 +236,16 @@ export class ConnectorStagingService {
         where: { id: item.id },
         data: { status: 'unchanged', documentId: link.documentId },
       });
+      await this.acl.applyToPage(row, link, storedAcl(item));
+      return;
+    }
+
+    // A spec (#78) is never written straight to its page, in any mode: the
+    // breaking-change merge gate is enforced at merge, so a sync that wrote the
+    // page directly would be a way round it. Approving the item in a reviewed
+    // run approves opening the merge request, not merging it.
+    if (spec && (item.action === 'update' || item.action === 'conflict')) {
+      await this.openConflictBranch(row, run, link, item, markdown, item.action === 'conflict' ? 'conflict' : 'spec-changed');
       await this.acl.applyToPage(row, link, storedAcl(item));
       return;
     }
@@ -316,20 +336,37 @@ export class ConnectorStagingService {
     parentId: string | null,
     reRooted: boolean,
   ): Promise<void> {
+    const spec = specOf(item);
     // Created without inline content and written once afterwards, the way import
-    // submit does: one revision, whose content was never half-written.
-    const created = await this.documents.createDocument({
-      workspaceId: row.workspaceId,
-      projectId: row.projectId,
-      title: item.title || 'Untitled',
-      category: row.category as DocumentCategory,
-      ...(parentId ? { parentId } : {}),
-    });
+    // submit does: one revision, whose content was never half-written. A spec
+    // (#78) goes in inline instead, because that is the path that names its
+    // syntax — the revision is `source.json` or `source.yaml` from the start —
+    // and validates it before the page exists. Its category is `reference`,
+    // whatever the connector files its pages under: that is what a spec is.
+    const created = spec
+      ? await this.documents.createDocument({
+          workspaceId: row.workspaceId,
+          projectId: row.projectId,
+          title: item.title || 'API',
+          category: 'reference',
+          kind: spec.kind,
+          content: { mode: 'inline', format: spec.syntax, text: markdown },
+          ...(parentId ? { parentId } : {}),
+        })
+      : await this.documents.createDocument({
+          workspaceId: row.workspaceId,
+          projectId: row.projectId,
+          title: item.title || 'Untitled',
+          category: row.category as DocumentCategory,
+          ...(parentId ? { parentId } : {}),
+        });
 
-    const revision = await this.prisma.documentRevision.findUnique({ where: { id: created.revisionId } });
-    if (!revision) throw new Error('revision vanished between create and write');
-    await this.storage.putObjectText(revision.s3Key, markdown, 'text/markdown');
-    await this.documents.finalizeRevision(created.documentId, created.revisionId);
+    if (!spec) {
+      const revision = await this.prisma.documentRevision.findUnique({ where: { id: created.revisionId } });
+      if (!revision) throw new Error('revision vanished between create and write');
+      await this.storage.putObjectText(revision.s3Key, markdown, 'text/markdown');
+      await this.documents.finalizeRevision(created.documentId, created.revisionId);
+    }
 
     const link = await this.prisma.connectorLink.create({
       data: {
@@ -403,15 +440,21 @@ export class ConnectorStagingService {
   // --- shared writes ---
 
   /** A new revision on the document's default branch, through the normal pipeline. */
-  private async writeRevision(documentId: string, markdown: string, branch?: string): Promise<string> {
+  private async writeRevision(
+    documentId: string,
+    markdown: string,
+    branch?: string,
+    spec?: ItemDraft['spec'],
+  ): Promise<string> {
+    const contentType = spec ? apiSpecContentType(spec.kind, spec.syntax) : 'text/markdown';
     const revision = await this.documents.createRevision(documentId, {
       branch,
       message: t('connector.syncRevisionMessage'),
-      contentType: 'text/markdown',
+      contentType,
     });
     const row = await this.prisma.documentRevision.findUnique({ where: { id: revision.revisionId } });
     if (!row) throw new Error('revision vanished between create and write');
-    await this.storage.putObjectText(row.s3Key, markdown, 'text/markdown');
+    await this.storage.putObjectText(row.s3Key, markdown, row.contentType);
     await this.documents.finalizeRevision(documentId, revision.revisionId);
     return revision.revisionId;
   }
@@ -433,9 +476,11 @@ export class ConnectorStagingService {
     const branch =
       reason === 'regenerated'
         ? `wiki/${run.id.slice(0, 8)}-${Date.now().toString(36)}`
-        : `connector/${row.kind}-${Date.now().toString(36)}`;
+        : reason === 'spec-changed'
+          ? `spec/${run.id.slice(0, 8)}-${Date.now().toString(36)}`
+          : `connector/${row.kind}-${Date.now().toString(36)}`;
     await this.documents.createBranch(link.documentId, { name: branch });
-    const revisionId = await this.writeRevision(link.documentId, markdown, branch);
+    const revisionId = await this.writeRevision(link.documentId, markdown, branch, specOf(item));
 
     await this.prisma.connectorLink.update({
       where: { id: link.id },
@@ -467,10 +512,13 @@ export class ConnectorStagingService {
     });
   }
 
-  /** Whether the head is byte-for-byte the last page the repo wiki sent by merge request. */
+  /**
+   * Whether the head is byte-for-byte the last page this connector sent by
+   * merge request — a regenerated wiki page, or a changed spec (#78).
+   */
   private async isOurRegeneration(documentId: string, headHash: string): Promise<boolean> {
     const latest = await this.prisma.connectorConflict.findFirst({
-      where: { documentId, reason: 'regenerated' },
+      where: { documentId, reason: { in: [...SUPERSEDING_CONFLICT_REASONS] } },
       orderBy: { createdAt: 'desc' },
       select: { revisionId: true },
     });
@@ -535,6 +583,11 @@ function deliversByMergeRequest(row: Connector, externalId: string): boolean {
     isWikiUnitKey(externalId) ||
     externalId === 'changelog:unreleased'
   );
+}
+
+/** The spec this item stages (#78), or undefined for a page. */
+function specOf(item: ConnectorRunItem): ItemDraft['spec'] {
+  return ((item.draft as ItemDraft | null) ?? {}).spec;
 }
 
 /** The ACL staging read for this item, if the connector mirrors (#76). */

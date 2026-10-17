@@ -9,6 +9,7 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
+import type { MergeRequestApiChangesResponse } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
@@ -176,6 +177,44 @@ export class MergeRequestsController {
     return this.mergeRequests.diff(id, { semantic: semantic === 'true' });
   }
 
+  @Get('merge-requests/:id/api-changes')
+  @Access('viewer', 'merge-request')
+  @ApiOperation({
+    summary:
+      'What a spec merge request does to its API: the classified diff from the merge base, the pages linking ' +
+      'each changed operation, the workspace policy and whether a merge would be refused. applicable=false for a page',
+  })
+  async apiChanges(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<MergeRequestApiChangesResponse> {
+    return this.mergeRequests.apiChanges(id, await this.scopeForMr(id, principal));
+  }
+
+  @Post('merge-requests/:id/breaking-ack')
+  @Access('admin', 'merge-request')
+  @ApiOperation({
+    summary:
+      "Acknowledge the spec's breaking changes at the current source head, which lets a merge through a block " +
+      'policy. A later push needs a new acknowledgement',
+  })
+  async acknowledgeBreaking(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<MergeRequestApiChangesResponse> {
+    return this.mergeRequests.setBreakingAck(id, true, await this.scopeForMr(id, principal), principal?.userId);
+  }
+
+  @Delete('merge-requests/:id/breaking-ack')
+  @Access('admin', 'merge-request')
+  @ApiOperation({ summary: 'Withdraw the acknowledgement of breaking API changes' })
+  async withdrawBreakingAck(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<MergeRequestApiChangesResponse> {
+    return this.mergeRequests.setBreakingAck(id, false, await this.scopeForMr(id, principal), principal?.userId);
+  }
+
   @Post('merge-requests/:id/approve')
   @Access('editor', 'merge-request')
   @ApiOperation({ summary: 'Approve as the calling principal (MR_REQUIRED_APPROVALS non-author approvals gate the merge)' })
@@ -187,7 +226,7 @@ export class MergeRequestsController {
   @Access('editor', 'merge-request')
   @ApiOperation({
     summary:
-      'Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged when gated, ' +
+      'Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged|breaking-api when gated, ' +
       '+ comparison link when the target diverged',
   })
   merge(
@@ -276,5 +315,11 @@ export class MergeRequestsController {
     @CurrentPrincipal() principal: Principal,
   ) {
     return this.threads.setResolved(id, threadId, dto.resolved, principal?.userId);
+  }
+
+  /** The caller's scope in the merge request's workspace, for reads that list pages. */
+  private async scopeForMr(id: string, principal: Principal) {
+    const { documentId } = await this.mergeRequests.documentOf(id);
+    return this.permissions.scopeForDocument(principal, documentId);
   }
 }

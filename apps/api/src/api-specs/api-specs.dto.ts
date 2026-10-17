@@ -13,7 +13,14 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { API_TRY_PROXY_MODES, CODE_SAMPLE_LANGS, type ApiTryProxyMode, type CodeSampleLang } from '@knowledge/contracts';
+import {
+  API_BREAKING_CHANGE_POLICIES,
+  API_TRY_PROXY_MODES,
+  CODE_SAMPLE_LANGS,
+  type ApiBreakingChangePolicy,
+  type ApiTryProxyMode,
+  type CodeSampleLang,
+} from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 export class ListApiSpecsQueryDto {
@@ -141,4 +148,25 @@ export class UpdateApiSettingsDto {
   @IsOptional()
   @IsIn(API_TRY_PROXY_MODES)
   apiTryProxyMode?: ApiTryProxyMode | null;
+
+  @ApiPropertyOptional({
+    enum: API_BREAKING_CHANGE_POLICIES,
+    nullable: true,
+    type: String,
+    description: 'The merge gate for breaking spec changes; null inherits warn',
+  })
+  @IsOptional()
+  @IsIn(API_BREAKING_CHANGE_POLICIES)
+  apiBreakingChangePolicy?: ApiBreakingChangePolicy | null;
+}
+
+export class ApiSpecDiffQueryDto {
+  @ApiProperty({ format: 'uuid', description: 'The revision diffed from' })
+  @IsUUID()
+  from!: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'The revision diffed to; the default-branch head when absent' })
+  @IsOptional()
+  @IsUUID()
+  to?: string;
 }

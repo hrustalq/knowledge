@@ -1,14 +1,22 @@
 <script setup lang="ts">
 // GitLab-style merge widget: readiness checklist + the merge/close/reopen
-// controls in one card. 409 gate reasons (draft | approvals | diverged, see
-// MergeGateConflictDetails) surface as toasts — divergence with a compare link.
+// controls in one card. 409 gate reasons (draft | approvals | diverged |
+// breaking-api, see MergeGateConflictDetails) surface as toasts — divergence
+// with a compare link. On a spec (#78) the checklist gains a breaking-change
+// row: what the API tab found, what the workspace policy does about it, and an
+// admin's acknowledgement, pinned to the source head it was given for.
 import { useI18n } from 'vue-i18n'
 import { formatDateTime } from '@/lib/format'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { AlertTriangle, Check, CircleDashed, GitMerge, MessageSquare, ThumbsUp } from 'lucide-vue-next'
-import type { MergeGateConflictDetails, MergeRequestInfo, MergeStrategy } from '@knowledge/contracts'
+import { AlertTriangle, Check, CircleDashed, FileWarning, GitMerge, MessageSquare, ThumbsUp } from 'lucide-vue-next'
+import type {
+  MergeGateConflictDetails,
+  MergeRequestApiChangesResponse,
+  MergeRequestInfo,
+  MergeStrategy,
+} from '@knowledge/contracts'
 import { useApiMutation, isApiRequestError } from '@/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
@@ -23,10 +31,16 @@ import { actorLabel, mrIcon } from './mr-ui'
 
 const { t } = useI18n()
 
-const props = withDefaults(defineProps<{ mergeRequest: MergeRequestInfo; unresolvedThreads?: number }>(), {
-  unresolvedThreads: 0,
-})
-const emit = defineEmits<{ changed: [] }>()
+const props = withDefaults(
+  defineProps<{
+    mergeRequest: MergeRequestInfo
+    unresolvedThreads?: number
+    /** GET …/api-changes; null until it loads, `applicable: false` on a page. */
+    apiChanges?: MergeRequestApiChangesResponse | null
+  }>(),
+  { unresolvedThreads: 0, apiChanges: null },
+)
+const emit = defineEmits<{ changed: []; reviewApi: [] }>()
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -48,6 +62,16 @@ const merge = useApiMutation('post', '/v1/merge-requests/{id}/merge', { invalida
 const close = useApiMutation('post', '/v1/merge-requests/{id}/close', { invalidates })
 const reopen = useApiMutation('post', '/v1/merge-requests/{id}/reopen', { invalidates })
 const update = useApiMutation('patch', '/v1/merge-requests/{id}', { invalidates })
+const apiInvalidates = () => [...invalidates(), ['/v1/merge-requests/{id}/api-changes'], ['/v1/activity']]
+const ack = useApiMutation('post', '/v1/merge-requests/{id}/breaking-ack', { invalidates: apiInvalidates })
+const unack = useApiMutation('delete', '/v1/merge-requests/{id}/breaking-ack', { invalidates: apiInvalidates })
+
+/** The breaking-change row: shown on a spec whose workspace checks, once the diff has a verdict. */
+const api = computed(() => {
+  const a = props.apiChanges
+  if (!a?.applicable || a.policy === 'off' || !a.diff) return null
+  return { ...a, breaking: a.diff.summary.breaking }
+})
 
 const busy = computed(
   () =>
@@ -55,7 +79,9 @@ const busy = computed(
     merge.isPending.value ||
     close.isPending.value ||
     reopen.isPending.value ||
-    update.isPending.value,
+    update.isPending.value ||
+    ack.isPending.value ||
+    unack.isPending.value,
 )
 
 function onMerge() {
@@ -73,6 +99,12 @@ function onMerge() {
             toast.error(t('mr.needsApprovals', { required: details.requiredApprovals, have: details.approvals }))
           } else if (details.reason === 'draft') {
             toast.error(t('mr.draftCannotMerge'))
+          } else if (details.reason === 'breaking-api') {
+            const n = details.breakingCount ?? 0
+            toast.error(t('mr.api.blockedToast', { n }, n), {
+              action: { label: t('mr.api.review'), onClick: () => emit('reviewApi') },
+            })
+            emit('changed')
           } else if (details.comparisonUrl) {
             toast.error(t('mr.targetDiverged'), {
               action: { label: t('mr.compare'), onClick: () => void router.push(comparePagePath(details.comparisonUrl!)) },
@@ -100,6 +132,13 @@ function act(mutation: typeof close, label: string) {
       toast.success(label)
       emit('changed')
     },
+    onError: (e) => toast.error(e.message),
+  })
+}
+
+function setAck(on: boolean) {
+  ;(on ? ack : unack).mutate(id.value, {
+    onSuccess: () => toast.success(on ? t('mr.api.acknowledged') : t('mr.api.withdrawn')),
     onError: (e) => toast.error(e.message),
   })
 }
@@ -146,6 +185,50 @@ function toggleDraft() {
         </span>
         <span v-else class="text-muted-foreground">{{ t('mr.allThreadsResolved') }}</span>
       </p>
+      <!-- Breaking API changes (#78): amber under warn, the caution hue while
+           a block holds, emerald once there is nothing to hold. -->
+      <div v-if="api" class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <FileWarning
+          v-if="api.breaking > 0"
+          class="size-4 shrink-0"
+          :class="api.blocked ? 'text-[color:var(--kn-panel-caution)]' : 'text-amber-500'"
+        />
+        <Check v-else class="size-4 shrink-0 text-emerald-500" />
+        <span v-if="api.breaking === 0" class="text-muted-foreground">{{ t('mr.api.noneBreaking') }}</span>
+        <span v-else class="min-w-0">
+          <button type="button" class="font-medium underline-offset-2 hover:underline" @click="emit('reviewApi')">
+            {{ t('mr.api.breaking', { n: api.breaking }, api.breaking) }}
+          </button>
+          <span class="text-muted-foreground"> — </span>
+          <span v-if="api.ack?.current" class="text-muted-foreground">{{ t('mr.api.ackedBy', { name: actorLabel(api.ack.by) }) }}</span>
+          <span v-else-if="api.ack" class="text-muted-foreground">{{ t('mr.api.ackStale', { name: actorLabel(api.ack.by) }) }}</span>
+          <span v-else-if="api.blocked" class="text-muted-foreground">{{ t('mr.api.blocked') }}</span>
+          <span v-else class="text-muted-foreground">{{ t('mr.api.warnOnly') }}</span>
+        </span>
+        <template v-if="api.breaking > 0 && api.policy === 'block'">
+          <Button
+            v-if="auth.canAdminWorkspace && !api.ack?.current"
+            variant="outline"
+            size="xs"
+            class="ml-auto"
+            :disabled="busy"
+            @click="setAck(true)"
+          >
+            {{ t('mr.api.acknowledge') }}
+          </Button>
+          <Button
+            v-else-if="auth.canAdminWorkspace"
+            variant="ghost"
+            size="xs"
+            class="ml-auto"
+            :disabled="busy"
+            @click="setAck(false)"
+          >
+            {{ t('mr.api.withdraw') }}
+          </Button>
+          <span v-else-if="api.blocked" class="ml-auto text-xs text-muted-foreground">{{ t('mr.api.ackHint') }}</span>
+        </template>
+      </div>
     </div>
 
     <!-- terminal-state summary -->
@@ -178,7 +261,7 @@ function toggleDraft() {
             <SelectItem value="squash">{{ t('mr.squash') }}</SelectItem>
           </SelectContent>
         </Select>
-        <Button size="sm" :disabled="busy || mr.isDraft" @click="onMerge">
+        <Button size="sm" :disabled="busy || mr.isDraft || !!api?.blocked" @click="onMerge">
           <GitMerge class="size-3.5" /> {{ t('mr.merge') }}
         </Button>
         <Button size="sm" variant="ghost" :disabled="busy" @click="toggleDraft">

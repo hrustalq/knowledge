@@ -10,10 +10,12 @@ import type {
   SemanticRelationChange,
   StructuralDiff,
 } from '@knowledge/contracts';
+import { isApiSpecKind } from '@knowledge/contracts';
 import type { DocumentBranch, DocumentRevision } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
+import { ApiSpecDiffService } from '../api-specs/api-spec-diff.service.js';
 import { parseStructured, structuralDiff } from './structural-diff.js';
 import { t } from '../i18n/t.js';
 
@@ -45,6 +47,7 @@ export class CompareService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly graph: GraphService,
+    private readonly apiDiffs: ApiSpecDiffService,
   ) {}
 
   async compare(
@@ -74,10 +77,13 @@ export class CompareService {
       }
     }
 
-    const [{ additions, deletions, hunks }, structural, semantic] = await Promise.all([
+    // A spec also gets its classified diff (#78), cached like the others; a
+    // page's response is unchanged.
+    const [{ additions, deletions, hunks }, structural, semantic, api] = await Promise.all([
       this.diff(base, to),
       opts.structural === false ? Promise.resolve(undefined) : this.structuralOf(base, to),
       opts.semantic ? this.semanticOf(document.workspaceId, documentId, base, to) : Promise.resolve(undefined),
+      isApiSpecKind(document.kind) ? this.apiDiffs.diff(documentId, base.id, to.id) : Promise.resolve(undefined),
     ]);
 
     return {
@@ -90,6 +96,7 @@ export class CompareService {
       hunks,
       structural,
       semantic,
+      ...(api !== undefined ? { api } : {}),
     };
   }
 
@@ -100,7 +107,10 @@ export class CompareService {
    * cached — there is no `from` revision to key a cache row on.
    */
   async compareWithNothing(documentId: string, toId: string, opts: CompareOptions = {}): Promise<CompareResponse> {
-    const to = await this.getComparableRevision(documentId, toId);
+    const [to, document] = await Promise.all([
+      this.getComparableRevision(documentId, toId),
+      this.prisma.document.findUnique({ where: { id: documentId }, select: { kind: true } }),
+    ]);
     const text = await this.storage.getObjectText(to.s3Key);
     const { additions, deletions, hunks } = toHunks('', text);
     let structural: StructuralDiff | null | undefined;
@@ -118,6 +128,7 @@ export class CompareService {
       hunks,
       structural,
       ...(opts.semantic ? { semantic: null } : {}),
+      ...(isApiSpecKind(document?.kind) ? { api: await this.apiDiffs.diff(documentId, null, to.id) } : {}),
     };
   }
 

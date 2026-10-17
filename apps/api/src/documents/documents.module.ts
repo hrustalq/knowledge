@@ -27,6 +27,8 @@ import { MentionRepliesService } from './mention-replies.service.js';
 import { MentionReplySweeper } from './mention-reply.sweeper.js';
 import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
+import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
+import { EntitiesModule } from '../entities/entities.module.js';
 
 /**
  * API side. DocumentsService itself lives in DocumentsCoreModule (worker-safe);
@@ -66,6 +68,11 @@ import { PermissionsCoreModule } from '../permissions/permissions-core.module.js
     AiReadableCoreModule,
     // Page permissions (#76): lists filter by the caller's scope, reviewers need view.
     PermissionsCoreModule,
+    // A spec's classified diff in compare and the breaking-change merge gate
+    // (#78). A leaf. EntitiesModule finds the pages linking a changed
+    // operation; it imports only graph and permissions, so there is no cycle.
+    ApiSpecsCoreModule,
+    EntitiesModule,
   ],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [

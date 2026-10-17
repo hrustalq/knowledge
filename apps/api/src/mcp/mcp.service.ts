@@ -69,8 +69,9 @@ import { CaptureService } from '../captures/capture.service.js';
 import { MAX_USAGE_LIMIT } from '../components/component-match.js';
 import { COMPONENT_DRAFT_MAX_PATHS } from '@knowledge/contracts';
 import { ComponentUsagesService } from '../components/component-usages.service.js';
+import { ApiSpecDiffService } from '../api-specs/api-spec-diff.service.js';
 import { ApiSpecReadService } from '../api-specs/api-spec-read.service.js';
-import { API_SPEC_SYNTAXES, CODE_SAMPLE_LANGS, isApiSpecKind, normalizeEntityKey, type ApiSpecSyntax } from '@knowledge/contracts';
+import { API_CHANGE_RULE_IDS, API_SPEC_SYNTAXES, CODE_SAMPLE_LANGS, isApiSpecKind, normalizeEntityKey, type ApiSpecSyntax } from '@knowledge/contracts';
 import { ComponentDraftsService } from '../components/component-drafts.service.js';
 
 /**
@@ -96,6 +97,7 @@ export const MCP_SERVER_VERSION = '0.26.0';
  *   knowledge_document_component → draft a component page from code → merge request (#236)
  *   knowledge_list_api_operations → operations of the API specs the caller may open (#78)
  *   knowledge_get_api_operation → one operation's text + the pages linking it (#78)
+ *   knowledge_diff_api_spec     → classified spec diff between two revisions (#78)
  *   knowledge_create_relation   → knowledge.create_relation   (Phase 4, curated)
  *   knowledge_query_graph       → knowledge.query_graph       (Phase 5, audited)
  *   knowledge_get_historical_context → knowledge.get_historical_context (Phase 5)
@@ -176,6 +178,7 @@ export class McpService {
     private readonly componentUsages: ComponentUsagesService,
     private readonly componentDrafts: ComponentDraftsService,
     private readonly apiSpecs: ApiSpecReadService,
+    private readonly apiDiffs: ApiSpecDiffService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -907,6 +910,30 @@ export class McpService {
           .filter((e) => !specIds.has(e.documentId))
           .map((e) => ({ documentId: e.documentId, title: e.documentTitle, relationType: e.relationType, extractor: e.extractor }));
         return this.json({ entityKey: key, operations: found.operations, linkedPages });
+      },
+    );
+
+    // Read-only (#78, phase 6), the twin of GET /v1/api-specs/:id/diff: viewer.
+    server.registerTool(
+      'knowledge_diff_api_spec',
+      {
+        description:
+          'What changed in an API spec document between two revisions, classified: each change names its rule ' +
+          `(${API_CHANGE_RULE_IDS.join(', ')}), its severity (breaking / non-breaking / info), the operation's ` +
+          'entityKey and what changed inside it (subject, before, after). Breaking means a client of the old spec ' +
+          'can fail against the new one. Operations match by method and path, so reordered parameters and renamed ' +
+          'path parameters are no change. Revision ids come from knowledge_list_revisions.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          documentId: z.string().uuid().describe('The spec document'),
+          fromRevisionId: z.string().uuid().describe('The older revision'),
+          toRevisionId: z.string().uuid().optional().describe('The newer revision; the default-branch head when absent'),
+        },
+      },
+      async ({ workspaceId, documentId, fromRevisionId, toRevisionId }) => {
+        await guard.ws(workspaceId, 'viewer');
+        await guard.doc(documentId, 'viewer');
+        return this.json(await this.apiDiffs.require(documentId, fromRevisionId, toRevisionId));
       },
     );
 

@@ -190,10 +190,13 @@ export interface ListSavedFiltersResponse {
  * 409 `details` vocabulary for merge gating (see RevisionConflictResponse for
  * the diverged case): `draft` — MR is flagged draft; `approvals` — fewer
  * non-author approvals than MR_REQUIRED_APPROVALS; `diverged` — target branch
- * advanced past the merge base (fast-forward precondition).
+ * advanced past the merge base (fast-forward precondition); `breaking-api` —
+ * a spec document's source head breaks its API under a `block` policy and no
+ * admin has acknowledged that head (#78).
  */
 export interface MergeGateConflictDetails {
-  reason: 'draft' | 'approvals' | 'diverged';
+  reason: 'draft' | 'approvals' | 'diverged' | 'breaking-api';
+  breakingCount?: number;
   requiredApprovals?: number;
   approvals?: number;
   currentHeadRevisionId?: string | null;

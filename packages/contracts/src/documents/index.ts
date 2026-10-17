@@ -6,6 +6,7 @@ import type {
   RevisionStatus,
   SourceVerificationState,
 } from '@knowledge/contracts/core';
+import type { ApiSpecDiff } from '@knowledge/contracts/api/diff';
 import type { AuthorableRelationType, FactExtractor } from '@knowledge/contracts/graph';
 import type { DeleteReviewCommentResponse, ReviewComment, ReviewThread, SemanticDiff, StructuralDiff } from '@knowledge/contracts/reviews';
 
@@ -236,6 +237,8 @@ export interface CompareResponse {
   structural?: StructuralDiff | null;
   /** Graph-projection diff between the two revisions; null when neither side is indexed. */
   semantic?: SemanticDiff | null;
+  /** Classified spec diff (#78) when the document is an API spec; null when a side does not parse. */
+  api?: ApiSpecDiff | null;
 }
 
 /**

@@ -514,6 +514,9 @@ export type I18nTranslations = {
             "divergedWhileMerging": string;
             "alreadyOpen": string;
             "notMembers": string;
+            "breakingApi": string;
+            "notSpec": string;
+            "notOpenForAck": string;
         };
         "thread": {
             "notFoundOnDocument": string;
@@ -986,6 +989,7 @@ export type I18nTranslations = {
             "format": string;
             "template": string;
             "notSpec": string;
+            "notDiffable": string;
         };
         "apiTry": {
             "disabled": string;

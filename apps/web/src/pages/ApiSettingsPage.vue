@@ -9,6 +9,10 @@
  * setting that reads "open" while the deployment says "off" is a silent lie.
  * `allowlist` reuses the source policies in AI → Plugins, so there is one host
  * list to keep, not two. Admin-only to change, like the route behind it.
+ *
+ * Below it, the merge gate for breaking spec changes (phase 6): the same
+ * three-row control, with no deployment ceiling — `null` is the code default,
+ * `warn`, and the row says so rather than looking unset.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -16,7 +20,15 @@ import { RouterLink } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { ShieldCheck } from 'lucide-vue-next'
-import { API_TRY_PROXY_MODES, type ApiSettingsResponse, type ApiTryProxyMode } from '@knowledge/contracts'
+import {
+  API_BREAKING_CHANGE_POLICIES,
+  API_TRY_PROXY_MODES,
+  DEFAULT_API_BREAKING_CHANGE_POLICY,
+  type ApiBreakingChangePolicy,
+  type ApiSettingsResponse,
+  type ApiTryProxyMode,
+  type UpdateApiSettingsRequest,
+} from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
@@ -37,13 +49,23 @@ const options = apiQueryOptions('/v1/workspaces/{id}/api-settings', { path: { id
 const query = useQuery(options)
 const settings = computed(() => query.data.value as ApiSettingsResponse | undefined)
 const proxy = computed(() => settings.value?.tryProxy)
+const breaking = computed(() => settings.value?.breakingChanges)
 
-async function setMode(mode: ApiTryProxyMode | null) {
-  if (!canManage.value || mode === proxy.value?.requested) return
+function setMode(mode: ApiTryProxyMode | null) {
+  if (mode === proxy.value?.requested) return
+  return save({ apiTryProxyMode: mode })
+}
+function setPolicy(policy: ApiBreakingChangePolicy | null) {
+  if (policy === breaking.value?.requested) return
+  return save({ apiBreakingChangePolicy: policy })
+}
+
+async function save(body: UpdateApiSettingsRequest) {
+  if (!canManage.value) return
   try {
     const next = (await api.patch('/v1/workspaces/{id}/api-settings', {
       path: { id: workspaceId },
-      body: { apiTryProxyMode: mode },
+      body,
     })) as ApiSettingsResponse
     queryClient.setQueryData(options.queryKey, next)
     toast.success(t('apiSettings.saved'))
@@ -141,8 +163,58 @@ async function setMode(mode: ApiTryProxyMode | null) {
           {{ t('apiSettings.inherit', { mode: t(`apiSettings.mode.${proxy.ceiling}.label`) }) }}
         </button>
       </div>
-      <p v-if="!canManage" class="text-[13px] text-muted-foreground">{{ t('apiSettings.adminOnly') }}</p>
     </section>
+
+    <section v-if="breaking" class="max-w-2xl space-y-4">
+      <header class="space-y-1 border-b pb-3">
+        <h2 class="text-sm font-semibold">{{ t('apiSettings.breaking.title') }}</h2>
+        <p class="text-sm leading-relaxed text-muted-foreground">{{ t('apiSettings.breaking.subtitle') }}</p>
+      </header>
+
+      <RadioGroup
+        :model-value="breaking.effective"
+        :disabled="!canManage"
+        class="kn-modes"
+        :aria-label="t('apiSettings.breaking.title')"
+        @update:model-value="setPolicy($event as ApiBreakingChangePolicy)"
+      >
+        <label
+          v-for="policy in API_BREAKING_CHANGE_POLICIES"
+          :key="policy"
+          class="kn-mode"
+          :data-active="breaking.effective === policy || undefined"
+        >
+          <RadioGroupItem :value="policy" :disabled="!canManage" class="mt-0.5" />
+          <span class="min-w-0">
+            <span class="flex flex-wrap items-center gap-1.5">
+              <span class="text-sm font-medium">{{ t(`apiSettings.breaking.mode.${policy}.label`) }}</span>
+              <Badge
+                v-if="breaking.requested === null && policy === DEFAULT_API_BREAKING_CHANGE_POLICY"
+                variant="outline"
+                class="font-normal"
+              >
+                {{ t('apiSettings.breaking.default') }}
+              </Badge>
+            </span>
+            <span class="mt-0.5 block text-[13px] leading-relaxed text-muted-foreground">
+              {{ t(`apiSettings.breaking.mode.${policy}.body`) }}
+            </span>
+          </span>
+        </label>
+      </RadioGroup>
+
+      <div v-if="canManage && breaking.requested !== null" class="flex justify-end">
+        <button
+          type="button"
+          class="text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          @click="setPolicy(null)"
+        >
+          {{ t('apiSettings.breaking.inherit') }}
+        </button>
+      </div>
+    </section>
+
+    <p v-if="settings && !canManage" class="max-w-2xl text-[13px] text-muted-foreground">{{ t('apiSettings.adminOnly') }}</p>
   </div>
 </template>
 

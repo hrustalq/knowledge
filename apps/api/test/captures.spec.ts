@@ -509,14 +509,17 @@ describe("a page's first merge request", () => {
           branch: { name: 'capture/x' },
         })),
       },
+      document: { findUnique: vi.fn(async () => ({ kind: 'page' })) },
     };
     const storage = { getObjectText: vi.fn(async () => text) };
-    const compare = new CompareService(prisma as never, storage as never, {} as never);
+    const compare = new CompareService(prisma as never, storage as never, {} as never, {} as never);
     const res = await compare.compareWithNothing('doc-new', 'rev-src', { structural: true });
     expect(res.from).toBeNull();
     expect(res.to).toMatchObject({ revisionId: 'rev-src', branch: 'capture/x' });
     expect(res.summary).toEqual({ additions: 6, deletions: 0 });
     expect(res.hunks.flatMap((h) => h.lines).every((l) => l.kind === 'added')).toBe(true);
     expect(res.structural?.summary).toMatchObject({ added: 1, removed: 0, changed: 0 });
+    // A page carries no API diff (#78); only a spec does.
+    expect(res).not.toHaveProperty('api');
   });
 });

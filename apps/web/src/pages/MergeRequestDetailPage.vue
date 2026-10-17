@@ -21,6 +21,7 @@ import { Pencil } from 'lucide-vue-next'
 import type {
   DocumentContentResponse,
   ListMergeRequestThreadsResponse,
+  MergeRequestApiChangesResponse,
   MergeRequestDiffResponse,
   MergeRequestInfo,
   MergeRequestThreadAnchor,
@@ -42,6 +43,7 @@ import MergeWidget from '@/components/merge-requests/MergeWidget.vue'
 import MrSidebar from '@/components/merge-requests/MrSidebar.vue'
 import MrActivityFeed from '@/components/merge-requests/MrActivityFeed.vue'
 import MrProvenance from '@/components/merge-requests/MrProvenance.vue'
+import ApiChangesPanel from '@/components/api-reference/ApiChangesPanel.vue'
 import ThreadCard from '@/components/merge-requests/ThreadCard.vue'
 import CommentComposer from '@/components/merge-requests/CommentComposer.vue'
 import { matchAnchoredThreads } from '@/components/merge-requests/thread-anchors'
@@ -50,13 +52,14 @@ import UserChip from '@/components/people/UserChip.vue'
 
 const { t } = useI18n()
 
-const TABS = ['overview', 'review', 'changes', 'structure', 'impact'] as const
+const TABS = ['overview', 'review', 'changes', 'structure', 'api', 'impact'] as const
 type Tab = (typeof TABS)[number]
 const TAB_LABELS: Record<Tab, string> = {
   overview: 'mr.tabOverview',
   review: 'mr.tabReview',
   changes: 'mr.tabChanges',
   structure: 'mr.tabStructure',
+  api: 'mr.tabApi',
   impact: 'mr.tabImpact',
 }
 
@@ -67,7 +70,7 @@ const auth = useAuthStore()
 const id = computed(() => String(route.params.id))
 
 const tab = computed<Tab>(() =>
-  TABS.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'overview',
+  visibleTabs.value.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'overview',
 )
 function setTab(next: Tab) {
   void router.replace({ query: { ...route.query, tab: next === 'overview' ? undefined : next } })
@@ -79,6 +82,22 @@ const detailQuery = useQuery(
 )
 const mr = computed(
   () => (detailQuery.data.value as { mergeRequest: MergeRequestInfo } | undefined)?.mergeRequest,
+)
+
+/**
+ * What the merge request does to its API (#78). Asked for on every merge
+ * request: a page answers `applicable: false` from one row read, and the
+ * answer decides whether the API tab exists and whether the merge widget has
+ * a breaking-change row. The diff behind it is cached per revision pair.
+ */
+const apiQuery = useQuery(
+  computed(() => apiQueryOptions('/v1/merge-requests/{id}/api-changes', { path: { id: id.value } })),
+)
+const apiChanges = computed(
+  () => (apiQuery.data.value as MergeRequestApiChangesResponse | undefined) ?? null,
+)
+const visibleTabs = computed<readonly Tab[]>(() =>
+  apiChanges.value?.applicable ? TABS : TABS.filter((t) => t !== 'api'),
 )
 
 const diffQuery = useQuery(
@@ -162,6 +181,7 @@ const tabCounts = computed<Partial<Record<Tab, number>>>(() => ({
   overview: threads.value.length || undefined,
   review: threads.value.filter((t) => t.anchor?.type === 'text').length || undefined,
   changes: diff.value?.hunks.length || undefined,
+  api: apiChanges.value?.diff?.changes.length || undefined,
 }))
 
 // --- title/description inline editing (GitLab-style) -------------------------
@@ -310,6 +330,7 @@ function onDeleteComment(threadId: string, commentId: string) {
 function refresh() {
   void queryClient.invalidateQueries({ queryKey: ['/v1/merge-requests/{id}', { id: id.value }, null] })
   void queryClient.invalidateQueries({ queryKey: ['/v1/merge-requests/{id}/diff'] })
+  void queryClient.invalidateQueries({ queryKey: ['/v1/merge-requests/{id}/api-changes'] })
   void queryClient.invalidateQueries({ queryKey: ['/v1/activity'] })
 }
 </script>
@@ -374,7 +395,13 @@ function refresh() {
       <MrProvenance :merge-request="mr" />
     </header>
 
-    <MergeWidget :merge-request="mr" :unresolved-threads="unresolvedCount" @changed="refresh" />
+    <MergeWidget
+      :merge-request="mr"
+      :unresolved-threads="unresolvedCount"
+      :api-changes="apiChanges"
+      @changed="refresh"
+      @review-api="setTab('api')"
+    />
 
     <!-- Content column + rail. `items-start` keeps the aside from stretching,
          which is what lets it stick. -->
@@ -383,7 +410,7 @@ function refresh() {
         <!-- tabs -->
         <div class="flex gap-0.5 overflow-x-auto border-b" role="tablist">
           <button
-            v-for="tabId in TABS"
+            v-for="tabId in visibleTabs"
             :key="tabId"
             role="tab"
             :aria-selected="tab === tabId"
@@ -530,6 +557,21 @@ function refresh() {
               </div>
             </CardContent>
           </Card>
+        </div>
+
+        <!-- API changes (#78): only on a spec -->
+        <div v-else-if="tab === 'api'" class="space-y-3">
+          <Skeleton v-if="apiQuery.isPending.value" class="h-24 w-full" />
+          <template v-else-if="apiChanges">
+            <p class="text-sm text-muted-foreground">{{ t(`mr.api.policy.${apiChanges.policy}`) }}</p>
+            <ApiChangesPanel
+              v-if="apiChanges.diff"
+              :diff="apiChanges.diff"
+              :document-id="apiChanges.documentId"
+              :affected-pages="apiChanges.affectedPages"
+            />
+            <p v-else class="text-sm text-muted-foreground">{{ t('mr.api.notParsed') }}</p>
+          </template>
         </div>
 
         <!-- knowledge impact -->

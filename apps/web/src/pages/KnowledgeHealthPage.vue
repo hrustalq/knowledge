@@ -5,9 +5,9 @@
  * put away, the counts, one action over many of them, and the policy that
  * decides what those words mean.
  *
- * Two tabs: **Pages** — the preset strip (each a `HealthFilter`, with its live
- * count), the narrowing row, the table and the bulk bar — and **Settings**,
- * the freshness policy. `?tab=` and `?filter=` are opening instructions: a
+ * Three tabs: **Pages** — the preset strip (each a `HealthFilter`, with its live
+ * count), the narrowing row, the table and the bulk bar — **Quality**, the
+ * auditor's scores (#74, phase 5), and **Settings**, the freshness policy. `?tab=` and `?filter=` are opening instructions: a
  * notification or a doc can point at "the unowned pages", and the page starts
  * there.
  *
@@ -42,6 +42,7 @@ import HealthFilters from '@/components/health/HealthFilters.vue'
 import HealthPreviewSheet from '@/components/health/HealthPreviewSheet.vue'
 import HealthSettings from '@/components/health/HealthSettings.vue'
 import HealthTable from '@/components/health/HealthTable.vue'
+import QualityPanel from '@/components/quality/QualityPanel.vue'
 import {
   EMPTY_SELECTION,
   clearSelection,
@@ -72,9 +73,10 @@ const projectId = getProjectId() ?? undefined
 
 /* ------------------------------------------------------------------ tabs */
 
-type TabKey = 'pages' | 'settings'
+type TabKey = 'pages' | 'quality' | 'settings'
 const tabs = computed<PageTab<TabKey>[]>(() => [
   { key: 'pages', label: t('health.tab.pages') },
+  { key: 'quality', label: t('health.tab.quality') },
   { key: 'settings', label: t('health.tab.settings') },
 ])
 const tab = usePageTabs(tabs, 'pages')
@@ -290,6 +292,15 @@ const previewRow = ref<KnowledgeHealthRow | null>(null)
           {{ listQuery.isFetching.value ? t('common.loading') : t('common.loadMore') }}
         </Button>
       </div>
+    </div>
+
+    <div v-else-if="tab === 'quality'" :id="panelId('quality')" role="tabpanel" :aria-labelledby="tabId('quality')">
+      <QualityPanel
+        :workspace-id="workspaceId"
+        :project-id="projectId"
+        :scope-label="scopeLabel"
+        :can-run-agents="auth.canAdminWorkspace"
+      />
     </div>
 
     <div v-else :id="panelId('settings')" role="tabpanel" :aria-labelledby="tabId('settings')">

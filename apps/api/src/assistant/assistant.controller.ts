@@ -24,6 +24,7 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { AssistantService } from './assistant.service.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
+import { StyleLintService } from './style-lint.service.js';
 import {
   AssistantAskDto,
   AssistantLintDto,
@@ -44,6 +45,7 @@ export class AssistantController {
   constructor(
     private readonly assistant: AssistantService,
     private readonly threads: AssistantThreadsService,
+    private readonly styleLint: StyleLintService,
   ) {}
 
   @Post('review')
@@ -61,7 +63,7 @@ export class AssistantController {
       'that styleguide and quotes the text verbatim; anything else the model reports is dropped and counted.',
   })
   lint(@Body() dto: AssistantLintDto, @CurrentPrincipal() principal: Principal): Promise<AssistantLintResponse> {
-    return this.assistant.lint(dto, principal);
+    return this.styleLint.lint(dto, principal);
   }
 
   @Post('suggest')

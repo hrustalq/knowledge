@@ -280,6 +280,14 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
         paths: input.paths,
       })),
     },
+    apiSpecs: {},
+    apiDiffs: {},
+    styleLint: {
+      lint: vi.fn(async () => ({ enabled: true, styleguide: { id: 'sg-1', name: 'House', scope: 'workspace' }, violations: [], dropped: 0 })),
+    },
+    quality: {
+      forDocument: vi.fn(async (_scope: unknown, documentId: string) => ({ documentId, score: null, peers: [], stale: false, history: [], lowThreshold: 50 })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
   return {
@@ -298,6 +306,8 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     learnings: deps.learnings,
     captures: deps.captures,
     componentDrafts: deps.componentDrafts,
+    styleLint: deps.styleLint,
+    quality: deps.quality,
   };
 }
 
@@ -497,6 +507,37 @@ describe('McpService over a principal', () => {
 
     const refused = await client.callTool({ name: 'knowledge_list_templates', arguments: { workspaceId: WS_A } });
     expect(refused.isError).toBe(true);
+  });
+
+  it('lints a draft and reads page quality for a read-only key, as viewers (#74)', async () => {
+    const doc = '44444444-4444-4444-8444-444444444444';
+    const svc = service(accessWith('viewer'));
+    (svc.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_A);
+    const p = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A });
+    const client = await connect(svc.mcp, p);
+    const { tools } = await client.listTools();
+    for (const name of ['knowledge_lint_draft', 'knowledge_get_page_quality']) {
+      expect(tools.find((t) => t.name === name)?.annotations?.readOnlyHint, name).toBe(true);
+      expect(WRITE_TOOLS.has(name)).toBe(false);
+    }
+
+    const lint = await client.callTool({ name: 'knowledge_lint_draft', arguments: { workspaceId: WS_A, markdown: 'Click on Save.' } });
+    expect(lint.isError).toBeFalsy();
+    expect(svc.styleLint.lint).toHaveBeenCalledWith({ workspaceId: WS_A, projectId: undefined, title: '', markdown: 'Click on Save.' }, p);
+    expect(JSON.parse((lint.content as Array<{ text: string }>)[0].text)).toMatchObject({ enabled: true, violations: [] });
+
+    const quality = await client.callTool({ name: 'knowledge_get_page_quality', arguments: { documentId: doc } });
+    expect(quality.isError).toBeFalsy();
+    expect(svc.quality.forDocument).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: WS_A }), doc);
+
+    // A page in a workspace the key is not pinned to is refused before it is read.
+    (svc.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_B);
+    const refused = await client.callTool({ name: 'knowledge_get_page_quality', arguments: { documentId: doc } });
+    expect(refused.isError).toBe(true);
+    expect(svc.quality.forDocument).toHaveBeenCalledTimes(1);
+    const foreign = await client.callTool({ name: 'knowledge_lint_draft', arguments: { workspaceId: WS_B, markdown: 'x' } });
+    expect(foreign.isError).toBe(true);
+    expect(svc.styleLint.lint).toHaveBeenCalledTimes(1);
   });
 
   it('knowledge_get_page_access is a read that checks the page before describing it (#76)', async () => {

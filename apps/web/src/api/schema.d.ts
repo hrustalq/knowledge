@@ -4369,6 +4369,57 @@ export interface paths {
         patch: operations["KnowledgeHealthController_updateSettings"];
         trace?: never;
     };
+    "/v1/quality/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quality of the workspace or one project from each page's newest score: distribution, dimension means, history per audit day, worst pages and most-violated styleguide rules */
+        get: operations["QualityController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/quality/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Scored pages with their newest score, worst first unless sorted otherwise */
+        get: operations["QualityController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page's newest quality score with its issues, near-duplicate peers the caller may open, and its history. score is null until the auditor has run */
+        get: operations["QualityController_forDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/shares": {
         parameters: {
             query?: never;
@@ -6157,6 +6208,8 @@ export interface components {
             extractionMinConfidence?: number | null;
             /** @description Chunks of a page sent to the extractor. Null inherits EXTRACTOR_MAX_CHUNKS (20). */
             extractionMaxChunks?: number | null;
+            /** @description Days a quality score stands before the auditor re-scores an unchanged page (#74). Null inherits QUALITY_AUDIT_DAYS (7). */
+            qualityAuditDays?: number | null;
             /** @description Allow Agent mode (write tools) in the chat for this workspace */
             agentModeEnabled?: boolean;
             /** @description USD per 1M prompt tokens (cost estimate) */
@@ -21594,6 +21647,138 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateKnowledgeHealthSettingsDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityController_summary: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Only this project; the whole workspace when absent */
+                projectId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Only this project; the whole workspace when absent */
+                projectId?: string;
+                /** @description worst (the default) | best | title | recent */
+                sort?: "worst" | "best" | "title" | "recent";
+                /** @description Title contains */
+                q?: string;
+                /** @description 50 when absent */
+                limit?: number;
+                /** @description nextCursor of the previous page */
+                cursor?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityController_forDocument: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

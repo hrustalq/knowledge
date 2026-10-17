@@ -3791,6 +3791,36 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/documents/{id}/quality",
+      "tag": "quality",
+      "summary": "A page's newest quality score with its issues, near-duplicate peers the caller may open, and its history. score is null until the auditor has run",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/quality/documents",
+      "tag": "quality",
+      "summary": "Scored pages with their newest score, worst first unless sorted otherwise",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/quality/summary",
+      "tag": "quality",
+      "summary": "Quality of the workspace or one project from each page's newest score: distribution, dimension means, history per audit day, worst pages and most-violated styleguide rules",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/search",
       "tag": "search",
@@ -4647,6 +4677,16 @@
       ]
     },
     {
+      "name": "knowledge_get_page_quality",
+      "description": "s newest quality score from the auditor agent: overall 0–100 and six dimensions (clarity, \" + + +",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        }
+      ]
+    },
+    {
       "name": "knowledge_get_template",
       "description": "One template: its markdown source, category, default tags and relations, and the placeholders (name, kind, required) to pass as values to knowledge_create_document.",
       "inputs": [
@@ -4721,6 +4761,28 @@
         {
           "name": "documentId",
           "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_lint_draft",
+      "description": "s own, else the \" + \"workspaces severity; reports the model invented are dropped and counted. Nothing is stored. Use it before \" + +",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        },
+        {
+          "name": "title",
+          "optional": true
+        },
+        {
+          "name": "markdown",
+          "optional": false
         }
       ]
     },

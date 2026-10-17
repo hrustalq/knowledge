@@ -2471,7 +2471,11 @@
         "noteClamped": "Asked for {asked}, but the deployment allows at most {ceiling} (STYLE_LINT_POLICY).",
         "noteAgentDisabled": "Off: the Linter agent is disabled in Agents."
       }
-    }
+    },
+    "qualityAudit": "Quality audit",
+    "qualityAuditDesc": "How the auditor agent keeps page quality scores current.",
+    "qualityAuditDays": "Re-score unchanged pages after (days)",
+    "qualityAuditHint": "A page is re-scored as soon as it changes. An unchanged page keeps its score for {days} days; leave the field empty to use the server default ({defaultDays})."
   },
   "search": {
     "activeFilters": "{n} filter | {n} filters",
@@ -2654,7 +2658,8 @@
     "pages": "Pages",
     "glossary": "Glossary",
     "site": "Site",
-    "usedBy": "Used by"
+    "usedBy": "Used by",
+    "quality": "Quality"
   },
   "knowledgeIssue": {
     "report": "Report a problem",
@@ -3976,7 +3981,8 @@
     "subtitle": "{count} live page {scope} | {count} live pages {scope}",
     "tab": {
       "pages": "Pages",
-      "settings": "Settings"
+      "settings": "Settings",
+      "quality": "Quality"
     },
     "presets": "Presets",
     "preset": {
@@ -5171,6 +5177,95 @@
       "missing-in-code": "Not in code",
       "missing-in-spec": "Not in spec",
       "method-mismatch": "Method differs"
+    }
+  },
+  "quality": {
+    "headline": "Pages {scope} average {average}",
+    "scored": "{scored} of {total} page scored | {scored} of {total} pages scored",
+    "unscored": "{n} not scored yet | {n} not scored yet",
+    "lastAudit": "last audit {when}",
+    "stale": "changed since scored",
+    "issues": "{n} issue | {n} issues",
+    "empty": {
+      "title": "No page has been scored yet",
+      "body": "The auditor agent scores each page on clarity, completeness, links, ownership, duplication and style. Scores appear here after its first run — on its schedule, or started by hand.",
+      "run": "Run the auditor from AI settings",
+      "askAdmin": "A workspace admin can run the auditor from AI settings."
+    },
+    "history": {
+      "title": "Over time",
+      "hint": "The average as it stood at the end of each audit day. Below {threshold}, the auditor reports a page.",
+      "summary": "Score went from {from} on {start} to {to} on {end}",
+      "up": "up {n}",
+      "down": "down {n}",
+      "single": "One audit so far, on {date}. The line starts with the second."
+    },
+    "dimensions": {
+      "title": "Where the points go",
+      "hint": "The mean of each dimension over the pages where it could be measured.",
+      "measured": "on {n} page | on {n} pages",
+      "notMeasured": "not measured yet"
+    },
+    "dimension": {
+      "clarity": {
+        "label": "Clarity",
+        "hint": "Is it easy to follow — structure, sentences, defined terms."
+      },
+      "completeness": {
+        "label": "Completeness",
+        "hint": "Does it cover what a page like this needs, without gaps or placeholders."
+      },
+      "links": {
+        "label": "Links",
+        "hint": "Do its links to other pages resolve to a page that exists."
+      },
+      "ownership": {
+        "label": "Ownership",
+        "hint": "Does the page have an owner who answers for it."
+      },
+      "duplication": {
+        "label": "Duplication",
+        "hint": "Is it distinct from every other page, or does another say the same thing."
+      },
+      "style": {
+        "label": "Style",
+        "hint": "Does it follow the styleguide that applies to its project."
+      }
+    },
+    "distribution": {
+      "title": "Distribution",
+      "hint": "Pages per score band.",
+      "label": "Pages per score band",
+      "band": "Score {band}"
+    },
+    "worst": {
+      "title": "Lowest scores"
+    },
+    "rules": {
+      "title": "Rules broken most",
+      "hint": "Styleguide rules the newest scores cite.",
+      "none": "No styleguide rule is broken on a scored page.",
+      "count": "{count}× on {pages} page | {count}× on {pages} pages",
+      "gone": "No longer in the styleguide",
+      "edit": "Edit the styleguide"
+    },
+    "severity": {
+      "error": "Error",
+      "warning": "Warning",
+      "info": "Note"
+    },
+    "rail": {
+      "scored": "scored {when}",
+      "stale": "The page changed after this score; it is re-scored at the next audit.",
+      "issues": "What cost points",
+      "peers": "Near-duplicates",
+      "similarity": "{n}% alike",
+      "preview": "{n} / 100",
+      "previewStale": "{n} / 100 · changed"
+    },
+    "project": {
+      "average": "Average {average}.",
+      "open": "Open quality"
     }
   }
 }

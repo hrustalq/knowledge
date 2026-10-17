@@ -224,6 +224,25 @@ in the pull request that introduces them — see
   an unchanged page keeps its earlier judgement and makes no model call, so
   re-running over an unchanged workspace costs nothing. Model calls appear in
   AI usage as `audit`. (#74)
+- Quality scores are now visible. Knowledge health has a **Quality** tab:
+  the average for the workspace or the active project, how many pages are
+  scored, the average over time (one point per audit day, counting each
+  page's newest score as of that day), the mean of each of the six
+  dimensions, how the pages spread across score bands, the lowest-scoring
+  pages and the styleguide rules broken most often. A page with a score gets
+  a **Quality** widget in its side rail with the score, the six dimensions,
+  what cost it points (the quoted passage, the rule, the broken link) and its
+  near-duplicates; a project page gets the same summary in small. Scores
+  below the auditor's threshold are marked. Every figure counts only pages
+  you can open, and a near-duplicate you cannot open is not named. Over the
+  API: `GET /v1/quality/summary`, `GET /v1/quality/documents` and
+  `GET /v1/documents/:id/quality`. AI settings gains the audit interval
+  (`qualityAuditDays`, how long an unchanged page keeps its score). (#74)
+- Two MCP tools for agents: `knowledge_lint_draft` checks markdown against
+  the styleguide of its project before the agent writes it (the same result
+  as `POST /v1/assistant/lint`), and `knowledge_get_page_quality` returns a
+  page's newest score, issues and history. Both are read-only and offered to
+  read-only keys. (#74)
 
 ### Changed
 

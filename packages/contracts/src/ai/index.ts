@@ -701,6 +701,13 @@ export interface CheckSourcePolicyResponse {
 
 export type AiProvider = 'none' | 'openai-compatible' | 'deepseek' | 'gen-api';
 
+export interface QualityAuditSettings {
+  days: number;
+  source: 'db' | 'env';
+  /** QUALITY_AUDIT_DAYS — what a cleared override goes back to. */
+  defaultDays: number;
+}
+
 // GET /v1/ai/settings?workspaceId= — the credential itself is never returned.
 export interface AiSettingsResponse {
   workspaceId: string;
@@ -727,6 +734,11 @@ export interface AiSettingsResponse {
   sources: AiSettingsSourceMap;
   /** How much of the open web the assistant may reach (docs/features/25). */
   webAccess: WebAccessSettings;
+  /**
+   * How often the auditor re-scores an unchanged page (#74). `days` applies;
+   * `source` says whether it is this workspace's override or QUALITY_AUDIT_DAYS.
+   */
+  qualityAudit: QualityAuditSettings;
   /** Whether the page AI actions menu may open external AI vendors (issue #68). */
   externalAiActions: ExternalAiActionsSettings;
   /** Agent-session memory: whether coding agents may propose captures, and how many (issue #73). */

@@ -148,6 +148,20 @@ export class UpdateAiSettingsDto {
   @Max(200, { message: vmsg('max') })
   extractionMaxChunks?: number | null;
 
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    minimum: 1,
+    maximum: 365,
+    description: 'Days a quality score stands before the auditor re-scores an unchanged page (#74). Null inherits QUALITY_AUDIT_DAYS (7).',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('qualityAuditDays')
+  @IsInt()
+  @Min(1, { message: vmsg('min') })
+  @Max(365, { message: vmsg('max') })
+  qualityAuditDays?: number | null;
+
   @ApiPropertyOptional({ description: 'Allow Agent mode (write tools) in the chat for this workspace' })
   @IsOptional()
   @IsBoolean()

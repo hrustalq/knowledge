@@ -59,6 +59,13 @@ export const ApiContract = Node.create<ApiOptions>({
         parseHTML: (element) => element.getAttribute(KN.apiPath) || '/',
         renderHTML: (attributes) => ({ [KN.apiPath]: attributes.path }),
       },
+      // The spec operation this block mirrors (#78). Set, the read view draws
+      // the operation live from the spec and the page IMPLEMENTS it.
+      op: {
+        default: null as string | null,
+        parseHTML: (element) => element.getAttribute(KN.apiOp) || null,
+        renderHTML: (attributes) => (attributes.op ? { [KN.apiOp]: attributes.op } : {}),
+      },
     }
   },
 

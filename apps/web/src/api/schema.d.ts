@@ -19539,6 +19539,8 @@ export interface operations {
                 q?: string;
                 /** @description Only the operations of this spec document */
                 documentId?: string;
+                /** @description Exactly this operation, however the key is spelled (op:billing-api:post-/invoices) — resolves a link to its spec */
+                entityKey?: string;
                 /** @description Defaults to 50 */
                 limit?: number;
             };

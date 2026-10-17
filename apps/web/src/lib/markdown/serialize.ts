@@ -138,7 +138,10 @@ turndown.addRule('knApi', {
     // `"` is the only character that can break out of the attribute; the path
     // is otherwise written verbatim so `{id}` templates survive untouched.
     const path = (attr(node, KN.apiPath) || '/').replace(/"/g, '&quot;');
-    return `\n\n<div ${KN.api}="${method}" ${KN.apiPath}="${path}">\n\n${content.trim()}\n\n</div>\n\n`;
+    // The spec operation a linked block mirrors (#78); the worker reads it back
+    // as an IMPLEMENTS fact, so it is escaped the way the path is.
+    const op = attr(node, KN.apiOp).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    return `\n\n<div ${KN.api}="${method}" ${KN.apiPath}="${path}"${op ? ` ${KN.apiOp}="${op}"` : ''}>\n\n${content.trim()}\n\n</div>\n\n`;
   },
 });
 

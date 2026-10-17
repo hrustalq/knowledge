@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { WorkflowProducer } from './workflow.producer.js';
 import { t } from '../i18n/t.js';
+import type { StepItem } from './workflow.executors.js';
 
 /**
  * Run progression (docs/features/17) — the part of the workflow engine that
@@ -80,7 +81,7 @@ export class WorkflowRunnerService {
     run: WorkflowRun,
     parent: WorkflowRunNode,
     step: WorkflowStep,
-    items: Array<{ title: string; summary?: string }>,
+    items: StepItem[],
   ): Promise<void> {
     const graph = run.definitionSnapshot as unknown as WorkflowGraph;
     const next = step.next.map((id) => stepById(graph, id)).filter((s): s is WorkflowStep => Boolean(s));
@@ -101,6 +102,7 @@ export class WorkflowRunnerService {
           title: item.title,
           markdown: item.summary ?? '',
           summary: item.summary,
+          ...(item.operationKey ? { operationKey: item.operationKey } : {}),
         } as Prisma.InputJsonValue,
       })),
     });

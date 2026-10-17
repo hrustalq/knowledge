@@ -1,6 +1,7 @@
 import {
   AGENT_MENTION_ATTR,
   API_CONTRACT_ATTR,
+  API_OPERATION_ATTR,
   API_PATH_ATTR,
   API_SECTION_ATTR,
 } from '@knowledge/contracts';
@@ -51,6 +52,7 @@ export const KN = {
   api: API_CONTRACT_ATTR,
   apiPath: API_PATH_ATTR,
   apiSection: API_SECTION_ATTR,
+  apiOp: API_OPERATION_ATTR,
 } as const;
 
 /**

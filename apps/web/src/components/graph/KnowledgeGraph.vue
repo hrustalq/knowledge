@@ -36,7 +36,7 @@ import {
   type Simulation,
 } from 'd3-force'
 import { DEFAULT_OPTIONS, project, radiusOf, type GraphEdgeInput, type GraphNodeInput, type GraphOptions } from './graph-model'
-import { entityColor, mix, readPalette, rgba, type GraphPalette } from './graph-theme'
+import { entityColor, isOperationType, mix, readPalette, rgba, type GraphPalette } from './graph-theme'
 
 const props = withDefaults(
   defineProps<{
@@ -57,6 +57,8 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   open: [id: string]
+  /** An operation or channel entity (#78): its card in the API reference is where it lives. */
+  'open-operation': [key: string]
   select: [node: GraphNodeInput | null]
   stats: [value: { nodes: number; edges: number; orphans: number; counts: Record<string, number> }]
 }>()
@@ -479,7 +481,10 @@ function draw() {
       // the round-rect used to, but at a scale that survives 300 nodes.
       ctx.fillStyle = rgba(p.background, a)
       ctx.beginPath()
-      ctx.arc(x, y, r, 0, Math.PI * 2)
+      // A spec operation is a square: a defined, addressable contract rather
+      // than a loose concept, legible at any zoom without a legend (#78).
+      if (isOperationType(n.entityType)) ctx.roundRect(x - r * 0.9, y - r * 0.9, r * 1.8, r * 1.8, r * 0.3)
+      else ctx.arc(x, y, r, 0, Math.PI * 2)
       ctx.fill()
       ctx.strokeStyle = rgba(base, a * (isFocus ? 1 : 0.85))
       ctx.lineWidth = Math.max(1.2, r * 0.34)
@@ -648,6 +653,10 @@ function onPointerUp(e: PointerEvent) {
     emit('open', d.node.id)
     return
   }
+  if (d.node.kind === 'entity' && isOperationType(d.node.entityType)) {
+    emit('open-operation', d.node.id)
+    return
+  }
   pinned.value = pinned.value?.id === d.node.id ? null : d.node
   emit('select', pinned.value)
   wake()
@@ -754,6 +763,7 @@ const cardRelations = computed(() => {
 
 /** Every page in the graph, as real links — the keyboard and screen-reader route. */
 const documentNodes = computed(() => projection.value.nodes.filter((n) => n.kind === 'document'))
+const operationNodes = computed(() => projection.value.nodes.filter((n) => n.kind === 'entity' && isOperationType(n.entityType)))
 </script>
 
 <template>
@@ -781,6 +791,9 @@ const documentNodes = computed(() => projection.value.nodes.filter((n) => n.kind
     <ul class="sr-only">
       <li v-for="n in documentNodes" :key="n.id">
         <a :href="`/documents/${n.id}`" @click.prevent="emit('open', n.id)">{{ n.label }}</a>
+      </li>
+      <li v-for="n in operationNodes" :key="n.id">
+        <button type="button" @click="emit('open-operation', n.id)">{{ n.label }}</button>
       </li>
     </ul>
 

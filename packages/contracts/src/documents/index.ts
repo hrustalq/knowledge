@@ -375,15 +375,20 @@ export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
 //
 // These live in contracts rather than in the web app for the AGENT_MENTION_ATTR
 // reason: the block is written by the editor and read back by the server (the
-// ingestion worker turns an endpoint into a graph entity, and the OpenAPI
-// exporter parses these attributes out of stored markdown), so the writer and
-// the reader must not be able to drift apart.
+// ingestion worker turns a block linked to a spec operation into an IMPLEMENTS
+// fact), so the writer and the reader must not be able to drift apart.
 // ---------------------------------------------------------------------------
 
 /** Wrapper attribute; its value is the HTTP method. */
 export const API_CONTRACT_ATTR = 'data-kn-api';
 /** The endpoint path, on the same wrapper. */
 export const API_PATH_ATTR = 'data-kn-path';
+/**
+ * The spec operation a block mirrors (#78): an `op:` or `channel:` entity key,
+ * as `operationEntityKey` builds it. Set, the block renders that operation live
+ * from the spec, and the page IMPLEMENTS it.
+ */
+export const API_OPERATION_ATTR = 'data-kn-op';
 /**
  * Marks one section inside the block. The *meaning* rides here so the visible
  * label stays translatable — an exporter that matched on the label text would

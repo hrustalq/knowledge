@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ApiOperationInfo } from '@knowledge/contracts'
-import { deref, groupByTag, operationView, resolvePointer, schemaTree, serversOf, typeLabel } from './api-spec'
+import { SCHEMA_DEPTH, deref, expandRecursive, groupByTag, operationView, resolvePointer, schemaTree, serversOf, typeLabel } from './api-spec'
 
 const doc = {
   openapi: '3.1.1',
@@ -80,6 +80,25 @@ describe('api-spec reading', () => {
     expect(tree[2]).toMatchObject({ recursive: true, refName: 'User', children: [] })
     expect(tree[3].type).toBe('array<Tag>')
     expect(tree[3].children.map((n) => n.name)).toEqual(['name'])
+  })
+
+  it('counts what a node holds and opens a recursion one level on request', () => {
+    const tree = schemaTree(doc, { $ref: '#/components/schemas/User' })
+    expect(tree[0].count).toBeNull()
+    expect(tree[3].count).toEqual({ kind: 'fields', n: 1, array: true })
+    const manager = tree[2]
+    expect(manager).toMatchObject({ lazy: true, count: { kind: 'fields', n: 4, array: false } })
+    const next = expandRecursive(doc, manager)
+    expect(next.map((n) => n.name)).toEqual(['id', 'role', 'manager', 'tags'])
+    // The repeat inside is a marker again, one level deeper.
+    expect(next[2]).toMatchObject({ recursive: true, lazy: true, depth: manager.depth + 1 })
+  })
+
+  it('stops opening a recursion at the depth cap', () => {
+    let level = schemaTree(doc, { $ref: '#/components/schemas/User' })
+    for (let i = 0; i < SCHEMA_DEPTH && level[2]?.lazy; i++) level = expandRecursive(doc, level[2])
+    expect(level[2].lazy).toBe(false)
+    expect(level[2].depth + 1).toBeGreaterThanOrEqual(SCHEMA_DEPTH)
   })
 
   it('labels types', () => {

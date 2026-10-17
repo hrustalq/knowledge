@@ -13,9 +13,21 @@
  *       targetKey: product:babbler          # the tool-schema spelling
  *       name: Babbler
  *   tags: [security, identity]
+ *
+ * And from the body, one more declaration of the same class: an API contract
+ * block linked to a spec operation (`data-kn-op`, #78) makes the page
+ * IMPLEMENTS that operation. It is the author's statement as much as a
+ * `relations:` entry is, so it shares the frontmatter class — replaced with
+ * every revision, scoped to the branch the revision is on.
  */
 
-import { readFrontmatterRelations, readFrontmatterTags, tagEntityKey } from '../common/relations.js';
+import { entityNameOf, entityTypeOf } from '@knowledge/contracts';
+import {
+  readApiOperationRefs,
+  readFrontmatterRelations,
+  readFrontmatterTags,
+  tagEntityKey,
+} from '../common/relations.js';
 
 export interface ExtractedFact {
   type: string;
@@ -26,7 +38,7 @@ export interface ExtractedFact {
 // key below, so accepting it here would give tags two spellings. That rule now
 // lives with the vocabulary itself, in @knowledge/contracts.
 
-export function extractFrontmatterFacts(frontmatter: Record<string, unknown>): ExtractedFact[] {
+export function extractFrontmatterFacts(frontmatter: Record<string, unknown>, body = ''): ExtractedFact[] {
   const facts: ExtractedFact[] = [];
 
   // Both readers go through the shared normalizer, so `связи:`/`теги:` are read
@@ -39,6 +51,10 @@ export function extractFrontmatterFacts(frontmatter: Record<string, unknown>): E
 
   for (const tag of readFrontmatterTags(frontmatter)) {
     facts.push({ type: 'TAGGED_WITH', target: { key: tagEntityKey(tag), type: 'tag', name: tag } });
+  }
+
+  for (const key of readApiOperationRefs(body)) {
+    facts.push({ type: 'IMPLEMENTS', target: { key, type: entityTypeOf(key), name: entityNameOf(key) } });
   }
 
   // De-duplicate (type, target.key) pairs.

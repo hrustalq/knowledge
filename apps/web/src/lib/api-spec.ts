@@ -77,6 +77,20 @@ export interface SchemaNode {
   enumValues: string[]
   deprecated: boolean
   children: SchemaNode[]
+  /** What a closed node holds — "3 fields", "array of 2 fields", "one of 2 variants". Null when nothing opens. */
+  count: SchemaCount | null
+  /** A recursion that can still be opened one more level on request (`expandRecursive`). */
+  lazy: boolean
+  /** The schema this node was read from and its depth, for `expandRecursive`. */
+  schema: unknown
+  depth: number
+}
+
+export interface SchemaCount {
+  kind: 'fields' | 'variants'
+  n: number
+  /** The fields are an array's items'. */
+  array: boolean
 }
 
 /** The root of a schema as nodes — its properties, or its items' properties. */
@@ -117,9 +131,16 @@ function child(
   const n = isObject(node) ? node : {}
   const opens = !cycle && hasChildren(doc, n, ref ? [...chain, ref] : chain)
   const truncated = opens && depth + 1 >= SCHEMA_DEPTH
+  // A recursion is counted from a fresh walk: the ref it repeats is the one it would open.
+  const count = cycle ? countOf(doc, value, []) : opens ? countOf(doc, value, chain) : null
   return {
+    count,
+    lazy: cycle && count !== null && depth + 1 < SCHEMA_DEPTH,
+    schema: value,
+    depth,
     name,
-    type: cycle ? 'object' : typeLabel(doc, n, ref ? [...chain, ref] : chain),
+    // From the reference itself, so a `$ref` reads as its name (`Customer`), not `object`.
+    type: typeLabel(doc, value, chain),
     required,
     description: str(n.description),
     refName: refName(refOverride ?? ref),
@@ -129,6 +150,37 @@ function child(
     deprecated: n.deprecated === true,
     children: opens && !truncated ? schemaTree(doc, n, ref ? [...chain, ref] : chain, depth + 1) : [],
   }
+}
+
+/**
+ * Open a recursive node one more level, as Swagger does: walk its schema
+ * afresh, so the ref it repeated is followed once and the next repeat inside
+ * is again a marker. Never called by Expand all — only by a click — so a
+ * self-referencing type costs one level per request and cannot run away.
+ */
+export function expandRecursive(doc: unknown, node: SchemaNode): SchemaNode[] {
+  return node.lazy ? schemaTree(doc, node.schema, [], node.depth + 1) : node.children
+}
+
+/** How much a node holds, without walking below its first level. */
+function countOf(doc: unknown, schema: unknown, chain: readonly string[], array = false): SchemaCount | null {
+  const { node, ref, cycle } = deref(doc, schema, chain)
+  if (cycle || !isObject(node)) return null
+  const next = ref ? [...chain, ref] : chain
+  for (const key of ['oneOf', 'anyOf'] as const) {
+    if (Array.isArray(node[key]) && node[key].length) return { kind: 'variants', n: node[key].length, array }
+  }
+  if (node.type === 'array' || (node.items !== undefined && !node.properties)) {
+    return array ? null : countOf(doc, node.items, next, true)
+  }
+  let n = isObject(node.properties) ? Object.keys(node.properties).length : 0
+  if (Array.isArray(node.allOf)) {
+    for (const part of node.allOf) {
+      const c = countOf(doc, part, next)
+      if (c?.kind === 'fields' && !c.array) n += c.n
+    }
+  }
+  return n > 0 ? { kind: 'fields', n, array } : null
 }
 
 function hasChildren(doc: unknown, node: Json, chain: readonly string[]): boolean {

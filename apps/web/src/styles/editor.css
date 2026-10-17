@@ -327,66 +327,368 @@
 
 /* API contract ------------------------------------------------------------ */
 
+/* One endpoint as Swagger UI's opblock, spoken in the panel ramp (#78): the
+   method's hue draws a hairline frame, washes the ground faintly and the
+   header more strongly, and fills the method badge. A column of endpoints
+   reads by colour before it reads by word. Three surfaces wear it — the page's
+   API block (read and written), the markdown it renders to, and the spec
+   reference card (`.kn-op`) — so they never disagree about what GET looks like.
+   The hues are `methodTone`'s; emerald, amber and red stay the indexing dot's.
+   Mixes here are in oklab, not oklch: the light card is `oklch(1 0 0)`, whose
+   hue of 0° an oklch mix interpolates toward — a blue wash came out pink. */
+/* Neutral until a method names a hue; `:where` so any method rule wins. */
+:where(.kn-api, [data-kn-api], .kn-op) { --kn-accent: var(--muted-foreground); }
 .kn-api,
-.markdown-body [data-kn-api] {
-  --kn-accent: var(--kn-panel-note);
-  margin-block: var(--kn-block-gap);
-  border: 1px solid var(--border);
+.markdown-body [data-kn-api],
+.kn-op {
+  border: 1px solid color-mix(in oklab, var(--kn-accent) 38%, var(--border));
   border-radius: 10px;
-  background: var(--card);
-  overflow: hidden;
+  background: color-mix(in oklab, var(--kn-accent) 3.5%, var(--card));
+  overflow: clip;
 }
-[data-kn-api='POST'] { --kn-accent: var(--kn-panel-tip); }
-[data-kn-api='PUT'],
-[data-kn-api='PATCH'] { --kn-accent: var(--kn-panel-warning); }
-[data-kn-api='DELETE'] { --kn-accent: var(--kn-panel-caution); }
-[data-kn-api='HEAD'],
-[data-kn-api='OPTIONS'] { --kn-accent: var(--muted-foreground); }
+.kn-api,
+.markdown-body [data-kn-api] { margin-block: var(--kn-block-gap); }
+.kn-op { container: kn-op / inline-size; }
+:is([data-kn-api], [data-kn-method]):is([data-kn-api='GET'], [data-kn-api='HEAD'], [data-kn-method='GET'], [data-kn-method='HEAD']) { --kn-accent: var(--kn-panel-note); }
+:is([data-kn-api='POST'], [data-kn-method='POST']) { --kn-accent: var(--kn-panel-tip); }
+:is([data-kn-api='PUT'], [data-kn-method='PUT']) { --kn-accent: var(--kn-panel-warning); }
+:is([data-kn-api='PATCH'], [data-kn-method='PATCH']) { --kn-accent: var(--kn-panel-important); }
+:is([data-kn-api='DELETE'], [data-kn-method='DELETE']) { --kn-accent: var(--kn-panel-caution); }
+
+/* The header band. On the reference card it is the button that opens the
+   card, so it answers the pointer; on a page block it is the block's title. */
+.kn-op-head,
+.kn-api .kn-api-head,
+.markdown-body [data-kn-api] > h3:first-child {
+  background: color-mix(in oklab, var(--kn-accent) 10%, var(--card));
+}
+.kn-op-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.6rem 0.9rem 0.6rem 0.75rem;
+  border: 0;
+  cursor: pointer;
+  text-align: start;
+  transition: background-color 150ms ease-out;
+}
+.kn-op-head:hover { background: color-mix(in oklab, var(--kn-accent) 15%, var(--card)); }
+.kn-op-head:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.kn-op[data-state='open'] > h3 > .kn-op-head { border-bottom: 1px solid color-mix(in oklab, var(--kn-accent) 30%, var(--border)); }
 
 /* One header, two surfaces: the <h3> the node view draws and the <h3> marked
    emits from the stored markdown. Styled by a single rule, so an endpoint looks
    the same whether it is being read or written. */
-.kn-api-head,
+/* `.kn-api` doubled up: the prose heading rule (`.kn-prose h3`) must lose. */
+.kn-api .kn-api-head,
 .markdown-body [data-kn-api] > h3:first-child {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  min-height: 3rem;
   margin: 0;
-  padding: 0.5rem 0.85rem;
+  padding: 0.5rem 0.6rem 0.5rem 0.75rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 600;
+  line-height: 1.35;
   letter-spacing: 0;
-  color: var(--kn-accent);
-  background: color-mix(in oklch, var(--kn-accent) 8%, transparent);
-  border-bottom: 1px solid color-mix(in oklch, var(--kn-accent) 22%, transparent);
-}
-.kn-api-method {
-  font: inherit;
-  font-weight: 700;
-  color: var(--kn-accent);
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-}
-.kn-api-path {
-  flex: 1;
-  min-width: 0;
   color: var(--foreground);
+  border-bottom: 1px solid color-mix(in oklab, var(--kn-accent) 30%, var(--border));
+}
+.kn-api-head:last-child,
+.kn-api.kn-api--bare .kn-api-head { border-bottom: 0; }
+
+/* The badge: the hue as ground, the page's own background as ink. Pulled 22%
+   toward the foreground first — darker on paper, lighter on night ground —
+   which is what keeps the ink at AA on both. */
+.kn-api-method {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  min-width: 4rem;
+  height: 1.6rem;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: center;
+  text-align-last: center;
+  color: var(--background);
+  background: color-mix(in oklab, var(--kn-accent) 78%, var(--foreground));
+}
+select.kn-api-method {
+  appearance: none;
+  cursor: pointer;
+  padding-inline: 0.5rem 1.2rem;
+  background:
+    linear-gradient(45deg, transparent 50%, currentColor 50%) right 0.6rem top 50% / 0.28rem 0.28rem no-repeat,
+    linear-gradient(-45deg, transparent 50%, currentColor 50%) right 0.38rem top 50% / 0.28rem 0.28rem no-repeat,
+    color-mix(in oklab, var(--kn-accent) 78%, var(--foreground));
+}
+select.kn-api-method option { color: var(--foreground); background: var(--popover); }
+select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+.kn-api-path {
+  /* A real basis, so a narrow card wraps its actions below the path instead
+     of squeezing the path to one character per line. */
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
   border-radius: 4px;
   outline: none;
 }
-.kn-api-path:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
+.kn-api-path:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+/* `{id}` steps down to the muted ink, so the route's shape reads first. */
+.kn-api-param { color: var(--muted-foreground); }
+
+/* Linking to a spec operation (#78). Sans and muted beside the mono endpoint:
+   chrome about the block, never part of what it documents. */
+.kn-api-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.125rem;
+  margin-inline-start: auto;
 }
+.kn-api-linked,
+.kn-api-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 16rem;
+  height: 1.85rem;
+  padding-inline: 0.55rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: color-mix(in oklab, var(--foreground) 75%, var(--card));
+  text-decoration: none;
+  white-space: nowrap;
+}
+.kn-api-linked > span { overflow: hidden; text-overflow: ellipsis; }
+.kn-api-action { cursor: pointer; transition: background-color 120ms ease-out, color 120ms ease-out; }
+.kn-api a.kn-api-action { color: color-mix(in oklab, var(--foreground) 75%, var(--card)); text-decoration: none; }
+.kn-api a.kn-api-action:hover,
+.kn-api-action:hover { color: var(--foreground); background: color-mix(in oklab, var(--kn-accent) 16%, transparent); }
+.kn-api-action:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+/* Body ---------------------------------------------------------------------
+   The author's summary as prose, then one full-bleed row per section — the
+   request-inspector shape: a disclosure with a count, hairlines between. The
+   live spec rows (`.kn-api-live`) are the same rows, so a linked card and a
+   written one read alike. */
 .kn-api-body,
-.markdown-body [data-kn-api] > :not(h3:first-child) { padding-inline: 0.85rem; }
-.kn-api-body > :first-child,
-.markdown-body [data-kn-api] > h3:first-child + * { margin-top: 0.7rem; }
-.kn-api-body > :last-child,
-.markdown-body [data-kn-api] > :last-child { margin-bottom: 0.85rem; }
+.markdown-body [data-kn-api] > :not(h3:first-child) { padding-inline: 1rem; }
+.kn-api-body { padding-top: 0.75rem; }
+.markdown-body [data-kn-api] > h3:first-child + * { padding-top: 0.75rem; }
+.markdown-body [data-kn-api] > :last-child { padding-bottom: 0.85rem; }
+.kn-api-body p,
+.markdown-body [data-kn-api] p { margin-block: 0.15rem; font-size: 0.92rem; line-height: 1.6; }
+.kn-api-section[data-kn-api-section='summary'] { padding-bottom: 0.75rem; }
+.kn-api-section--empty { display: none; }
+.kn-api.kn-api--bare .kn-api-body { padding-top: 0; }
+
+/* A section row bleeds to the card's edges so its hairline does too. */
+.kn-api-section:not([data-kn-api-section='summary']),
+.kn-api-live > .kn-api-live-row,
+.kn-api-live > .kn-api-disclosure {
+  margin-inline: -1rem;
+  padding-inline: 1rem;
+  border-top: 1px solid color-mix(in oklab, var(--kn-accent) 20%, var(--border));
+}
+.kn-api-live { padding-inline: 1rem; }
+.kn-api-live > .kn-api-live-row { padding-block: 0.65rem; }
+.kn-api-section:first-child { border-top: 0; }
+
+.kn-api-disclosure-trigger {
+  display: flex;
+  width: calc(100% + 2rem);
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.6rem;
+  margin-inline: -1rem;
+  padding: 0.45rem 1rem;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground);
+  text-align: start;
+  transition: background-color 150ms ease-out;
+}
+.kn-api-disclosure-trigger:hover { background: color-mix(in oklab, var(--kn-accent) 8%, transparent); }
+.kn-api-disclosure-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.kn-api-disclosure-chevron {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  transition: transform var(--collapse-duration) var(--snap-ease);
+}
+.kn-api-disclosure[data-state='open'] .kn-api-disclosure-chevron { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .kn-api-disclosure-chevron, .kn-api-disclosure-trigger, .kn-op-head { transition: none; }
+}
+.kn-api-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding-inline: 0.3rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--kn-accent) 16%, transparent);
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in oklab, var(--kn-accent) 65%, var(--foreground));
+}
+.kn-api-disclosure-panel { padding-bottom: 0.75rem; }
+/* Opening and closing travel, where the browser can animate to `auto`. The
+   panel stays `hidden="until-found"` when closed — find-in-page still reaches
+   into it — so the close rides `content-visibility` discretely to keep the
+   rows on screen while the height falls. Elsewhere it opens instantly, as it
+   always did. */
+@supports (interpolate-size: allow-keywords) {
+  .kn-api-disclosure-panel {
+    interpolate-size: allow-keywords;
+    block-size: auto;
+    overflow: clip;
+    transition:
+      block-size var(--collapse-duration) var(--snap-ease),
+      padding-block var(--collapse-duration) var(--snap-ease),
+      opacity 160ms ease-out,
+      content-visibility var(--collapse-duration) allow-discrete;
+  }
+  .kn-api-disclosure-panel[hidden] {
+    block-size: 0;
+    padding-block: 0;
+    opacity: 0;
+  }
+  @starting-style {
+    .kn-api-disclosure[data-state='open'] .kn-api-disclosure-panel { block-size: 0; opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .kn-api-disclosure-panel { transition: opacity 120ms linear, content-visibility 120ms allow-discrete; }
+  }
+}
+.kn-api-disclosure-trigger + .kn-api-disclosure-panel { padding-top: 0.05rem; }
+/* Read, the trigger already names the section; its heading would repeat it. */
+.kn-api-disclosure-trigger + .kn-api-disclosure-panel h4 { display: none; }
+/* Written, there is no trigger: the heading is the label, above its table. */
+.kn-api-section .kn-api-disclosure-panel:first-child { padding-top: 0.5rem; }
+
+.kn-api h4,
+.markdown-body [data-kn-api] h4 {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0;
+  color: var(--muted-foreground);
+}
+.markdown-body [data-kn-api-section]:not([data-kn-api-section='summary']) { margin-top: 0.6rem; }
+
+/* Tables read as a dense list: hairline rows, no grid, a quiet header. */
+.kn-api :is(.tableWrapper, .kn-table-scroll, table),
+.markdown-body [data-kn-api] :is(.kn-table-scroll, table) { margin-block: 0; }
+.kn-api table,
+.markdown-body [data-kn-api] table { font-size: 0.875rem; }
+.kn-api :is(th, td),
+.markdown-body [data-kn-api] :is(th, td) {
+  min-width: 0;
+  padding: 0.45rem 1rem 0.45rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.5;
+}
+.kn-api th,
+.markdown-body [data-kn-api] th {
+  padding-block: 0.2rem 0.35rem;
+  background: none;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.kn-api tr:last-child > td,
+.markdown-body [data-kn-api] tr:last-child > td { border-bottom: 0; }
+.kn-api-body :is(th, td) > p,
+.markdown-body [data-kn-api] :is(th, td) > p { margin: 0; font-size: inherit; line-height: inherit; }
+/* The first column names the thing — a parameter, a field, a code, a header. */
+.kn-api td:first-child,
+.markdown-body [data-kn-api] td:first-child {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+/* Writing, the cells need edges to click into; reading, they do not. */
+.ProseMirror[contenteditable='true'] .kn-api :is(th, td) {
+  padding-inline-start: 0.4rem;
+  box-shadow: inset 1px 0 color-mix(in oklab, var(--border) 60%, transparent);
+}
+.ProseMirror[contenteditable='true'] .kn-api :is(th, td):first-child { box-shadow: none; }
+
+/* The live operation (#78) is chrome drawn inside the prose surface: the prose
+   rhythm must not reach it. Margins and list marks only — this sheet is
+   unlayered, so a padding reset here would override its Tailwind padding. */
+.kn-api-live :is(p, dl, dd, li) { margin-block: 0; }
+.kn-api-live ul { margin: 0; padding-inline-start: 0; list-style: none; }
+/* Same for the rows a written section is redrawn as. */
+.kn-api ul.kn-api-kv,
+.kn-api dl.kn-api-kv { margin: 0; padding-inline-start: 0; list-style: none; }
+.kn-api .kn-api-kv :is(li, dt, dd) { margin-block: 0; }
+.kn-api-live code { padding: 0; border: 0; background: none; font-size: inherit; }
+
+/* Key → value rows: the spec's parameters, bodies, responses, messages. A key
+   column on a wide card, key above value on a narrow one. */
+.kn-api-kv { display: grid; font-size: 0.875rem; }
+.kn-api-kv > :is(div, li) {
+  display: grid;
+  grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr);
+  column-gap: 1.25rem;
+  align-items: baseline;
+  padding-block: 0.55rem;
+}
+.kn-api-kv > :is(div, li) + :is(div, li) { border-top: 1px solid var(--border); }
+.kn-api-kv > li { display: flex; gap: 0.85rem; }
+.kn-api-kv dt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.84rem; font-weight: 600; overflow-wrap: anywhere; }
+.kn-api-kv dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.65rem; font-size: 0.82rem; color: color-mix(in oklab, var(--foreground) 85%, var(--card)); }
+/* Secondary facts in a row — where a value travels, its extras — sit one step
+   down, never at the muted ink's small size that read as absent on night ground. */
+.kn-api-kv .kn-api-dim { color: var(--muted-foreground); }
+.kn-api-kv .kn-api-note { flex-basis: 100%; font-size: 0.84rem; line-height: 1.5; color: color-mix(in oklab, var(--foreground) 72%, var(--card)); }
+/* Required is the one value a reader scans a parameter list for: ink, not
+   muted, and boxed so it reads at a glance without a colour of its own. */
+/* Required, as Swagger marks it: a word in the caution ink beside the type. */
+.kn-api-req {
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: color-mix(in oklab, var(--kn-panel-caution) 75%, var(--foreground));
+}
+.kn-api-kv > li { align-items: baseline; }
+
+/* Every threshold reads the card's own width, not the viewport's: a card in a
+   narrow editor column stacks exactly as it does on a phone. */
+.kn-api { container: kn-api / inline-size; }
+@container kn-api (max-width: 30rem) {
+  .kn-api-kv > div { grid-template-columns: minmax(0, 1fr); row-gap: 0.2rem; }
+  .kn-api-actions { margin-inline-start: 0; }
+}
 
 /* Expand ------------------------------------------------------------------ */
 
@@ -2021,4 +2323,15 @@
   .kn-ai-caret { animation: none; opacity: 0.6; }
   .kn-ai-dock-enter-active, .kn-ai-dock-leave-active { transition: opacity 120ms linear; }
   .kn-ai-dock-enter-from, .kn-ai-dock-leave-to { transform: none; }
+}
+
+/* A swapped panel (a tab, a media type) arrives rather than snapping in: from
+   already visible, a short settle. Content is never hidden waiting for it. */
+@keyframes kn-fade-swap {
+  from { opacity: 0.35; transform: translateY(3px); }
+}
+.kn-fade-swap { animation: kn-fade-swap 180ms var(--snap-ease); }
+@media (prefers-reduced-motion: reduce) {
+  .kn-fade-swap { animation: kn-fade-swap-still 120ms linear; }
+  @keyframes kn-fade-swap-still { from { opacity: 0.5; } }
 }

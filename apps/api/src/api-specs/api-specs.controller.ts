@@ -143,6 +143,11 @@ export class ApiOperationsController {
     @Query() query: SearchApiOperationsQueryDto,
   ): Promise<SearchApiOperationsResponse> {
     const scope = await this.permissions.scopeFor(principal, query.workspaceId);
-    return this.reads.search(scope, { q: query.q, documentId: query.documentId, limit: query.limit });
+    return this.reads.search(scope, {
+      q: query.q,
+      documentId: query.documentId,
+      entityKeys: query.entityKey ? [query.entityKey] : undefined,
+      limit: query.limit,
+    });
   }
 }

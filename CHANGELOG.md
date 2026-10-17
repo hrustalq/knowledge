@@ -84,6 +84,55 @@ in the pull request that introduces them — see
   `Host` are never forwarded. Each request needs the editor role and counts
   against a per-person rate limit. The audit log records method, host and
   path template, never headers or bodies. It is not an MCP tool. (#78)
+- Pages can now link to the operations of an API spec. In page settings,
+  **Link API operation** searches every spec you can open and adds the
+  operation as an `IMPLEMENTS` relation, and the row shows which endpoint
+  and spec the key resolves to. An API block can be linked to a spec
+  operation with **Link to spec**. A linked block takes its method and path
+  from the spec, keeps only your summary, and shows the parameters, body and
+  responses live from the spec's head. If the operation leaves the spec, the
+  block says so instead of going stale. The page then `IMPLEMENTS` the
+  operation, so it appears in the operation's linked pages.
+  `GET /v1/api-operations` takes `entityKey` to resolve one key in any
+  spelling. In the graph, operations and channels are drawn as squares and
+  open their card in the spec. In workflows, a fan-out step whose source
+  page links operations (or which runs against a spec) can tag each item
+  with one of them. The endpoint draft under that item gets the spec's text
+  for the operation and declares `DESCRIBES` on it. (#78)
+
+### Changed
+
+- API blocks (the endpoint widget in the editor) and the operations of a
+  spec now look like Swagger UI. Each endpoint is a card tinted by its
+  method — GET blue, POST green, PUT amber, PATCH violet, DELETE red — with
+  the method as a solid badge, so a page of endpoints reads at a glance in
+  light and dark themes. Text inside the cards is larger and higher-contrast,
+  and required parameters are marked as Swagger marks them.
+  - An API block's sections (parameters, body, responses, headers) are rows
+    with a count that open and close with a short animation. Find-in-page
+    still reaches text inside a closed section and opens it. When reading, a
+    section's table is drawn as name → type · location · required rows, with
+    section names and column meanings in the reader's language; the values
+    are never translated, and stored markdown is unchanged.
+  - On a spec, each operation is one line (method, path, summary, a lock when
+    it needs credentials) that opens in place. Specs with more than three
+    operations start closed; **Expand all** opens every card. Parameters and
+    responses are Name | Description and Code | Description tables, and every
+    body has **Example** and **Schema** tabs. An example the spec does not
+    give is built from the schema and labelled as such. The schema is a
+    field tree: a closed field says what it holds ("3 fields", "array of 2
+    fields", "one of 2 variants"), levels open with a short animation, and
+    **Expand all** opens the whole schema. A type that refers to itself
+    opens one more level per click instead of stopping, up to six levels.
+    Examples and responses carry an always-visible **Copy JSON** button,
+    ready to paste into Postman or `curl --data`.
+  - "Try it" is laid out like Postman: one request bar with the method, the
+    URL as it will be sent (filled path parameters highlighted, empty ones
+    flagged) and Send; then **Params**, **Headers**, **Body** and **Auth**
+    tabs with key/value tables; then the response with its status, time and
+    size, and **Body** / **Headers** tabs. Code samples and JSON responses are
+    syntax-highlighted. Pressing Send with a required field empty jumps to
+    that field instead of doing nothing. (#78)
 
 ### Operations
 

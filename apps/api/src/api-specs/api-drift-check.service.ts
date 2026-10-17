@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { isApiSpecKind, type AgentRunInput, type ApiDriftCheckResponse } from '@knowledge/contracts';
 import { AgentProducer } from '../agents/agent.producer.js';
@@ -30,10 +30,11 @@ export class ApiDriftCheckService {
   ) {}
 
   async start(principal: Principal, documentId: string): Promise<ApiDriftCheckResponse> {
-    const doc = await this.prisma.document.findUniqueOrThrow({
+    const doc = await this.prisma.document.findUnique({
       where: { id: documentId },
       select: { id: true, workspaceId: true, kind: true },
     });
+    if (!doc) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
     if (!isApiSpecKind(doc.kind)) throw new BadRequestException(t('error.apiSpec.notSpec', { id: documentId }));
     if (doc.kind !== 'openapi') throw new BadRequestException(t('error.apiSpec.driftNotHttp'));
 

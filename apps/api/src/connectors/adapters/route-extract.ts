@@ -24,7 +24,8 @@ import type { CodeLanguage, TreeSitterService } from './tree-sitter.service.js';
  *   and gin/echo/fiber `r.GET` + `x.Group(prefix)`.
  *
  * A path that is not a literal — a constant, a template with a substitution —
- * is counted as `dynamic` and dropped, never guessed. Anything else is simply
+ * is counted as `dynamic` and dropped, never guessed. Tests, fixtures,
+ * examples and vendored code are not read at all (`isOutsideTheApi`). Anything else is simply
  * not a route here; the comparator reads "no routes at all" as "this framework
  * is not supported", not as "every operation is missing".
  */
@@ -107,6 +108,18 @@ const GO_METHODS: Record<string, string> = {
 };
 const GO_HTTP_METHOD = /^(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD|CONNECT|TRACE)\s+(\/.*)$/;
 
+/**
+ * Tests, fixtures, examples and vendored code declare routes too — a test
+ * controller, a sample app — and none of them is the API a spec describes.
+ */
+const NOT_THE_API =
+  /(?:^|\/)(?:test|tests|__tests__|__mocks__|e2e|spec|specs|fixtures?|testdata|examples?|samples?|vendor|node_modules|third_party)\/|\.(?:spec|test|e2e-spec)\.[cm]?[jt]sx?$|(?:^|\/)test_[^/]*\.py$|_test\.(?:py|go)$/i;
+
+/** Whether a path is outside the API a spec describes, however many routes it declares. */
+export function isOutsideTheApi(path: string): boolean {
+  return NOT_THE_API.test(path);
+}
+
 /** Whether a file in this language could declare a route — before its text is known. */
 export function isRouteLanguage(language: CodeLanguage | null): boolean {
   return !!language && ROUTE_LANGUAGES.has(language);
@@ -124,7 +137,7 @@ export async function fileRoutes(
   text: string,
 ): Promise<FileRoutes | null> {
   const language = treeSitter.languageForPath(path);
-  if (!mayDeclareRoutes(language, text)) return null;
+  if (isOutsideTheApi(path) || !mayDeclareRoutes(language, text)) return null;
   return treeSitter.withTree(language!, text, (tree) => extractRoutes(language!, tree, path, text));
 }
 

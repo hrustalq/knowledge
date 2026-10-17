@@ -119,6 +119,14 @@ describe('route extraction', () => {
     ]);
   });
 
+  it('reads no route out of tests, fixtures, examples or vendored code', async () => {
+    const controller = "@Controller('asset') class Fixture { @Get() x() {} }";
+    for (const path of ['apps/api/test/query-token.spec.ts', 'src/users.controller.spec.ts', 'examples/app.ts', 'vendor/x/router.go', 'tests/test_app.py', 'pkg/server_test.go']) {
+      expect(await fileRoutes(treeSitter, path, controller)).toBeNull();
+    }
+    expect(await routesOf('src/asset.controller.ts', controller)).toEqual(['GET /asset']);
+  });
+
   it('joins paths with one slash and keeps the root', () => {
     expect(joinRoutePath('/api/', '/users/')).toBe('/api/users');
     expect(joinRoutePath('', '')).toBe('/');

@@ -136,8 +136,9 @@ in the pull request that introduces them — see
 - The drift check now compares a synced OpenAPI spec with the routes its
   repository declares. It reads NestJS controllers (`@ApiExcludeEndpoint`
   routes are left out), Express, Fastify, Hono and Koa routers, FastAPI
-  decorators, and Go `net/http`, chi, gin, echo and gorilla routes. A route
-  whose path is not a literal is counted, not guessed. A path matches whatever
+  decorators, and Go `net/http`, chi, gin, echo and gorilla routes. Tests,
+  fixtures, examples and vendored code are not read. A route whose path is
+  not a literal is counted, not guessed. A path matches whatever
   its parameters are named (`:id`, `{id}`, `{userId}`), and one uniform
   prefix such as `/v1` is allowed between the two sides. The check reports
   three things: an operation the spec documents that no route serves (missing

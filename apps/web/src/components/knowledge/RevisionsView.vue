@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import DiffView from '@/components/knowledge/DiffView.vue'
+import ApiChangesPanel from '@/components/api-reference/ApiChangesPanel.vue'
 
 const { t } = useI18n()
 
@@ -172,5 +173,11 @@ watch(branchFilter, () => void load())
         <DiffView :compare="compare" />
       </CardContent>
     </Card>
+
+    <!-- A spec's classified diff (#78): the verdicts the merge request shows. -->
+    <section v-if="compare?.api" class="space-y-3">
+      <h3 class="text-sm font-semibold">{{ t('revisions.apiChanges') }}</h3>
+      <ApiChangesPanel :diff="compare.api" :document-id="documentId" />
+    </section>
   </div>
 </template>

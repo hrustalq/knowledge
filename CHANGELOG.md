@@ -100,6 +100,25 @@ in the pull request that introduces them — see
   with one of them. The endpoint draft under that item gets the spec's text
   for the operation and declares `DESCRIBES` on it. (#78)
 
+- Merge requests on an API spec now say what the change does to the API.
+  An **API changes** tab lists every changed operation, grouped by endpoint,
+  breaking changes first. Breaking means a client of the old spec can fail
+  against the new one: an operation or channel removed, a required parameter
+  or request field added, a parameter's type changed, an allowed value or a
+  response status or field removed, or authentication now required. Each
+  operation lists the pages that link it, so the docs a breaking change makes
+  wrong are one click away. Operations are matched by method and path, so
+  reordering parameters or renaming a path parameter is no change. The same
+  classified diff is in the revision compare, in `GET /v1/documents/:id/compare`
+  (as `api`), at `GET /v1/api-specs/:id/diff?from=&to=`, and for agents as
+  `knowledge_diff_api_spec`. Workspace admins choose what a breaking change
+  does under Settings → API reference: `warn` (the default) names it in the
+  merge widget, `block` refuses the merge with a 409 (`reason: breaking-api`,
+  `breakingCount`) until an admin acknowledges it, and `off` does neither. An
+  acknowledgement covers the branch as it was: a later push needs a new one.
+  `GET /v1/merge-requests/:id/api-changes` returns the diff, the linked pages
+  and whether a merge would be refused. (#78)
+
 ### Changed
 
 - API blocks (the endpoint widget in the editor) and the operations of a
@@ -151,6 +170,12 @@ in the pull request that introduces them — see
   `API_TRY_MAX_RESPONSE_BYTES` (1000000) and `API_TRY_RATE_PER_MINUTE` (30).
   With the defaults the proxy refuses every request, so nothing changes until
   an operator raises the ceiling. The rate limit uses Redis and fails closed.
+- Migration `20261105100000_api_breaking_changes` adds the nullable
+  `workspace_settings.api_breaking_change_policy` and
+  `merge_requests.breaking_ack_by` / `breaking_ack_at` /
+  `breaking_ack_revision_id`. No backfill: an empty policy is `warn`, which
+  never refuses a merge. The previous image never reads them, so a rollback is
+  safe.
 
 ## [0.26.0] — 2026-10-16
 

@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   ApiOperationSamplesResponse,
   ApiSettingsResponse,
+  ApiSpecDiff,
   ApiSpecDocumentResponse,
   ApiTryResponse,
   ListApiOperationsResponse,
@@ -13,11 +14,13 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { ApiSpecDiffService } from './api-spec-diff.service.js';
 import { ApiSpecReadService } from './api-spec-read.service.js';
 import { ApiSettingsService } from './api-settings.service.js';
 import { ApiTryService } from './api-try.service.js';
 import {
   ApiSamplesQueryDto,
+  ApiSpecDiffQueryDto,
   ApiSpecRevisionQueryDto,
   ApiTryRequestDto,
   ListApiSpecsQueryDto,
@@ -38,6 +41,7 @@ export class ApiSpecsController {
     private readonly reads: ApiSpecReadService,
     private readonly permissions: PermissionService,
     private readonly tries: ApiTryService,
+    private readonly diffs: ApiSpecDiffService,
   ) {}
 
   @Get()
@@ -70,6 +74,17 @@ export class ApiSpecsController {
     @Query() query: ApiSpecRevisionQueryDto,
   ): Promise<ListApiOperationsResponse> {
     return this.reads.operations(id, query.revisionId);
+  }
+
+  @Get(':id/diff')
+  @Access('viewer', 'document')
+  @ApiOperation({
+    summary:
+      'The classified diff between two revisions of a spec: every change by rule, breaking first. Operations ' +
+      'match by method and path, so reordering parameters or renaming a path parameter is no change',
+  })
+  async diff(@Param('id', ParseUUIDPipe) id: string, @Query() query: ApiSpecDiffQueryDto): Promise<ApiSpecDiff> {
+    return this.diffs.require(id, query.from, query.to);
   }
 
   @Get(':id/samples')

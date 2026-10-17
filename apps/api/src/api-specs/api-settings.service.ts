@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import {
   API_TRY_MAX_REQUEST_BYTES,
   API_TRY_PROXY_MODES,
+  resolveApiBreakingChangePolicy,
+  type ApiBreakingChangePolicy,
   type ApiSettingsResponse,
   type ApiTryProxyMode,
   type ApiTryProxySettings,
@@ -20,6 +22,10 @@ import { PrismaService } from '../prisma/prisma.service.js';
  * it — the shape of web research's WEB_ACCESS_MODE (docs/features/25), and the
  * response carries both what was asked for and what applies, because a clamp
  * the settings page does not show is a lie about the configuration.
+ *
+ * The breaking-change policy (phase 6) has no env ceiling: `null` is `warn`,
+ * and the merge gate reads it through `ApiSpecDiffService.breakingPolicy`,
+ * which resolves it with the same contracts function.
  */
 @Injectable()
 export class ApiSettingsService {
@@ -52,6 +58,10 @@ export class ApiSettingsService {
     return {
       workspaceId,
       tryProxy: this.tryProxy(row?.apiTryProxyMode),
+      breakingChanges: {
+        requested: (row?.apiBreakingChangePolicy as ApiBreakingChangePolicy | null | undefined) ?? null,
+        effective: resolveApiBreakingChangePolicy(row?.apiBreakingChangePolicy),
+      },
       tryLimits: {
         timeoutMs: this.config.get('API_TRY_TIMEOUT_MS', { infer: true }),
         maxRequestBytes: API_TRY_MAX_REQUEST_BYTES,
@@ -71,6 +81,13 @@ export class ApiSettingsService {
         where: { workspaceId },
         create: { workspaceId, apiTryProxyMode: patch.apiTryProxyMode, updatedBy: actorId ?? null },
         update: { apiTryProxyMode: patch.apiTryProxyMode, updatedBy: actorId ?? null },
+      });
+    }
+    if (patch.apiBreakingChangePolicy !== undefined) {
+      await this.prisma.workspaceSettings.upsert({
+        where: { workspaceId },
+        create: { workspaceId, apiBreakingChangePolicy: patch.apiBreakingChangePolicy, updatedBy: actorId ?? null },
+        update: { apiBreakingChangePolicy: patch.apiBreakingChangePolicy, updatedBy: actorId ?? null },
       });
     }
     return this.get(workspaceId);

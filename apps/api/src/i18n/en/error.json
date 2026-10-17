@@ -112,7 +112,10 @@
     "diverged": "Target branch {target} has advanced past the merge base — rebase {source} onto it and retry",
     "divergedWhileMerging": "Target branch {target} advanced while merging — retry",
     "alreadyOpen": "Open merge request {id} already exists for {source} → {target}",
-    "notMembers": "Not members of this workspace: {users}"
+    "notMembers": "Not members of this workspace: {users}",
+    "breakingApi": "Merge request {id} makes {count} breaking API change(s), and this workspace blocks those until an admin acknowledges them",
+    "notSpec": "Merge request {id} is not on an API spec, so it has no breaking changes to acknowledge",
+    "notOpenForAck": "Merge request {id} is {status}; only an open merge request takes an acknowledgement"
   },
   "thread": {
     "notFoundOnDocument": "Thread {threadId} not found on document {documentId}",
@@ -582,7 +585,8 @@
     "parseFailed": "The API spec is not valid: {reason}",
     "format": "An API spec is written as yaml or json, not {format}",
     "template": "An API spec cannot start from a page template",
-    "notSpec": "Document {id} is not an API spec"
+    "notSpec": "Document {id} is not an API spec",
+    "notDiffable": "Document {id} is not an API spec whose revisions both parse, so there is no API diff"
   },
   "apiTry": {
     "disabled": "The try-it proxy is off for this workspace. Send the request from your browser instead.",

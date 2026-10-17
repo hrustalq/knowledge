@@ -386,6 +386,7 @@ describe('read helpers (phase 2)', () => {
   it('keeps the API operation tools read-only', () => {
     expect(WRITE_TOOLS.has('knowledge_list_api_operations')).toBe(false);
     expect(WRITE_TOOLS.has('knowledge_get_api_operation')).toBe(false);
+    expect(WRITE_TOOLS.has('knowledge_diff_api_spec')).toBe(false);
   });
 });
 

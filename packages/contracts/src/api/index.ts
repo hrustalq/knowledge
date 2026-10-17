@@ -1,5 +1,6 @@
 import type { ApiDocumentKind } from '@knowledge/contracts/core';
 import { normalizeEntityKey } from '@knowledge/contracts/graph';
+import type { ApiSpecDiff } from '@knowledge/contracts/api/diff';
 import type { CodeSample } from '@knowledge/contracts/api/samples';
 
 // ---------------------------------------------------------------------------
@@ -222,6 +223,8 @@ export interface ApiTryProxySettings {
 export interface ApiSettingsResponse {
   workspaceId: string;
   tryProxy: ApiTryProxySettings;
+  /** The merge gate for breaking spec changes (phase 6): the override beside what applies. */
+  breakingChanges: { requested: ApiBreakingChangePolicy | null; effective: ApiBreakingChangePolicy };
   /** The proxy's deployment caps, for the console to state. */
   tryLimits: { timeoutMs: number; maxRequestBytes: number; maxResponseBytes: number; perMinute: number };
   updatedAt: string | null;
@@ -230,6 +233,8 @@ export interface ApiSettingsResponse {
 export interface UpdateApiSettingsRequest {
   /** null goes back to the ceiling. */
   apiTryProxyMode?: ApiTryProxyMode | null;
+  /** null goes back to the default, `warn`. */
+  apiBreakingChangePolicy?: ApiBreakingChangePolicy | null;
 }
 
 /** The largest request body the proxy forwards. */
@@ -269,4 +274,59 @@ export interface ApiTryResponse {
   durationMs: number;
   /** Request headers the proxy would not forward (`Cookie`, `Host`, hop-by-hop), so dropping one is never silent. */
   droppedHeaders: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Spec diff and breaking changes (#78, phase 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * What a merge request that introduces a breaking change does (#78): `off`
+ * neither warns nor gates (the diff is still readable), `warn` names the
+ * changes in the merge widget and merges, `block` refuses the merge until an
+ * admin acknowledges the source head.
+ */
+export const API_BREAKING_CHANGE_POLICIES = ['off', 'warn', 'block'] as const;
+export type ApiBreakingChangePolicy = (typeof API_BREAKING_CHANGE_POLICIES)[number];
+export const DEFAULT_API_BREAKING_CHANGE_POLICY: ApiBreakingChangePolicy = 'warn';
+
+/** A sparse setting over the code default; there is no env ceiling for this one. */
+export function resolveApiBreakingChangePolicy(requested: string | null | undefined): ApiBreakingChangePolicy {
+  return API_BREAKING_CHANGE_POLICIES.includes(requested as ApiBreakingChangePolicy)
+    ? (requested as ApiBreakingChangePolicy)
+    : DEFAULT_API_BREAKING_CHANGE_POLICY;
+}
+
+/** An admin's acknowledgement of the breaking changes at one source head. */
+export interface ApiBreakingAck {
+  by: string;
+  at: string;
+  /** The source head acknowledged; a later push needs a new acknowledgement. */
+  revisionId: string;
+  /** True while `revisionId` is still the source head. */
+  current: boolean;
+}
+
+/** A page that links an operation a change touches. */
+export interface ApiAffectedPage {
+  documentId: string;
+  title: string;
+  relationType: string;
+  extractor: string;
+}
+
+/** GET /v1/merge-requests/:id/api-changes */
+export interface MergeRequestApiChangesResponse {
+  mergeRequestId: string;
+  documentId: string;
+  /** False for a page document: nothing below applies. */
+  applicable: boolean;
+  policy: ApiBreakingChangePolicy;
+  /** The merge base (or nothing, for a first merge) against the source head. Null when not applicable. */
+  diff: ApiSpecDiff | null;
+  /** Pages linking each changed operation, keyed by entity key; the spec itself is left out. */
+  affectedPages: Record<string, ApiAffectedPage[]>;
+  ack: ApiBreakingAck | null;
+  /** True when merging now would be refused with `breaking-api`. */
+  blocked: boolean;
 }

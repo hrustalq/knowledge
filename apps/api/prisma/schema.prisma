@@ -284,18 +284,24 @@ model MergeRequest {
   approvedBy  Json    @default("[]") @map("approved_by")
 
   // merge-commit | squash — set when merged.
-  strategy         String?
-  mergedRevisionId String?   @map("merged_revision_id") @db.Uuid
+  strategy              String?
+  mergedRevisionId      String?   @map("merged_revision_id") @db.Uuid
   /// MR_PROVENANCES: manual | agent | captured (issue #73). Who opened it, not
   /// who wrote the code: an agent-session capture is still authored by the
   /// key's owner, and the merge gates treat it exactly as theirs.
-  provenance       String    @default("manual")
+  provenance            String    @default("manual")
   /// The knowledge_captures row this merge request was proposed from. No FK,
   /// like merged_revision_id: the capture is the record of where it came from.
-  captureId        String?   @map("capture_id") @db.Uuid
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  mergedAt         DateTime? @map("merged_at") @db.Timestamptz
-  closedAt         DateTime? @map("closed_at") @db.Timestamptz
+  captureId             String?   @map("capture_id") @db.Uuid
+  /// An admin's acknowledgement of a spec's breaking changes (#78): who, when,
+  /// and the source head they read. No FK, house policy. A later push makes it
+  /// stale — the gate passes only while the acknowledged head is still the head.
+  breakingAckBy         String?   @map("breaking_ack_by") @db.Uuid
+  breakingAckAt         DateTime? @map("breaking_ack_at") @db.Timestamptz
+  breakingAckRevisionId String?   @map("breaking_ack_revision_id") @db.Uuid
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  mergedAt              DateTime? @map("merged_at") @db.Timestamptz
+  closedAt              DateTime? @map("closed_at") @db.Timestamptz
 
   document     Document               @relation(fields: [documentId], references: [id])
   sourceBranch DocumentBranch         @relation("mrSource", fields: [sourceBranchId], references: [id])
@@ -3129,11 +3135,13 @@ model ApiOperation {
 /// table reproduces the env exactly. Other milestones add their columns here
 /// rather than starting another one-row table.
 model WorkspaceSettings {
-  workspaceId     String   @id @map("workspace_id") @db.Uuid
+  workspaceId             String   @id @map("workspace_id") @db.Uuid
   /// off | allowlist | open — narrowed by API_TRY_PROXY_MODE, never widened.
-  apiTryProxyMode String?  @map("api_try_proxy_mode")
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
-  updatedBy       String?  @map("updated_by") @db.Uuid
+  apiTryProxyMode         String?  @map("api_try_proxy_mode")
+  /// off | warn | block — the merge gate for breaking spec changes; null is `warn`.
+  apiBreakingChangePolicy String?  @map("api_breaking_change_policy")
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  updatedBy               String?  @map("updated_by") @db.Uuid
 
   @@map("workspace_settings")
 }

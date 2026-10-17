@@ -1284,7 +1284,9 @@
       "requestedReview": "requested review from {who}",
       "aReviewer": "a reviewer",
       "mergedSquash": "merged this as a squashed revision",
-      "mergedCommit": "merged this with a merge commit"
+      "mergedCommit": "merged this with a merge commit",
+      "ackedBreaking": "acknowledged the breaking API changes",
+      "withdrewBreakingAck": "withdrew the acknowledgement of breaking API changes"
     },
     "requestedToMerge": "requested to merge",
     "into": "into",
@@ -1343,6 +1345,28 @@
       "anAgent": "an agent session",
       "session": "session",
       "viewCaptures": "View in captures"
+    },
+    "tabApi": "API changes",
+    "api": {
+      "notParsed": "One side of this merge request no longer parses as a spec, so there is no API verdict.",
+      "policy": {
+        "off": "This workspace does not check breaking API changes.",
+        "warn": "This workspace warns about breaking API changes but does not block a merge.",
+        "block": "This workspace blocks a merge with breaking API changes until an admin acknowledges them."
+      },
+      "noneBreaking": "No breaking API changes",
+      "breaking": "{n} breaking API change | {n} breaking API changes",
+      "blocked": "merging is blocked until an admin acknowledges",
+      "warnOnly": "merging is allowed (warn)",
+      "ackedBy": "acknowledged by {name}",
+      "ackStale": "{name} acknowledged an earlier revision; the branch has changed since",
+      "acknowledge": "Acknowledge",
+      "withdraw": "Withdraw",
+      "review": "Review",
+      "acknowledged": "Breaking changes acknowledged",
+      "withdrawn": "Acknowledgement withdrawn",
+      "ackHint": "Only a workspace admin can acknowledge breaking changes.",
+      "blockedToast": "{n} breaking API change needs an admin’s acknowledgement before this merges | {n} breaking API changes need an admin’s acknowledgement before this merges"
     }
   },
   "assistant": {
@@ -1557,7 +1581,8 @@
     "structural": "Structural ({source})",
     "view": "view",
     "compareTitle": "Compare {from} → {to}",
-    "mergeBaseAt": "merge base {id}"
+    "mergeBaseAt": "merge base {id}",
+    "apiChanges": "API changes"
   },
   "count": {
     "messages": "{n} message | {n} messages",
@@ -4942,6 +4967,77 @@
     "limits": "Per person: {perMinute} requests a minute, {timeout} s each, bodies up to {request} out and {response} back.",
     "inherit": "Use the deployment’s setting ({mode})",
     "adminOnly": "Only a workspace admin can change this.",
-    "saved": "Saved"
+    "saved": "Saved",
+    "breaking": {
+      "title": "Breaking changes in merge requests",
+      "subtitle": "What a merge request on a spec does when it removes an operation, adds a required parameter or drops a response a client relies on. The changes are listed on its API changes tab either way.",
+      "default": "Default",
+      "inherit": "Use the default (warn)",
+      "mode": {
+        "off": {
+          "label": "Off",
+          "body": "No readiness check and no gate. The diff is still shown."
+        },
+        "warn": {
+          "label": "Warn",
+          "body": "The merge widget names the breaking changes; anyone who may merge still can."
+        },
+        "block": {
+          "label": "Block",
+          "body": "A merge is refused until a workspace admin acknowledges the breaking changes. A later push needs a new acknowledgement."
+        }
+      }
+    }
+  },
+  "apiDiff": {
+    "severity": {
+      "breaking": "Breaking",
+      "nonBreaking": "Non-breaking",
+      "info": "Info"
+    },
+    "count": {
+      "breaking": "{n} breaking",
+      "nonBreaking": "{n} non-breaking",
+      "info": "{n} info"
+    },
+    "rule": {
+      "operation-removed": "Operation removed",
+      "operation-added": "Operation added",
+      "operation-deprecated": "Operation deprecated",
+      "required-param-added": "Required parameter added",
+      "optional-param-added": "Optional parameter added",
+      "param-removed": "Parameter removed",
+      "param-became-required": "Parameter is now required",
+      "param-type-changed": "Parameter type changed",
+      "request-body-required": "Request body is now required",
+      "request-property-required-added": "Request field is now required",
+      "property-type-changed": "Field type changed",
+      "enum-value-removed": "Allowed value removed",
+      "enum-value-added": "Allowed value added",
+      "response-status-removed": "Response status removed",
+      "response-status-added": "Response status added",
+      "response-property-removed": "Response field removed",
+      "response-property-added": "Response field added",
+      "security-requirement-added": "Authentication now required",
+      "security-requirement-removed": "Authentication requirement dropped",
+      "channel-removed": "Channel removed",
+      "channel-added": "Channel added",
+      "message-payload-field-removed": "Message field removed",
+      "message-payload-field-added": "Message field added"
+    },
+    "filterLabel": "Show changes by severity",
+    "noChanges": "No API changes. Every operation a client calls is unchanged.",
+    "noneShown": "No changes of the selected severity.",
+    "removed": "Removed",
+    "added": "New",
+    "was": "was",
+    "now": "now",
+    "affectedPages": "Pages that may now be wrong",
+    "linkedPages": "Pages linking this operation",
+    "openInReference": "Open in reference",
+    "value": {
+      "optional": "optional",
+      "required": "required"
+    }
   }
 }

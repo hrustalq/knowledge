@@ -792,6 +792,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/api-specs/{id}/diff",
+      "tag": "api-specs",
+      "summary": "The classified diff between two revisions of a spec: every change by rule, breaking first. Operations match by method and path, so reordering parameters or renaming a path parameter is no change",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/api-specs/{id}/operations",
       "tag": "api-specs",
       "summary": "The operations and channels of one revision of a spec, in spec order. Empty while that revision is still indexing — revisionStatus says which",
@@ -2901,11 +2911,41 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/merge-requests/{id}/api-changes",
+      "tag": "merge-requests",
+      "summary": "What a spec merge request does to its API: the classified diff from the merge base, the pages linking each changed operation, the workspace policy and whether a merge would be refused. applicable=false for a page",
+      "role": "viewer",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/merge-requests/{id}/approve",
       "tag": "merge-requests",
       "summary": "Approve as the calling principal (MR_REQUIRED_APPROVALS non-author approvals gate the merge)",
       "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/merge-requests/{id}/breaking-ack",
+      "tag": "merge-requests",
+      "summary": "Withdraw the acknowledgement of breaking API changes",
+      "role": "admin",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/merge-requests/{id}/breaking-ack",
+      "tag": "merge-requests",
+      "summary": "Acknowledge the spec's breaking changes at the current source head, which lets a merge through a block policy. A later push needs a new acknowledgement",
+      "role": "admin",
       "source": "merge-request",
       "public": false,
       "platformAdmin": false
@@ -2934,7 +2974,7 @@
       "method": "POST",
       "path": "/v1/merge-requests/{id}/merge",
       "tag": "merge-requests",
-      "summary": "Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged when gated, + comparison link when the target diverged",
+      "summary": "Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged|breaking-api when gated, + comparison link when the target diverged",
       "role": "editor",
       "source": "merge-request",
       "public": false,
@@ -4218,6 +4258,28 @@
         },
         {
           "name": "syntax",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_diff_api_spec",
+      "description": "What changed in an API spec document between two revisions, classified: each change names its rule , s ` + + +",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "fromRevisionId",
+          "optional": false
+        },
+        {
+          "name": "toRevisionId",
           "optional": true
         }
       ]

@@ -138,6 +138,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 49 | Agent triggers       | Events, a signed webhook, a mention or a time of day start agent runs; `AgentTriggerService` is the only `trigger:'event'` writer; recipes, admin-approved learnings, repo guidance as disabled skills |
 | 50 | Agent memory         | `knowledge_capture_*` → staged row → raw-cosine dedupe → MR with `provenance: 'captured'`; `capture` key passes editor only on `{ capture: true }` calls; head-less new pages hidden via `pending_merge_request_id`; terms via the inbox |
 | 51 | Component pages      | `component:` → `component_declarations`; each pull replaces `code_imports` + `code_files`; rules only in `component-match.ts`; `code` edges via `replaceCodeFacts`; Used by is read-time under `AccessScope`; drafts = archaeologist run + `proposePage` |
+| 52 | API reference        | `documents.kind` openapi/asyncapi; ingestion branches on kind → markdown projection + `api_operations` + revision-scoped `spec` `DESCRIBES`; `{param}` folds in `normalizeEntityKey`; slug pinned; try-it proxy is env-ceilinged, never MCP; `breakingBlocks` gates merge; synced spec changes always MR |
 
 ## Conventions
 

@@ -115,7 +115,9 @@
     "notMembers": "Not members of this workspace: {users}",
     "breakingApi": "Merge request {id} makes {count} breaking API change(s), and this workspace blocks those until an admin acknowledges them",
     "notSpec": "Merge request {id} is not on an API spec, so it has no breaking changes to acknowledge",
-    "notOpenForAck": "Merge request {id} is {status}; only an open merge request takes an acknowledgement"
+    "notOpenForAck": "Merge request {id} is {status}; only an open merge request takes an acknowledgement",
+    "lintPending": "Merge request {id} waits for the style check of its source head, and this page blocks merges until it has one",
+    "lintBlocking": "Merge request {id} has {count} unresolved error-severity style violation(s); resolve them or ask an admin to override the check"
   },
   "thread": {
     "notFoundOnDocument": "Thread {threadId} not found on document {documentId}",
@@ -617,6 +619,10 @@
     "notOpen": "Only an open merge request is linted.",
     "off": "Style lint is off for this page.",
     "running": "A lint of this head is already waiting or running.",
-    "busy": "The lint could not start: too many checks are waiting in this workspace, or one was just started."
+    "busy": "The lint could not start: too many checks are waiting in this workspace, or one was just started.",
+    "checkNotFound": "Check {id} is not a style check of this merge request.",
+    "overrideNotCurrent": "Only the check of the current source head can be overridden; a newer push replaced this one.",
+    "notOverridable": "This check does not hold the merge — there is nothing to override.",
+    "alreadyOverridden": "This head's check is already overridden."
   }
 }

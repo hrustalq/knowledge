@@ -6,10 +6,12 @@
 // row: what the API tab found, what the workspace policy does about it, and an
 // admin's acknowledgement, pinned to the source head it was given for. Where
 // the page's styleguide lint is on (#74) a style row says what the check of the
-// current head found; under `warn` it never holds the merge.
+// current head found; under `warn` it never holds the merge, under `block` it
+// holds while the check is to come or an error-severity thread is open, and an
+// admin may override that one revision with a reason.
 import { useI18n } from 'vue-i18n'
 import { formatDateTime } from '@/lib/format'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { AlertTriangle, Check, CircleDashed, FileWarning, GitMerge, MessageSquare, ThumbsUp } from 'lucide-vue-next'
@@ -22,6 +24,16 @@ import type {
 import { useApiMutation, isApiRequestError } from '@/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -76,10 +88,53 @@ const api = computed(() => {
   return { ...a, breaking: a.diff.summary.breaking }
 })
 
-const { current: lintCheck, shown: lintShown, policy: lintPolicy, relint } = useLintChecks(
-  computed(() => mr.value.mergeRequestId),
-)
+const {
+  current: lintCheck,
+  shown: lintShown,
+  policy: lintPolicy,
+  gate: lintGate,
+  relint,
+  override: lintOverride,
+  query: lintQuery,
+} = useLintChecks(computed(() => mr.value.mergeRequestId))
 const lintView = computed(() => lintCheckView(lintCheck.value))
+/**
+ * What the row says about the merge under `block`. Read from the gate's
+ * counts rather than `blocked`, so a caller the gate is not enforced for (the
+ * dev principal) still sees what it would hold.
+ */
+const lintHold = computed<'override' | 'blocking' | 'waiting' | 'clear' | null>(() => {
+  const g = lintGate.value
+  if (!g || g.policy !== 'block') return null
+  if (g.overridden) return 'override'
+  if (g.blockingCount > 0) return 'blocking'
+  if (['missing', 'pending', 'running'].includes(g.checkStatus)) return 'waiting'
+  return 'clear'
+})
+const canOverride = computed(
+  () => auth.canAdminWorkspace && !!lintGate.value?.checkId && (lintHold.value === 'blocking' || lintHold.value === 'waiting'),
+)
+const overrideOpen = ref(false)
+const overrideReason = ref('')
+watch(overrideOpen, (open) => {
+  if (open) overrideReason.value = ''
+})
+
+function onOverride() {
+  const checkId = lintGate.value?.checkId
+  const reason = overrideReason.value.trim()
+  if (!checkId || !reason) return
+  lintOverride.mutate(
+    { path: { id: mr.value.mergeRequestId, checkId }, body: { reason } },
+    {
+      onSuccess: () => {
+        overrideOpen.value = false
+        toast.success(t('mr.lint.overridden'))
+      },
+      onError: (e) => toast.error(e.message),
+    },
+  )
+}
 /** A head can be checked again once its check has settled, while lint is on. */
 const canRelint = computed(
   () =>
@@ -103,7 +158,8 @@ const busy = computed(
     reopen.isPending.value ||
     update.isPending.value ||
     ack.isPending.value ||
-    unack.isPending.value,
+    unack.isPending.value ||
+    lintOverride.isPending.value,
 )
 
 function onMerge() {
@@ -121,6 +177,10 @@ function onMerge() {
             toast.error(t('mr.needsApprovals', { required: details.requiredApprovals, have: details.approvals }))
           } else if (details.reason === 'draft') {
             toast.error(t('mr.draftCannotMerge'))
+          } else if (details.reason === 'lint') {
+            const n = details.blockingCount ?? 0
+            toast.error(n > 0 ? t('mr.lint.blockedToast', { n }, n) : t('mr.lint.pendingToast'))
+            void lintQuery.refetch()
           } else if (details.reason === 'breaking-api') {
             const n = details.breakingCount ?? 0
             toast.error(t('mr.api.blockedToast', { n }, n), {
@@ -217,17 +277,44 @@ function toggleDraft() {
         <span v-if="lintView.unresolved > 0" class="text-muted-foreground">
           — {{ t('mr.lint.unresolved', { n: lintView.unresolved }, lintView.unresolved) }}
         </span>
-        <span v-if="lintCheck?.status === 'failed'" class="text-muted-foreground">· {{ t('mr.lint.warnOnly') }}</span>
-        <Button
-          v-if="canRelint && isOpen"
-          variant="ghost"
-          size="xs"
-          class="ml-auto"
-          :disabled="relint.isPending.value"
-          @click="onRelint"
+        <template v-if="lintHold === 'override' && lintCheck?.override">
+          <span class="text-muted-foreground" :title="lintCheck.override.reason">
+            · {{ t('mr.lint.overriddenBy', { name: actorLabel(lintCheck.override.by) }) }}
+          </span>
+        </template>
+        <template v-else-if="lintHold === 'blocking'">
+          <span class="font-medium text-[color:var(--kn-panel-caution)]">
+            · {{ t('mr.lint.blocking', { n: lintGate!.blockingCount }, lintGate!.blockingCount) }}
+          </span>
+          <span v-if="lintGate?.blocked" class="text-muted-foreground">— {{ t('mr.lint.blocksMerge') }}</span>
+        </template>
+        <span v-else-if="lintHold === 'waiting' && lintGate?.blocked" class="text-muted-foreground">
+          · {{ t('mr.lint.waitsMerge') }}
+        </span>
+        <span v-else-if="lintHold === 'clear' && lintCheck?.status === 'failed'" class="text-muted-foreground">
+          · {{ t('mr.lint.noneBlocking') }}
+        </span>
+        <span v-else-if="lintCheck?.status === 'failed'" class="text-muted-foreground">· {{ t('mr.lint.warnOnly') }}</span>
+        <span class="ml-auto flex items-center gap-1">
+          <Button v-if="canOverride && isOpen" variant="outline" size="xs" :disabled="busy" @click="overrideOpen = true">
+            {{ t('mr.lint.override') }}
+          </Button>
+          <Button
+            v-if="canRelint && isOpen"
+            variant="ghost"
+            size="xs"
+            :disabled="relint.isPending.value"
+            @click="onRelint"
+          >
+            {{ t('mr.lint.recheck') }}
+          </Button>
+        </span>
+        <p
+          v-if="lintGate?.blocked && !auth.canAdminWorkspace && lintHold === 'blocking'"
+          class="w-full pl-6 text-xs text-muted-foreground"
         >
-          {{ t('mr.lint.recheck') }}
-        </Button>
+          {{ t('mr.lint.adminHint') }}
+        </p>
       </div>
       <!-- Breaking API changes (#78): amber under warn, the caution hue while
            a block holds, emerald once there is nothing to hold. -->
@@ -305,7 +392,7 @@ function toggleDraft() {
             <SelectItem value="squash">{{ t('mr.squash') }}</SelectItem>
           </SelectContent>
         </Select>
-        <Button size="sm" :disabled="busy || mr.isDraft || !!api?.blocked" @click="onMerge">
+        <Button size="sm" :disabled="busy || mr.isDraft || !!api?.blocked || !!lintGate?.blocked" @click="onMerge">
           <GitMerge class="size-3.5" /> {{ t('mr.merge') }}
         </Button>
         <Button size="sm" variant="ghost" :disabled="busy" @click="toggleDraft">
@@ -328,5 +415,24 @@ function toggleDraft() {
         <AlertTriangle class="size-3.5" /> {{ t('mr.mergedFinal') }}
       </p>
     </div>
+
+    <Dialog v-model:open="overrideOpen">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{{ t('mr.lint.overrideTitle') }}</DialogTitle>
+          <DialogDescription>{{ t('mr.lint.overrideHint') }}</DialogDescription>
+        </DialogHeader>
+        <div class="space-y-2">
+          <Label for="kn-lint-override-reason">{{ t('mr.lint.reasonLabel') }}</Label>
+          <Textarea id="kn-lint-override-reason" v-model="overrideReason" rows="3" maxlength="500" />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="overrideOpen = false">{{ t('common.cancel') }}</Button>
+          <Button :disabled="!overrideReason.trim() || lintOverride.isPending.value" @click="onOverride">
+            {{ t('mr.lint.override') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

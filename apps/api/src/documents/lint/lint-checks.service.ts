@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
+  AgentFinding,
+  LintGateState,
   LintPolicy,
   LintPolicySettings,
   ListMergeRequestChecksResponse,
@@ -14,12 +16,13 @@ import type { Env } from '../../config/env.js';
 import { AgentRegistryService } from '../../agents/agent-registry.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { t } from '../../i18n/t.js';
-import { LINT_AGENT_KEY, resolveLintPolicy } from './lint-check.js';
+import { LINT_AGENT_KEY, errorRuleIds, lintGate, resolveLintPolicy } from './lint-check.js';
 
 /**
  * The read side of merge request checks (#74) and the lint policy every part
  * of it obeys. Controller-free and worker-safe, so the trigger, the settings
- * routes and (phase 3) the merge gate read one resolution of the policy.
+ * routes and the merge gate read one resolution of the policy — and the
+ * merge gate and the widget one reading of the gate.
  */
 @Injectable()
 export class LintChecksService {
@@ -73,8 +76,12 @@ export class LintChecksService {
     return this.policyFor(workspaceId, projectId);
   }
 
-  /** Every check of a merge request, newest first, with the policy of its page. */
-  async list(mergeRequestId: string): Promise<ListMergeRequestChecksResponse> {
+  /**
+   * Every check of a merge request, newest first, with the policy of its page
+   * and what the gate says about its current head. `enforced` is whether the
+   * gate applies to the caller (see `lintGate`).
+   */
+  async list(mergeRequestId: string, enforced: boolean): Promise<ListMergeRequestChecksResponse> {
     const mr = await this.prisma.mergeRequest.findUnique({
       where: { id: mergeRequestId },
       include: { sourceBranch: { select: { headRevisionId: true } }, document: { select: { workspaceId: true, projectId: true } } },
@@ -85,8 +92,10 @@ export class LintChecksService {
       where: { mergeRequestId },
       orderBy: { createdAt: 'desc' },
     });
+    const head = mr.sourceBranch.headRevisionId;
+    const currentRow = rows.find((r) => r.kind === 'lint' && r.headRevisionId === head) ?? null;
     const runIds = rows.map((r) => r.agentRunId).filter((id): id is string => !!id);
-    const [runs, open, policy] = await Promise.all([
+    const [runs, open, policy, blockingCount] = await Promise.all([
       runIds.length
         ? this.prisma.agentRun.findMany({ where: { id: { in: runIds } }, select: { id: true, status: true } })
         : Promise.resolve([]),
@@ -96,10 +105,10 @@ export class LintChecksService {
         _count: { _all: true },
       }),
       this.policyFor(mr.document.workspaceId, mr.document.projectId),
+      currentRow?.status === 'failed' ? this.blockingCount(currentRow.id, currentRow.agentRunId) : Promise.resolve(0),
     ]);
     const runStatus = new Map(runs.map((r) => [r.id, r.status]));
     const unresolved = new Map(open.map((g) => [g.checkId!, g._count._all]));
-    const head = mr.sourceBranch.headRevisionId;
 
     const checks = rows.map(
       (row): MergeRequestCheckInfo => ({
@@ -118,10 +127,41 @@ export class LintChecksService {
         agentRunId: row.agentRunId,
         counts: (row.counts as MergeRequestCheckCounts | null) ?? null,
         unresolved: unresolved.get(row.id) ?? 0,
+        override:
+          row.overriddenAt && row.overriddenBy
+            ? { by: row.overriddenBy, at: row.overriddenAt.toISOString(), reason: row.overrideReason ?? '' }
+            : null,
         createdAt: row.createdAt.toISOString(),
         publishedAt: row.publishedAt?.toISOString() ?? null,
       }),
     );
-    return { mergeRequestId, policy, checks };
+    const current = currentRow ? checks.find((c) => c.checkId === currentRow.id)! : null;
+    const gate = lintGate({
+      policy: policy.effective,
+      enforced,
+      check: current ? { id: current.checkId, status: current.status, overridden: !!current.override } : null,
+      blockingCount,
+    });
+    return { mergeRequestId, policy, gate, checks };
+  }
+
+  /** The gate alone — what `MergeRequestsService.merge` asks. */
+  async gate(mergeRequestId: string, enforced: boolean): Promise<LintGateState> {
+    return (await this.list(mergeRequestId, enforced)).gate;
+  }
+
+  /**
+   * Open lint threads of a check that cite an error-severity rule. A standing
+   * violation's thread is re-pointed at the newest check when it publishes, so
+   * the current check's threads are every violation the head still has.
+   */
+  private async blockingCount(checkId: string, agentRunId: string | null): Promise<number> {
+    if (!agentRunId) return 0;
+    const run = await this.prisma.agentRun.findUnique({ where: { id: agentRunId }, select: { findings: true } });
+    const rules = errorRuleIds(Array.isArray(run?.findings) ? (run.findings as unknown as AgentFinding[]) : []);
+    if (rules.size === 0) return 0;
+    return this.prisma.mergeRequestThread.count({
+      where: { checkId, resolvable: true, resolved: false, ruleId: { in: [...rules] } },
+    });
   }
 }

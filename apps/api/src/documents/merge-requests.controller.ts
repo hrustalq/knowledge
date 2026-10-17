@@ -9,7 +9,7 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import type { MergeRequestApiChangesResponse } from '@knowledge/contracts';
+import type { MergeRequestApiChangesResponse, MergeRequestCheckInfo } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
@@ -33,6 +33,7 @@ import {
   ListSavedFiltersQueryDto,
   UpdateSavedFilterDto,
 } from './dto/saved-filters.dto.js';
+import { OverrideLintCheckDto } from './lint/lint.dto.js';
 
 /**
  * Merge-request surface (plan.md §7/§8): nested under the document for
@@ -213,6 +214,22 @@ export class MergeRequestsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<MergeRequestApiChangesResponse> {
     return this.mergeRequests.setBreakingAck(id, false, await this.scopeForMr(id, principal), principal?.userId);
+  }
+
+  @Post('merge-requests/:id/checks/:checkId/override')
+  @Access('admin', 'merge-request')
+  @ApiOperation({
+    summary:
+      "Override the style check of the current source head, which lets it through a block policy. A reason is required; " +
+      'it is audited and shown in the activity feed. A later push needs its own pass or override',
+  })
+  overrideLintCheck(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('checkId', ParseUUIDPipe) checkId: string,
+    @Body() dto: OverrideLintCheckDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<{ check: MergeRequestCheckInfo }> {
+    return this.mergeRequests.overrideLintCheck(id, checkId, dto.reason, principal);
   }
 
   @Post('merge-requests/:id/approve')

@@ -182,8 +182,8 @@ in the pull request that introduces them — see
   of the current head: waiting, running, passed, the number of violations,
   or why it did not run (no styleguide, a newer push, a page not open to
   every member, an author who cannot act, a spent AI budget, a failed run).
-  **Check again** lints the head again. A `warn` check never holds a merge;
-  a blocking gate comes in a later release. The policy is set per workspace,
+  **Check again** lints the head again. A `warn` check never holds a merge.
+  The policy is set per workspace,
   and per project, under **Settings → AI → Styleguide** (`GET`/`PUT
   /v1/lint-policy`), where the panel shows both the setting and what
   applies. `GET /v1/merge-requests/:id/checks` lists a merge request's
@@ -191,6 +191,23 @@ in the pull request that introduces them — see
   threads gain `checkId` and `ruleId`. A page restricted to some members is
   not linted, because agent runs and their findings are listed to every
   member. (#74)
+- A `block` lint policy holds a merge request until its style is fixed.
+  Under it, `POST /v1/merge-requests/:id/merge` answers 409 with
+  `details.reason: 'lint'` while the check of the source head is still to
+  come, or while it has error-severity violations nobody has resolved
+  (`details.checkStatus`, `details.blockingCount`, `details.checkId`).
+  Resolving those threads lets the merge through; warnings and suggestions
+  never hold it. A workspace admin can instead override the check of the
+  current head with a required reason (**Override** in the merge widget,
+  `POST /v1/merge-requests/:id/checks/:checkId/override`); the override is
+  written to the audit log and shown in the merge request's activity, and
+  it covers that revision only, so the next push is checked again. A check
+  that could not run — a provider failure or a spent budget — does not hold
+  a merge, and neither does a disabled `linter` agent. As with approvals,
+  the gate is not enforced for the `AUTH_MODE=none` dev principal or an MCP
+  client with no principal. `GET /v1/merge-requests/:id/checks` gains
+  `gate` (what holds the merge now, for the caller) and each check its
+  `override`. (#74)
 
 ### Changed
 
@@ -265,10 +282,12 @@ in the pull request that introduces them — see
   rollback is safe.
 - New env vars, both with defaults: `STYLE_LINT_POLICY` (`off`) is the
   ceiling, and the policy of every workspace that sets none, for merge
-  request lint (`off` | `warn`). With the default nothing is linted anywhere
+  request lint (`off` | `warn` | `block`). With the default nothing is linted anywhere
   and the trigger does not even query. `LINT_MAX_PENDING_PER_WORKSPACE` (20)
   bounds the checks one workspace may have waiting. Each check is one model
-  call per push, billed to the merge request's author.
+  call per push, billed to the merge request's author. Raising the ceiling
+  to `block` makes `block` the policy of every workspace and project that
+  sets none, so merges there wait for their style check.
 
 ## [0.26.0] — 2026-10-16
 

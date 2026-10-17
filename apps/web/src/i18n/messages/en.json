@@ -1294,7 +1294,9 @@
       "mergedSquash": "merged this as a squashed revision",
       "mergedCommit": "merged this with a merge commit",
       "ackedBreaking": "acknowledged the breaking API changes",
-      "withdrewBreakingAck": "withdrew the acknowledgement of breaking API changes"
+      "withdrewBreakingAck": "withdrew the acknowledgement of breaking API changes",
+      "overrodeLint": "overrode the style check",
+      "overrodeLintBecause": "overrode the style check: “{reason}”"
     },
     "requestedToMerge": "requested to merge",
     "into": "into",
@@ -1398,7 +1400,20 @@
         "run-failed": "Style check could not run",
         "stale": "Not published: the check finished more than a day ago"
       },
-      "onBehalfOf": "on behalf of {actor}"
+      "onBehalfOf": "on behalf of {actor}",
+      "blocking": "{n} blocking | {n} blocking",
+      "blocksMerge": "merging is blocked until the error threads are resolved",
+      "waitsMerge": "merging waits for the check",
+      "noneBlocking": "nothing of error severity is open",
+      "overriddenBy": "overridden by {name}",
+      "override": "Override",
+      "overrideTitle": "Override the style check",
+      "overrideHint": "Lets this revision merge despite its style check. It holds for this revision only: a later push is checked again. The reason is kept in the activity feed and the audit log.",
+      "reasonLabel": "Reason",
+      "overridden": "Style check overridden",
+      "adminHint": "Resolve the error threads, or ask a workspace admin to override.",
+      "blockedToast": "{n} unresolved error-severity style violation holds this merge | {n} unresolved error-severity style violations hold this merge",
+      "pendingToast": "This merge waits for the style check of the source revision"
     }
   },
   "assistant": {
@@ -2439,7 +2454,8 @@
         "inheritProject": "As the workspace ({value})",
         "choice": {
           "off": "Off",
-          "warn": "Warn — post violations as threads"
+          "warn": "Warn — post violations as threads",
+          "block": "Block — hold the merge on unresolved errors"
         },
         "value": {
           "off": "off",

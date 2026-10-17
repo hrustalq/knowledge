@@ -6,6 +6,7 @@ import type { Principal } from '../../auth/principal.js';
 import { ActivityService } from '../../activity/activity.service.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../../common/validation.js';
 import { LintChecksService } from './lint-checks.service.js';
+import { lintGateEnforced } from './lint-check.js';
 import { LintTriggerSweeper } from './lint-trigger.sweeper.js';
 import { LintPolicyQueryDto, UpdateLintPolicyDto } from './lint.dto.js';
 
@@ -51,9 +52,11 @@ export class LintController {
 
   @Get('merge-requests/:id/checks')
   @Access('viewer', 'merge-request')
-  @ApiOperation({ summary: "A merge request's checks, newest first, with the lint policy of its page" })
-  list(@Param('id', ParseUUIDPipe) id: string): Promise<ListMergeRequestChecksResponse> {
-    return this.checks.list(id);
+  @ApiOperation({
+    summary: "A merge request's checks, newest first, with the lint policy of its page and whether it holds a merge by the caller",
+  })
+  list(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ListMergeRequestChecksResponse> {
+    return this.checks.list(id, lintGateEnforced(principal));
   }
 
   @Post('merge-requests/:id/checks/lint')
@@ -63,7 +66,7 @@ export class LintController {
   })
   async relint(@Param('id', ParseUUIDPipe) id: string): Promise<{ check: MergeRequestCheckInfo }> {
     const checkId = await this.trigger.relint(id);
-    const { checks } = await this.checks.list(id);
+    const { checks } = await this.checks.list(id, false);
     return { check: checks.find((c) => c.checkId === checkId)! };
   }
 }

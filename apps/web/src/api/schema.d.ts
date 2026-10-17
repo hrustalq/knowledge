@@ -1277,6 +1277,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/merge-requests/{id}/checks/{checkId}/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Override the style check of the current source head, which lets it through a block policy. A reason is required; it is audited and shown in the activity feed. A later push needs its own pass or override */
+        post: operations["MergeRequestsController_overrideLintCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/merge-requests/{id}/approve": {
         parameters: {
             query?: never;
@@ -3258,7 +3275,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A merge request's checks, newest first, with the lint policy of its page */
+        /** A merge request's checks, newest first, with the lint policy of its page and whether it holds a merge by the caller */
         get: operations["LintController_list"];
         put?: never;
         post?: never;
@@ -5873,6 +5890,10 @@ export interface components {
             /** @description Replace-set of reviewer user ids (workspace members) */
             reviewerIds: string[];
         };
+        OverrideLintCheckDto: {
+            /** @description Why the head may merge despite its check; kept with the override and in the audit log */
+            reason: string;
+        };
         MergeMergeRequestDto: {
             /**
              * @default merge-commit
@@ -6731,7 +6752,7 @@ export interface components {
              * @description null inherits: a project the workspace, the workspace STYLE_LINT_POLICY
              * @enum {string|null}
              */
-            policy: "off" | "warn" | null;
+            policy: "off" | "warn" | "block" | null;
         };
         CreateGlossaryTermDto: {
             workspaceId: string;
@@ -11828,6 +11849,51 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_overrideLintCheck: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                checkId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverrideLintCheckDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

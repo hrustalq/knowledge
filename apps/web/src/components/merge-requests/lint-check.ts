@@ -18,13 +18,17 @@ export function useLintChecks(mergeRequestId: ComputedRef<string>) {
   /** The check of the source branch's current head, if it has one yet. */
   const current = computed(() => data.value?.checks.find((c) => c.current && c.kind === 'lint') ?? null)
   const policy = computed(() => data.value?.policy ?? null)
+  /** Whether the lint holds a merge by this caller now — the server's reading of the gate. */
+  const gate = computed(() => data.value?.gate ?? null)
   /** Whether the row is worth showing: lint is on here, or this head was checked anyway. */
   const shown = computed(() => !!data.value && (data.value.policy.effective !== 'off' || !!current.value))
 
-  const relint = useApiMutation('post', '/v1/merge-requests/{id}/checks/lint', {
-    invalidates: () => [['/v1/merge-requests/{id}/checks', { id: mergeRequestId.value }]],
+  const invalidates = () => [['/v1/merge-requests/{id}/checks', { id: mergeRequestId.value }]]
+  const relint = useApiMutation('post', '/v1/merge-requests/{id}/checks/lint', { invalidates })
+  const override = useApiMutation('post', '/v1/merge-requests/{id}/checks/{checkId}/override', {
+    invalidates: () => [...invalidates(), ['/v1/activity']],
   })
-  return { query, data, current, policy, shown, relint }
+  return { query, data, current, policy, gate, shown, relint, override }
 }
 
 export interface LintCheckView {

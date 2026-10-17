@@ -6667,6 +6667,81 @@
         ]
       }
     },
+    "/v1/merge-requests/{id}/checks/{checkId}/override": {
+      "post": {
+        "operationId": "MergeRequestsController_overrideLintCheck",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "checkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverrideLintCheckDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Override the style check of the current source head, which lets it through a block policy. A reason is required; it is audited and shown in the activity feed. A later push needs its own pass or override",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
     "/v1/merge-requests/{id}/approve": {
       "post": {
         "operationId": "MergeRequestsController_approve",
@@ -16397,7 +16472,7 @@
             }
           }
         },
-        "summary": "A merge request's checks, newest first, with the lint policy of its page",
+        "summary": "A merge request's checks, newest first, with the lint policy of its page and whether it holds a merge by the caller",
         "tags": [
           "merge-requests"
         ]
@@ -27946,6 +28021,19 @@
           "reviewerIds"
         ]
       },
+      "OverrideLintCheckDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Why the head may merge despite its check; kept with the override and in the audit log"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
       "MergeMergeRequestDto": {
         "type": "object",
         "properties": {
@@ -30179,7 +30267,8 @@
             "type": "string",
             "enum": [
               "off",
-              "warn"
+              "warn",
+              "block"
             ],
             "nullable": true,
             "description": "null inherits: a project the workspace, the workspace STYLE_LINT_POLICY"

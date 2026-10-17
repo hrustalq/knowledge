@@ -371,11 +371,11 @@ export const envSchema = z.object({
    * The style lint of merge requests (#74, phase 2): the ceiling of every
    * workspace's and project's lint policy, and the policy of one that sets
    * none. `off` (the default) lints nothing anywhere. A scope may ask for a
-   * narrower policy, never a wider one (off < warn < block). `block` joins
-   * with the merge gate that enforces it (phase 3) — until then nothing may
-   * ask for a gate that does not exist.
+   * narrower policy, never a wider one (off < warn < block). `block` lets the
+   * merge gate hold a merge request while the check of its head is to come or
+   * found an unresolved error-severity violation (phase 3).
    */
-  STYLE_LINT_POLICY: z.enum(['off', 'warn']).default('off'),
+  STYLE_LINT_POLICY: z.enum(['off', 'warn', 'block']).default('off'),
   /** Lint checks one workspace may have waiting; past it a head waits for the next tick. */
   LINT_MAX_PENDING_PER_WORKSPACE: z.coerce.number().int().positive().default(20),
 

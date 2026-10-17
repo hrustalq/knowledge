@@ -192,11 +192,17 @@ export interface ListSavedFiltersResponse {
  * non-author approvals than MR_REQUIRED_APPROVALS; `diverged` — target branch
  * advanced past the merge base (fast-forward precondition); `breaking-api` —
  * a spec document's source head breaks its API under a `block` policy and no
- * admin has acknowledged that head (#78).
+ * admin has acknowledged that head (#78); `lint` — the page's style lint is
+ * `block` and the check of the source head is still to come, or found
+ * error-severity violations nobody has resolved, and no admin overrode it
+ * (#74). `checkStatus` and `blockingCount` say which, `checkId` is the check.
  */
 export interface MergeGateConflictDetails {
-  reason: 'draft' | 'approvals' | 'diverged' | 'breaking-api';
+  reason: 'draft' | 'approvals' | 'diverged' | 'breaking-api' | 'lint';
   breakingCount?: number;
+  checkStatus?: LintGateState['checkStatus'];
+  blockingCount?: number;
+  checkId?: string | null;
   requiredApprovals?: number;
   approvals?: number;
   currentHeadRevisionId?: string | null;
@@ -245,7 +251,8 @@ export type MergeRequestCheckReason = (typeof MR_CHECK_REASONS)[number];
 /**
  * What a merge request's style lint does (#74): `off` checks nothing and calls
  * no model, `warn` posts the violations as threads and merges anyway, `block`
- * (phase 3) refuses the merge while an error-severity violation is unresolved.
+ * refuses the merge while the check is to come or an error-severity violation
+ * is unresolved, unless an admin overrides that head.
  * The vocabulary of {@link API_BREAKING_CHANGE_POLICIES}.
  */
 export const LINT_POLICIES = ['off', 'warn', 'block'] as const;
@@ -300,8 +307,36 @@ export interface MergeRequestCheckInfo {
   counts: MergeRequestCheckCounts | null;
   /** Lint threads of this check nobody has resolved yet. */
   unresolved: number;
+  /** An admin's override of this head's result (#74, phase 3); null when there is none. */
+  override: MergeRequestCheckOverride | null;
   createdAt: string;
   publishedAt: string | null;
+}
+
+export interface MergeRequestCheckOverride {
+  by: string;
+  at: string;
+  reason: string;
+}
+
+/**
+ * What the lint gate says about the source head now — the one predicate the
+ * merge widget and `merge` share. Fail-open: a check that could not run
+ * (`error`, `skipped`) never holds a merge. `blocked` is for the caller: the
+ * gate is not enforced for the dev principal or a principal-less MCP client,
+ * the approval gate's trust semantics.
+ */
+export interface LintGateState {
+  /** The effective policy of the page; only `block` can hold. */
+  policy: LintPolicy;
+  blocked: boolean;
+  /** The current head's check, if it has one yet. */
+  checkId: string | null;
+  /** `missing`: the head has no check yet — the trigger has not reached it. */
+  checkStatus: MergeRequestCheckStatus | 'missing';
+  /** Unresolved lint threads of the current check citing an error-severity rule. */
+  blockingCount: number;
+  overridden: boolean;
 }
 
 // GET /v1/merge-requests/:id/checks — newest first.
@@ -309,7 +344,14 @@ export interface ListMergeRequestChecksResponse {
   mergeRequestId: string;
   /** The policy that applies to this merge request's page. */
   policy: LintPolicySettings;
+  /** Whether the lint would hold a merge of the current head by the caller. */
+  gate: LintGateState;
   checks: MergeRequestCheckInfo[];
+}
+
+// POST /v1/merge-requests/:id/checks/:checkId/override — admin; bound to that head.
+export interface OverrideMergeRequestCheckRequest {
+  reason: string;
 }
 
 /**

@@ -104,7 +104,7 @@ const savePolicy = useApiMutation('put', '/v1/lint-policy', {
   invalidates: () => [['/v1/lint-policy'], ['/v1/merge-requests/{id}/checks']],
 })
 /** What a scope may ask for in this release; `block` comes with the merge gate. */
-const POLICY_CHOICES = ['inherit', 'off', 'warn'] as const
+const POLICY_CHOICES = ['inherit', 'off', 'warn', 'block'] as const
 const policyChoice = computed(() => policy.value?.requested ?? 'inherit')
 
 async function choosePolicy(value: unknown) {

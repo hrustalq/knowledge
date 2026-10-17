@@ -582,6 +582,8 @@ export type I18nTranslations = {
             "breakingApi": string;
             "notSpec": string;
             "notOpenForAck": string;
+            "lintPending": string;
+            "lintBlocking": string;
         };
         "thread": {
             "notFoundOnDocument": string;
@@ -1086,6 +1088,10 @@ export type I18nTranslations = {
             "off": string;
             "running": string;
             "busy": string;
+            "checkNotFound": string;
+            "overrideNotCurrent": string;
+            "notOverridable": string;
+            "alreadyOverridden": string;
         };
     };
     "import": {

@@ -2,10 +2,12 @@ import {
   LINT_POLICIES,
   type AgentFinding,
   type DiffHunk,
+  type LintGateState,
   type LintPolicy,
   type LintPolicySettings,
   type LintViolation,
   type MergeRequestCheckCounts,
+  type MergeRequestCheckStatus,
   type StyleRule,
   type StyleRuleSeverity,
 } from '@knowledge/contracts';
@@ -238,4 +240,60 @@ export function lintThreadBody(finding: AgentFinding): string {
   if (finding.detail && finding.detail !== finding.title) lines.push('', defuse(finding.detail));
   if (finding.suggestion) lines.push('', `${t('agent.lint.suggestion')} ${defuse(finding.suggestion)}`);
   return lines.join('\n');
+}
+
+/**
+ * The rules a check's run found error-severity violations of. Severity is the
+ * rule's, stamped on the finding when the run read the styleguide, so an
+ * admin editing a rule afterwards does not change what this head was held to.
+ */
+export function errorRuleIds(findings: AgentFinding[]): Set<string> {
+  return new Set(findings.filter((f) => f.kind === 'style' && f.ruleId && f.severity === 'error').map((f) => f.ruleId!));
+}
+
+/**
+ * Whether the style lint holds a merge of the current source head (#74,
+ * phase 3) — the one predicate the merge gate and the merge widget read.
+ *
+ * Only `block` holds, and only where it is `enforced` (not for the dev
+ * principal or a principal-less MCP client — the approval gate's trust
+ * semantics). Under it a head merges once its check passed, or found nothing
+ * of error severity still unresolved, or an admin overrode it. A head with no
+ * check yet, or one still waiting or running, waits for it. A check that could
+ * not run (`error`, `skipped`) never holds: a provider outage must not freeze
+ * every merge in the workspace (fail-open).
+ */
+export function lintGate(input: {
+  policy: LintPolicy;
+  enforced: boolean;
+  check: { id: string; status: MergeRequestCheckStatus; overridden: boolean } | null;
+  blockingCount: number;
+}): LintGateState {
+  const { policy, check } = input;
+  const checkStatus = check?.status ?? 'missing';
+  const overridden = check?.overridden ?? false;
+  const blockingCount = checkStatus === 'failed' ? input.blockingCount : 0;
+  const holds =
+    checkStatus === 'missing' || checkStatus === 'pending' || checkStatus === 'running' || blockingCount > 0;
+  return {
+    policy,
+    blocked: policy === 'block' && input.enforced && !overridden && holds,
+    checkId: check?.id ?? null,
+    checkStatus,
+    blockingCount,
+    overridden,
+  };
+}
+
+/**
+ * Whether the gate applies to a caller: not to the dev principal (it is the
+ * author stub, as in the approval gate) nor to an MCP client with no principal.
+ */
+export function lintGateEnforced(principal: { mode: string } | null | undefined): boolean {
+  return !!principal && principal.mode !== 'dev';
+}
+
+/** Results an admin may override: the ones that can hold a merge. */
+export function overridable(status: MergeRequestCheckStatus): boolean {
+  return status === 'pending' || status === 'running' || status === 'failed';
 }

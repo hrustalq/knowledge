@@ -28,6 +28,7 @@ import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js'
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { EntitiesModule } from '../entities/entities.module.js';
+import { LintCoreModule } from './lint/lint-core.module.js';
 
 /**
  * API side. DocumentsService itself lives in DocumentsCoreModule (worker-safe);
@@ -72,6 +73,9 @@ import { EntitiesModule } from '../entities/entities.module.js';
     // operation; it imports only graph and permissions, so there is no cycle.
     ApiSpecsCoreModule,
     EntitiesModule,
+    // The style lint merge gate (#74): the policy and the check reads. A leaf
+    // over Prisma and the agent registry, so there is no cycle.
+    LintCoreModule,
   ],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [

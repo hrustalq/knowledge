@@ -11,6 +11,7 @@ import type {
   ListWorkspaceMergeRequestsResponse,
   MergeMergeRequestResponse,
   MergeRequestApiChangesResponse,
+  MergeRequestCheckInfo,
   MergeRequestDiffResponse,
   MergeRequestInfo,
   MergeRequestProvenance,
@@ -35,6 +36,9 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { ApiSpecDiffService } from '../api-specs/api-spec-diff.service.js';
 import { EntitiesService } from '../entities/entities.service.js';
+import { AuditService } from '../auth/audit.service.js';
+import { LintChecksService } from './lint/lint-checks.service.js';
+import { lintGateEnforced, overridable } from './lint/lint-check.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 export const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -61,8 +65,11 @@ type MrWithBranches = MergeRequest & {
  *
  * Merge gating: draft MRs never merge; MR_REQUIRED_APPROVALS non-author
  * approvals are required (0 disables); merging into a protected branch
- * requires the workspace admin role; a spec whose source head breaks its API
- * waits for an admin's acknowledgement under a `block` policy (#78).
+ * requires the workspace admin role; a page whose style lint is `block` waits
+ * for the check of its source head and for its error-severity violations to
+ * be resolved, or for an admin's override (#74); a spec whose source head
+ * breaks its API waits for an admin's acknowledgement under a `block` policy
+ * (#78).
  */
 @Injectable()
 export class MergeRequestsService {
@@ -81,6 +88,8 @@ export class MergeRequestsService {
     private readonly permissions: PermissionService,
     private readonly apiDiffs: ApiSpecDiffService,
     private readonly entities: EntitiesService,
+    private readonly lint: LintChecksService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -512,6 +521,58 @@ export class MergeRequestsService {
     });
   }
 
+  /**
+   * An admin lets the current source head merge despite its style check
+   * (#74): one still to come, or one with violations left open. Bound to that
+   * head — a later push is linted afresh and needs its own pass or override.
+   * Audited, and in the activity feed with its reason.
+   */
+  async overrideLintCheck(
+    mergeRequestId: string,
+    checkId: string,
+    reason: string,
+    principal?: Principal,
+  ): Promise<{ check: MergeRequestCheckInfo }> {
+    const mr = await this.getMrOrThrow(mergeRequestId);
+    if (mr.status !== 'open') throw new BadRequestException(t('error.lint.notOpen'));
+    const check = await this.prisma.mergeRequestCheck.findFirst({ where: { id: checkId, mergeRequestId: mr.id, kind: 'lint' } });
+    if (!check) throw new NotFoundException(t('error.lint.checkNotFound', { id: checkId }));
+    if (check.headRevisionId !== mr.sourceBranch.headRevisionId) {
+      throw new ConflictException({ statusCode: 409, message: t('error.lint.overrideNotCurrent'), reason: 'lint.notCurrent' });
+    }
+    if (!overridable(check.status as MergeRequestCheckInfo['status'])) {
+      throw new ConflictException({ statusCode: 409, message: t('error.lint.notOverridable'), reason: 'lint.notOverridable' });
+    }
+
+    const actorId = principal?.userId ?? AUTHOR_ID_STUB;
+    // Guarded: two admins pressing together write one override, and a check
+    // that settled to `passed` meanwhile has nothing left to override.
+    const claimed = await this.prisma.mergeRequestCheck.updateMany({
+      where: { id: check.id, overriddenAt: null, status: { in: ['pending', 'failed'] } },
+      data: { overriddenBy: actorId, overriddenAt: new Date(), overrideReason: reason },
+    });
+    if (claimed.count === 0) {
+      throw new ConflictException({ statusCode: 409, message: t('error.lint.alreadyOverridden'), reason: 'lint.alreadyOverridden' });
+    }
+
+    const params = { mergeRequestId: mr.id, checkId: check.id, headRevisionId: check.headRevisionId, reason };
+    await this.audit.record({
+      workspaceId: check.workspaceId,
+      actor: principal?.userId ?? 'dev',
+      action: 'merge-request.lint-override',
+      params,
+      ok: true,
+    });
+    await this.recordActivity(mr.documentId, 'merge-request.updated', mr.id, actorId, {
+      title: mr.title,
+      changed: ['lintOverride'],
+      lintOverride: { checkId: check.id, reason },
+      revisionId: check.headRevisionId,
+    });
+    const { checks } = await this.lint.list(mr.id, lintGateEnforced(principal));
+    return { check: checks.find((c) => c.checkId === check.id)! };
+  }
+
   /** The page a merge request is on — for a caller that needs its workspace first. */
   async documentOf(mergeRequestId: string): Promise<{ documentId: string }> {
     const mr = await this.prisma.mergeRequest.findUnique({ where: { id: mergeRequestId }, select: { documentId: true } });
@@ -596,6 +657,24 @@ export class MergeRequestsService {
         select: { workspaceId: true },
       });
       await this.access.requireRole(principal, doc.workspaceId, 'admin');
+    }
+    // Style lint (#74): after approvals, before divergence — a rebase would
+    // only produce a new head to lint. Not enforced where approvals are not.
+    if (lintGateEnforced(principal)) {
+      const gate = await this.lint.gate(mr.id, true);
+      if (gate.blocked) {
+        throw new ConflictException({
+          statusCode: 409,
+          message:
+            gate.blockingCount > 0
+              ? t('error.mergeRequest.lintBlocking', { id: mr.id, count: gate.blockingCount })
+              : t('error.mergeRequest.lintPending', { id: mr.id }),
+          reason: 'lint',
+          checkStatus: gate.checkStatus,
+          blockingCount: gate.blockingCount,
+          checkId: gate.checkId,
+        });
+      }
     }
 
     const sourceHeadId = mr.sourceBranch.headRevisionId;

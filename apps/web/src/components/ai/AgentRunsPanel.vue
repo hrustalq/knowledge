@@ -3,11 +3,13 @@
 // The one action here is Propose, which opens a merge request against the page
 // a finding cites — still not a change to the live page, just one a person can
 // review and merge. Or Dismiss (#70): the finding is wrong, hide it and tell
-// the agent's next runs, optionally with a learning saying why.
+// the agent's next runs, optionally with a learning saying why. Or Add to
+// glossary (#74), for a term the glossarist proposed.
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import {
+  BookA,
   CircleAlert,
   CircleCheck,
   CircleSlash,
@@ -24,6 +26,7 @@ import {
 } from 'lucide-vue-next'
 import { AGENT_LEARNING_MAX_CHARS } from '@knowledge/contracts'
 import type {
+  AddFindingTermResponse,
   AgentFinding,
   AgentRunSummary,
   DismissAgentFindingResponse,
@@ -39,6 +42,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -120,6 +124,8 @@ const repositoryName = (run: AgentRunSummary): string | null => {
  */
 function canPropose(f: AgentFinding): boolean {
   if (f.mergeRequestId || f.kind === 'orphan' || f.kind === 'relation' || f.documentIds.length === 0) return false
+  // A proposed glossary term is fixed in the glossary, not in the page it was found on.
+  if (f.term) return false
   return !f.draft || !f.proposedAt
 }
 
@@ -238,6 +244,52 @@ async function confirmDismiss() {
     })) as DismissAgentFindingResponse
     toast.success(res.learningId ? t('ai.runs.dismissedWithLearning') : t('ai.runs.dismissedToast'))
     dismissing.value = null
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+/**
+ * Add to glossary (#74). The glossarist drafted the entry; this opens it in a
+ * dialog so a person can correct the model before it becomes vocabulary. The
+ * project is not offered: the term lands where its page lives.
+ */
+const addTerm = useApiMutation('post', '/v1/ai/agents/runs/{id}/findings/{index}/add-term', {
+  invalidates: () => [['/v1/ai/agents/runs'], ['/v1/glossary']],
+})
+const addingTerm = ref<{ run: AgentRunSummary; index: number } | null>(null)
+const termForm = ref({ term: '', aliases: '', definition: '' })
+const addTermOpen = computed({
+  get: () => addingTerm.value !== null,
+  set: (open: boolean) => {
+    if (!open) addingTerm.value = null
+  },
+})
+function canAddTerm(f: AgentFinding): boolean {
+  return auth.canEdit && !!f.term && !f.termId && !f.dismissedAt
+}
+function askAddTerm(run: AgentRunSummary, index: number) {
+  const proposed = run.findings[index]?.term
+  if (!proposed) return
+  termForm.value = { term: proposed.term, aliases: proposed.aliases.join(', '), definition: proposed.definition }
+  addingTerm.value = { run, index }
+}
+async function confirmAddTerm() {
+  const target = addingTerm.value
+  const f = termForm.value
+  if (!target || !f.term.trim() || !f.definition.trim()) return
+  try {
+    const res = (await addTerm.mutateAsync({
+      path: { id: target.run.id, index: target.index },
+      query: { workspaceId },
+      body: {
+        term: f.term.trim(),
+        definition: f.definition.trim(),
+        aliases: f.aliases.split(',').map((a) => a.trim()).filter(Boolean),
+      },
+    })) as AddFindingTermResponse
+    toast.success(t('ai.runs.termAdded', { term: res.term }))
+    addingTerm.value = null
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -461,6 +513,23 @@ const severityClass = (f: AgentFinding) =>
                 <FilePlus2 v-else class="size-3.5" />
                 {{ t('ai.runs.createPage') }}
               </Button>
+              <RouterLink
+                v-if="f.termId"
+                :to="`/settings/glossary?term=${f.termId}`"
+                class="text-primary inline-flex items-center gap-1 text-[11px] hover:underline"
+              >
+                <BookA class="size-3" /> {{ t('ai.runs.viewTerm') }}
+              </RouterLink>
+              <Button
+                v-else-if="canAddTerm(f)"
+                variant="outline"
+                size="sm"
+                :disabled="proposing !== null"
+                @click="askAddTerm(run, i)"
+              >
+                <BookA class="size-3.5" />
+                {{ t('ai.runs.addTerm') }}
+              </Button>
               <Button
                 v-if="canMarkOutdated(f)"
                 variant="ghost"
@@ -476,7 +545,7 @@ const severityClass = (f: AgentFinding) =>
                 {{ t('ai.runs.outdatedMarked') }}
               </span>
               <Button
-                v-if="auth.canEdit && !f.dismissedAt && !f.mergeRequestId"
+                v-if="auth.canEdit && !f.dismissedAt && !f.mergeRequestId && !f.termId"
                 variant="ghost"
                 size="sm"
                 class="text-muted-foreground"
@@ -497,6 +566,38 @@ const severityClass = (f: AgentFinding) =>
         </ul>
       </li>
     </ul>
+
+    <Dialog v-model:open="addTermOpen">
+      <DialogContent class="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{{ t('ai.runs.addTermTitle') }}</DialogTitle>
+          <DialogDescription>
+            {{ t('ai.runs.addTermDesc', { page: addingTerm?.run.findings[addingTerm.index]?.documentTitles[0] ?? '' }) }}
+          </DialogDescription>
+        </DialogHeader>
+        <form id="kn-add-finding-term" class="space-y-3" @submit.prevent="confirmAddTerm">
+          <label class="block space-y-1">
+            <span class="text-muted-foreground text-xs font-medium">{{ t('glossary.term') }}</span>
+            <Input v-model="termForm.term" required maxlength="80" />
+          </label>
+          <label class="block space-y-1">
+            <span class="text-muted-foreground text-xs font-medium">{{ t('glossary.aliases') }}</span>
+            <Input v-model="termForm.aliases" :placeholder="t('glossary.aliasesPlaceholder')" />
+          </label>
+          <label class="block space-y-1">
+            <span class="text-muted-foreground text-xs font-medium">{{ t('glossary.definition') }}</span>
+            <Textarea v-model="termForm.definition" required rows="4" maxlength="2000" />
+          </label>
+        </form>
+        <DialogFooter>
+          <Button variant="outline" @click="addingTerm = null">{{ t('common.cancel') }}</Button>
+          <Button type="submit" form="kn-add-finding-term" :disabled="addTerm.isPending.value">
+            <Loader2 v-if="addTerm.isPending.value" class="size-3.5 animate-spin" />
+            {{ t('ai.runs.addTerm') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <Dialog v-model:open="dismissOpen">
       <DialogContent class="sm:max-w-lg">

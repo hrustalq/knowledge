@@ -25,8 +25,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * A term is a linking key, not prose: the linker scans every rendered page for
  * it, so an entire sentence as a "term" would be both useless and expensive.
  */
-const MAX_TERM_CHARS = 80;
-const MAX_DEFINITION_CHARS = 2_000;
+export const MAX_TERM_CHARS = 80;
+export const MAX_DEFINITION_CHARS = 2_000;
 /** Mirrors MAX_QUOTE_CHARS in ThreadAnchorDto and lib/anchor-match. */
 const MAX_QUOTE_CHARS = 1_000;
 

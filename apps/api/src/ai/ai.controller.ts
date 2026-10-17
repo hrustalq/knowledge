@@ -18,6 +18,7 @@ import type {
   AgentLearningStatus,
   AgentLearningSummary,
   DismissAgentFindingResponse,
+  AddFindingTermResponse,
   ListAgentLearningsResponse,
   RotateAgentTriggerSecretResponse,
   ApplyAgentRecipeResponse,
@@ -87,6 +88,7 @@ import {
   CreateAgentLearningDto,
   UpdateAgentLearningDto,
   DismissAgentFindingDto,
+  AddFindingTermDto,
   ApplyAgentRecipeDto,
   UpdateAiAgentDto,
   UpdateAiSkillDto,
@@ -734,6 +736,26 @@ export class AiController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<FlagFindingOutdatedResponse> {
     return this.findings.markOutdated(workspaceId, id, index, principal);
+  }
+
+  /**
+   * Add the term a glossarist finding proposes to the glossary (#74).
+   * `editor`, the role `POST /v1/glossary` asks for: it is the same write,
+   * made from the finding and attributed to the caller.
+   */
+  @Post('agents/runs/:id/findings/:index/add-term')
+  @Access('editor', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
+  @ApiOperation({ summary: 'Add the glossary term a finding proposes, optionally edited, as the caller' })
+  addFindingTerm(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('index', ParseIntPipe) index: number,
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Body() dto: AddFindingTermDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AddFindingTermResponse> {
+    return this.findings.addTerm(workspaceId, id, index, principal, dto);
   }
 
   /**

@@ -7,6 +7,7 @@ import { VerificationCoreModule } from '../verification/verification-core.module
 import { AssistantModule } from '../assistant/assistant.module.js';
 import { AiCoreModule } from './ai-core.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
+import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { AiPluginsService } from './ai-plugins.service.js';
 import { AiSettingsService } from './ai-settings.service.js';
 import { AiAgentsService, AgentRunsService } from './ai-agents.service.js';
@@ -48,6 +49,8 @@ import { AiUsageController } from './ai-usage.controller.js';
     StorageModule,
     // Mark outdated from a finding (docs/features/39). Controller-free.
     VerificationCoreModule,
+    // AgentFindingsService.addTerm writes through the one glossary writer (#74).
+    GlossaryCoreModule,
     forwardRef(() => AssistantModule),
   ],
   controllers: [AiController, AiUsageController, AgentWebhookController],

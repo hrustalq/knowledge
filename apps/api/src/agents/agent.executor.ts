@@ -193,7 +193,7 @@ const MAX_COMPARED = 1_000;
 export interface AgentRunResult {
   summary: string;
   findings: AgentFinding[];
-  /** What the run found that is not a finding; only the sentinel writes it (#236). */
+  /** What the run found that is not a finding: the sentinel's usages (#236), the glossarist's watermark (#74). */
   details?: AgentRunDetails;
 }
 
@@ -994,7 +994,14 @@ export class AgentExecutor {
    * that drops ungrounded terms, and the "already defined in this project"
    * lookup are one implementation, not two. Terms are proposed as findings —
    * nothing is written to the glossary, exactly as a background agent never
-   * writes.
+   * writes. Each finding carries the term itself, so *Add to glossary* is a
+   * person's click and not a second model call.
+   *
+   * Incremental (#74): a page whose head revision an earlier run already read
+   * is skipped, so successive runs walk the whole workspace, most recently
+   * active first, instead of rereading the same newest pages. The watermark is
+   * the runs' own `details.glossaryScanned` — no column, no table. Pages a
+   * person named on the run are read regardless: they asked.
    */
   private async buildGlossary(
     run: AgentRun,
@@ -1002,19 +1009,36 @@ export class AgentExecutor {
     report: AgentReporter,
   ): Promise<AgentRunResult> {
     const scope = await this.runScope(run, principal);
-    const documents = await this.prisma.document.findMany({
-      where: { workspaceId: run.workspaceId, ...pageScope(run), AND: [visibilityWhere(scope)] },
-      select: { id: true, title: true },
-      orderBy: { createdAt: 'desc' },
-      take: MAX_GLOSSARY_PAGES,
-    });
-    if (documents.length === 0) return { summary: t('agent.curation.noPages'), findings: [] };
+    const named = ((run.input ?? {}) as AgentRunInput).documentIds?.length ?? 0;
+    const pages = (
+      await this.prisma.document.findMany({
+        where: {
+          workspaceId: run.workspaceId,
+          kind: 'page',
+          archivedAt: null,
+          ...LISTED_PAGE,
+          ...pageScope(run),
+          AND: [visibilityWhere(scope)],
+        },
+        select: { id: true, title: true, defaultBranch: true, branches: { select: { name: true, headRevisionId: true } } },
+        orderBy: { lastActivityAt: 'desc' },
+      })
+    )
+      .map((p) => ({ id: p.id, title: p.title, headRevisionId: p.branches.find((b) => b.name === p.defaultBranch)?.headRevisionId ?? null }))
+      .filter((p): p is typeof p & { headRevisionId: string } => p.headRevisionId !== null);
+    if (pages.length === 0) return { summary: t('agent.curation.noPages'), findings: [] };
+
+    const scannedBefore = named > 0 ? new Set<string>() : await this.glossaryScanned(run.workspaceId, pages.map((p) => p.headRevisionId));
+    const documents = pages.filter((p) => !scannedBefore.has(p.headRevisionId)).slice(0, MAX_GLOSSARY_PAGES);
+    if (documents.length === 0) return { summary: t('agent.glossary.allScanned'), findings: [] };
 
     const findings: AgentFinding[] = [];
     // Proposed once per run: the same term found on four pages is one entry to
     // add, and four findings saying so is a wall, not a review.
     const seen = new Set<string>();
-    let scanned = 0;
+    // Recorded only once `suggest` answered, so a page that failed is read again next run.
+    const scanned: string[] = [];
+    const details = (): AgentRunDetails | undefined => (scanned.length > 0 ? { glossaryScanned: scanned } : undefined);
 
     for (const [at, doc] of documents.entries()) {
       if (findings.length >= MAX_FINDINGS) break;
@@ -1029,9 +1053,9 @@ export class AgentExecutor {
         // The provider is off for this workspace — every later page would say
         // the same, so stop rather than making the same failed call per page.
         if (!res.enabled) {
-          return { summary: t('agent.glossary.disabled'), findings };
+          return { summary: t('agent.glossary.disabled'), findings, details: details() };
         }
-        scanned++;
+        scanned.push(doc.headRevisionId);
         for (const s of res.suggestions) {
           // Already in the glossary: proposing it again is noise.
           if (s.existingTermId) continue;
@@ -1047,6 +1071,10 @@ export class AgentExecutor {
             }`,
             documentIds: [doc.id],
             documentTitles: [doc.title],
+            // `suggest` takes the project from the page, so the term lands where it was found.
+            ...(res.projectId
+              ? { term: { term: s.term, aliases: s.aliases, definition: s.definition, projectId: res.projectId } }
+              : {}),
           });
           if (findings.length >= MAX_FINDINGS) break;
         }
@@ -1056,8 +1084,9 @@ export class AgentExecutor {
         // (docs/features/18), so a text match would only work in English.
         if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
           return {
-            summary: t('agent.glossary.budgetSpent', { pages: t('agent.count.pages', { count: scanned }) }),
+            summary: t('agent.glossary.budgetSpent', { pages: t('agent.count.pages', { count: scanned.length }) }),
             findings,
+            details: details(),
           };
         }
         if (error instanceof ProviderAccountError) {
@@ -1072,13 +1101,31 @@ export class AgentExecutor {
     return {
       summary:
         findings.length === 0
-          ? t('agent.glossary.nothingNew', { pages: t('agent.count.pages', { count: scanned }) })
+          ? t('agent.glossary.nothingNew', { pages: t('agent.count.pages', { count: scanned.length }) })
           : t('agent.glossary.summary', {
-              pages: t('agent.count.pages', { count: scanned }),
+              pages: t('agent.count.pages', { count: scanned.length }),
               terms: t('agent.count.terms', { count: findings.length }),
             }),
       findings,
+      details: details(),
     };
+  }
+
+  /**
+   * Which of these head revisions an earlier glossarist run already read.
+   * Asked only about the candidates, so the answer stays as small as the
+   * workspace however many runs there have been.
+   */
+  private async glossaryScanned(workspaceId: string, revisionIds: string[]): Promise<Set<string>> {
+    if (revisionIds.length === 0) return new Set();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT DISTINCT rev AS id
+        FROM agent_runs, jsonb_array_elements_text(COALESCE(details -> 'glossaryScanned', '[]'::jsonb)) AS rev
+       WHERE workspace_id = ${workspaceId}::uuid
+         AND agent_key = 'glossarist'
+         AND status = 'succeeded'
+         AND rev = ANY(${revisionIds}::text[])`);
+    return new Set(rows.map((r) => r.id));
   }
 
   // ------------------------------------------------------------ archaeologist

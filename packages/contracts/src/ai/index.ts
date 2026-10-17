@@ -2255,6 +2255,23 @@ export interface AgentFinding {
   anchor?: ReviewThreadAnchor;
   /** A rewrite the linter offered for the quoted passage. Applying it is a person's act. */
   suggestion?: string;
+  /**
+   * The glossary entry a glossarist finding proposes (#74), as `suggest`
+   * returned it, so *Add to glossary* needs no second model call. `projectId`
+   * is the cited page's project — where the term lands, never the caller's
+   * choice.
+   */
+  term?: AgentFindingTerm;
+  /** The glossary term a person created from this finding. Set once; the button becomes a link. */
+  termId?: string | null;
+}
+
+/** A proposed glossary entry carried on a glossarist finding (#74). */
+export interface AgentFindingTerm {
+  term: string;
+  aliases: string[];
+  definition: string;
+  projectId: string;
 }
 
 /** One declared path a change removed or moved (#236). */
@@ -2302,6 +2319,12 @@ export interface AgentRunDetails {
    * API section reads, including specs with nothing wrong.
    */
   apiSpecs?: ApiDriftSpec[];
+  /**
+   * The head revisions the glossarist read (#74). The next run skips a page
+   * whose head is in any earlier run's list, so the glossarist walks the whole
+   * workspace over time instead of rereading the newest pages.
+   */
+  glossaryScanned?: string[];
 }
 
 /**
@@ -2352,6 +2375,13 @@ export interface FlagFindingOutdatedResponse {
   documentTitle: string;
   /** The page's derived state after the flag — `outdated`, unless a report outranks it. */
   verification: SourceVerificationState;
+}
+
+// POST /v1/ai/agents/runs/:id/findings/:index/add-term
+export interface AddFindingTermResponse {
+  termId: string;
+  term: string;
+  projectId: string;
 }
 
 // POST /v1/ai/agents/runs/:id/findings/:index/create-page

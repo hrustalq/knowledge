@@ -243,6 +243,17 @@ in the pull request that introduces them — see
   as `POST /v1/assistant/lint`), and `knowledge_get_page_quality` returns a
   page's newest score, issues and history. Both are read-only and offered to
   read-only keys. (#74)
+- The glossarist's proposals can now go straight into the glossary. Each
+  proposed term in the agents panel has **Add to glossary**, which opens the
+  term, aliases and definition the agent drafted so you can correct them,
+  then adds the entry to the glossary of the project the term was found in,
+  marked as suggested by AI. It makes no model call, and a term can be added
+  from a finding only once; afterwards the finding links to the entry. Over
+  the API: `POST /v1/ai/agents/runs/:id/findings/:index/add-term` (editor).
+  The glossarist also no longer rereads the same 15 newest pages on every
+  run: it skips any page it has already read at its current version, so
+  repeated runs work through the whole workspace, most recently active pages
+  first. A page you name on the run is always read. (#74)
 
 ### Changed
 

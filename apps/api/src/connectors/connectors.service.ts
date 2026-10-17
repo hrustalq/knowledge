@@ -18,6 +18,7 @@ import {
   type ConnectorRunWarning,
   type ConnectorSummary,
   type ConnectorSyncMode,
+  type ConnectorTestResponse,
   type ConnectorTrigger,
   type DocumentCategory,
 } from '@knowledge/contracts';
@@ -236,13 +237,17 @@ export class ConnectorsService {
     await this.prisma.connector.delete({ where: { id: connectorId } });
   }
 
-  async testConnection(connectorId: string): Promise<{ ok: boolean; detail: string | null }> {
+  async testConnection(connectorId: string): Promise<ConnectorTestResponse> {
     const row = await this.require(connectorId);
     const adapter = this.adapterFor(row);
     try {
       const ctx = await this.contextFor(row, async () => undefined);
       const result = await adapter.testConnection(ctx);
-      return { ok: result.ok, detail: result.detail ?? null };
+      return {
+        ok: result.ok,
+        detail: result.detail ?? null,
+        ...(result.apiSpecSuggestions?.length ? { apiSpecSuggestions: result.apiSpecSuggestions } : {}),
+      };
     } catch (err) {
       return { ok: false, detail: (err as Error).message.slice(0, 500) };
     }

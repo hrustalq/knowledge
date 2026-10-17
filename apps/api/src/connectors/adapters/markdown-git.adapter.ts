@@ -26,6 +26,9 @@ import {
   type OutboundDocument,
 } from './connector.types.js';
 import { githubRepoAcl, githubTeamMembers } from './github-acl.js';
+import { repoSpecFiles, suggestSpecFiles, type RepoSpecFile } from './repo-specs.js';
+import { apiSpecGlobs } from '@knowledge/contracts';
+import { globToRegExp } from '../../common/glob.js';
 
 /**
  * Markdown in a git repository (docs/features/19).
@@ -41,6 +44,13 @@ import { githubRepoAcl, githubTeamMembers } from './github-acl.js';
  *
  * Push needs a host API, so it works for GitHub and GitLab and reports itself
  * unavailable elsewhere.
+ *
+ * API spec files (#78) named by the `apiSpecs` globs ride along as leaves of
+ * the same path tree. Their external id is the path, like a page's; what
+ * differs is `ExternalDocument.spec`, which makes the sync create a spec
+ * document and deliver every later change by merge request. They are never
+ * pushed (`ConnectorSyncService.push` skips them): the repository is a spec's
+ * source of truth, and a bundled copy written back would replace its sources.
  */
 @Injectable()
 export class MarkdownGitAdapter implements ConnectorAdapter {
@@ -57,13 +67,25 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
   }
 
 
-  async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
+  async testConnection(
+    ctx: ConnectorContext,
+  ): Promise<{ ok: boolean; detail?: string; apiSpecSuggestions?: string[] }> {
     const files = await this.markdownFiles(ctx);
+    const specs = await this.specFiles(ctx);
     const host = repoHost(ctx);
     const pushable = host.kind === 'github' || host.kind === 'gitlab';
+    // Offered only while the connector names none: suggesting what is already
+    // configured would be a list of things the dialog cannot do anything with.
+    const suggestions = apiSpecGlobs(ctx.config).length
+      ? []
+      : suggestSpecFiles((await downloadRepoArchive(ctx)).files);
     return {
       ok: true,
-      detail: `${files.size} markdown file(s)${pushable ? '' : ' — this host is pull-only'}`,
+      detail:
+        `${files.size} markdown file(s)` +
+        (specs.size ? `, ${specs.size} API spec(s)` : '') +
+        (pushable ? '' : ' — this host is pull-only'),
+      ...(suggestions.length ? { apiSpecSuggestions: suggestions } : {}),
     };
   }
 
@@ -82,6 +104,7 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
         version: hashBytes(bytes),
       };
     }
+    for (const spec of (await this.specFiles(ctx)).values()) yield specRef(ctx, spec, branch);
   }
 
   /**
@@ -100,10 +123,19 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
    * upstream, and pushing back would then have to invent files for them.
    */
   async *children(ctx: ConnectorContext, parent: ExternalRef | null): AsyncIterable<ExternalRef> {
-    const files = await this.markdownFiles(ctx);
+    const markdown = await this.markdownFiles(ctx);
+    const specs = await this.specFiles(ctx);
     const branch = await resolveBranch(ctx);
     const dir = parent ? dirOf(parent.externalId) : '';
+    // A spec is a leaf in the same tree: never an index, so it hangs from the
+    // nearest directory page exactly as a plain markdown file beside it would.
+    const files = specs.size ? new Map([...markdown, ...[...specs.keys()].map((p) => [p, EMPTY] as const)]) : markdown;
     for (const path of childPathsOf(dir, files)) {
+      const spec = specs.get(path);
+      if (spec) {
+        yield { ...specRef(ctx, spec, branch), ...(parent ? { parentExternalId: parent.externalId } : {}) };
+        continue;
+      }
       const bytes = files.get(path)!;
       yield {
         externalId: path,
@@ -118,6 +150,17 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
   }
 
   async fetch(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalDocument> {
+    const spec = (await this.specFiles(ctx)).get(ref.externalId);
+    if (spec) {
+      return {
+        ref: { ...ref, version: spec.version },
+        title: spec.title,
+        markdown: spec.text,
+        spec: { kind: spec.kind, syntax: spec.syntax },
+        warnings: spec.warnings,
+      };
+    }
+
     const files = await this.markdownFiles(ctx);
     const bytes = files.get(ref.externalId);
     if (!bytes) throw new Error(t('error.connector.fileGone', { path: ref.externalId }, ctx.locale));
@@ -222,9 +265,13 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
       removed?: string[];
     }>;
     const paths = new Set<string>();
+    // A pushed spec file by its glob (#78). A pushed sibling it references is
+    // not matched — the delivery names files, not bundles — so that change
+    // waits for the next scheduled or manual sync, which re-bundles every spec.
+    const specGlobs = apiSpecGlobs(ctx.config).map(globToRegExp);
     for (const commit of commits) {
       for (const p of [...(commit.added ?? []), ...(commit.modified ?? [])]) {
-        if (p.toLowerCase().endsWith('.md')) paths.add(p);
+        if (p.toLowerCase().endsWith('.md') || specGlobs.some((g) => g.test(p))) paths.add(p);
       }
     }
     return [...paths].map((p) => ({ externalId: p, title: p }));
@@ -246,6 +293,13 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
     return markdown;
   }
 
+  /** The connector's spec files (#78), bundled — empty unless it names `apiSpecs` globs. */
+  private async specFiles(ctx: ConnectorContext): Promise<Map<string, RepoSpecFile>> {
+    if (apiSpecGlobs(ctx.config).length === 0) return new Map();
+    const { files } = await downloadRepoArchive(ctx);
+    return repoSpecFiles(files, ctx.config, ctx.locale);
+  }
+
   private pathFor(ctx: ConnectorContext, title: string): string {
     const subdir = repoSubdir(ctx);
     const slug =
@@ -256,6 +310,14 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
         .slice(0, 80) || 'untitled';
     return subdir ? `${subdir}/${slug}.md` : `${slug}.md`;
   }
+}
+
+const EMPTY = new Uint8Array();
+
+function specRef(ctx: ConnectorContext, spec: RepoSpecFile, branch: string): ExternalRef {
+  // The bundle's hash, not the file's: a change to a referenced sibling is a
+  // change to the spec, and the version is what the cheapest skip compares.
+  return { externalId: spec.path, title: spec.title, url: blobUrl(ctx, spec.path, branch), version: spec.version };
 }
 
 function encodePath(path: string): string {

@@ -736,6 +736,14 @@
       "result": "{created} new, {updated} updated, {pending} awaiting review, {removed} removed",
       "truncated": "Cut to the skill budget: {paths}",
       "skipped": "Skipped: {paths}"
+    },
+    "apiSpecs": {
+      "foundTitle": "Found one API spec in this repository | Found {count} API specs in this repository",
+      "foundHint": "Sync them as API reference pages beside the other pages. Later changes to a spec arrive as merge requests, with breaking changes called out. You can edit the list under the connector's API specs setting.",
+      "add": "Sync this spec | Sync these {n} specs",
+      "added": "Added to API specs",
+      "specNote": "An API spec file, shown as it will be stored. Once the page exists, every change to it arrives as a merge request.",
+      "assistOff": "The AI assists rewrite markdown, so they are not offered for an API spec."
     }
   },
   "workflow": {

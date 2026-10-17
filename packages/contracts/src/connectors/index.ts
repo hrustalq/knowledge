@@ -1,4 +1,5 @@
 import type { DocumentCategory } from '@knowledge/contracts/documents';
+import type { ApiSpecKind } from '@knowledge/contracts/api';
 
 // configured sources and destinations. A connector is one configured
 // connection; a link is the recorded identity between an external item and a
@@ -306,6 +307,17 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         help: 'Only markdown under this path is synced. An Obsidian vault is just a folder.',
       },
       {
+        // #78: spec files sync as API reference documents beside the pages.
+        // A comma- or newline-separated string, because config values are
+        // strings; `apiSpecGlobs` is the one reader.
+        key: 'apiSpecs',
+        label: 'API specs',
+        kind: 'text',
+        required: false,
+        placeholder: 'openapi.yaml, specs/**/*.json',
+        help: 'OpenAPI or AsyncAPI files to sync as API reference pages, matched from the repository root. A changed spec arrives as a merge request.',
+      },
+      {
         key: 'driftCheck',
         label: 'Drift check',
         kind: 'select',
@@ -352,6 +364,17 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         required: false,
         placeholder: 'src',
         help: 'Only code under this path is read. Leave empty for the whole repository.',
+      },
+      {
+        // #78: spec files sync as API reference documents beside the pages.
+        // A comma- or newline-separated string, because config values are
+        // strings; `apiSpecGlobs` is the one reader.
+        key: 'apiSpecs',
+        label: 'API specs',
+        kind: 'text',
+        required: false,
+        placeholder: 'openapi.yaml, specs/**/*.json',
+        help: 'OpenAPI or AsyncAPI files to sync as API reference pages, matched from the repository root. A changed spec arrives as a merge request.',
       },
       {
         key: 'maxModules',
@@ -495,6 +518,11 @@ export interface ConnectorTestResponse {
   ok: boolean;
   /** Upstream's own message on failure, or a one-line summary of what was reached. */
   detail: string | null;
+  /**
+   * OpenAPI / AsyncAPI files found in a repository whose connector names none
+   * (#78). Offered in the setup dialog, never imported on their own.
+   */
+  apiSpecSuggestions?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -856,12 +884,40 @@ export function wikiDelivery(config: Record<string, unknown> | null | undefined)
 }
 
 /**
- * Why a `connector_conflicts` row exists: both sides changed (`conflict`), or
- * the repo wiki regenerated a page that is delivered by merge request
- * (`regenerated`). The sweeper titles the merge request by it.
+ * Why a `connector_conflicts` row exists: both sides changed (`conflict`), the
+ * repo wiki regenerated a page that is delivered by merge request
+ * (`regenerated`), or a synced API spec changed upstream (`spec-changed`, #78),
+ * which always arrives by merge request so the breaking-change gate sees it.
+ * The sweeper titles the merge request by it.
  */
-export const CONNECTOR_CONFLICT_REASONS = ['conflict', 'regenerated'] as const;
+export const CONNECTOR_CONFLICT_REASONS = ['conflict', 'regenerated', 'spec-changed'] as const;
 export type ConnectorConflictReason = (typeof CONNECTOR_CONFLICT_REASONS)[number];
+
+/**
+ * The reasons whose merge requests replace each other: each carries the whole
+ * page as the connector produced it, so only the newest of a burst is worth
+ * reviewing. A `conflict` holds a person's edit too and is never superseded.
+ */
+export const SUPERSEDING_CONFLICT_REASONS: readonly ConnectorConflictReason[] = ['regenerated', 'spec-changed'];
+
+// ---------------------------------------------------------------------------
+// API spec files in a repository (#78, phase 7)
+// ---------------------------------------------------------------------------
+
+export const API_SPECS_CONFIG_KEY = 'apiSpecs';
+/** More patterns than this is a typo, not a configuration. */
+export const MAX_API_SPEC_GLOBS = 20;
+
+/**
+ * The connector's spec globs, `[]` when unset — which is every connector that
+ * existed before this, so they sync exactly what they did. Config values are
+ * strings, so the list is written comma- or newline-separated.
+ */
+export function apiSpecGlobs(config: Record<string, unknown> | null | undefined): string[] {
+  const raw = config?.[API_SPECS_CONFIG_KEY];
+  if (typeof raw !== 'string') return [];
+  return [...new Set(raw.split(/[\n,]/u).map((g) => g.trim()).filter(Boolean))].slice(0, MAX_API_SPEC_GLOBS);
+}
 
 /** `wiki:architecture` — a section's `connector_links` key, and therefore permanent. */
 export function wikiUnitKey(section: WikiPageSection): string {
@@ -1176,6 +1232,11 @@ export interface ConnectorRunItemInfo {
   aiOp: ConnectorItemAiOp | null;
   /** True once someone edited the staged markdown by hand. */
   edited: boolean;
+  /**
+   * Set when the item is an API spec file (#78), not markdown: the review pane
+   * shows its text as written, and neither assist may rewrite it.
+   */
+  specKind: ApiSpecKind | null;
   documentId: string | null;
   error: string | null;
   updatedAt: string;

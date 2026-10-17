@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import type { Connector, ConnectorConflict } from '@prisma/client';
 import matter from 'gray-matter';
+import { SUPERSEDING_CONFLICT_REASONS, type ConnectorConflictReason } from '@knowledge/contracts';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
@@ -57,7 +58,7 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
 
       for (const conflict of pending) {
         try {
-          if (conflict.reason === 'regenerated' && (await this.supersededBeforeOpening(conflict))) continue;
+          if (supersedes(conflict.reason) && (await this.supersededBeforeOpening(conflict))) continue;
           const created = await withLocale(asLocale(conflict.connector.locale), async () =>
             this.mergeRequests.create(
               conflict.documentId,
@@ -76,7 +77,7 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
               resolvedAt: new Date(),
             },
           });
-          if (conflict.reason === 'regenerated') await this.closeOlder(conflict);
+          if (supersedes(conflict.reason)) await this.closeOlder(conflict);
         } catch (err) {
           // Record and move on: one unopenable merge request (the branch was
           // deleted, say) must not block every other conflict behind it.
@@ -99,6 +100,13 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
     conflict: ConnectorConflict,
     connector: Connector,
   ): Promise<{ sourceBranch: string; title: string; description: string }> {
+    if (conflict.reason === 'spec-changed') {
+      return {
+        sourceBranch: conflict.branch,
+        title: t('connector.mr.specTitle', { name: connector.name, title: conflict.title }).slice(0, 300),
+        description: t('connector.mr.specDescription', { name: connector.name, url: conflict.externalUrl ?? '—' }),
+      };
+    }
     if (conflict.reason !== 'regenerated') {
       return {
         sourceBranch: conflict.branch,
@@ -136,15 +144,16 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * A newer regeneration of the same page is already waiting: opening this one
-   * would be a merge request born superseded. Marked and skipped, oldest first,
-   * so only the newest of a burst ever becomes a merge request.
+   * A newer regeneration (or spec change, #78) of the same page is already
+   * waiting: opening this one would be a merge request born superseded.
+   * Marked and skipped, oldest first, so only the newest of a burst ever
+   * becomes a merge request.
    */
   private async supersededBeforeOpening(conflict: ConnectorConflict): Promise<boolean> {
     const newer = await this.prisma.connectorConflict.findFirst({
       where: {
         documentId: conflict.documentId,
-        reason: 'regenerated',
+        reason: conflict.reason,
         status: 'pending',
         createdAt: { gt: conflict.createdAt },
       },
@@ -159,15 +168,15 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Close the regeneration merge requests this one replaces (docs/features/46).
-   * Only ones still open: a merged one is history, and a closed one was already
-   * decided. Attributed to the connector owner, who opened them.
+   * Close the regeneration (or spec change) merge requests this one replaces
+   * (docs/features/46). Only ones still open: a merged one is history, and a
+   * closed one was already decided. Attributed to the connector owner.
    */
   private async closeOlder(conflict: ConnectorConflict & { connector: Connector }): Promise<void> {
     const older = await this.prisma.connectorConflict.findMany({
       where: {
         documentId: conflict.documentId,
-        reason: 'regenerated',
+        reason: conflict.reason,
         status: 'resolved',
         id: { not: conflict.id },
         mergeRequestId: { not: null },
@@ -180,8 +189,13 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
         if (mergeRequest.status !== 'open') continue;
         await this.mergeRequests.close(row.mergeRequestId!, conflict.connector.createdBy ?? undefined);
       } catch (err) {
-        this.logger.warn(`Could not close superseded wiki merge request ${row.mergeRequestId}: ${(err as Error).message}`);
+        this.logger.warn(`Could not close superseded merge request ${row.mergeRequestId}: ${(err as Error).message}`);
       }
     }
   }
+}
+
+/** Whether a newer row of this reason replaces an older one's merge request. */
+function supersedes(reason: string): boolean {
+  return SUPERSEDING_CONFLICT_REASONS.includes(reason as ConnectorConflictReason);
 }

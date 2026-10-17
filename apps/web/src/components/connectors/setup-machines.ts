@@ -31,6 +31,7 @@ import type {
   ConnectorDirection,
   ConnectorKind,
   ConnectorSyncMode,
+  ConnectorTestResponse,
   DocumentCategory,
 } from '@knowledge/contracts'
 
@@ -67,6 +68,11 @@ export interface SetupContext {
   preserveHierarchy: boolean
   /** What the last successful test reached — shown, because "OK" proves nothing. */
   testDetail: string | null
+  /**
+   * API spec files the test found in a repository whose connector names none
+   * (#78) — offered on the destination step, never added on their own.
+   */
+  specSuggestions: string[]
   error: string | null
   /** Set once the connector exists. The handle that makes this state syncable. */
   connectorId: string | null
@@ -263,7 +269,7 @@ export function kindStepMeta(kind: ConnectorKind, stateName: string | null): Ste
 
 export interface SetupServices {
   /** Proves the credential and configuration reach something. */
-  test(context: SetupContext): Promise<{ ok: boolean; detail: string | null }>
+  test(context: SetupContext): Promise<ConnectorTestResponse>
   /** Creates or updates the connector; resolves to its id. */
   save(context: SetupContext): Promise<string>
 }
@@ -278,7 +284,7 @@ export const connectorSetupMachine = setup({
     // Replaced per-kind at actor creation via `.provide()`; the placeholder keeps
     // the machine definition self-contained and typeable.
     kindSetup: confluenceSetup,
-    test: fromPromise<{ ok: boolean; detail: string | null }, SetupContext>(async () => ({
+    test: fromPromise<ConnectorTestResponse, SetupContext>(async () => ({
       ok: true,
       detail: null,
     })),
@@ -327,6 +333,7 @@ export const connectorSetupMachine = setup({
     syncMode: input.syncMode ?? (canWalkTree(input.kind) ? 'review' : 'auto'),
     preserveHierarchy: input.preserveHierarchy ?? canWalkTree(input.kind),
     testDetail: null,
+    specSuggestions: [],
     error: null,
     connectorId: null,
     editingId: input.editingId ?? null,
@@ -371,7 +378,11 @@ export const connectorSetupMachine = setup({
           {
             guard: ({ event }) => event.output.ok,
             target: 'destination',
-            actions: assign({ testDetail: ({ event }) => event.output.detail, error: () => null }),
+            actions: assign({
+              testDetail: ({ event }) => event.output.detail,
+              specSuggestions: ({ event }) => event.output.apiSpecSuggestions ?? [],
+              error: () => null,
+            }),
           },
           {
             target: 'testFailed',
@@ -454,7 +465,7 @@ export function createSetupActor(
   const machine = connectorSetupMachine.provide({
     actors: {
       kindSetup: SETUP_MACHINES[kind],
-      test: fromPromise<{ ok: boolean; detail: string | null }, SetupContext>(({ input: ctx }) =>
+      test: fromPromise<ConnectorTestResponse, SetupContext>(({ input: ctx }) =>
         services.test(ctx),
       ),
       save: fromPromise<string, SetupContext>(({ input: ctx }) => services.save(ctx)),

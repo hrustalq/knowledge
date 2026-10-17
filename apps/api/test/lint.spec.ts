@@ -4,7 +4,7 @@ import type { AiSkill } from '@prisma/client';
 import type { StyleRule } from '@knowledge/contracts';
 import { lintMessages, readLintViolations, readStyleRules, renderStyleguide } from '../src/agents/lint.js';
 import { AiSkillsService } from '../src/ai/ai-skills.service.js';
-import { AssistantService } from '../src/assistant/assistant.service.js';
+import { StyleLintService } from '../src/assistant/style-lint.service.js';
 import { DEV_PRINCIPAL } from '../src/auth/principal.js';
 
 /**
@@ -244,7 +244,7 @@ describe('AiSkillsService styleguides', () => {
   });
 });
 
-describe('AssistantService.lint', () => {
+describe('StyleLintService.lint', () => {
   function assistant(skills: AiSkillsService, reply: string, agentEnabled = true) {
     const client = { chat: vi.fn(async () => reply) };
     const agents = {
@@ -252,13 +252,7 @@ describe('AssistantService.lint', () => {
     };
     const aiUsage = { assertWithinBudget: vi.fn(async () => undefined) };
     const env = { get: vi.fn(() => 15) };
-    const deps: unknown[] = Array.from({ length: 22 }, () => ({}));
-    deps[0] = client;
-    deps[8] = aiUsage;
-    deps[9] = skills;
-    deps[11] = agents;
-    deps[19] = env;
-    const service = new (AssistantService as unknown as new (...args: unknown[]) => AssistantService)(...deps);
+    const service = new StyleLintService(client as never, aiUsage as never, skills, agents as never, env as never);
     return { service, client, aiUsage };
   }
   const dto = { workspaceId: WS, projectId: PROJECT, title: 'Saving', markdown: TEXT };

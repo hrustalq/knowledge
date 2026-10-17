@@ -13,6 +13,7 @@ import { WebResearchModule } from './web-research.module.js';
 import { CodeResearchModule } from '../connectors/code-research/code-research.module.js';
 import { ConnectorWorkItemsModule } from '../connectors/connector-work-items.module.js';
 import { AssistantService } from './assistant.service.js';
+import { StyleLintModule } from './style-lint.module.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
 import { AssistantController } from './assistant.controller.js';
 import { AiModule } from '../ai/ai.module.js';
@@ -58,6 +59,8 @@ import { TemplatesCoreModule } from '../templates/templates-core.module.js';
     TemplatesCoreModule,
     // Grounding and breadcrumbs follow page permissions (#76).
     PermissionsCoreModule,
+    // POST /v1/assistant/lint (#74); shared with the MCP tool set.
+    StyleLintModule,
     forwardRef(() => AiModule),
   ],
   controllers: [AssistantController],

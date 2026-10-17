@@ -73,6 +73,8 @@ import { ApiSpecDiffService } from '../api-specs/api-spec-diff.service.js';
 import { ApiSpecReadService } from '../api-specs/api-spec-read.service.js';
 import { API_CHANGE_RULE_IDS, API_SPEC_SYNTAXES, CODE_SAMPLE_LANGS, isApiSpecKind, normalizeEntityKey, type ApiSpecSyntax } from '@knowledge/contracts';
 import { ComponentDraftsService } from '../components/component-drafts.service.js';
+import { StyleLintService } from '../assistant/style-lint.service.js';
+import { QualityService } from '../quality/quality.service.js';
 
 /**
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
@@ -118,6 +120,8 @@ export const MCP_SERVER_VERSION = '0.26.0';
  *   knowledge_create_document   → a new page with inline markdown
  *   knowledge_feedback          → rate an answer built from knowledge_search (docs/features/38)
  *   knowledge_report_issue      → report a page as wrong / stale; checked by the sentinel (docs/features/38)
+ *   knowledge_lint_draft        → check text against its project's styleguide (#74)
+ *   knowledge_get_page_quality  → a page's newest quality score, issues and history (#74)
  *
  *   Agent-session memory (issue #73, capture-tools.ts) — writes propose, never publish:
  *   knowledge_capture_decision      → a decision + rationale → merge request (new page or amended page)
@@ -179,6 +183,8 @@ export class McpService {
     private readonly componentDrafts: ComponentDraftsService,
     private readonly apiSpecs: ApiSpecReadService,
     private readonly apiDiffs: ApiSpecDiffService,
+    private readonly styleLint: StyleLintService,
+    private readonly quality: QualityService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -1067,6 +1073,48 @@ export class McpService {
       async ({ documentId, revisionId }) => {
         await guard.doc(documentId, 'viewer');
         return this.json(await this.documents.getContent(documentId, revisionId));
+      },
+    );
+
+    // Read-only (#74, phase 5), the twin of POST /v1/assistant/lint: viewer.
+    // It may spend a model call, as the REST route does, and writes nothing.
+    server.registerTool(
+      'knowledge_lint_draft',
+      {
+        description:
+          "Check markdown against the styleguide that applies to its project (the project's own, else the " +
+          "workspace's). Each violation names the rule it breaks (ruleId), quotes the text verbatim and carries the " +
+          "rule's severity; reports the model invented are dropped and counted. Nothing is stored. Use it before " +
+          'knowledge_create_revision or knowledge_create_document, so a merge request does not open with lint threads. ' +
+          'enabled is false when the linter agent is off; no styleguide means no violations and no model call.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          projectId: z.string().uuid().optional().describe("The page's project; the workspace styleguide when absent"),
+          title: z.string().max(300).optional(),
+          markdown: z.string().min(1).max(100_000),
+        },
+      },
+      async ({ workspaceId, projectId, title, markdown }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(await this.styleLint.lint({ workspaceId, projectId, title: title ?? '', markdown }, principal));
+      },
+    );
+
+    // Read-only (#74, phase 5), the twin of GET /v1/documents/:id/quality: viewer.
+    server.registerTool(
+      'knowledge_get_page_quality',
+      {
+        description:
+          "A page's newest quality score from the auditor agent: overall 0–100 and six dimensions (clarity, " +
+          'completeness, links, ownership, duplication, style; null = not measured), the issues that cost points ' +
+          '(broken links, styleguide rules broken, near-duplicate pages), and one history point per audit day. ' +
+          'score is null until the page has been audited; stale is true when the page changed after its score.',
+        inputSchema: { documentId: z.string().uuid() },
+      },
+      async ({ documentId }) => {
+        await guard.doc(documentId, 'viewer');
+        const scope = await guard.scope(await this.access.workspaceOfDocument(documentId));
+        return this.json(await this.quality.forDocument(scope, documentId));
       },
     );
 

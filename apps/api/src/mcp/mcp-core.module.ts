@@ -26,6 +26,8 @@ import { CapturesCoreModule } from '../captures/captures-core.module.js';
 import { ComponentsCoreModule } from '../components/components-core.module.js';
 import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { ComponentDraftsModule } from '../components/component-drafts.module.js';
+import { StyleLintModule } from '../assistant/style-lint.module.js';
+import { QualityCoreModule } from '../quality/quality-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -87,6 +89,9 @@ import { McpService } from './mcp.service.js';
     ComponentDraftsModule,
     // knowledge_list_api_operations / knowledge_get_api_operation (#78). Controller-free and read-only.
     ApiSpecsCoreModule,
+    // knowledge_lint_draft / knowledge_get_page_quality (#74). Controller-free and read-only.
+    StyleLintModule,
+    QualityCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

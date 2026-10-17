@@ -28,6 +28,7 @@ import {
   Braces,
   Download,
   Flag,
+  Gauge,
   GitMerge,
   History,
   LayoutTemplate,
@@ -51,6 +52,7 @@ import type {
   DocumentDetailResponse,
   ListActivityResponse,
   ListKnowledgeIssuesResponse,
+  DocumentQualityResponse,
   ListDocumentRelationsResponse,
   ListDocumentThreadsResponse,
   ListMergeRequestsResponse,
@@ -93,6 +95,7 @@ import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
 import WorkflowRail from '@/components/workflows/WorkflowRail.vue'
 import ConnectorRail from '@/components/connectors/ConnectorRail.vue'
 import KnowledgeIssuesRail from '@/components/knowledge/KnowledgeIssuesRail.vue'
+import QualityRail from '@/components/quality/QualityRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
 import PageAiActions from '@/components/knowledge/PageAiActions.vue'
@@ -125,6 +128,8 @@ const RAIL_WIDGETS = [
   // Reports against the page (docs/features/38, phase 3): what readers and
   // agents said is wrong, and where each report is on its way to a fix.
   { id: 'issues', label: t('rail.issues'), icon: Flag, expandable: false },
+  // The auditor's newest score (#74): only once the page has one.
+  { id: 'quality', label: t('rail.quality'), icon: Gauge, expandable: false },
   { id: 'graph', label: t('rail.graph'), icon: Share2, expandable: true },
   // Where the code a component page declares is used (#236): only on a page
   // that declares one.
@@ -167,6 +172,7 @@ const visibleWidgets = computed(() =>
     (w) =>
       (w.id !== 'frontmatter' || !!content.value?.frontmatter) &&
       (w.id !== 'used-by' || !!declaration.value) &&
+      (w.id !== 'quality' || !!quality.value?.score) &&
       (w.id !== 'operations' || isSpec.value),
   ),
 )
@@ -458,6 +464,13 @@ const issuesPreview = useQuery(
   ),
 )
 
+// The widget is drawn only once a score exists, so the preview query is also
+// the widget's data — one request whether the row is open or not.
+const qualityQuery = useQuery(
+  computed(() => apiQueryOptions('/v1/documents/{id}/quality', { path: { id: documentId.value } })),
+)
+const quality = computed(() => qualityQuery.data.value as DocumentQualityResponse | undefined)
+
 // The same query the declaration notice runs, which vue-query dedupes; the
 // usages are read only once a declaration resolved to a connector.
 const declarationPreview = useQuery(
@@ -511,6 +524,11 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
         : mrs.length
           ? `${mrs.length} closed`
           : 'none'
+      : null,
+    quality: quality.value?.score
+      ? quality.value.stale
+        ? t('quality.rail.previewStale', { n: quality.value.score.overall })
+        : t('quality.rail.preview', { n: quality.value.score.overall })
       : null,
     issues: issues ? (openIssues ? t('count.openIssues', { n: openIssues }, openIssues) : t('knowledgeIssue.none')) : null,
     graph: relations.value
@@ -801,6 +819,9 @@ watch(
               :title="detail.document.title"
               :revision-id="content?.revisionId ?? detail.revision.revisionId"
             />
+          </template>
+          <template #widget-quality>
+            <QualityRail v-if="quality?.score" :quality="quality" />
           </template>
           <template #widget-graph><GraphView :document-id="documentId" /></template>
           <template #widget-used-by>

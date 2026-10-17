@@ -3,7 +3,6 @@ import type {
   AnswerSurface,
   AssistantAskResponse,
   AssistantAskSource,
-  AssistantLintResponse,
   AssistantChatMode,
   AssistantIssue,
   AssistantMessageInfo,
@@ -47,14 +46,12 @@ import { AssistantThreadsService } from './assistant-threads.service.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
 import { AgentRouterService } from '../agents/agent-router.service.js';
 import { PAGE_LINK_RULE } from '../agents/built-in-agents.js';
-import { LINT_TEXT_MAX, enabledRules, lintMessages, readLintViolations } from '../agents/lint.js';
 import { AgentTiebreakService } from '../ai/agent-tiebreak.service.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
 import { WorkItemToolsService } from '../connectors/work-item-tools.service.js';
 import type { RepoSummary } from '../connectors/code-research/repo-snapshot.service.js';
 import type {
   AssistantAskDto,
-  AssistantLintDto,
   AssistantRelatedDto,
   AssistantReviewDto,
   AssistantSuggestDto,
@@ -384,28 +381,6 @@ export class AssistantService {
       : [];
     const summary = typeof parsed?.summary === 'string' ? parsed.summary : raw.slice(0, 500);
     return { enabled: true, issues, summary };
-  }
-
-  /**
-   * Check text against the styleguide of its project (#74). No styleguide, or
-   * none of its rules enabled, means no model call at all — the check has
-   * nothing to check against. What the model reports is filtered by
-   * `readLintViolations`: a rule id the styleguide does not hold, or a quote
-   * the text does not contain, never reaches the caller.
-   */
-  async lint(dto: AssistantLintDto, principal: Principal): Promise<AssistantLintResponse> {
-    const found = await this.skills.effectiveStyleguide(dto.workspaceId, dto.projectId ?? null);
-    const styleguide = found ? { id: found.row.id, name: found.row.name, scope: found.scope } : null;
-    if (!found || enabledRules(found.rules).length === 0) {
-      return { enabled: true, styleguide, violations: [], dropped: 0 };
-    }
-    const opened = await this.openAgentCall(dto.workspaceId, principal, 'linter', 'lint');
-    if (!opened) return { enabled: false, styleguide, violations: [], dropped: 0 };
-    const { agent, call } = opened;
-    const text = dto.markdown.slice(0, LINT_TEXT_MAX);
-    const raw = await this.client.chat(call, lintMessages(agent.instructions, found.rules, dto.title, text), { json: true });
-    const max = this.env.get<number>('LINT_MAX_FINDINGS') ?? 15;
-    return { enabled: true, styleguide, ...readLintViolations(this.parseJson(raw), found.rules, text, max) };
   }
 
   async suggest(dto: AssistantSuggestDto, principal: Principal): Promise<AssistantSuggestResponse> {

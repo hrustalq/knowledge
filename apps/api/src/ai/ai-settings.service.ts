@@ -45,6 +45,8 @@ export interface UpdateAiSettingsInput {
   captureDedupeThreshold?: number | null;
   captureAmendThreshold?: number | null;
   captureParentDocumentId?: string | null;
+  /** Issue #74 — null clears the override and inherits QUALITY_AUDIT_DAYS. */
+  qualityAuditDays?: number | null;
   pricePromptPerMTok?: number | null;
   priceCompletionPerMTok?: number | null;
   workspaceMonthlyTokenBudget?: number | null;
@@ -107,6 +109,11 @@ export class AiSettingsService {
       webAccess: effective.webAccess,
       externalAiActions: effective.externalAiActions,
       capture,
+      qualityAudit: {
+        days: row?.qualityAuditDays ?? this.config.get('QUALITY_AUDIT_DAYS', { infer: true }),
+        source: row?.qualityAuditDays != null ? 'db' : 'env',
+        defaultDays: this.config.get('QUALITY_AUDIT_DAYS', { infer: true }),
+      },
       pricePromptPerMTok: effective.pricePromptPerMTok,
       priceCompletionPerMTok: effective.priceCompletionPerMTok,
       workspaceMonthlyTokenBudget:
@@ -144,6 +151,7 @@ export class AiSettingsService {
       ...pick(input, 'timeoutMs'),
       ...pick(input, 'extractionMinConfidence'),
       ...pick(input, 'extractionMaxChunks'),
+      ...pick(input, 'qualityAuditDays'),
       ...pick(input, 'pricePromptPerMTok'),
       ...pick(input, 'priceCompletionPerMTok'),
       ...pick(input, 'workspaceMonthlyTokenBudget'),

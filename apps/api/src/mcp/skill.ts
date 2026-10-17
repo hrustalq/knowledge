@@ -250,6 +250,14 @@ ${feedbackStep}${reportStep}${flagStep}
 - ${toolRef('knowledge_list_documents')} — the page tree of a workspace or project.
 - ${toolRef('knowledge_get_workspace_graph')} — every page and entity with typed edges; pages of degree 0 are orphans.
 
+### House style and page quality
+
+- ${toolRef('knowledge_lint_draft')} — check markdown against the styleguide of its project before you write it. Each
+  violation names a \`ruleId\` and quotes your text; fix those before a revision, or the merge request opens with
+  style threads (and, where the workspace blocks on lint, cannot merge until they are resolved).
+- ${toolRef('knowledge_get_page_quality')} — a page's newest score from the auditor (0–100, six dimensions) and the
+  issues that cost it points: broken links, rules broken, near-duplicate pages. When you improve a page, start there.
+
 ### Dependencies and impact
 
 Entities are keyed \`type:name\` — \`service:identity\`, \`db:orders\`.

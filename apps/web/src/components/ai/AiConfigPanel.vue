@@ -55,6 +55,8 @@ type Form = {
   // the env value", and an emptied type="number" input cannot express that.
   extractionMinConfidence: string
   extractionMaxChunks: string
+  /** Days a quality score stands (#74); empty inherits QUALITY_AUDIT_DAYS. */
+  qualityAuditDays: string
   agentModeEnabled: boolean
   /** What the workspace asks for, or the ceiling it inherits (issue #68). */
   externalAiActions: boolean
@@ -84,6 +86,7 @@ function formFrom(s: AiSettingsResponse): Form {
     extractionMinConfidence:
       s.sources.extractionMinConfidence === 'db' ? s.extractionMinConfidence.toString() : '',
     extractionMaxChunks: s.sources.extractionMaxChunks === 'db' ? s.extractionMaxChunks.toString() : '',
+    qualityAuditDays: s.qualityAudit.source === 'db' ? s.qualityAudit.days.toString() : '',
     agentModeEnabled: s.agentModeEnabled,
     externalAiActions: s.externalAiActions.requested ?? s.externalAiActions.ceiling,
     pricePromptPerMTok: s.pricePromptPerMTok?.toString() ?? '',
@@ -151,6 +154,7 @@ async function onSave() {
       // box already means "inherit" and needs no untouched-field guard.
       extractionMinConfidence: num(f.extractionMinConfidence),
       extractionMaxChunks: num(f.extractionMaxChunks),
+      qualityAuditDays: num(f.qualityAuditDays),
       agentModeEnabled: f.agentModeEnabled,
       // Sent only once touched: an inherited switch stays inherited, so a later
       // change to the env ceiling still reaches this workspace.
@@ -392,6 +396,28 @@ const externalCeiling = computed(() => settings.value?.externalAiActions.ceiling
         </label>
       </div>
       <p class="text-muted-foreground text-xs leading-snug">{{ t('ai.extractionHint') }}</p>
+    </AiSettingsSection>
+
+    <!-- How often the auditor re-scores a page nobody changed (#74). Both
+         halves are shown: what this workspace asks for, and what applies. -->
+    <AiSettingsSection :title="t('ai.qualityAudit')" :description="t('ai.qualityAuditDesc')">
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <label class="block space-y-1.5">
+          <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+            {{ t('ai.qualityAuditDays') }}
+            <span v-if="settings?.qualityAudit.source === 'db'" class="text-primary/70">{{ t('ai.overridden') }}</span>
+          </span>
+          <Input
+            v-model="form.qualityAuditDays"
+            inputmode="numeric"
+            :disabled="!canManage"
+            :placeholder="settings?.qualityAudit.defaultDays.toString()"
+          />
+        </label>
+      </div>
+      <p v-if="settings" class="text-muted-foreground text-xs leading-snug">
+        {{ t('ai.qualityAuditHint', { days: settings.qualityAudit.days, defaultDays: settings.qualityAudit.defaultDays }) }}
+      </p>
     </AiSettingsSection>
 
     <AiSettingsSection

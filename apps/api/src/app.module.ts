@@ -36,6 +36,7 @@ import { McpHttpModule } from './mcp/mcp-http.module.js';
 import { AiReadableModule } from './ai-readable/ai-readable.module.js';
 import { FeedbackModule } from './feedback/feedback.module.js';
 import { VerificationModule } from './verification/verification.module.js';
+import { QualityModule } from './quality/quality.module.js';
 import { PublishingModule } from './publishing/publishing.module.js';
 import { PublicModule } from './public/public.module.js';
 import { ExportModule } from './export/export.module.js';
@@ -87,6 +88,9 @@ import { ChatModule } from './chat/chat.module.js';
     // Page verification, archive and the knowledge-health dashboard
     // (docs/features/39 + 40, issue #66). API-only: the controllers.
     VerificationModule,
+    // Docs quality reads (#74, phase 5). API-only: the controller; the scores
+    // are the worker auditor's, and MCP loads QualityCoreModule.
+    QualityModule,
     // Share links (docs/features/43, issue #77). API-only: the management
     // routes, and the anonymous /v1/public reader with its rate limiter.
     PublishingModule,

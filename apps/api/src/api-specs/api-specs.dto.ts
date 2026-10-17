@@ -50,6 +50,14 @@ export class SearchApiOperationsQueryDto {
   @IsUUID()
   documentId?: string;
 
+  @ApiPropertyOptional({
+    description: 'Exactly this operation, however the key is spelled (op:billing-api:post-/invoices) — resolves a link to its spec',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey?: string;
+
   @ApiPropertyOptional({ minimum: 1, maximum: 200, description: 'Defaults to 50' })
   @IsOptional()
   @Type(() => Number)

@@ -245,8 +245,10 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       mark('fulltext');
 
       // 7. Deterministic relation extraction (plan.md §5 "deterministic" class):
-      //    frontmatter `relations:`/`tags:` → typed edges with provenance.
-      const facts = extractFrontmatterFacts(parsed.data ?? {});
+      //    frontmatter `relations:`/`tags:`, and the operations a page's API
+      //    blocks mirror (#78) → typed edges with provenance. A spec's body is
+      //    its own projection, which declares nothing.
+      const facts = extractFrontmatterFacts(parsed.data ?? {}, spec ? '' : parsed.content);
       await this.graph.replaceRevisionFrontmatterFacts({
         workspaceId: revision.document.workspaceId,
         documentId: revision.documentId,

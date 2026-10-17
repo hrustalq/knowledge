@@ -2,9 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConnectorWorkItemsService } from '../connectors/connector-work-items.service.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { WorkflowRun, WorkflowRunNode } from '@prisma/client';
-import { AUTHORABLE_RELATION_TYPES } from '@knowledge/contracts';
-import type { RelationInput, WorkflowNodeDraft, WorkflowStep } from '@knowledge/contracts';
-import { normalizeRelation, relationKey } from '../common/relations.js';
+import { AUTHORABLE_RELATION_TYPES, entityTypeOf, isApiSpecKind, normalizeEntityKey } from '@knowledge/contracts';
+import type { ApiOperationInfo, RelationInput, WorkflowNodeDraft, WorkflowStep } from '@knowledge/contracts';
+import { ApiSpecReadService } from '../api-specs/api-spec-read.service.js';
+import { parseMarkdown } from '../common/frontmatter.js';
+import { normalizeRelation, readApiOperationRefs, readFrontmatterRelations, relationKey } from '../common/relations.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { TemplatesService, type TemplateDefaults } from '../templates/templates.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -27,6 +29,10 @@ const MAX_DRAFT_TAGS = 20;
 /** The template skeleton handed to a drafting model — a structure, not a second source page. */
 const MAX_SKELETON_CHARS = 24_000;
 const MAX_TEMPLATE_NOTES_CHARS = 4_000;
+/** Spec operations a fan-out step is offered to tag its items with (#78). */
+const MAX_OPERATION_CANDIDATES = 60;
+/** One operation's section of the spec, handed to the drafting model. */
+const MAX_OPERATION_CHARS = 12_000;
 
 /**
  * Appended to a drafting step's system prompt when its `produces.templateRef`
@@ -39,9 +45,24 @@ const TEMPLATE_RULE =
   'source supports, or with "TODO:" and what is missing — never invent one. Follow the title pattern when ' +
   'there is one. Return the filled-in page as "markdown"; never return the skeleton unchanged.';
 
+/** Code-owned rules for the two halves of seeding a draft from a spec operation (#78). */
+const OPERATION_PICK_RULE =
+  'Some items may be API operations from the list given below. For such an item set "operationKey" to its key ' +
+  'exactly as listed; leave it out for anything else, and never make one up.';
+const OPERATION_DRAFT_RULE =
+  'The page documents one API operation, whose section of the spec is given below. Describe its contract as the ' +
+  'spec defines it — never invent a parameter, field or status code the spec does not list.';
+
+/** A fan-out item: what a reviewer sees, and the spec operation it is about, if any. A type, not an interface, so it stays assignable to Prisma JSON. */
+export type StepItem = {
+  title: string;
+  summary?: string;
+  operationKey?: string;
+};
+
 /** What a step produced: either a fan-out list, or one node's draft. */
 export type StepResult =
-  | { kind: 'items'; items: Array<{ title: string; summary?: string }> }
+  | { kind: 'items'; items: StepItem[] }
   | { kind: 'draft'; draft: WorkflowNodeDraft }
   | { kind: 'context'; context: unknown }
   | { kind: 'gate' };
@@ -72,6 +93,7 @@ export class WorkflowExecutors {
     private readonly workItems: ConnectorWorkItemsService,
     private readonly templates: TemplatesService,
     private readonly permissions: PermissionService,
+    private readonly apiSpecs: ApiSpecReadService,
   ) {}
 
   /** `principal` is the run's rehydrated owner, already authorised by the processor. */
@@ -82,9 +104,9 @@ export class WorkflowExecutors {
       case 'search':
         return this.runSearch(step, node, run, principal);
       case 'ai.generate':
-        return this.runGenerate(step, node, run);
+        return this.runGenerate(step, node, run, principal);
       case 'ai.draft':
-        return this.runDraft(step, node, run);
+        return this.runDraft(step, node, run, principal);
       case 'task.update':
         return this.runTaskUpdate(step, node, run);
     }
@@ -132,13 +154,7 @@ export class WorkflowExecutors {
     principal: Principal,
   ): Promise<StepResult> {
     const context = await this.gather(node, run);
-    // The owner's pages, clamped to the source page's audience (#76): what the
-    // search finds feeds drafts that land under that page, read by whoever can
-    // open it — not necessarily by everyone the owner can see.
-    const scope = await this.permissions.audienceScope(await this.permissions.scopeFor(principal, run.workspaceId), {
-      kind: 'document',
-      documentId: run.rootDocumentId,
-    });
+    const scope = await this.audience(run, principal);
     const results = await this.search.search(
       {
         workspaceId: run.workspaceId,
@@ -156,7 +172,12 @@ export class WorkflowExecutors {
 
   // ------------------------------------------------------------- ai.generate
 
-  private async runGenerate(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
+  private async runGenerate(
+    step: WorkflowStep,
+    node: WorkflowRunNode,
+    run: WorkflowRun,
+    principal: Principal,
+  ): Promise<StepResult> {
     // The step's default instructions come from the agent (docs/features/20);
     // an explicit `step.prompt.system` still wins, because a workflow author
     // writing a prompt for one step means that step and not the roster.
@@ -172,15 +193,19 @@ export class WorkflowExecutors {
 
     const context = await this.gather(node, run);
     const cap = Math.min(step.maxItems ?? 8, 50);
+    const operations = await this.operationCandidates(run, principal, context);
 
     const messages: ChatCompletionMessageParam[] = [
       {
         role: 'system',
         content: [
           step.prompt?.system ?? planner.instructions,
-          `Return JSON: {"items":[{"title":"…","summary":"…"}]}.`,
+          operations.length
+            ? `Return JSON: {"items":[{"title":"…","summary":"…","operationKey":"…"}]}.`
+            : `Return JSON: {"items":[{"title":"…","summary":"…"}]}.`,
           `Return at most ${cap} items. Every item must be grounded in the source below —`,
           'do not invent things the source gives no basis for. Titles are short and specific.',
+          operations.length ? OPERATION_PICK_RULE : '',
           await this.skillText(run.workspaceId, step, planner),
         ]
           .filter(Boolean)
@@ -193,6 +218,13 @@ export class WorkflowExecutors {
           run.note ? `\nExtra instructions for this run: ${run.note}` : '',
           `\n\n--- SOURCE: ${context.title} ---\n${context.markdown}`,
           context.parentSummary ? `\n\n--- PARENT ITEM ---\n${context.parentSummary}` : '',
+          operations.length
+            ? `\n\nAPI operations an item may be about:\n${wrapUntrusted(
+                operations.map((o) => `${o.entityKey} — ${o.method ?? ''} ${o.path}${o.summary ? ` — ${o.summary}` : ''}`).join('\n'),
+                'api_operations',
+                'spec',
+              )}`
+            : '',
         ].join(''),
       },
     ];
@@ -203,20 +235,26 @@ export class WorkflowExecutors {
       { json: true },
     );
 
-    const items = this.parseItems(raw).slice(0, cap);
+    const items = this.parseItems(raw, new Set(operations.map((o) => o.entityKey))).slice(0, cap);
     if (items.length === 0) throw new Error(t('error.workflow.noItems'));
     return { kind: 'items', items };
   }
 
   // ---------------------------------------------------------------- ai.draft
 
-  private async runDraft(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
+  private async runDraft(
+    step: WorkflowStep,
+    node: WorkflowRunNode,
+    run: WorkflowRun,
+    principal: Principal,
+  ): Promise<StepResult> {
     const drafter = await this.agents.resolve(run.workspaceId, 'drafter', step.providerId ?? undefined);
     const config = drafter.config;
     if (!drafter.enabled || !config.enabled) throw new Error(t('error.assistant.providerDisabled'));
 
     const context = await this.gather(node, run);
     const title = context.parentTitle || context.title;
+    const operation = context.operationKey ? await this.operationFor(run, principal, context.operationKey) : null;
     // Resolved at draft time, at its current version — which is what the node
     // records, so the page can say which shape it was written against even
     // after the template moves on. An archived template still resolves: the
@@ -248,6 +286,7 @@ export class WorkflowExecutors {
           'Declare only relations the source material actually supports; return [] rather than guessing. Tags are not relations.',
           'Stay grounded in the source material; say plainly when something is not specified.',
           template ? TEMPLATE_RULE : '',
+          operation ? OPERATION_DRAFT_RULE : '',
           await this.skillText(run.workspaceId, step, drafter),
         ]
           .filter(Boolean)
@@ -261,6 +300,13 @@ export class WorkflowExecutors {
           `\n\nWrite the page for: ${title}`,
           context.parentSummary ? `\n\nWhat it covers: ${context.parentSummary}` : '',
           `\n\n--- SOURCE: ${context.title} ---\n${context.markdown}`,
+          operation
+            ? `\n\nThe API operation (${operation.specTitle}):\n${wrapUntrusted(
+                operation.markdown.slice(0, MAX_OPERATION_CHARS),
+                'api_operation',
+                'spec',
+              )}`
+            : '',
           template ? `\n\nFollow this structure exactly:\n${this.templateBlock(template)}` : '',
         ].join(''),
       },
@@ -280,7 +326,10 @@ export class WorkflowExecutors {
     // the DTO and written by the materializer — and no executor ever produced
     // them. That is the same declared-and-ignored defect `WorkflowStep.tools`
     // was (docs/features/20).
-    const relations = this.withTemplateRelations(template, this.parseRelations(parsed.relations));
+    const relations = this.withOperation(
+      operation,
+      this.withTemplateRelations(template, this.parseRelations(parsed.relations)),
+    );
     const tags = this.parseTags([...(template?.tags ?? []), ...this.asArray(parsed.tags)]);
     const frontmatter = { ...template?.frontmatter, ...(tags.length > 0 ? { tags } : {}) };
 
@@ -293,8 +342,85 @@ export class WorkflowExecutors {
         ...(relations.length > 0 ? { relations } : {}),
         ...(Object.keys(frontmatter).length > 0 ? { frontmatter } : {}),
         ...(template ? { templateRef: template.ref, templateVersion: template.version } : {}),
+        ...(operation ? { operationKey: operation.entityKey } : {}),
       },
     };
+  }
+
+  /**
+   * The page DESCRIBES the operation it was seeded from (#78), first and
+   * whatever the model proposed: a deterministic fact must not depend on the
+   * model remembering to declare it, nor fall to the relation cap.
+   */
+  private withOperation(operation: SeedOperation | null, relations: RelationInput[]): RelationInput[] {
+    if (!operation) return relations;
+    const own: RelationInput = {
+      type: 'DESCRIBES',
+      target: {
+        key: operation.entityKey,
+        type: entityTypeOf(operation.entityKey),
+        name: `${operation.method ?? ''} ${operation.path}`.trim(),
+      },
+    };
+    return [own, ...relations.filter((r) => relationKey(r) !== relationKey(own))];
+  }
+
+  /**
+   * The owner's pages, clamped to the source page's audience (#76): what a step
+   * reads feeds drafts that land under that page, read by whoever can open it —
+   * not necessarily by everyone the owner can see.
+   */
+  private async audience(run: WorkflowRun, principal: Principal) {
+    return this.permissions.audienceScope(await this.permissions.scopeFor(principal, run.workspaceId), {
+      kind: 'document',
+      documentId: run.rootDocumentId,
+    });
+  }
+
+  /**
+   * The spec operations a fan-out step may tag its items with (#78): a spec's
+   * own, when the run is against a spec; otherwise the ones the source page
+   * links, by `relations:` or by an API block. Read at each spec's head, under
+   * the run's audience, so an item cannot be seeded from a spec its readers
+   * cannot open. A page that links none is offered none, and its prompt is
+   * exactly what it was before.
+   */
+  private async operationCandidates(
+    run: WorkflowRun,
+    principal: Principal,
+    context: { markdown: string; kind: string },
+  ): Promise<ApiOperationInfo[]> {
+    let keys: string[] | undefined;
+    if (!isApiSpecKind(context.kind)) {
+      const { data, body } = parseMarkdown(context.markdown);
+      keys = [
+        ...readFrontmatterRelations(data)
+          .map((r) => r.target.key)
+          .filter((k) => k.startsWith('op:') || k.startsWith('channel:')),
+        ...readApiOperationRefs(body),
+      ];
+      if (keys.length === 0) return [];
+    }
+    const { operations } = await this.apiSpecs.search(await this.audience(run, principal), {
+      ...(keys ? { entityKeys: keys } : { documentId: run.rootDocumentId }),
+      limit: MAX_OPERATION_CANDIDATES * 2,
+    });
+    // AsyncAPI's send and receive share one channel entity: one offer per key.
+    const seen = new Set<string>();
+    return operations
+      .filter((o) => !seen.has(o.entityKey) && Boolean(seen.add(o.entityKey)))
+      .slice(0, MAX_OPERATION_CANDIDATES);
+  }
+
+  /** The operation a draft is seeded from, with its section of the spec — or null once it is gone or out of reach. */
+  private async operationFor(run: WorkflowRun, principal: Principal, key: string): Promise<SeedOperation | null> {
+    const found = await this.apiSpecs.operation(await this.audience(run, principal), normalizeEntityKey(key));
+    const hit = found?.operations.find((o) => o.markdown.trim());
+    if (!hit) {
+      this.logger.warn(`Workflow run ${run.id}: operation ${key} is not readable here; drafting without it`);
+      return null;
+    }
+    return hit;
   }
 
   /**
@@ -402,18 +528,27 @@ export class WorkflowExecutors {
   private async gather(
     node: WorkflowRunNode,
     run: WorkflowRun,
-  ): Promise<{ title: string; markdown: string; parentTitle?: string; parentSummary?: string }> {
+  ): Promise<{
+    title: string;
+    markdown: string;
+    kind: string;
+    parentTitle?: string;
+    parentSummary?: string;
+    operationKey?: string;
+  }> {
     const source = await this.documentText(run.rootDocumentId);
-    const input = (node.input ?? {}) as { parentDraft?: { title?: string; summary?: string } };
+    const input = (node.input ?? {}) as { parentDraft?: Partial<WorkflowNodeDraft> };
     const own = (node.draft ?? null) as WorkflowNodeDraft | null;
 
     return {
       title: source.title,
       markdown: source.markdown,
+      kind: source.kind,
       // A fan-out node carries its own item as its draft; a step spawned below
       // one carries the parent's.
       parentTitle: own?.title ?? input.parentDraft?.title,
       parentSummary: own?.summary ?? input.parentDraft?.summary,
+      operationKey: own?.operationKey ?? input.parentDraft?.operationKey,
     };
   }
 
@@ -423,22 +558,23 @@ export class WorkflowExecutors {
    * left in — it usually carries the relations that tell a model what the page
    * is connected to.
    */
-  private async documentText(documentId: string): Promise<{ title: string; markdown: string }> {
+  private async documentText(documentId: string): Promise<{ title: string; markdown: string; kind: string }> {
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
       include: { branches: true },
     });
-    if (!document) return { title: 'Unknown page', markdown: '' };
+    if (!document) return { title: 'Unknown page', markdown: '', kind: 'page' };
+    const kind = document.kind ?? 'page';
 
     const headId = document.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId;
-    if (!headId) return { title: document.title, markdown: '' };
+    if (!headId) return { title: document.title, markdown: '', kind };
     const revision = await this.prisma.documentRevision.findUnique({ where: { id: headId } });
-    if (!revision?.s3Key || revision.status === 'draft') return { title: document.title, markdown: '' };
+    if (!revision?.s3Key || revision.status === 'draft') return { title: document.title, markdown: '', kind };
 
     const raw = await this.storage.getObjectText(revision.s3Key).catch(() => '');
     // Capped rather than chunked: a chain of steps that each paste a whole page
     // into its prompt is how a run walks off the end of a context window.
-    return { title: document.title, markdown: raw.slice(0, 24_000) };
+    return { title: document.title, markdown: raw.slice(0, 24_000), kind };
   }
 
   /**
@@ -472,8 +608,11 @@ export class WorkflowExecutors {
     }
   }
 
-  /** Providers disagree about whether to wrap a list; accept either shape. */
-  private parseItems(raw: string): Array<{ title: string; summary?: string }> {
+  /**
+   * Providers disagree about whether to wrap a list; accept either shape. An
+   * `operationKey` survives only when it is one the step offered (#78).
+   */
+  private parseItems(raw: string, offered: Set<string> = new Set()): StepItem[] {
     const parsed = this.parseObject(raw);
     const candidate = Array.isArray(parsed.items)
       ? parsed.items
@@ -482,19 +621,24 @@ export class WorkflowExecutors {
         : [];
 
     const seen = new Set<string>();
-    const items: Array<{ title: string; summary?: string }> = [];
+    const items: StepItem[] = [];
     for (const entry of candidate) {
       if (typeof entry !== 'object' || entry === null) continue;
-      const { title, summary } = entry as { title?: unknown; summary?: unknown };
+      const { title, summary, operationKey } = entry as { title?: unknown; summary?: unknown; operationKey?: unknown };
       if (typeof title !== 'string' || !title.trim()) continue;
-      const key = title.trim().toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const dedupe = title.trim().toLowerCase();
+      if (seen.has(dedupe)) continue;
+      seen.add(dedupe);
+      const key = typeof operationKey === 'string' ? normalizeEntityKey(operationKey) : '';
       items.push({
         title: title.trim().slice(0, 300),
         summary: typeof summary === 'string' ? summary.slice(0, 4_000) : undefined,
+        ...(offered.has(key) ? { operationKey: key } : {}),
       });
     }
     return items;
   }
 }
+
+/** An operation a draft was seeded from, with its section of the spec. */
+type SeedOperation = Pick<ApiOperationInfo, 'entityKey' | 'method' | 'path'> & { specTitle: string; markdown: string };

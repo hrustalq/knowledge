@@ -16,6 +16,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
+import ApiOperationRef from '@/components/api-reference/ApiOperationRef.vue'
+import { getWorkspaceId } from '@/lib/api'
 import { isBusyStatus, NODE_STATUS_CLASS, NODE_STATUS_ICON, NODE_STATUS_LABEL } from './workflow-ui'
 
 const { t } = useI18n()
@@ -95,6 +97,9 @@ const draftPatch = computed<WorkflowNodeDraft>(() => {
     title: title.value,
     markdown: markdown.value,
     ...(props.node.draft?.summary ? { summary: props.node.draft.summary } : {}),
+    // The spec operation the item is about (#78): not editable here, but a
+    // saved draft must not lose it, or the step below drafts unseeded.
+    ...(props.node.draft?.operationKey ? { operationKey: props.node.draft.operationKey } : {}),
     relations: relations.value.filter((r) => r.type && r.target.key.trim()),
     ...(Object.keys(frontmatter).length > 0 ? { frontmatter } : {}),
   }
@@ -256,6 +261,12 @@ function approve() {
 
       <div v-else class="min-h-0 overflow-auto">
         <p v-if="node.draft.summary" class="text-muted-foreground mb-3 text-sm">{{ node.draft.summary }}</p>
+        <!-- The operation this item is about (#78): the draft below it reads
+             the spec for it and DESCRIBES it once published. -->
+        <div v-if="node.draft.operationKey" class="mb-3 space-y-1 border-y py-2">
+          <span class="text-muted-foreground block text-[11px] font-medium">{{ t('apiLink.workflow') }}</span>
+          <ApiOperationRef :workspace-id="getWorkspaceId()" :entity-key="node.draft.operationKey" />
+        </div>
         <!-- Relations become graph facts on publication, so they are shown
              beside the prose rather than approved sight-unseen. -->
         <div v-if="viewRelations.length || viewTags.length" class="mb-3 flex flex-wrap gap-1.5">

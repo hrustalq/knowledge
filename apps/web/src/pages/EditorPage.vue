@@ -27,7 +27,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { onKeyStroke, useStorage } from '@vueuse/core'
-import { History, LayoutTemplate, MoreHorizontal, Settings2, Sparkles, X } from 'lucide-vue-next'
+import { History, LayoutTemplate, MoreHorizontal, Route, Settings2, Sparkles, X } from 'lucide-vue-next'
 import {
   AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
@@ -103,6 +103,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import RichEditor from '@/components/editor/RichEditor.vue'
+import ApiOperationPicker, { type PickedOperation } from '@/components/api-reference/ApiOperationPicker.vue'
+import ApiOperationRef from '@/components/api-reference/ApiOperationRef.vue'
 import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/components/templates/SaveAsTemplateDialog.vue'
 import { useWorkingCopy } from '@/components/editor/use-working-copy'
 import DiffView from '@/components/knowledge/DiffView.vue'
@@ -274,6 +276,19 @@ const parentSelection = computed<string[]>({
 })
 
 const relationTypeOptions: AutocompleteOption[] = AUTHORABLE_RELATION_TYPES.map((t) => ({ value: t, label: t }))
+
+/** A row whose key names a spec operation (#78) — shown resolved under its input. */
+const isOperationKey = (key: string) => /^\s*(op|channel)\s*:/iu.test(key)
+
+/**
+ * "Link API operation" (#78): a use case IMPLEMENTS the endpoint it is built
+ * on, so that is the type it arrives with; the select changes it. The key is
+ * the one the spec's ingestion wrote, never retyped.
+ */
+function linkOperation(op: PickedOperation) {
+  if (relationRows.value.some((r) => r.key.trim() === op.entityKey)) return
+  relationRows.value.push({ type: 'IMPLEMENTS', key: op.entityKey, name: `${op.method ?? ''} ${op.path}`.trim() })
+}
 
 const projectOptions = computed<AutocompleteOption[]>(() =>
   projects.items.map((p) => ({ value: p.projectId, label: p.name, meta: p.documentCount })),
@@ -1188,6 +1203,7 @@ onBeforeUnmount(() => {
                   @update:model-value="row.type = $event[0] ?? row.type"
                 />
                 <Input v-model="row.key" placeholder="service:identity" class="h-8 font-mono text-xs" />
+                <ApiOperationRef v-if="isOperationKey(row.key)" :workspace-id="getWorkspaceId()" :entity-key="row.key.trim()" />
                 <Input v-model="row.name" :placeholder="t('editor.relationDisplayName')" class="h-8 text-xs" />
               </div>
               <Button
@@ -1199,13 +1215,23 @@ onBeforeUnmount(() => {
                 <X class="size-4" />
               </Button>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              @click="relationRows.push({ type: 'DEPENDS_ON', key: '', name: '' })"
-            >
-              {{ t('editor.addRelation') }}
-            </Button>
+            <div class="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                @click="relationRows.push({ type: 'DEPENDS_ON', key: '', name: '' })"
+              >
+                {{ t('editor.addRelation') }}
+              </Button>
+              <ApiOperationPicker :workspace-id="getWorkspaceId()" align="end" @pick="linkOperation">
+                <template #trigger="{ toggle }">
+                  <Button size="sm" variant="ghost" @click="toggle">
+                    <Route class="size-3.5" />
+                    {{ t('apiLink.relation') }}
+                  </Button>
+                </template>
+              </ApiOperationPicker>
+            </div>
           </div>
 
           <div class="space-y-1.5">

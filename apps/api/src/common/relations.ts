@@ -1,4 +1,5 @@
 import {
+  API_OPERATION_ATTR,
   FRONTMATTER_KEY_ALIASES,
   normalizeEntityKey,
   normalizeRelationType,
@@ -184,4 +185,24 @@ export function tagEntityKey(tag: string): string {
 export function tagFilterKey(input: string): string {
   const key = normalizeEntityKey(input);
   return key.startsWith('tag:') ? key : `tag:${key}`;
+}
+
+const OPERATION_REF_RE = new RegExp(`<div\\b[^>]*\\s${API_OPERATION_ATTR}="([^"]*)"`, 'gu');
+const ENTITIES: Record<string, string> = { '&quot;': '"', '&#39;': "'", '&lt;': '<', '&gt;': '>', '&amp;': '&' };
+
+/**
+ * The spec operations a page's API contract blocks mirror (#78): every
+ * `data-kn-op` on a block's wrapper, folded and de-duplicated. Only `op:` and
+ * `channel:` keys count — the attribute names an operation, and a block cannot
+ * make a page IMPLEMENTS a service by carrying some other key.
+ */
+export function readApiOperationRefs(markdown: string): string[] {
+  const keys = new Set<string>();
+  for (const match of markdown.matchAll(OPERATION_REF_RE)) {
+    const key = normalizeEntityKey(match[1].replace(/&(?:quot|#39|lt|gt|amp);/gu, (e) => ENTITIES[e] ?? e));
+    if ((key.startsWith('op:') || key.startsWith('channel:')) && hasContent(key.slice(key.indexOf(':') + 1))) {
+      keys.add(key);
+    }
+  }
+  return [...keys];
 }

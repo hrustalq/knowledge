@@ -634,7 +634,9 @@ function collectHeadings() {
   const seen = new Map<string, number>()
   const headings = [...root.querySelectorAll<HTMLElement>('.kn-prose h1, .kn-prose h2, .kn-prose h3')].map(
     (el) => {
-      const text = el.textContent?.trim() ?? ''
+      // Chrome drawn into a heading (an API block's spec link, #78) is not
+      // its text: it would rename the rail entry and move the anchor.
+      const text = quotableText(el)
       const base = slugifyHeading(text) || 'section'
       const n = (seen.get(base) ?? 0) + 1
       seen.set(base, n)

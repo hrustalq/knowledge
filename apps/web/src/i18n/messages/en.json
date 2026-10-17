@@ -3179,7 +3179,9 @@
     "process": "Processes",
     "system": "Systems",
     "contract": "Contracts",
-    "entity": "Other"
+    "entity": "Other",
+    "op": "API operations",
+    "channel": "Channels"
   },
   "filters": {
     "author": "Author",
@@ -4758,10 +4760,41 @@
     "linked": {
       "title": "Linked pages",
       "loading": "Looking for pages that link this operation…",
-      "empty": "No page links this operation yet. A use case or guide links it by naming its key in frontmatter:",
+      "empty": "No page links this operation yet. Link it from a page with Link API operation in the page settings, or an API block’s Link to spec — or name its key in frontmatter:",
       "copyKey": "Copy key",
       "copied": "Copied",
       "copyFailed": "Could not copy — select the key and copy it by hand"
+    }
+  },
+  "apiLink": {
+    "search": "Search API operations",
+    "placeholder": "Method and path, summary or operationId",
+    "failed": "Could not search operations — try again",
+    "noMatch": "No operation matches “{query}”",
+    "noSpecs": "No API specs here yet. Add an OpenAPI or AsyncAPI spec, and its operations show up here to link.",
+    "relation": "Link API operation",
+    "gone": "No spec you can open defines this operation any more",
+    "workflow": "API operation",
+    "block": {
+      "link": "Link to spec",
+      "linked": "From spec",
+      "unlink": "Unlink from spec",
+      "copy": "Copy method and path",
+      "copied": "Copied"
+    },
+    "live": {
+      "label": "Operation from the spec",
+      "open": "Open in reference",
+      "gone": "No spec you can open defines this operation any more:",
+      "failed": "Could not load this operation from its spec:",
+      "spec": "From the spec"
+    },
+    "in": {
+      "path": "path",
+      "query": "query",
+      "header": "header",
+      "cookie": "cookie",
+      "body": "body"
     }
   },
   "apiSpecEditor": {

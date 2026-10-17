@@ -18848,6 +18848,15 @@
             }
           },
           {
+            "name": "entityKey",
+            "required": false,
+            "in": "query",
+            "description": "Exactly this operation, however the key is spelled (op:billing-api:post-/invoices) — resolves a link to its spec",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "required": false,
             "in": "query",

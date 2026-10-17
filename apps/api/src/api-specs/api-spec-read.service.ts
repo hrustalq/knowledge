@@ -123,10 +123,12 @@ export class ApiSpecReadService {
    * Operations across every spec the scope may open, at each spec's head —
    * the "Link API operation" picker and `knowledge_list_api_operations`.
    * Matches method + path, summary, operationId and the key, case-insensitively.
+   * `entityKeys` narrows to exact (folded) keys: what a page or a picker
+   * already names, resolved to the spec that defines it.
    */
   async search(
     scope: AccessScope,
-    opts: { q?: string; documentId?: string; limit?: number },
+    opts: { q?: string; documentId?: string; entityKeys?: string[]; limit?: number },
   ): Promise<SearchApiOperationsResponse> {
     const limit = Math.min(Math.max(opts.limit ?? SEARCH_LIMIT, 1), 200);
     const q = opts.q?.trim();
@@ -143,6 +145,11 @@ export class ApiSpecReadService {
          AND ${listedSql('d')}
          AND ${visibilitySql(scope, 'd')}
          ${opts.documentId ? Prisma.sql`AND d.id = ${opts.documentId}::uuid` : Prisma.empty}
+         ${
+           opts.entityKeys
+             ? Prisma.sql`AND o.entity_key = ANY(${opts.entityKeys.map((k) => normalizeEntityKey(k))}::text[])`
+             : Prisma.empty
+         }
          ${
            like
              ? Prisma.sql`AND (coalesce(o.method, '') || ' ' || o.path ILIKE ${like} OR o.summary ILIKE ${like}

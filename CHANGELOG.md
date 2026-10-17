@@ -84,6 +84,36 @@ in the pull request that introduces them — see
   `Host` are never forwarded. Each request needs the editor role and counts
   against a per-person rate limit. The audit log records method, host and
   path template, never headers or bodies. It is not an MCP tool. (#78)
+- Pages can now link to the operations of an API spec. In page settings,
+  **Link API operation** searches every spec you can open and adds the
+  operation as an `IMPLEMENTS` relation, and the row shows which endpoint
+  and spec the key resolves to. An API block can be linked to a spec
+  operation with **Link to spec**. A linked block takes its method and path
+  from the spec, keeps only your summary, and shows the parameters, body and
+  responses live from the spec's head. If the operation leaves the spec, the
+  block says so instead of going stale. The page then `IMPLEMENTS` the
+  operation, so it appears in the operation's linked pages.
+  `GET /v1/api-operations` takes `entityKey` to resolve one key in any
+  spelling. In the graph, operations and channels are drawn as squares and
+  open their card in the spec. In workflows, a fan-out step whose source
+  page links operations (or which runs against a spec) can tag each item
+  with one of them. The endpoint draft under that item gets the spec's text
+  for the operation and declares `DESCRIBES` on it. (#78)
+
+### Changed
+
+- API blocks (the endpoint widget in the editor) are now a compact card. A
+  slim request line shows the method as a coloured chip, the path with its
+  `{params}` muted, and a copy button. Each section (parameters, body,
+  responses, headers) is a one-line row with a count that opens on click.
+  Find-in-page still reaches text inside a closed section and opens it.
+  Sections left empty are hidden when reading. When reading, a section's table
+  is drawn as name → type · location · required rows, the same shape as a
+  linked operation. Section names and column meanings are shown in the
+  reader's language even when the page was written in another, because the
+  columns are recognised in English or Russian. The values themselves are
+  never translated. The editor keeps the real table, and the card stacks to
+  fit narrow columns and phones. Stored markdown is unchanged. (#78)
 
 ### Operations
 

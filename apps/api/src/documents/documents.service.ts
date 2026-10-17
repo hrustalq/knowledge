@@ -913,7 +913,9 @@ export class DocumentsService {
     }
 
     const raw = await this.storage.getObjectText(revision.s3Key);
-    const parsed = matter(raw);
+    // A spec (#78) is returned verbatim: it has no frontmatter, and a YAML
+    // spec may well open with a `---` document marker gray-matter would eat.
+    const parsed = isApiSpecKind(document.kind) ? { data: {}, content: raw } : matter(raw);
     return {
       documentId,
       revisionId: revision.id,

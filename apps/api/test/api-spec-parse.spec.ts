@@ -369,10 +369,11 @@ describe('StorageService.sourceObjectName', () => {
 
 describe('read helpers (phase 2)', () => {
   it('serves OpenAPI upgraded to 3.1 with its $refs kept, so a recursive schema stays JSON', () => {
-    const doc = readApiSpecDocument(OPENAPI_30, 'openapi');
+    const { document: doc, specVersion } = readApiSpecDocument(OPENAPI_30, 'openapi');
     expect(doc.openapi).toMatch(/^3\.1/u);
+    expect(specVersion).toBe('3.0.3');
     expect(JSON.stringify(doc)).toContain('"$ref":"#/components/schemas/User"');
-    expect(readApiSpecDocument(ASYNCAPI_26, 'asyncapi').asyncapi).toBe('2.6.0');
+    expect(readApiSpecDocument(ASYNCAPI_26, 'asyncapi').document.asyncapi).toBe('2.6.0');
   });
 
   it('renders one operation alone', async () => {

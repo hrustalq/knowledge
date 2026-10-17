@@ -45,6 +45,20 @@ in the pull request that introduces them — see
   Both work with read-only keys. `knowledge_create_revision` now writes a
   spec document's whole YAML or JSON body; name it with `syntax`. The
   document detail response gains `kind`. (#78)
+- A spec document now reads as an API reference rather than a page. Every
+  operation or channel gets its own card, grouped under its tag. A card shows
+  the parameters, request body, responses or messages, with schemas as a
+  collapsible field tree that marks a recursive type instead of looping. It
+  also shows examples, deprecation, and the pages that link the operation,
+  each with its fact class. When no page links it yet, the card shows the
+  frontmatter that would. An **Operations** card in the page rail lists them
+  all. Clicking a row scrolls to that operation, and the row being read stays
+  highlighted as you scroll. `?op=<entityKey>` lands on that operation.
+  Specs are written in a text editor: "API spec" in the new-page menu, or
+  Edit on a spec. The editor loads a `.yaml` / `.json` file, publishes a
+  revision, and lists the validator's messages when the spec is refused.
+  `GET /v1/api-specs/:id` now reports the spec version as written (`3.0.3`)
+  rather than the upgraded one. (#78)
 
 ### Operations
 

@@ -85,13 +85,13 @@ export class ApiSpecReadService {
     if (!revision) throw new NotFoundException(t('error.document.noRevisions', { id: documentId }));
     if (revision.status === 'draft') throw new BadRequestException(t('error.document.contentIsDraft', { id: revision.id }));
     const raw = await this.storage.getObjectText(revision.s3Key);
-    const document = readApiSpecDocument(raw, doc.kind);
+    const { document, specVersion } = readApiSpecDocument(raw, doc.kind);
     const info = (document.info ?? {}) as Record<string, unknown>;
     return {
       documentId,
       revisionId: revision.id,
       kind: doc.kind,
-      specVersion: String(document.openapi ?? document.swagger ?? document.asyncapi ?? ''),
+      specVersion,
       title: typeof info.title === 'string' ? info.title : doc.title,
       version: typeof info.version === 'string' ? info.version : null,
       slug: doc.specSlug,

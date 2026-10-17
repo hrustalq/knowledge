@@ -45,6 +45,12 @@ export function renderSpecProjection(spec: ParsedApiSpec, operations: ParsedOper
   return out.join('\n').replace(/\n{3,}/gu, '\n\n').trim() + '\n';
 }
 
+/** One operation's section alone — what `knowledge_get_api_operation` returns. */
+export function renderOperation(op: ParsedOperation): string {
+  const lines = op.protocol === 'http' ? httpOperation(op) : asyncOperation(op);
+  return lines.join('\n').replace(/\n{3,}/gu, '\n\n').trim() + '\n';
+}
+
 function httpOperation(op: ParsedOperation): string[] {
   const o = op.raw;
   const out = [`### ${op.method} ${inline(op.path)}`, ''];

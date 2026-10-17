@@ -581,6 +581,7 @@
   "apiSpec": {
     "parseFailed": "The API spec is not valid: {reason}",
     "format": "An API spec is written as yaml or json, not {format}",
-    "template": "An API spec cannot start from a page template"
+    "template": "An API spec cannot start from a page template",
+    "notSpec": "Document {id} is not an API spec"
   }
 }

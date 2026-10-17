@@ -48,6 +48,15 @@ export function parseAcceptLanguage(header: string | undefined | null): Locale |
   return null;
 }
 
+/**
+ * `documents.kind` (#78). `page` is every document that existed before API
+ * reference documents. Here rather than in `api/` because DocumentSummary
+ * carries it and `core` must not import the domains that import it; `api/`
+ * holds everything else about specs.
+ */
+export const API_DOCUMENT_KINDS = ['page', 'openapi', 'asyncapi'] as const;
+export type ApiDocumentKind = (typeof API_DOCUMENT_KINDS)[number];
+
 export interface DocumentSummary {
   documentId: string;
   workspaceId: string;
@@ -62,6 +71,12 @@ export interface DocumentSummary {
   headRevisionId: string | null;
   headRevisionStatus: RevisionStatus | null;
   createdAt: string;
+  /**
+   * What the body is (#78): `page`, or an API spec. Filled in by the detail
+   * route, which decides between the page canvas and the API reference;
+   * absent elsewhere, where it reads as `page`.
+   */
+  kind?: ApiDocumentKind;
   /**
    * The manual verification stamp (docs/features/38): who last said "this page
    * is right" and at which revision. Optional because only the detail route

@@ -86,6 +86,25 @@ export async function parseApiSpec(raw: string, kind: ApiSpecKind, limits: ApiSp
 }
 
 /**
+ * A revision's spec for a reader (#78, phase 2): OpenAPI upgraded to 3.1,
+ * AsyncAPI as written, with internal `$ref`s left in place — a recursive schema
+ * dereferences to a cyclic object, which no JSON response can carry. Not
+ * validated again: only a finalized revision is read, and finalize validated it.
+ */
+export function readApiSpecDocument(raw: string, kind: ApiSpecKind): Record<string, unknown> {
+  let value: unknown;
+  try {
+    value = normalize(raw);
+  } catch (e) {
+    throw new ApiSpecError([{ message: (e as Error).message.split('\n')[0] }]);
+  }
+  if (!isObject(value)) throw new ApiSpecError([{ message: 'The document is not a YAML or JSON object' }]);
+  if (kind === 'asyncapi') return value;
+  const { specification } = upgrade(value);
+  return (specification ?? value) as Record<string, unknown>;
+}
+
+/**
  * The operations with their entity keys under `slug`. A second operation that
  * folds to a key already taken (`/users/{id}` and `/users/{userId}`, both GET)
  * is the same operation by our rules, so the first one wins.

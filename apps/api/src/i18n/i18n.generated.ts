@@ -985,6 +985,7 @@ export type I18nTranslations = {
             "parseFailed": string;
             "format": string;
             "template": string;
+            "notSpec": string;
         };
     };
     "import": {

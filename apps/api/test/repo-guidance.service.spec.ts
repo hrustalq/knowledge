@@ -202,7 +202,7 @@ describe('RepoGuidanceService', () => {
       require: vi.fn(async () => connector),
       contextFor: vi.fn(async () => ({ config: {} })),
     };
-    const aiSkills = new AiSkillsService(prisma as never);
+    const aiSkills = new AiSkillsService(prisma as never, { get: () => 50 } as never);
     const service = new RepoGuidanceService(prisma as never, connectors as never, aiSkills, activity as never);
     return { service, aiSkills, prisma };
   }

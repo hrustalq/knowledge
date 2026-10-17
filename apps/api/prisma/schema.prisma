@@ -1166,8 +1166,19 @@ model AiSkill {
   /// live `instructions` of an enabled skill.
   pendingInstructions String?   @map("pending_instructions")
   sourceRemovedAt     DateTime? @map("source_removed_at") @db.Timestamptz
+  /// 'skill' | 'styleguide' (AI_SKILL_KINDS, #74). A styleguide never joins a
+  /// turn by trigger word: the linter injects it explicitly.
+  kind                String    @default("skill")
+  /// Styleguide scope: null = workspace-wide; set = replaces it for one project.
+  /// No FK (house style).
+  projectId           String?   @map("project_id") @db.Uuid
+  /// StyleRule[] — only for kind='styleguide'. Json, not an array (the `triggers` precedent).
+  rules               Json?
 
   @@unique([workspaceId, name])
+  /// One styleguide per (workspace, project) is a raw partial unique index in
+  /// the migration (ai_skills_one_styleguide_per_scope), not expressible here.
+  @@index([workspaceId, kind, projectId])
   /// One skill per guidance file. NULLs are distinct in PG, so manual rows never collide.
   @@unique([workspaceId, sourceConnectorId, sourcePath])
   @@index([workspaceId, createdAt])

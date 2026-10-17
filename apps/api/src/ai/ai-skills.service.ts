@@ -1,7 +1,16 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { AiSkill } from '@prisma/client';
-import { AI_SKILL_INSTRUCTIONS_MAX, type AiSkillSummary } from '@knowledge/contracts';
+import {
+  AI_SKILL_INSTRUCTIONS_MAX,
+  type AiSkillSummary,
+  type GetStyleguideResponse,
+  type StyleRule,
+  type StyleguideSummary,
+} from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { readStyleRules } from '../agents/lint.js';
+import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 
 /** Skills merged into one turn, and the total instruction budget they share. */
@@ -10,6 +19,21 @@ const MAX_SKILL_CHARS = AI_SKILL_INSTRUCTIONS_MAX;
 
 /** How long the enabled-skill roster is reused before PG is consulted again. */
 const CACHE_TTL_MS = 30_000;
+
+export interface UpsertStyleguideInput {
+  /** Null = the workspace's styleguide. */
+  projectId: string | null;
+  name: string;
+  description: string;
+  rules: StyleRule[];
+}
+
+/** The styleguide that applies to a page, and where it came from. */
+export interface EffectiveStyleguide {
+  row: AiSkill;
+  rules: StyleRule[];
+  scope: 'project' | 'workspace';
+}
 
 export interface UpsertSkillInput {
   name: string;
@@ -34,11 +58,14 @@ export interface UpsertSkillInput {
 export class AiSkillsService {
   private readonly cache = new Map<string, { at: number; skills: AiSkill[] }>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly env: ConfigService<Env, true>,
+  ) {}
 
   async list(workspaceId: string): Promise<AiSkillSummary[]> {
     const skills = await this.prisma.aiSkill.findMany({
-      where: { workspaceId },
+      where: { workspaceId, kind: 'skill' },
       orderBy: [{ enabled: 'desc' }, { name: 'asc' }],
     });
     const names = await this.connectorNames(skills);
@@ -46,9 +73,19 @@ export class AiSkillsService {
   }
 
   async get(id: string): Promise<AiSkillSummary> {
-    const skill = await this.prisma.aiSkill.findUnique({ where: { id } });
-    if (!skill) throw new NotFoundException(t('error.ai.skillNotFound', { id }));
+    const skill = await this.findSkill(id);
     return toSummary(skill, await this.connectorNames([skill]));
+  }
+
+  /**
+   * A skill by id — never a styleguide. The skill routes share the table and
+   * the `ai-skill` ACL source with the styleguide routes, so without this a
+   * PATCH /skills/:id could rewrite a styleguide row as a skill.
+   */
+  private async findSkill(id: string): Promise<AiSkill> {
+    const skill = await this.prisma.aiSkill.findUnique({ where: { id } });
+    if (!skill || skill.kind === 'styleguide') throw new NotFoundException(t('error.ai.skillNotFound', { id }));
+    return skill;
   }
 
   /**
@@ -59,8 +96,7 @@ export class AiSkillsService {
    * that pretends to have accepted something.
    */
   async acceptUpstream(id: string): Promise<AiSkillSummary> {
-    const skill = await this.prisma.aiSkill.findUnique({ where: { id } });
-    if (!skill) throw new NotFoundException(t('error.ai.skillNotFound', { id }));
+    const skill = await this.findSkill(id);
     const pending = skill.pendingInstructions;
     if (pending === null) throw new ConflictException(t('error.ai.skillNoUpstream', { id }));
     const { count } = await this.prisma.aiSkill.updateMany({
@@ -99,8 +135,7 @@ export class AiSkillsService {
   }
 
   async update(id: string, input: Partial<UpsertSkillInput>): Promise<AiSkillSummary> {
-    const current = await this.prisma.aiSkill.findUnique({ where: { id } });
-    if (!current) throw new NotFoundException(t('error.ai.skillNotFound', { id }));
+    const current = await this.findSkill(id);
 
     if (input.name && input.name !== current.name) {
       const clash = await this.prisma.aiSkill.findUnique({
@@ -124,10 +159,104 @@ export class AiSkillsService {
   }
 
   async remove(id: string): Promise<void> {
-    const skill = await this.prisma.aiSkill.findUnique({ where: { id } });
-    if (!skill) throw new NotFoundException(t('error.ai.skillNotFound', { id }));
+    const skill = await this.findSkill(id);
     await this.prisma.aiSkill.delete({ where: { id } });
     this.cache.delete(skill.workspaceId);
+  }
+
+  // ---- Styleguides (#74) ---------------------------------------------------
+
+  /**
+   * The styleguide that applies to a page of `projectId`: the project's own
+   * when it has one, else the workspace's. The project row REPLACES the
+   * workspace row rather than merging with it, so a project can relax a rule.
+   * Both reads carry `workspaceId`, so a foreign project id finds nothing.
+   */
+  async effectiveStyleguide(workspaceId: string, projectId?: string | null): Promise<EffectiveStyleguide | null> {
+    const rows = await this.prisma.aiSkill.findMany({
+      where: {
+        workspaceId,
+        kind: 'styleguide',
+        OR: [{ projectId: null }, ...(projectId ? [{ projectId }] : [])],
+      },
+    });
+    const own = projectId ? rows.find((r) => r.projectId === projectId) : undefined;
+    const row = own ?? rows.find((r) => r.projectId === null);
+    if (!row) return null;
+    return { row, rules: readStyleRules(row.rules), scope: own ? 'project' : 'workspace' };
+  }
+
+  async getStyleguide(workspaceId: string, projectId?: string | null): Promise<GetStyleguideResponse> {
+    const found = await this.effectiveStyleguide(workspaceId, projectId);
+    return {
+      styleguide: found ? toStyleguide(found.row) : null,
+      scope: found?.scope ?? null,
+      maxRules: this.env.get('STYLEGUIDE_MAX_RULES', { infer: true }),
+    };
+  }
+
+  /**
+   * Create or replace the styleguide of one scope. One per scope: the guarded
+   * `updateMany` of the scope's row comes first and an insert follows only
+   * when it touched nothing; the partial unique index in the migration is the
+   * backstop for two first saves racing.
+   */
+  async upsertStyleguide(workspaceId: string, input: UpsertStyleguideInput, actorId?: string): Promise<StyleguideSummary> {
+    const max = this.env.get('STYLEGUIDE_MAX_RULES', { infer: true });
+    if (input.rules.length > max) {
+      throw new BadRequestException(t('error.styleguide.tooManyRules', { max }));
+    }
+    const ids = new Set<string>();
+    for (const rule of input.rules) {
+      if (ids.has(rule.id)) throw new BadRequestException(t('error.styleguide.duplicateRuleId', { id: rule.id }));
+      ids.add(rule.id);
+    }
+    if (input.projectId) {
+      const project = await this.prisma.project.findFirst({ where: { id: input.projectId, workspaceId }, select: { id: true } });
+      if (!project) throw new NotFoundException(t('error.project.notInWorkspace', { id: input.projectId }));
+    }
+
+    const scope = { workspaceId, kind: 'styleguide', projectId: input.projectId };
+    // A name is unique per workspace across skills and styleguides alike.
+    const clash = await this.prisma.aiSkill.findUnique({
+      where: { workspaceId_name: { workspaceId, name: input.name } },
+    });
+    if (clash && !(clash.kind === 'styleguide' && clash.projectId === input.projectId)) {
+      throw new ConflictException(t('error.ai.skillNameTaken', { name: input.name }));
+    }
+
+    const data = {
+      name: input.name,
+      description: input.description,
+      rules: input.rules.map(cleanRule) as unknown as object,
+    };
+    const { count } = await this.prisma.aiSkill.updateMany({ where: scope, data });
+    if (count === 0) {
+      try {
+        await this.prisma.aiSkill.create({
+          data: { ...scope, ...data, instructions: '', triggers: [], enabled: true, createdBy: actorId ?? null },
+        });
+      } catch (e) {
+        if ((e as { code?: string }).code === 'P2002') {
+          throw new ConflictException(t('error.styleguide.scopeTaken'));
+        }
+        throw e;
+      }
+    }
+    const row = await this.prisma.aiSkill.findFirstOrThrow({ where: scope });
+    return toStyleguide(row);
+  }
+
+  /** The styleguide by id — never a skill — for the delete route's activity line. */
+  async getStyleguideById(id: string): Promise<StyleguideSummary> {
+    const row = await this.prisma.aiSkill.findUnique({ where: { id } });
+    if (!row || row.kind !== 'styleguide') throw new NotFoundException(t('error.styleguide.notFound', { id }));
+    return toStyleguide(row);
+  }
+
+  async removeStyleguide(id: string): Promise<void> {
+    await this.getStyleguideById(id);
+    await this.prisma.aiSkill.delete({ where: { id } });
   }
 
   /**
@@ -188,7 +317,7 @@ export class AiSkillsService {
     const hit = this.cache.get(workspaceId);
     if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.skills;
     const skills = await this.prisma.aiSkill.findMany({
-      where: { workspaceId, enabled: true },
+      where: { workspaceId, kind: 'skill', enabled: true },
       orderBy: { name: 'asc' },
     });
     this.cache.set(workspaceId, { at: Date.now(), skills });
@@ -242,5 +371,34 @@ function toSummary(skill: AiSkill, connectorNames: ReadonlyMap<string, string>):
     sourceSha: skill.sourceSha,
     pendingInstructions: skill.pendingInstructions,
     sourceRemovedAt: skill.sourceRemovedAt?.toISOString() ?? null,
+  };
+}
+
+function toStyleguide(row: AiSkill): StyleguideSummary {
+  return {
+    id: row.id,
+    workspaceId: row.workspaceId,
+    projectId: row.projectId,
+    name: row.name,
+    description: row.description,
+    rules: readStyleRules(row.rules),
+    createdBy: row.createdBy,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** Exactly the contract's fields, trimmed — a DTO instance carries nothing else into the Json. */
+function cleanRule(rule: StyleRule): StyleRule {
+  const example =
+    rule.example && (rule.example.bad.trim() || rule.example.good.trim())
+      ? { bad: rule.example.bad.trim(), good: rule.example.good.trim() }
+      : undefined;
+  return {
+    id: rule.id,
+    text: rule.text.trim(),
+    severity: rule.severity,
+    enabled: rule.enabled,
+    ...(example ? { example } : {}),
   };
 }

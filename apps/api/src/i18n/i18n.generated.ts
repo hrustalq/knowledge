@@ -38,6 +38,8 @@ export type I18nTranslations = {
         "surveyorDesc": string;
         "digest": string;
         "digestDesc": string;
+        "linter": string;
+        "linterDesc": string;
         "route": {
             "explicit": string;
             "disabled": string;
@@ -1045,6 +1047,12 @@ export type I18nTranslations = {
             "timeout": string;
             "revisionDraft": string;
             "unresolved": string;
+        };
+        "styleguide": {
+            "notFound": string;
+            "tooManyRules": string;
+            "duplicateRuleId": string;
+            "scopeTaken": string;
         };
     };
     "import": {

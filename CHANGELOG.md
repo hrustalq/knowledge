@@ -155,6 +155,22 @@ in the pull request that introduces them — see
   (`POST /v1/api-specs/:id/drift-check`, which queues a sentinel run). Neither
   path needs a model, and spec pages are never given an AI-written correction:
   the fix belongs in the repository's file. (#78)
+- A styleguide: the rules your team agreed on for writing docs, in plain
+  words, each with a severity (error, warning or suggestion). Admins write it
+  under **Settings → AI → Styleguide**, for the whole workspace or for one
+  project. A project's own styleguide replaces the workspace one there rather
+  than adding to it, so a project can relax a rule. Every member can read the
+  rules (`GET /v1/ai/styleguides`); admins write them with
+  `PUT /v1/ai/styleguides` and delete them with
+  `DELETE /v1/ai/styleguides/:id`. `POST /v1/assistant/lint` checks text
+  against the styleguide of its project with the new `linter` agent. The
+  panel's **Try it** box uses the same check. Each violation names the rule
+  it breaks and quotes the passage. A violation that cites no rule of the
+  styleguide, or quotes text that is not there, is dropped and counted in
+  `dropped` rather than shown. The severity always comes from the rule. With
+  no styleguide, the check makes no model call. Styleguides never appear
+  among skills and never join a chat turn. Checking merge requests
+  automatically comes in a later release. (#74)
 
 ### Changed
 
@@ -213,6 +229,15 @@ in the pull request that introduces them — see
   `breaking_ack_revision_id`. No backfill: an empty policy is `warn`, which
   never refuses a merge. The previous image never reads them, so a rollback is
   safe.
+- Migration `20261106100000_styleguide` adds `ai_skills.kind` (NOT NULL,
+  default `'skill'`, so no backfill), `ai_skills.project_id`,
+  `ai_skills.rules` and a partial unique index allowing one styleguide per
+  workspace or project. The previous image does not know about `kind`, so
+  after a rollback it would list a styleguide as an empty skill. Delete
+  styleguides before rolling back:
+  `DELETE FROM ai_skills WHERE kind = 'styleguide'`.
+- New env vars, both with defaults: `STYLEGUIDE_MAX_RULES` (50) and
+  `LINT_MAX_FINDINGS` (15).
 
 ## [0.26.0] — 2026-10-16
 

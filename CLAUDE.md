@@ -139,6 +139,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 50 | Agent memory         | `knowledge_capture_*` → staged row → raw-cosine dedupe → MR with `provenance: 'captured'`; `capture` key passes editor only on `{ capture: true }` calls; head-less new pages hidden via `pending_merge_request_id`; terms via the inbox |
 | 51 | Component pages      | `component:` → `component_declarations`; each pull replaces `code_imports` + `code_files`; rules only in `component-match.ts`; `code` edges via `replaceCodeFacts`; Used by is read-time under `AccessScope`; drafts = archaeologist run + `proposePage` |
 | 52 | API reference        | `documents.kind` openapi/asyncapi; ingestion branches on kind → markdown projection + `api_operations` + revision-scoped `spec` `DESCRIBES`; `{param}` folds in `normalizeEntityKey`; slug pinned; try-it proxy is env-ceilinged, never MCP; `breakingBlocks` gates merge; synced spec changes always MR |
+| 53 | Doc quality          | Styleguide = `ai_skills` `kind='styleguide'`, project replaces workspace; `readLintViolations` drops unknown rules/ungrounded quotes, severity is the rule's; MR lint = added lines only, sweeper-triggered per head, published API-side; `lintGate` is the one predicate (fail-open); scores are append-only rows the worker writes |
 
 ## Conventions
 

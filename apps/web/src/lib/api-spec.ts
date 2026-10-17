@@ -170,6 +170,9 @@ export interface ParameterView {
   description: string | null
   type: string
   schema: unknown
+  /** The spec's own example — `example`, then the schema's example, default or first enum. Null when it gives none. */
+  example: string | null
+  enumValues: string[]
 }
 
 export interface ContentView {
@@ -238,6 +241,8 @@ export function operationView(doc: Json, op: ApiOperationInfo): OperationView | 
     description: str(p.description),
     type: typeLabel(doc, p.schema),
     schema: p.schema,
+    example: paramExample(doc, p),
+    enumValues: enumOf(doc, p.schema),
   }))
   const body = deref(doc, raw.requestBody).node
   const responses = isObject(raw.responses)
@@ -263,6 +268,24 @@ export function operationView(doc: Json, op: ApiOperationInfo): OperationView | 
     messages: [],
     security: [...new Set(security)],
   }
+}
+
+/** An example the spec states. Unlike a sample's filler, never invented from the type. */
+function paramExample(doc: Json, p: Json): string | null {
+  const schema = deref(doc, p.schema).node
+  const examples = isObject(p.examples) ? Object.values(p.examples).find(isObject)?.value : undefined
+  // A 3.0 schema's `example` arrives as 3.1 `examples: [...]` after the server's upgrade.
+  const own = isObject(schema)
+    ? [schema.example, Array.isArray(schema.examples) ? schema.examples[0] : undefined, schema.default, Array.isArray(schema.enum) ? schema.enum[0] : undefined]
+    : []
+  const candidates = [p.example, examples, ...own]
+  const hit = candidates.find((v) => v !== undefined && v !== null)
+  return hit === undefined ? null : typeof hit === 'string' ? hit : JSON.stringify(hit)
+}
+
+function enumOf(doc: Json, schema: unknown): string[] {
+  const node = deref(doc, schema).node
+  return isObject(node) && Array.isArray(node.enum) ? node.enum.slice(0, 50).map(String) : []
 }
 
 function asyncMessages(doc: Json, raw: Json, op: ApiOperationInfo): MessageView[] {

@@ -1,6 +1,19 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { API_TRY_PROXY_MODES, CODE_SAMPLE_LANGS, type ApiTryProxyMode, type CodeSampleLang } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 export class ListApiSpecsQueryDto {
@@ -44,4 +57,80 @@ export class SearchApiOperationsQueryDto {
   @Min(1, { message: vmsg('min') })
   @Max(200, { message: vmsg('max') })
   limit?: number;
+}
+
+export class ApiSamplesQueryDto {
+  @ApiProperty({ description: 'The operation, as its row names it (op:billing-api:post-/invoices)' })
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey!: string;
+
+  @ApiPropertyOptional({ description: 'The method, when one key has several rows' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20, { message: vmsg('maxLength') })
+  method?: string;
+
+  @ApiPropertyOptional({ enum: CODE_SAMPLE_LANGS, description: 'One language; every language when absent' })
+  @IsOptional()
+  @IsIn(CODE_SAMPLE_LANGS)
+  lang?: CodeSampleLang;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'A revision of this document; the default-branch head when absent' })
+  @IsOptional()
+  @IsUUID()
+  revisionId?: string;
+}
+
+export class ApiTryHeaderDto {
+  @ApiProperty()
+  @IsString()
+  @MaxLength(200, { message: vmsg('maxLength') })
+  name!: string;
+
+  @ApiProperty()
+  @IsString()
+  @MaxLength(8000, { message: vmsg('maxLength') })
+  value!: string;
+}
+
+export class ApiTryRequestDto {
+  @ApiProperty({ format: 'uuid', description: 'The revision being viewed: the target must be one of its servers' })
+  @IsUUID()
+  revisionId!: string;
+
+  @ApiProperty({ description: 'The operation tried; the URL path must be its path' })
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey!: string;
+
+  @ApiProperty({ example: 'GET' })
+  @IsString()
+  @MaxLength(20, { message: vmsg('maxLength') })
+  method!: string;
+
+  @ApiProperty({ description: 'The full URL, query included' })
+  @IsString()
+  @MaxLength(8000, { message: vmsg('maxLength') })
+  url!: string;
+
+  @ApiPropertyOptional({ type: [ApiTryHeaderDto], description: 'Sent per request; never stored or logged' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => ApiTryHeaderDto)
+  headers?: ApiTryHeaderDto[];
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'At most 256 KB' })
+  @IsOptional()
+  @IsString()
+  body?: string | null;
+}
+
+export class UpdateApiSettingsDto {
+  @ApiPropertyOptional({ enum: API_TRY_PROXY_MODES, nullable: true, type: String, description: 'null inherits API_TRY_PROXY_MODE' })
+  @IsOptional()
+  @IsIn(API_TRY_PROXY_MODES)
+  apiTryProxyMode?: ApiTryProxyMode | null;
 }

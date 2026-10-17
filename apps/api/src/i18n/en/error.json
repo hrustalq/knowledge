@@ -583,5 +583,19 @@
     "format": "An API spec is written as yaml or json, not {format}",
     "template": "An API spec cannot start from a page template",
     "notSpec": "Document {id} is not an API spec"
+  },
+  "apiTry": {
+    "disabled": "The try-it proxy is off for this workspace. Send the request from your browser instead.",
+    "operationNotInSpec": "This revision of the spec has no {method} operation {entityKey}.",
+    "targetNotInSpec": "{url} is not {method} {path} on a server of this revision of the spec.",
+    "relativeServer": "This spec names no absolute server URL, so the proxy has nowhere to send the request.",
+    "privateAddress": "{host} is a private or unsafe address, which the try-it proxy does not reach.",
+    "notAllowed": "{host} is not allowed by this workspace's source policies.",
+    "tooLarge": "The request body is {bytes} bytes; the proxy forwards at most {limit}.",
+    "rateLimited": "Too many try-it requests. Wait a minute and send again.",
+    "unreachable": "Could not reach {host}: {reason}",
+    "timeout": "{host} did not answer within {seconds} s.",
+    "revisionDraft": "Revision {id} is a draft; try an operation of a finalized revision.",
+    "unresolved": "{host} does not resolve to any address."
   }
 }

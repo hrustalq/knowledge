@@ -9,6 +9,7 @@ import {
   Bell,
   BookMarked,
   BookOpen,
+  Braces,
   Download,
   FolderKanban,
   Globe,
@@ -41,6 +42,7 @@ const links = computed<SettingsLink[]>(() => [
   { to: '/settings/templates', label: t('nav.templates'), icon: LayoutTemplate, hint: t('settings.templatesHint') },
 
   { to: '/settings/publishing', label: t('nav.publishing'), icon: Globe, hint: t('settings.publishingHint') },
+  { to: '/settings/api', label: t('nav.apiReference'), icon: Braces, hint: t('settings.apiReferenceHint') },
   // Members, roles and — for a platform admin — the accounts themselves, all
   // under one row. Accounts used to be a second row beside this one, which put
   // "can this person sign in" and "what may they do here" in two places and

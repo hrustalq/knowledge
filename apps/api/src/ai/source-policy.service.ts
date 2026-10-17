@@ -173,8 +173,16 @@ export class SourcePolicyService {
    * rather than a fact this method can check, and a page from an allowed domain
    * saying *now fetch evil.com* makes the same claim just as convincingly.
    */
-  async decide(workspaceId: string, rawUrl: string, effective: WebAccessMode): Promise<WebAccessDecision> {
+  async decide(
+    workspaceId: string,
+    rawUrl: string,
+    effective: WebAccessMode,
+    // The try-it proxy (#78) reuses these rows under its own private-address
+    // switch, API_TRY_ALLOW_PRIVATE_URLS, rather than web research's.
+    opts: { allowPrivate?: boolean } = {},
+  ): Promise<WebAccessDecision> {
     if (effective === 'off') return { ok: false, reason: 'mode-off', matchedPattern: null };
+    const allowPrivate = opts.allowPrivate ?? this.allowPrivate;
 
     let url: URL;
     try {
@@ -182,7 +190,7 @@ export class SourcePolicyService {
     } catch {
       return { ok: false, reason: 'unsafe', detail: rawUrl, matchedPattern: null };
     }
-    if (url.protocol !== 'https:' && !(this.allowPrivate && url.protocol === 'http:')) {
+    if (url.protocol !== 'https:' && !(allowPrivate && url.protocol === 'http:')) {
       return { ok: false, reason: 'unsafe', detail: url.protocol.replace(':', ''), matchedPattern: null };
     }
 
@@ -200,7 +208,7 @@ export class SourcePolicyService {
 
     // SSRF last, because it is the most expensive check and the cheapest ones
     // have already refused most of what they were going to refuse.
-    if (!this.allowPrivate && (await this.resolvesPrivate(host))) {
+    if (!allowPrivate && (await this.resolvesPrivate(host))) {
       return { ok: false, reason: 'unsafe', detail: host, matchedPattern: match?.pattern ?? null };
     }
     return { ok: true, matchedPattern: match?.pattern ?? null };

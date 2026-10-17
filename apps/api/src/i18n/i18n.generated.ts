@@ -987,6 +987,20 @@ export type I18nTranslations = {
             "template": string;
             "notSpec": string;
         };
+        "apiTry": {
+            "disabled": string;
+            "operationNotInSpec": string;
+            "targetNotInSpec": string;
+            "relativeServer": string;
+            "privateAddress": string;
+            "notAllowed": string;
+            "tooLarge": string;
+            "rateLimited": string;
+            "unreachable": string;
+            "timeout": string;
+            "revisionDraft": string;
+            "unresolved": string;
+        };
     };
     "import": {
         "stage": {

@@ -451,6 +451,23 @@ export const envSchema = z.object({
   API_SPEC_MAX_BYTES: z.coerce.number().int().positive().default(5_000_000),
   API_SPEC_MAX_OPERATIONS: z.coerce.number().int().positive().default(2000),
 
+  /**
+   * The try-it proxy (#78): POST /v1/api-specs/:id/try sends a request to a
+   * server the spec names, for an API that does not allow CORS. The mode is a
+   * CEILING the workspace setting can only narrow, as WEB_ACCESS_MODE is for
+   * web research: `allowlist` reaches only hosts the workspace's source
+   * policies allow, `open` any host they do not block. `off` keeps the route
+   * refusing and the console browser-direct only.
+   */
+  API_TRY_PROXY_MODE: z.enum(['off', 'allowlist', 'open']).default('off'),
+  /** Let the proxy reach private and loopback addresses (an intranet API). Operator-only. */
+  API_TRY_ALLOW_PRIVATE_URLS: boolish(false),
+  API_TRY_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+  /** A longer response body is cut here and returned with `truncated: true`. */
+  API_TRY_MAX_RESPONSE_BYTES: z.coerce.number().int().positive().default(1_000_000),
+  /** Proxied requests per user per minute, counted in Redis. */
+  API_TRY_RATE_PER_MINUTE: z.coerce.number().int().positive().default(30),
+
   /** Allow web targets on private/loopback ranges (self-hosted SearXNG, intranet). */
   WEB_ALLOW_PRIVATE_URLS: boolish(false),
 

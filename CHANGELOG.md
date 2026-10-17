@@ -59,6 +59,31 @@ in the pull request that introduces them — see
   revision, and lists the validator's messages when the spec is refused.
   `GET /v1/api-specs/:id` now reports the spec version as written (`3.0.3`)
   rather than the upgraded one. (#78)
+- Code samples and a try-it console on every HTTP operation of a spec. Each
+  operation shows its request as cURL, JavaScript `fetch`, Python `requests`
+  and Go `net/http`. Where the spec has `x-codeSamples` for a language, the
+  author's sample is shown instead and labelled as theirs. Credentials appear
+  as environment variables (`$TOKEN`, `process.env.TOKEN`…), never as values.
+  "Try it" opens a console with the server, parameters, credentials and body,
+  prefilled from the spec's examples, and the sample follows what you type.
+  Requests go from your browser by default; when the API refuses CORS, the
+  console says so. Credentials stay in the browser tab's `sessionStorage`.
+  The same samples are available from
+  `GET /v1/api-specs/:id/samples?entityKey=&lang=` and from
+  `knowledge_get_api_operation` with `lang`. (#78)
+- A try-it proxy for APIs that refuse browser requests, at
+  `POST /v1/api-specs/:id/try`. It is off unless the deployment allows it, and
+  workspace admins set the mode under Settings → API reference
+  (`GET`/`PATCH /v1/workspaces/:id/api-settings`). The page shows both the
+  mode asked for and the mode in force. The proxy sends only to a server named
+  by the spec revision being read, and only for an operation that revision
+  defines. `allowlist` reaches only hosts the workspace's source policies
+  allow, `open` any public host they do not block. Private addresses are
+  refused, including a name that resolves to one at connect time. Redirects
+  are returned, not followed. `Set-Cookie` never comes back, and `Cookie` /
+  `Host` are never forwarded. Each request needs the editor role and counts
+  against a per-person rate limit. The audit log records method, host and
+  path template, never headers or bodies. It is not an MCP tool. (#78)
 
 ### Operations
 
@@ -67,6 +92,16 @@ in the pull request that introduces them — see
   It is additive, so rolling back to the previous image is safe.
 - New env vars, both with defaults: `API_SPEC_MAX_BYTES` (5000000) and
   `API_SPEC_MAX_OPERATIONS` (2000). A spec above either limit is refused.
+- Migration `20261104100000_workspace_settings` adds the sparse
+  `workspace_settings` table (one row per workspace, `null` inherits). It is a
+  new table, so rolling back to the previous image is safe: that image never
+  reads it.
+- New env vars, all with defaults: `API_TRY_PROXY_MODE` (`off`; a ceiling the
+  workspace can only narrow: `off` | `allowlist` | `open`),
+  `API_TRY_ALLOW_PRIVATE_URLS` (`false`), `API_TRY_TIMEOUT_MS` (15000),
+  `API_TRY_MAX_RESPONSE_BYTES` (1000000) and `API_TRY_RATE_PER_MINUTE` (30).
+  With the defaults the proxy refuses every request, so nothing changes until
+  an operator raises the ceiling. The rate limit uses Redis and fails closed.
 
 ## [0.26.0] — 2026-10-16
 

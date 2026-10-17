@@ -1,5 +1,6 @@
 import type { ApiDocumentKind } from '@knowledge/contracts/core';
 import { normalizeEntityKey } from '@knowledge/contracts/graph';
+import type { CodeSample } from '@knowledge/contracts/api/samples';
 
 // ---------------------------------------------------------------------------
 // API reference documents (#78).
@@ -185,4 +186,87 @@ export interface ListApiOperationsResponse {
 /** GET /v1/api-operations — the picker: operations across every spec the caller may open. */
 export interface SearchApiOperationsResponse {
   operations: Array<ApiOperationInfo & { specTitle: string }>;
+}
+
+// ---------------------------------------------------------------------------
+// Code samples and try-it (#78, phase 4)
+// ---------------------------------------------------------------------------
+
+/** GET /v1/api-specs/:documentId/samples — one operation's samples. */
+export interface ApiOperationSamplesResponse {
+  documentId: string;
+  revisionId: string;
+  entityKey: string;
+  samples: CodeSample[];
+}
+
+/**
+ * How far the try-it proxy reaches. `allowlist` reuses the workspace's source
+ * policies (docs/features/25), so there is one host list, not two.
+ */
+export const API_TRY_PROXY_MODES = ['off', 'allowlist', 'open'] as const;
+export type ApiTryProxyMode = (typeof API_TRY_PROXY_MODES)[number];
+
+/** What the workspace asked for beside what applies, so a clamp is never silent. */
+export interface ApiTryProxySettings {
+  /** The workspace override; null inherits the ceiling. */
+  requested: ApiTryProxyMode | null;
+  /** API_TRY_PROXY_MODE. */
+  ceiling: ApiTryProxyMode;
+  effective: ApiTryProxyMode;
+  /** `clamped` when `requested` is wider than the ceiling. */
+  source: 'env' | 'db' | 'clamped';
+}
+
+/** GET/PATCH /v1/workspaces/:id/api-settings */
+export interface ApiSettingsResponse {
+  workspaceId: string;
+  tryProxy: ApiTryProxySettings;
+  /** The proxy's deployment caps, for the console to state. */
+  tryLimits: { timeoutMs: number; maxRequestBytes: number; maxResponseBytes: number; perMinute: number };
+  updatedAt: string | null;
+}
+
+export interface UpdateApiSettingsRequest {
+  /** null goes back to the ceiling. */
+  apiTryProxyMode?: ApiTryProxyMode | null;
+}
+
+/** The largest request body the proxy forwards. */
+export const API_TRY_MAX_REQUEST_BYTES = 256 * 1024;
+
+export interface ApiTryHeader {
+  name: string;
+  value: string;
+}
+
+/**
+ * POST /v1/api-specs/:documentId/try. The target must be a server of
+ * `revisionId` and the path one of `entityKey`'s. Credentials ride in
+ * `headers`, per request, and are neither stored nor logged.
+ */
+export interface ApiTryRequest {
+  revisionId: string;
+  entityKey: string;
+  method: string;
+  url: string;
+  headers?: ApiTryHeader[];
+  body?: string | null;
+}
+
+export interface ApiTryResponse {
+  status: number;
+  statusText: string;
+  /** Filtered: no `Set-Cookie`, no hop-by-hop headers. */
+  headers: ApiTryHeader[];
+  /** UTF-8 text, or base64 for a body that is not text. */
+  body: string;
+  encoding: 'utf8' | 'base64';
+  /** Bytes received, up to the cap. */
+  bytes: number;
+  /** True when the body was cut at API_TRY_MAX_RESPONSE_BYTES. */
+  truncated: boolean;
+  durationMs: number;
+  /** Request headers the proxy would not forward (`Cookie`, `Host`, hop-by-hop), so dropping one is never silent. */
+  droppedHeaders: string[];
 }

@@ -3732,6 +3732,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/api-specs/{id}/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One operation's code samples (curl, JavaScript, Python, Go): the spec's x-codeSamples where it has them, generated elsewhere, with environment-variable placeholders for credentials */
+        get: operations["ApiSpecsController_samples"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/try": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send one request to a server this revision names, for an operation it defines — the try-it proxy. 403 while the workspace's mode is off; redirects are returned, not followed; Set-Cookie is dropped */
+        post: operations["ApiSpecsController_try"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/api-operations": {
         parameters: {
             query?: never;
@@ -3747,6 +3781,24 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/api-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's API reference settings: what is asked for, the deployment ceiling, what applies */
+        get: operations["ApiSettingsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Override the API reference settings; null on a key inherits the deployment value */
+        patch: operations["ApiSettingsController_update"];
         trace?: never;
     };
     "/v1/documents/{id}/markdown": {
@@ -6713,6 +6765,34 @@ export interface components {
             projectId?: string;
             /** @description The page to nest it under */
             parentId?: string;
+        };
+        ApiTryHeaderDto: {
+            name: string;
+            value: string;
+        };
+        ApiTryRequestDto: {
+            /**
+             * Format: uuid
+             * @description The revision being viewed: the target must be one of its servers
+             */
+            revisionId: string;
+            /** @description The operation tried; the URL path must be its path */
+            entityKey: string;
+            /** @example GET */
+            method: string;
+            /** @description The full URL, query included */
+            url: string;
+            /** @description Sent per request; never stored or logged */
+            headers?: components["schemas"]["ApiTryHeaderDto"][];
+            /** @description At most 256 KB */
+            body?: string | null;
+        };
+        UpdateApiSettingsDto: {
+            /**
+             * @description null inherits API_TRY_PROXY_MODE
+             * @enum {string|null}
+             */
+            apiTryProxyMode?: "off" | "allowlist" | "open" | null;
         };
         SetMessageFeedbackDto: {
             /** @enum {string} */
@@ -19358,6 +19438,99 @@ export interface operations {
             };
         };
     };
+    ApiSpecsController_samples: {
+        parameters: {
+            query: {
+                /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+                entityKey: string;
+                /** @description The method, when one key has several rows */
+                method?: string;
+                /** @description One language; every language when absent */
+                lang?: "curl" | "javascript" | "python" | "go";
+                /** @description A revision of this document; the default-branch head when absent */
+                revisionId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_try: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiTryRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     ApiOperationsController_search: {
         parameters: {
             query: {
@@ -19377,6 +19550,90 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSettingsController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateApiSettingsDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {

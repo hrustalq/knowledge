@@ -12663,6 +12663,90 @@
         ]
       }
     },
+    "/v1/ai/agents/runs/{id}/findings/{index}/add-term": {
+      "post": {
+        "operationId": "AiController_addFindingTerm",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "required": true,
+            "in": "path",
+            "description": "Position in the run's findings array",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddFindingTermDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Add the glossary term a finding proposes, optionally edited, as the caller",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/v1/ai/agents/runs/{id}/findings/{index}/dismiss": {
       "post": {
         "operationId": "AiController_dismissFinding",
@@ -29705,6 +29789,25 @@
         "required": [
           "workspaceId"
         ]
+      },
+      "AddFindingTermDto": {
+        "type": "object",
+        "properties": {
+          "term": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "definition": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "DismissAgentFindingDto": {
         "type": "object",

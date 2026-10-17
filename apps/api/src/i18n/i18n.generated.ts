@@ -106,6 +106,7 @@ export type I18nTranslations = {
             "aliases": string;
             "budgetSpent": string;
             "nothingNew": string;
+            "allScanned": string;
             "summary": string;
         };
         "archaeology": {
@@ -732,6 +733,8 @@ export type I18nTranslations = {
             "agentWebhookDeliveryId": string;
             "skillNoUpstream": string;
             "findingComponentDraft": string;
+            "findingNoTerm": string;
+            "findingTermAdded": string;
         };
         "assistant": {
             "providerDisabled": string;

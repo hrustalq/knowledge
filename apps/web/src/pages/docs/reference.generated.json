@@ -282,6 +282,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/ai/agents/runs/{id}/findings/{index}/add-term",
+      "tag": "ai",
+      "summary": "Add the glossary term a finding proposes, optionally edited, as the caller",
+      "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/ai/agents/runs/{id}/findings/{index}/apply-relations",
       "tag": "ai",
       "summary": "Open a merge request declaring the relations one finding proposes",

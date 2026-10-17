@@ -2506,6 +2506,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/agents/runs/{id}/findings/{index}/add-term": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add the glossary term a finding proposes, optionally edited, as the caller */
+        post: operations["AiController_addFindingTerm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai/agents/runs/{id}/findings/{index}/dismiss": {
         parameters: {
             query?: never;
@@ -6477,6 +6494,11 @@ export interface components {
             connectorId?: string;
             /** @description Restrict a page-reading agent (curator, reviewer, glossarist) to these pages instead of the most recent ones. Pages the caller cannot open are skipped. */
             documentIds?: string[];
+        };
+        AddFindingTermDto: {
+            term?: string;
+            definition?: string;
+            aliases?: string[];
         };
         DismissAgentFindingDto: {
             /** @description Why it was wrong, as a rule for next time. Becomes a proposed learning for this agent. */
@@ -15827,6 +15849,54 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_addFindingTerm: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                /** @description Position in the run's findings array */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddFindingTermDto"];
+            };
+        };
         responses: {
             201: {
                 headers: {

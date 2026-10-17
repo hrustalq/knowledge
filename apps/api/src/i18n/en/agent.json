@@ -91,6 +91,7 @@
     "aliases": "Aliases: {list}.",
     "budgetSpent": "Stopped after {pages}: the workspace AI budget is spent.",
     "nothingNew": "Scanned {pages}; every term they use is already defined.",
+    "allScanned": "Every page has been scanned at its current version; nothing new to read.",
     "summary": "Scanned {pages} and proposes {terms}."
   },
   "archaeology": {

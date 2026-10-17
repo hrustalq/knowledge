@@ -18,6 +18,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { MAX_DEFINITION_CHARS, MAX_TERM_CHARS } from '../glossary/glossary.dto.js';
 import {
   AGENT_CAPABILITIES,
   AGENT_LEARNING_MAX_CHARS,
@@ -1231,6 +1232,35 @@ export class DismissAgentFindingDto {
   @IsOptional()
   @IsBoolean()
   allAgents?: boolean;
+}
+
+/**
+ * Add a glossarist finding's term to the glossary (#74). Every field is an
+ * edit of what the finding proposed — the dialog lets a person correct the
+ * model before saving. The project is not here: it is the cited page's.
+ */
+export class AddFindingTermDto {
+  @ApiPropertyOptional({ maxLength: MAX_TERM_CHARS })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(MAX_TERM_CHARS, { message: vmsg('maxLength') })
+  term?: string;
+
+  @ApiPropertyOptional({ maxLength: MAX_DEFINITION_CHARS })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(MAX_DEFINITION_CHARS, { message: vmsg('maxLength') })
+  definition?: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20, { message: vmsg('arrayMaxSize') })
+  @IsString({ each: true })
+  @MaxLength(MAX_TERM_CHARS, { each: true, message: vmsg('maxLength') })
+  aliases?: string[];
 }
 
 // ---- Source policies (docs/features/25) ------------------------------------

@@ -245,7 +245,9 @@
     "agentWebhookStale": "X-Knowledge-Timestamp отличается от часов сервера больше чем на {seconds} с.",
     "agentWebhookDeliveryId": "X-Knowledge-Delivery отсутствует или некорректен: 1–200 латинских букв, цифр и . _ : -",
     "skillNoUpstream": "У навыка {id} нет изменений из репозитория, которые можно принять",
-    "findingComponentDraft": "Черновик компонента открывается как merge request, а не как опубликованная страница."
+    "findingComponentDraft": "Черновик компонента открывается как merge request, а не как опубликованная страница.",
+    "findingNoTerm": "Это замечание не предлагает термин для глоссария.",
+    "findingTermAdded": "Этот термин уже добавлен в глоссарий."
   },
   "assistant": {
     "providerDisabled": "ИИ-провайдер отключён для этого рабочего пространства",

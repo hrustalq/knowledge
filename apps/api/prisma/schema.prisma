@@ -308,6 +308,7 @@ model MergeRequest {
   targetBranch DocumentBranch         @relation("mrTarget", fields: [targetBranchId], references: [id])
   reviewers    MergeRequestReviewer[]
   threads      MergeRequestThread[]
+  checks       MergeRequestCheck[]
 
   @@index([documentId, status])
   @@index([authorId])
@@ -355,13 +356,53 @@ model MergeRequestThread {
   anchorType     String?   @map("anchor_type")
   // line: {revisionId, line, excerpt?} · section: {heading} · entity: {entityKey}
   anchor         Json?
+  /// The lint check that opened it (#74), so a re-lint resolves its own stale
+  /// threads and never a person's. Re-pointed to the newest check while the
+  /// violation stands. No FK, like agent_run_id.
+  checkId        String?   @map("check_id") @db.Uuid
+  /// The StyleRule.id a lint thread cites.
+  ruleId         String?   @map("rule_id")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   mergeRequest MergeRequest          @relation(fields: [mergeRequestId], references: [id])
   comments     MergeRequestComment[]
 
   @@index([mergeRequestId])
+  @@index([checkId])
   @@map("merge_request_threads")
+}
+
+/// One lint pass of one merge request's source head (#74). Identity is
+/// (mergeRequestId, kind, headRevisionId): a head is linted once, a push is a
+/// new row, and the insert is the claim. `publishedAt` is the publish claim.
+model MergeRequestCheck {
+  id             String    @id @default(uuid()) @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  mergeRequestId String    @map("merge_request_id") @db.Uuid
+  /// MR_CHECK_KINDS
+  kind           String    @default("lint")
+  headRevisionId String    @map("head_revision_id") @db.Uuid
+  styleguideId   String?   @map("styleguide_id") @db.Uuid
+  /// pending → passed | failed | error | skipped. `running` is derived from the run.
+  status         String    @default("pending")
+  /// MR_CHECK_REASONS — why a check was skipped or errored.
+  reason         String?
+  agentRunId     String?   @map("agent_run_id") @db.Uuid
+  /// {error, warning, suggestion} at publish time.
+  counts         Json?
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz
+  /// An admin's override of a blocking result (phase 3), bound to this head.
+  overriddenBy   String?   @map("overridden_by") @db.Uuid
+  overriddenAt   DateTime? @map("overridden_at") @db.Timestamptz
+  overrideReason String?   @map("override_reason")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  mergeRequest MergeRequest @relation(fields: [mergeRequestId], references: [id])
+
+  @@unique([mergeRequestId, kind, headRevisionId])
+  @@index([workspaceId, status, createdAt])
+  @@map("merge_request_checks")
 }
 
 model MergeRequestComment {
@@ -494,6 +535,8 @@ model Project {
   avatarUpdatedAt DateTime? @map("avatar_updated_at") @db.Timestamptz
   /// Project restriction switch (#76): every page in it inherits the restriction.
   restricted      Boolean   @default(false)
+  /// off | warn | block — the style lint of its merge requests (#74); null is the workspace's.
+  lintPolicy      String?   @map("lint_policy")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   documents     Document[]
@@ -3151,6 +3194,8 @@ model WorkspaceSettings {
   apiTryProxyMode         String?  @map("api_try_proxy_mode")
   /// off | warn | block — the merge gate for breaking spec changes; null is `warn`.
   apiBreakingChangePolicy String?  @map("api_breaking_change_policy")
+  /// off | warn | block — the style lint of merge requests (#74); null is STYLE_LINT_POLICY.
+  lintPolicy              String?  @map("lint_policy")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 

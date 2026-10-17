@@ -71,6 +71,10 @@
     "terms": {
       "one": "{count} new term",
       "other": "{count} new terms"
+    },
+    "violations": {
+      "one": "{count} styleguide violation",
+      "other": "{count} styleguide violations"
     }
   },
   "review": {
@@ -209,5 +213,24 @@
   "recipe": {
     "freshnessSweepNote": "Focus on freshness: report pages that look stale against the rest of the workspace or against the source they were imported from, as kind \"stale\", and say what has moved on.",
     "glossarySuggesterNote": "Propose glossary terms only from the page that was just merged."
+  },
+  "lint": {
+    "noInput": "This linter run names no merge request check.",
+    "cannotRun": "The linter cannot run: no AI provider is configured for it, or its model lacks JSON output.",
+    "notVisible": "The merge request is gone, or its page is not open to every member.",
+    "noStyleguide": "No styleguide applies to this page.",
+    "nothingChanged": "The merge request adds nothing to lint.",
+    "clean": "The change follows the styleguide.",
+    "summary": "{violations} in the change.",
+    "dropped": {
+      "one": "The linter reported {count} violation that does not quote the page; it was dropped.",
+      "other": "The linter reported {count} violations that do not quote the page; they were dropped."
+    },
+    "suggestion": "Suggestion:",
+    "severity": {
+      "error": "Error",
+      "warning": "Warning",
+      "suggestion": "Suggestion"
+    }
   }
 }

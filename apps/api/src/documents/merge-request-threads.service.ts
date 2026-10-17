@@ -275,6 +275,8 @@ export class MergeRequestThreadsService {
       resolvedBy: t.resolvedBy,
       resolvedAt: t.resolvedAt?.toISOString() ?? null,
       anchor: (t.anchor as MergeRequestThreadAnchor | null) ?? null,
+      checkId: t.checkId,
+      ruleId: t.ruleId,
       comments: t.comments.map(
         (c): MergeRequestComment => ({
           commentId: c.id,

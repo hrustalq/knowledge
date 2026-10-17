@@ -9,6 +9,9 @@
 //
 // Findings are a dead end unless they can become review feedback, so the dock
 // carries a second action that posts them into the discussion as a thread.
+//
+// Above it sits the style check (#74): not run from here but by the server on
+// every push, so it only reports. Its violations are already threads.
 import { useI18n } from 'vue-i18n'
 import { computed, ref, type Component } from 'vue'
 import {
@@ -29,6 +32,7 @@ import type {
 import { api } from '@/api/queries'
 import { getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { lintCheckView, useLintChecks } from './lint-check'
 
 const { t } = useI18n()
 
@@ -46,6 +50,9 @@ const emit = defineEmits<{
   /** Issue counts for the sidebar's tab badge; null once the result is cleared. */
   result: [counts: { issues: number; errors: number } | null]
 }>()
+
+const { current: lintCheck, shown: lintShown } = useLintChecks(computed(() => props.mergeRequest.mergeRequestId))
+const lintView = computed(() => lintCheckView(lintCheck.value))
 
 const state = ref<'idle' | 'running' | 'done' | 'error'>('idle')
 const review = ref<AssistantReviewResponse | null>(null)
@@ -113,6 +120,20 @@ function postFindings() {
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
     <div class="quiet-scroll min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <section v-if="lintShown" class="mb-3 border-b pb-3" :aria-label="t('mr.lint.paneTitle')">
+        <h3 class="mb-1.5 text-xs font-medium text-muted-foreground">{{ t('mr.lint.paneTitle') }}</h3>
+        <p class="flex items-start gap-2 text-xs leading-5">
+          <component :is="lintView.icon" class="mt-0.5 size-3.5 shrink-0" :class="lintView.tone" />
+          <span>{{ t(lintView.label, lintView.args ?? {}, lintView.count ?? 1) }}</span>
+        </p>
+        <ul v-if="lintCheck?.status === 'failed' && lintCheck.counts" class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 pl-5.5 text-xs text-muted-foreground">
+          <li v-for="sev in (['error', 'warning', 'suggestion'] as const)" v-show="lintCheck.counts[sev] > 0" :key="sev" class="flex items-center gap-1">
+            <component :is="SEVERITY[sev].icon" class="size-3" :class="SEVERITY[sev].tone" />
+            {{ lintCheck.counts[sev] }} {{ t(SEVERITY[sev].label) }}
+          </li>
+        </ul>
+        <p v-if="lintCheck?.status === 'failed'" class="mt-1.5 pl-5.5 text-xs text-muted-foreground">{{ t('mr.lint.inDiscussion') }}</p>
+      </section>
       <!-- Status reads like a check on a pipeline: one line, one colour. -->
       <p v-if="state === 'idle'" class="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
         <Sparkles class="mt-0.5 size-3.5 shrink-0" />

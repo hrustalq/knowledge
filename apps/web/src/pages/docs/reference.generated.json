@@ -2932,6 +2932,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/lint-policy",
+      "tag": "merge-requests",
+      "summary": "The style lint policy of the workspace or of one project: its own setting, what it inherits, the deployment's ceiling and what applies",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/lint-policy",
+      "tag": "merge-requests",
+      "summary": "Set the style lint policy of the workspace or of one project; null inherits",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/merge-requests",
       "tag": "merge-requests",
       "summary": "List merge requests across a workspace (filterable, cursor-paginated)",
@@ -2996,6 +3016,26 @@
       "tag": "merge-requests",
       "summary": "Acknowledge the spec's breaking changes at the current source head, which lets a merge through a block policy. A later push needs a new acknowledgement",
       "role": "admin",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/merge-requests/{id}/checks",
+      "tag": "merge-requests",
+      "summary": "A merge request's checks, newest first, with the lint policy of its page",
+      "role": "viewer",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/merge-requests/{id}/checks/lint",
+      "tag": "merge-requests",
+      "summary": "Lint the source head again. 409 while a check of that head is still waiting or running; 400 when lint is off",
+      "role": "editor",
       "source": "merge-request",
       "public": false,
       "platformAdmin": false

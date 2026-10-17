@@ -1375,6 +1375,30 @@
       "withdrawn": "Acknowledgement withdrawn",
       "ackHint": "Only a workspace admin can acknowledge breaking changes.",
       "blockedToast": "{n} breaking API change needs an admin’s acknowledgement before this merges | {n} breaking API changes need an admin’s acknowledgement before this merges"
+    },
+    "lint": {
+      "notYet": "Style not checked yet",
+      "pending": "Style check waiting",
+      "running": "Checking style…",
+      "passed": "Follows the styleguide",
+      "failed": "{n} styleguide violation | {n} styleguide violations",
+      "unresolved": "{n} unresolved | {n} unresolved",
+      "warnOnly": "does not hold the merge",
+      "recheck": "Check again",
+      "queued": "Style check queued",
+      "paneTitle": "Style",
+      "inDiscussion": "Each violation is a thread in the discussion.",
+      "ruleChip": "Styleguide rule {rule}",
+      "reason": {
+        "superseded": "Skipped: a newer push replaced this head",
+        "no-styleguide": "Not checked: no styleguide applies to this page",
+        "restricted": "Not checked: the page is not open to every member",
+        "author-unavailable": "Not checked: the author can no longer act in this workspace",
+        "budget": "Style check could not run: the AI budget is spent",
+        "run-failed": "Style check could not run",
+        "stale": "Not published: the check finished more than a day ago"
+      },
+      "onBehalfOf": "on behalf of {actor}"
     }
   },
   "assistant": {
@@ -1994,7 +2018,8 @@
         "judging": "Checking pages against the change",
         "signals": "Reading answer feedback",
         "clustering": "Clustering questions",
-        "topics": "Naming topics"
+        "topics": "Naming topics",
+        "linting": "Checking the change against the styleguide"
       },
       "propose": "Propose fix",
       "proposed": "Opened a merge request: {title}",
@@ -2406,7 +2431,27 @@
       "clean": "No rule is broken.",
       "linterOff": "The linter is off: no model is configured for it, or the agent is disabled.",
       "suggestion": "Suggested:",
-      "dropped": "No reports dropped | 1 report dropped: it cited no rule of this styleguide, or quoted text that is not there | {count} reports dropped: they cited no rule of this styleguide, or quoted text that is not there"
+      "dropped": "No reports dropped | 1 report dropped: it cited no rule of this styleguide, or quoted text that is not there | {count} reports dropped: they cited no rule of this styleguide, or quoted text that is not there",
+      "policy": {
+        "title": "Check merge requests",
+        "saved": "Lint policy saved",
+        "inheritDefault": "Default ({value})",
+        "inheritProject": "As the workspace ({value})",
+        "choice": {
+          "off": "Off",
+          "warn": "Warn — post violations as threads"
+        },
+        "value": {
+          "off": "off",
+          "warn": "warn",
+          "block": "block"
+        },
+        "noteScope": "Merge requests on these pages: {value}.",
+        "noteInherited": "Inherited from the workspace: {value}.",
+        "noteDefault": "The deployment default (STYLE_LINT_POLICY): {value}.",
+        "noteClamped": "Asked for {asked}, but the deployment allows at most {ceiling} (STYLE_LINT_POLICY).",
+        "noteAgentDisabled": "Off: the Linter agent is disabled in Agents."
+      }
     }
   },
   "search": {

@@ -88,6 +88,9 @@ import {
   type DriftCandidate,
 } from './drift.js';
 import { apiDriftFinding, apiDriftPromptNote } from './api-drift.js';
+import { LINT_TEXT_MAX, enabledRules, lintMessages, readLintViolations } from './lint.js';
+import { changedText, styleFindings } from '../documents/lint/lint-check.js';
+import { CompareService } from '../documents/compare.service.js';
 import { readEvidence } from '../feedback/knowledge-issues.service.js';
 import {
   COVERAGE_OUTPUT_CONTRACT,
@@ -219,6 +222,7 @@ export class AgentExecutor {
     private readonly componentUsages: ComponentUsagesService,
     private readonly templates: TemplatesService,
     private readonly apiDrift: ApiDriftService,
+    private readonly compare: CompareService,
   ) {}
 
   /**
@@ -317,6 +321,10 @@ export class AgentExecutor {
         if (input.apiSpecDocumentId) return this.checkApiDrift(run, principal, report);
         return this.checkDrift(run, agent, principal, report);
       }
+      // Not in RUNNABLE_AGENTS either (#74): a lint answers one merge request
+      // check, and only LintTriggerSweeper starts one.
+      case 'linter':
+        return this.lintMergeRequest(run, agent, principal, report);
       default:
         // RUNNABLE_AGENTS is the API's copy of this switch; anything reaching
         // here got past that check, so failing loudly beats running an agent as
@@ -610,6 +618,81 @@ export class AgentExecutor {
       if (out.length >= MAX_ISSUES_PER_PAGE) break;
     }
     return out;
+  }
+
+  // -------------------------------------------------------------------- linter
+
+  /**
+   * The style lint of one merge request head (#74, phase 2).
+   *
+   * Only what the merge request adds is linted: the merge-base diff's added
+   * lines, so a violation already on the target is not this author's. A page's
+   * first merge request has no target head, and then all of it is new. The
+   * prompt and the gate on what comes back are `lint.ts`'s, the same ones the
+   * editor's check uses; `styleFindings` then keeps only quotes the page holds
+   * and anchors each to the head. The run publishes nothing — the API's
+   * `LintPublishSweeper` turns its findings into threads.
+   */
+  private async lintMergeRequest(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const lint = ((run.input ?? {}) as AgentRunInput).lint;
+    if (!lint) throw new Error(t('agent.lint.noInput'));
+    if (!agent.config.enabled || agent.missing.length > 0) throw new Error(t('agent.lint.cannotRun'));
+
+    // Asked again on execution, not only at enqueue: the page may have been
+    // restricted since, and this run's findings are listed to every member.
+    const scope = await this.runScope(run, principal);
+    const mr = await this.prisma.mergeRequest.findFirst({
+      where: { id: lint.mergeRequestId, document: { workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] } },
+      include: {
+        targetBranch: { select: { headRevisionId: true } },
+        document: { select: { title: true, projectId: true } },
+      },
+    });
+    if (!mr) throw new Error(t('agent.lint.notVisible'));
+
+    const styleguide = await this.skills.effectiveStyleguide(run.workspaceId, mr.document.projectId);
+    if (!styleguide || enabledRules(styleguide.rules).length === 0) {
+      return { summary: t('agent.lint.noStyleguide'), findings: [] };
+    }
+
+    await report({ stage: 'diff' });
+    const target = mr.targetBranch.headRevisionId;
+    const diff = target
+      ? await this.compare.compare(mr.documentId, target, lint.headRevisionId, 'merge-base', { structural: false })
+      : await this.compare.compareWithNothing(mr.documentId, lint.headRevisionId, { structural: false });
+    const text = changedText(diff.hunks).slice(0, LINT_TEXT_MAX);
+    if (!text.trim()) return { summary: t('agent.lint.nothingChanged'), findings: [] };
+
+    await report({ stage: 'linting' });
+    const raw = await this.client.chat(
+      { config: agent.config, userId: principal.userId, operation: 'lint', locale: run.locale as Locale },
+      lintMessages(agent.instructions, styleguide.rules, mr.document.title, text),
+      { json: true },
+    );
+    const max = this.config.get('LINT_MAX_FINDINGS', { infer: true });
+    const { violations, dropped } = readLintViolations(safeJson(raw), styleguide.rules, text, max);
+    const page = await this.documents.getContent(mr.documentId, lint.headRevisionId);
+    const findings = styleFindings(violations, styleguide.rules, {
+      documentId: mr.documentId,
+      title: mr.document.title,
+      revisionId: lint.headRevisionId,
+      markdown: page.markdown,
+    });
+    const ungrounded = dropped + violations.length - findings.length;
+    if (ungrounded > 0) await report({ warning: t('agent.lint.dropped', { count: ungrounded }) });
+
+    return {
+      summary:
+        findings.length === 0
+          ? t('agent.lint.clean')
+          : t('agent.lint.summary', { violations: t('agent.count.violations', { count: findings.length }) }),
+      findings,
+    };
   }
 
   // ---------------------------------------------------------------- glossarist

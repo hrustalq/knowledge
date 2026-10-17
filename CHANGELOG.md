@@ -169,8 +169,28 @@ in the pull request that introduces them — see
   styleguide, or quotes text that is not there, is dropped and counted in
   `dropped` rather than shown. The severity always comes from the rule. With
   no styleguide, the check makes no model call. Styleguides never appear
-  among skills and never join a chat turn. Checking merge requests
-  automatically comes in a later release. (#74)
+  among skills and never join a chat turn. (#74)
+- Merge requests are checked against the styleguide. When a page's lint
+  policy is `warn`, every push to an open, ready merge request is linted
+  within about a minute, as its author. Only the lines the merge request adds
+  are checked, so a violation already on the target branch is not reported.
+  Each violation becomes a resolvable AI thread on the merge request,
+  anchored to the quoted passage, naming the rule it breaks. A later push
+  resolves the threads whose violation is gone and keeps the ones that still
+  stand; a thread somebody resolved is never reopened, and threads people
+  wrote are never touched. The merge widget and the AI pane show the check
+  of the current head: waiting, running, passed, the number of violations,
+  or why it did not run (no styleguide, a newer push, a page not open to
+  every member, an author who cannot act, a spent AI budget, a failed run).
+  **Check again** lints the head again. A `warn` check never holds a merge;
+  a blocking gate comes in a later release. The policy is set per workspace,
+  and per project, under **Settings → AI → Styleguide** (`GET`/`PUT
+  /v1/lint-policy`), where the panel shows both the setting and what
+  applies. `GET /v1/merge-requests/:id/checks` lists a merge request's
+  checks, `POST /v1/merge-requests/:id/checks/lint` re-runs one, and review
+  threads gain `checkId` and `ruleId`. A page restricted to some members is
+  not linted, because agent runs and their findings are listed to every
+  member. (#74)
 
 ### Changed
 
@@ -238,6 +258,17 @@ in the pull request that introduces them — see
   `DELETE FROM ai_skills WHERE kind = 'styleguide'`.
 - New env vars, both with defaults: `STYLEGUIDE_MAX_RULES` (50) and
   `LINT_MAX_FINDINGS` (15).
+- Migration `20261107100000_merge_request_checks` adds the
+  `merge_request_checks` table, `merge_request_threads.check_id` /
+  `rule_id`, `workspace_settings.lint_policy` and `projects.lint_policy`. All
+  additive and nullable, and the previous image reads none of them, so a
+  rollback is safe.
+- New env vars, both with defaults: `STYLE_LINT_POLICY` (`off`) is the
+  ceiling, and the policy of every workspace that sets none, for merge
+  request lint (`off` | `warn`). With the default nothing is linted anywhere
+  and the trigger does not even query. `LINT_MAX_PENDING_PER_WORKSPACE` (20)
+  bounds the checks one workspace may have waiting. Each check is one model
+  call per push, billed to the merge request's author.
 
 ## [0.26.0] — 2026-10-16
 

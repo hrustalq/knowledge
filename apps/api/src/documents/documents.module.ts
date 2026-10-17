@@ -6,7 +6,6 @@ import { DocumentsCoreModule } from './documents-core.module.js';
 import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { DocumentsController } from './documents.controller.js';
-import { CompareService } from './compare.service.js';
 import { DocumentRelationsService } from './document-relations.service.js';
 import { MergeRequestsController } from './merge-requests.controller.js';
 import { MergeRequestsService } from './merge-requests.service.js';
@@ -76,7 +75,6 @@ import { EntitiesModule } from '../entities/entities.module.js';
   ],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [
-    CompareService,
     // Frontmatter relation edits (docs/features/28). API-only by construction:
     // it opens merge requests, so it needs MergeRequestsService.
     DocumentRelationsService,
@@ -90,7 +88,6 @@ import { EntitiesModule } from '../entities/entities.module.js';
   ],
   exports: [
     DocumentsCoreModule,
-    CompareService,
     DocumentRelationsService,
     MergeRequestsService,
     MergeRequestThreadsService,

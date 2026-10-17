@@ -10,6 +10,7 @@ import type {
 import type { RelationInput } from '@knowledge/contracts/documents';
 import type { AiActionId } from '@knowledge/contracts/content';
 import type { ApiDriftSpec } from '@knowledge/contracts/api';
+import type { ReviewThreadAnchor } from '@knowledge/contracts/reviews';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
 // sidebar materializes from each assistant message's toolCalls trace rather
@@ -1342,6 +1343,20 @@ export interface AgentRunInput {
    * as a merge request, as the run's owner, and stamps `publishedAt`.
    */
   component?: AgentRunComponent;
+  /**
+   * A linter run (#74, phase 2): the merge request, the source head it lints
+   * and the `merge_request_checks` row it answers. Set only by
+   * `LintTriggerService`, which also settles the head — the worker lints that
+   * revision even if the branch has moved since.
+   */
+  lint?: AgentRunLint;
+}
+
+/** What a linter run checks (#74). */
+export interface AgentRunLint {
+  mergeRequestId: string;
+  headRevisionId: string;
+  checkId: string;
 }
 
 /** What a "Document this component" run documents (#236). */
@@ -1838,6 +1853,12 @@ export const AGENT_RUN_TRIGGERS = [
    * `'webhook'` is by `DriftTriggerService`.
    */
   'report',
+  /**
+   * A merge request's source head needed a style lint (#74, phase 2). Emitted
+   * by exactly one service, `LintTriggerService`, for exactly one agent, the
+   * `linter`, and never from the event bus.
+   */
+  'merge-request',
 ] as const;
 export type AgentRunTrigger = (typeof AGENT_RUN_TRIGGERS)[number];
 
@@ -2102,6 +2123,8 @@ export const AGENT_FINDING_KINDS = [
   'gap',
   /** A relation the page should declare but does not (docs/features/28). */
   'relation',
+  /** A styleguide rule the text breaks (#74). Carries `ruleId` and `anchor`. */
+  'style',
   'other',
 ] as const;
 export type AgentFindingKind = (typeof AGENT_FINDING_KINDS)[number];
@@ -2205,6 +2228,15 @@ export interface AgentFinding {
    * repository's file, corrected there and synced back.
    */
   apiDrift?: ApiDriftSpec;
+  /**
+   * The styleguide rule a `style` finding breaks (#74). Its severity is the
+   * rule's, mapped by the linter, never the model's.
+   */
+  ruleId?: string;
+  /** The passage a `style` finding quotes, as a review-thread anchor on the revision it read. */
+  anchor?: ReviewThreadAnchor;
+  /** A rewrite the linter offered for the quoted passage. Applying it is a person's act. */
+  suggestion?: string;
 }
 
 /** One declared path a change removed or moved (#236). */

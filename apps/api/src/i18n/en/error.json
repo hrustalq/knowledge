@@ -612,5 +612,11 @@
     "tooManyRules": "A styleguide holds at most {max} rules",
     "duplicateRuleId": "Two rules share the id \"{id}\" — each rule needs its own",
     "scopeTaken": "This scope already has a styleguide; reload and edit it instead"
+  },
+  "lint": {
+    "notOpen": "Only an open merge request is linted.",
+    "off": "Style lint is off for this page.",
+    "running": "A lint of this head is already waiting or running.",
+    "busy": "The lint could not start: too many checks are waiting in this workspace, or one was just started."
   }
 }

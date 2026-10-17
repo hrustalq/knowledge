@@ -85,6 +85,12 @@ export type I18nTranslations = {
                 "few": string;
                 "many": string;
             };
+            "violations": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
         };
         "review": {
             "cannotRun": string;
@@ -222,6 +228,27 @@ export type I18nTranslations = {
         "recipe": {
             "freshnessSweepNote": string;
             "glossarySuggesterNote": string;
+        };
+        "lint": {
+            "noInput": string;
+            "cannotRun": string;
+            "notVisible": string;
+            "noStyleguide": string;
+            "nothingChanged": string;
+            "clean": string;
+            "summary": string;
+            "dropped": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "suggestion": string;
+            "severity": {
+                "error": string;
+                "warning": string;
+                "suggestion": string;
+            };
         };
     };
     "assistant": {
@@ -1053,6 +1080,12 @@ export type I18nTranslations = {
             "tooManyRules": string;
             "duplicateRuleId": string;
             "scopeTaken": string;
+        };
+        "lint": {
+            "notOpen": string;
+            "off": string;
+            "running": string;
+            "busy": string;
         };
     };
     "import": {

@@ -4,6 +4,10 @@
 // workspace; a project may replace it with its own (replace, not merge, so a
 // project can relax a rule). Rule ids are stable once saved: a finding, a
 // thread and the quality dashboard name the rule by id after its text changes.
+//
+// The scope's lint policy sits beside its rules: whether merge requests on its
+// pages are checked. It shows what the scope asks for and what applies, since
+// the deployment's STYLE_LINT_POLICY and a disabled linter can both clamp it.
 import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
@@ -22,6 +26,8 @@ import {
 import type {
   AssistantLintResponse,
   GetStyleguideResponse,
+  LintPolicy,
+  LintPolicySettings,
   StyleRule,
   StyleRuleSeverity,
 } from '@knowledge/contracts'
@@ -83,6 +89,53 @@ const invalidates = () => [['/v1/ai/styleguides']]
 const save = useApiMutation('put', '/v1/ai/styleguides', { invalidates })
 const remove = useApiMutation('delete', '/v1/ai/styleguides/{id}', { invalidates })
 const lint = useApiMutation('post', '/v1/assistant/lint')
+
+// ---- Lint policy ------------------------------------------------------------
+
+const policyQuery = useQuery(
+  computed(() =>
+    apiQueryOptions('/v1/lint-policy', {
+      query: { workspaceId, ...(projectId.value ? { projectId: projectId.value } : {}) },
+    }),
+  ),
+)
+const policy = computed(() => policyQuery.data.value as LintPolicySettings | undefined)
+const savePolicy = useApiMutation('put', '/v1/lint-policy', {
+  invalidates: () => [['/v1/lint-policy'], ['/v1/merge-requests/{id}/checks']],
+})
+/** What a scope may ask for in this release; `block` comes with the merge gate. */
+const POLICY_CHOICES = ['inherit', 'off', 'warn'] as const
+const policyChoice = computed(() => policy.value?.requested ?? 'inherit')
+
+async function choosePolicy(value: unknown) {
+  const next = value === 'inherit' ? null : (value as Exclude<(typeof POLICY_CHOICES)[number], 'inherit'>)
+  if (next === (policy.value?.requested ?? null)) return
+  try {
+    await savePolicy.mutateAsync({ body: { workspaceId, projectId: projectId.value, policy: next } })
+    toast.success(t('ai.styleguide.policy.saved'))
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+/** Why the policy that applies is the one it is — a message key and its arguments. */
+const policyNote = computed(() => {
+  const p = policy.value
+  if (!p) return null
+  const v = (x: LintPolicy) => t(`ai.styleguide.policy.value.${x}`)
+  switch (p.source) {
+    case 'agent-disabled':
+      return t('ai.styleguide.policy.noteAgentDisabled')
+    case 'inherited':
+      return t('ai.styleguide.policy.noteInherited', { value: v(p.effective) })
+    case 'ceiling':
+      return p.requested
+        ? t('ai.styleguide.policy.noteClamped', { asked: v(p.requested), ceiling: v(p.ceiling) })
+        : t('ai.styleguide.policy.noteDefault', { value: v(p.effective) })
+    default:
+      return t('ai.styleguide.policy.noteScope', { value: v(p.effective) })
+  }
+})
 
 // ---- The draft -----------------------------------------------------------
 
@@ -228,6 +281,33 @@ const readOnlyRules = computed(() => own.value?.rules ?? inherited.value?.rules 
         {{ projectId ? t('ai.styleguide.scopeProjectHint') : t('ai.styleguide.scopeWorkspaceHint') }}
       </p>
     </div>
+
+    <!-- Whether merge requests in this scope are checked against its rules. -->
+    <section v-if="policy" class="flex flex-wrap items-start gap-x-4 gap-y-2" aria-labelledby="kn-sg-policy">
+      <div class="min-w-0 flex-1 basis-64">
+        <h2 id="kn-sg-policy" class="text-sm font-medium">{{ t('ai.styleguide.policy.title') }}</h2>
+        <p class="text-muted-foreground mt-0.5 text-xs">{{ policyNote }}</p>
+      </div>
+      <Select
+        v-if="canManage"
+        :model-value="policyChoice"
+        :disabled="savePolicy.isPending.value"
+        @update:model-value="choosePolicy"
+      >
+        <SelectTrigger class="h-8 w-56" :aria-label="t('ai.styleguide.policy.title')"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem v-for="c in POLICY_CHOICES" :key="c" :value="c">
+            {{
+              c === 'inherit'
+                ? t(projectId ? 'ai.styleguide.policy.inheritProject' : 'ai.styleguide.policy.inheritDefault', {
+                    value: t(`ai.styleguide.policy.value.${policy.inherited}`),
+                  })
+                : t(`ai.styleguide.policy.choice.${c}`)
+            }}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </section>
 
     <div v-if="query.isPending.value" class="space-y-2">
       <Skeleton v-for="i in 3" :key="i" class="h-16 w-full" />

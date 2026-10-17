@@ -203,6 +203,115 @@ export interface MergeGateConflictDetails {
   comparisonUrl?: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Merge request checks (#74)
+// ---------------------------------------------------------------------------
+
+/** What a merge request is checked for. Only the style lint, today. */
+export const MR_CHECK_KINDS = ['lint'] as const;
+export type MergeRequestCheckKind = (typeof MR_CHECK_KINDS)[number];
+
+/**
+ * A check's state. `running` is never stored: it is a pending check whose
+ * agent run the worker has claimed, derived on read. `failed` means the head
+ * has violations; `error` that the check could not run, which never blocks
+ * (fail-open).
+ */
+export const MR_CHECK_STATUSES = ['pending', 'running', 'passed', 'failed', 'error', 'skipped'] as const;
+export type MergeRequestCheckStatus = (typeof MR_CHECK_STATUSES)[number];
+
+/** Why a check was skipped or errored — only what the code emits. */
+export const MR_CHECK_REASONS = [
+  /** A newer push replaced the head before the check ran. */
+  'superseded',
+  /** No styleguide applies, or none of its rules is enabled. */
+  'no-styleguide',
+  /**
+   * The page is not open to every member. A run's findings are listed to the
+   * whole workspace, so a page some members cannot read is not linted.
+   */
+  'restricted',
+  /** The merge request's author cannot act any more (disabled, or not a member). */
+  'author-unavailable',
+  /** The author's or the workspace's AI budget is spent. */
+  'budget',
+  /** The agent run failed — the provider, the model or the prompt. */
+  'run-failed',
+  /** The run finished more than a day ago, e.g. across an outage: not published. */
+  'stale',
+] as const;
+export type MergeRequestCheckReason = (typeof MR_CHECK_REASONS)[number];
+
+/**
+ * What a merge request's style lint does (#74): `off` checks nothing and calls
+ * no model, `warn` posts the violations as threads and merges anyway, `block`
+ * (phase 3) refuses the merge while an error-severity violation is unresolved.
+ * The vocabulary of {@link API_BREAKING_CHANGE_POLICIES}.
+ */
+export const LINT_POLICIES = ['off', 'warn', 'block'] as const;
+export type LintPolicy = (typeof LINT_POLICIES)[number];
+
+/**
+ * The lint policy of one scope, as asked for beside as applied. `requested` is
+ * this scope's own row (null inherits), `inherited` what it would inherit, and
+ * `effective` the narrower of the two with the deployment's ceiling
+ * (STYLE_LINT_POLICY) — or `off` while the `linter` agent is disabled.
+ * `source` names what decided it, so the settings page never shows a clamp as
+ * the setting.
+ */
+export interface LintPolicySettings {
+  workspaceId: string;
+  projectId: string | null;
+  requested: LintPolicy | null;
+  inherited: LintPolicy;
+  ceiling: LintPolicy;
+  effective: LintPolicy;
+  source: 'scope' | 'inherited' | 'ceiling' | 'agent-disabled';
+  linterEnabled: boolean;
+}
+
+// PUT /v1/lint-policy
+export interface UpdateLintPolicyRequest {
+  workspaceId: string;
+  /** Absent or null: the workspace's own policy. */
+  projectId?: string | null;
+  /** null goes back to inheriting. */
+  policy: LintPolicy | null;
+}
+
+export interface MergeRequestCheckCounts {
+  error: number;
+  warning: number;
+  suggestion: number;
+}
+
+export interface MergeRequestCheckInfo {
+  checkId: string;
+  mergeRequestId: string;
+  kind: MergeRequestCheckKind;
+  headRevisionId: string;
+  /** Whether this is the check of the source branch's current head. */
+  current: boolean;
+  status: MergeRequestCheckStatus;
+  reason: MergeRequestCheckReason | null;
+  styleguideId: string | null;
+  agentRunId: string | null;
+  /** Violations by severity, once published. */
+  counts: MergeRequestCheckCounts | null;
+  /** Lint threads of this check nobody has resolved yet. */
+  unresolved: number;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+// GET /v1/merge-requests/:id/checks — newest first.
+export interface ListMergeRequestChecksResponse {
+  mergeRequestId: string;
+  /** The policy that applies to this merge request's page. */
+  policy: LintPolicySettings;
+  checks: MergeRequestCheckInfo[];
+}
+
 /**
  * Review threads (plan.md §8): anchors are optional and best-effort — a line
  * anchor pins the source-head revision at comment time and is shown as
@@ -341,6 +450,10 @@ export type MergeRequestComment = ReviewComment;
 
 export interface MergeRequestThread extends ReviewThread {
   mergeRequestId: string;
+  /** The lint check that opened it (#74); null on every other thread. */
+  checkId: string | null;
+  /** The styleguide rule a lint thread cites. */
+  ruleId: string | null;
 }
 
 // GET /v1/merge-requests/:id/threads

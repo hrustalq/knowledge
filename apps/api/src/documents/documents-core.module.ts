@@ -12,6 +12,7 @@ import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { DocumentsService } from './documents.service.js';
+import { CompareService } from './compare.service.js';
 
 /**
  * Document reads and writes with no controllers and no auth dependencies.
@@ -50,7 +51,9 @@ import { DocumentsService } from './documents.service.js';
     // A spec document is validated at finalize (#78). A leaf.
     ApiSpecsCoreModule,
   ],
-  providers: [DocumentsService],
-  exports: [DocumentsService],
+  // CompareService too: a merge request's lint reads its diff in the worker
+  // (#74). Prisma, storage, graph and the spec diff — all already here.
+  providers: [DocumentsService, CompareService],
+  exports: [DocumentsService, CompareService],
 })
 export class DocumentsCoreModule {}

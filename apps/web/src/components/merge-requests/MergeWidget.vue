@@ -4,7 +4,9 @@
 // breaking-api, see MergeGateConflictDetails) surface as toasts — divergence
 // with a compare link. On a spec (#78) the checklist gains a breaking-change
 // row: what the API tab found, what the workspace policy does about it, and an
-// admin's acknowledgement, pinned to the source head it was given for.
+// admin's acknowledgement, pinned to the source head it was given for. Where
+// the page's styleguide lint is on (#74) a style row says what the check of the
+// current head found; under `warn` it never holds the merge.
 import { useI18n } from 'vue-i18n'
 import { formatDateTime } from '@/lib/format'
 import { computed, ref } from 'vue'
@@ -28,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { actorLabel, mrIcon } from './mr-ui'
+import { lintCheckView, useLintChecks } from './lint-check'
 
 const { t } = useI18n()
 
@@ -72,6 +75,25 @@ const api = computed(() => {
   if (!a?.applicable || a.policy === 'off' || !a.diff) return null
   return { ...a, breaking: a.diff.summary.breaking }
 })
+
+const { current: lintCheck, shown: lintShown, policy: lintPolicy, relint } = useLintChecks(
+  computed(() => mr.value.mergeRequestId),
+)
+const lintView = computed(() => lintCheckView(lintCheck.value))
+/** A head can be checked again once its check has settled, while lint is on. */
+const canRelint = computed(
+  () =>
+    auth.canEdit &&
+    lintPolicy.value?.effective !== 'off' &&
+    !['pending', 'running'].includes(lintCheck.value?.status ?? ''),
+)
+
+function onRelint() {
+  relint.mutate(id.value, {
+    onSuccess: () => toast.success(t('mr.lint.queued')),
+    onError: (e) => toast.error(e.message),
+  })
+}
 
 const busy = computed(
   () =>
@@ -185,6 +207,28 @@ function toggleDraft() {
         </span>
         <span v-else class="text-muted-foreground">{{ t('mr.allThreadsResolved') }}</span>
       </p>
+      <!-- Style lint (#74): the check of the current head. Violations are
+           threads in the discussion; under `warn` they inform, never hold. -->
+      <div v-if="lintShown" class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <component :is="lintView.icon" class="size-4 shrink-0" :class="lintView.tone" />
+        <span :class="lintCheck?.status === 'failed' ? '' : 'text-muted-foreground'">
+          {{ t(lintView.label, lintView.args ?? {}, lintView.count ?? 1) }}
+        </span>
+        <span v-if="lintView.unresolved > 0" class="text-muted-foreground">
+          — {{ t('mr.lint.unresolved', { n: lintView.unresolved }, lintView.unresolved) }}
+        </span>
+        <span v-if="lintCheck?.status === 'failed'" class="text-muted-foreground">· {{ t('mr.lint.warnOnly') }}</span>
+        <Button
+          v-if="canRelint && isOpen"
+          variant="ghost"
+          size="xs"
+          class="ml-auto"
+          :disabled="relint.isPending.value"
+          @click="onRelint"
+        >
+          {{ t('mr.lint.recheck') }}
+        </Button>
+      </div>
       <!-- Breaking API changes (#78): amber under warn, the caution hue while
            a block holds, emerald once there is nothing to hold. -->
       <div v-if="api" class="flex flex-wrap items-center gap-x-2 gap-y-1">

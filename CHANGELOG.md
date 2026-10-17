@@ -13,6 +13,35 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- A document can now be an OpenAPI or AsyncAPI spec rather than a markdown
+  page. Pass `kind: 'openapi' | 'asyncapi'` to `POST /v1/documents` with
+  `content.format` `yaml` or `json`. OpenAPI 3.0, 3.1 and Swagger 2.0
+  (upgraded on read) are accepted, and so are AsyncAPI 2.x and 3.x. A spec
+  that does not validate is refused with a 422 (`code: UNPROCESSABLE`, the
+  validator's messages in `details.issues`), at create or at finalize. A
+  remote `$ref` is refused, never fetched. Once indexed, a spec is
+  searchable by its operations, summaries, parameters and schemas. The graph
+  holds one `DESCRIBES` edge per operation (`op:<slug>:<METHOD> <path>`) or
+  channel (`channel:<slug>:<address>`). Path parameters are folded, so
+  `/users/{id}` and `/users/{userId}` are one operation. A page that names
+  the same key in its frontmatter `relations:` links to the same entity. The
+  slug is fixed when the spec first indexes, so renaming `info.title` does
+  not break those links; only `x-knowledge-key` changes it. This is the
+  first phase of the API reference: the reader, try-it, the merge-request
+  diff and repo sync come in later releases. (#78)
+
+### Operations
+
+- Migration `20261103100000_api_reference_kind` adds `documents.kind`
+  (default `'page'`), `documents.spec_slug` and the `api_operations` table.
+  It is additive, so rolling back to the previous image is safe.
+- New env vars, both with defaults: `API_SPEC_MAX_BYTES` (5000000) and
+  `API_SPEC_MAX_OPERATIONS` (2000). A spec above either limit is refused.
+
 ## [0.26.0] — 2026-10-16
 
 ### Added

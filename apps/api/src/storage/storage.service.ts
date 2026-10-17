@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { apiSpecSyntaxOf } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
 import {
   CopyObjectCommand,
@@ -95,6 +96,19 @@ export class StorageService {
   }
 
   /** Object key layout per plan.md §4. */
+  /**
+   * A revision's object name, from its content type (#78): `source.yaml` /
+   * `source.json` for an API spec, `source.md` for everything else. Existing
+   * rows keep the key they were written under — `s3_key` is stored, never
+   * re-derived.
+   */
+  sourceObjectName(contentType: string): string {
+    const t = contentType.toLowerCase();
+    if (t.includes('markdown') || t.startsWith('text/plain')) return 'source.md';
+    const syntax = apiSpecSyntaxOf(t);
+    return syntax ? `source.${syntax}` : 'source.md';
+  }
+
   revisionObjectKey(workspaceId: string, documentId: string, revisionId: string, filename: string): string {
     return `workspaces/${workspaceId}/documents/${documentId}/revisions/${revisionId}/${filename}`;
   }

@@ -25469,7 +25469,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.25.0",
+    "version": "0.26.0",
     "contact": {}
   },
   "tags": [],
@@ -26077,6 +26077,15 @@
             "type": "string",
             "format": "uuid",
             "description": "Feature 08 nesting: create under this document"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "page",
+              "openapi",
+              "asyncapi"
+            ],
+            "description": "What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and `asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is created (422 with `details.issues`), and default to the `reference` category."
           },
           "template": {
             "description": "Start from a template (issue #69). Without `content` the template is rendered server-side: its title pattern, body, tags and relations become the page, and its category is the default.",
@@ -30555,6 +30564,7 @@
               "CONFLICT",
               "PAYLOAD_TOO_LARGE",
               "UNSUPPORTED_MEDIA_TYPE",
+              "UNPROCESSABLE",
               "RATE_LIMITED",
               "UPSTREAM_UNAVAILABLE",
               "ASSISTANT_BUDGET_EXCEEDED",

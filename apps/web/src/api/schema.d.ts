@@ -5402,6 +5402,11 @@ export interface components {
              * @description Feature 08 nesting: create under this document
              */
             parentId?: string;
+            /**
+             * @description What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and `asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is created (422 with `details.issues`), and default to the `reference` category.
+             * @enum {string}
+             */
+            kind?: "page" | "openapi" | "asyncapi";
             /** @description Start from a template (issue #69). Without `content` the template is rendered server-side: its title pattern, body, tags and relations become the page, and its category is the default. */
             template?: components["schemas"]["DocumentTemplateDto"];
         };
@@ -7082,7 +7087,7 @@ export interface components {
              * @example NOT_FOUND
              * @enum {string}
              */
-            code: "BAD_REQUEST" | "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "PAYLOAD_TOO_LARGE" | "UNSUPPORTED_MEDIA_TYPE" | "RATE_LIMITED" | "UPSTREAM_UNAVAILABLE" | "ASSISTANT_BUDGET_EXCEEDED" | "INTERNAL" | "NETWORK_ERROR" | "TIMEOUT" | "ABORTED" | "UNKNOWN";
+            code: "BAD_REQUEST" | "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "PAYLOAD_TOO_LARGE" | "UNSUPPORTED_MEDIA_TYPE" | "UNPROCESSABLE" | "RATE_LIMITED" | "UPSTREAM_UNAVAILABLE" | "ASSISTANT_BUDGET_EXCEEDED" | "INTERNAL" | "NETWORK_ERROR" | "TIMEOUT" | "ABORTED" | "UNKNOWN";
             /** @example Document 3f2a… not found */
             message: string;
             /** @description Machine-readable extras: validation errors[], conflict currentHeadRevisionId/comparisonUrl, … */

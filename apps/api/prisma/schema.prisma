@@ -82,6 +82,15 @@ model Document {
   /// sites, llms.txt) leave it out while it is set, and the merge clears it.
   /// Readable by id meanwhile, so the reviewer can open it. No FK, house policy.
   pendingMergeRequestId String?   @map("pending_merge_request_id") @db.Uuid
+  /// What the body is (#78): `page` (markdown, every document before #78) or
+  /// an API spec, `openapi` | `asyncapi` (API_DOCUMENT_KINDS). Set at create
+  /// and never changed — a revision is parsed by its document's kind.
+  kind                  String    @default("page")
+  /// A spec's operation-key slug (`op:<slug>:…`), pinned at its first indexed
+  /// revision so editing `info.title` does not fork every operation entity.
+  /// Only an explicit `x-knowledge-key` on the default-branch head re-pins it.
+  /// Null for pages and for a spec not yet indexed.
+  specSlug              String?   @map("spec_slug")
   /// Page restriction switch (#76). On: only grantees (and admins) pass this
   /// node, and so its whole subtree.
   restricted            Boolean   @default(false)
@@ -107,6 +116,7 @@ model Document {
   shareLinks           ShareLink[]
   siteAudienceRules    SiteAudienceRule[]
   componentDeclaration ComponentDeclaration?
+  apiOperations        ApiOperation[]
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, category])
@@ -120,6 +130,7 @@ model Document {
   @@index([workspaceId, verificationExpiresAt])
   @@index([workspaceId, lastActivityAt])
   @@index([workspaceId, archivedAt])
+  @@index([workspaceId, kind])
   @@map("documents")
 }
 
@@ -3074,4 +3085,41 @@ model ChatCapture {
   @@unique([answerId, kind])
   @@index([status, createdAt])
   @@map("chat_captures")
+}
+
+/// The operations and channels of one spec revision (#78): a projection of the
+/// revision, derived at ingestion and replaced whole when that revision is
+/// re-indexed (the `upsertRevisionChunks` pattern). It exists so the reference
+/// sidebar, the MR diff and the operation picker are SQL reads, not a re-parse
+/// of the spec — never a second answer: the spec in S3 is the truth.
+model ApiOperation {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// From the document, never the caller. No FK, house policy.
+  workspaceId String   @map("workspace_id") @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  /// No FK: revisions are immutable and never deleted once indexed.
+  revisionId  String   @map("revision_id") @db.Uuid
+  /// `http` | `async`
+  protocol    String
+  /// `GET`… for HTTP; `send` / `receive` (2.x `publish` / `subscribe`) for AsyncAPI.
+  method      String?
+  /// As the spec spells it: `/users/{id}`, or a channel address.
+  path        String
+  operationId String?  @map("operation_id")
+  /// Canonical (`operationEntityKey` / `channelEntityKey`), the graph vertex.
+  entityKey   String   @map("entity_key")
+  summary     String?
+  tags        String[] @default([])
+  deprecated  Boolean  @default(false)
+  /// JSON pointer into the spec, for deep links.
+  pointer     String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  /// Method too: one AsyncAPI channel (one entity) carries a send and a receive.
+  @@unique([revisionId, entityKey, method])
+  @@index([workspaceId, entityKey])
+  @@index([documentId, revisionId])
+  @@map("api_operations")
 }

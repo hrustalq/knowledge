@@ -443,6 +443,14 @@ export const envSchema = z.object({
   CAPTURE_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   CAPTURE_STALE_MS: z.coerce.number().int().positive().default(300_000),
 
+  /**
+   * API reference documents (#78). A spec larger than this, or defining more
+   * operations, is refused at finalize (422) and at ingestion — the operation
+   * count is the graph and projection fan-out of one revision.
+   */
+  API_SPEC_MAX_BYTES: z.coerce.number().int().positive().default(5_000_000),
+  API_SPEC_MAX_OPERATIONS: z.coerce.number().int().positive().default(2000),
+
   /** Allow web targets on private/loopback ranges (self-hosted SearXNG, intranet). */
   WEB_ALLOW_PRIVATE_URLS: boolish(false),
 

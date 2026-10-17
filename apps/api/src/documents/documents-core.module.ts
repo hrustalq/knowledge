@@ -10,6 +10,7 @@ import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { VerificationPolicyModule } from '../verification/verification-policy.module.js';
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
+import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { DocumentsService } from './documents.service.js';
 
 /**
@@ -46,6 +47,8 @@ import { DocumentsService } from './documents.service.js';
     TemplatesCoreModule,
     // `restricted_by` is rewritten in the same transaction as a move (#76). A leaf.
     PermissionsCoreModule,
+    // A spec document is validated at finalize (#78). A leaf.
+    ApiSpecsCoreModule,
   ],
   providers: [DocumentsService],
   exports: [DocumentsService],

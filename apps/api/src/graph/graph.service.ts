@@ -85,7 +85,7 @@ function usageSnippet(usages: readonly string[], max = 1000): string {
 }
 
 /** Fact classes whose edges belong to one revision and so follow its liveness. */
-const REVISION_SCOPED_EXTRACTORS = ['frontmatter', 'inferred'] as const;
+const REVISION_SCOPED_EXTRACTORS = ['frontmatter', 'inferred', 'spec'] as const;
 
 /**
  * Relation edge types allowed in the graph (plan.md §6). Edge type names are
@@ -104,14 +104,14 @@ export interface FactInput {
   type: string;
   target: { key: string; type: string; name: string };
   /** plan.md §5 fact classes: explicit / frontmatter (deterministic) / inferred (LLM) / curated, plus code (#236). */
-  extractor: 'explicit' | 'frontmatter' | 'inferred' | 'curated' | 'code';
+  extractor: 'explicit' | 'frontmatter' | 'inferred' | 'curated' | 'code' | 'spec';
   confidence: number;
   /** Inferred facts carry their source span (plan.md §5). */
   sourceChunkId?: string;
   snippet?: string;
   /**
    * Whether the edge belongs to the live projection (#83). Only meaningful
-   * for revision-scoped classes (frontmatter / inferred); explicit and
+   * for revision-scoped classes (frontmatter / inferred / spec); explicit and
    * curated edges are document-level and always live. Defaults to true.
    */
   live?: boolean;
@@ -128,6 +128,17 @@ export interface DocumentRelation {
   sourceChunkId?: string;
   snippet?: string;
   /** False for edges of a retired revision; legacy rows read as live. */
+  live: boolean;
+}
+
+/** A revision's facts of one revision-scoped class, replaced whole. */
+export interface RevisionFactsInput {
+  workspaceId: string;
+  documentId: string;
+  revisionId: string;
+  title: string;
+  facts: FactInput[];
+  /** Part of the live projection (#83) — see `upsertRevisionChunks`. */
   live: boolean;
 }
 
@@ -403,22 +414,31 @@ export class GraphService {
    * Idempotent replace of a revision's frontmatter-derived relation edges
    * (deterministic facts, plan.md §5). Explicit/curated edges are untouched.
    */
-  async replaceRevisionFrontmatterFacts(input: {
-    workspaceId: string;
-    documentId: string;
-    revisionId: string;
-    title: string;
-    facts: FactInput[];
-    /** Part of the live projection (#83) — see `upsertRevisionChunks`. */
-    live: boolean;
-  }): Promise<void> {
+  async replaceRevisionFrontmatterFacts(input: RevisionFactsInput): Promise<void> {
+    await this.replaceRevisionScopedFacts('frontmatter', input);
+  }
+
+  /**
+   * Idempotent replace of an API spec revision's `DESCRIBES` edges to its
+   * operations and channels (#78). Deterministic like frontmatter, and its own
+   * class so neither replace wipes the other's edges on the same revision.
+   */
+  async replaceRevisionSpecFacts(input: RevisionFactsInput): Promise<void> {
+    await this.replaceRevisionScopedFacts('spec', input);
+  }
+
+  private async replaceRevisionScopedFacts(
+    extractor: 'frontmatter' | 'spec',
+    input: RevisionFactsInput,
+  ): Promise<void> {
     const { workspaceId, documentId, revisionId, title, live } = input;
     const facts = await this.canonicalFacts(workspaceId, input.facts);
     for (const type of RELATION_EDGE_TYPES) {
       await this.arcade
-        .command('sql', `DELETE FROM ${type} WHERE documentId = :documentId AND revisionId = :revisionId AND extractor = 'frontmatter'`, {
+        .command('sql', `DELETE FROM ${type} WHERE documentId = :documentId AND revisionId = :revisionId AND extractor = :extractor`, {
           documentId,
           revisionId,
+          extractor,
         })
         .catch(() => {
           /* edge type may hold no rows yet */

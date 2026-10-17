@@ -9,6 +9,7 @@
     "./documents": "./src/documents/index.ts",
     "./reviews": "./src/reviews/index.ts",
     "./graph": "./src/graph/index.ts",
+    "./api": "./src/api/index.ts",
     "./identity": "./src/identity/index.ts",
     "./notifications": "./src/notifications/index.ts",
     "./ai": "./src/ai/index.ts",

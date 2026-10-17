@@ -10,8 +10,13 @@ import type { EntityRef } from '@knowledge/contracts/documents';
  * `code` (#236) is derived from a codebase connector's import index: a page
  * documenting a file that imports a declared component `DEPENDS_ON` it. No
  * author writes one — every pull replaces them — so no input path accepts it.
+ *
+ * `spec` (#78) is an API spec document's `DESCRIBES` edge to each operation or
+ * channel it defines. Deterministic like frontmatter and revision-scoped like
+ * it, so a branch revision's operations stay out of the live graph until it
+ * merges; its own class so the frontmatter replace never wipes it.
  */
-export type FactExtractor = 'explicit' | 'frontmatter' | 'inferred' | 'curated' | 'code';
+export type FactExtractor = 'explicit' | 'frontmatter' | 'inferred' | 'curated' | 'code' | 'spec';
 
 /**
  * Relation edge types allowed in the graph (plan.md §6).
@@ -133,7 +138,15 @@ export function normalizeEntityKey(raw: string): string {
   const nfc = raw.normalize('NFC');
   const colon = nfc.indexOf(':');
   if (colon === -1) return fold(nfc);
-  return `${fold(nfc.slice(0, colon))}:${fold(nfc.slice(colon + 1))}`;
+  const type = fold(nfc.slice(0, colon));
+  let rest = nfc.slice(colon + 1);
+  // #78: an API operation or channel is one entity however its path
+  // parameters are named, so `/users/{id}` and `/users/{userId}` fold here —
+  // in the one function every writer calls — rather than only where a spec is
+  // parsed. A page's frontmatter naming the operation then lands on the same
+  // vertex the spec wrote.
+  if (type === 'op' || type === 'channel') rest = rest.replace(/\{[^}]*\}/gu, '{}');
+  return `${type}:${fold(rest)}`;
 }
 
 /** `service:identity` → `service`; a bare key is a plain entity. */

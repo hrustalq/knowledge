@@ -981,6 +981,11 @@ export type I18nTranslations = {
             "kitNotOffered": string;
             "keyNotHere": string;
         };
+        "apiSpec": {
+            "parseFailed": string;
+            "format": string;
+            "template": string;
+        };
     };
     "import": {
         "stage": {

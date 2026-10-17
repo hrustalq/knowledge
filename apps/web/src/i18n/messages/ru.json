@@ -2016,7 +2016,8 @@
         "manual": "вручную",
         "schedule": "по расписанию",
         "webhook": "pull request",
-        "report": "по замечанию"
+        "report": "по замечанию",
+        "merge-request": "merge request"
       },
       "stage": {
         "scanning": "Просмотр страниц",

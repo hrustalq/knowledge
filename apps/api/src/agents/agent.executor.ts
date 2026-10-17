@@ -715,6 +715,7 @@ export class AgentExecutor {
       title: mr.document.title,
       revisionId: lint.headRevisionId,
       markdown: page.markdown,
+      changed: text,
     });
     const ungrounded = dropped + violations.length - findings.length;
     if (ungrounded > 0) await report({ warning: t('agent.lint.dropped', { count: ungrounded }) });
@@ -809,13 +810,14 @@ export class AgentExecutor {
 
     // The facts. Links resolve against every page of the workspace, not only
     // the visible ones: a link to a restricted page is not broken, and the
-    // issue names only what this page itself says.
+    // issue names only what this page itself says. An archived page is gone —
+    // archiving is how a page is deleted — so a link to it is broken.
     await report({ stage: 'facts', progress: 0.1 });
     const roster = await this.prisma.document.findMany({
       where: { workspaceId: run.workspaceId },
       select: { id: true, title: true, projectId: true, archivedAt: true, pendingMergeRequestId: true },
     });
-    const documentIds = new Set(roster.map((d) => d.id));
+    const documentIds = new Set(roster.filter((d) => !d.archivedAt).map((d) => d.id));
     // Titles resolve the way the reader's resolver does: over the listed,
     // unarchived roster, preferring the page's own project.
     const titled = roster.filter((d) => !d.archivedAt && !d.pendingMergeRequestId).map((d) => ({ documentId: d.id, title: d.title, projectId: d.projectId }));

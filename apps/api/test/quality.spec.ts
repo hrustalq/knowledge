@@ -39,6 +39,7 @@ const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const C = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const GONE = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const ARCHIVED = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
 const RULES: StyleRule[] = [
   { id: 'ui-verbs', text: 'Say "select", not "click on".', severity: 'error', enabled: true },
@@ -225,7 +226,7 @@ describe('the auditor run', () => {
   const HEADS: Record<string, string> = { [A]: 'rev-a', [B]: 'rev-b', [C]: 'rev-c' };
   const BODIES: Record<string, string> = {
     [A]: `Install it, then click on Save. See [the guide](/documents/${GONE}).`,
-    [B]: 'Install it, then select Save.',
+    [B]: `Install it, then select Save. See [the old guide](/documents/${ARCHIVED}) and [the setup](/documents/${C}).`,
     [C]: 'Something else entirely.',
   };
 
@@ -244,7 +245,10 @@ describe('the auditor run', () => {
         findMany: vi.fn(async (args: { where: { kind?: string } }) =>
           args.where.kind
             ? [page(A, 'Install', 'owner'), page(B, 'Installing', null), page(C, 'Other', 'owner')]
-            : [A, B, C].map((id) => ({ id, title: id, projectId: PROJECT, archivedAt: null, pendingMergeRequestId: null })),
+            : [
+                ...[A, B, C].map((id) => ({ id, title: id, projectId: PROJECT, archivedAt: null, pendingMergeRequestId: null })),
+                { id: ARCHIVED, title: 'Old guide', projectId: PROJECT, archivedAt: new Date(), pendingMergeRequestId: null },
+              ],
         ),
       },
       aiSettings: { findUnique: vi.fn(async () => (over.auditDays ? { qualityAuditDays: over.auditDays } : null)) },
@@ -317,6 +321,15 @@ describe('the auditor run', () => {
     expect(duplicates[0].documentIds.sort()).toEqual([A, B].sort());
     expect(result.findings.some((f) => f.kind === 'quality' && f.documentIds[0] === A)).toBe(true);
     expect(a.issues).toContainEqual(expect.objectContaining({ dimension: 'links', link: `/documents/${GONE}` }));
+  });
+
+  it('counts a link to an archived page as broken, and a link to a live one as fine', async () => {
+    const h = harness();
+    await h.go();
+    const b = h.stored.find((r) => r.documentId === B)!;
+    expect((b.dimensions as QualityDimensionScores).links).toBe(50);
+    expect(b.issues).toContainEqual(expect.objectContaining({ dimension: 'links', link: `/documents/${ARCHIVED}` }));
+    expect(b.issues).not.toContainEqual(expect.objectContaining({ link: `/documents/${C}` }));
   });
 
   it('makes no model call on a second run over an unchanged corpus', async () => {

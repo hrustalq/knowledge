@@ -4,6 +4,7 @@ import type { AiSkill } from '@prisma/client';
 import type { StyleRule } from '@knowledge/contracts';
 import { lintMessages, readLintViolations, readStyleRules, renderStyleguide } from '../src/agents/lint.js';
 import { AiSkillsService } from '../src/ai/ai-skills.service.js';
+import { AssistantService } from '../src/assistant/assistant.service.js';
 import { StyleLintService } from '../src/assistant/style-lint.service.js';
 import { DEV_PRINCIPAL } from '../src/auth/principal.js';
 
@@ -241,6 +242,50 @@ describe('AiSkillsService styleguides', () => {
     await expect(skills.update(sg.id, { enabled: false })).rejects.toBeInstanceOf(NotFoundException);
     await expect(skills.remove(sg.id)).rejects.toBeInstanceOf(NotFoundException);
     await expect(skills.removeStyleguide(skill.id)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('existing prompts with and without a styleguide', () => {
+  /** One skill, and — in the second world — a workspace and a project styleguide beside it. */
+  async function worlds() {
+    const plain = harness();
+    const styled = harness();
+    for (const { skills } of [plain, styled]) {
+      await skills.create(WS, { name: 'Release notes', description: '', instructions: 'Group by Added/Fixed.', triggers: ['release'] });
+    }
+    const ws = await styled.skills.upsertStyleguide(WS, guide(null, 'House style'));
+    const project = await styled.skills.upsertStyleguide(WS, guide(PROJECT, 'Docs style'));
+    return { plain: plain.skills, styled: styled.skills, styleguideIds: [ws.id, project.id] };
+  }
+
+  it('leaves the chat skills block byte-identical, even when the message names the styleguide or its id is pinned', async () => {
+    const { plain, styled, styleguideIds } = await worlds();
+    // What runChatTurn appends: renderPrompt(forTurn(workspace, message, pinned ids)).
+    const block = async (skills: AiSkillsService, message: string, ids: string[] = []) =>
+      skills.renderPrompt(await skills.forTurn(WS, message, ids));
+    for (const message of ['release House style', 'Docs style: say select, not click on', 'how do we deploy?']) {
+      expect(await block(styled, message, styleguideIds)).toBe(await block(plain, message));
+    }
+    // With no skill either, there is nothing to append at all.
+    const bare = harness();
+    await bare.skills.upsertStyleguide(WS, guide(null, 'House style'));
+    expect(await block(bare.skills, 'House style')).toBe('');
+  });
+
+  it('leaves the review messages byte-identical', async () => {
+    const { plain, styled } = await worlds();
+    const sent = async (skills: AiSkillsService) => {
+      const svc = Object.create(AssistantService.prototype) as AssistantService;
+      const client = { chat: vi.fn(async (_call: unknown, _messages: unknown) => JSON.stringify({ issues: [], summary: 'ok' })) };
+      Object.assign(svc, {
+        skills,
+        client,
+        openAgentCall: vi.fn(async () => ({ agent: { instructions: 'You are the reviewer.' }, call: { userId: 'u' } })),
+      });
+      await svc.review({ workspaceId: WS, title: 'Install', markdown: 'Click on Save. House style.' } as never, DEV_PRINCIPAL);
+      return client.chat.mock.calls[0][1];
+    };
+    expect(await sent(styled)).toEqual(await sent(plain));
   });
 });
 

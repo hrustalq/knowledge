@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentRun } from '@prisma/client';
 import type { AgentFinding, DiffHunk, LintViolation, StyleRule } from '@knowledge/contracts';
 import { ConflictException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { OverrideLintCheckDto } from '../src/documents/lint/lint.dto.js';
 import {
   changedText,
   countsOf,
@@ -150,6 +153,15 @@ describe('styleFindings', () => {
     const out = styleFindings([v('Intro. click on'), v('Done.', 'no-we')], RULES, page);
     expect(out.map((f) => [f.ruleId, f.severity])).toEqual([['no-we', 'info']]);
     expect(countsOf(out)).toEqual({ error: 0, warning: 0, suggestion: 1 });
+  });
+
+  it('anchors to the copy the merge request added when the page also holds one it left alone', () => {
+    const twice = { ...page, markdown: 'Untouched: click on Cancel to stop.\n\nAdded: to leave, click on Cancel now.' };
+    const [first] = styleFindings([v('click on Cancel')], RULES, twice);
+    expect(first.anchor).toMatchObject({ prefix: 'Untouched:' });
+    const [added] = styleFindings([v('click on Cancel')], RULES, { ...twice, changed: 'Added: to leave, click on Cancel now.' });
+    expect(added.anchor).toMatchObject({ quote: 'click on Cancel', suffix: 'now.' });
+    expect(added.anchor?.type === 'text' && added.anchor.prefix).toMatch(/Added: to leave,$/);
   });
 });
 
@@ -908,5 +920,15 @@ describe('MergeRequestsService.overrideLintCheck', () => {
     });
     expect(twice.audit.record).not.toHaveBeenCalled();
     await expect(mergeFixture({ check: null }).service.overrideLintCheck(MR, 'nope', 'x', ADMIN)).rejects.toThrow();
+  });
+});
+
+describe('OverrideLintCheckDto', () => {
+  it('requires a reason that is more than whitespace, and keeps it trimmed', async () => {
+    expect(await validate(plainToInstance(OverrideLintCheckDto, { reason: '   ' }))).not.toHaveLength(0);
+    expect(await validate(plainToInstance(OverrideLintCheckDto, {}))).not.toHaveLength(0);
+    const dto = plainToInstance(OverrideLintCheckDto, { reason: '  hotfix, reviewed live  ' });
+    expect(await validate(dto)).toHaveLength(0);
+    expect(dto.reason).toBe('hotfix, reviewed live');
   });
 });

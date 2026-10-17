@@ -112,18 +112,24 @@ function ruleSeverity(severity: AgentFinding['severity']): StyleRuleSeverity {
  * quote straddling the join exists in neither the page nor the rendered view —
  * a thread anchored to it would point at nothing. Comparison is on collapsed
  * whitespace, the way `validateThreadAnchor` and the reader resolve anchors.
+ *
+ * `changed` is the text that was linted. A quote can occur more than once on
+ * the page — in the passage the merge request added and in one it left alone —
+ * and the thread belongs on the added copy, so it decides which occurrence the
+ * anchor's prefix and suffix are read from.
  */
 export function styleFindings(
   violations: LintViolation[],
   rules: StyleRule[],
-  page: { documentId: string; title: string; revisionId: string; markdown: string },
+  page: { documentId: string; title: string; revisionId: string; markdown: string; changed?: string },
 ): AgentFinding[] {
   const text = normalizeQuote(page.markdown);
+  const changed = page.changed ? normalizeQuote(page.changed) : null;
   const byId = new Map(rules.map((r) => [r.id, r]));
   const out: AgentFinding[] = [];
   for (const v of violations) {
     const quote = normalizeQuote(v.quote);
-    const at = text.indexOf(quote);
+    const at = quote ? occurrenceIn(text, quote, changed) : -1;
     if (!quote || at < 0) continue;
     const prefix = text.slice(Math.max(0, at - ANCHOR_CONTEXT), at).trim();
     const suffix = text.slice(at + quote.length, at + quote.length + ANCHOR_CONTEXT).trim();
@@ -146,6 +152,29 @@ export function styleFindings(
     });
   }
   return out;
+}
+
+/**
+ * Which occurrence of `quote` in `text` to anchor to: the one whose
+ * surroundings the changed text also holds, on either side, the widest match
+ * winning and the first on a tie. -1 when the page does not hold the quote.
+ */
+function occurrenceIn(text: string, quote: string, changed: string | null): number {
+  let best = text.indexOf(quote);
+  if (best < 0 || !changed) return best;
+  let bestWidth = -1;
+  for (let at = best; at >= 0; at = text.indexOf(quote, at + 1)) {
+    let before = 0;
+    while (before < ANCHOR_CONTEXT && at - before > 0 && changed.includes(text.slice(at - before - 1, at + quote.length))) before += 1;
+    let after = 0;
+    const end = at + quote.length;
+    while (after < ANCHOR_CONTEXT && end + after < text.length && changed.includes(text.slice(at, end + after + 1))) after += 1;
+    if (before + after > bestWidth) {
+      best = at;
+      bestWidth = before + after;
+    }
+  }
+  return best;
 }
 
 /** The identity of a violation across pushes: the rule it breaks and what it quotes. */

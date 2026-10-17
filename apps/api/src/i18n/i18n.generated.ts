@@ -40,6 +40,8 @@ export type I18nTranslations = {
         "digestDesc": string;
         "linter": string;
         "linterDesc": string;
+        "auditor": string;
+        "auditorDesc": string;
         "route": {
             "explicit": string;
             "disabled": string;
@@ -249,6 +251,24 @@ export type I18nTranslations = {
                 "warning": string;
                 "suggestion": string;
             };
+        };
+        "quality": {
+            "noPages": string;
+            "upToDate": string;
+            "modelOff": string;
+            "noEmbeddings": string;
+            "stubEmbeddings": string;
+            "brokenIdLink": string;
+            "brokenTitleLink": string;
+            "noOwner": string;
+            "duplicate": string;
+            "empty": string;
+            "duplicateTitle": string;
+            "duplicateDetail": string;
+            "lowTitle": string;
+            "linksTitle": string;
+            "lowDetail": string;
+            "summary": string;
         };
     };
     "assistant": {

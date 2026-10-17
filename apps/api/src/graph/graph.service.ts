@@ -43,6 +43,8 @@ export interface StoredChunk {
  * it the ranking is over an arbitrary subset (see `searchChunks`).
  */
 const CHUNK_SCAN_LIMIT = 5000;
+/** Revisions averaged per read in `meanRevisionEmbeddings`, so each read stays under the scan cap. */
+const MEAN_BATCH = 100;
 
 /**
  * The live-projection predicate (#83). A chunk or revision-scoped edge is
@@ -360,6 +362,35 @@ export class GraphService {
     const mean = Array.from({ length: vecs[0].length }, () => 0);
     for (const v of vecs) for (let i = 0; i < mean.length; i++) mean[i] += v[i] / vecs.length;
     return mean;
+  }
+
+  /**
+   * The mean chunk embedding of each revision (#74, the auditor's duplicate
+   * check), one read per batch rather than one per page. A revision with no
+   * indexed chunks is absent from the map. Raw vectors stay in the graph
+   * layer's callers only as means — never a chunk's own vector.
+   */
+  async meanRevisionEmbeddings(workspaceId: string, revisionIds: readonly string[]): Promise<Map<string, number[]>> {
+    const sums = new Map<string, { sum: number[]; n: number }>();
+    for (let at = 0; at < revisionIds.length; at += MEAN_BATCH) {
+      const batch = revisionIds.slice(at, at + MEAN_BATCH);
+      const rows = await this.arcade.query<{ revisionId: string; embedding: number[] }>(
+        'sql',
+        `SELECT revisionId, embedding FROM Chunk WHERE workspaceId = :workspaceId AND revisionId IN :revisionIds LIMIT ${CHUNK_SCAN_LIMIT}`,
+        { workspaceId, revisionIds: [...batch] },
+      );
+      if (rows.length >= CHUNK_SCAN_LIMIT) this.logger.error(`Mean embeddings hit the ${CHUNK_SCAN_LIMIT}-chunk scan cap; some pages are averaged over part of their chunks.`);
+      for (const r of rows) {
+        if (!Array.isArray(r.embedding) || r.embedding.length === 0) continue;
+        const acc = sums.get(r.revisionId);
+        if (!acc) sums.set(r.revisionId, { sum: [...r.embedding], n: 1 });
+        else if (acc.sum.length === r.embedding.length) {
+          for (let i = 0; i < acc.sum.length; i++) acc.sum[i] += r.embedding[i];
+          acc.n += 1;
+        }
+      }
+    }
+    return new Map([...sums].map(([id, { sum, n }]) => [id, sum.map((v) => v / n)]));
   }
 
   /** Upsert the Document vertex (needed when relations arrive before first indexing). */

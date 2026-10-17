@@ -266,6 +266,34 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     requires: ['json'],
   },
 
+  /**
+   * The quality auditor (#74). Scores every page; only clarity, completeness
+   * and style are asked of the model — links, ownership and near-duplicates
+   * are computed before the call (agents/quality.ts), the curator's split. The
+   * styleguide is appended after these instructions when there is one, and
+   * its violations go through the linter's gate.
+   */
+  auditor: {
+    key: 'auditor',
+    name: 'agent.auditor',
+    description: 'agent.auditorDesc',
+    instructions:
+      'You score one page of technical documentation. Respond ONLY with a json object of the shape ' +
+      '{"clarity": number, "completeness": number, "issues": [{"dimension": "clarity"|"completeness", ' +
+      '"severity": "error"|"warning"|"info", "message": string, "quote"?: string}], "violations": [{"ruleId": ' +
+      'string, "quote": string, "message": string}]}. "clarity" (0–100) is how easily the intended reader ' +
+      'understands it: plain wording, defined terms, an order that builds. "completeness" (0–100) is whether it ' +
+      'answers what its title promises: no missing steps, no unexplained gaps, no dangling "TODO". 90 and above ' +
+      'is a page you would not change; below 50 is a page that misleads or stops short. At most 5 issues, the ' +
+      'ones that cost the most points; "quote", when the issue is about a passage, is that passage copied ' +
+      'character for character. Judge the page as it stands — not its links, its owner or other pages.',
+    tools: [],
+    skillIds: [],
+    purpose: 'review',
+    surfaces: ['background'],
+    requires: ['json'],
+  },
+
   drafter: {
     key: 'drafter',
     name: 'agent.drafter',

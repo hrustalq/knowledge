@@ -323,3 +323,170 @@ export const EXTERNAL_AI_ACTIONS: ReadonlySet<AiActionId> = new Set<AiActionId>(
 export function visibleAiActions(externalAllowed: boolean): AiActionId[] {
   return AI_ACTION_IDS.filter((id) => externalAllowed || !EXTERNAL_AI_ACTIONS.has(id));
 }
+
+// ---- Page references (lifted from the web for #74) --------------------------
+//
+// Authors reach for a page by the name they see in the sidebar —
+// `[Модель данных](OrderHub — Модель данных)` — as well as by id
+// (`/documents/<id>`). The web renders both; the quality auditor checks both
+// resolve. One implementation, so a link the reader sees as broken is the link
+// the auditor reports, and no other.
+
+/**
+ * Titles are compared on collapsed whitespace, case-insensitively.
+ *
+ * Both halves earn their place: a title that wrapped in the source arrives with
+ * a newline in it, and the model routinely varies the case of a word it is
+ * quoting back. Nothing else is normalised — em dashes, colons and punctuation
+ * are part of the title, and a reference that differs in those is a reference
+ * to something else.
+ */
+export function pageRefKey(title: string): string {
+  return title.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/**
+ * Resolves a page *title* to its document id, or null when nothing in the
+ * workspace carries that title.
+ */
+export type PageRefResolver = (title: string) => string | null;
+
+/** A page as the roster knows it: enough to resolve a title, and no more. */
+export interface PageRef {
+  documentId: string;
+  title: string;
+  /** Which project it lives in — the tiebreak when a title is not unique. */
+  projectId?: string | null;
+}
+
+/**
+ * Build a resolver over a set of pages.
+ *
+ * Titles are not unique across a workspace — the same page name recurs in every
+ * project that documents the same thing — so a title alone can be ambiguous.
+ * `preferProjectId` is the tiebreak that makes the common case work: a
+ * reference written on a page in project X almost always means the page of that
+ * name in project X, which is the containment feature 11 exists to express.
+ *
+ * When that still leaves more than one, the reference resolves to **nothing**.
+ * Picking the first would send readers somewhere plausible and wrong, and a
+ * reference that kept its brackets at least says it is unresolved.
+ */
+export function buildPageRefResolver(pages: readonly PageRef[], preferProjectId?: string | null): PageRefResolver {
+  const byTitle = new Map<string, PageRef[]>();
+  for (const page of pages) {
+    const key = pageRefKey(page.title);
+    if (!key) continue;
+    const bucket = byTitle.get(key);
+    if (bucket) bucket.push(page);
+    else byTitle.set(key, [page]);
+  }
+  return (title) => {
+    const matches = byTitle.get(pageRefKey(title));
+    if (!matches?.length) return null;
+    if (matches.length === 1) return matches[0].documentId;
+    const local = preferProjectId ? matches.filter((p) => p.projectId === preferProjectId) : [];
+    return local.length === 1 ? local[0].documentId : null;
+  };
+}
+
+/**
+ * A link destination that could be a page title rather than a location.
+ *
+ * Anything that addresses something — a scheme, a root-relative path, an
+ * in-page anchor — is a location, and comes back null. What is left is a bare
+ * relative reference, which this product has no other use for: there are no
+ * relative paths between pages, only `/documents/<id>`.
+ *
+ * The percent-decoding is the whole point of the second form. A model that
+ * escapes the title it is linking to produces a destination with no spaces in
+ * it, so CommonMark *accepts* it and the reader gets a relative link to
+ * `OrderHub%20%E2%80%94%20…` that 404s — the same authored intent as the
+ * unencoded form, and invisible to any check that looks for a space.
+ * A malformed escape decodes to itself rather than throwing.
+ */
+export function pageTitleHref(href: string): string | null {
+  if (!href || /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('/') || href.startsWith('#')) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(href);
+  } catch {
+    return href;
+  }
+}
+
+const PAGE_LINK_RE = /(!?)\[((?:\\.|[^[\]\\\n])+)\]\(([^()\n]*)\)/g;
+/** A CommonMark link title: `"…"`, `'…'` or `(…)`. */
+const PAGE_LINK_TITLE_RE = /^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\((?:[^()\\]|\\.)*\))$/;
+const DOCUMENT_HREF_RE = /^\/documents\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:[?#].*)?$/;
+const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})/;
+const INLINE_CODE_RE = /(`+)[^`\n][\s\S]*?\1/g;
+
+/** One reference from a page to another page, as written. */
+export type PageLink =
+  | { kind: 'id'; documentId: string; text: string; href: string }
+  | { kind: 'title'; title: string; text: string; href: string };
+
+/**
+ * Cheap pre-check: is it even worth loading the page roster for this text?
+ *
+ * Most markdown this app renders is a comment or a chat reply with no page
+ * reference in it at all, and the roster costs a request. Both spellings count:
+ * a destination containing a space (which CommonMark refuses outright, so it
+ * never becomes a link) and a bare relative one (which it accepts, and which
+ * then goes nowhere). Whether either *resolves* is the resolver's business.
+ */
+export function mayContainPageRef(markdown: string): boolean {
+  return extractPageLinks(markdown).some((link) => link.kind === 'title');
+}
+
+/**
+ * Every page reference in a markdown body: `/documents/<id>` links and
+ * title-style references, in order of appearance. Images and anything inside
+ * code — a fenced block or an inline span — are not references.
+ */
+export function extractPageLinks(markdown: string): PageLink[] {
+  const text = withoutFences(markdown ?? '').replace(INLINE_CODE_RE, '');
+  const links: PageLink[] = [];
+  for (const match of text.matchAll(PAGE_LINK_RE)) {
+    if (match[1]) continue; // an image
+    const label = match[2];
+    let inner = match[3].trim();
+    if (!inner) continue;
+    if (inner.startsWith('<') && inner.endsWith('>')) inner = inner.slice(1, -1).trim();
+    // A bare destination runs to the first space; what follows may only be a
+    // title. Anything else after the space is no link to CommonMark, which is
+    // exactly the title-reference an author or a model wrote.
+    const split = /^(\S+)\s+([\s\S]+)$/.exec(inner);
+    if (split && !PAGE_LINK_TITLE_RE.test(split[2].trim())) {
+      links.push({ kind: 'title', title: inner, text: label, href: match[3] });
+      continue;
+    }
+    const destination = split ? split[1] : inner;
+    const id = DOCUMENT_HREF_RE.exec(destination);
+    if (id) {
+      links.push({ kind: 'id', documentId: id[1].toLowerCase(), text: label, href: destination });
+      continue;
+    }
+    const title = pageTitleHref(destination);
+    if (title?.trim()) links.push({ kind: 'title', title, text: label, href: destination });
+  }
+  return links;
+}
+
+/** The body with fenced code blocks removed; an unclosed fence runs to the end, as CommonMark reads it. */
+function withoutFences(markdown: string): string {
+  const out: string[] = [];
+  let fence: string | null = null;
+  for (const line of markdown.split('\n')) {
+    const open = FENCE_OPEN_RE.exec(line);
+    if (fence === null) {
+      if (open) fence = open[1];
+      else out.push(line);
+    } else if (open && open[1][0] === fence[0] && open[1].length >= fence.length && !line.trim().slice(open[1].length).trim()) {
+      fence = null;
+    }
+  }
+  return out.join('\n');
+}

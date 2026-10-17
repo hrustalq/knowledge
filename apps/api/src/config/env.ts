@@ -378,6 +378,18 @@ export const envSchema = z.object({
   STYLE_LINT_POLICY: z.enum(['off', 'warn', 'block']).default('off'),
   /** Lint checks one workspace may have waiting; past it a head waits for the next tick. */
   LINT_MAX_PENDING_PER_WORKSPACE: z.coerce.number().int().positive().default(20),
+  /**
+   * The quality auditor (#74, phase 4): the most pages one run scores (one
+   * model call each, unless the page's revision was scored already), how many
+   * days a score stands before an unchanged page is re-scored (a workspace may
+   * override it in ai_settings), the mean-embedding cosine two pages must clear
+   * to be reported as near-duplicates, and the overall score below which a page
+   * becomes a finding.
+   */
+  QUALITY_AUDIT_MAX_PAGES: z.coerce.number().int().positive().default(200),
+  QUALITY_AUDIT_DAYS: z.coerce.number().int().positive().default(7),
+  QUALITY_DUPLICATE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.92),
+  QUALITY_FINDING_THRESHOLD: z.coerce.number().int().min(0).max(100).default(50),
 
   /**
    * Feature 12 AI settings: AES-256-GCM key (base64, 32 bytes) for provider

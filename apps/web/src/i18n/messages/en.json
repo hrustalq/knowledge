@@ -2034,7 +2034,10 @@
         "signals": "Reading answer feedback",
         "clustering": "Clustering questions",
         "topics": "Naming topics",
-        "linting": "Checking the change against the styleguide"
+        "linting": "Checking the change against the styleguide",
+        "facts": "Checking links, owners and duplicates",
+        "scoring": "Scoring pages",
+        "writing": "Saving scores"
       },
       "propose": "Propose fix",
       "proposed": "Opened a merge request: {title}",

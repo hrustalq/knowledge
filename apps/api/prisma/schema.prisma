@@ -375,6 +375,41 @@ model MergeRequestThread {
 /// One lint pass of one merge request's source head (#74). Identity is
 /// (mergeRequestId, kind, headRevisionId): a head is linted once, a push is a
 /// new row, and the insert is the claim. `publishedAt` is the publish claim.
+/// A page's quality at one audit (#74, phase 4). Append-only: the history is
+/// the rows, and a dashboard is a groupBy over them — each row is a fact about
+/// one revision at one time, not an aggregate. Written by the worker, the one
+/// stated exception to "the worker generates, the API publishes": a score is a
+/// measurement, like agent_runs.findings, and attributes no act to a person.
+/// No FK on workspace/project/document ids (house policy; a deleted page's
+/// history simply stops).
+model DocumentQualityScore {
+  id             String   @id @default(uuid()) @db.Uuid
+  workspaceId    String   @map("workspace_id") @db.Uuid
+  /// Denormalized at write time, so a project dashboard needs no join.
+  projectId      String   @map("project_id") @db.Uuid
+  documentId     String   @map("document_id") @db.Uuid
+  revisionId     String   @map("revision_id") @db.Uuid
+  agentRunId     String?  @map("agent_run_id") @db.Uuid
+  rubricVersion  Int      @map("rubric_version")
+  /// Fingerprint of the enabled styleguide rules the model half read; null
+  /// when there were none. A changed styleguide re-scores the style half.
+  styleguideHash String?  @map("styleguide_hash")
+  /// 0–100: the weighted mean of the measured dimensions.
+  overall        Int
+  /// QualityDimension → 0–100 | null (null = not measured).
+  dimensions     Json
+  /// QualityIssue[], capped.
+  issues         Json     @default("[]")
+  /// QualityDuplicate[] — near-duplicate peers.
+  duplicates     Json     @default("[]")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([documentId, createdAt])
+  @@map("document_quality_scores")
+}
+
 model MergeRequestCheck {
   id             String    @id @default(uuid()) @db.Uuid
   workspaceId    String    @map("workspace_id") @db.Uuid
@@ -1091,6 +1126,10 @@ model AiSettings {
   /// documents.parent_id; null puts them at the project root.
   captureParentDocumentId   String?  @map("capture_parent_document_id") @db.Uuid
 
+  /// Days a page's quality score stands before the auditor re-scores an
+  /// unchanged page (#74, phase 4). Null inherits QUALITY_AUDIT_DAYS.
+  qualityAuditDays Int? @map("quality_audit_days")
+
   updatedBy String?  @map("updated_by") @db.Uuid
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -1219,11 +1258,11 @@ model AiSkill {
   rules               Json?
 
   @@unique([workspaceId, name])
+  /// One skill per guidance file. NULLs are distinct in PG, so manual rows never collide.
+  @@unique([workspaceId, sourceConnectorId, sourcePath])
   /// One styleguide per (workspace, project) is a raw partial unique index in
   /// the migration (ai_skills_one_styleguide_per_scope), not expressible here.
   @@index([workspaceId, kind, projectId])
-  /// One skill per guidance file. NULLs are distinct in PG, so manual rows never collide.
-  @@unique([workspaceId, sourceConnectorId, sourcePath])
   @@index([workspaceId, createdAt])
   @@map("ai_skills")
 }

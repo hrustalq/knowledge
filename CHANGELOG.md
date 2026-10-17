@@ -208,6 +208,22 @@ in the pull request that introduces them — see
   client with no principal. `GET /v1/merge-requests/:id/checks` gains
   `gate` (what holds the merge now, for the caller) and each check its
   `override`. (#74)
+- A new background agent, the **quality auditor**, scores every page from 0
+  to 100. It measures six things: clarity and completeness (judged by the
+  model), style against the page's styleguide, broken internal links (a
+  `/documents/<id>` that no longer exists, or a title reference that matches
+  no single page, by the same rule the reader renders with), whether the page
+  has an owner, and near-duplicates (pages whose content is almost the same).
+  A dimension it cannot measure, such as style with no styleguide or clarity
+  with no model, is left out of the score, not counted as zero. Run it from
+  the agents panel or on a schedule; it is off until then. Its findings are
+  the pairs of likely duplicates and the pages below the quality threshold or
+  with broken links. Each audit is kept, so later releases can show the
+  history. A page is scored again only when it changed, the styleguide
+  changed, or the score is older than the audit interval (7 days). Even then,
+  an unchanged page keeps its earlier judgement and makes no model call, so
+  re-running over an unchanged workspace costs nothing. Model calls appear in
+  AI usage as `audit`. (#74)
 
 ### Changed
 
@@ -288,6 +304,18 @@ in the pull request that introduces them — see
   call per push, billed to the merge request's author. Raising the ceiling
   to `block` makes `block` the policy of every workspace and project that
   sets none, so merges there wait for their style check.
+- Migration `20261108100000_document_quality_scores` adds the
+  `document_quality_scores` table and the nullable
+  `ai_settings.quality_audit_days`. Both are additive and the previous image
+  reads neither, so a rollback is safe.
+- New env vars, all with defaults: `QUALITY_AUDIT_MAX_PAGES` (200, pages one
+  auditor run scores, one model call each at most), `QUALITY_AUDIT_DAYS` (7),
+  `QUALITY_DUPLICATE_THRESHOLD` (0.92, the mean-embedding similarity two pages
+  must reach to be called near-duplicates) and `QUALITY_FINDING_THRESHOLD`
+  (50). Nothing runs until someone runs or schedules the `auditor`. On
+  `EMBEDDINGS_PROVIDER=stub` the near-duplicate check is skipped and the run
+  says so, because the stub's similarity measures shared words rather than
+  shared meaning.
 
 ## [0.26.0] — 2026-10-16
 

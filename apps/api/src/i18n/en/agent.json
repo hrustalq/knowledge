@@ -33,6 +33,8 @@
   "digestDesc": "Summarises what changed since the last digest — new and changed pages, merged changes — as a page you can publish.",
   "linter": "Linter",
   "linterDesc": "Checks text against the styleguide your team wrote — only its rules, each violation quoted from the text.",
+  "auditor": "Quality auditor",
+  "auditorDesc": "Scores every page on clarity, completeness, links, ownership, near-duplicates and style, and reports the worst ones.",
   "route": {
     "explicit": "Explicitly requested.",
     "disabled": "disabled",
@@ -232,5 +234,23 @@
       "warning": "Warning",
       "suggestion": "Suggestion"
     }
+  },
+  "quality": {
+    "noPages": "No pages to score.",
+    "upToDate": "Every page's score is current.",
+    "modelOff": "No model is configured for the auditor: clarity, completeness and style are not scored, only links, ownership and duplicates.",
+    "noEmbeddings": "Could not read page embeddings: near-duplicates were not checked.",
+    "stubEmbeddings": "Embeddings are the stub provider, which cannot tell near-duplicates apart: duplication was not measured.",
+    "brokenIdLink": "The link \"{text}\" points at a page that does not exist.",
+    "brokenTitleLink": "The reference \"{text}\" names \"{title}\", which matches no single page.",
+    "noOwner": "The page has no owner.",
+    "duplicate": "Nearly the same as \"{title}\" ({similarity}% similar).",
+    "empty": "The page is empty.",
+    "duplicateTitle": "\"{a}\" and \"{b}\" may be duplicates",
+    "duplicateDetail": "Their content is {similarity}% similar. Merge them, or make each say what the other does not.",
+    "lowTitle": "\"{title}\" scores {score}/100",
+    "linksTitle": "\"{title}\" has broken links",
+    "lowDetail": "The page scores below the quality threshold.",
+    "summary": "Scored {pages}, averaging {average}/100: {calls} judged by the model, {reused} unchanged since their last score."
   }
 }

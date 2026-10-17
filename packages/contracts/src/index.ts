@@ -23,4 +23,5 @@ export * from '@knowledge/contracts/publishing';
 export * from '@knowledge/contracts/connectors';
 export * from '@knowledge/contracts/chat';
 export * from '@knowledge/contracts/captures';
+export * from '@knowledge/contracts/quality';
 export * from '@knowledge/contracts/observability';

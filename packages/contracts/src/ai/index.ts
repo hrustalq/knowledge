@@ -1101,6 +1101,8 @@ export type AiUsageOperation =
   | 'component-draft'
   /** Checking text against the styleguide (#74): the editor's check, the MCP tool, a merge request's lint. */
   | 'lint'
+  /** Scoring a page's clarity, completeness and style for the quality auditor (#74). */
+  | 'audit'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
@@ -1255,6 +1257,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'digest',
   /** Checks text against the workspace's styleguide rules (#74). */
   'linter',
+  /** Scores every page's quality and reports the worst ones (#74). */
+  'auditor',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -2125,6 +2129,8 @@ export const AGENT_FINDING_KINDS = [
   'relation',
   /** A styleguide rule the text breaks (#74). Carries `ruleId` and `anchor`. */
   'style',
+  /** A page the quality auditor scored below the threshold, or whose links are broken (#74). */
+  'quality',
   'other',
 ] as const;
 export type AgentFindingKind = (typeof AGENT_FINDING_KINDS)[number];

@@ -1881,6 +1881,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/assistant/lint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check text against the styleguide that applies to its project (#74). Each violation cites a rule id of that styleguide and quotes the text verbatim; anything else the model reports is dropped and counted. */
+        post: operations["AssistantController_lint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/assistant/suggest": {
         parameters: {
             query?: never;
@@ -2174,6 +2191,41 @@ export interface paths {
         /** Make an imported skill's pending upstream text its instructions (#70) */
         post: operations["AiController_acceptSkillUpstream"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/styleguides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The styleguide that applies to pages of a project — its own, else the workspace one — and which it was. Viewer: members read the rules they are held to. */
+        get: operations["AiController_getStyleguide"];
+        /** Create or replace the styleguide of the workspace, or of one project */
+        put: operations["AiController_upsertStyleguide"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/styleguides/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a styleguide; a project's falls back to the workspace one */
+        delete: operations["AiController_deleteStyleguide"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5908,6 +5960,17 @@ export interface components {
             title: string;
             markdown: string;
         };
+        AssistantLintDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            title: string;
+            markdown: string;
+            /**
+             * Format: uuid
+             * @description The project the text belongs to: its styleguide applies, else the workspace's (#74)
+             */
+            projectId?: string;
+        };
         AssistantSuggestDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -6143,6 +6206,40 @@ export interface components {
             instructions?: string;
             triggers?: string[];
             enabled?: boolean;
+        };
+        StyleRuleExampleDto: {
+            /** @example Click on the button to save. */
+            bad: string;
+            /** @example Select Save. */
+            good: string;
+        };
+        StyleRuleDto: {
+            /**
+             * @description Stable slug: lowercase letters, digits and dashes
+             * @example ui-verbs
+             */
+            id: string;
+            /** @example Name UI actions with "select", never "click on". */
+            text: string;
+            /** @enum {string} */
+            severity: "error" | "warning" | "suggestion";
+            enabled: boolean;
+            example?: components["schemas"]["StyleRuleExampleDto"];
+        };
+        UpsertStyleguideDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description Omitted or null: the workspace's styleguide. Set: the project's, which replaces it there.
+             */
+            projectId?: string | null;
+            /** @example House style */
+            name: string;
+            /** @example How we write user-facing docs */
+            description: string;
+            /** @description At most STYLEGUIDE_MAX_RULES; ids unique */
+            rules: components["schemas"]["StyleRuleDto"][];
         };
         UpdateAgentTriggerDto: {
             /**
@@ -13559,6 +13656,48 @@ export interface operations {
             };
         };
     };
+    AssistantController_lint: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantLintDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     AssistantController_suggest: {
         parameters: {
             query?: never;
@@ -14616,6 +14755,129 @@ export interface operations {
         requestBody?: never;
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_getStyleguide: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                projectId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_upsertStyleguide: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertStyleguideDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_deleteStyleguide: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

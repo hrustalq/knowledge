@@ -875,6 +875,90 @@ export interface ListAiSkillsResponse {
   skills: AiSkillSummary[];
 }
 
+// ---- Styleguides (#74) -------------------------------------------------------
+
+/**
+ * What an `ai_skills` row is. A `skill` joins a turn by trigger word or pick; a
+ * `styleguide` never does — the linter injects it explicitly, and it is listed
+ * under its own routes, never in `GET /v1/ai/skills`.
+ */
+export const AI_SKILL_KINDS = ['skill', 'styleguide'] as const;
+export type AiSkillKind = (typeof AI_SKILL_KINDS)[number];
+
+/** A rule's severity is the rule's, never the model's: a violation inherits it. */
+export const STYLE_RULE_SEVERITIES = ['error', 'warning', 'suggestion'] as const;
+export type StyleRuleSeverity = (typeof STYLE_RULE_SEVERITIES)[number];
+
+/** One rule's text, and each side of its example. */
+export const STYLE_RULE_TEXT_MAX = 500;
+/**
+ * A rule id: a stable slug, so a finding, a thread and the dashboard can name
+ * the rule a violation breaks after its text is reworded.
+ */
+export const STYLE_RULE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+export interface StyleRule {
+  id: string;
+  /** The rule in plain words, as the team agreed it. Trusted: only admins write it. */
+  text: string;
+  severity: StyleRuleSeverity;
+  enabled: boolean;
+  example?: { bad: string; good: string };
+}
+
+export interface StyleguideSummary {
+  id: string;
+  workspaceId: string;
+  /** Null = the workspace's styleguide; set = it replaces that one for this project. */
+  projectId: string | null;
+  name: string;
+  description: string;
+  rules: StyleRule[];
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * GET /v1/ai/styleguides?workspaceId=&projectId=
+ *
+ * `styleguide` is the one that applies to a page of that project: the project's
+ * own when it has one, else the workspace's. `scope` says which it was, so the
+ * editor can show "inherited" rather than pretend the project wrote it.
+ */
+export interface GetStyleguideResponse {
+  styleguide: StyleguideSummary | null;
+  scope: 'project' | 'workspace' | null;
+  /** STYLEGUIDE_MAX_RULES — the form's limit, and the PUT's. */
+  maxRules: number;
+}
+
+/** One rule broken by the text, grounded in a verbatim quote of it. */
+export interface LintViolation {
+  ruleId: string;
+  /** Copied from the rule, whatever the model said. */
+  severity: StyleRuleSeverity;
+  /** Found verbatim in the linted text — an ungrounded quote is dropped, not shown. */
+  quote: string;
+  message: string;
+  suggestion?: string;
+}
+
+// POST /v1/assistant/lint
+export interface AssistantLintResponse {
+  /** False when no model is configured for the linter, or the linter agent is disabled. */
+  enabled: boolean;
+  /** The styleguide the text was checked against; null when none applies (no model call then). */
+  styleguide: { id: string; name: string; scope: 'project' | 'workspace' } | null;
+  violations: LintViolation[];
+  /**
+   * Violations the model reported but the harness refused: an unknown or
+   * disabled rule id, or a quote not found in the text. Counted so a model that
+   * invents is visible as one, never shown as a finding.
+   */
+  dropped: number;
+}
+
 // ---- Repo guidance import (#70) ---------------------------------------------
 
 /**
@@ -1014,6 +1098,8 @@ export type AiUsageOperation =
   | 'chat-capture'
   /** Drafting a component page from its code, for "Document this component" (#236). */
   | 'component-draft'
+  /** Checking text against the styleguide (#74): the editor's check, the MCP tool, a merge request's lint. */
+  | 'lint'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
@@ -1166,6 +1252,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'surveyor',
   /** Summarises what changed in the workspace since its last digest (#70). */
   'digest',
+  /** Checks text against the workspace's styleguide rules (#74). */
+  'linter',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 

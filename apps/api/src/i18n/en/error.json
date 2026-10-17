@@ -606,5 +606,11 @@
     "timeout": "{host} did not answer within {seconds} s.",
     "revisionDraft": "Revision {id} is a draft; try an operation of a finalized revision.",
     "unresolved": "{host} does not resolve to any address."
+  },
+  "styleguide": {
+    "notFound": "Styleguide {id} not found",
+    "tooManyRules": "A styleguide holds at most {max} rules",
+    "duplicateRuleId": "Two rules share the id \"{id}\" — each rule needs its own",
+    "scopeTaken": "This scope already has a styleguide; reload and edit it instead"
   }
 }

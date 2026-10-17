@@ -14,13 +14,19 @@ import {
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { errorCodeForStatus, type ApiErrorPayload, type AssistantStreamFrame } from '@knowledge/contracts';
+import {
+  errorCodeForStatus,
+  type ApiErrorPayload,
+  type AssistantLintResponse,
+  type AssistantStreamFrame,
+} from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { AssistantService } from './assistant.service.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
 import {
   AssistantAskDto,
+  AssistantLintDto,
   AssistantRelatedDto,
   AssistantReviewDto,
   AssistantSuggestDto,
@@ -45,6 +51,17 @@ export class AssistantController {
   @ApiOperation({ summary: 'LLM review of a draft (docs/features/09); enabled=false when the provider is none' })
   review(@Body() dto: AssistantReviewDto, @CurrentPrincipal() principal: Principal) {
     return this.assistant.review(dto, principal);
+  }
+
+  @Post('lint')
+  @Access('viewer', 'body')
+  @ApiOperation({
+    summary:
+      'Check text against the styleguide that applies to its project (#74). Each violation cites a rule id of ' +
+      'that styleguide and quotes the text verbatim; anything else the model reports is dropped and counted.',
+  })
+  lint(@Body() dto: AssistantLintDto, @CurrentPrincipal() principal: Principal): Promise<AssistantLintResponse> {
+    return this.assistant.lint(dto, principal);
   }
 
   @Post('suggest')

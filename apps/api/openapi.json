@@ -9585,6 +9585,65 @@
         ]
       }
     },
+    "/v1/assistant/lint": {
+      "post": {
+        "operationId": "AssistantController_lint",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantLintDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Check text against the styleguide that applies to its project (#74). Each violation cites a rule id of that styleguide and quotes the text verbatim; anything else the model reports is dropped and counted.",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
     "/v1/assistant/suggest": {
       "post": {
         "operationId": "AssistantController_suggest",
@@ -11148,6 +11207,185 @@
           }
         },
         "summary": "Make an imported skill's pending upstream text its instructions (#70)",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/styleguides": {
+      "get": {
+        "operationId": "AiController_getStyleguide",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The styleguide that applies to pages of a project — its own, else the workspace one — and which it was. Viewer: members read the rules they are held to.",
+        "tags": [
+          "ai"
+        ]
+      },
+      "put": {
+        "operationId": "AiController_upsertStyleguide",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertStyleguideDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create or replace the styleguide of the workspace, or of one project",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/styleguides/{id}": {
+      "delete": {
+        "operationId": "AiController_deleteStyleguide",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a styleguide; a project's falls back to the workspace one",
         "tags": [
           "ai"
         ]
@@ -27891,6 +28129,31 @@
           "markdown"
         ]
       },
+      "AssistantLintDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "markdown": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The project the text belongs to: its styleguide applies, else the workspace's (#74)"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "title",
+          "markdown"
+        ]
+      },
       "AssistantSuggestDto": {
         "type": "object",
         "properties": {
@@ -28537,6 +28800,96 @@
             "type": "boolean"
           }
         }
+      },
+      "StyleRuleExampleDto": {
+        "type": "object",
+        "properties": {
+          "bad": {
+            "type": "string",
+            "maxLength": 500,
+            "example": "Click on the button to save."
+          },
+          "good": {
+            "type": "string",
+            "maxLength": 500,
+            "example": "Select Save."
+          }
+        },
+        "required": [
+          "bad",
+          "good"
+        ]
+      },
+      "StyleRuleDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "ui-verbs",
+            "description": "Stable slug: lowercase letters, digits and dashes"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 500,
+            "example": "Name UI actions with \"select\", never \"click on\"."
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "suggestion"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "example": {
+            "$ref": "#/components/schemas/StyleRuleExampleDto"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "severity",
+          "enabled"
+        ]
+      },
+      "UpsertStyleguideDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Omitted or null: the workspace's styleguide. Set: the project's, which replaces it there."
+          },
+          "name": {
+            "type": "string",
+            "example": "House style"
+          },
+          "description": {
+            "type": "string",
+            "example": "How we write user-facing docs"
+          },
+          "rules": {
+            "description": "At most STYLEGUIDE_MAX_RULES; ids unique",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StyleRuleDto"
+            }
+          }
+        },
+        "required": [
+          "workspaceId",
+          "name",
+          "description",
+          "rules"
+        ]
       },
       "UpdateAgentTriggerDto": {
         "type": "object",

@@ -15,7 +15,9 @@ import {
   MaxLength,
   Min,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import {
   AGENT_CAPABILITIES,
   AGENT_LEARNING_MAX_CHARS,
@@ -28,6 +30,10 @@ import {
   AGENT_TRIGGER_COOLDOWN_MAX_MINUTES,
   AGENT_TRIGGER_EVENTS,
   WEB_ACCESS_MODES,
+  STYLE_RULE_ID_PATTERN,
+  STYLE_RULE_SEVERITIES,
+  STYLE_RULE_TEXT_MAX,
+  type StyleRuleSeverity,
   type AgentCapability,
   type AgentLearningSource,
   type AgentLearningStatus,
@@ -570,6 +576,83 @@ export class UpdateAiSkillDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+}
+
+// ---- Styleguides (#74) -----------------------------------------------------
+
+export class StyleRuleExampleDto {
+  @ApiProperty({ maxLength: STYLE_RULE_TEXT_MAX, example: 'Click on the button to save.' })
+  @IsString()
+  @MaxLength(STYLE_RULE_TEXT_MAX, { message: vmsg('maxLength') })
+  bad!: string;
+
+  @ApiProperty({ maxLength: STYLE_RULE_TEXT_MAX, example: 'Select Save.' })
+  @IsString()
+  @MaxLength(STYLE_RULE_TEXT_MAX, { message: vmsg('maxLength') })
+  good!: string;
+}
+
+export class StyleRuleDto {
+  @ApiProperty({ example: 'ui-verbs', description: 'Stable slug: lowercase letters, digits and dashes' })
+  @IsString()
+  @Matches(STYLE_RULE_ID_PATTERN)
+  id!: string;
+
+  @ApiProperty({ maxLength: STYLE_RULE_TEXT_MAX, example: 'Name UI actions with "select", never "click on".' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(STYLE_RULE_TEXT_MAX, { message: vmsg('maxLength') })
+  text!: string;
+
+  @ApiProperty({ enum: STYLE_RULE_SEVERITIES })
+  @IsIn(STYLE_RULE_SEVERITIES)
+  severity!: StyleRuleSeverity;
+
+  @ApiProperty()
+  @IsBoolean()
+  enabled!: boolean;
+
+  @ApiPropertyOptional({ type: StyleRuleExampleDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => StyleRuleExampleDto)
+  example?: StyleRuleExampleDto;
+}
+
+export class UpsertStyleguideDto {
+  // Field name must stay `workspaceId`: @Access('admin', 'body') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description: "Omitted or null: the workspace's styleguide. Set: the project's, which replaces it there.",
+  })
+  @IsOptional()
+  @NULLABLE<UpsertStyleguideDto>('projectId')
+  @IsUUID()
+  projectId?: string | null;
+
+  @ApiProperty({ example: 'House style' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120, { message: vmsg('maxLength') })
+  name!: string;
+
+  @ApiProperty({ example: 'How we write user-facing docs' })
+  @IsString()
+  @MaxLength(500, { message: vmsg('maxLength') })
+  description!: string;
+
+  @ApiProperty({ type: [StyleRuleDto], description: 'At most STYLEGUIDE_MAX_RULES; ids unique' })
+  @IsArray()
+  @ArrayMaxSize(200, { message: vmsg('arrayMaxSize') })
+  @ValidateNested({ each: true })
+  @Type(() => StyleRuleDto)
+  rules!: StyleRuleDto[];
 }
 
 // ---- Plugins ---------------------------------------------------------------

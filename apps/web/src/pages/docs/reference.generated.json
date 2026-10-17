@@ -682,6 +682,36 @@
     },
     {
       "method": "GET",
+      "path": "/v1/ai/styleguides",
+      "tag": "ai",
+      "summary": "The styleguide that applies to pages of a project — its own, else the workspace one — and which it was. Viewer: members read the rules they are held to.",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/ai/styleguides",
+      "tag": "ai",
+      "summary": "Create or replace the styleguide of the workspace, or of one project",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/ai/styleguides/{id}",
+      "tag": "ai",
+      "summary": "Delete a styleguide; a project's falls back to the workspace one",
+      "role": "admin",
+      "source": "ai-skill",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/ai/usage",
       "tag": "ai",
       "summary": "Token usage totals, per-bucket breakdown and a daily series",
@@ -885,6 +915,16 @@
       "path": "/v1/assistant/ask/feedback",
       "tag": "assistant",
       "summary": "Rate a one-shot POST /v1/assistant/ask answer — the client sends what it saw",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assistant/lint",
+      "tag": "assistant",
+      "summary": "Check text against the styleguide that applies to its project (#74). Each violation cites a rule id of that styleguide and quotes the text verbatim; anything else the model reports is dropped and counted.",
       "role": "viewer",
       "source": "body",
       "public": false,

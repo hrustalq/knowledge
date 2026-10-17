@@ -31,6 +31,7 @@ export const AI_SECTION_GROUPS = [
     sections: [
       { key: 'coverage', label: 'ai.tabCoverage' },
       { key: 'feedback', label: 'ai.tabFeedback' },
+      { key: 'styleguide', label: 'ai.tabStyleguide' },
     ],
   },
   {

@@ -237,6 +237,35 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     requires: ['json'],
   },
 
+  /**
+   * The linter (#74). The reviewer judges a draft on its own terms; the linter
+   * only against rules the team wrote down, appended after these instructions
+   * as a numbered list with ids. What it may claim is enforced after the call
+   * (agents/lint.ts): an unknown rule id or a quote not found verbatim is
+   * dropped, and the severity is the rule's, so the prompt asks for neither
+   * more nor less than the harness will accept.
+   */
+  linter: {
+    key: 'linter',
+    name: 'agent.linter',
+    description: 'agent.linterDesc',
+    instructions:
+      'You check documentation text against a styleguide — a list of rules its team agreed on. Respond ONLY ' +
+      'with a json object of the shape {"violations": [{"ruleId": string, "quote": string, "message": string, ' +
+      '"suggestion"?: string}]}. Report a violation only when one of the listed rules covers it: never flag ' +
+      'anything for a rule that is not on the list, however much you would improve it. "ruleId" is the id ' +
+      'shown in brackets before the rule. "quote" is the shortest passage that breaks the rule, copied ' +
+      'character for character from the text — never paraphrased, never joined across paragraphs. "message" ' +
+      'says in one sentence how the passage breaks the rule. "suggestion", when you can give one, is the ' +
+      'passage rewritten to follow it. Report each passage once per rule. An empty list is the right answer ' +
+      'for text that follows every rule.',
+    tools: [],
+    skillIds: [],
+    purpose: 'review',
+    surfaces: ['interactive', 'background'],
+    requires: ['json'],
+  },
+
   drafter: {
     key: 'drafter',
     name: 'agent.drafter',

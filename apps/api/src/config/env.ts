@@ -360,6 +360,13 @@ export const envSchema = z.object({
   COVERAGE_MIN_CLUSTER_SIZE: z.coerce.number().int().min(1).default(3),
   COVERAGE_SIMILARITY: z.coerce.number().min(0).max(1).default(0.82),
   COVERAGE_MAX_QUESTIONS: z.coerce.number().int().positive().default(2_000),
+  /**
+   * Styleguides (#74): the most rules one styleguide may hold — every rule is
+   * in every lint prompt, so this bounds the prompt — and the most violations
+   * one lint reports, so a long page cannot bury its reader.
+   */
+  STYLEGUIDE_MAX_RULES: z.coerce.number().int().positive().default(50),
+  LINT_MAX_FINDINGS: z.coerce.number().int().positive().default(15),
 
   /**
    * Feature 12 AI settings: AES-256-GCM key (base64, 32 bytes) for provider

@@ -31,6 +31,8 @@
   "surveyorDesc": "Clusters the questions answers failed on into coverage gaps, and proposes the page that would close each.",
   "digest": "Digest",
   "digestDesc": "Summarises what changed since the last digest — new and changed pages, merged changes — as a page you can publish.",
+  "linter": "Linter",
+  "linterDesc": "Checks text against the styleguide your team wrote — only its rules, each violation quoted from the text.",
   "route": {
     "explicit": "Explicitly requested.",
     "disabled": "disabled",

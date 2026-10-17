@@ -59,7 +59,10 @@ not touch, are not linted, so a violation already on the target branch is not
 the author's. A page's first merge request has no target head, and then all of
 it is new. `styleFindings` then grounds each quote again in the whole source
 head (the linted text joins separate runs, and a quote across a join exists in
-neither) and anchors it as a `text` anchor with 32 characters of context.
+neither) and anchors it as a `text` anchor with 32 characters of context. A
+quote the page holds more than once is anchored to the copy whose surroundings
+the linted text also holds: the passage the merge request added, not an
+untouched one above it.
 
 **When a check runs.** `LintTriggerSweeper` (API, 30 s tick) picks open,
 non-draft merge requests whose source head has no check, where the effective
@@ -141,7 +144,9 @@ embeddings provider. An empty page scores 0 without a model call.
 
 - **Links.** `extractPageLinks` and the reader's resolver, lifted from the web
   into `@knowledge/contracts/content`, decide. An id link is broken when no
-  live page of the workspace has that id. A title reference is broken when the
+  live page of the workspace has that id: a missing one, one in another
+  workspace, or an archived one (archiving is how a page is deleted). A title
+  reference is broken when the
   reader would leave it as brackets: no page by that title, or several and
   none in the page's own project. Links resolve against every page in the
   workspace, so a link to a restricted page is not broken.
@@ -378,7 +383,8 @@ Web:
   rule, untrusted wrapping, scope fallback, prompts byte-identical with no
   styleguide), `lint-check.spec.ts` (one check per head, a newer head
   superseding, published once, stale threads resolved, people's threads
-  untouched, the 24 h cutoff, the author billed, and the gate matrix of
+  untouched, the 24 h cutoff, the author billed, the anchor on the added
+  copy of a repeated quote, and the gate matrix of
   policy × check status × override with resolve-to-unblock),
   `quality.spec.ts` (links, duplicate pairing, weighting with null
   dimensions, the model half reused, ownership), `glossary-findings.spec.ts`
@@ -387,7 +393,9 @@ Web:
   `quality.e2e-spec.ts` needs live infra and is not in CI; it passed locally
   5/5 under `AUTH_MODE=api-key` with a non-admin editor and an admin (counts,
   bands, history, worst order, a restricted page and its hidden peer,
-  cross-workspace 403, MCP matching REST).
+  cross-workspace 403, MCP matching REST). `styleguides.e2e-spec.ts` likewise
+  (3/3): the project override for its project and the workspace styleguide
+  for any other, non-admin `PUT`/`DELETE` → 403, never listed as a skill.
 - Live on dev: a merge request linted by a real model through the dev
   worker, its threads resolved and kept across pushes; the `block` gate, its
   409 and an override; the Quality tab, rail and project widget against

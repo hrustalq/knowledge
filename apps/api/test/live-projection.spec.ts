@@ -127,7 +127,7 @@ describe('GraphService.setLiveRevision (#83)', () => {
     }
     // Explicit and curated edges are document-level: never retired.
     for (const c of updates.filter((u) => !/^UPDATE Chunk/.test(u.sql))) {
-      expect(c.sql).toContain("extractor IN ['frontmatter', 'inferred']");
+      expect(c.sql).toContain("extractor IN ['frontmatter', 'inferred', 'spec']");
     }
     expect(updates.some((c) => /^UPDATE Chunk SET live = false .*revisionId <> :revisionId/.test(c.sql))).toBe(true);
   });

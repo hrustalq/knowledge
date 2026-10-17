@@ -1446,7 +1446,8 @@
         "frontmatter": "From frontmatter",
         "inferred": "Inferred relation",
         "curated": "Curated relation",
-        "code": "Derived from code"
+        "code": "Derived from code",
+        "spec": "From the API spec"
       }
     },
     "saveToKb": {

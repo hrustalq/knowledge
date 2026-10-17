@@ -1112,6 +1112,8 @@ export const API_ERROR_CODES = [
   'PAYLOAD_TOO_LARGE',
   // feature 16: the uploaded file is not a format any parser handles
   'UNSUPPORTED_MEDIA_TYPE',
+  // #78: well-formed request, refused content — an API spec that does not validate
+  'UNPROCESSABLE',
   'RATE_LIMITED',
   'UPSTREAM_UNAVAILABLE',
   // feature 12: the caller's or the workspace's monthly token budget is spent
@@ -1152,6 +1154,7 @@ export function errorCodeForStatus(status: number): ApiErrorCode {
     case 409: return 'CONFLICT';
     case 413: return 'PAYLOAD_TOO_LARGE';
     case 415: return 'UNSUPPORTED_MEDIA_TYPE';
+    case 422: return 'UNPROCESSABLE';
     case 429: return 'RATE_LIMITED';
     case 502:
     case 503:

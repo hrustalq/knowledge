@@ -9,6 +9,7 @@
 export * from '@knowledge/contracts/core';
 export * from '@knowledge/contracts/documents';
 export * from '@knowledge/contracts/graph';
+export * from '@knowledge/contracts/api';
 export * from '@knowledge/contracts/reviews';
 export * from '@knowledge/contracts/identity';
 export * from '@knowledge/contracts/notifications';

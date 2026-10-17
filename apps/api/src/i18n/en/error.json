@@ -577,5 +577,10 @@
     "kitClient": "There is no capture kit for \"{client}\". Kits exist for: {clients}.",
     "kitNotOffered": "This key is offered no capture tools, so a capture kit would describe calls it cannot make. Use a capture or read-write key.",
     "keyNotHere": "This key has nothing to do with this workspace."
+  },
+  "apiSpec": {
+    "parseFailed": "The API spec is not valid: {reason}",
+    "format": "An API spec is written as yaml or json, not {format}",
+    "template": "An API spec cannot start from a page template"
   }
 }

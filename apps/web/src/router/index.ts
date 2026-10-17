@@ -47,6 +47,9 @@ export function createRouter() {
         component: () => import('@/pages/EditorPage.vue'),
         meta: { fill: true, bare: true },
       },
+      // API specs (#78) are written as text, not in the page editor.
+      { path: '/create/spec', component: () => import('@/pages/ApiSpecEditorPage.vue') },
+      { path: '/documents/:id/spec', component: () => import('@/pages/ApiSpecEditorPage.vue') },
       // /upload keeps its path so every existing link, bookmark and sidebar
       // shortcut still lands; /import is the name the flow now goes by.
       // meta.fill: the wizard owns the viewport — its three steps share one

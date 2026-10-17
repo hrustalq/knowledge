@@ -158,7 +158,8 @@
     "publishing": "Publishing",
     "exports": "Exports",
     "chatBots": "Chat bots",
-    "captures": "Captures"
+    "captures": "Captures",
+    "newApiSpec": "API spec"
   },
   "role": {
     "guest": "Guest",
@@ -4710,5 +4711,75 @@
       "failed": "The draft failed.",
       "notOpened": "The page was drafted but could not be opened as a merge request. It is on the archaeologist's run."
     }
+  },
+  "apiRef": {
+    "nav": "Operations",
+    "untagged": "Other operations",
+    "untaggedChannels": "Channels",
+    "operationCount": "{n} operation | {n} operations",
+    "servers": "Servers",
+    "indexing": "Indexing this revision — operations appear when it finishes.",
+    "empty": "This spec defines no operations.",
+    "missing": "This operation is not in the spec revision being shown.",
+    "deprecated": "Deprecated",
+    "operationId": "Operation ID",
+    "auth": "Auth",
+    "entityKey": "Entity key",
+    "params": "Parameters",
+    "body": "Request body",
+    "responses": "Responses",
+    "messages": "Messages",
+    "message": "Message {n}",
+    "payload": "Payload",
+    "required": "required",
+    "recursive": "{name}, recursive",
+    "truncated": "… nested deeper",
+    "expand": "Expand {name}",
+    "collapse": "Collapse {name}",
+    "in": {
+      "path": "Path parameters",
+      "query": "Query parameters",
+      "header": "Headers",
+      "cookie": "Cookies"
+    },
+    "kind": {
+      "openapi": "OpenAPI",
+      "asyncapi": "AsyncAPI"
+    },
+    "syntax": {
+      "yaml": "YAML",
+      "json": "JSON"
+    },
+    "channel": "channel",
+    "format": "Format",
+    "versionLabel": "Version",
+    "linked": {
+      "title": "Linked pages",
+      "loading": "Looking for pages that link this operation…",
+      "empty": "No page links this operation yet. A use case or guide links it by naming its key in frontmatter:",
+      "copyKey": "Copy key",
+      "copied": "Copied",
+      "copyFailed": "Could not copy — select the key and copy it by hand"
+    }
+  },
+  "apiSpecEditor": {
+    "title": "Title",
+    "titlePlaceholder": "Billing API",
+    "kind": "Format",
+    "syntax": "Syntax",
+    "body": "Spec",
+    "loadFile": "Load file",
+    "kindFixed": "The format is fixed once a spec exists.",
+    "titleRequired": "Give the spec a title.",
+    "invalid": "The spec does not validate ({n} issue): | The spec does not validate ({n} issues):",
+    "create": "Create spec",
+    "publish": "Publish revision",
+    "saving": "Saving…",
+    "created": "Spec created — indexing its operations.",
+    "saved": "Revision published — indexing its operations.",
+    "unchanged": "Nothing changed: this is already the latest revision.",
+    "newHeading": "New API spec",
+    "editHeading": "Edit API spec",
+    "hint": "Paste an OpenAPI (3.0, 3.1, Swagger 2.0) or AsyncAPI (2.x, 3.x) spec, or load a file. It is checked when you save."
   }
 }

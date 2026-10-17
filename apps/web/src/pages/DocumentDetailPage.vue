@@ -40,6 +40,7 @@ import {
   Pencil,
   Share2,
   Workflow as WorkflowIcon,
+  ListTree,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type {
@@ -81,6 +82,9 @@ import ExportDialog from '@/components/knowledge/ExportDialog.vue'
 import { PageLayout, PageRail, PageState } from '@/components/layout/page'
 import TocRail from '@/components/knowledge/TocRail.vue'
 import DocumentCanvas from '@/components/knowledge/DocumentCanvas.vue'
+import ApiReferenceView from '@/components/api-reference/ApiReferenceView.vue'
+import ApiOperationIndex from '@/components/api-reference/ApiOperationIndex.vue'
+import { useApiReference } from '@/components/api-reference/use-api-reference'
 import RevisionsView from '@/components/knowledge/RevisionsView.vue'
 import MergeRequestList from '@/components/merge-requests/MergeRequestList.vue'
 import GraphView from '@/components/knowledge/GraphView.vue'
@@ -107,6 +111,9 @@ const store = useDocumentsStore()
 const events = useEventsStore()
 
 const RAIL_WIDGETS = [
+  // A spec's operations (#78): its table of contents, so it heads the rail on a
+  // spec and does not exist on a page.
+  { id: 'operations', label: t('apiRef.nav'), icon: ListTree, expandable: false },
   // What the page reads as and who answers for it (docs/features/39): a fact
   // about the page, so it heads the rail, and a widget like the rest so it
   // folds away and is remembered the same way.
@@ -158,7 +165,9 @@ onMounted(() => {
 const visibleWidgets = computed(() =>
   RAIL_WIDGETS.filter(
     (w) =>
-      (w.id !== 'frontmatter' || !!content.value?.frontmatter) && (w.id !== 'used-by' || !!declaration.value),
+      (w.id !== 'frontmatter' || !!content.value?.frontmatter) &&
+      (w.id !== 'used-by' || !!declaration.value) &&
+      (w.id !== 'operations' || isSpec.value),
   ),
 )
 
@@ -488,6 +497,7 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
         : t(`verification.state.${detail.value.document.verification ?? 'unverified'}`)
       : null,
     overview: detail.value ? `#${detail.value.revision.revisionNumber}` : null,
+    operations: isSpec.value ? String(apiRef.operations.value.length) : null,
     // The collapsed row carries the one fact that decides whether to open it:
     // which system this page answers to, or nothing at all.
     connectors: connectorLinks?.length
@@ -529,6 +539,10 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
 /* ------------------------------------------------------------- lifecycle */
 
 const viewingRevision = computed(() => (route.query.revision as string | undefined) ?? null)
+// An API spec (#78) renders as a reference rather than a page, and is edited as text.
+const isSpec = computed(() => !!detail.value?.document.kind && detail.value.document.kind !== 'page')
+// One state for the rail's operation index and the main column's operation.
+const apiRef = useApiReference(documentId, viewingRevision, isSpec)
 const canComment = computed(() => auth.canComment && !viewingRevision.value)
 
 onMounted(() => {
@@ -661,7 +675,7 @@ watch(
         </Button>
         <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
           <RouterLink
-            :to="`/documents/${detail.document.documentId}/edit`"
+            :to="`/documents/${detail.document.documentId}/${isSpec ? 'spec' : 'edit'}`"
             :title="hasUnstaged ? t('editor.unstaged.label') : undefined"
           >
             <Pencil class="size-3.5" />
@@ -702,17 +716,18 @@ watch(
         <PageRail
           :widgets="visibleWidgets"
           surface="document"
-          :default-open="['verification', 'overview']"
+          :default-open="['operations', 'verification', 'overview']"
           :previews="previewFor"
           @expand="expanded = $event"
         >
           <!-- Above the stack and outside it: the contents belong to the page
                being read, not to the facts about it. -->
           <template #before>
-            <TocRail v-if="headings.length > 1" :headings="headings" />
+            <TocRail v-if="!isSpec && headings.length > 1" :headings="headings" />
           </template>
 
           <!-- Hidden while reading an old revision: the stamp is about the head. -->
+          <template #widget-operations><ApiOperationIndex :state="apiRef" /></template>
           <template #widget-verification>
             <VerificationBar
               v-if="!viewingRevision"
@@ -828,7 +843,8 @@ watch(
         </p>
         <!-- About the head, like the verification stamp. -->
         <ComponentDeclarationNotice v-if="!viewingRevision" :document-id="documentId" />
-        <PageState v-if="contentError" state="error" :description="contentError" />
+        <ApiReferenceView v-if="isSpec" :state="apiRef" :workspace-id="detail.document.workspaceId" />
+        <PageState v-else-if="contentError" state="error" :description="contentError" />
         <PageState v-else-if="!content" state="loading" :rows="1" row-class="h-96" />
         <DocumentCanvas
           v-else

@@ -91,7 +91,7 @@ export async function parseApiSpec(raw: string, kind: ApiSpecKind, limits: ApiSp
  * dereferences to a cyclic object, which no JSON response can carry. Not
  * validated again: only a finalized revision is read, and finalize validated it.
  */
-export function readApiSpecDocument(raw: string, kind: ApiSpecKind): Record<string, unknown> {
+export function readApiSpecDocument(raw: string, kind: ApiSpecKind): { document: Record<string, unknown>; specVersion: string } {
   let value: unknown;
   try {
     value = normalize(raw);
@@ -99,9 +99,11 @@ export function readApiSpecDocument(raw: string, kind: ApiSpecKind): Record<stri
     throw new ApiSpecError([{ message: (e as Error).message.split('\n')[0] }]);
   }
   if (!isObject(value)) throw new ApiSpecError([{ message: 'The document is not a YAML or JSON object' }]);
-  if (kind === 'asyncapi') return value;
+  // The version as written, before the upgrade rewrites it.
+  const specVersion = str(value.openapi) ?? str(value.swagger) ?? str(value.asyncapi) ?? '';
+  if (kind === 'asyncapi') return { document: value, specVersion };
   const { specification } = upgrade(value);
-  return (specification ?? value) as Record<string, unknown>;
+  return { document: (specification ?? value) as Record<string, unknown>, specVersion };
 }
 
 /**

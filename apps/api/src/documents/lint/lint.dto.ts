@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
 import { LINT_POLICIES, type LintPolicy } from '@knowledge/contracts';
 
@@ -45,6 +46,8 @@ export class UpdateLintPolicyDto {
 
 export class OverrideLintCheckDto {
   @ApiProperty({ maxLength: 500, description: 'Why the head may merge despite its check; kept with the override and in the audit log' })
+  // Trimmed first, so a reason of only spaces is no reason.
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
   @MaxLength(500)

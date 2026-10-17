@@ -2016,7 +2016,8 @@
         "manual": "manual",
         "schedule": "scheduled",
         "webhook": "pull request",
-        "report": "report"
+        "report": "report",
+        "merge-request": "merge request"
       },
       "stage": {
         "scanning": "Scanning pages",

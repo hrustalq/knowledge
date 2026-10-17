@@ -70,7 +70,7 @@ import { MAX_USAGE_LIMIT } from '../components/component-match.js';
 import { COMPONENT_DRAFT_MAX_PATHS } from '@knowledge/contracts';
 import { ComponentUsagesService } from '../components/component-usages.service.js';
 import { ApiSpecReadService } from '../api-specs/api-spec-read.service.js';
-import { API_SPEC_SYNTAXES, isApiSpecKind, normalizeEntityKey, type ApiSpecSyntax } from '@knowledge/contracts';
+import { API_SPEC_SYNTAXES, CODE_SAMPLE_LANGS, isApiSpecKind, normalizeEntityKey, type ApiSpecSyntax } from '@knowledge/contracts';
 import { ComponentDraftsService } from '../components/component-drafts.service.js';
 
 /**
@@ -888,14 +888,18 @@ export class McpService {
           workspaceId: z.string().uuid(),
           entityKey: z.string().min(3).max(1000).describe('e.g. op:billing-api:post-/invoices'),
           documentId: z.string().uuid().optional().describe('The spec, when more than one defines the key'),
+          lang: z
+            .enum(CODE_SAMPLE_LANGS)
+            .optional()
+            .describe('Also return a code sample in this language, with environment-variable placeholders for credentials'),
         },
       },
-      async ({ workspaceId, entityKey, documentId }) => {
+      async ({ workspaceId, entityKey, documentId, lang }) => {
         await guard.ws(workspaceId, 'viewer');
         if (documentId) await guard.doc(documentId, 'viewer');
         const scope = await guard.scope(workspaceId);
         const key = normalizeEntityKey(entityKey);
-        const found = await this.apiSpecs.operation(scope, key, documentId);
+        const found = await this.apiSpecs.operation(scope, key, documentId, lang);
         if (!found) throw new Error(`No API operation ${key} in a spec you can open`);
         const specIds = new Set(found.operations.map((o) => o.documentId));
         const { edges } = await this.entities.neighbors(scope, key, 1);

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * One operation or channel (#78) as its own card: the endpoint line, the
- * summary as its heading, then what to send, what comes back, and who links it.
+ * summary as its heading, then what to send, what comes back, the request as
+ * code with its try-it console, and who links it.
  * The card is the boundary between endpoints; inside it, sections separate by
  * heading and hairline only, so no box ever sits in another.
  *
@@ -18,6 +19,7 @@ import { operationDomId } from './use-api-reference'
 import { useCopy } from '@/lib/use-copy'
 import ApiEndpoint from './ApiEndpoint.vue'
 import ApiOperationLinks from './ApiOperationLinks.vue'
+import ApiRequestPanel from './ApiRequestPanel.vue'
 import ApiSchemaTree from './ApiSchemaTree.vue'
 import ApiTone from './ApiTone.vue'
 
@@ -153,6 +155,14 @@ const groupTitle = (where: string) => (te(`apiRef.in.${where}`) ? t(`apiRef.in.$
         </div>
       </div>
     </section>
+
+    <ApiRequestPanel
+      v-if="view.protocol === 'http'"
+      :document="document"
+      :operation="operation"
+      :view="view"
+      :workspace-id="workspaceId"
+    />
 
     <ApiOperationLinks
       v-if="links"

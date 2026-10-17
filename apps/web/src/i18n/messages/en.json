@@ -159,7 +159,8 @@
     "exports": "Exports",
     "chatBots": "Chat bots",
     "captures": "Captures",
-    "newApiSpec": "API spec"
+    "newApiSpec": "API spec",
+    "apiReference": "API reference"
   },
   "role": {
     "guest": "Guest",
@@ -270,7 +271,8 @@
     "templatesHint": "Page shapes to start from",
     "publishingHint": "Public links to pages",
     "exportsHint": "Files you exported",
-    "chatBotsHint": "Answer questions in Telegram, citing your pages."
+    "chatBotsHint": "Answer questions in Telegram, citing your pages.",
+    "apiReferenceHint": "Try-it proxy for spec pages"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -4781,5 +4783,95 @@
     "newHeading": "New API spec",
     "editHeading": "Edit API spec",
     "hint": "Paste an OpenAPI (3.0, 3.1, Swagger 2.0) or AsyncAPI (2.x, 3.x) spec, or load a file. It is checked when you save."
+  },
+  "apiSamples": {
+    "title": "Request",
+    "label": "Code sample language",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailedShort": "Copy failed",
+    "copyFailed": "Could not copy — select the code and copy it by hand",
+    "fromSpec": "Written by the spec’s author — it does not follow the values in the console.",
+    "fromSpecLabelled": "“{label}”, written by the spec’s author — it does not follow the values in the console."
+  },
+  "apiTry": {
+    "open": "Try it",
+    "close": "Close",
+    "via": {
+      "label": "Send from",
+      "browser": "Browser",
+      "proxy": "Proxy"
+    },
+    "server": "Server",
+    "noServer": "This spec names no server",
+    "choose": "Choose…",
+    "contentType": "Body content type",
+    "proxyBlocked": {
+      "off": "The proxy is off for this workspace, so requests go from your browser.",
+      "role": "Sending through the proxy needs the editor role.",
+      "settings": "API reference settings"
+    },
+    "auth": {
+      "title": "Credentials",
+      "token": "Bearer token",
+      "apiKey": "API key",
+      "username": "Username",
+      "password": "Password",
+      "kept": "Kept in this browser tab only — never saved, never put in a code sample.",
+      "forget": "Forget credentials"
+    },
+    "send": "Send request",
+    "sending": "Sending…",
+    "missing": "Fill in {names} first.",
+    "relativeServer": "This spec names no absolute server URL, so there is nowhere to send the request.",
+    "corsHint": "No response reached this page from {host}. Either the API does not allow requests from a browser on another site (CORS), or it could not be reached.",
+    "corsUseProxy": "Switch “Send from” to Proxy to send it from the server instead.",
+    "corsNoProxy": "An admin can turn on the proxy in API reference settings, or send it from a terminal with the cURL sample.",
+    "response": "Response",
+    "ms": "{n} ms",
+    "sentVia": {
+      "browser": "from your browser",
+      "proxy": "through the proxy"
+    },
+    "tab": {
+      "body": "Body",
+      "headers": "Headers"
+    },
+    "binary": "Not text — shown as base64.",
+    "emptyBody": "Empty body.",
+    "truncated": "Cut at {size}; the response was longer.",
+    "browserHeaders": "A browser shows only the headers the API exposes to it (Access-Control-Expose-Headers).",
+    "dropped": "Not forwarded by the proxy: {names}."
+  },
+  "apiSettings": {
+    "title": "API reference",
+    "subtitle": "How the try-it console on spec pages may reach the APIs they describe.",
+    "proxy": {
+      "title": "Try-it proxy",
+      "subtitle": "Requests go from the reader’s browser by default. The proxy sends them from the server instead, for APIs that refuse browser requests — only to servers the spec names, only for its operations, and only for editors."
+    },
+    "mode": {
+      "off": {
+        "label": "Off",
+        "body": "Every request goes from the reader’s browser. APIs without CORS cannot be tried."
+      },
+      "allowlist": {
+        "label": "Allowlisted hosts",
+        "body": "The proxy reaches only hosts the workspace’s source policies allow."
+      },
+      "open": {
+        "label": "Any public host",
+        "body": "The proxy reaches any public host the source policies do not block. Private addresses stay refused."
+      }
+    },
+    "policies": "Source policies",
+    "fromEnv": "From the deployment",
+    "inForce": "In force",
+    "cappedTo": "Capped to {mode}",
+    "clampExplained": "This workspace asks for “{requested}”, but the deployment allows at most “{ceiling}” (API_TRY_PROXY_MODE), so “{ceiling}” is what applies.",
+    "limits": "Per person: {perMinute} requests a minute, {timeout} s each, bodies up to {request} out and {response} back.",
+    "inherit": "Use the deployment’s setting ({mode})",
+    "adminOnly": "Only a workspace admin can change this.",
+    "saved": "Saved"
   }
 }

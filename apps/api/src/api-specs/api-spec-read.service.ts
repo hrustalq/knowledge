@@ -1,8 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type DocumentRevision } from '@prisma/client';
 import {
+  CODE_SAMPLE_LANGS,
+  codeSamplesFor,
   isApiSpecKind,
+  normalizeEntityKey,
   type ApiOperationInfo,
+  type ApiOperationSamplesResponse,
+  type CodeSample,
+  type CodeSampleLang,
   type ApiSpecDocumentResponse,
   type ApiSpecKind,
   type ApiSpecSummary,
@@ -149,6 +155,31 @@ export class ApiSpecReadService {
   }
 
   /**
+   * One operation's code samples (#78, phase 4): the author's `x-codeSamples`
+   * where the spec has them, generated from the operation elsewhere, with
+   * placeholders for every credential.
+   */
+  async samples(
+    documentId: string,
+    opts: { entityKey: string; method?: string; lang?: CodeSampleLang; revisionId?: string },
+  ): Promise<ApiOperationSamplesResponse> {
+    const { revision } = await this.revisionOf(documentId, opts.revisionId);
+    const spec = await this.spec(documentId, revision?.id);
+    const entityKey = normalizeEntityKey(opts.entityKey);
+    const row = await this.prisma.apiOperation.findFirst({
+      where: { revisionId: spec.revisionId, entityKey, ...(opts.method ? { method: opts.method.toUpperCase() } : {}) },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!row) throw new NotFoundException(t('error.apiTry.operationNotInSpec', { method: opts.method ?? '', entityKey }));
+    return {
+      documentId,
+      revisionId: spec.revisionId,
+      entityKey,
+      samples: codeSamplesFor(spec.document, row, {}, opts.lang ? [opts.lang] : CODE_SAMPLE_LANGS),
+    };
+  }
+
+  /**
    * One operation by entity key, at the head of a spec the scope may open, with
    * its section of the projection — the spec author's text, which the caller
    * must wrap as untrusted before a model sees it.
@@ -157,10 +188,11 @@ export class ApiSpecReadService {
     scope: AccessScope,
     entityKey: string,
     documentId?: string,
-  ): Promise<{ operations: Array<ApiOperationInfo & { specTitle: string; markdown: string }> } | null> {
+    lang?: CodeSampleLang,
+  ): Promise<{ operations: Array<ApiOperationInfo & { specTitle: string; markdown: string; samples?: CodeSample[] }> } | null> {
     const hits = (await this.search(scope, { documentId, limit: 200 })).operations.filter((o) => o.entityKey === entityKey);
     if (hits.length === 0) return null;
-    const out: Array<ApiOperationInfo & { specTitle: string; markdown: string }> = [];
+    const out: Array<ApiOperationInfo & { specTitle: string; markdown: string; samples?: CodeSample[] }> = [];
     for (const hit of hits.slice(0, 5)) {
       const revision = await this.prisma.documentRevision.findUnique({ where: { id: hit.revisionId } });
       const doc = await this.prisma.document.findUnique({ where: { id: hit.documentId }, select: { kind: true } });
@@ -169,7 +201,11 @@ export class ApiSpecReadService {
       // The pointer is stable within a revision, so it finds the operation
       // without re-deriving a key under a slug that may have been re-pinned.
       const op = spec.operations.find((o) => o.pointer === hit.pointer && o.method === hit.method);
-      out.push({ ...hit, markdown: op ? renderOperation(op) : '' });
+      out.push({
+        ...hit,
+        markdown: op ? renderOperation(op) : '',
+        ...(lang ? { samples: codeSamplesFor(spec.document, hit, {}, [lang]) } : {}),
+      });
     }
     return { operations: out };
   }

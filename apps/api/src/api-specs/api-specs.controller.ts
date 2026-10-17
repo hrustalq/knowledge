@@ -1,7 +1,10 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
+  ApiOperationSamplesResponse,
+  ApiSettingsResponse,
   ApiSpecDocumentResponse,
+  ApiTryResponse,
   ListApiOperationsResponse,
   ListApiSpecsResponse,
   SearchApiOperationsResponse,
@@ -11,7 +14,16 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { ApiSpecReadService } from './api-spec-read.service.js';
-import { ApiSpecRevisionQueryDto, ListApiSpecsQueryDto, SearchApiOperationsQueryDto } from './api-specs.dto.js';
+import { ApiSettingsService } from './api-settings.service.js';
+import { ApiTryService } from './api-try.service.js';
+import {
+  ApiSamplesQueryDto,
+  ApiSpecRevisionQueryDto,
+  ApiTryRequestDto,
+  ListApiSpecsQueryDto,
+  SearchApiOperationsQueryDto,
+  UpdateApiSettingsDto,
+} from './api-specs.dto.js';
 
 /**
  * API spec documents (#78, phase 2). A spec is a document, so its writes are
@@ -25,6 +37,7 @@ export class ApiSpecsController {
   constructor(
     private readonly reads: ApiSpecReadService,
     private readonly permissions: PermissionService,
+    private readonly tries: ApiTryService,
   ) {}
 
   @Get()
@@ -57,6 +70,59 @@ export class ApiSpecsController {
     @Query() query: ApiSpecRevisionQueryDto,
   ): Promise<ListApiOperationsResponse> {
     return this.reads.operations(id, query.revisionId);
+  }
+
+  @Get(':id/samples')
+  @Access('viewer', 'document')
+  @ApiOperation({
+    summary:
+      "One operation's code samples (curl, JavaScript, Python, Go): the spec's x-codeSamples where it has them, " +
+      'generated elsewhere, with environment-variable placeholders for credentials',
+  })
+  samples(@Param('id', ParseUUIDPipe) id: string, @Query() query: ApiSamplesQueryDto): Promise<ApiOperationSamplesResponse> {
+    return this.reads.samples(id, query);
+  }
+
+  @Post(':id/try')
+  @HttpCode(200)
+  @Access('editor', 'document')
+  @ApiOperation({
+    summary:
+      'Send one request to a server this revision names, for an operation it defines — the try-it proxy. ' +
+      "403 while the workspace's mode is off; redirects are returned, not followed; Set-Cookie is dropped",
+  })
+  try(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApiTryRequestDto,
+  ): Promise<ApiTryResponse> {
+    return this.tries.send(principal, id, dto);
+  }
+}
+
+/** A workspace's API reference settings (#78): the try-it proxy mode, asked for beside applied. */
+@ApiTags('api-specs')
+@Controller('v1/workspaces')
+export class ApiSettingsController {
+  constructor(private readonly settings: ApiSettingsService) {}
+
+  // A viewer reads it: the console has to know whether the proxy is there.
+  @Get(':id/api-settings')
+  @Access('viewer', 'workspace')
+  @ApiOperation({ summary: "The workspace's API reference settings: what is asked for, the deployment ceiling, what applies" })
+  get(@Param('id', ParseUUIDPipe) id: string): Promise<ApiSettingsResponse> {
+    return this.settings.get(id);
+  }
+
+  @Patch(':id/api-settings')
+  @Access('admin', 'workspace')
+  @ApiOperation({ summary: 'Override the API reference settings; null on a key inherits the deployment value' })
+  update(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateApiSettingsDto,
+  ): Promise<ApiSettingsResponse> {
+    return this.settings.update(id, dto, principal?.userId);
   }
 }
 

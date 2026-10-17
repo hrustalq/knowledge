@@ -159,6 +159,10 @@ export function createRouter() {
           // and the inventory of every link. Gated in the page on
           // auth.canAdminWorkspace, as AI settings are; the API enforces admin.
           { path: 'publishing', component: () => import('@/pages/PublishingSettingsPage.vue') },
+          // API reference (#78): the try-it proxy mode. Open to every member to
+          // read, since the console needs to know; the page gates the change on
+          // auth.canAdminWorkspace and the API enforces admin.
+          { path: 'api', component: () => import('@/pages/ApiSettingsPage.vue') },
           { path: 'exports', component: () => import('@/pages/ExportsPage.vue') },
           // Workflows: like AI settings, deliberately not meta.platformAdmin —
           // this is workspace administration, so the page gates on

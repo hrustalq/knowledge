@@ -802,6 +802,46 @@
     },
     {
       "method": "GET",
+      "path": "/v1/api-specs/{id}/samples",
+      "tag": "api-specs",
+      "summary": "One operation's code samples (curl, JavaScript, Python, Go): the spec's x-codeSamples where it has them, generated elsewhere, with environment-variable placeholders for credentials",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/api-specs/{id}/try",
+      "tag": "api-specs",
+      "summary": "Send one request to a server this revision names, for an operation it defines — the try-it proxy. 403 while the workspace's mode is off; redirects are returned, not followed; Set-Cookie is dropped",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/api-settings",
+      "tag": "api-specs",
+      "summary": "The workspace's API reference settings: what is asked for, the deployment ceiling, what applies",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/workspaces/{id}/api-settings",
+      "tag": "api-specs",
+      "summary": "Override the API reference settings; null on a key inherits the deployment value",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/",
       "tag": "App",
       "summary": "",
@@ -4338,6 +4378,10 @@
         },
         {
           "name": "documentId",
+          "optional": true
+        },
+        {
+          "name": "lang",
           "optional": true
         }
       ]

@@ -3123,3 +3123,17 @@ model ApiOperation {
   @@index([documentId, revisionId])
   @@map("api_operations")
 }
+
+/// Workspace settings outside AI and publishing (#78), one sparse row per
+/// workspace: `null` inherits the deployment default or ceiling, so an empty
+/// table reproduces the env exactly. Other milestones add their columns here
+/// rather than starting another one-row table.
+model WorkspaceSettings {
+  workspaceId     String   @id @map("workspace_id") @db.Uuid
+  /// off | allowlist | open — narrowed by API_TRY_PROXY_MODE, never widened.
+  apiTryProxyMode String?  @map("api_try_proxy_mode")
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  updatedBy       String?  @map("updated_by") @db.Uuid
+
+  @@map("workspace_settings")
+}

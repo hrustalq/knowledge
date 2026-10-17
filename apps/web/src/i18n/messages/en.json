@@ -4738,8 +4738,6 @@
     "required": "required",
     "recursive": "{name}, recursive",
     "truncated": "… nested deeper",
-    "expand": "Expand {name}",
-    "collapse": "Collapse {name}",
     "kind": {
       "openapi": "OpenAPI",
       "asyncapi": "AsyncAPI"
@@ -4776,7 +4774,13 @@
     "needsAuth": "Needs credentials: {schemes}",
     "noDescription": "No description",
     "expandAll": "Expand all",
-    "collapseAll": "Collapse all"
+    "collapseAll": "Collapse all",
+    "schema": {
+      "fields": "{n} field | {n} fields",
+      "arrayFields": "array of {n} field | array of {n} fields",
+      "variants": "one of {n} variant | one of {n} variants",
+      "noFields": "No fields described."
+    }
   },
   "apiLink": {
     "search": "Search API operations",
@@ -4837,7 +4841,8 @@
     "copyFailedShort": "Copy failed",
     "copyFailed": "Could not copy — select the code and copy it by hand",
     "fromSpec": "Written by the spec’s author — it does not follow the values in the console.",
-    "fromSpecLabelled": "“{label}”, written by the spec’s author — it does not follow the values in the console."
+    "fromSpecLabelled": "“{label}”, written by the spec’s author — it does not follow the values in the console.",
+    "copyJson": "Copy JSON"
   },
   "apiTry": {
     "open": "Try it",

@@ -254,7 +254,8 @@ const responseTabs = computed<ApiTab[]>(() => [
   { id: 'headers', label: t('apiTry.tab.headers'), count: result.value?.headers.length ?? 0 },
 ])
 const responseStrip = ref<InstanceType<typeof ApiTabs> | null>(null)
-const isJson = computed(() => /json/iu.test(result.value?.headers.find((h) => h.name.toLowerCase() === 'content-type')?.value ?? ''))
+const contentType = computed(() => result.value?.headers.find((h) => h.name.toLowerCase() === 'content-type')?.value ?? '')
+const isJson = computed(() => /json/iu.test(contentType.value))
 
 const shownBody = computed(() => {
   const r = result.value
@@ -485,7 +486,7 @@ const shownBody = computed(() => {
         <div :id="responseStrip?.panelId(tab)" :key="tab" role="tabpanel" :aria-labelledby="responseStrip?.tabId(tab)" class="kn-fade-swap">
           <template v-if="tab === 'body'">
             <p v-if="result.encoding === 'base64'" class="mb-1.5 text-[0.8rem] text-muted-foreground">{{ t('apiTry.binary') }}</p>
-            <ApiCode v-if="shownBody" :code="shownBody" :lang="isJson && result.encoding === 'utf8' ? 'json' : null" wrap />
+            <ApiCode v-if="shownBody" :code="shownBody" :lang="isJson && result.encoding === 'utf8' ? 'json' : null" :caption="contentType || t('apiTry.tab.body')" wrap />
             <p v-else class="py-2 text-[0.875rem] text-muted-foreground">{{ t('apiTry.emptyBody') }}</p>
             <p v-if="result.truncated" class="mt-1.5 text-[0.8rem] text-muted-foreground">
               {{ t('apiTry.truncated', { size: formatBytes(settings?.tryLimits.maxResponseBytes ?? result.bytes) }) }}

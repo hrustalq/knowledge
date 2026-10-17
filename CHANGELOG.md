@@ -119,7 +119,13 @@ in the pull request that introduces them — see
     operations start closed; **Expand all** opens every card. Parameters and
     responses are Name | Description and Code | Description tables, and every
     body has **Example** and **Schema** tabs. An example the spec does not
-    give is built from the schema and labelled as such.
+    give is built from the schema and labelled as such. The schema is a
+    field tree: a closed field says what it holds ("3 fields", "array of 2
+    fields", "one of 2 variants"), levels open with a short animation, and
+    **Expand all** opens the whole schema. A type that refers to itself
+    opens one more level per click instead of stopping, up to six levels.
+    Examples and responses carry an always-visible **Copy JSON** button,
+    ready to paste into Postman or `curl --data`.
   - "Try it" is laid out like Postman: one request bar with the method, the
     URL as it will be sent (filled path parameters highlighted, empty ones
     flagged) and Send; then **Params**, **Headers**, **Body** and **Auth**

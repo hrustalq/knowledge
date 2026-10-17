@@ -16,7 +16,7 @@ import { exampleForSchema } from '@knowledge/contracts'
 import { schemaTree, typeLabel, type ContentView } from '@/lib/api-spec'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import ApiCode, { type ApiCodeLang } from './ApiCode.vue'
-import ApiSchemaTree from './ApiSchemaTree.vue'
+import ApiSchema from './ApiSchema.vue'
 import ApiTabs from './ApiTabs.vue'
 
 const props = defineProps<{ document: Record<string, unknown>; contents: ContentView[] }>()
@@ -71,16 +71,15 @@ const strip = ref<InstanceType<typeof ApiTabs> | null>(null)
           <SelectItem v-for="c in contents" :key="c.mediaType" :value="c.mediaType" class="font-mono text-[0.75rem]">{{ c.mediaType }}</SelectItem>
         </SelectContent>
       </Select>
-      <code v-else class="pb-1.5 font-mono text-[0.75rem] text-muted-foreground">{{ current.mediaType }}</code>
+      <code v-else-if="shown !== 'example'" class="pb-1.5 font-mono text-[0.75rem] text-muted-foreground">{{ current.mediaType }}</code>
     </div>
 
     <div v-if="shown === 'example' && example" :id="strip?.panelId('example')" role="tabpanel" :aria-labelledby="strip?.tabId('example')" class="kn-fade-swap space-y-1.5">
-      <ApiCode :code="example.text" :lang="lang" max-height="20rem" />
+      <ApiCode :code="example.text" :lang="lang" :caption="current.mediaType" max-height="20rem" />
       <p v-if="!example.own" class="text-[0.75rem] text-muted-foreground">{{ t('apiRef.generatedExample') }}</p>
     </div>
     <div v-else-if="shown === 'schema'" :id="strip?.panelId('schema')" role="tabpanel" :aria-labelledby="strip?.tabId('schema')" class="kn-fade-swap">
-      <p class="mb-1 font-mono text-[0.78rem] text-muted-foreground">{{ typeLabel(document, current.schema) }}</p>
-      <ApiSchemaTree :nodes="tree" />
+      <ApiSchema :document="document" :nodes="tree" :type="typeLabel(document, current.schema)" />
     </div>
     <p v-else class="text-[0.85rem] text-muted-foreground">{{ t('apiRef.noSchema') }}</p>
   </div>

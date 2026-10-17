@@ -57,7 +57,7 @@ import { expiryFor, VerificationPolicyService } from '../verification/verificati
 import { TemplatesService } from '../templates/templates.service.js';
 import { t } from '../i18n/t.js';
 import { ApiSpecsService } from '../api-specs/api-specs.service.js';
-import { API_SPEC_SYNTAXES, apiSpecContentType, apiSpecSyntaxOf, isApiSpecKind } from '@knowledge/contracts';
+import { API_SPEC_SYNTAXES, apiSpecContentType, apiSpecSyntaxOf, isApiSpecKind, type ApiDocumentKind } from '@knowledge/contracts';
 import { WORKSPACE_READER } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
@@ -723,6 +723,7 @@ export class DocumentsService {
         headRevisionId: headId,
         headRevisionStatus: (revision.status as RevisionStatus) ?? null,
         createdAt: document.createdAt.toISOString(),
+        kind: document.kind as ApiDocumentKind,
         // The stamp, the flag and their reading against the head and the
         // clock (docs/features/38 + 39). Writes live in VerificationService.
         ...this.trustFields(document, headId, issues.get(documentId) ?? 0, settings.inactiveAfterDays),

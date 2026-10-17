@@ -33,6 +33,18 @@ in the pull request that introduces them — see
   not break those links; only `x-knowledge-key` changes it. This is the
   first phase of the API reference: the reader, try-it, the merge-request
   diff and repo sync come in later releases. (#78)
+- Reading API specs over the API and MCP. `GET /v1/api-specs` lists the spec
+  documents you can open, with each head's operation count.
+  `GET /v1/api-specs/:id` returns one revision parsed (OpenAPI upgraded to
+  3.1, internal `$ref`s kept), and `GET /v1/api-specs/:id/operations`
+  returns its operations. `GET /v1/api-operations?q=` searches operations
+  across every spec, by method and path, summary or operationId. Agents get
+  `knowledge_list_api_operations` and `knowledge_get_api_operation`. The
+  latter returns an operation's parameters, body and responses as markdown,
+  plus the pages that link to it, such as a use case that `IMPLEMENTS` it.
+  Both work with read-only keys. `knowledge_create_revision` now writes a
+  spec document's whole YAML or JSON body; name it with `syntax`. The
+  document detail response gains `kind`. (#78)
 
 ### Operations
 

@@ -28,6 +28,7 @@ import { WorkflowsModule } from './workflows/workflows.module.js';
 import { WorkflowMaterializeModule } from './workflows/workflow-materialize.module.js';
 import { TemplatesModule } from './templates/templates.module.js';
 import { ComponentsModule } from './components/components.module.js';
+import { ApiSpecsModule } from './api-specs/api-specs.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { McpHttpModule } from './mcp/mcp-http.module.js';
@@ -74,6 +75,7 @@ import { ChatModule } from './chat/chat.module.js';
     // loads TemplatesCoreModule on its own to create a page from one.
     TemplatesModule,
     ComponentsModule,
+    ApiSpecsModule,
     // Plain-markdown reads for agents (issue #68). API-only: carries a controller.
     AiReadableModule,
     // Votes on answers (docs/features/38, issue #67 phase 2). API-only: the

@@ -1,3 +1,4 @@
+import type { ApiDocumentKind } from '@knowledge/contracts/core';
 import { normalizeEntityKey } from '@knowledge/contracts/graph';
 
 // ---------------------------------------------------------------------------
@@ -11,9 +12,6 @@ import { normalizeEntityKey } from '@knowledge/contracts/graph';
 // and four spellings of one key are four vertices for one endpoint.
 // ---------------------------------------------------------------------------
 
-/** `documents.kind`. `page` is every document that existed before #78. */
-export const API_DOCUMENT_KINDS = ['page', 'openapi', 'asyncapi'] as const;
-export type ApiDocumentKind = (typeof API_DOCUMENT_KINDS)[number];
 
 /** The kinds whose body is a spec rather than markdown. */
 export type ApiSpecKind = Exclude<ApiDocumentKind, 'page'>;
@@ -125,4 +123,66 @@ export interface ApiOperationSummary {
   deprecated: boolean;
   /** JSON pointer into the spec (`/paths/~1users~1{id}/get`), for deep links. */
   pointer: string;
+}
+
+// ---------------------------------------------------------------------------
+// Read API (#78, phase 2)
+// ---------------------------------------------------------------------------
+
+/** One stored operation, as the reference sidebar and the picker read it. */
+export interface ApiOperationInfo extends ApiOperationSummary {
+  documentId: string;
+  revisionId: string;
+}
+
+/** GET /v1/api-specs — a spec document and how many operations its head defines. */
+export interface ApiSpecSummary {
+  documentId: string;
+  projectId: string;
+  title: string;
+  kind: ApiSpecKind;
+  /** The pinned operation-key slug; null until the spec first indexes. */
+  slug: string | null;
+  headRevisionId: string | null;
+  /** `indexed` once the head's operations are readable. */
+  headRevisionStatus: string | null;
+  /** Operations of the head revision; 0 while it is still indexing. */
+  operationCount: number;
+  createdAt: string;
+}
+
+export interface ListApiSpecsResponse {
+  specs: ApiSpecSummary[];
+}
+
+/**
+ * GET /v1/api-specs/:documentId — the spec of one revision, parsed. OpenAPI is
+ * upgraded to 3.1; internal `$ref`s are kept rather than inlined, because a
+ * recursive schema dereferences to a cyclic object no JSON can carry. The
+ * renderer resolves them against `document`.
+ */
+export interface ApiSpecDocumentResponse {
+  documentId: string;
+  revisionId: string;
+  kind: ApiSpecKind;
+  /** As written: `3.0.3`, `2.0`, `2.6.0`… */
+  specVersion: string;
+  title: string;
+  version: string | null;
+  slug: string | null;
+  document: Record<string, unknown>;
+}
+
+/** GET /v1/api-specs/:documentId/operations */
+export interface ListApiOperationsResponse {
+  documentId: string;
+  /** The revision listed: the default-branch head unless one was asked for. */
+  revisionId: string | null;
+  revisionStatus: string | null;
+  operations: ApiOperationInfo[];
+}
+
+/** GET /v1/api-operations — the picker: operations across every spec the caller may open. */
+export interface SearchApiOperationsResponse {
+  operations: Array<ApiOperationInfo & { specTitle: string }>;
 }

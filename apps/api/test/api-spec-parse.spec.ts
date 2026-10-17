@@ -8,8 +8,9 @@ import {
   normalizeEntityKey,
   operationEntityKey,
 } from '@knowledge/contracts';
-import { ApiSpecError, keyOperations, parseApiSpec } from '../src/api-specs/api-spec.parser.js';
-import { renderSpecProjection } from '../src/api-specs/api-spec.projection.js';
+import { ApiSpecError, keyOperations, parseApiSpec, readApiSpecDocument } from '../src/api-specs/api-spec.parser.js';
+import { renderOperation, renderSpecProjection } from '../src/api-specs/api-spec.projection.js';
+import { WRITE_TOOLS } from '../src/mcp/mcp-tools.js';
 import { ApiSpecsService } from '../src/api-specs/api-specs.service.js';
 import { splitMarkdown } from '../src/ingestion/markdown.js';
 import { StorageService } from '../src/storage/storage.service.js';
@@ -365,3 +366,25 @@ describe('StorageService.sourceObjectName', () => {
     expect(name('text/plain')).toBe('source.md');
   });
 });
+
+describe('read helpers (phase 2)', () => {
+  it('serves OpenAPI upgraded to 3.1 with its $refs kept, so a recursive schema stays JSON', () => {
+    const doc = readApiSpecDocument(OPENAPI_30, 'openapi');
+    expect(doc.openapi).toMatch(/^3\.1/u);
+    expect(JSON.stringify(doc)).toContain('"$ref":"#/components/schemas/User"');
+    expect(readApiSpecDocument(ASYNCAPI_26, 'asyncapi').asyncapi).toBe('2.6.0');
+  });
+
+  it('renders one operation alone', async () => {
+    const spec = await parseApiSpec(OPENAPI_30, 'openapi', LIMITS);
+    const md = renderOperation(spec.operations[2]);
+    expect(md.startsWith('### POST /invoices')).toBe(true);
+    expect(md).not.toContain('GET /users');
+  });
+
+  it('keeps the API operation tools read-only', () => {
+    expect(WRITE_TOOLS.has('knowledge_list_api_operations')).toBe(false);
+    expect(WRITE_TOOLS.has('knowledge_get_api_operation')).toBe(false);
+  });
+});
+

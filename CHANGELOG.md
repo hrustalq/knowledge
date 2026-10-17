@@ -133,6 +133,28 @@ in the pull request that introduces them — see
   never pushed back to the repository, and the AI clean-up and merge assists
   are not offered on them. Connectors that name no specs sync exactly what
   they did. (#78)
+- The drift check now compares a synced OpenAPI spec with the routes its
+  repository declares. It reads NestJS controllers (`@ApiExcludeEndpoint`
+  routes are left out), Express, Fastify, Hono and Koa routers, FastAPI
+  decorators, and Go `net/http`, chi, gin, echo and gorilla routes. Tests,
+  fixtures, examples and vendored code are not read. A route whose path is
+  not a literal is counted, not guessed. A path matches whatever
+  its parameters are named (`:id`, `{id}`, `{userId}`), and one uniform
+  prefix such as `/v1` is allowed between the two sides. The check reports
+  three things: an operation the spec documents that no route serves (missing
+  in code), a route no spec documents (missing in spec), and a path whose
+  methods differ. A pull request that edits a spec or a file declaring a route
+  gets a finding on the spec page for each disagreement it introduces.
+  Disagreements that predate the change are not reported. The one drift
+  comment gains an **API specs** section with the spec's own diff (breaking /
+  non-breaking) when the pull request edits it. A pull request that touches
+  neither leaves the spec out. A repository with no supported framework is
+  reported as not compared, never as every operation missing. On a spec page,
+  editors can press **Check against the code** in the connector card to
+  compare the default branch as it stands
+  (`POST /v1/api-specs/:id/drift-check`, which queues a sentinel run). Neither
+  path needs a model, and spec pages are never given an AI-written correction:
+  the fix belongs in the repository's file. (#78)
 
 ### Changed
 

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
+  ApiDriftCheckResponse,
   ApiOperationSamplesResponse,
   ApiSettingsResponse,
   ApiSpecDiff,
@@ -14,6 +15,7 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { ApiDriftCheckService } from './api-drift-check.service.js';
 import { ApiSpecDiffService } from './api-spec-diff.service.js';
 import { ApiSpecReadService } from './api-spec-read.service.js';
 import { ApiSettingsService } from './api-settings.service.js';
@@ -42,6 +44,7 @@ export class ApiSpecsController {
     private readonly permissions: PermissionService,
     private readonly tries: ApiTryService,
     private readonly diffs: ApiSpecDiffService,
+    private readonly driftChecks: ApiDriftCheckService,
   ) {}
 
   @Get()
@@ -112,6 +115,19 @@ export class ApiSpecsController {
     @Body() dto: ApiTryRequestDto,
   ): Promise<ApiTryResponse> {
     return this.tries.send(principal, id, dto);
+  }
+
+  @Post(':id/drift-check')
+  @HttpCode(202)
+  @Access('editor', 'document')
+  @ApiOperation({
+    summary:
+      'Compare an OpenAPI spec with the routes its repository declares (NestJS, Express/Fastify, FastAPI, Go), on ' +
+      'the default branch. Queues a sentinel run whose findings are the disagreements; a check already waiting is ' +
+      'returned. 400 when no connected repository syncs the spec',
+  })
+  driftCheck(@CurrentPrincipal() principal: Principal, @Param('id', ParseUUIDPipe) id: string): Promise<ApiDriftCheckResponse> {
+    return this.driftChecks.start(principal, id);
   }
 }
 

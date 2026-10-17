@@ -1,6 +1,6 @@
 import type { ApiDocumentKind } from '@knowledge/contracts/core';
 import { normalizeEntityKey } from '@knowledge/contracts/graph';
-import type { ApiSpecDiff } from '@knowledge/contracts/api/diff';
+import type { ApiSpecDiff, ApiSpecDiffSummary } from '@knowledge/contracts/api/diff';
 import type { CodeSample } from '@knowledge/contracts/api/samples';
 
 // ---------------------------------------------------------------------------
@@ -329,4 +329,55 @@ export interface MergeRequestApiChangesResponse {
   ack: ApiBreakingAck | null;
   /** True when merging now would be refused with `breaking-api`. */
   blocked: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Spec ↔ code drift (#78, phase 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * How a spec and the routes its repository declares disagree. Closed: the
+ * comparator emits exactly these, the PR comment and the web label them, and
+ * a value the comparator never emits would be a label for nothing.
+ */
+export const API_DRIFT_KINDS = ['missing-in-code', 'missing-in-spec', 'method-mismatch'] as const;
+export type ApiDriftKind = (typeof API_DRIFT_KINDS)[number];
+
+/** One path the spec and the code disagree about. */
+export interface ApiDriftMismatch {
+  kind: ApiDriftKind;
+  /** As the spec spells it; as the code does for `missing-in-spec`. */
+  path: string;
+  /** The methods this is about: the spec's with no route, or the code's with no operation. `*` is any method. */
+  methods: string[];
+  /** `method-mismatch` only: the methods the code declares for the path instead. */
+  codeMethods?: string[];
+  /** Where the code declares the route, when it does. */
+  file?: string;
+  line?: number;
+}
+
+/** What one spec document was compared against, and what disagreed. */
+export interface ApiDriftSpec {
+  documentId: string;
+  title: string;
+  /** The spec file in the repository. */
+  specPath: string;
+  /** Routes read from the code. 0 means no supported framework was found, and nothing was compared. */
+  routes: number;
+  frameworks: string[];
+  /** Route declarations whose path was not a literal, so were not read. */
+  dynamic: number;
+  /** Capped; `mismatchTotal` is the whole count. On a pull request, only what the change introduces. */
+  mismatches: ApiDriftMismatch[];
+  mismatchTotal: number;
+  /** A pull request that changed the spec file: the classified diff, base → head. */
+  changes?: ApiSpecDiffSummary;
+}
+
+/** POST /v1/api-specs/:documentId/drift-check */
+export interface ApiDriftCheckResponse {
+  runId: string;
+  /** True when a check of this spec was already waiting or running, and that run is returned. */
+  existing: boolean;
 }

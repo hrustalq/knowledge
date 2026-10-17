@@ -318,6 +318,27 @@ describe('renderDriftComment', () => {
     expect(body).not.toContain('documents/');
   });
 
+  it('lists a tied spec with its diff and new disagreements, and leaves out one with nothing to say (#78)', () => {
+    const spec = {
+      documentId: 'spec-1',
+      title: 'Users [API]',
+      specPath: 'openapi.yaml',
+      routes: 4,
+      frameworks: ['nestjs'],
+      dynamic: 0,
+      mismatches: [],
+      mismatchTotal: 2,
+      changes: { breaking: 1, nonBreaking: 3, info: 0 },
+    };
+    const quiet = { ...spec, documentId: 'spec-2', mismatchTotal: 0, changes: undefined };
+    const unread = { ...spec, documentId: 'spec-3', routes: 0, mismatchTotal: 0 };
+    const body = renderDriftComment({ webBaseUrl: 'https://kb', connectorName: 'app', pullRequest: pr, entries: [], apiSpecs: [spec, quiet, unread] });
+    expect(body).toContain('agent.drift.comment.apiHeading');
+    expect(body).toContain('[Users \\[API\\]](https://kb/documents/spec-1) `openapi.yaml` — agent.drift.comment.apiChanges · agent.drift.comment.apiDisagreements');
+    expect(body).not.toContain('documents/spec-2');
+    expect(body).toContain('documents/spec-3) `openapi.yaml` — agent.drift.comment.apiChanges · _agent.drift.comment.apiNoRoutes_');
+  });
+
   it('keys the marker by connector, so two connectors on one repository keep a comment each', () => {
     expect(driftCommentMarker('a')).not.toBe(driftCommentMarker('b'));
     expect(driftCommentMarker('a')).toMatch(/^<!--.*-->$/);
@@ -510,6 +531,23 @@ describe('DriftPublishSweeper page flags', () => {
     });
     expect(verification.markOutdated).not.toHaveBeenCalled();
     expect(upsertPullRequestComment).toHaveBeenCalledTimes(1);
+  });
+
+  it('comments a spec diff on its own, with no finding to report (#78)', async () => {
+    const spec = { documentId: 'spec-1', title: 'Users API', specPath: 'openapi.yaml', routes: 2, frameworks: ['nestjs'], dynamic: 0, mismatches: [], mismatchTotal: 0, changes: { breaking: 1, nonBreaking: 0, info: 0 } };
+    const { sweeper } = harness({ publish: ['run-1'], run: { findings: [], details: { apiSpecs: [spec] } } });
+    vi.mocked(upsertPullRequestComment).mockClear();
+    await sweeper.sweep();
+    expect(upsertPullRequestComment).toHaveBeenCalledTimes(1);
+    expect(String(vi.mocked(upsertPullRequestComment).mock.calls[0][3])).toContain('documents/spec-1');
+  });
+
+  it('stays quiet on a tied spec with nothing to say', async () => {
+    const spec = { documentId: 'spec-1', title: 'Users API', specPath: 'openapi.yaml', routes: 2, frameworks: ['nestjs'], dynamic: 0, mismatches: [], mismatchTotal: 0 };
+    const { sweeper } = harness({ publish: ['run-1'], run: { findings: [], details: { apiSpecs: [spec] } } });
+    vi.mocked(upsertPullRequestComment).mockClear();
+    await sweeper.sweep();
+    expect(upsertPullRequestComment).not.toHaveBeenCalled();
   });
 
   it('leaves pages alone with driftFlagPages off, and still comments', async () => {

@@ -14,8 +14,11 @@ import type { DocumentConnectorResponse } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { relativeTime } from '@/lib/api'
+import ApiDriftCheck from '@/components/api-reference/ApiDriftCheck.vue'
 
-const props = defineProps<{ documentId: string }>()
+// `driftCheck`: an OpenAPI spec the reader may edit (#78, phase 8). Offered only
+// under a repository link, where there is code to compare it with.
+const props = defineProps<{ documentId: string; driftCheck?: boolean }>()
 
 const { t } = useI18n()
 
@@ -23,6 +26,8 @@ const query = useQuery(
   computed(() => apiQueryOptions('/v1/documents/{id}/connectors', { path: { id: props.documentId } })),
 )
 const links = computed(() => (query.data.value as DocumentConnectorResponse | undefined)?.links ?? [])
+const REPO_KINDS = new Set(['codebase', 'markdown-git'])
+const fromRepository = computed(() => links.value.some((l) => REPO_KINDS.has(l.kind)))
 
 const push = useApiMutation('post', '/v1/documents/{id}/push', {
   invalidates: () => [['/v1/documents/{id}/connectors'], ['/v1/connectors']],
@@ -71,6 +76,7 @@ async function publish() {
         </Button>
       </div>
     </div>
+    <ApiDriftCheck v-if="driftCheck && fromRepository" :document-id="documentId" class="border-t pt-3" />
   </div>
 
   <p v-else class="text-muted-foreground text-xs">{{ t('connectors.notLinked') }}</p>

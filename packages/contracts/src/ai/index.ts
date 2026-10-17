@@ -9,6 +9,7 @@ import type {
 } from '@knowledge/contracts/core';
 import type { RelationInput } from '@knowledge/contracts/documents';
 import type { AiActionId } from '@knowledge/contracts/content';
+import type { ApiDriftSpec } from '@knowledge/contracts/api';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
 // sidebar materializes from each assistant message's toolCalls trace rather
@@ -1205,6 +1206,12 @@ export interface AgentRunInput {
    */
   issueId?: string;
   /**
+   * The spec document an on-demand sentinel run compares against its
+   * repository's routes (#78, phase 8), with `connectorId` naming the
+   * repository. No pull request: the default branch is checked as it stands.
+   */
+  apiSpecDocumentId?: string;
+  /**
    * How far back a surveyor run reads answer feedback (docs/features/38,
    * phase 4). Absent, the worker uses `COVERAGE_WINDOW_DAYS`.
    */
@@ -2103,6 +2110,13 @@ export interface AgentFinding {
    * the finding has a draft.
    */
   componentPaths?: ComponentPathFix[];
+  /**
+   * The spec ↔ code comparison this finding reports, for the spec document it
+   * cites (#78, phase 8). Set only by the sentinel, from static analysis,
+   * never by a model; such a finding carries no draft — a spec page is the
+   * repository's file, corrected there and synced back.
+   */
+  apiDrift?: ApiDriftSpec;
 }
 
 /** One declared path a change removed or moved (#236). */
@@ -2144,6 +2158,12 @@ export interface DriftAffectedUsages {
  */
 export interface AgentRunDetails {
   affectedUsages?: DriftAffectedUsages;
+  /**
+   * Every spec document the check compared against the code (#78, phase 8),
+   * with the spec's own diff when the change edited it — what the comment's
+   * API section reads, including specs with nothing wrong.
+   */
+  apiSpecs?: ApiDriftSpec[];
 }
 
 /**

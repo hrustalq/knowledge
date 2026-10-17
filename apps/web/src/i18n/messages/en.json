@@ -5047,5 +5047,17 @@
       "optional": "optional",
       "required": "required"
     }
+  },
+  "apiDrift": {
+    "check": "Check against the code",
+    "checking": "Comparing with the code…",
+    "failed": "The check did not finish.",
+    "codeServes": "The code serves {methods} here",
+    "more": "{n} more | {n} more",
+    "kind": {
+      "missing-in-code": "Not in code",
+      "missing-in-spec": "Not in spec",
+      "method-mismatch": "Method differs"
+    }
   }
 }

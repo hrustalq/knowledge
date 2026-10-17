@@ -21,7 +21,7 @@ import { upsertPullRequestComment } from '../adapters/pull-request.js';
 import { ConnectorsService } from '../connectors.service.js';
 import { flagNote, pagesToFlag } from './drift-flags.js';
 import { DRIFT_AGENT_KEY } from './drift-trigger.service.js';
-import { driftCommentMarker, renderDriftComment, type DriftReportEntry } from './drift-report.js';
+import { apiSpecWorthListing, driftCommentMarker, renderDriftComment, type DriftReportEntry } from './drift-report.js';
 
 const SWEEP_INTERVAL_MS = 15_000;
 const BATCH = 5;
@@ -39,6 +39,12 @@ const listsUsages = (details: unknown) => {
   const usages = (details as AgentRunDetails | null)?.affectedUsages;
   return !!usages && (usages.pages.length > 0 || usages.hiddenPages > 0 || usages.undocumentedTotal > 0);
 };
+
+/** The specs a run has something to say about (#78, phase 8) — a spec diff or a new disagreement with the code. */
+const listedSpecs = (details: unknown) => ((details as AgentRunDetails | null)?.apiSpecs ?? []).filter(apiSpecWorthListing);
+
+/** Whether a run's comment carries more than its findings. */
+const listsDetails = (details: unknown) => listsUsages(details) || listedSpecs(details).length > 0;
 
 /**
  * Publishes a finished drift check (docs/features/35): the merge requests it
@@ -211,11 +217,13 @@ export class DriftPublishSweeper implements OnModuleInit, OnModuleDestroy {
     // clean check after a warning updates the comment to say it is resolved.
     // Affected usages (#236) are worth a comment on their own: they name the
     // docs downstream of a component change before anything has drifted.
+    // So are API specs (#78): a spec diff is news to the reviewer of a spec change.
     const affected = listsUsages(run.details) ? (run.details as AgentRunDetails).affectedUsages! : null;
+    const apiSpecs = listedSpecs(run.details);
     const warnedBefore = siblings.some(
-      (s) => (Array.isArray(s.findings) && s.findings.length > 0) || listsUsages(s.details),
+      (s) => (Array.isArray(s.findings) && s.findings.length > 0) || listsDetails(s.details),
     );
-    if (entries.length === 0 && !affected && !warnedBefore) return;
+    if (entries.length === 0 && !affected && apiSpecs.length === 0 && !warnedBefore) return;
 
     const body = renderDriftComment({
       webBaseUrl: this.webBaseUrl,
@@ -223,6 +231,7 @@ export class DriftPublishSweeper implements OnModuleInit, OnModuleDestroy {
       pullRequest: pr,
       entries,
       affected,
+      apiSpecs,
     });
     const ctx = await this.connectors.contextFor(row, async () => undefined);
     await upsertPullRequestComment(ctx, pr.number, driftCommentMarker(row.id), body);

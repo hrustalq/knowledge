@@ -138,6 +138,11 @@ export type I18nTranslations = {
                 "hiddenPages": string;
                 "undocumented": string;
                 "andMore": string;
+                "apiHeading": string;
+                "apiChanges": string;
+                "apiNoRoutes": string;
+                "apiDisagreements": string;
+                "apiAgrees": string;
             };
             "paths": {
                 "title": string;
@@ -148,6 +153,28 @@ export type I18nTranslations = {
             "overlayFailed": string;
             "overlayPartial": string;
             "usagesFailed": string;
+            "api": {
+                "missingInCode": string;
+                "missingInSpec": string;
+                "methodMismatch": string;
+                "more": string;
+                "findingTitle": string;
+                "findingDetailPr": string;
+                "findingDetail": string;
+                "headPartial": string;
+                "headUnread": string;
+                "specGone": string;
+                "specUnparsed": string;
+                "failed": string;
+                "hidden": string;
+                "summaryPr": string;
+                "needsSpec": string;
+                "restricted": string;
+                "summaryUnchecked": string;
+                "summaryNoRoutes": string;
+                "summaryDrifted": string;
+                "summaryClean": string;
+            };
         };
         "report": {
             "noContent": string;
@@ -1000,6 +1027,10 @@ export type I18nTranslations = {
             "template": string;
             "notSpec": string;
             "notDiffable": string;
+            "driftNotLinked": string;
+            "driftNoRepository": string;
+            "driftNotHttp": string;
+            "driftDisabled": string;
         };
         "apiTry": {
             "disabled": string;

@@ -19061,6 +19061,63 @@
         ]
       }
     },
+    "/v1/api-specs/{id}/drift-check": {
+      "post": {
+        "operationId": "ApiSpecsController_driftCheck",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Compare an OpenAPI spec with the routes its repository declares (NestJS, Express/Fastify, FastAPI, Go), on the default branch. Queues a sentinel run whose findings are the disagreements; a check already waiting is returned. 400 when no connected repository syncs the spec",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
     "/v1/api-operations": {
       "get": {
         "operationId": "ApiOperationsController_search",

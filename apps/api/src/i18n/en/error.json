@@ -587,7 +587,11 @@
     "format": "An API spec is written as yaml or json, not {format}",
     "template": "An API spec cannot start from a page template",
     "notSpec": "Document {id} is not an API spec",
-    "notDiffable": "Document {id} is not an API spec whose revisions both parse, so there is no API diff"
+    "notDiffable": "Document {id} is not an API spec whose revisions both parse, so there is no API diff",
+    "driftNotLinked": "Document {id} is not a spec this repository syncs.",
+    "driftNoRepository": "This spec is not synced from a connected repository, so there is no code to compare it with.",
+    "driftNotHttp": "Only an OpenAPI spec describes HTTP routes; an AsyncAPI spec has nothing to compare with the code.",
+    "driftDisabled": "The sentinel agent is turned off for this workspace, so no drift check can run."
   },
   "apiTry": {
     "disabled": "The try-it proxy is off for this workspace. Send the request from your browser instead.",

@@ -801,6 +801,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/api-specs/{id}/drift-check",
+      "tag": "api-specs",
+      "summary": "Compare an OpenAPI spec with the routes its repository declares (NestJS, Express/Fastify, FastAPI, Go), on the default branch. Queues a sentinel run whose findings are the disagreements; a check already waiting is returned. 400 when no connected repository syncs the spec",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/api-specs/{id}/operations",
       "tag": "api-specs",

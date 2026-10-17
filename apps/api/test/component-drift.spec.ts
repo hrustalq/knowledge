@@ -269,6 +269,7 @@ describe('the sentinel with component ties', () => {
       { promptFor: async () => '', dismissedPrompt: async () => '' } as never,
       componentUsages as never,
       {} as never,
+      { forPullRequest: async () => null } as never,
     );
     const run = {
       id: 'run-1',

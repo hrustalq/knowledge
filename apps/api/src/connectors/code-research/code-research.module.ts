@@ -3,6 +3,7 @@ import { AuthCoreModule } from '../../auth/auth-core.module.js';
 import { PrismaModule } from '../../prisma/prisma.module.js';
 import { ConnectorAdaptersModule } from '../adapters/adapters.module.js';
 import { ConnectorsCoreModule } from '../connectors-core.module.js';
+import { ApiDriftService } from './api-drift.service.js';
 import { CodeResearchService } from './code-research.service.js';
 import { PullRequestService } from './pull-request.service.js';
 import { RepoSnapshotService } from './repo-snapshot.service.js';
@@ -22,11 +23,11 @@ import { RepoSnapshotService } from './repo-snapshot.service.js';
  * the credential resolution, and `ConnectorAdaptersModule` for the one parser
  * instance it exports. Nothing here can write a page or a repository — which
  * is why reading a pull request's diff lives here (docs/features/35) and
- * commenting on one does not.
+ * commenting on one does not — and why the spec ↔ code drift check (#78) does.
  */
 @Module({
   imports: [PrismaModule, AuthCoreModule, ConnectorsCoreModule, ConnectorAdaptersModule],
-  providers: [RepoSnapshotService, CodeResearchService, PullRequestService],
-  exports: [RepoSnapshotService, CodeResearchService, PullRequestService],
+  providers: [RepoSnapshotService, CodeResearchService, PullRequestService, ApiDriftService],
+  exports: [RepoSnapshotService, CodeResearchService, PullRequestService, ApiDriftService],
 })
 export class CodeResearchModule {}

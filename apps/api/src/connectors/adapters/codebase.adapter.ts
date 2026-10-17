@@ -83,10 +83,7 @@ import {
   type ExternalRef,
 } from './connector.types.js';
 import { githubRepoAcl, githubTeamMembers } from './github-acl.js';
-import { repoSpecFiles, suggestSpecFiles } from './repo-specs.js';
-
-/** A spec file's unit key (#78): the path, kept apart from module keys, which are paths too. */
-const SPEC_KEY_PREFIX = 'spec:';
+import { repoSpecFiles, SPEC_KEY_PREFIX, suggestSpecFiles } from './repo-specs.js';
 
 /**
  * A repository as a subject to document (docs/features/27).

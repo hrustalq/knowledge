@@ -7,7 +7,9 @@ import type {
   AgentRunDetails,
   AgentRunComponent,
   AgentRunInput,
+  AgentRunPullRequest,
   AnswerSignalKind,
+  ApiDriftSpec,
   AnswerSurface,
   AssistantWebSource,
   AuthorableRelationType,
@@ -28,6 +30,7 @@ import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
 import { RepoSnapshotService } from '../connectors/code-research/repo-snapshot.service.js';
 import { PullRequestService } from '../connectors/code-research/pull-request.service.js';
+import { ApiDriftService, type ApiDriftResult } from '../connectors/code-research/api-drift.service.js';
 import { ComponentUsagesService, type ChangeImpact } from '../components/component-usages.service.js';
 import { declaredPathFixes } from '../components/component-match.js';
 import { wrapUntrusted } from '../common/untrusted.js';
@@ -84,6 +87,7 @@ import {
   subdirOf,
   type DriftCandidate,
 } from './drift.js';
+import { apiDriftFinding, apiDriftPromptNote } from './api-drift.js';
 import { readEvidence } from '../feedback/knowledge-issues.service.js';
 import {
   COVERAGE_OUTPUT_CONTRACT,
@@ -214,6 +218,7 @@ export class AgentExecutor {
     private readonly learnings: AgentLearningsService,
     private readonly componentUsages: ComponentUsagesService,
     private readonly templates: TemplatesService,
+    private readonly apiDrift: ApiDriftService,
   ) {}
 
   /**
@@ -306,10 +311,12 @@ export class AgentExecutor {
       // the Run button and feeds the schedule sweeper, and a sentinel run with
       // neither a pull request nor a report has nothing to check. Only
       // DriftTriggerService and KnowledgeIssuesService start one.
-      case 'sentinel':
-        return ((run.input ?? {}) as AgentRunInput).issueId
-          ? this.checkReport(run, agent, principal, report)
-          : this.checkDrift(run, agent, principal, report);
+      case 'sentinel': {
+        const input = (run.input ?? {}) as AgentRunInput;
+        if (input.issueId) return this.checkReport(run, agent, principal, report);
+        if (input.apiSpecDocumentId) return this.checkApiDrift(run, principal, report);
+        return this.checkDrift(run, agent, principal, report);
+      }
       default:
         // RUNNABLE_AGENTS is the API's copy of this switch; anything reaching
         // here got past that check, so failing loudly beats running an agent as
@@ -1055,15 +1062,24 @@ export class AgentExecutor {
     const changed = await this.pullRequests.files(connectorId, run.workspaceId, pr.number);
     if (changed.truncated) await report({ warning: t('agent.drift.truncated', { files: changed.files.length }) });
     const files = scopeFiles(changed.files, subdirOf(connector.config));
-    if (files.length === 0) return { summary: t('agent.drift.noFiles', { number: pr.number }), findings: [] };
+    // Spec ↔ code (#78) reads every changed file: the routes a docs
+    // connector's spec describes sit outside its `subdir`.
+    const api = await this.apiDriftForChange(run, connectorId, pr, changed.files, report);
+    if (files.length === 0 && !api?.specs.length) return { summary: t('agent.drift.noFiles', { number: pr.number }), findings: [] };
 
     // --- which pages it touches, strongest tie first
     await report({ stage: 'related', progress: 0.2 });
     const scope = await this.runScope(run, principal);
-    const impact = await this.changeImpact(scope, connector, pr, files, report);
-    const all = await this.driftCandidates(scope, connector, pr, files, impact, report);
+    const apiSpecs = api ? await this.visibleSpecs(scope, api.specs, report) : [];
+    // Certain, like a path fix: static analysis, whatever the model says.
+    const apiFindings = apiSpecs.map((s) => apiDriftFinding(s, pr)).filter((f): f is AgentFinding => !!f);
+    const impact = files.length ? await this.changeImpact(scope, connector, pr, files, report) : null;
+    const all = files.length ? await this.driftCandidates(scope, connector, pr, files, impact, report) : [];
+    // A spec page is the repository's file: its drift is the comparison
+    // above, and a model-written body would be overwritten by the next sync.
+    const specIds = await this.specDocumentIds(all.map((c) => c.documentId));
     // Past the cap a page is listed, never judged — one model call each.
-    const candidates = all.slice(0, MAX_DRIFT_PAGES);
+    const candidates = all.filter((c) => !specIds.has(c.documentId)).slice(0, MAX_DRIFT_PAGES);
 
     // A declared path the change removes or moves is known from the diff
     // alone, so it is a finding whatever the model says, or whether one runs.
@@ -1073,10 +1089,16 @@ export class AgentExecutor {
       if (fixes.length > 0) pathFindings.set(page.documentId, componentPathFinding({ id: page.documentId, title: page.title }, page.paths, fixes, pr));
     }
     const judged = new Set<string>();
-    const details = (): AgentRunDetails | undefined => affectedUsagesDetails(impact, judged);
+    const details = (): AgentRunDetails | undefined => {
+      const merged: AgentRunDetails = { ...affectedUsagesDetails(impact, judged), ...(apiSpecs.length ? { apiSpecs } : {}) };
+      return Object.keys(merged).length ? merged : undefined;
+    };
 
     if (candidates.length === 0) {
-      return { summary: t('agent.drift.noRelated', { number: pr.number, files: files.length }), findings: [], details: details() };
+      const summary = apiFindings.length
+        ? t('agent.drift.api.summaryPr', { number: pr.number, specs: apiSpecs.length, drifted: apiFindings.length })
+        : t('agent.drift.noRelated', { number: pr.number, files: files.length });
+      return { summary, findings: [...apiFindings, ...pathFindings.values()], details: details() };
     }
 
     // 'tools' is a preference, not a prerequisite — the curator's rule.
@@ -1102,6 +1124,7 @@ export class AgentExecutor {
       for (const [documentId, finding] of pathFindings) {
         if (!candidates.some((c) => c.documentId === documentId)) findings.push(finding);
       }
+      findings.unshift(...apiFindings);
       return {
         summary: t('agent.drift.summaryNoModel', { number: pr.number, pages: findings.length }),
         findings,
@@ -1127,6 +1150,7 @@ export class AgentExecutor {
         ? this.code.execute(name, { ...args, connectorId }, toolCtx)
         : this.readTools.execute(name, args, toolCtx);
     const byPath = new Map(files.map((f) => [f.path, f]));
+    const apiNote = apiDriftPromptNote(apiSpecs);
 
     const findings: AgentFinding[] = [];
     let checked = 0;
@@ -1167,7 +1191,8 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
 <page title=${JSON.stringify(candidate.title)} documentId="${candidate.documentId}">
 ` +
             `${content.markdown.slice(0, MAX_PAGE_CHARS)}
-</page>`,
+</page>` +
+            apiNote,
         },
       ];
 
@@ -1203,8 +1228,8 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
       }
     }
 
-    // Path findings first: they are certain, and the cap must not drop them.
-    findings.unshift(...pathFindings.values());
+    // Path and spec findings first: they are certain, and the cap must not drop them.
+    findings.unshift(...apiFindings, ...pathFindings.values());
     return {
       summary: t('agent.drift.summary', {
         number: pr.number,
@@ -1214,6 +1239,83 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
       }),
       findings: findings.slice(0, MAX_FINDINGS),
       details: details(),
+    };
+  }
+
+  /**
+   * What a change does to the agreement between the repository's specs and
+   * its routes (#78, phase 8), or null when it ties no spec. Any failure costs
+   * the comparison, never the run — the pages are still worth judging.
+   */
+  private async apiDriftForChange(
+    run: AgentRun,
+    connectorId: string,
+    pr: AgentRunPullRequest,
+    changed: Parameters<ApiDriftService['forPullRequest']>[3],
+    report: AgentReporter,
+  ): Promise<ApiDriftResult | null> {
+    try {
+      const result = await this.apiDrift.forPullRequest(connectorId, run.workspaceId, pr.headSha, changed, run.locale as Locale);
+      for (const warning of result?.warnings ?? []) await report({ warning });
+      return result;
+    } catch (error) {
+      this.logger.warn(`Sentinel could not compare specs with routes for #${pr.number}: ${String(error)}`);
+      await report({ warning: t('agent.drift.api.failed') });
+      return null;
+    }
+  }
+
+  /** The specs the run's audience may open; the rest are counted, never named. */
+  private async visibleSpecs(scope: AccessScope, specs: ApiDriftSpec[], report: AgentReporter): Promise<ApiDriftSpec[]> {
+    const visible = await this.permissions.visibleDocumentIds(scope, specs.map((s) => s.documentId));
+    const hidden = specs.filter((s) => !visible.has(s.documentId)).length;
+    if (hidden > 0) await report({ warning: t('agent.drift.api.hidden', { count: hidden }) });
+    return specs.filter((s) => visible.has(s.documentId));
+  }
+
+  /** Which of these pages are spec documents. */
+  private async specDocumentIds(ids: string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const rows = await this.prisma.document.findMany({
+      where: { id: { in: ids }, kind: { in: ['openapi', 'asyncapi'] } },
+      select: { id: true },
+    });
+    return new Set(rows.map((r) => r.id));
+  }
+
+  /**
+   * The on-demand spec ↔ code check (#78, phase 8): one spec against its
+   * repository's default branch, with no pull request and no model — the
+   * comparison is static analysis, so it runs whether or not a model is
+   * configured. Everything it finds is reported, drift that predates any
+   * change included; the result is the run's findings, the same surface as a
+   * pull request check, and nothing is published.
+   */
+  private async checkApiDrift(run: AgentRun, principal: Principal, report: AgentReporter): Promise<AgentRunResult> {
+    const input = (run.input ?? {}) as AgentRunInput;
+    const documentId = input.apiSpecDocumentId;
+    if (!documentId || !input.connectorId) throw new Error(t('agent.drift.api.needsSpec'));
+
+    await report({ stage: 'routes', progress: 0.1 });
+    const scope = await this.runScope(run, principal);
+    if (!(await this.permissions.visibleDocumentIds(scope, [documentId])).has(documentId)) {
+      throw new Error(t('agent.drift.api.restricted'));
+    }
+    const result = await this.apiDrift.forBranch(input.connectorId, run.workspaceId, documentId, run.locale as Locale);
+    for (const warning of result.warnings) await report({ warning });
+    const spec = result.specs[0];
+    if (!spec) return { summary: t('agent.drift.api.summaryUnchecked'), findings: [] };
+
+    await report({ stage: 'comparing', progress: 0.9 });
+    const details: AgentRunDetails = { apiSpecs: [spec] };
+    if (spec.routes === 0) return { summary: t('agent.drift.api.summaryNoRoutes', { title: spec.title }), findings: [], details };
+    const finding = apiDriftFinding(spec, null);
+    return {
+      summary: finding
+        ? t('agent.drift.api.summaryDrifted', { title: spec.title, count: spec.mismatchTotal, routes: spec.routes })
+        : t('agent.drift.api.summaryClean', { title: spec.title, routes: spec.routes }),
+      findings: finding ? [finding] : [],
+      details,
     };
   }
 

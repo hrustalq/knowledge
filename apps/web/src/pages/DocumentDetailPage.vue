@@ -811,7 +811,12 @@ watch(
             />
           </template>
           <template #widget-workflows><WorkflowRail :document-id="documentId" /></template>
-          <template #widget-connectors><ConnectorRail :document-id="documentId" /></template>
+          <template #widget-connectors>
+            <ConnectorRail
+              :document-id="documentId"
+              :drift-check="detail?.document.kind === 'openapi' && auth.canEdit && !archived && !viewingRevision"
+            />
+          </template>
           <!-- Bounded to sit inside the widget's own cap rather than past it.
                Left at the 60vh default, the feed's scrollport was taller than
                the card holding it, so the rail scrolled the card while the card

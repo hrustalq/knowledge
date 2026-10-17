@@ -20,6 +20,24 @@ import { t } from '../../i18n/t.js';
 /** Only these extensions are ever specs; a `.md` file is the markdown path's. */
 const SPEC_EXTENSIONS = /\.(ya?ml|json)$/iu;
 
+/** A spec file's unit key on a `codebase` connector (#78): the path, kept apart from module keys, which are paths too. */
+export const SPEC_KEY_PREFIX = 'spec:';
+
+/**
+ * The spec file a connector link stands for: `spec:<path>` on `codebase`, the
+ * path itself on `markdown-git`. Null for any other link — a module, a page.
+ */
+export function specPathOfLink(kind: string, externalId: string): string | null {
+  if (kind === 'codebase') return externalId.startsWith(SPEC_KEY_PREFIX) ? externalId.slice(SPEC_KEY_PREFIX.length) : null;
+  if (kind === 'markdown-git') return SPEC_EXTENSIONS.test(externalId) ? externalId : null;
+  return null;
+}
+
+/** Whether a changed file could change a spec: the spec itself, or a sibling it references. */
+export function mayBeSpecSource(path: string): boolean {
+  return SPEC_EXTENSIONS.test(path);
+}
+
 /** How much of a file the discovery sniff reads; the top-level key is near the top. */
 const SNIFF_BYTES = 4096;
 

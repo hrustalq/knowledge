@@ -57,13 +57,14 @@ in the codebase, so they are worth keeping stable:
 | Step  | What it does                                                            | `mark()`     |
 | ----- | ----------------------------------------------------------------------- | ------------ |
 | 1     | Fetch raw bytes — `storage.getObjectText(revision.s3Key)`                | `fetch`      |
-| 2     | Parse with gray-matter (`matter(raw)`); non-markdown/non-`text/*` is rejected | —       |
+| 2     | Parse with gray-matter (`matter(raw)`); non-markdown/non-`text/*` is rejected. A spec document parses by its kind instead (below) | —       |
 | 3     | Normalize via `splitMarkdown`, persist `normalized.json` beside the source | `normalize` |
 | 4     | Chunk — `chunkSections(sections)`                                        | `chunk`      |
 | 5     | Embed — title + heading breadcrumb + body, in slices of 32               | `embed`      |
 | 6     | Index into the graph store — `graph.upsertRevisionChunks`                | `graph`      |
 | 6b    | Optional BM25 mirror — `fulltext.indexRevisionChunks`, non-fatal         | `fulltext`   |
 | 7     | Deterministic relations — frontmatter facts                              | `relations`  |
+| 7a    | Spec facts — `DESCRIBES` per operation, specs only                       | `spec`       |
 | 8     | Inferred relations — the LLM extractor, non-fatal                        | `inferred`   |
 
 Steps 6b and 8 are documented in [04](04-search-graph.md); everything else is
@@ -166,7 +167,13 @@ declares.
 Provenance is stamped by the caller rather than the parser — the processor maps
 `{ ...f, extractor: 'frontmatter', confidence: 1 }` — so `relations.ts` stays a
 pure function of the frontmatter. The `extractor` union across the whole system
-is `'explicit' | 'frontmatter' | 'inferred' | 'curated' | 'code'`.
+is `'explicit' | 'frontmatter' | 'inferred' | 'curated' | 'code' | 'spec'`
+(`FactExtractor`); `spec` is described under [Spec documents](#spec-documents).
+
+A linked API block (`data-kn-op` on its wrapper) is read by
+`readApiOperationRefs` (`common/relations.ts`) as an `IMPLEMENTS` fact in the
+frontmatter class: it is the author's declaration in the page source, so it is
+replaced per revision like `relations:`. Only `op:` / `channel:` keys count.
 
 The fifth class is not read from a page. A `component:` block
 ([feature 51](../features/51-component-pages.md)) is recorded by the processor
@@ -241,6 +248,60 @@ mandatory workspace predicate that `plan.md` §6's security note requires. The
 predicate is resolved in PostgreSQL first and injected server-side; a
 `workspaceId` filter written by a caller is not a substitute.
 
+## Spec documents
+
+An OpenAPI or AsyncAPI spec ([feature 52](../features/52-api-reference.md)) is
+a document whose `kind` is `openapi` or `asyncapi`, and it goes through the
+same job. **The processor branches on `document.kind`, never on the content
+type**: a `text/yaml` body would pass the step 2 content-type check and then be
+read as prose. `isApiSpecKind(kind)` sends step 2 to
+`ApiSpecsService.project`, which:
+
+1. Parses with `parseApiSpec` (`api-specs/api-spec.parser.ts`):
+   `@scalar/openapi-parser` for OpenAPI 2.0 / 3.0 / 3.1, upgraded to 3.1 with
+   internal `$ref`s dereferenced, and an in-house reader on js-yaml for
+   AsyncAPI 2.x / 3.x. No fetch plugin is passed, so a remote `$ref` is a
+   validation error and never a request. `API_SPEC_MAX_BYTES` and
+   `API_SPEC_MAX_OPERATIONS` cap the input. A spec that will not parse fails
+   the job with the validator's messages. Finalize would already have refused
+   it, unless a limit was lowered since.
+2. Resolves the slug. `documents.spec_slug` is pinned at the first indexed
+   revision with a guarded `updateMany(… specSlug: null)`. Only an
+   `x-knowledge-key` on the default-branch head re-pins it, so a title edit
+   cannot fork every operation entity.
+3. Replaces the revision's `api_operations` rows (`deleteMany` then
+   `createMany` on `revisionId`), which makes a reindex converge like
+   `upsertRevisionChunks`.
+4. Renders the **markdown projection** (`renderSpecProjection`): one `##` per
+   tag, one `###` per operation, parameters, body and responses as GFM tables,
+   with a cycle-safe schema walk.
+
+The projection becomes `parsed.content`, with empty frontmatter, and steps 3–8
+run unchanged. That is why search, BM25 and the assistant read a spec with no
+code of their own. `normalized.json` gains a `spec` block (kind, version,
+title, slug, operation count). The source object is `source.yaml` /
+`source.json` under an `application/vnd.oai.openapi+…` or
+`application/vnd.aai.asyncapi+…` content type, named by
+`StorageService.sourceObjectName(contentType)`; existing rows keep their
+stored `s3Key`.
+
+Step 7a writes `document -DESCRIBES-> op:<slug>:<METHOD> <path>` (or
+`channel:<slug>:<address>`) per operation through
+`GraphService.replaceRevisionSpecFacts`, with **`extractor: 'spec'`**. It is
+not `explicit`, because explicit edges are document-level and always live, so a
+branch revision of a spec would publish its operations before the merge. `spec`
+is in `REVISION_SCOPED_EXTRACTORS` with `frontmatter` and `inferred`, so it
+follows the live projection, and the frontmatter replace never touches it. A
+page never has spec edges to clear, because a kind never changes.
+
+Path parameters fold to `{}` inside `normalizeEntityKey`, for `op:` and
+`channel:` keys only. Every writer calls it, so a page's frontmatter naming
+`/users/{userId}` lands on the vertex the spec wrote for `/users/{id}`.
+
+`ApiSpecsCoreModule` (parse, project, read, diff; controller-free) is imported
+by the worker and the API. `ApiSpecsModule` carries the controllers and the
+try-it proxy and never loads in the worker.
+
 ## Stale detection and reindex
 
 `StaleSweeper` (`apps/api/src/ingestion/stale.sweeper.ts`) is registered only in
@@ -294,6 +355,8 @@ rows with ids of their own.
 | `document_revisions` | `embedding_model` holds the four-segment signature stamped at index time; `indexed_at` is set in the same transaction that completes the job.                     |
 | `code_imports`, `code_files` | A codebase connector's head: importer → imported file with the names taken, and every file. Replaced whole per pull, in one transaction (feature 51).        |
 | `component_declarations` | One row per page with a `component:` block: resolved connector, paths, symbols, warning, `missing_paths`. Written by ingestion, re-resolved per pull.       |
+| `documents.kind`, `documents.spec_slug` | `page` \| `openapi` \| `asyncapi`, default `page`. The slug is pinned at a spec's first indexed revision (feature 52). |
+| `api_operations` | One row per operation or channel per revision: protocol, method, path, `entity_key`, summary, tags, `pointer`. A projection, replaced per revision; unique on `(revision_id, entity_key, method)`, because an AsyncAPI channel carries both a send and a receive. |
 
 Chunks, vectors and relation edges live in ArcadeDB, reached only through
 `GraphService` — see [04](04-search-graph.md).
@@ -337,9 +400,10 @@ controller comes along with it.
 - **The four fact classes are spelled differently.** `plan.md` §5 names them
   explicit / deterministic / inferred / curated; the `extractor` union is
   `'explicit' | 'frontmatter' | 'inferred' | 'curated'`. `frontmatter` _is_ the
-  deterministic class — it is simply the only deterministic extractor built, so
-  the value names the source rather than the category. The OpenAPI/Prisma-schema
-  parsers §5 also lists as deterministic do not exist.
+  deterministic class; the value names the source rather than the category.
+  Of the parsers §5 also lists as deterministic, the OpenAPI one now exists
+  (and reads AsyncAPI too) under its own value, `spec`. The Prisma-schema
+  parser does not exist.
 - **No `manifest.json`.** `plan.md` §4's object layout lists `manifest.json`,
   `extracted.txt`, `graph-projection.json` and `diff-from-parent.json` beside
   the source; none of the four has a writer anywhere in `apps/api/src`. The
@@ -359,9 +423,10 @@ controller comes along with it.
 
 ## Limits
 
-Markdown only. Step 2 rejects anything that is not markdown or `text/*`, so the
-pipeline has no parser branch for other content types — importing a PDF or a
-`.docx` is a separate flow that produces markdown _before_ a revision exists.
+Markdown, or a spec. Step 2 rejects a page body that is not markdown or
+`text/*`, and the only other parser branch is the spec kind, which still ends
+in markdown (the projection). Importing a PDF or a `.docx` is a separate flow
+that produces markdown _before_ a revision exists.
 
 Chunk sizing (3200 / 400), the embed batch stride (32) and the sweep caps (10
 per job, per pass) are all inline literals. They are not tunable without a

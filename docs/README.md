@@ -76,6 +76,7 @@ Features 01–17 come from the original list in [`../features.md`](../features.m
 | 49  | Agent triggers (events, signed webhooks, mentions, time-of-day schedules, recipes, digest, learnings, repo guidance as skills) | [features/49-agent-triggers.md](features/49-agent-triggers.md)     | ✅ #70                      |
 | 50  | Agent memory (capture tools, capture key scope, dedupe → merge request, captures inbox, MR provenance, capture kit for Claude Code and Cursor) | [features/50-agent-memory.md](features/50-agent-memory.md)         | ✅ #73                      |
 | 51  | Component pages (`component:` declarations, reverse-import index, Used by, `code` edges, drift ties and Affected usages, Document this component, missing-paths health filter) | [features/51-component-pages.md](features/51-component-pages.md)   | ✅ #236                     |
+| 52  | API reference (OpenAPI/AsyncAPI spec documents, operation entities, reference reader, code samples, try-it proxy, page linking, classified spec diff and breaking-change gate, repo sync, spec ↔ code drift) | [features/52-api-reference.md](features/52-api-reference.md)       | ✅ #78                      |
 
 Open work against the agents feature is tracked in
 [features/20-agents-todo.md](features/20-agents-todo.md).

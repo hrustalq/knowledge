@@ -26,10 +26,10 @@ const where = (raw: string) => {
   <ul v-if="kind === 'responses'" class="kn-api-kv">
     <li v-for="(r, i) in rows" :key="i" class="items-baseline">
       <ApiTone :tone="statusTone(r.code)" class="self-start">{{ r.code || '—' }}</ApiTone>
-      <span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 leading-snug">
+      <span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-0.5 leading-normal">
         <span v-if="r.description">{{ r.description }}</span>
-        <code v-if="r.body" class="font-mono text-[0.76rem] text-muted-foreground">{{ r.body }}</code>
-        <span v-for="x in r.extras" :key="x.label" class="text-[0.76rem] text-muted-foreground">{{ x.label }}: {{ x.value }}</span>
+        <code v-if="r.body" class="kn-api-dim font-mono text-[0.8rem]">{{ r.body }}</code>
+        <span v-for="x in r.extras" :key="x.label" class="kn-api-dim text-[0.8rem]">{{ x.label }}: {{ x.value }}</span>
       </span>
     </li>
   </ul>
@@ -39,11 +39,11 @@ const where = (raw: string) => {
       <dt>{{ r.name || '—' }}</dt>
       <dd>
         <span v-if="r.type" class="font-mono">{{ r.type }}</span>
-        <span v-if="r.in" class="text-muted-foreground">{{ where(r.in) }}</span>
+        <span v-if="r.in" class="kn-api-dim italic">{{ where(r.in) }}</span>
         <span v-if="requiredValue(r.required) === true" class="kn-api-req">{{ required }}</span>
-        <span v-else-if="requiredValue(r.required) === null && r.required" class="text-muted-foreground">{{ r.required }}</span>
-        <span v-for="x in r.extras" :key="x.label" class="text-muted-foreground">{{ x.label }}: {{ x.value }}</span>
-        <span v-if="r.description" class="basis-full text-[0.8rem] leading-snug text-muted-foreground">{{ r.description }}</span>
+        <span v-else-if="requiredValue(r.required) === null && r.required" class="kn-api-dim">{{ r.required }}</span>
+        <span v-for="x in r.extras" :key="x.label" class="kn-api-dim">{{ x.label }}: {{ x.value }}</span>
+        <span v-if="r.description" class="kn-api-note">{{ r.description }}</span>
       </dd>
     </div>
   </dl>

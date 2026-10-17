@@ -39,11 +39,11 @@ const inLabel = (where: string) => (te(`apiLink.in.${where}`) ? t(`apiLink.in.${
 
 <template>
   <section class="kn-api-live" contenteditable="false" :aria-label="t('apiLink.live.label')">
-    <p v-if="missing || isError" class="kn-api-live-row flex items-start gap-2 text-[0.82rem] leading-relaxed text-muted-foreground">
-      <AlertTriangle class="mt-1 size-3.5 shrink-0 text-[color-mix(in_oklch,var(--kn-panel-warning)_75%,var(--foreground))]" />
+    <p v-if="missing || isError" class="kn-api-live-row flex items-start gap-2 text-[0.875rem] leading-relaxed text-muted-foreground">
+      <AlertTriangle class="mt-1 size-3.5 shrink-0 text-[color-mix(in_oklab,var(--kn-panel-warning)_75%,var(--foreground))]" />
       <span class="min-w-0">
         {{ isError ? t('apiLink.live.failed') : t('apiLink.live.gone') }}
-        <code class="font-mono text-[0.76rem] text-foreground [overflow-wrap:anywhere]">{{ entityKey }}</code>
+        <code class="font-mono text-[0.82rem] text-foreground [overflow-wrap:anywhere]">{{ entityKey }}</code>
       </span>
     </p>
 
@@ -53,10 +53,10 @@ const inLabel = (where: string) => (te(`apiLink.in.${where}`) ? t(`apiLink.in.${
     </div>
 
     <template v-else>
-      <p v-if="view.summary || view.deprecated" class="kn-api-live-row flex flex-wrap items-baseline gap-x-2 text-[0.82rem] leading-relaxed text-muted-foreground">
+      <p v-if="view.summary || view.deprecated" class="kn-api-live-row flex flex-wrap items-baseline gap-x-2 text-[0.9rem] leading-relaxed text-[color-mix(in_oklab,var(--foreground)_80%,var(--card))]">
         <span class="sr-only">{{ t('apiLink.live.spec') }}:</span>
         <span v-if="view.summary">{{ view.summary }}</span>
-        <ApiTone v-if="view.deprecated" tone="warning">{{ t('apiRef.deprecated') }}</ApiTone>
+        <ApiTone v-if="view.deprecated" tone="warning" size="sm">{{ t('apiRef.deprecated') }}</ApiTone>
       </p>
 
       <ApiDisclosure v-if="view.parameters.length" :label="t('apiRef.params')" :count="view.parameters.length">
@@ -65,9 +65,9 @@ const inLabel = (where: string) => (te(`apiLink.in.${where}`) ? t(`apiLink.in.${
             <dt :class="p.deprecated && 'line-through opacity-60'">{{ p.name }}</dt>
             <dd>
               <span class="font-mono">{{ p.type }}</span>
-              <span class="text-muted-foreground">{{ inLabel(p.in) }}</span>
+              <span class="kn-api-dim italic">{{ inLabel(p.in) }}</span>
               <span v-if="p.required" class="kn-api-req">{{ t('apiRef.required').toLowerCase() }}</span>
-              <span v-if="p.description" class="basis-full text-[0.8rem] leading-snug text-muted-foreground">{{ p.description }}</span>
+              <span v-if="p.description" class="kn-api-note">{{ p.description }}</span>
             </dd>
           </div>
         </dl>
@@ -78,7 +78,7 @@ const inLabel = (where: string) => (te(`apiLink.in.${where}`) ? t(`apiLink.in.${
           <div v-for="c in view.requestBody.contents" :key="c.mediaType">
             <dt>{{ typeLabel(doc, c.schema) }}</dt>
             <dd>
-              <span class="font-mono text-muted-foreground">{{ c.mediaType }}</span>
+              <span class="kn-api-dim font-mono">{{ c.mediaType }}</span>
               <span v-if="view.requestBody.required" class="kn-api-req">{{ t('apiRef.required').toLowerCase() }}</span>
             </dd>
           </div>
@@ -98,7 +98,7 @@ const inLabel = (where: string) => (te(`apiLink.in.${where}`) ? t(`apiLink.in.${
         <dl class="kn-api-kv">
           <div v-for="(m, i) in view.messages" :key="i">
             <dt>{{ m.name ?? t('apiRef.message', { n: i + 1 }) }}</dt>
-            <dd><span class="font-mono text-muted-foreground">{{ typeLabel(doc, m.payload) }}</span></dd>
+            <dd><span class="kn-api-dim font-mono">{{ typeLabel(doc, m.payload) }}</span></dd>
           </div>
         </dl>
       </ApiDisclosure>

@@ -48,7 +48,7 @@ function go(o: ApiOperationInfo, event: Event) {
           :aria-current="activeKey === operationRowKey(o) ? 'location' : undefined"
           @click="go(o, $event)"
         >
-          <ApiTone :tone="methodTone(o.method)">{{ o.method ?? t('apiRef.channel') }}</ApiTone>
+          <ApiTone :tone="methodTone(o.method)" size="sm">{{ o.method ?? t('apiRef.channel') }}</ApiTone>
           <span class="min-w-0 truncate font-mono" :class="o.deprecated && 'line-through opacity-60'">{{ o.path }}</span>
         </button>
       </template>
@@ -57,23 +57,23 @@ function go(o: ApiOperationInfo, event: Event) {
 
   <nav v-else :aria-label="t('apiRef.nav')" class="max-h-[26rem] space-y-3 overflow-y-auto text-sm lg:max-h-[32rem]">
     <section v-for="g in state.groups.value" :key="g.tag ?? ''">
-      <p class="mb-1 text-[0.8rem] font-medium">{{ tagLabel(g.tag) }}</p>
+      <p class="mb-1.5 text-[0.8rem] font-semibold">{{ tagLabel(g.tag) }}</p>
       <ul class="border-l">
         <li v-for="o in g.operations" :key="operationRowKey(o)">
           <button
             type="button"
-            class="-ml-px flex w-full items-center gap-2.5 border-l-2 py-1 pr-1 pl-3 text-left transition-colors"
+            class="-ml-px flex w-full items-center gap-2.5 rounded-r-md border-l-2 py-1.5 pr-1.5 pl-2.5 text-left transition-colors duration-150"
             :class="
               activeKey === operationRowKey(o)
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+                ? 'border-primary bg-primary/8 text-foreground'
+                : 'border-transparent text-[color-mix(in_oklab,var(--foreground)_78%,var(--card))] hover:bg-accent hover:text-foreground'
             "
             :aria-current="activeKey === operationRowKey(o) ? 'location' : undefined"
             :title="o.summary ?? undefined"
             @click="go(o, $event)"
           >
-            <ApiTone :tone="methodTone(o.method)" :solid="false" class="w-[3.25rem] justify-start">{{ o.method ?? t('apiRef.channel') }}</ApiTone>
-            <span class="min-w-0 truncate font-mono text-[0.78rem]" :class="o.deprecated && 'line-through opacity-60'">{{ o.path }}</span>
+            <ApiTone :tone="methodTone(o.method)" size="sm">{{ o.method ?? t('apiRef.channel') }}</ApiTone>
+            <span class="min-w-0 truncate font-mono text-[0.8rem]" :class="o.deprecated && 'line-through opacity-60'">{{ o.path }}</span>
           </button>
         </li>
       </ul>

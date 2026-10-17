@@ -48,10 +48,32 @@ export function useApiReference(documentId: Ref<string>, revisionId: Ref<string 
   /** The operation being read, as the content's scroll-spy last saw it. */
   const active = ref<string | null>(null)
 
+  /**
+   * Cards open, by row key. A spec reads like Swagger UI: a column of one-line
+   * operations, each opening in place. A short spec (three or fewer) starts
+   * open, since a list of three is not worth a click; a long one starts closed,
+   * which is also what keeps 300 operations from mounting 300 bodies.
+   */
+  const expanded = ref(new Set<string>())
+  let seeded = false
+  const isOpen = (op: { entityKey: string; method: string | null }) => expanded.value.has(operationRowKey(op))
+  function setOpen(op: { entityKey: string; method: string | null }, open: boolean) {
+    const next = new Set(expanded.value)
+    if (open) next.add(operationRowKey(op))
+    else next.delete(operationRowKey(op))
+    expanded.value = next
+  }
+  const allOpen = computed(() => operations.value.length > 0 && operations.value.every(isOpen))
+  function setAll(open: boolean) {
+    expanded.value = open ? new Set(operations.value.map(operationRowKey)) : new Set()
+  }
+
   function scrollTo(op: ApiOperationInfo, behavior: ScrollBehavior = 'smooth') {
     if (import.meta.env.SSR) return
     active.value = operationRowKey(op)
-    document.getElementById(operationDomId(op))?.scrollIntoView({ behavior, block: 'start' })
+    setOpen(op, true)
+    // After the card has opened its first frame, so the scroll lands on its head.
+    void nextTick(() => document.getElementById(operationDomId(op))?.scrollIntoView({ behavior, block: 'start' }))
   }
 
   // The opening instruction, once the cards exist (and the spec they need).
@@ -59,6 +81,10 @@ export function useApiReference(documentId: Ref<string>, revisionId: Ref<string 
   watch(
     [operations, spec],
     async ([rows, s]) => {
+      if (!seeded && rows.length > 0) {
+        seeded = true
+        if (rows.length <= 3) setAll(true)
+      }
       if (arrived || rows.length === 0 || !s) return
       arrived = true
       const wanted = typeof route.query.op === 'string' ? route.query.op : null
@@ -73,6 +99,8 @@ export function useApiReference(documentId: Ref<string>, revisionId: Ref<string 
   watch([documentId, revisionId], () => {
     active.value = null
     arrived = false
+    seeded = false
+    expanded.value = new Set()
   })
 
   return {
@@ -81,6 +109,10 @@ export function useApiReference(documentId: Ref<string>, revisionId: Ref<string 
     groups,
     active,
     scrollTo,
+    isOpen,
+    setOpen,
+    allOpen,
+    setAll,
     revisionStatus: computed(() => list.value?.revisionStatus ?? null),
     error: computed(() => (specQuery.error.value as Error | null) ?? null),
   }

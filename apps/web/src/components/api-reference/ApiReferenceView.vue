@@ -16,7 +16,9 @@
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
+import { Button } from '@/components/ui/button'
 import { PageState } from '@/components/layout/page'
 import { operationRowKey, serversOf } from '@/lib/api-spec'
 import ApiOperationDetail from './ApiOperationDetail.vue'
@@ -93,9 +95,9 @@ onBeforeUnmount(() => spy?.disconnect())
         <div class="tabular-nums">{{ t('apiRef.operationCount', { n: count }, count) }}</div>
       </dl>
       <MarkdownView v-if="description" :markdown="description" />
-      <dl v-if="servers.length" class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[0.8rem]">
+      <dl v-if="servers.length" class="flex flex-wrap items-baseline gap-x-2 gap-y-1.5 text-[0.85rem]">
         <dt class="text-muted-foreground">{{ t('apiRef.servers') }}</dt>
-        <dd v-for="s in servers" :key="s"><code class="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[0.78rem]">{{ s }}</code></dd>
+        <dd v-for="s in servers" :key="s"><code class="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[0.8rem]">{{ s }}</code></dd>
       </dl>
     </header>
 
@@ -104,11 +106,18 @@ onBeforeUnmount(() => spy?.disconnect())
     </div>
     <template v-else>
       <ApiOperationIndex :state="state" inline class="lg:hidden" />
-      <section v-for="g in state.groups.value" :key="g.tag ?? ''" class="space-y-4">
-        <h2 class="border-b pb-2 font-display text-[1.35rem] font-semibold tracking-[-0.015em]">
-          {{ tagLabel(g.tag) }}
-          <span class="ml-1 font-sans text-[0.8rem] font-normal text-muted-foreground tabular-nums">{{ g.operations.length }}</span>
-        </h2>
+      <section v-for="(g, gi) in state.groups.value" :key="g.tag ?? ''" class="space-y-3">
+        <div class="flex items-end gap-3 border-b pb-2">
+          <h2 class="min-w-0 flex-1 font-display text-[1.35rem] font-semibold tracking-[-0.015em]">
+            {{ tagLabel(g.tag) }}
+            <span class="ml-1 font-sans text-[0.85rem] font-normal text-muted-foreground tabular-nums">{{ g.operations.length }}</span>
+          </h2>
+          <!-- Once, on the first group: it opens or closes every card on the page. -->
+          <Button v-if="gi === 0 && count > 1" variant="ghost" size="sm" class="h-7 shrink-0 text-[0.8rem] text-muted-foreground" @click="state.setAll(!state.allOpen.value)">
+            <component :is="state.allOpen.value ? ChevronsDownUp : ChevronsUpDown" />
+            {{ state.allOpen.value ? t('apiRef.collapseAll') : t('apiRef.expandAll') }}
+          </Button>
+        </div>
         <ApiOperationDetail
           v-for="o in g.operations"
           :key="operationRowKey(o)"
@@ -116,7 +125,9 @@ onBeforeUnmount(() => spy?.disconnect())
           :document="spec.document"
           :operation="o"
           :workspace-id="workspaceId"
+          :open="state.isOpen(o)"
           :links="seen.has(operationRowKey(o))"
+          @toggle="(v) => state.setOpen(o, v)"
         />
       </section>
     </template>

@@ -4740,12 +4740,6 @@
     "truncated": "… nested deeper",
     "expand": "Expand {name}",
     "collapse": "Collapse {name}",
-    "in": {
-      "path": "Path parameters",
-      "query": "Query parameters",
-      "header": "Headers",
-      "cookie": "Cookies"
-    },
     "kind": {
       "openapi": "OpenAPI",
       "asyncapi": "AsyncAPI"
@@ -4764,7 +4758,25 @@
       "copyKey": "Copy key",
       "copied": "Copied",
       "copyFailed": "Could not copy — select the key and copy it by hand"
-    }
+    },
+    "tab": {
+      "example": "Example",
+      "schema": "Schema",
+      "label": "Body view"
+    },
+    "generatedExample": "Built from the schema — the spec gives no example.",
+    "noSchema": "The spec describes no schema for this body.",
+    "col": {
+      "name": "Name",
+      "description": "Description",
+      "code": "Code"
+    },
+    "requiredMark": "* required",
+    "exampleLabel": "Example:",
+    "needsAuth": "Needs credentials: {schemes}",
+    "noDescription": "No description",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all"
   },
   "apiLink": {
     "search": "Search API operations",
@@ -4874,7 +4886,27 @@
     "emptyBody": "Empty body.",
     "truncated": "Cut at {size}; the response was longer.",
     "browserHeaders": "A browser shows only the headers the API exposes to it (Access-Control-Expose-Headers).",
-    "dropped": "Not forwarded by the proxy: {names}."
+    "dropped": "Not forwarded by the proxy: {names}.",
+    "req": {
+      "label": "Request parts",
+      "params": "Params",
+      "headers": "Headers",
+      "body": "Body",
+      "auth": "Auth",
+      "filled": "{n} filled in"
+    },
+    "col": {
+      "key": "Key",
+      "value": "Value",
+      "description": "Description"
+    },
+    "idle": "Send the request — the response appears here.",
+    "metric": {
+      "status": "Status",
+      "time": "Time",
+      "size": "Size"
+    },
+    "resetBody": "Reset to the example"
   },
   "apiSettings": {
     "title": "API reference",

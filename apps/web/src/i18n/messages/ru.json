@@ -3222,7 +3222,7 @@
     "changeMethod": "Сменить метод",
     "editPath": "Изменить путь",
     "section": {
-      "params": "Путь и query",
+      "params": "Путь и параметры запроса",
       "body": "Тело запроса",
       "responses": "Ответы",
       "auth": "Заголовки и авторизация"
@@ -4740,12 +4740,6 @@
     "truncated": "… вложено глубже",
     "expand": "Развернуть {name}",
     "collapse": "Свернуть {name}",
-    "in": {
-      "path": "Параметры пути",
-      "query": "Параметры запроса",
-      "header": "Заголовки",
-      "cookie": "Cookie"
-    },
     "kind": {
       "openapi": "OpenAPI",
       "asyncapi": "AsyncAPI"
@@ -4764,7 +4758,25 @@
       "copyKey": "Скопировать ключ",
       "copied": "Скопировано",
       "copyFailed": "Не удалось скопировать — выделите ключ и скопируйте вручную"
-    }
+    },
+    "tab": {
+      "example": "Пример",
+      "schema": "Схема",
+      "label": "Вид тела"
+    },
+    "generatedExample": "Собран по схеме — в спецификации нет примера.",
+    "noSchema": "Спецификация не описывает схему этого тела.",
+    "col": {
+      "name": "Имя",
+      "description": "Описание",
+      "code": "Код"
+    },
+    "requiredMark": "* обязательный",
+    "exampleLabel": "Пример:",
+    "needsAuth": "Нужны учётные данные: {schemes}",
+    "noDescription": "Без описания",
+    "expandAll": "Развернуть все",
+    "collapseAll": "Свернуть все"
   },
   "apiLink": {
     "search": "Поиск операций API",
@@ -4874,7 +4886,27 @@
     "emptyBody": "Пустое тело.",
     "truncated": "Обрезано на {size}; ответ был длиннее.",
     "browserHeaders": "Браузер показывает только заголовки, которые API ему открывает (Access-Control-Expose-Headers).",
-    "dropped": "Прокси не переслал: {names}."
+    "dropped": "Прокси не переслал: {names}.",
+    "req": {
+      "label": "Части запроса",
+      "params": "Параметры",
+      "headers": "Заголовки",
+      "body": "Тело",
+      "auth": "Авторизация",
+      "filled": "Заполнено: {n}"
+    },
+    "col": {
+      "key": "Ключ",
+      "value": "Значение",
+      "description": "Описание"
+    },
+    "idle": "Отправьте запрос — ответ появится здесь.",
+    "metric": {
+      "status": "Статус",
+      "time": "Время",
+      "size": "Размер"
+    },
+    "resetBody": "Вернуть пример"
   },
   "apiSettings": {
     "title": "Справочник API",

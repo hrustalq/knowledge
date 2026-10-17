@@ -1,26 +1,33 @@
 <script setup lang="ts">
 /**
- * One operation or channel (#78) as its own card: the endpoint line, the
- * summary as its heading, then what to send, what comes back, the request as
- * code with its try-it console, and who links it.
- * The card is the boundary between endpoints; inside it, sections separate by
- * heading and hairline only, so no box ever sits in another.
+ * One operation or channel (#78), drawn as Swagger UI's opblock in the panel
+ * ramp: the whole card takes its method's hue — a hairline frame, a faint
+ * ground, a stronger header — so a column of operations reads by colour
+ * before it reads by word. GET is note-blue, POST tip-green and so on
+ * (`methodTone`); the indexing lifecycle's emerald, amber and red stay its own.
+ *
+ * Closed, the card is one line: the solid method badge, the route, the
+ * summary, a lock when it needs credentials. Open, it unfolds in place
+ * (Collapse, the app's one way to open a section) into what to send, what
+ * comes back, the request with its try-it console, and who links it. The body
+ * mounts only while open, so a spec of 300 operations is 300 header rows.
  *
  * Descriptions are the spec author's markdown, so they go through MarkdownView
  * and its sanitizer; nothing here uses `v-html`.
  */
-import { computed } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, Copy } from 'lucide-vue-next'
+import { Check, ChevronDown, Copy, LockKeyhole } from 'lucide-vue-next'
 import type { ApiOperationInfo } from '@knowledge/contracts'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
-import { operationView, schemaTree, statusTone, typeLabel } from '@/lib/api-spec'
+import { Collapse } from '@/components/ui/collapse'
+import { operationView, statusTone, type ResponseView } from '@/lib/api-spec'
 import { operationDomId } from './use-api-reference'
 import { useCopy } from '@/lib/use-copy'
 import ApiEndpoint from './ApiEndpoint.vue'
+import ApiMediaContent from './ApiMediaContent.vue'
 import ApiOperationLinks from './ApiOperationLinks.vue'
 import ApiRequestPanel from './ApiRequestPanel.vue'
-import ApiSchemaTree from './ApiSchemaTree.vue'
 import ApiTone from './ApiTone.vue'
 
 const props = withDefaults(
@@ -28,149 +35,451 @@ const props = withDefaults(
     document: Record<string, unknown>
     operation: ApiOperationInfo
     workspaceId: string
+    open?: boolean
     /** Read the linked pages: only once the card has been on screen, so a spec of 300 operations is not 300 graph reads. */
     links?: boolean
   }>(),
-  { links: false },
+  { open: true, links: false },
 )
+const emit = defineEmits<{ toggle: [open: boolean] }>()
 const { t, te } = useI18n()
 const { state: copyState, copy } = useCopy()
+const uid = useId()
 
 const view = computed(() => operationView(props.document, props.operation))
-const paramGroups = computed(() => {
-  const groups = new Map<string, NonNullable<typeof view.value>['parameters']>()
-  for (const p of view.value?.parameters ?? []) groups.set(p.in, [...(groups.get(p.in) ?? []), p])
-  return [...groups.entries()]
+const params = computed(() => {
+  const order = ['path', 'query', 'header', 'cookie']
+  return [...(view.value?.parameters ?? [])].sort((a, b) => order.indexOf(a.in) - order.indexOf(b.in))
 })
-const tree = (schema: unknown) => schemaTree(props.document, schema)
-const example = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v, null, 2))
-const groupTitle = (where: string) => (te(`apiRef.in.${where}`) ? t(`apiRef.in.${where}`) : t('apiRef.params'))
+const where = (loc: string) => (te(`apiLink.in.${loc}`) ? t(`apiLink.in.${loc}`) : loc)
+
+/** Successful responses with a body start open; the rest wait to be asked. */
+const openResponses = ref(new Set((view.value?.responses ?? []).filter((r) => r.status.startsWith('2') && r.contents.length).map((r) => r.status)))
+function toggleResponse(r: ResponseView) {
+  const next = new Set(openResponses.value)
+  if (next.has(r.status)) next.delete(r.status)
+  else next.add(r.status)
+  openResponses.value = next
+}
 </script>
 
 <template>
   <article
     :id="operationDomId(operation)"
-    class="scroll-mt-28 space-y-7 rounded-xl border bg-card p-5 sm:p-6"
+    class="kn-op scroll-mt-28"
+    :data-kn-method="view?.protocol === 'http' ? view.method?.toUpperCase() : undefined"
+    :data-state="open ? 'open' : 'closed'"
     :data-op="operation.entityKey"
   >
     <template v-if="view">
-    <header class="space-y-3">
-      <ApiEndpoint :method="view.method" :path="view.path" :protocol="view.protocol" size="lg" />
-      <h3 v-if="view.summary" class="font-display text-[1.12rem] leading-snug font-semibold tracking-[-0.015em] text-balance">
-        {{ view.summary }}
-      </h3>
-      <dl class="flex flex-wrap gap-x-5 gap-y-1 text-[0.8rem] text-muted-foreground">
-        <div v-if="view.deprecated" class="flex items-center gap-1.5">
-          <ApiTone tone="warning">{{ t('apiRef.deprecated') }}</ApiTone>
-        </div>
-        <div v-if="view.operationId" class="flex gap-1.5">
-          <dt>{{ t('apiRef.operationId') }}</dt>
-          <dd><code class="font-mono text-foreground">{{ view.operationId }}</code></dd>
-        </div>
-        <div v-if="view.security.length" class="flex gap-1.5">
-          <dt>{{ t('apiRef.auth') }}</dt>
-          <dd><code class="font-mono text-foreground">{{ view.security.join(', ') }}</code></dd>
-        </div>
-        <div class="flex min-w-0 max-w-full items-center gap-1.5">
-          <dt class="shrink-0 whitespace-nowrap">{{ t('apiRef.entityKey') }}</dt>
-          <dd class="flex min-w-0 items-center gap-1">
-            <code class="truncate font-mono text-foreground">{{ operation.entityKey }}</code>
-            <button
-              type="button"
-              class="grid size-6 shrink-0 place-items-center rounded-sm hover:bg-accent hover:text-foreground"
-              :aria-label="copyState === 'copied' ? t('apiRef.linked.copied') : t('apiRef.linked.copyKey')"
-              :title="copyState === 'failed' ? t('apiRef.linked.copyFailed') : t('apiRef.linked.copyKey')"
-              @click="copy(operation.entityKey)"
-            >
-              <Check v-if="copyState === 'copied'" class="size-3.5" />
-              <Copy v-else class="size-3.5" />
-            </button>
-          </dd>
-        </div>
-      </dl>
-      <MarkdownView v-if="view.description" :markdown="view.description" />
-    </header>
-
-    <section v-for="[where, params] in paramGroups" :key="where" class="space-y-2">
-      <h4 class="font-display text-base font-semibold tracking-[-0.015em] text-muted-foreground">{{ groupTitle(where) }}</h4>
-      <ul class="divide-y border-y">
-        <li v-for="p in params" :key="p.name" class="py-2">
-          <p class="flex flex-wrap items-baseline gap-x-2 leading-6">
-            <code class="font-mono text-[0.82rem] font-medium" :class="p.deprecated && 'line-through opacity-60'">{{ p.name }}</code>
-            <span class="font-mono text-[0.75rem] text-muted-foreground">{{ p.type }}</span>
-            <span v-if="p.required" class="text-[0.7rem] font-semibold tracking-wide uppercase">{{ t('apiRef.required') }}</span>
-          </p>
-          <p v-if="p.description" class="text-[0.82rem] leading-relaxed text-muted-foreground">{{ p.description }}</p>
-        </li>
-      </ul>
-    </section>
-
-    <section v-if="view.requestBody" class="space-y-2">
-      <h4 class="flex items-baseline gap-2 font-display text-base font-semibold tracking-[-0.015em] text-muted-foreground">
-        {{ t('apiRef.body') }}
-        <span v-if="view.requestBody.required" class="font-sans text-[0.7rem] font-semibold tracking-wide uppercase">{{ t('apiRef.required') }}</span>
-      </h4>
-      <MarkdownView v-if="view.requestBody.description" :markdown="view.requestBody.description" />
-      <div v-for="c in view.requestBody.contents" :key="c.mediaType" class="space-y-1">
-        <p class="font-mono text-[0.75rem] text-muted-foreground">{{ c.mediaType }} · {{ typeLabel(document, c.schema) }}</p>
-        <ApiSchemaTree v-if="tree(c.schema).length" :nodes="tree(c.schema)" />
-        <pre v-if="c.example !== undefined" class="mt-2 overflow-x-auto rounded-lg border bg-muted/50 p-3 font-mono text-[0.78rem]">{{ example(c.example) }}</pre>
-      </div>
-    </section>
-
-    <section v-if="view.responses.length" class="space-y-2">
-      <h4 class="font-display text-base font-semibold tracking-[-0.015em] text-muted-foreground">{{ t('apiRef.responses') }}</h4>
-      <div class="divide-y border-y">
-        <details v-for="r in view.responses" :key="r.status" class="group" :open="r.status.startsWith('2') && r.contents.length > 0">
-          <summary
-            class="flex list-none items-baseline gap-3 py-2 text-sm [&::-webkit-details-marker]:hidden"
-            :class="r.contents.length ? 'cursor-pointer' : 'cursor-default'"
-          >
-            <ApiTone :tone="statusTone(r.status)">{{ r.status }}</ApiTone>
-            <span class="min-w-0 flex-1">{{ r.description }}</span>
-            <span v-if="r.contents.length" class="font-mono text-[0.72rem] text-muted-foreground group-open:hidden">
-              {{ r.contents.map((c) => c.mediaType).join(', ') }}
+      <h3 class="m-0">
+        <button
+          type="button"
+          class="kn-op-head"
+          :aria-expanded="open"
+          :aria-controls="`${uid}-body`"
+          @click="emit('toggle', !open)"
+        >
+          <ApiEndpoint :method="view.method" :path="view.path" :protocol="view.protocol" variant="solid" size="lg" class="kn-op-route" />
+          <span v-if="view.summary" class="kn-op-summary">{{ view.summary }}</span>
+          <span class="kn-op-flags">
+            <ApiTone v-if="view.deprecated" tone="warning" size="sm">{{ t('apiRef.deprecated') }}</ApiTone>
+            <span v-if="view.security.length" class="kn-op-lock" :title="t('apiRef.needsAuth', { schemes: view.security.join(', ') })">
+              <LockKeyhole class="size-3.5" aria-hidden="true" /><span class="sr-only">{{ t('apiRef.needsAuth', { schemes: view.security.join(', ') }) }}</span>
             </span>
-          </summary>
-          <div v-if="r.contents.length" class="space-y-3 pb-3 pl-[4.1rem]">
-            <div v-for="c in r.contents" :key="c.mediaType" class="space-y-1">
-              <p class="font-mono text-[0.75rem] text-muted-foreground">{{ c.mediaType }} · {{ typeLabel(document, c.schema) }}</p>
-              <ApiSchemaTree v-if="tree(c.schema).length" :nodes="tree(c.schema)" />
-              <pre v-if="c.example !== undefined" class="mt-2 overflow-x-auto rounded-lg border bg-muted/50 p-3 font-mono text-[0.78rem]">{{ example(c.example) }}</pre>
-            </div>
+            <ChevronDown class="kn-op-chevron" aria-hidden="true" />
+          </span>
+        </button>
+      </h3>
+
+      <Collapse :open="open">
+        <div :id="`${uid}-body`" class="kn-op-body">
+          <div v-if="view.description || view.operationId || view.security.length" class="kn-op-intro">
+            <MarkdownView v-if="view.description" :markdown="view.description" />
+            <dl class="kn-op-meta">
+              <div v-if="view.operationId">
+                <dt>{{ t('apiRef.operationId') }}</dt>
+                <dd><code>{{ view.operationId }}</code></dd>
+              </div>
+              <div v-if="view.security.length">
+                <dt>{{ t('apiRef.auth') }}</dt>
+                <dd><code>{{ view.security.join(', ') }}</code></dd>
+              </div>
+              <div class="min-w-0">
+                <dt>{{ t('apiRef.entityKey') }}</dt>
+                <dd class="min-w-0">
+                  <code class="truncate">{{ operation.entityKey }}</code>
+                  <button
+                    type="button"
+                    class="kn-op-iconbtn"
+                    :aria-label="copyState === 'copied' ? t('apiRef.linked.copied') : t('apiRef.linked.copyKey')"
+                    :title="copyState === 'failed' ? t('apiRef.linked.copyFailed') : t('apiRef.linked.copyKey')"
+                    @click="copy(operation.entityKey)"
+                  >
+                    <Check v-if="copyState === 'copied'" class="size-3.5" />
+                    <Copy v-else class="size-3.5" />
+                  </button>
+                </dd>
+              </div>
+            </dl>
           </div>
-        </details>
-      </div>
-    </section>
 
-    <section v-if="view.messages.length" class="space-y-2">
-      <h4 class="font-display text-base font-semibold tracking-[-0.015em] text-muted-foreground">{{ t('apiRef.messages') }}</h4>
-      <div class="divide-y border-y">
-        <div v-for="(m, i) in view.messages" :key="i" class="space-y-1 py-3">
-          <p class="text-sm font-medium">{{ m.name ?? t('apiRef.message', { n: i + 1 }) }}</p>
-          <p v-if="m.summary" class="text-[0.82rem] text-muted-foreground">{{ m.summary }}</p>
-          <MarkdownView v-if="m.description" :markdown="m.description" />
-          <p class="font-mono text-[0.75rem] text-muted-foreground">{{ t('apiRef.payload') }} · {{ typeLabel(document, m.payload) }}</p>
-          <ApiSchemaTree v-if="tree(m.payload).length" :nodes="tree(m.payload)" />
+          <!-- Parameters: one table, the way Swagger lists them, path first. -->
+          <section v-if="params.length" class="kn-op-section">
+            <h4 class="kn-op-section-title">{{ t('apiRef.params') }}<span class="kn-op-count">{{ params.length }}</span></h4>
+            <div class="kn-op-table" role="table" :aria-label="t('apiRef.params')">
+              <div class="kn-op-thead" role="row">
+                <span role="columnheader">{{ t('apiRef.col.name') }}</span>
+                <span role="columnheader">{{ t('apiRef.col.description') }}</span>
+              </div>
+              <div v-for="p in params" :key="`${p.in}:${p.name}`" class="kn-op-row" role="row">
+                <div role="cell" class="kn-op-name">
+                  <p class="flex flex-wrap items-baseline gap-x-1.5">
+                    <code class="kn-op-key" :class="p.deprecated && 'line-through opacity-60'">{{ p.name }}</code>
+                    <span v-if="p.required" class="kn-op-required">{{ t('apiRef.requiredMark') }}</span>
+                  </p>
+                  <p class="kn-op-type">{{ p.type }} <span class="kn-op-in">({{ where(p.in) }})</span></p>
+                </div>
+                <div role="cell" class="kn-op-desc">
+                  <p v-if="p.description">{{ p.description }}</p>
+                  <p v-else class="text-muted-foreground">—</p>
+                  <p v-if="p.enumValues.length" class="mt-1.5 flex flex-wrap gap-1">
+                    <code v-for="v in p.enumValues" :key="v" class="kn-op-chip">{{ v }}</code>
+                  </p>
+                  <p v-if="p.example" class="mt-1.5 text-[0.8rem] text-muted-foreground">
+                    {{ t('apiRef.exampleLabel') }} <code class="kn-op-chip">{{ p.example }}</code>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section v-if="view.requestBody" class="kn-op-section">
+            <h4 class="kn-op-section-title">
+              {{ t('apiRef.body') }}
+              <span v-if="view.requestBody.required" class="kn-op-required">{{ t('apiRef.requiredMark') }}</span>
+            </h4>
+            <div class="kn-op-pad space-y-3">
+              <MarkdownView v-if="view.requestBody.description" :markdown="view.requestBody.description" />
+              <ApiMediaContent :document="document" :contents="view.requestBody.contents" />
+            </div>
+          </section>
+
+          <section v-if="view.responses.length" class="kn-op-section">
+            <h4 class="kn-op-section-title">{{ t('apiRef.responses') }}<span class="kn-op-count">{{ view.responses.length }}</span></h4>
+            <div class="kn-op-table" role="table" :aria-label="t('apiRef.responses')">
+              <div class="kn-op-thead kn-op-thead--code" role="row">
+                <span role="columnheader">{{ t('apiRef.col.code') }}</span>
+                <span role="columnheader">{{ t('apiRef.col.description') }}</span>
+              </div>
+              <div v-for="r in view.responses" :key="r.status" class="kn-op-row kn-op-row--code" role="row">
+                <div role="cell"><ApiTone :tone="statusTone(r.status)">{{ r.status }}</ApiTone></div>
+                <div role="cell" class="kn-op-desc min-w-0">
+                  <button
+                    v-if="r.contents.length"
+                    type="button"
+                    class="kn-op-response-toggle"
+                    :aria-expanded="openResponses.has(r.status)"
+                    :aria-controls="`${uid}-r-${r.status}`"
+                    @click="toggleResponse(r)"
+                  >
+                    <span class="min-w-0 flex-1 text-start">{{ r.description || t('apiRef.noDescription') }}</span>
+                    <span v-if="!openResponses.has(r.status)" class="font-mono text-[0.75rem] text-muted-foreground">{{ r.contents.map((c) => c.mediaType).join(', ') }}</span>
+                    <ChevronDown class="kn-op-chevron size-4" aria-hidden="true" />
+                  </button>
+                  <p v-else>{{ r.description || t('apiRef.noDescription') }}</p>
+                  <Collapse v-if="r.contents.length" :open="openResponses.has(r.status)">
+                    <div :id="`${uid}-r-${r.status}`" class="pt-2.5 pb-1">
+                      <ApiMediaContent :document="document" :contents="r.contents" />
+                    </div>
+                  </Collapse>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section v-if="view.messages.length" class="kn-op-section">
+            <h4 class="kn-op-section-title">{{ t('apiRef.messages') }}<span class="kn-op-count">{{ view.messages.length }}</span></h4>
+            <div class="kn-op-pad divide-y">
+              <div v-for="(m, i) in view.messages" :key="i" class="space-y-2 py-3 first:pt-0 last:pb-0">
+                <p class="text-[0.92rem] font-semibold">{{ m.name ?? t('apiRef.message', { n: i + 1 }) }}</p>
+                <p v-if="m.summary" class="text-[0.875rem] text-muted-foreground">{{ m.summary }}</p>
+                <MarkdownView v-if="m.description" :markdown="m.description" />
+                <ApiMediaContent :document="document" :contents="[{ mediaType: t('apiRef.payload'), schema: m.payload, example: undefined }]" />
+              </div>
+            </div>
+          </section>
+
+          <ApiRequestPanel
+            v-if="view.protocol === 'http'"
+            class="kn-op-section"
+            :document="document"
+            :operation="operation"
+            :view="view"
+            :workspace-id="workspaceId"
+          />
+
+          <ApiOperationLinks
+            v-if="links"
+            class="kn-op-section"
+            :workspace-id="workspaceId"
+            :entity-key="operation.entityKey"
+            :spec-document-id="operation.documentId"
+          />
         </div>
-      </div>
-    </section>
-
-    <ApiRequestPanel
-      v-if="view.protocol === 'http'"
-      :document="document"
-      :operation="operation"
-      :view="view"
-      :workspace-id="workspaceId"
-    />
-
-    <ApiOperationLinks
-      v-if="links"
-      :workspace-id="workspaceId"
-      :entity-key="operation.entityKey"
-      :spec-document-id="operation.documentId"
-    />
+      </Collapse>
     </template>
-    <p v-else class="text-sm text-muted-foreground">{{ t('apiRef.missing') }}</p>
+    <p v-else class="p-4 text-sm text-muted-foreground">{{ t('apiRef.missing') }}</p>
   </article>
 </template>
+
+<style>
+/* The frame, header wash and badge are the shared opblock rules in
+   styles/editor.css (`.kn-op`), which the page's API block also wears. What is
+   here is the reference card's own interior — unscoped, because the request
+   panel inside the card opens on the same section band. Every class is
+   `kn-op-*`, so nothing outside a card can match. */
+.kn-op-route {
+  flex: 0 1 auto;
+}
+.kn-op-summary {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.9rem;
+  color: color-mix(in oklab, var(--foreground) 78%, var(--card));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+}
+.kn-op-flags {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  margin-inline-start: auto;
+}
+.kn-op-lock {
+  display: grid;
+  place-items: center;
+  color: color-mix(in oklab, var(--kn-accent) 60%, var(--foreground));
+}
+.kn-op-chevron {
+  width: 1.1rem;
+  height: 1.1rem;
+  color: var(--muted-foreground);
+  transition: transform var(--collapse-duration) var(--snap-ease);
+}
+.kn-op[data-state='closed'] .kn-op-head .kn-op-chevron {
+  transform: rotate(-90deg);
+}
+.kn-op-response-toggle[aria-expanded='false'] .kn-op-chevron {
+  transform: rotate(-90deg);
+}
+
+.kn-op-body {
+  padding-bottom: 1.25rem;
+}
+.kn-op-intro {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+.kn-op-intro:empty {
+  display: none;
+}
+.kn-op-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.5rem;
+  font-size: 0.82rem;
+}
+.kn-op-meta > div {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.kn-op-meta dt {
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.kn-op-meta dd {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.kn-op-meta code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  color: var(--foreground);
+}
+.kn-op-iconbtn {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+.kn-op-iconbtn:hover {
+  color: var(--foreground);
+  background: var(--accent);
+}
+.kn-op-iconbtn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+/* A section opens on Swagger's band: the title on a step of the card's hue,
+   bleeding to the frame, hairlines above and below. */
+.kn-op-section + .kn-op-section {
+  margin-top: 1.5rem;
+}
+.kn-op-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 1.25rem;
+  border-block: 1px solid color-mix(in oklab, var(--kn-accent) 22%, var(--border));
+  background: color-mix(in oklab, var(--kn-accent) 6%, var(--card));
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+/* Straight under the header, the header's own rule is the band's top edge. */
+.kn-op-body > .kn-op-section:first-child .kn-op-section-title {
+  border-top: 0;
+}
+.kn-op-count {
+  display: grid;
+  place-items: center;
+  height: 1.15rem;
+  min-width: 1.15rem;
+  padding-inline: 0.3rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--kn-accent) 16%, transparent);
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in oklab, var(--kn-accent) 65%, var(--foreground));
+}
+.kn-op-pad {
+  padding-inline: 1.25rem;
+}
+
+/* Name | Description, as Swagger's parameter table: the name column holds the
+   name, its type and where it travels; the description column the prose. */
+.kn-op-table {
+  padding-inline: 1.25rem;
+  font-size: 0.875rem;
+}
+.kn-op-thead,
+.kn-op-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 13rem) minmax(0, 1fr);
+  column-gap: 1.5rem;
+}
+.kn-op-thead--code,
+.kn-op-row--code {
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+}
+.kn-op-thead {
+  padding-bottom: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.kn-op-row {
+  padding-block: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.kn-op-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.86rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.kn-op-required {
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: color-mix(in oklab, var(--kn-panel-caution) 75%, var(--foreground));
+}
+.kn-op-type {
+  margin-top: 0.15rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: color-mix(in oklab, var(--foreground) 72%, var(--card));
+  overflow-wrap: anywhere;
+}
+.kn-op-in {
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+.kn-op-desc {
+  line-height: 1.55;
+  color: color-mix(in oklab, var(--foreground) 88%, var(--card));
+}
+.kn-op-chip {
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  background: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.76rem;
+  color: var(--foreground);
+}
+.kn-op-response-toggle {
+  display: flex;
+  width: calc(100% + 0.8rem);
+  align-items: center;
+  gap: 0.6rem;
+  margin: -0.2rem -0.4rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  transition: background-color 120ms ease-out;
+}
+.kn-op-response-toggle:hover {
+  background: color-mix(in oklab, var(--kn-accent) 7%, transparent);
+}
+.kn-op-response-toggle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 0;
+}
+
+@container kn-op (max-width: 34rem) {
+  .kn-op-thead {
+    display: none;
+  }
+  .kn-op-thead + .kn-op-row {
+    border-top: 0;
+  }
+  .kn-op-row:not(.kn-op-row--code) {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0.35rem;
+  }
+  .kn-op-summary {
+    flex-basis: 100%;
+    order: 3;
+    white-space: normal;
+  }
+  .kn-op-table,
+  .kn-op-pad,
+  .kn-op-section-title,
+  .kn-op-intro {
+    padding-inline: 1rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kn-op-chevron {
+    transition: none;
+  }
+}
+</style>

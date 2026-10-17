@@ -102,18 +102,31 @@ in the pull request that introduces them — see
 
 ### Changed
 
-- API blocks (the endpoint widget in the editor) are now a compact card. A
-  slim request line shows the method as a coloured chip, the path with its
-  `{params}` muted, and a copy button. Each section (parameters, body,
-  responses, headers) is a one-line row with a count that opens on click.
-  Find-in-page still reaches text inside a closed section and opens it.
-  Sections left empty are hidden when reading. When reading, a section's table
-  is drawn as name → type · location · required rows, the same shape as a
-  linked operation. Section names and column meanings are shown in the
-  reader's language even when the page was written in another, because the
-  columns are recognised in English or Russian. The values themselves are
-  never translated. The editor keeps the real table, and the card stacks to
-  fit narrow columns and phones. Stored markdown is unchanged. (#78)
+- API blocks (the endpoint widget in the editor) and the operations of a
+  spec now look like Swagger UI. Each endpoint is a card tinted by its
+  method — GET blue, POST green, PUT amber, PATCH violet, DELETE red — with
+  the method as a solid badge, so a page of endpoints reads at a glance in
+  light and dark themes. Text inside the cards is larger and higher-contrast,
+  and required parameters are marked as Swagger marks them.
+  - An API block's sections (parameters, body, responses, headers) are rows
+    with a count that open and close with a short animation. Find-in-page
+    still reaches text inside a closed section and opens it. When reading, a
+    section's table is drawn as name → type · location · required rows, with
+    section names and column meanings in the reader's language; the values
+    are never translated, and stored markdown is unchanged.
+  - On a spec, each operation is one line (method, path, summary, a lock when
+    it needs credentials) that opens in place. Specs with more than three
+    operations start closed; **Expand all** opens every card. Parameters and
+    responses are Name | Description and Code | Description tables, and every
+    body has **Example** and **Schema** tabs. An example the spec does not
+    give is built from the schema and labelled as such.
+  - "Try it" is laid out like Postman: one request bar with the method, the
+    URL as it will be sent (filled path parameters highlighted, empty ones
+    flagged) and Send; then **Params**, **Headers**, **Body** and **Auth**
+    tabs with key/value tables; then the response with its status, time and
+    size, and **Body** / **Headers** tabs. Code samples and JSON responses are
+    syntax-highlighted. Pressing Send with a required field empty jumps to
+    that field instead of doing nothing. (#78)
 
 ### Operations
 

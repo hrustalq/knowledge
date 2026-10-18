@@ -80,6 +80,21 @@ in the pull request that introduces them — see
   while another person's turn streams, and a suggestion whose writer closed
   the tab mid-stream becomes decidable for everyone else. `draft-edit` stream
   frames now carry the turn's `agent` (`key`, `name`).
+- A browser that was offline when someone discarded a shared draft no longer
+  brings the old page back (#80, phase 6). Each draft now has a generation
+  that changes on every reset, and each browser keeps it beside its offline
+  copy. A copy from an older generation is refused before it syncs, and the
+  editor clears it and reopens the reset page. This holds whether the page is
+  reopened later or was open the whole time. Offline edits on a current copy
+  still merge in, once. The `/v1/collab` token may now carry that generation
+  after the ticket (`collabToken`), and a peer receives it in a stateless
+  message after joining. Every draft store now writes a `collab.store` event
+  to the ops JSONL stream: duration, draft size, peers, and whether it was
+  stored or refused. `make backtest ARGS=--report` summarizes these events,
+  and `make collab-load` load-tests running API instances. Real-time co-editing
+  is documented in `docs/features/56-realtime-coediting.md`, numbers included.
+  It stays off by default (`COLLAB_ENABLED=false`); turning it on is a
+  separate change after a dogfood pass.
 
 ### Operations
 

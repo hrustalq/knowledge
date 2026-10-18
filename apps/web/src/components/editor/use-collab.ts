@@ -22,7 +22,9 @@ import { ySyncPluginKey } from '@tiptap/y-tiptap'
 import {
   COLLAB_DENY_REASONS,
   COLLAB_DISABLED_CLOSE_CODE,
+  collabToken,
   type CollabDenyReason,
+  type CollabJoined,
   type CollabUser,
   type UrlTicketResponse,
 } from '@knowledge/contracts'
@@ -32,6 +34,9 @@ import { apiFetch, getToken } from '@/lib/api'
 import { avatarColor, avatarColorDeep } from '@/lib/avatar'
 import { wsBase } from '@/api/live'
 import type { SharedSuggestion, SuggestionStore } from './extensions/ai-suggestions'
+
+/** Beside this device's copy, outside the Y.Doc: which seeding of the draft it came from (`collabToken`). */
+const GENERATION_KEY = 'generation'
 
 /** The assistant's pending suggestions, one Y.Map each (`suggestionStore`). */
 export const SUGGESTIONS_FIELD = 'suggestions'
@@ -141,7 +146,17 @@ export function createCollab(options: {
     url: `${wsBase()}/v1/collab`,
     name: options.name,
     document: doc,
-    token: ticket,
+    // The copy's generation goes with every (re)join: a copy from before a
+    // reset is refused with `reset` before it can merge, even one this tab
+    // held open offline through the reset.
+    token: async () => {
+      await local.whenSynced
+      return collabToken(await ticket(), ((await local.get(GENERATION_KEY)) as string | undefined) ?? null)
+    },
+  })
+  provider.on('stateless', ({ payload }: { payload: string }) => {
+    const { generation } = JSON.parse(payload) as Partial<CollabJoined>
+    if (generation) void local.set(GENERATION_KEY, generation)
   })
 
   followProvider(provider, status, { synced: markSynced, stopped: () => settle(false) })

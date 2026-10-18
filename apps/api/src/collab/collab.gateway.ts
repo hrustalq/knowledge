@@ -11,16 +11,19 @@ import {
   COLLAB_DISABLED_CLOSE_CODE,
   collabDocName,
   parseCollabDocName,
+  parseCollabToken,
   type CollabDenyReason,
+  type CollabJoined,
   type CollabUser,
 } from '@knowledge/contracts';
+import { emitBacktest } from '@knowledge/observability';
 import { TokenAuthService } from '../auth/token-auth.service.js';
 import type { Principal } from '../auth/principal.js';
 import type { Env } from '../config/env.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { EventsSubscriber } from '../events/events.subscriber.js';
 import { PermissionService } from '../permissions/permission.service.js';
-import { CollabDraftTooLargeError, CollabDraftsService, snapshotOf, type LoadedDraft } from './collab-drafts.service.js';
+import { CollabDraftTooLargeError, CollabDraftsService, generationOf, snapshotOf, type LoadedDraft } from './collab-drafts.service.js';
 
 /** What a document connection carries once `onAuthenticate` accepted it. */
 interface CollabContext {
@@ -120,23 +123,49 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       onStoreDocument: async ({ documentName, document, lastContext }) => {
         const row = this.loaded.get(document);
         if (!row) return;
+        const startedAt = performance.now();
+        const state = Y.encodeStateAsUpdate(document);
+        let outcome: 'stored' | 'stale' | 'too-large' = 'stored';
         try {
           const stored = await this.drafts.store(row, {
-            state: Y.encodeStateAsUpdate(document),
+            state,
             snapshot: snapshotOf(document),
             userId: lastContext?.principal.userId,
           });
           // Reset or dropped since this doc loaded: whatever it holds is not the draft any more.
-          if (!stored) this.closeDraft(document, 'reset');
+          if (!stored) {
+            outcome = 'stale';
+            this.closeDraft(document, 'reset');
+          }
         } catch (e) {
           if (!(e instanceof CollabDraftTooLargeError)) throw e;
           // The last stored state stays; the edits since are lost with the peers.
+          outcome = 'too-large';
           this.logger.warn(`Draft ${documentName} is over COLLAB_MAX_DOC_BYTES; closing its peers`);
           this.closeDraft(document, 'too-large');
         }
+        const { workspaceId, documentId, branchId } = parseCollabDocName(documentName)!;
+        emitBacktest({
+          traceId: 'unscoped',
+          source: 'ws',
+          workspaceId,
+          kind: 'collab.store',
+          ts: new Date().toISOString(),
+          durationMs: performance.now() - startedAt,
+          documentId,
+          branchId,
+          outcome,
+          bytes: state.byteLength,
+          peers: document.getConnectionsCount(),
+        });
       },
-      // Who has a draft open changed: the "N editing" badges re-ask.
-      connected: async ({ documentName }) => this.announce(documentName),
+      connected: async ({ documentName, connection }) => {
+        // What the peer keeps beside its device copy, and sends back on every join (`collabToken`).
+        const row = this.loaded.get(connection.document);
+        if (row) connection.sendStateless(JSON.stringify({ generation: generationOf(row) } satisfies CollabJoined));
+        // Who has a draft open changed: the "N editing" badges re-ask.
+        this.announce(documentName);
+      },
       onDisconnect: async ({ documentName }) => this.announce(documentName),
     });
   }
@@ -231,9 +260,10 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const name = parseCollabDocName(documentName);
     if (!name) throw deny('forbidden');
 
+    const { ticket, generation } = parseCollabToken(token ?? '');
     let principal: Principal;
     try {
-      principal = await this.tokenAuth.resolveTicket(token || undefined);
+      principal = await this.tokenAuth.resolveTicket(ticket || undefined);
     } catch {
       throw deny('unauthorized');
     }
@@ -245,6 +275,10 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     if (access === 'none') throw deny('forbidden');
     connectionConfig.readOnly = access === 'read';
     await this.settled(documentName);
+    // A device copy from another seeding of this draft — kept offline across
+    // a reset, or of a draft since dropped — would merge the old page back in.
+    // Refused before its sync step is read; the client clears it and rejoins.
+    if (generation && generation !== (await this.drafts.generation(name.documentId, name.branchId))) throw deny('reset');
     return { principal, workspaceId, documentId: name.documentId };
   }
 

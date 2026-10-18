@@ -79,7 +79,7 @@ Features 01–17 come from the original list in [`../features.md`](../features.m
 | 52  | API reference (OpenAPI/AsyncAPI spec documents, operation entities, reference reader, code samples, try-it proxy, page linking, classified spec diff and breaking-change gate, repo sync, spec ↔ code drift) | [features/52-api-reference.md](features/52-api-reference.md)       | ✅ #78                      |
 | 53  | Doc quality (styleguide per workspace/project, `linter` agent, merge request lint threads, `block` lint gate with admin override, `auditor` quality scores, Quality tab and rail, glossary from content) | [features/53-doc-quality.md](features/53-doc-quality.md)           | ✅ #74                      |
 | 54  | Enterprise auth (OIDC, SAML and LDAP sign-in, JIT, group → role mapping, enforced SSO and verified domains, SCIM 2.0 provisioning, session list, back-channel logout, workspace audit log) | [features/54-enterprise-auth.md](features/54-enterprise-auth.md)   | ✅ #75                      |
-| 56  | Real-time co-editing of drafts (Yjs + Hocuspocus, shared draft per branch, presence, publish → ordinary revision) — phase 0 decision record | [features/56-realtime-coediting.md](features/56-realtime-coediting.md) | 🚧 #80 phase 0 |
+| 56  | Real-time co-editing of drafts (Yjs + Hocuspocus, shared draft per branch, carets and presence, publish → ordinary revision, discard, branch drafts, shared assistant suggestions, offline copies) — behind `COLLAB_ENABLED` | [features/56-realtime-coediting.md](features/56-realtime-coediting.md) | ✅ #80 (flag off) |
 
 Open work against the agents feature is tracked in
 [features/20-agents-todo.md](features/20-agents-todo.md).

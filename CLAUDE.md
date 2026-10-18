@@ -35,6 +35,7 @@ make deps               # dependency-cruiser: process boundaries, layering, cycl
 make deps-baseline      # re-record known violations (shrink-only: drops fixed ones, never adds)
 make smoke              # health-check every service
 make backtest           # retrieval/pipeline backtest. ARGS="--generate --limit 120" | "--report"
+make collab-load        # shared-draft load test against running APIs (AUTH_MODE=none, COLLAB_ENABLED=true). ARGS="--docs 50 --peers 5"
 
 make infra-up|down|logs        # docker compose: postgres, minio (+bucket init), redis, arcadedb
 make infra-up-opensearch       # + optional OpenSearch BM25 node (FULLTEXT_PROVIDER=opensearch)
@@ -141,6 +142,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 52 | API reference        | `documents.kind` openapi/asyncapi; ingestion branches on kind → markdown projection + `api_operations` + revision-scoped `spec` `DESCRIBES`; `{param}` folds in `normalizeEntityKey`; slug pinned; try-it proxy is env-ceilinged, never MCP; `breakingBlocks` gates merge; synced spec changes always MR |
 | 53 | Doc quality          | Styleguide = `ai_skills` `kind='styleguide'`, project replaces workspace; `readLintViolations` drops unknown rules/ungrounded quotes, severity is the rule's; MR lint = added lines only, sweeper-triggered per head, published API-side; `lintGate` is the one predicate (fail-open); scores are append-only rows the worker writes |
 | 54 | Enterprise auth      | OIDC/SAML/LDAP providers per workspace (`platformWide` opt-in), JIT only on a verified address in `allowedDomains`; token via a 60 s fragment exchange code; `RoleSyncService` is the one non-manual membership writer; enforced SSO inside `requireRole` (`AuthPolicyService`, 30 s cache); SCIM `kscim_` is a credential, never a principal |
+| 56 | Co-editing           | One Yjs draft per (page, branch) in `collab_drafts`, never a revision; Hocuspocus embedded behind `/v1/collab` (API-only, `kt_` tickets, page permissions, per-document **reasons** not close codes); server seeds via `@knowledge/editor-schema`; publish = ordinary finalize that rebases the draft; reset moves `reset_at` + device copies carry a generation; collab mode never `setContent`; `COLLAB_ENABLED` default off |
 
 ## Conventions
 

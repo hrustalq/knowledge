@@ -35,8 +35,9 @@ WYSIWYG block editor; see Future work.
 
 - Block-based WYSIWYG (TipTap/ProseMirror) mapped to markdown.
 - PDF/attachment embeds — requires binary revision uploads + a viewer.
-- Live collaborative editing (CRDT) — plan.md keeps revisions immutable, so
-  collaboration would happen pre-finalize on drafts.
+- ~~Live collaborative editing (CRDT)~~ — shipped behind `COLLAB_ENABLED` as a
+  shared draft per branch, pre-finalize as planned:
+  [56](56-realtime-coediting.md).
 - Widgets/macros (status, TOC, include-other-doc).
 
 ## Since the MVP: streams and the working copy
@@ -103,4 +104,7 @@ or a crash lost them. Now:
   mount — the SSR pass has no storage).
 
 Not handled: two tabs *both editing* the same page write the same slot, last
-write wins. Copies are per browser, never synced.
+write wins. Copies are per browser, never synced. With `COLLAB_ENABLED` on, the
+working copy is off and both tabs edit one shared draft instead
+([56](56-realtime-coediting.md)); this paragraph describes the editor with the
+flag off.

@@ -45,6 +45,15 @@ export function seedState(markdown: string, meta?: PageMeta): { state: Uint8Arra
   return { state: new Uint8Array(Y.encodeStateAsUpdate(doc)), snapshot: snapshotOf(doc) };
 }
 
+/**
+ * Which seeding of a draft a copy came from: a new value on every reset (the
+ * row's `reset_at`) and on every new row (a dropped draft opened again).
+ * Opaque to clients (`collabToken`).
+ */
+export function generationOf(row: { id: string; resetAt: Date | null }): string {
+  return `${row.id}.${row.resetAt?.getTime() ?? 0}`;
+}
+
 /** A store would push the draft past COLLAB_MAX_DOC_BYTES. */
 export class CollabDraftTooLargeError extends Error {}
 
@@ -79,6 +88,15 @@ export class CollabDraftsService {
       select: { document: { select: { workspaceId: true } } },
     });
     return branch?.document.workspaceId ?? null;
+  }
+
+  /** The draft's current generation, or null while the branch has none. */
+  async generation(documentId: string, branchId: string): Promise<string | null> {
+    const row = await this.prisma.collabDraft.findUnique({
+      where: { documentId_branchId: { documentId, branchId } },
+      select: { id: true, resetAt: true },
+    });
+    return row && generationOf(row);
   }
 
   /**

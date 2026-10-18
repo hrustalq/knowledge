@@ -3,6 +3,7 @@ import type { Locale, WorkspaceRole } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import { DEV_PRINCIPAL, ROLE_ORDER, type Principal } from './principal.js';
+import { AuthPolicyService } from './auth-policy.service.js';
 import { t } from '../i18n/t.js';
 
 /**
@@ -13,7 +14,10 @@ import { t } from '../i18n/t.js';
  */
 @Injectable()
 export class AccessService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly policy: AuthPolicyService,
+  ) {}
 
   async requireRole(
     principal: Principal,
@@ -26,6 +30,10 @@ export class AccessService {
     // platform-admin shortcut, or an admin's read-only key would write anyway.
     if (principal.apiKey) this.requireKeyAllows(principal.apiKey, workspaceId, role, opts);
     if (principal.mode === 'dev') return; // AUTH_MODE=none — full access
+    // The workspace's sign-in policy (#75): enforced SSO, keys under it, a
+    // session age cap. Ahead of the admin shortcut so an admin's crossing is
+    // audited as break-glass; behind the key, which narrows first regardless.
+    await this.policy.enforce(principal, workspaceId);
     if (principal.isAdmin) return; // platform admin — implicit admin + operator everywhere
     const member = await this.prisma.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId, userId: principal.userId } },

@@ -36,7 +36,11 @@
     "apiKeyLimit": "You already have {max} active API keys — revoke one before creating another.",
     "sessionNotFound": "Session not found",
     "passwordLoginDisabled": "Password sign-in is turned off on this instance — sign in with your organization's single sign-on",
-    "rateLimited": "Too many attempts — wait a minute and try again"
+    "rateLimited": "Too many attempts — wait a minute and try again",
+    "ssoRequired": "Workspace {workspaceId} requires single sign-on — sign in through your organization's identity provider",
+    "ssoRequiredForDomain": "Addresses on {domain} sign in with single sign-on, not a password",
+    "apiKeysBlocked": "Workspace {workspaceId} requires single sign-on and does not accept API keys",
+    "sessionTooOld": "Your session is older than this workspace allows ({hours} h) — sign in again"
   },
   "workspace": {
     "notFound": "Workspace {id} not found",
@@ -647,6 +651,14 @@
     "invalidDomain": "\"{domain}\" is not a domain name",
     "groupMappingNotFound": "Identity provider group mapping not found",
     "groupNameRequired": "Group names cannot be empty",
-    "groupMappingProvider": "A mapping must name one of this workspace's identity providers or a platform-wide one"
+    "groupMappingProvider": "A mapping must name one of this workspace's identity providers or a platform-wide one",
+    "domainNotFound": "That domain is not claimed by this workspace",
+    "domainTaken": "{domain} is already claimed by another workspace",
+    "domainNotVerified": "Verify {domain} before enforcing single sign-on on it",
+    "domainProvider": "A domain must name one of this workspace's identity providers or a platform-wide one",
+    "domainNoProvider": "Enforcing {domain} would leave its people no way in — enable an identity provider for this workspace first",
+    "manualVerifyAdminOnly": "Only a platform admin can mark a domain verified without DNS",
+    "policyNoProvider": "Enforcing single sign-on needs an enabled identity provider for this workspace",
+    "policyLocksYouOut": "Saving this would lock you out ({failure}). Sign in through the workspace's identity provider first, then try again"
   }
 }

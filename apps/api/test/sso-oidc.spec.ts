@@ -13,6 +13,7 @@ import { SsoLoginService } from '../src/auth/sso/sso-login.service.js';
 import { RoleSyncService } from '../src/auth/sso/role-sync.service.js';
 import { normalizeDomain } from '../src/auth/sso/identity-providers.service.js';
 import { safeReturnTo } from '../src/common/safe-return-to.js';
+import { noAuthPolicy } from './auth-policy-fakes.js';
 
 /**
  * OIDC sign-in end to end (#75 phase 2), against an in-process OpenID provider:
@@ -232,8 +233,8 @@ function harness(config = fakeConfig()) {
   };
   const oidc = new OidcService(config as never);
   const login = new SsoLoginService(prisma as never, audit as never, new RoleSyncService(prisma as never, audit as never));
-  const flow = new AuthFlowService(prisma as never, config as never, sessions as never, {} as never, audit as never);
-  const sso = new SsoFlowService(prisma as never, config as never, oidc, login, flow, audit as never);
+  const flow = new AuthFlowService(prisma as never, config as never, sessions as never, {} as never, audit as never, noAuthPolicy);
+  const sso = new SsoFlowService(prisma as never, config as never, oidc, login, flow, audit as never, noAuthPolicy);
 
   const provider = (over: Row = {}) => {
     const row = {
@@ -505,6 +506,7 @@ describe('discovery and login buttons', () => {
       method: 'sso',
       providers: [{ id: p.id, name: 'Keycloak', kind: 'oidc', preset: 'keycloak' }],
       passwordAllowed: false,
+      enforced: false,
     });
     expect((await h.sso.discover('root@corp.example')).passwordAllowed).toBe(true);
     expect(await h.sso.discover('x@other.example')).toMatchObject({ method: 'password', providers: [] });
@@ -527,7 +529,7 @@ describe('password ceiling', () => {
     const config = fakeConfig({ AUTH_SIGNUP_ENABLED: true, ...over });
     const audit = { record: vi.fn(async () => undefined) };
     const prisma = { user: { findUnique: vi.fn(async () => null) } };
-    return new AuthFlowService(prisma as never, config as never, {} as never, {} as never, audit as never);
+    return new AuthFlowService(prisma as never, config as never, {} as never, {} as never, audit as never, noAuthPolicy);
   }
 
   it('AUTH_PASSWORD_LOGIN_ENABLED=false refuses login and signup, and forgot-password mints nothing', async () => {

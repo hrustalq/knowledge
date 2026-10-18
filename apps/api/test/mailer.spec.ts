@@ -6,6 +6,7 @@ import { Test } from '@nestjs/testing';
 import { I18nJsonLoader, I18nModule } from 'nestjs-i18n';
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { hashToken } from '../src/auth/auth-tokens.js';
+import { noAuthPolicy } from './auth-policy-fakes.js';
 
 /**
  * Mailer (docs/features/41). What is pinned:
@@ -255,7 +256,7 @@ describe('AuthFlowService — verification', () => {
       },
     };
     const mail = { enqueue: vi.fn(async () => undefined) };
-    const flow = new AuthFlowService(prisma as never, config() as never, {} as never, mail as never);
+    const flow = new AuthFlowService(prisma as never, config() as never, {} as never, mail as never, {} as never, noAuthPolicy);
     return { flow, mail, created, userUpdates };
   }
   const session: Principal = { ...DEV_PRINCIPAL, userId: 'u1', mode: 'session', isAdmin: false, emailVerified: false };
@@ -324,7 +325,7 @@ describe('AuthFlowService — forgot-password queues the link', () => {
       },
       passwordResetToken: { create: vi.fn(async ({ data }: { data: unknown }) => created.push(data)) },
     };
-    const flow = new AuthFlowService(prisma as never, config({ NODE_ENV: 'production' }) as never, {} as never, mail as never);
+    const flow = new AuthFlowService(prisma as never, config({ NODE_ENV: 'production' }) as never, {} as never, mail as never, {} as never, noAuthPolicy);
     expect(await flow.forgotPassword('nobody@example.com')).toEqual({ ok: true });
     expect(await flow.forgotPassword(' Ada@Example.com ')).toEqual({ ok: true });
     expect(mail.enqueue).toHaveBeenCalledTimes(1);

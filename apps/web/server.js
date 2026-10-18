@@ -26,6 +26,23 @@ const base = process.env.BASE || '/'
 // but bare console.log, which made an SSR failure unattributable to the page
 // that caused it.
 const logger = createRootLogger({ service: 'web-ssr', level: envLogLevel() })
+
+// A page that fires a request without awaiting it (`void store.fetchX()` in an
+// immediate watcher) runs that request during SSR too, and a refusal there is
+// an unhandled rejection — which Node answers by killing the process, and
+// every render with it. An API refusal (a 4xx — say a workspace that enforces
+// SSO answering a password session, #75) is data about one request, not about
+// this process: log it and carry on; the browser repeats the request after
+// hydration and handles it (lib/reauth.ts). Anything else is a real bug and
+// still crashes, as Node intends.
+process.on('unhandledRejection', (reason) => {
+  const status = typeof reason === 'object' && reason !== null ? reason.status : undefined
+  if (typeof status === 'number' && status >= 400 && status < 500) {
+    logger.warn({ msg: 'unawaited API request refused during SSR', status, err: reason })
+    return
+  }
+  throw reason
+})
 const OFF = new Set(['false', '0', 'no', 'off'])
 configureBacktest({
   enabled: !OFF.has(String(process.env.OPS_JSONL_ENABLED ?? 'true').toLowerCase()),

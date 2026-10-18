@@ -29,3 +29,8 @@ export function ssoErrorOf(raw: unknown): SsoLoginError | null {
 export function ownPath(raw: unknown, fallback = '/documents'): string {
   return typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') ? raw : fallback
 }
+
+/** `?reauth=` on /login, set by a workspace's sign-in policy (#75 phase 4). Anything else reads as none. */
+export function reauthKindOf(raw: unknown): 'sso' | 'session' | null {
+  return raw === 'sso' || raw === 'session' ? raw : null
+}

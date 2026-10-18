@@ -14,6 +14,7 @@ import { CAPTURE_TOOLS, WRITE_TOOLS, settleTools } from '../src/mcp/mcp-tools.js
 import { renderSkill } from '../src/mcp/skill.js';
 import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
 import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
+import { ENFORCING_PROVIDER, enforcingPolicy, noAuthPolicy } from './auth-policy-fakes.js';
 
 /**
  * MCP over HTTP and named API keys (docs/features/33).
@@ -49,7 +50,7 @@ function keyPrincipal(apiKey: NonNullable<Principal['apiKey']>, extra: Partial<P
   };
 }
 
-function accessWith(role: 'guest' | 'viewer' | 'editor' | 'admin' | null) {
+function accessWith(role: 'guest' | 'viewer' | 'editor' | 'admin' | null, policy = noAuthPolicy) {
   const prisma = {
     workspaceMember: {
       findUnique: vi.fn(async () => (role ? { role, trustedOperator: false } : null)),
@@ -57,7 +58,7 @@ function accessWith(role: 'guest' | 'viewer' | 'editor' | 'admin' | null) {
     workspace: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({ id: where.id })) },
     connector: { findUnique: vi.fn(async () => ({ workspaceId: WS_A })) },
   };
-  return new AccessService(prisma as never);
+  return new AccessService(prisma as never, policy);
 }
 
 describe('AccessService key narrowing', () => {
@@ -495,6 +496,24 @@ describe('McpService over a principal', () => {
     expect(search.search).toHaveBeenCalledOnce();
   });
 
+  it('meets enforced SSO (#75): a key the workspace blocks, or a password session, never reaches the service', async () => {
+    const blocked = service(accessWith('viewer', enforcingPolicy({ allowApiKeys: false }).policy));
+    const viaKey = await connect(blocked.mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
+    const refused = await viaKey.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
+    expect(refused.isError).toBe(true);
+    expect(JSON.stringify(refused.content)).toMatch(/apiKeysBlocked/);
+
+    const session = (extra: Partial<Principal>) =>
+      keyPrincipal(undefined as never, { mode: 'session', apiKey: undefined, sessionId: 's1', ...extra });
+    const enforced = service(accessWith('viewer', enforcingPolicy().policy));
+    const viaPassword = await connect(enforced.mcp, session({ authMethod: 'password' }));
+    const denied = await viaPassword.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
+    expect(denied.isError).toBe(true);
+    expect(enforced.search.search).not.toHaveBeenCalled();
+    const viaSso = await connect(enforced.mcp, session({ authMethod: 'oidc', providerId: ENFORCING_PROVIDER.id }));
+    expect((await viaSso.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } })).isError).toBeFalsy();
+  });
+
   it('lets a guest search and browse the tree, scoped, but not reach workspace tools (#76)', async () => {
     const { mcp, search, documents } = service(accessWith('guest'));
     const client = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
@@ -850,7 +869,7 @@ function readableWorld(opts: { enabled?: boolean } = {}) {
   };
   const config = { get: (key: string) => env[key] };
   const aiReadable = new AiReadableService(prisma as never, documents as never, config as never);
-  const access = new AccessService(prisma as never);
+  const access = new AccessService(prisma as never, noAuthPolicy);
   return { aiReadable, access, documents, prisma };
 }
 

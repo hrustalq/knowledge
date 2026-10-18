@@ -20,9 +20,11 @@ import { t } from '../../i18n/t.js';
 import { AuditService } from '../audit.service.js';
 import { AuthFlowService } from '../auth-flow.service.js';
 import { passwordAllowedFor } from '../password-policy.js';
+import { AuthPolicyService } from '../auth-policy.service.js';
 import { OIDC_PRESETS, presetOf } from './oidc-presets.js';
 import { OidcService } from './oidc.service.js';
 import { SsoLoginService } from './sso-login.service.js';
+import { LIVE_IDP_KINDS } from './live-kinds.js';
 
 /** The fragment code's lifetime: long enough for one page load, short enough to be useless later. */
 const EXCHANGE_TTL_MS = 60_000;
@@ -32,8 +34,6 @@ const DEFAULT_RETURN = '/documents';
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
 const isUuid = (v: string): boolean => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
-/** Kinds that can sign anyone in today. SAML and LDAP join with their phases. */
-const LIVE_KINDS: IdpKind[] = ['oidc'];
 
 const toLoginProvider = (p: IdentityProvider): SsoLoginProvider => ({
   id: p.id,
@@ -67,6 +67,7 @@ export class SsoFlowService {
     private readonly login: SsoLoginService,
     private readonly flow: AuthFlowService,
     private readonly audit: AuditService,
+    private readonly policy: AuthPolicyService,
   ) {
     this.web = config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
     this.stateTtlMs = config.get('AUTH_SSO_STATE_TTL_SEC', { infer: true }) * 1000;
@@ -78,7 +79,7 @@ export class SsoFlowService {
       where: {
         enabled: true,
         showOnLogin: true,
-        kind: { in: LIVE_KINDS },
+        kind: { in: LIVE_IDP_KINDS },
         OR: [{ platformWide: true }, ...(workspaceId && isUuid(workspaceId) ? [{ workspaceId }] : [])],
       },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
@@ -93,18 +94,35 @@ export class SsoFlowService {
    * Email-first sign-in: which providers assert this address's domain. Decided
    * on the domain alone, so the answer is the same for an address with an
    * account and one without — discovery enumerates nobody.
+   *
+   * An enforced domain (#75 phase 4) also offers its own provider (or its
+   * workspace's), and takes the password away unless the address is
+   * break-glass or the workspace keeps the admin exception — which cannot be
+   * told apart from here without saying who is an admin, so the field stays.
    */
   async discover(email: string): Promise<SsoDiscoverResponse> {
     const normalized = email.trim().toLowerCase();
     const domain = normalized.slice(normalized.lastIndexOf('@') + 1);
+    const enforced = await this.policy.enforcedDomainFor(normalized);
     const rows = await this.prisma.identityProvider.findMany({
-      where: { enabled: true, kind: { in: LIVE_KINDS }, allowedDomains: { has: domain } },
+      where: {
+        enabled: true,
+        kind: { in: LIVE_IDP_KINDS },
+        OR: [
+          { allowedDomains: { has: domain } },
+          ...(enforced
+            ? [enforced.providerId ? { id: enforced.providerId } : { OR: [{ workspaceId: enforced.workspaceId }, { platformWide: true }] }]
+            : []),
+        ],
+      },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
+    const passwordPast = !enforced || this.policy.isBreakGlass(normalized) || enforced.allowPasswordForAdmins;
     return {
       method: rows.length ? 'sso' : 'password',
       providers: rows.map(toLoginProvider),
-      passwordAllowed: passwordAllowedFor(normalized, this.config),
+      passwordAllowed: passwordAllowedFor(normalized, this.config) && passwordPast,
+      enforced: enforced !== null,
     };
   }
 
@@ -160,7 +178,7 @@ export class SsoFlowService {
       data: { consumedAt: new Date() },
     });
     if (spent.count === 0) return this.fail(provider, 'invalid-state', 'state replayed', back, meta);
-    if (!provider || !provider.enabled || !LIVE_KINDS.includes(provider.kind as IdpKind)) {
+    if (!provider || !provider.enabled || !LIVE_IDP_KINDS.includes(provider.kind as IdpKind)) {
       return this.fail(provider, 'failed', 'provider disabled', back, meta);
     }
 
@@ -229,7 +247,7 @@ export class SsoFlowService {
 
   private async liveProvider(providerId: string): Promise<IdentityProvider | null> {
     if (!isUuid(providerId)) return null;
-    return this.prisma.identityProvider.findFirst({ where: { id: providerId, enabled: true, kind: { in: LIVE_KINDS } } });
+    return this.prisma.identityProvider.findFirst({ where: { id: providerId, enabled: true, kind: { in: LIVE_IDP_KINDS } } });
   }
 
   /** Audit the failure with its real reason; send the browser back to /login with only the category. */

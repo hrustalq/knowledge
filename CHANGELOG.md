@@ -312,6 +312,29 @@ in the pull request that introduces them — see
   `managedByIdp` until an admin chooses **Manage manually**
   (`PATCH …/members/:userId` with `convertToManual: true`). From then on,
   sign-ins leave that member alone. (#75)
+- Enforced single sign-on. Under Settings → Security → Policy a workspace
+  admin can require that every session reaching the workspace was opened
+  through one of its identity providers (or a platform-wide one). The rule
+  is checked on every request, for the web app, the API, MCP clients and
+  live updates alike. A session that fails it gets 403 with
+  `details.reason: 'ssoRequired'` and the providers to sign in through, and
+  the web app sends the person to `/login` to sign in again that way. Keys
+  keep working under enforced SSO unless the admin turns them off
+  (`apiKeysBlocked`). A session age cap (`reauthRequired`) works with or
+  without SSO. Platform admins pass the policy as break-glass, and each
+  crossing is recorded in the audit log as `auth.sso_bypassed`. Saving a
+  policy that would lock out the admin saving it (enforcing SSO from a
+  password session, say) answers 409 `policyLocksYouOut`
+  (`GET`/`PUT /v1/workspaces/:id/auth-policy`). Under Settings → Security
+  → Domains an admin claims an email domain and proves it with a DNS TXT
+  record at `_knowledge-challenge.<domain>`. The record is checked on demand
+  and every 15 minutes for a week, and a platform admin may mark a domain
+  verified by hand. Once a domain is verified, it can be enforced: password
+  sign-in, signup and password reset are refused for its addresses (403
+  `ssoRequiredForDomain`), and the login page sends them to the domain's
+  provider. Addresses in `AUTH_BREAK_GLASS_EMAILS` still get in, and a
+  workspace may let platform admins keep their password. A domain belongs
+  to one workspace; a pending claim stops holding it after a week. (#75)
 
 ### Changed
 
@@ -352,6 +375,15 @@ in the pull request that introduces them — see
   `Retry-After`. While Redis is down, password sign-in is refused rather
   than left unlimited. Settings → Security now opens on a Providers tab, with
   the audit log on its own tab. (#75)
+
+### Fixed
+
+- The web server no longer exits when a page's background request is
+  refused during server rendering. A request the page did not wait for,
+  answered with a 4xx, used to be an unhandled rejection, which stopped the
+  process and every render in flight. It is now logged; any other unhandled
+  rejection still stops the process. Enforced SSO made this common: every
+  page a password session opened in an enforcing workspace hit it. (#75)
 
 ### Operations
 
@@ -435,6 +467,13 @@ in the pull request that introduces them — see
   nullable column, `sso_auth_requests.idp_session_id`, which the previous
   image never reads, so rolling back is safe. `make infra-up-keycloak`
   starts a local Keycloak with a test realm for trying SSO out. (#75)
+- Enforced SSO adds no migration and no environment variable; the policy
+  columns and `sso_domains` came with `20261109100000_enterprise_auth`. With
+  `AUTH_SSO_ENABLED` off, no SSO policy or domain is enforced, whatever a
+  workspace saved, and the Policy tab shows the setting as not applied. When
+  SSO is on, the API checks pending domains every 15 minutes and so needs
+  outbound DNS. The same pass deletes expired login transactions and
+  expired sessions. (#75)
 
 ## [0.26.0] — 2026-10-16
 

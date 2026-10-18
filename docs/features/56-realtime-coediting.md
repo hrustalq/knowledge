@@ -66,8 +66,14 @@ closes with 4401, its own `Unauthorized`).
 Reset and too-large still work per document. `hocuspocus.closeConnections(name)`
 closes every connection to one draft. An error thrown from
 `beforeHandleMessage` closes that document's connection with the error's `code`
-and `reason`. **To verify in phase 2:** that a custom `code` (4409, 4413)
-reaches `HocuspocusProvider`'s `onClose`.
+and `reason`. **Verified in phase 2: it does not.** A per-document close is
+a close *message* that carries only the reason, and the provider reports it as
+`{ code: 1000, reason }` (`collab-auth.e2e-spec.ts` pins this). So every
+per-document outcome is a reason in `COLLAB_DENY_REASONS` (`too-large`,
+`access-changed`, and later the reset), and the only close code left is 4503
+on the socket when the flag is off. After a close message the provider does
+not rejoin by itself: the client decides, from the reason, whether to rejoin
+with a fresh ticket.
 
 ### 2. Tickets already exist: reuse `kt_`
 

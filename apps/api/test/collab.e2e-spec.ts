@@ -19,7 +19,7 @@ import { PrismaService } from '../src/prisma/prisma.service.js';
  * duplicating it.
  *
  * Runs as the `AUTH_MODE=none` dev principal in whichever workspace has a
- * project, so every peer is a writer; who may join and write is phase 2's spec. Needs
+ * project, so every peer is a writer; who may join and write is collab-auth.e2e-spec.ts. Needs
  * `make infra-up` and the `collab_drafts` table.
  */
 

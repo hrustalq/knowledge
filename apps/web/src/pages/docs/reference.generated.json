@@ -1342,6 +1342,36 @@
     },
     {
       "method": "GET",
+      "path": "/v1/workspaces/{id}/group-mappings",
+      "tag": "auth",
+      "summary": "The workspace's group → role mappings, and the providers a mapping may name",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workspaces/{id}/group-mappings",
+      "tag": "auth",
+      "summary": "Map a provider group to a role. The same group again replaces its role. Applies at next sign-in",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/workspaces/{id}/group-mappings/{mappingId}",
+      "tag": "auth",
+      "summary": "Remove a mapping. Memberships it granted stay until the next sign-in re-syncs them",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/workspaces/{id}/identity-providers",
       "tag": "auth",
       "summary": "The workspace's identity providers. Client secrets are never returned (hasSecret only)",

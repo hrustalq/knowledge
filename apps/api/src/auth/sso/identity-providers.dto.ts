@@ -9,6 +9,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -147,4 +148,25 @@ export class SsoExchangeDto {
   @IsNotEmpty()
   @MaxLength(200, { message: vmsg('maxLength') })
   code!: string;
+}
+
+export class UpsertGroupMappingDto {
+  @ApiProperty({ description: "One of the workspace's identity providers, or a platform-wide one" })
+  @IsUUID()
+  providerId!: string;
+
+  @ApiProperty({ description: "The group exactly as the provider's groups claim carries it", example: 'knowledge-editors' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(256, { message: vmsg('maxLength') })
+  externalGroup!: string;
+
+  @ApiProperty({ enum: WORKSPACE_ROLES })
+  @IsIn(WORKSPACE_ROLES)
+  role!: WorkspaceRole;
+
+  @ApiPropertyOptional({ description: 'Also grant the trusted-operator flag (POST /v1/graph/query). Defaults to false.' })
+  @IsOptional()
+  @IsBoolean()
+  trustedOperator?: boolean;
 }

@@ -73,6 +73,10 @@ export const AUDIT_ACTIONS = [
   'sso.provider_deleted',
   'sso.jit_user_created',
   'sso.identity_linked',
+  'sso.group_mapping_created',
+  'sso.group_mapping_deleted',
+  'role_sync.applied',
+  'role_sync.blocked_last_admin',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -96,6 +100,32 @@ export type IdpPreset = (typeof IDP_PRESETS)[number];
 /** Additive grants what the IdP's groups map to; authoritative also takes away what they no longer do. */
 export const GROUP_SYNC_MODES = ['additive', 'authoritative'] as const;
 export type GroupSyncMode = (typeof GROUP_SYNC_MODES)[number];
+
+/**
+ * One IdP group → one workspace role (#75 phase 3). On every SSO sign-in the
+ * person's groups are matched against the mappings of the provider they used;
+ * the highest mapped role wins, and any matching mapping with
+ * `trustedOperator` grants it. Rows a person set by hand are never touched.
+ */
+export interface GroupMappingView {
+  id: string;
+  workspaceId: string;
+  providerId: string;
+  /** The provider's name, for the table; null if it has since been removed. */
+  providerName: string | null;
+  /** The value as it arrives in the provider's groups claim. */
+  externalGroup: string;
+  role: WorkspaceRole;
+  trustedOperator: boolean;
+  createdAt: string;
+}
+
+// GET /v1/workspaces/:id/group-mappings
+export interface ListGroupMappingsResponse {
+  mappings: GroupMappingView[];
+  /** Providers a mapping may name: the workspace's own and every platform-wide one. */
+  providers: { id: string; name: string; groupSyncMode: GroupSyncMode; groupsClaim: string | null }[];
+}
 
 /** The non-secret half of an OIDC provider (`identity_providers.config`). */
 export interface OidcProviderConfig {
@@ -872,6 +902,8 @@ export interface WorkspaceMemberEntry {
   avatarUrl: AvatarUrl;
   role: WorkspaceRole;
   trustedOperator: boolean;
+  /** Who manages the row (#75). Only `manual` rows are edited by hand; the rest need `convertToManual`. */
+  source: MembershipSource;
   disabled: boolean;
   createdAt: string;
 }

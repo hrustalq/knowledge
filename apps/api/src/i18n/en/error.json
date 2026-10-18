@@ -43,7 +43,8 @@
     "noUserWithEmail": "No user with that email — create the account first (signup or POST /v1/users)",
     "notAMember": "User {userId} is not a member of workspace {workspaceId}",
     "lastAdminDemote": "Cannot demote the last admin of the workspace",
-    "lastAdminRemove": "Cannot remove the last admin of the workspace"
+    "lastAdminRemove": "Cannot remove the last admin of the workspace",
+    "managedByIdp": "This member is managed by single sign-on ({source}) — take the row over as manual to edit it"
   },
   "user": {
     "notFound": "User {id} not found",
@@ -643,6 +644,9 @@
     "issuerNotHttps": "The issuer must use https",
     "issuerUnresolved": "The issuer host {host} does not resolve",
     "issuerPrivate": "The issuer resolves to a private address ({address}). Set AUTH_SSO_ALLOW_PRIVATE_URLS=true for an on-premises identity provider",
-    "invalidDomain": "\"{domain}\" is not a domain name"
+    "invalidDomain": "\"{domain}\" is not a domain name",
+    "groupMappingNotFound": "Identity provider group mapping not found",
+    "groupNameRequired": "Group names cannot be empty",
+    "groupMappingProvider": "A mapping must name one of this workspace's identity providers or a platform-wide one"
   }
 }

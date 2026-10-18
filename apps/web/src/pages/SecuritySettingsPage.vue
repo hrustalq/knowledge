@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AuditLogTable from '@/components/security/AuditLogTable.vue'
+import GroupMappingsPanel from '@/components/security/GroupMappingsPanel.vue'
 import IdentityProvidersPanel from '@/components/security/IdentityProvidersPanel.vue'
 
 const { t } = useI18n()
@@ -24,6 +25,7 @@ const canManage = computed(() => auth.canAdminWorkspace)
 // `label` is a message key — resolved with t() where the tab renders.
 const TABS = [
   { key: 'providers', label: 'security.tabs.providers' },
+  { key: 'groups', label: 'security.tabs.groups' },
   { key: 'audit', label: 'security.tabs.audit' },
 ] as const
 type TabKey = (typeof TABS)[number]['key']
@@ -64,6 +66,7 @@ function setTab(key: TabKey) {
         </button>
       </div>
       <IdentityProvidersPanel v-if="tab === 'providers'" />
+      <GroupMappingsPanel v-else-if="tab === 'groups'" />
       <AuditLogTable v-else />
     </template>
   </div>

@@ -531,6 +531,7 @@ export type I18nTranslations = {
             "notAMember": string;
             "lastAdminDemote": string;
             "lastAdminRemove": string;
+            "managedByIdp": string;
         };
         "user": {
             "notFound": string;
@@ -1133,6 +1134,9 @@ export type I18nTranslations = {
             "issuerUnresolved": string;
             "issuerPrivate": string;
             "invalidDomain": string;
+            "groupMappingNotFound": string;
+            "groupNameRequired": string;
+            "groupMappingProvider": string;
         };
     };
     "import": {

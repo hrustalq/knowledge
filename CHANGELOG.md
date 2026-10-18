@@ -295,6 +295,23 @@ in the pull request that introduces them — see
   workspace's audit log. A platform admin can make a provider platform-wide,
   so it is offered on every workspace's login page. Deleting a provider
   signs out the sessions it opened. (#75)
+- Workspace roles from identity provider groups. Under Settings → Security
+  → Group mapping, an admin maps a group from the provider's groups claim to
+  a workspace role, and optionally to trusted operator. A workspace may map
+  its own providers or any platform-wide one. Each SSO sign-in applies the
+  mappings: the highest mapped role wins, and with no match the provider's
+  role for new members applies in its own workspace. A provider's group sync
+  is either **additive** (sign-in only raises a role) or **authoritative**
+  (each sign-in sets the role from the groups, and removes the membership
+  when no group maps). Mappings take effect at each person's next sign-in.
+  Roles set by hand are never changed. Sign-in will not demote or remove a
+  workspace's last admin: it skips the change and records it in the audit
+  log. If Entra ID sends too many groups to list, sign-in takes nothing
+  away. On Access → Members, a member managed by single sign-on shows where
+  the role comes from. Editing that member's role answers 409
+  `managedByIdp` until an admin chooses **Manage manually**
+  (`PATCH …/members/:userId` with `convertToManual: true`). From then on,
+  sign-ins leave that member alone. (#75)
 
 ### Changed
 

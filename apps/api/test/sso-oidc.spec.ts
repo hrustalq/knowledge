@@ -10,6 +10,7 @@ import { identityFromClaims } from '../src/auth/sso/oidc-claims.js';
 import { OidcService } from '../src/auth/sso/oidc.service.js';
 import { SsoFlowService } from '../src/auth/sso/sso-flow.service.js';
 import { SsoLoginService } from '../src/auth/sso/sso-login.service.js';
+import { RoleSyncService } from '../src/auth/sso/role-sync.service.js';
 import { normalizeDomain } from '../src/auth/sso/identity-providers.service.js';
 import { safeReturnTo } from '../src/common/safe-return-to.js';
 
@@ -162,6 +163,7 @@ function fakePrisma() {
       return row[k] === v;
     });
   const prisma = {
+    idpGroupMapping: { findMany: vi.fn(async () => []) },
     identityProvider: {
       findFirst: vi.fn(async ({ where }: Row) => db.providers.find((p) => match(p, where)) ?? null),
       findMany: vi.fn(async ({ where }: Row) => db.providers.filter((p) => match(p, where))),
@@ -229,7 +231,7 @@ function harness(config = fakeConfig()) {
     })),
   };
   const oidc = new OidcService(config as never);
-  const login = new SsoLoginService(prisma as never, audit as never);
+  const login = new SsoLoginService(prisma as never, audit as never, new RoleSyncService(prisma as never, audit as never));
   const flow = new AuthFlowService(prisma as never, config as never, sessions as never, {} as never, audit as never);
   const sso = new SsoFlowService(prisma as never, config as never, oidc, login, flow, audit as never);
 
@@ -296,7 +298,7 @@ describe('OIDC sign-in', () => {
     expect(h.db.users).toHaveLength(1);
     expect(h.db.users[0]).toMatchObject({ email: 'ada@corp.example', passwordHash: null, displayName: 'Ada L' });
     expect(h.db.identities[0]).toMatchObject({ providerId: p.id, subject: 'kc-1', userId: h.db.users[0].id });
-    expect(h.db.members).toEqual([{ workspaceId: WS, userId: h.db.users[0].id, role: 'editor', source: 'jit' }]);
+    expect(h.db.members).toEqual([{ workspaceId: WS, userId: h.db.users[0].id, role: 'editor', trustedOperator: false, source: 'jit' }]);
 
     const res = await h.sso.exchange(code!, meta);
     expect(res.returnTo).toBe('/documents/abc');
@@ -558,7 +560,7 @@ describe('claims', () => {
     // The generic preset does not read `hd`; a google-preset provider is checked by SsoLoginService.
     expect(fragmentCode(await signIn(h, p.id, person({ hd: undefined })))).toBeTruthy();
 
-    const login = new SsoLoginService(h.prisma as never, h.audit as never);
+    const login = new SsoLoginService(h.prisma as never, h.audit as never, new RoleSyncService(h.prisma as never, h.audit as never));
     const google = { ...p, id: randomUUID(), preset: 'google' };
     const id = { subject: 'g1', email: 'bob@corp.example', emailVerified: true, displayName: null, groups: [], idpSessionId: null, notes: [] };
     expect(await login.resolve(google as never, { ...id, hostedDomain: null })).toMatchObject({ ok: false, error: 'domain-not-allowed' });

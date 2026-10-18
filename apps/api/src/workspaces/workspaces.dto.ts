@@ -66,4 +66,12 @@ export class UpdateMemberDto {
   @IsOptional()
   @IsBoolean()
   trustedOperator?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Take an IdP-managed row (source jit/group/scim) over as manual. Without it such a row answers 409 managedByIdp.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  convertToManual?: boolean;
 }

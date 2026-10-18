@@ -7,6 +7,9 @@ import { SsoController } from './sso.controller.js';
 import { SsoEnabledGuard } from './sso-enabled.guard.js';
 import { SsoFlowService } from './sso-flow.service.js';
 import { SsoLoginService } from './sso-login.service.js';
+import { GroupMappingsController } from './group-mappings.controller.js';
+import { GroupMappingsService } from './group-mappings.service.js';
+import { RoleSyncService } from './role-sync.service.js';
 
 /**
  * Enterprise SSO (#75). API-only — it carries controllers, and the API
@@ -16,7 +19,15 @@ import { SsoLoginService } from './sso-login.service.js';
  */
 @Module({
   imports: [PrismaModule],
-  controllers: [SsoController, IdentityProvidersController],
-  providers: [OidcService, SsoLoginService, SsoFlowService, IdentityProvidersService, SsoEnabledGuard],
+  controllers: [SsoController, IdentityProvidersController, GroupMappingsController],
+  providers: [
+    OidcService,
+    SsoLoginService,
+    SsoFlowService,
+    IdentityProvidersService,
+    RoleSyncService,
+    GroupMappingsService,
+    SsoEnabledGuard,
+  ],
 })
 export class SsoModule {}

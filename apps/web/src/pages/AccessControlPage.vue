@@ -64,6 +64,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -287,6 +288,18 @@ async function assignRole(userIds: string[], role: WorkspaceRole) {
   }
 }
 
+/**
+ * A row JIT, group sync or SCIM wrote is the identity provider's (#75): the API
+ * refuses a hand edit of it (409), because the next sign-in would undo it.
+ * Taking it over is an explicit act, and from then on sync leaves it alone.
+ */
+const isManaged = (m: WorkspaceMemberEntry) => m.source !== 'manual'
+
+async function takeOver(member: WorkspaceMemberEntry) {
+  if (!window.confirm(t('access.source.takeOverConfirm', { name: member.displayName }))) return
+  await patchMember(member, { convertToManual: true })
+}
+
 async function removeMember(member: WorkspaceMemberEntry) {
   try {
     const res = await apiFetch<ListWorkspaceMembersResponse>(
@@ -387,12 +400,20 @@ const tab = usePageTabs(tabs, 'members')
             <div class="flex items-center gap-1.5">
               <UserChip :user-id="member.userId" :name="member.displayName" class="font-medium" />
               <Badge v-if="member.disabled" variant="destructive">{{ t('access.disabled') }}</Badge>
+              <TooltipProvider v-if="isManaged(member)" :delay-duration="300">
+                <Tooltip>
+                  <TooltipTrigger as-child>
+                    <Badge variant="secondary" tabindex="0">{{ t(`access.source.${member.source}`) }}</Badge>
+                  </TooltipTrigger>
+                  <TooltipContent class="max-w-xs">{{ t('access.source.managedHint') }}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
             <div class="text-muted-foreground pl-[1.875rem] text-xs">{{ member.email }}</div>
           </TableCell>
           <TableCell>
             <Select
-              v-if="canManage"
+              v-if="canManage && !isManaged(member)"
               :model-value="member.role"
               @update:model-value="patchMember(member, { role: $event as string })"
             >
@@ -407,7 +428,7 @@ const tab = usePageTabs(tabs, 'members')
           </TableCell>
           <TableCell>
             <Checkbox
-              v-if="canManage"
+              v-if="canManage && !isManaged(member)"
               :model-value="member.trustedOperator"
               :aria-label="t('access.trustedOperatorFor', { name: member.displayName })"
               @update:model-value="patchMember(member, { trustedOperator: $event === true })"
@@ -415,7 +436,12 @@ const tab = usePageTabs(tabs, 'members')
             <span v-else class="text-muted-foreground text-sm">{{ member.trustedOperator ? t('common.yes') : t('common.no') }}</span>
           </TableCell>
           <TableCell class="text-right">
-            <Button v-if="canManage" size="sm" variant="destructive" @click="removeMember(member)">{{ t('access.remove') }}</Button>
+            <div v-if="canManage" class="flex justify-end gap-1.5">
+              <Button v-if="isManaged(member)" size="sm" variant="outline" @click="takeOver(member)">
+                {{ t('access.source.takeOver') }}
+              </Button>
+              <Button size="sm" variant="destructive" @click="removeMember(member)">{{ t('access.remove') }}</Button>
+            </div>
           </TableCell>
         </TableRow>
       </TableBody>

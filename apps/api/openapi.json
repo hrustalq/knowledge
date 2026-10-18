@@ -1634,6 +1634,193 @@
         ]
       }
     },
+    "/v1/workspaces/{id}/group-mappings": {
+      "get": {
+        "operationId": "GroupMappingsController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace's group → role mappings, and the providers a mapping may name",
+        "tags": [
+          "auth"
+        ]
+      },
+      "post": {
+        "operationId": "GroupMappingsController_upsert",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertGroupMappingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Map a provider group to a role. The same group again replaces its role. Applies at next sign-in",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/group-mappings/{mappingId}": {
+      "delete": {
+        "operationId": "GroupMappingsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a mapping. Memberships it granted stay until the next sign-in re-syncs them",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/v1/users": {
       "get": {
         "operationId": "UsersController_list",
@@ -28430,6 +28617,38 @@
           }
         }
       },
+      "UpsertGroupMappingDto": {
+        "type": "object",
+        "properties": {
+          "providerId": {
+            "type": "string",
+            "description": "One of the workspace's identity providers, or a platform-wide one"
+          },
+          "externalGroup": {
+            "type": "string",
+            "description": "The group exactly as the provider's groups claim carries it",
+            "example": "knowledge-editors"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "guest",
+              "viewer",
+              "editor",
+              "admin"
+            ]
+          },
+          "trustedOperator": {
+            "type": "boolean",
+            "description": "Also grant the trusted-operator flag (POST /v1/graph/query). Defaults to false."
+          }
+        },
+        "required": [
+          "providerId",
+          "externalGroup",
+          "role"
+        ]
+      },
       "CreateUserDto": {
         "type": "object",
         "properties": {
@@ -28530,6 +28749,10 @@
           },
           "trustedOperator": {
             "type": "boolean"
+          },
+          "convertToManual": {
+            "type": "boolean",
+            "description": "Take an IdP-managed row (source jit/group/scim) over as manual. Without it such a row answers 409 managedByIdp."
           }
         }
       },

@@ -153,8 +153,10 @@ function assign(role: string) {
             :key="member.userId"
             class="flex items-center gap-1.5"
           >
+            <!-- An IdP-managed row is not reassigned by hand (#75); it is taken over on Members. -->
             <Checkbox
               v-if="canManage"
+              :disabled="member.source !== 'manual'"
               :model-value="picked.has(member.userId)"
               :aria-label="t('access.selectMember', { name: member.displayName })"
               @update:model-value="toggle(member.userId, $event === true)"

@@ -14,8 +14,10 @@ import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { Copy, KeyRound, Plus } from 'lucide-vue-next'
 import {
+  GROUP_SYNC_MODES,
   IDP_PRESETS,
   WORKSPACE_ROLES,
+  type GroupSyncMode,
   type IdentityProviderView,
   type IdpPreset,
   type ListIdentityProvidersResponse,
@@ -72,6 +74,7 @@ const blank = () => ({
   jitEnabled: false,
   defaultRole: NO_ROLE as WorkspaceRole | typeof NO_ROLE,
   groupsClaim: '',
+  groupSyncMode: 'additive' as GroupSyncMode,
   sessionTtlHours: '',
   enabled: false,
   showOnLogin: true,
@@ -103,6 +106,7 @@ function startEdit(p: IdentityProviderView) {
     jitEnabled: p.jitEnabled,
     defaultRole: p.defaultRole ?? NO_ROLE,
     groupsClaim: p.groupsClaim ?? '',
+    groupSyncMode: p.groupSyncMode,
     sessionTtlHours: p.sessionTtlHours ? String(p.sessionTtlHours) : '',
     enabled: p.enabled,
     showOnLogin: p.showOnLogin,
@@ -126,6 +130,7 @@ function body() {
     jitEnabled: form.jitEnabled,
     defaultRole: form.defaultRole === NO_ROLE ? null : form.defaultRole,
     groupsClaim: form.groupsClaim.trim() || null,
+    groupSyncMode: form.groupSyncMode,
     sessionTtlHours: Number.isFinite(ttl) && ttl > 0 ? ttl : null,
     enabled: form.enabled,
     showOnLogin: form.showOnLogin,
@@ -302,6 +307,16 @@ const busy = computed(() => create.isPending.value || update.isPending.value)
               <div class="grid gap-1">
                 <label class="text-sm font-medium" for="idp-groups">{{ t('security.providers.groupsClaim') }}</label>
                 <Input id="idp-groups" v-model="form.groupsClaim" :placeholder="EXAMPLES.groupsClaim" />
+              </div>
+              <div class="grid gap-1">
+                <label class="text-sm font-medium" for="idp-sync">{{ t('security.providers.groupSyncMode') }}</label>
+                <Select v-model="form.groupSyncMode">
+                  <SelectTrigger id="idp-sync"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="mode in GROUP_SYNC_MODES" :key="mode" :value="mode">{{ t(`security.groupMapping.modeBadge.${mode}`) }}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p class="text-xs text-muted-foreground">{{ t(`security.groupMapping.mode.${form.groupSyncMode}`) }}</p>
               </div>
               <div class="grid gap-1">
                 <label class="text-sm font-medium" for="idp-ttl">{{ t('security.providers.sessionTtl') }}</label>

@@ -20,6 +20,456 @@ export interface WorkspaceMembership {
   role: WorkspaceRole;
   /** Gate for POST /v1/graph/query / knowledge.query_graph (plan.md section 9). */
   trustedOperator: boolean;
+  /** Who manages the row (#75): a person by hand, or an identity provider. */
+  source: MembershipSource;
+}
+
+// ---------------------------------------------------------------------------
+// Enterprise auth (#75): how a session was opened and who manages a membership.
+// ---------------------------------------------------------------------------
+
+/** `sessions.auth_method`. Every session that predates SSO is `password`. */
+export const AUTH_METHODS = ['password', 'oidc', 'saml', 'ldap'] as const;
+export type AuthMethod = (typeof AUTH_METHODS)[number];
+
+/**
+ * `workspace_members.source`. Only `manual` rows are edited by people; the
+ * others belong to JIT, group sync or SCIM, which never touch a `manual` one.
+ */
+export const MEMBERSHIP_SOURCES = ['manual', 'jit', 'group', 'scim'] as const;
+export type MembershipSource = (typeof MEMBERSHIP_SOURCES)[number];
+
+/** A stored value outside the vocabulary reads as its default, never as a new kind. */
+export function authMethodOf(stored: string): AuthMethod {
+  return (AUTH_METHODS as readonly string[]).includes(stored) ? (stored as AuthMethod) : 'password';
+}
+export function membershipSourceOf(stored: string): MembershipSource {
+  return (MEMBERSHIP_SOURCES as readonly string[]).includes(stored) ? (stored as MembershipSource) : 'manual';
+}
+
+/**
+ * `audit_logs.action`. Every value here is written by at least one code path,
+ * and `audit.service.spec.ts` fails if one stops being: a filter must not offer
+ * an action nothing records. Later phases of #75 add their actions with the
+ * code that emits them.
+ */
+export const AUDIT_ACTIONS = [
+  'graph.query',
+  'acl.bypass',
+  'acl.update',
+  'acl.request',
+  'acl.request.approve',
+  'acl.request.deny',
+  'ai-readable.llms-full',
+  'api.try',
+  'feedback.export',
+  'merge-request.lint-override',
+  'auth.login',
+  'auth.login_failed',
+  'auth.logout',
+  'auth.session_revoked',
+  'sso.provider_created',
+  'sso.provider_updated',
+  'sso.provider_deleted',
+  'sso.jit_user_created',
+  'sso.identity_linked',
+  'sso.group_mapping_created',
+  'sso.group_mapping_deleted',
+  'role_sync.applied',
+  'role_sync.blocked_last_admin',
+  'sso.domain_claimed',
+  'sso.domain_verified',
+  'sso.domain_enforced',
+  'sso.domain_updated',
+  'sso.domain_removed',
+  'sso.policy_updated',
+  'auth.sso_bypassed',
+  'scim.user_created',
+  'scim.user_updated',
+  'scim.user_deactivated',
+  'scim.user_deleted',
+  'scim.group_created',
+  'scim.group_updated',
+  'scim.group_deleted',
+  'scim.token_created',
+  'scim.token_revoked',
+  'scim.settings_updated',
+] as const;
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+// ---------------------------------------------------------------------------
+// Identity providers (#75 phase 2). Owned by a workspace; a platform admin may
+// mark one `platformWide` so a single-tenant install offers it on every login.
+// ---------------------------------------------------------------------------
+
+/** `identity_providers.kind`. LDAP is offered only under AUTH_LDAP_ENABLED. */
+export const IDP_KINDS = ['oidc', 'saml', 'ldap'] as const;
+export type IdpKind = (typeof IDP_KINDS)[number];
+
+/**
+ * `identity_providers.preset`: which IdP's quirks apply. `yandex` is OAuth 2 +
+ * userinfo rather than OIDC (no discovery document, no id_token), so its
+ * endpoints are fixed and `issuer` is ignored.
+ */
+export const IDP_PRESETS = ['keycloak', 'entra', 'google', 'yandex', 'generic'] as const;
+export type IdpPreset = (typeof IDP_PRESETS)[number];
+
+/** Additive grants what the IdP's groups map to; authoritative also takes away what they no longer do. */
+export const GROUP_SYNC_MODES = ['additive', 'authoritative'] as const;
+export type GroupSyncMode = (typeof GROUP_SYNC_MODES)[number];
+
+/**
+ * One IdP group → one workspace role (#75 phases 3 and 5). On every SSO
+ * sign-in the person's groups are matched against the mappings of the
+ * provider they used; a SCIM group's mapping (no provider) applies as soon as
+ * provisioning changes the group. The highest mapped role wins, and any
+ * matching mapping with `trustedOperator` grants it. Rows a person set by hand
+ * are never touched.
+ */
+export interface GroupMappingView {
+  id: string;
+  workspaceId: string;
+  /** Null for a SCIM group's mapping. */
+  providerId: string | null;
+  /** The provider's name, for the table; null if it has since been removed, or for a SCIM mapping. */
+  providerName: string | null;
+  /** The value as it arrives in the provider's groups claim, or the SCIM group's id. */
+  externalGroup: string;
+  /** A SCIM mapping's group name; null if the client has since deleted the group, or for a provider mapping. */
+  scimGroupName: string | null;
+  role: WorkspaceRole;
+  trustedOperator: boolean;
+  createdAt: string;
+}
+
+// GET /v1/workspaces/:id/group-mappings
+export interface ListGroupMappingsResponse {
+  mappings: GroupMappingView[];
+  /** Providers a mapping may name: the workspace's own and every platform-wide one. Empty while SSO is off. */
+  providers: { id: string; name: string; groupSyncMode: GroupSyncMode; groupsClaim: string | null }[];
+  /** Groups the workspace's SCIM client has pushed. Empty while SCIM is off. */
+  scimGroups: { id: string; displayName: string; memberCount: number }[];
+  /** Which kinds of mapping the instance offers: AUTH_SSO_ENABLED and AUTH_SCIM_ENABLED (both under AUTH_MODE=api-key). */
+  enabled: { sso: boolean; scim: boolean };
+}
+
+// ---------------------------------------------------------------------------
+// SCIM 2.0 provisioning (#75 phase 5). A workspace's IdP creates, updates and
+// deactivates its people over /v1/scim/v2 with a `kscim_` bearer token. The
+// token is a credential for that workspace's provisioning only — never a
+// principal, so it opens no other route.
+// ---------------------------------------------------------------------------
+
+/**
+ * `workspace_settings.scim_default_role`: what a provisioned user is given
+ * when no mapped SCIM group says more. `none` grants nothing without a group.
+ */
+export const SCIM_DEFAULT_ROLES = ['none', ...WORKSPACE_ROLES] as const;
+export type ScimDefaultRole = (typeof SCIM_DEFAULT_ROLES)[number];
+
+/** A SCIM token as its workspace's admins see it. Never the secret. */
+export interface ScimTokenView {
+  id: string;
+  name: string;
+  /** `kscim_` and the next 8 characters: enough to recognise it in the IdP's settings. */
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+// GET/PUT /v1/workspaces/:id/scim
+export interface ScimSettingsView {
+  workspaceId: string;
+  /** The SCIM base URL to paste into the IdP: `${API_PUBLIC_URL}/v1/scim/v2`. */
+  baseUrl: string;
+  /** Stored null reads as `viewer`. */
+  defaultRole: ScimDefaultRole;
+  tokens: ScimTokenView[];
+  /** Users and groups the client has provisioned into this workspace. */
+  users: number;
+  activeUsers: number;
+  groups: number;
+}
+
+// POST /v1/workspaces/:id/scim-tokens
+export interface ScimTokenCreated {
+  token: ScimTokenView;
+  /** The bearer token itself, shown once. Only its SHA-256 is stored. */
+  secret: string;
+}
+
+// ---------------------------------------------------------------------------
+// Enforced SSO (#75 phase 4): a workspace policy, and email domains a
+// workspace has proven it owns.
+// ---------------------------------------------------------------------------
+
+/**
+ * The `workspace_settings` auth columns as an admin set them. `null` inherits:
+ * an empty row is no enforcement, keys allowed, no admin password exception,
+ * and the instance session lifetime.
+ */
+export interface WorkspaceAuthPolicySettings {
+  /** Sessions must come from one of this workspace's (or a platform-wide) providers. */
+  ssoEnforced: boolean | null;
+  /** Under enforced SSO, `kn_` keys still open the workspace. Null is yes. */
+  allowApiKeys: boolean | null;
+  /** Platform admins may still use a password on this workspace's enforced domains. Null is no. */
+  allowPasswordForAdmins: boolean | null;
+  /** A session older than this must sign in again to reach the workspace. Null is no cap. */
+  sessionMaxAgeHours: number | null;
+}
+
+/** What the API enforces after the instance ceilings. */
+export interface WorkspaceAuthPolicyApplied {
+  ssoEnforced: boolean;
+  allowApiKeys: boolean;
+  allowPasswordForAdmins: boolean;
+  /** Null when no cap applies — none asked, or one no shorter than AUTH_SESSION_TTL_HOURS. */
+  sessionMaxAgeHours: number | null;
+}
+
+// GET/PUT /v1/workspaces/:id/auth-policy
+export interface WorkspaceAuthPolicyView {
+  workspaceId: string;
+  asked: WorkspaceAuthPolicySettings;
+  applied: WorkspaceAuthPolicyApplied;
+  /** The instance values that clamp `asked`: AUTH_SSO_ENABLED (with AUTH_MODE=api-key) and AUTH_SESSION_TTL_HOURS. */
+  ceilings: { ssoEnabled: boolean; sessionTtlHours: number };
+  /** Enabled providers whose sessions satisfy enforcement. */
+  providers: { id: string; name: string }[];
+  updatedAt: string | null;
+}
+
+/** `PUT /v1/workspaces/:id/auth-policy` refuses to save a policy its own caller would fail. */
+export type AuthPolicyFailure = 'password-session' | 'foreign-provider' | 'api-key' | 'session-too-old';
+
+/** An email domain a workspace claims. Only a verified one may be enforced. */
+export interface SsoDomainView {
+  /** Lower-case punycode. */
+  domain: string;
+  workspaceId: string;
+  /** The provider people on this domain are sent to; null = any of the workspace's. */
+  providerId: string | null;
+  providerName: string | null;
+  /** The DNS name to publish the TXT record at: `_knowledge-challenge.<domain>`. */
+  recordName: string;
+  /** The TXT record's value. */
+  verificationToken: string;
+  verifiedAt: string | null;
+  /** Password sign-in, signup and reset are refused for addresses on this domain. */
+  enforced: boolean;
+  createdAt: string;
+  /** Until when the API keeps rechecking DNS by itself; null once verified. */
+  recheckUntil: string | null;
+}
+
+// GET /v1/workspaces/:id/sso-domains
+export interface ListSsoDomainsResponse {
+  domains: SsoDomainView[];
+  /** Providers a domain may send people to: the workspace's own and every platform-wide one. */
+  providers: { id: string; name: string }[];
+  /** The caller is a platform admin and may mark a domain verified without DNS. */
+  canVerifyManually: boolean;
+}
+
+// POST /v1/workspaces/:id/sso-domains/:domain/verify
+export interface VerifySsoDomainResponse {
+  domain: SsoDomainView;
+  /** Why DNS did not prove it, when it did not: `no-record`, `mismatch`, `lookup-failed`. */
+  error: 'no-record' | 'mismatch' | 'lookup-failed' | null;
+}
+
+/** The non-secret half of an OIDC provider (`identity_providers.config`). */
+export interface OidcProviderConfig {
+  /** The issuer identifier; discovery is `<issuer>/.well-known/openid-configuration`. */
+  issuer: string;
+  clientId: string;
+  /** `openid` is always requested; these are added to it. */
+  scopes: string[];
+}
+
+/**
+ * The non-secret half of a SAML provider (#75 phase 6). The groups attribute
+ * is the provider's `groupsClaim`, shared with OIDC; the SP key pair is made
+ * on create and only its certificate leaves the API, inside the metadata.
+ */
+export interface SamlProviderConfig {
+  /** The IdP's entity ID: the assertion's `Issuer` must equal it. */
+  idpEntityId: string;
+  /** Where the browser is sent with the AuthnRequest (HTTP-Redirect binding). */
+  ssoUrl: string;
+  /** PEM certificate(s) the IdP signs with; two during a rollover. */
+  idpCert: string;
+  /** Accept a response no AuthnRequest of ours asked for (a tile in the IdP's app portal). */
+  allowIdpInitiated: boolean;
+  /** Attribute holding the address; null tries the usual names, then an email-format NameID. */
+  emailAttribute: string | null;
+  /** Attribute holding the display name; null tries the usual names. */
+  nameAttribute: string | null;
+}
+
+/**
+ * The search an LDAP sign-in runs when the provider names none: a person
+ * whose uid, mail, sAMAccountName or userPrincipalName is what they typed.
+ * `{username}` is replaced by the typed value, escaped per RFC 4515.
+ */
+export const LDAP_DEFAULT_USER_FILTER =
+  '(&(objectClass=person)(|(uid={username})(mail={username})(sAMAccountName={username})(userPrincipalName={username})))';
+
+/**
+ * The non-secret half of an LDAP / Active Directory provider (#75 phase 7).
+ * The service account's password is the provider's secret (write-only, like
+ * an OIDC client secret); the groups attribute is its `groupsClaim`, which
+ * defaults to `memberOf`.
+ */
+export interface LdapProviderConfig {
+  /** `ldaps://host[:port]`, or `ldap://` with `startTls`. */
+  url: string;
+  /** Upgrade an `ldap://` connection with StartTLS before anything is sent. */
+  startTls: boolean;
+  /** The service account that searches for the person; null searches anonymously. */
+  bindDn: string | null;
+  /** Where the search starts, e.g. `ou=people,dc=corp,dc=example`. */
+  baseDn: string;
+  /** Null uses LDAP_DEFAULT_USER_FILTER. Must contain `{username}`. */
+  userFilter: string | null;
+  /** Attribute holding the address; null is `mail`. */
+  emailAttribute: string | null;
+  /** Attribute holding the display name; null tries displayName, then cn. */
+  nameAttribute: string | null;
+}
+
+export interface SamlProviderView extends SamlProviderConfig {
+  /** Our entity ID, which is also the URL the SP metadata is served at. */
+  entityId: string;
+}
+
+export interface IdentityProviderView {
+  id: string;
+  workspaceId: string;
+  kind: IdpKind;
+  preset: IdpPreset;
+  name: string;
+  enabled: boolean;
+  showOnLogin: boolean;
+  platformWide: boolean;
+  /** OIDC settings; empty strings for a SAML provider. */
+  config: OidcProviderConfig;
+  /** SAML settings and our SP endpoints; null for OIDC. */
+  saml: SamlProviderView | null;
+  /** LDAP settings; null for the other kinds. */
+  ldap: LdapProviderConfig | null;
+  /** A client secret is stored. The secret itself never leaves the API. */
+  hasSecret: boolean;
+  jitEnabled: boolean;
+  defaultRole: WorkspaceRole | null;
+  /** Email domains this provider may assert. Linking and JIT both need the address to be in one. */
+  allowedDomains: string[];
+  groupsClaim: string | null;
+  groupSyncMode: GroupSyncMode;
+  sessionTtlHours: number | null;
+  /** What to register at the IdP: the OIDC redirect URI, or the SAML ACS URL. Empty for LDAP. */
+  redirectUri: string;
+  /** OIDC back-channel logout URI to register at the IdP; null for kinds and presets without one. */
+  backchannelLogoutUri: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /v1/workspaces/:id/identity-providers
+export interface ListIdentityProvidersResponse {
+  providers: IdentityProviderView[];
+  /** SETTINGS_ENCRYPTION_KEY is set: a client secret can be saved. */
+  secretsWritable: boolean;
+  /** The kinds a new provider may have on this instance (LDAP only under AUTH_LDAP_ENABLED). */
+  kinds: IdpKind[];
+}
+
+// POST /v1/workspaces/:id/identity-providers/:providerId/test
+export interface TestIdentityProviderResponse {
+  ok: boolean;
+  /** The issuer the discovery document names, when it was reached. */
+  issuer: string | null;
+  authorizationEndpoint: string | null;
+  error: string | null;
+}
+
+/** A provider as the login page shows it: enough for a button, nothing more. */
+export interface SsoLoginProvider {
+  id: string;
+  name: string;
+  kind: IdpKind;
+  preset: IdpPreset;
+}
+
+// GET /v1/auth/sso/providers?workspaceId=
+export interface SsoProvidersResponse {
+  providers: SsoLoginProvider[];
+  /** AUTH_PASSWORD_LOGIN_ENABLED: the password form is offered at all. */
+  passwordLogin: boolean;
+}
+
+// POST /v1/auth/sso/discover
+export interface SsoDiscoverResponse {
+  /** `sso` when a provider asserts this address's domain. Never says whether an account exists. */
+  method: 'password' | 'sso';
+  /**
+   * The domain is verified and enforced (#75 phase 4): a password is refused
+   * for it, break-glass aside. Says nothing about whether an account exists.
+   */
+  enforced: boolean;
+  providers: SsoLoginProvider[];
+  /** A password may still be used for this address (the ceiling, or a break-glass entry). */
+  passwordAllowed: boolean;
+}
+
+// POST /v1/auth/sso/exchange
+export interface SsoExchangeResponse extends AuthSessionResponse {
+  /** The web path the sign-in started from. */
+  returnTo: string;
+}
+
+/**
+ * Why an SSO callback sent the browser back to `/login?error=`. The reason in
+ * detail goes to the audit trail; the browser gets one of these.
+ */
+export const SSO_LOGIN_ERRORS = [
+  'invalid-state',
+  'provider-error',
+  'id-token-invalid',
+  'email-missing',
+  'email-not-verified',
+  'domain-not-allowed',
+  'jit-disabled',
+  'account-disabled',
+  'failed',
+] as const;
+export type SsoLoginError = (typeof SSO_LOGIN_ERRORS)[number];
+
+/** One login session, as its owner (or a platform admin) sees it. Never the token. */
+export interface SessionView {
+  id: string;
+  authMethod: AuthMethod;
+  /** identity_providers.id for an SSO login. */
+  providerId: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  /** Null until the session is first used after sign-in. */
+  lastSeenAt: string | null;
+  expiresAt: string;
+  /** The session this request came in on. */
+  current: boolean;
+}
+
+// GET /v1/me/sessions, GET /v1/users/:id/sessions
+export interface ListSessionsResponse {
+  sessions: SessionView[];
+}
+
+// POST /v1/users/:id/revoke-sessions
+export interface RevokeSessionsResponse {
+  revoked: number;
 }
 
 // GET /v1/me
@@ -47,6 +497,8 @@ export interface MeResponse {
   isAdmin: boolean;
   /** UI + API language (docs/features/18). 'en' for the dev principal, which has no users row. */
   locale: Locale;
+  /** How the current session was opened (#75); null for an API key or the dev principal. */
+  authMethod: AuthMethod | null;
   /** The address is proven (docs/features/41). Always true for the dev principal. */
   emailVerified: boolean;
   /**
@@ -69,10 +521,16 @@ export interface GraphQueryResponse {
 
 export interface AuditLogEntry {
   id: string;
-  workspaceId: string;
-  /** users.id, or a synthetic actor ("dev", "mcp-operator") outside api-key mode. */
+  /** Null for a platform event — a sign-in belongs to no workspace (#75). */
+  workspaceId: string | null;
+  /** users.id, or a synthetic actor ("dev", "mcp-operator", "anonymous"). */
   actor: string;
+  /** An {@link AuditAction}; typed as string because old rows may hold a retired one. */
   action: string;
+  /** Client address of the request behind it, when there was one. */
+  ip: string | null;
+  /** Who or what it was done to — a user id, a provider id. */
+  target: string | null;
   params: Record<string, unknown>;
   rowCount: number | null;
   durationMs: number | null;
@@ -81,10 +539,18 @@ export interface AuditLogEntry {
   createdAt: string;
 }
 
-// GET /v1/audit-logs?workspaceId=
+// GET /v1/audit-logs?workspaceId=&action=&cursor=
 export interface ListAuditLogsResponse {
   workspaceId: string;
   entries: AuditLogEntry[];
+  /** Pass as `cursor` for the next (older) page; null on the last one. */
+  nextCursor: string | null;
+}
+
+// GET /v1/admin/audit-logs?action=&cursor= (platform admin; includes platform events)
+export interface ListPlatformAuditLogsResponse {
+  entries: AuditLogEntry[];
+  nextCursor: string | null;
 }
 
 /** A fact as asserted at a point in the revision DAG (Phase 5 historical queries). */
@@ -658,6 +1124,8 @@ export interface WorkspaceMemberEntry {
   avatarUrl: AvatarUrl;
   role: WorkspaceRole;
   trustedOperator: boolean;
+  /** Who manages the row (#75). Only `manual` rows are edited by hand; the rest need `convertToManual`. */
+  source: MembershipSource;
   disabled: boolean;
   createdAt: string;
 }

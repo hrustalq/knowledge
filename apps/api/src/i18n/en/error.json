@@ -33,14 +33,22 @@
     "apiKeyWorkspaceNotMember": "You can only pin a key to a workspace you belong to ({workspaceId}).",
     "apiKeyProjectsNeedCapture": "Only a key with capture scope can be pinned to projects.",
     "apiKeyProjectNotAllowed": "You can only pin a key to a project you can reach, inside the key's workspace ({projectId}).",
-    "apiKeyLimit": "You already have {max} active API keys — revoke one before creating another."
+    "apiKeyLimit": "You already have {max} active API keys — revoke one before creating another.",
+    "sessionNotFound": "Session not found",
+    "passwordLoginDisabled": "Password sign-in is turned off on this instance — sign in with your organization's single sign-on",
+    "rateLimited": "Too many attempts — wait a minute and try again",
+    "ssoRequired": "Workspace {workspaceId} requires single sign-on — sign in through your organization's identity provider",
+    "ssoRequiredForDomain": "Addresses on {domain} sign in with single sign-on, not a password",
+    "apiKeysBlocked": "Workspace {workspaceId} requires single sign-on and does not accept API keys",
+    "sessionTooOld": "Your session is older than this workspace allows ({hours} h) — sign in again"
   },
   "workspace": {
     "notFound": "Workspace {id} not found",
     "noUserWithEmail": "No user with that email — create the account first (signup or POST /v1/users)",
     "notAMember": "User {userId} is not a member of workspace {workspaceId}",
     "lastAdminDemote": "Cannot demote the last admin of the workspace",
-    "lastAdminRemove": "Cannot remove the last admin of the workspace"
+    "lastAdminRemove": "Cannot remove the last admin of the workspace",
+    "managedByIdp": "This member is managed by single sign-on ({source}) — take the row over as manual to edit it"
   },
   "user": {
     "notFound": "User {id} not found",
@@ -112,7 +120,12 @@
     "diverged": "Target branch {target} has advanced past the merge base — rebase {source} onto it and retry",
     "divergedWhileMerging": "Target branch {target} advanced while merging — retry",
     "alreadyOpen": "Open merge request {id} already exists for {source} → {target}",
-    "notMembers": "Not members of this workspace: {users}"
+    "notMembers": "Not members of this workspace: {users}",
+    "breakingApi": "Merge request {id} makes {count} breaking API change(s), and this workspace blocks those until an admin acknowledges them",
+    "notSpec": "Merge request {id} is not on an API spec, so it has no breaking changes to acknowledge",
+    "notOpenForAck": "Merge request {id} is {status}; only an open merge request takes an acknowledgement",
+    "lintPending": "Merge request {id} waits for the style check of its source head, and this page blocks merges until it has one",
+    "lintBlocking": "Merge request {id} has {count} unresolved error-severity style violation(s); resolve them or ask an admin to override the check"
   },
   "thread": {
     "notFoundOnDocument": "Thread {threadId} not found on document {documentId}",
@@ -240,7 +253,9 @@
     "agentWebhookStale": "X-Knowledge-Timestamp is more than {seconds} seconds away from the server's clock.",
     "agentWebhookDeliveryId": "X-Knowledge-Delivery is missing or invalid: 1–200 letters, digits and . _ : -",
     "skillNoUpstream": "Skill {id} has no upstream change to accept",
-    "findingComponentDraft": "A component draft opens as a merge request, never as a published page."
+    "findingComponentDraft": "A component draft opens as a merge request, never as a published page.",
+    "findingNoTerm": "This finding proposes no glossary term.",
+    "findingTermAdded": "This finding has already been added to the glossary."
   },
   "assistant": {
     "providerDisabled": "Assistant provider is disabled for this workspace",
@@ -345,7 +360,8 @@
     "aclAudienceGroup": "The audience must be a group in this workspace.",
     "identityNotFound": "No upstream identity {id} on this connector.",
     "identityNotMember": "Only a member of this workspace can be mapped to an upstream identity.",
-    "guidanceNotARepository": "Connector {name} is not a repository — guidance files are read from codebase and markdown/git connectors only"
+    "guidanceNotARepository": "Connector {name} is not a repository — guidance files are read from codebase and markdown/git connectors only",
+    "specNoAssist": "An API spec is synced as written; the AI assists rewrite markdown and are not offered for it"
   },
   "routeNotFound": "Cannot {method} {path}",
   "validationFailed": "Validation failed",
@@ -577,5 +593,109 @@
     "kitClient": "There is no capture kit for \"{client}\". Kits exist for: {clients}.",
     "kitNotOffered": "This key is offered no capture tools, so a capture kit would describe calls it cannot make. Use a capture or read-write key.",
     "keyNotHere": "This key has nothing to do with this workspace."
+  },
+  "apiSpec": {
+    "parseFailed": "The API spec is not valid: {reason}",
+    "format": "An API spec is written as yaml or json, not {format}",
+    "template": "An API spec cannot start from a page template",
+    "notSpec": "Document {id} is not an API spec",
+    "notDiffable": "Document {id} is not an API spec whose revisions both parse, so there is no API diff",
+    "driftNotLinked": "Document {id} is not a spec this repository syncs.",
+    "driftNoRepository": "This spec is not synced from a connected repository, so there is no code to compare it with.",
+    "driftNotHttp": "Only an OpenAPI spec describes HTTP routes; an AsyncAPI spec has nothing to compare with the code.",
+    "driftDisabled": "The sentinel agent is turned off for this workspace, so no drift check can run."
+  },
+  "apiTry": {
+    "disabled": "The try-it proxy is off for this workspace. Send the request from your browser instead.",
+    "operationNotInSpec": "This revision of the spec has no {method} operation {entityKey}.",
+    "targetNotInSpec": "{url} is not {method} {path} on a server of this revision of the spec.",
+    "relativeServer": "This spec names no absolute server URL, so the proxy has nowhere to send the request.",
+    "privateAddress": "{host} is a private or unsafe address, which the try-it proxy does not reach.",
+    "notAllowed": "{host} is not allowed by this workspace's source policies.",
+    "tooLarge": "The request body is {bytes} bytes; the proxy forwards at most {limit}.",
+    "rateLimited": "Too many try-it requests. Wait a minute and send again.",
+    "unreachable": "Could not reach {host}: {reason}",
+    "timeout": "{host} did not answer within {seconds} s.",
+    "revisionDraft": "Revision {id} is a draft; try an operation of a finalized revision.",
+    "unresolved": "{host} does not resolve to any address."
+  },
+  "styleguide": {
+    "notFound": "Styleguide {id} not found",
+    "tooManyRules": "A styleguide holds at most {max} rules",
+    "duplicateRuleId": "Two rules share the id \"{id}\" — each rule needs its own",
+    "scopeTaken": "This scope already has a styleguide; reload and edit it instead"
+  },
+  "lint": {
+    "notOpen": "Only an open merge request is linted.",
+    "off": "Style lint is off for this page.",
+    "running": "A lint of this head is already waiting or running.",
+    "busy": "The lint could not start: too many checks are waiting in this workspace, or one was just started.",
+    "checkNotFound": "Check {id} is not a style check of this merge request.",
+    "overrideNotCurrent": "Only the check of the current source head can be overridden; a newer push replaced this one.",
+    "notOverridable": "This check does not hold the merge — there is nothing to override.",
+    "alreadyOverridden": "This head's check is already overridden."
+  },
+  "sso": {
+    "disabled": "Single sign-on is not enabled on this instance",
+    "providerNotFound": "Identity provider not found",
+    "exchangeInvalid": "This sign-in link is invalid, expired or already used — sign in again",
+    "secretKeyMissing": "The client secret cannot be stored: SETTINGS_ENCRYPTION_KEY is not set on the server",
+    "kindNotSupported": "Identity providers of kind {kind} are not enabled on this instance",
+    "platformWideAdminOnly": "Only a platform admin can make a provider platform-wide",
+    "issuerRequired": "The issuer URL is required",
+    "clientIdRequired": "The client ID is required",
+    "idpEntityIdRequired": "The IdP entity ID is required",
+    "ssoUrlInvalid": "The SSO URL must be an https URL",
+    "idpCertInvalid": "The IdP certificate is not a valid X.509 certificate (paste the PEM, BEGIN CERTIFICATE included)",
+    "issuerInvalid": "The issuer is not a valid URL",
+    "issuerNotHttps": "The issuer must use https",
+    "issuerUnresolved": "The issuer host {host} does not resolve",
+    "issuerPrivate": "The issuer resolves to a private address ({address}). Set AUTH_SSO_ALLOW_PRIVATE_URLS=true for an on-premises identity provider",
+    "invalidDomain": "\"{domain}\" is not a domain name",
+    "groupMappingNotFound": "Identity provider group mapping not found",
+    "groupNameRequired": "Group names cannot be empty",
+    "groupMappingProvider": "A mapping must name one of this workspace's identity providers or a platform-wide one",
+    "domainNotFound": "That domain is not claimed by this workspace",
+    "domainTaken": "{domain} is already claimed by another workspace",
+    "domainNotVerified": "Verify {domain} before enforcing single sign-on on it",
+    "domainProvider": "A domain must name one of this workspace's identity providers or a platform-wide one",
+    "domainNoProvider": "Enforcing {domain} would leave its people no way in — enable an identity provider for this workspace first",
+    "manualVerifyAdminOnly": "Only a platform admin can mark a domain verified without DNS",
+    "policyNoProvider": "Enforcing single sign-on needs an enabled identity provider for this workspace",
+    "policyLocksYouOut": "Saving this would lock you out ({failure}). Sign in through the workspace's identity provider first, then try again",
+    "ldapUrlInvalid": "The directory URL must be ldaps://host[:port], or ldap://host[:port] with StartTLS — no path or credentials",
+    "ldapInsecure": "Plain ldap:// without StartTLS sends passwords in clear text. Use ldaps:// or turn on StartTLS (AUTH_LDAP_ALLOW_INSECURE=true permits it on a lab instance)",
+    "ldapHostUnresolved": "The directory host {host} does not resolve",
+    "ldapHostPrivate": "The directory host resolves to a private address ({address}). Set AUTH_SSO_ALLOW_PRIVATE_URLS=true for an on-premises directory",
+    "baseDnRequired": "The base DN is required",
+    "userFilterInvalid": "The user filter must be an LDAP filter in parentheses that contains {username}",
+    "ldapInvalidCredentials": "Invalid username or password",
+    "ldapUnavailable": "The directory could not be reached. Try again, or ask your administrator",
+    "ldapRefused": "Your directory account cannot sign in to this workspace"
+  },
+  "scim": {
+    "disabled": "SCIM provisioning is not enabled on this instance",
+    "unauthorized": "A valid SCIM bearer token is required",
+    "userNotFound": "User {id} not found",
+    "groupNotFound": "Group {id} not found",
+    "invalidFilter": "Unsupported filter. Use a single eq comparison on userName, externalId, emails.value or id (Users), or on displayName, externalId or id (Groups)",
+    "userExists": "A user with userName {userName} or this externalId is already provisioned",
+    "emailProvisioned": "The address {email} is already provisioned in this workspace or belongs to another account",
+    "externalIdExists": "A user with externalId {externalId} is already provisioned",
+    "groupExists": "A group named {displayName} already exists",
+    "displayNameRequired": "displayName is required",
+    "bodyObject": "The request body must be a JSON object",
+    "userNameRequired": "userName is required (at most 320 characters)",
+    "activeBoolean": "active must be a boolean",
+    "emailRequired": "An email address is required, in emails or as userName",
+    "patchOperations": "A PATCH body needs a non-empty Operations array of {op, path, value} objects",
+    "patchOp": "Unsupported PATCH op {op}: use add, replace or remove",
+    "patchRemoveNeedsPath": "A remove operation needs a path",
+    "patchPath": "Unsupported PATCH path {path}",
+    "patchValueObject": "An operation without a path needs an object value",
+    "memberValue": "A member must be an object with a value (the user id)",
+    "tokenLimit": "This workspace already has {max} active SCIM tokens — revoke one before creating another.",
+    "tokenNotFound": "SCIM token not found",
+    "mappingGroup": "Choose a group the workspace's SCIM client has provisioned"
   }
 }

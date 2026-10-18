@@ -57,6 +57,14 @@ function editClauses(
     else if ('assigneeId' in meta) clauses.push(t('mr.note.removedAssignee'))
     else clauses.push(t('mr.note.changedAssignee'))
   }
+  if (changed.includes('breakingAck')) {
+    clauses.push(meta.breakingAck === false ? t('mr.note.withdrewBreakingAck') : t('mr.note.ackedBreaking'))
+  }
+  if (changed.includes('lintOverride')) {
+    const override = (meta.lintOverride ?? {}) as { reason?: unknown }
+    const reason = str(override.reason)
+    clauses.push(reason ? t('mr.note.overrodeLintBecause', { reason }) : t('mr.note.overrodeLint'))
+  }
   if (changed.includes('title')) clauses.push(t('mr.note.changedTitle'))
   if (changed.includes('description')) clauses.push(t('mr.note.editedDescription'))
   return clauses

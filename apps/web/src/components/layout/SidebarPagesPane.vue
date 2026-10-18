@@ -16,7 +16,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, provide, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { ChevronDown, ChevronLeft, FilePlus2, FileUp, LayoutTemplate, Plus } from 'lucide-vue-next'
+import { Braces, ChevronDown, ChevronLeft, FilePlus2, FileUp, LayoutTemplate, Plus } from 'lucide-vue-next'
 import type { DocumentTreeNode } from '@knowledge/contracts'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
@@ -181,6 +181,12 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
               <DropdownMenuItem @select="templates.openGallery()">
                 <LayoutTemplate class="size-3.5" />
                 {{ t('nav.newPageFromTemplate') }}
+              </DropdownMenuItem>
+              <DropdownMenuItem as-child>
+                <RouterLink to="/create/spec">
+                  <Braces class="size-3.5" />
+                  {{ t('nav.newApiSpec') }}
+                </RouterLink>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

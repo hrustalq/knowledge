@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { BootstrapModule } from './config/bootstrap.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { SsoModule } from './auth/sso/sso.module.js';
+import { ScimModule } from './scim/scim.module.js';
 import { UsersModule } from './users/users.module.js';
 import { WorkspacesModule } from './workspaces/workspaces.module.js';
 import { PermissionsModule } from './permissions/permissions.module.js';
@@ -21,6 +23,7 @@ import { EventsApiModule } from './events/events-api.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 import { ConnectorsModule } from './connectors/connectors.module.js';
 import { DriftModule } from './connectors/drift/drift.module.js';
+import { LintModule } from './documents/lint/lint.module.js';
 import { AiModule } from './ai/ai.module.js';
 import { GlossaryModule } from './glossary/glossary.module.js';
 import { ImportModule } from './import/import.module.js';
@@ -28,12 +31,14 @@ import { WorkflowsModule } from './workflows/workflows.module.js';
 import { WorkflowMaterializeModule } from './workflows/workflow-materialize.module.js';
 import { TemplatesModule } from './templates/templates.module.js';
 import { ComponentsModule } from './components/components.module.js';
+import { ApiSpecsModule } from './api-specs/api-specs.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { McpHttpModule } from './mcp/mcp-http.module.js';
 import { AiReadableModule } from './ai-readable/ai-readable.module.js';
 import { FeedbackModule } from './feedback/feedback.module.js';
 import { VerificationModule } from './verification/verification.module.js';
+import { QualityModule } from './quality/quality.module.js';
 import { PublishingModule } from './publishing/publishing.module.js';
 import { PublicModule } from './public/public.module.js';
 import { ExportModule } from './export/export.module.js';
@@ -44,6 +49,10 @@ import { ChatModule } from './chat/chat.module.js';
     BootstrapModule,
     PrismaModule,
     AuthModule,
+    // Enterprise SSO (#75): API-only, every route 404s unless AUTH_SSO_ENABLED.
+    SsoModule,
+    // SCIM provisioning (#75): API-only, every route 404s unless AUTH_SCIM_ENABLED.
+    ScimModule,
     UsersModule,
     WorkspacesModule,
     PermissionsModule,
@@ -64,6 +73,8 @@ import { ChatModule } from './chat/chat.module.js';
     ConnectorsModule,
     // Publishes finished drift checks (docs/features/35); API-only, sweeper.
     DriftModule,
+    // The merge request style lint (#74): trigger, publisher, routes. API-only.
+    LintModule,
     GlossaryModule,
     ImportModule,
     WorkflowsModule,
@@ -74,6 +85,7 @@ import { ChatModule } from './chat/chat.module.js';
     // loads TemplatesCoreModule on its own to create a page from one.
     TemplatesModule,
     ComponentsModule,
+    ApiSpecsModule,
     // Plain-markdown reads for agents (issue #68). API-only: carries a controller.
     AiReadableModule,
     // Votes on answers (docs/features/38, issue #67 phase 2). API-only: the
@@ -82,6 +94,9 @@ import { ChatModule } from './chat/chat.module.js';
     // Page verification, archive and the knowledge-health dashboard
     // (docs/features/39 + 40, issue #66). API-only: the controllers.
     VerificationModule,
+    // Docs quality reads (#74, phase 5). API-only: the controller; the scores
+    // are the worker auditor's, and MCP loads QualityCoreModule.
+    QualityModule,
     // Share links (docs/features/43, issue #77). API-only: the management
     // routes, and the anonymous /v1/public reader with its rate limiter.
     PublishingModule,

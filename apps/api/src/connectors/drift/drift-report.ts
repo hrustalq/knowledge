@@ -1,4 +1,4 @@
-import type { AgentFinding, AgentRunPullRequest, DriftAffectedUsages } from '@knowledge/contracts';
+import type { AgentFinding, AgentRunPullRequest, ApiDriftSpec, DriftAffectedUsages } from '@knowledge/contracts';
 import { t } from '../../i18n/t.js';
 
 /**
@@ -35,11 +35,16 @@ export function renderDriftComment(input: {
   entries: DriftReportEntry[];
   /** Where the changed component code is used (#236); absent when the change touched none. */
   affected?: DriftAffectedUsages | null;
+  /** The specs the change ties (#78, phase 8): their own diff and what they now disagree with. */
+  apiSpecs?: ApiDriftSpec[] | null;
 }): string {
   const base = input.webBaseUrl.replace(/\/+$/, '');
   const sha = input.pullRequest.headSha.slice(0, 7);
   const lines = [`### ${t('agent.drift.comment.heading')}`, ''];
-  const usages = input.affected ? affectedSection(input.affected, base) : [];
+  const usages = [
+    ...(input.affected ? affectedSection(input.affected, base) : []),
+    ...apiSection(input.apiSpecs ?? [], base),
+  ];
 
   if (input.entries.length === 0) {
     lines.push(t('agent.drift.comment.clean', { sha, connector: input.connectorName }));
@@ -91,6 +96,32 @@ function affectedSection(affected: DriftAffectedUsages, base: string): string[] 
   }
   if (lines.length === 0) return [];
   return [`#### ${t('agent.drift.comment.usagesHeading')}`, '', t('agent.drift.comment.usagesIntro'), '', ...lines];
+}
+
+/** Whether a spec has anything for the comment to say: its own diff, or a disagreement the change introduced. */
+export function apiSpecWorthListing(spec: ApiDriftSpec): boolean {
+  const changes = spec.changes ? spec.changes.breaking + spec.changes.nonBreaking + spec.changes.info : 0;
+  return changes > 0 || spec.mismatchTotal > 0;
+}
+
+/**
+ * API specs (#78, phase 8): per spec the change ties, the classified diff of
+ * the spec file when the change edits it, and how many disagreements with the
+ * routes it introduces. The disagreements themselves are the spec's line in
+ * the findings above; this is the summary a reviewer of the spec reads.
+ */
+function apiSection(specs: ApiDriftSpec[], base: string): string[] {
+  const lines: string[] = [];
+  for (const spec of specs.filter(apiSpecWorthListing)) {
+    const parts: string[] = [];
+    if (spec.changes) parts.push(t('agent.drift.comment.apiChanges', { breaking: spec.changes.breaking, nonBreaking: spec.changes.nonBreaking }));
+    if (spec.routes === 0) parts.push(`_${t('agent.drift.comment.apiNoRoutes')}_`);
+    else if (spec.mismatchTotal > 0) parts.push(t('agent.drift.comment.apiDisagreements', { count: spec.mismatchTotal }));
+    else parts.push(t('agent.drift.comment.apiAgrees'));
+    lines.push(`- [${escapeLink(spec.title)}](${base}/documents/${spec.documentId}) ${code(spec.specPath)} — ${parts.join(' · ')}`);
+  }
+  if (lines.length === 0) return [];
+  return [`#### ${t('agent.drift.comment.apiHeading')}`, '', ...lines];
 }
 
 /** A path as inline code. A backtick cannot appear in one, so it cannot close the span early. */

@@ -1,10 +1,10 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
+import { OptionalUuidPipe, ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import type { ListAuditLogsResponse, MeResponse } from '@knowledge/contracts';
+import type { ListAuditLogsResponse, ListPlatformAuditLogsResponse, MeResponse } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
-import { Access, CurrentPrincipal, UnverifiedOk } from './access.decorator.js';
+import { Access, CurrentPrincipal, PlatformAdmin, UnverifiedOk } from './access.decorator.js';
 import { toMeResponse } from './me-response.js';
 import { AccessService } from './access.service.js';
 import { AuditService } from './audit.service.js';
@@ -32,12 +32,36 @@ export class AuthController {
 
   @Get('audit-logs')
   @Access('admin', 'query')
-  @ApiOperation({ summary: 'Workspace audit trail — operator graph queries (admin only, Phase 5)' })
+  @ApiOperation({ summary: "Workspace audit trail, newest first (admin) — graph queries, ACL changes, the workspace's sign-in config" })
   @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'action', required: false, description: 'One AUDIT_ACTIONS value' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'nextCursor from the previous page' })
   async auditLogs(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('limit') limit?: string,
+    @Query('action') action?: string,
+    @Query('cursor', OptionalUuidPipe) cursor?: string,
   ): Promise<ListAuditLogsResponse> {
-    return { workspaceId, entries: await this.audit.list(workspaceId, limit ? Number(limit) : 50) };
+    const page = await this.audit.list(workspaceId, { limit: limit ? Number(limit) : 50, action, cursor });
+    return { workspaceId, ...page };
+  }
+
+  /**
+   * Every workspace's trail plus the platform's own events — the sign-ins,
+   * which belong to no workspace (#75). Platform admins only: it crosses
+   * every tenant boundary at once.
+   */
+  @Get('admin/audit-logs')
+  @PlatformAdmin()
+  @ApiOperation({ summary: 'Platform audit trail incl. sign-ins and other workspace-less events (platform admin)' })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'action', required: false, description: 'One AUDIT_ACTIONS value' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'nextCursor from the previous page' })
+  platformAuditLogs(
+    @Query('limit') limit?: string,
+    @Query('action') action?: string,
+    @Query('cursor', OptionalUuidPipe) cursor?: string,
+  ): Promise<ListPlatformAuditLogsResponse> {
+    return this.audit.listPlatform({ limit: limit ? Number(limit) : 50, action, cursor });
   }
 }

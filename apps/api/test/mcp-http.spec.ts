@@ -14,6 +14,7 @@ import { CAPTURE_TOOLS, WRITE_TOOLS, settleTools } from '../src/mcp/mcp-tools.js
 import { renderSkill } from '../src/mcp/skill.js';
 import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
 import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
+import { ENFORCING_PROVIDER, enforcingPolicy, noAuthPolicy } from './auth-policy-fakes.js';
 
 /**
  * MCP over HTTP and named API keys (docs/features/33).
@@ -49,7 +50,7 @@ function keyPrincipal(apiKey: NonNullable<Principal['apiKey']>, extra: Partial<P
   };
 }
 
-function accessWith(role: 'guest' | 'viewer' | 'editor' | 'admin' | null) {
+function accessWith(role: 'guest' | 'viewer' | 'editor' | 'admin' | null, policy = noAuthPolicy) {
   const prisma = {
     workspaceMember: {
       findUnique: vi.fn(async () => (role ? { role, trustedOperator: false } : null)),
@@ -57,7 +58,7 @@ function accessWith(role: 'guest' | 'viewer' | 'editor' | 'admin' | null) {
     workspace: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({ id: where.id })) },
     connector: { findUnique: vi.fn(async () => ({ workspaceId: WS_A })) },
   };
-  return new AccessService(prisma as never);
+  return new AccessService(prisma as never, policy);
 }
 
 describe('AccessService key narrowing', () => {
@@ -280,6 +281,14 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
         paths: input.paths,
       })),
     },
+    apiSpecs: {},
+    apiDiffs: {},
+    styleLint: {
+      lint: vi.fn(async () => ({ enabled: true, styleguide: { id: 'sg-1', name: 'House', scope: 'workspace' }, violations: [], dropped: 0 })),
+    },
+    quality: {
+      forDocument: vi.fn(async (_scope: unknown, documentId: string) => ({ documentId, score: null, peers: [], stale: false, history: [], lowThreshold: 50 })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
   return {
@@ -298,6 +307,8 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     learnings: deps.learnings,
     captures: deps.captures,
     componentDrafts: deps.componentDrafts,
+    styleLint: deps.styleLint,
+    quality: deps.quality,
   };
 }
 
@@ -485,6 +496,24 @@ describe('McpService over a principal', () => {
     expect(search.search).toHaveBeenCalledOnce();
   });
 
+  it('meets enforced SSO (#75): a key the workspace blocks, or a password session, never reaches the service', async () => {
+    const blocked = service(accessWith('viewer', enforcingPolicy({ allowApiKeys: false }).policy));
+    const viaKey = await connect(blocked.mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
+    const refused = await viaKey.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
+    expect(refused.isError).toBe(true);
+    expect(JSON.stringify(refused.content)).toMatch(/apiKeysBlocked/);
+
+    const session = (extra: Partial<Principal>) =>
+      keyPrincipal(undefined as never, { mode: 'session', apiKey: undefined, sessionId: 's1', ...extra });
+    const enforced = service(accessWith('viewer', enforcingPolicy().policy));
+    const viaPassword = await connect(enforced.mcp, session({ authMethod: 'password' }));
+    const denied = await viaPassword.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
+    expect(denied.isError).toBe(true);
+    expect(enforced.search.search).not.toHaveBeenCalled();
+    const viaSso = await connect(enforced.mcp, session({ authMethod: 'oidc', providerId: ENFORCING_PROVIDER.id }));
+    expect((await viaSso.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } })).isError).toBeFalsy();
+  });
+
   it('lets a guest search and browse the tree, scoped, but not reach workspace tools (#76)', async () => {
     const { mcp, search, documents } = service(accessWith('guest'));
     const client = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
@@ -497,6 +526,37 @@ describe('McpService over a principal', () => {
 
     const refused = await client.callTool({ name: 'knowledge_list_templates', arguments: { workspaceId: WS_A } });
     expect(refused.isError).toBe(true);
+  });
+
+  it('lints a draft and reads page quality for a read-only key, as viewers (#74)', async () => {
+    const doc = '44444444-4444-4444-8444-444444444444';
+    const svc = service(accessWith('viewer'));
+    (svc.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_A);
+    const p = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A });
+    const client = await connect(svc.mcp, p);
+    const { tools } = await client.listTools();
+    for (const name of ['knowledge_lint_draft', 'knowledge_get_page_quality']) {
+      expect(tools.find((t) => t.name === name)?.annotations?.readOnlyHint, name).toBe(true);
+      expect(WRITE_TOOLS.has(name)).toBe(false);
+    }
+
+    const lint = await client.callTool({ name: 'knowledge_lint_draft', arguments: { workspaceId: WS_A, markdown: 'Click on Save.' } });
+    expect(lint.isError).toBeFalsy();
+    expect(svc.styleLint.lint).toHaveBeenCalledWith({ workspaceId: WS_A, projectId: undefined, title: '', markdown: 'Click on Save.' }, p);
+    expect(JSON.parse((lint.content as Array<{ text: string }>)[0].text)).toMatchObject({ enabled: true, violations: [] });
+
+    const quality = await client.callTool({ name: 'knowledge_get_page_quality', arguments: { documentId: doc } });
+    expect(quality.isError).toBeFalsy();
+    expect(svc.quality.forDocument).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: WS_A }), doc);
+
+    // A page in a workspace the key is not pinned to is refused before it is read.
+    (svc.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_B);
+    const refused = await client.callTool({ name: 'knowledge_get_page_quality', arguments: { documentId: doc } });
+    expect(refused.isError).toBe(true);
+    expect(svc.quality.forDocument).toHaveBeenCalledTimes(1);
+    const foreign = await client.callTool({ name: 'knowledge_lint_draft', arguments: { workspaceId: WS_B, markdown: 'x' } });
+    expect(foreign.isError).toBe(true);
+    expect(svc.styleLint.lint).toHaveBeenCalledTimes(1);
   });
 
   it('knowledge_get_page_access is a read that checks the page before describing it (#76)', async () => {
@@ -809,7 +869,7 @@ function readableWorld(opts: { enabled?: boolean } = {}) {
   };
   const config = { get: (key: string) => env[key] };
   const aiReadable = new AiReadableService(prisma as never, documents as never, config as never);
-  const access = new AccessService(prisma as never);
+  const access = new AccessService(prisma as never, noAuthPolicy);
   return { aiReadable, access, documents, prisma };
 }
 

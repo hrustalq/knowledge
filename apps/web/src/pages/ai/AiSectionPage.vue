@@ -21,6 +21,7 @@ import AgentRunsPanel from '@/components/ai/AgentRunsPanel.vue'
 import AiCoveragePanel from '@/components/ai/AiCoveragePanel.vue'
 import AiFeedbackPanel from '@/components/ai/AiFeedbackPanel.vue'
 import AiSkillsPanel from '@/components/ai/AiSkillsPanel.vue'
+import AiStyleguidePanel from '@/components/ai/AiStyleguidePanel.vue'
 import AgentLearningsPanel from '@/components/ai/AgentLearningsPanel.vue'
 import AiPluginsPanel from '@/components/ai/AiPluginsPanel.vue'
 import AiUsagePanel from '@/components/ai/AiUsagePanel.vue'
@@ -34,7 +35,8 @@ const section = computed(() => route.params.section as string)
 const label = computed(() => aiSectionLabel(section.value))
 
 // Every endpoint behind these panels is @Access('admin', …) except the skill
-// roster and the learnings list (any member reads; editors propose), so a non-admin is told plainly rather than shown a wall of 403s.
+// roster, the styleguide (any member reads the rules they are held to) and the
+// learnings list (any member reads; editors propose), so a non-admin is told plainly rather than shown a wall of 403s.
 const canManage = computed(() => auth.canAdminWorkspace)
 </script>
 
@@ -55,6 +57,7 @@ const canManage = computed(() => auth.canAdminWorkspace)
       <AiCoveragePanel v-else-if="section === 'coverage'" :can-manage="canManage" />
       <AiFeedbackPanel v-else-if="section === 'feedback'" :can-manage="canManage" />
       <AiSkillsPanel v-else-if="section === 'skills'" :can-manage="canManage" />
+      <AiStyleguidePanel v-else-if="section === 'styleguide'" :can-manage="canManage" />
       <AgentLearningsPanel v-else-if="section === 'learnings'" :can-manage="canManage" />
       <AiPluginsPanel v-else-if="section === 'plugins'" :can-manage="canManage" />
       <AiUsagePanel v-else-if="section === 'usage'" :can-manage="canManage" />

@@ -33,6 +33,7 @@ import {
 } from 'lucide-vue-next'
 import type { CompareResponse, ConnectorRunItemInfo } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { Collapse } from '@/components/ui/collapse'
 import DiffView from '@/components/knowledge/DiffView.vue'
 import RichEditor from '@/components/editor/RichEditor.vue'
@@ -91,6 +92,12 @@ watch(
 const editable = computed(() => props.canManage && props.item.status === 'staged')
 
 /**
+ * An API spec file (#78). The rich editor would read its YAML as markdown and
+ * write markdown back on flush, so it is shown and edited as plain text.
+ */
+const isSpec = computed(() => !!props.item.specKind)
+
+/**
  * A comparison that never existed as two revisions, assembled to the shape
  * `DiffView` renders. The ids are the item's, not a revision's: nothing here
  * addresses a revision, and commenting — the only thing that would need one —
@@ -128,7 +135,7 @@ const empty = computed(() => markdown.value.trim().length === 0)
  */
 defineExpose({
   flush(): string {
-    markdown.value = editorRef.value?.flush() ?? markdown.value
+    if (!isSpec.value) markdown.value = editorRef.value?.flush() ?? markdown.value
     return markdown.value
   },
 })
@@ -184,13 +191,36 @@ defineExpose({
         <p class="text-muted-foreground shrink-0 border-b px-6 py-2 text-xs lg:px-10">
           {{ t('connectors.agreedNote') }}
         </p>
-        <div class="min-h-0 flex-1">
+        <pre v-if="isSpec" class="kn-spec-text min-h-0 flex-1 overflow-auto px-6 py-6 lg:px-10">{{ localHead ?? '' }}</pre>
+        <div v-else class="min-h-0 flex-1">
           <RichEditor :model-value="localHead ?? ''" :editable="false" :pages="mentionablePages">
             <template #lede>
               <h1 class="kn-title-input">{{ title }}</h1>
             </template>
           </RichEditor>
         </div>
+      </div>
+
+      <div v-else-if="isSpec" class="flex h-full min-h-0 flex-col gap-3 overflow-y-auto px-6 py-6 lg:px-10">
+        <textarea
+          v-model="title"
+          class="kn-title-input"
+          rows="1"
+          :readonly="!editable"
+          :placeholder="t('connectors.itemTitle')"
+          :aria-label="t('connectors.itemTitle')"
+          spellcheck="false"
+        />
+        <p class="text-muted-foreground text-sm">{{ t('connectors.apiSpecs.specNote') }}</p>
+        <Textarea
+          v-model="markdown"
+          :readonly="!editable"
+          :aria-label="t('connectors.itemTitle')"
+          spellcheck="false"
+          autocapitalize="off"
+          wrap="off"
+          class="kn-spec-text min-h-[30rem] flex-1 resize-y overflow-x-auto"
+        />
       </div>
 
       <RichEditor
@@ -309,7 +339,10 @@ defineExpose({
       </section>
 
       <!-- Never automatic: both of these are asked for, one item at a time. -->
-      <section v-if="canManage && item.status === 'staged'" class="space-y-3 p-4">
+      <p v-if="canManage && item.status === 'staged' && isSpec" class="text-muted-foreground p-4 text-xs">
+        {{ t('connectors.apiSpecs.assistOff') }}
+      </p>
+      <section v-else-if="canManage && item.status === 'staged'" class="space-y-3 p-4">
         <h2 class="text-sm font-semibold">{{ t('connectors.aiAssist') }}</h2>
         <p class="text-muted-foreground text-xs">{{ t('connectors.aiAssistHint') }}</p>
         <div class="flex flex-wrap gap-2">
@@ -356,6 +389,15 @@ defineExpose({
 
 .kn-page-main :deep(.kn-editor-content) {
   padding-inline: 2rem;
+}
+
+/* A spec (#78) as written: the spec editor page's type, unwrapped. */
+.kn-spec-text {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  white-space: pre;
+  tab-size: 2;
 }
 
 @media (max-width: 1023px) {

@@ -15,6 +15,7 @@ import { ResourceAccessService } from '../src/permissions/resource-access.servic
 import { AccessService } from '../src/auth/access.service.js';
 import type { Principal } from '../src/auth/principal.js';
 import { matchesWhere } from './prisma-where.js';
+import { noAuthPolicy } from './auth-policy-fakes.js';
 
 /**
  * Page permissions, phase 2 (issue #76): restrictions, grants and the one
@@ -198,7 +199,7 @@ function permissionsAs(role: string, grants: GrantRow[] = []) {
     },
   };
   const audit = { record: vi.fn(async () => undefined) };
-  const service = new PermissionService(prisma as never, new AccessService(prisma as never), audit as never, { get: () => 5000 } as never);
+  const service = new PermissionService(prisma as never, new AccessService(prisma as never, noAuthPolicy), audit as never, { get: () => 5000 } as never);
   return { service, audit, prisma };
 }
 

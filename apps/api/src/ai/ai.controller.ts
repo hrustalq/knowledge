@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,6 +8,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
@@ -16,6 +18,7 @@ import type {
   AgentLearningStatus,
   AgentLearningSummary,
   DismissAgentFindingResponse,
+  AddFindingTermResponse,
   ListAgentLearningsResponse,
   RotateAgentTriggerSecretResponse,
   ApplyAgentRecipeResponse,
@@ -34,6 +37,8 @@ import type {
   AiPageActionsResponse,
   AiSettingsResponse,
   AiSkillSummary,
+  GetStyleguideResponse,
+  StyleguideSummary,
   ListAiPluginsResponse,
   ListAiProviderChoicesResponse,
   ListAiProvidersResponse,
@@ -47,6 +52,7 @@ import type {
   SourcePolicy,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { t } from '../i18n/t.js';
 import type { Principal } from '../auth/principal.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { AccessService } from '../auth/access.service.js';
@@ -82,10 +88,14 @@ import {
   CreateAgentLearningDto,
   UpdateAgentLearningDto,
   DismissAgentFindingDto,
+  AddFindingTermDto,
   ApplyAgentRecipeDto,
   UpdateAiAgentDto,
   UpdateAiSkillDto,
+  UpsertStyleguideDto,
 } from './ai.dto.js';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * AI settings surface (docs/features/12): provider configuration, skills and
@@ -344,6 +354,69 @@ export class AiController {
       action: 'ai.skill.deleted',
       subjectId: id,
       metadata: { name: skill.name },
+    });
+    return { ok: true };
+  }
+
+  // ---- Styleguides (#74) ---------------------------------------------------
+
+  @Get('styleguides')
+  @Access('viewer', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiQuery({ name: 'projectId', required: false })
+  @ApiOperation({
+    summary:
+      'The styleguide that applies to pages of a project — its own, else the workspace one — and which it was. ' +
+      'Viewer: members read the rules they are held to.',
+  })
+  getStyleguide(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Query('projectId') projectId?: string,
+  ): Promise<GetStyleguideResponse> {
+    if (projectId && !UUID_RE.test(projectId)) {
+      throw new BadRequestException(t('error.invalidUuid', { subject: t('subject.project') }));
+    }
+    return this.skills.getStyleguide(workspaceId, projectId || null);
+  }
+
+  @Put('styleguides')
+  @Access('admin', 'body')
+  @ApiOperation({ summary: 'Create or replace the styleguide of the workspace, or of one project' })
+  async upsertStyleguide(
+    @Body() dto: UpsertStyleguideDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<StyleguideSummary> {
+    const { workspaceId, ...input } = dto;
+    const styleguide = await this.skills.upsertStyleguide(
+      workspaceId,
+      { ...input, projectId: input.projectId ?? null },
+      principal?.userId,
+    );
+    await this.activity.record({
+      workspaceId,
+      actor: principal?.userId,
+      action: 'ai.styleguide.updated',
+      subjectId: styleguide.id,
+      metadata: { name: styleguide.name, projectId: styleguide.projectId, rules: styleguide.rules.length },
+    });
+    return styleguide;
+  }
+
+  @Delete('styleguides/:id')
+  @Access('admin', 'ai-skill')
+  @ApiOperation({ summary: "Delete a styleguide; a project's falls back to the workspace one" })
+  async deleteStyleguide(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<{ ok: true }> {
+    const styleguide = await this.skills.getStyleguideById(id);
+    await this.skills.removeStyleguide(id);
+    await this.activity.record({
+      workspaceId: styleguide.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.styleguide.deleted',
+      subjectId: id,
+      metadata: { name: styleguide.name, projectId: styleguide.projectId },
     });
     return { ok: true };
   }
@@ -663,6 +736,26 @@ export class AiController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<FlagFindingOutdatedResponse> {
     return this.findings.markOutdated(workspaceId, id, index, principal);
+  }
+
+  /**
+   * Add the term a glossarist finding proposes to the glossary (#74).
+   * `editor`, the role `POST /v1/glossary` asks for: it is the same write,
+   * made from the finding and attributed to the caller.
+   */
+  @Post('agents/runs/:id/findings/:index/add-term')
+  @Access('editor', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
+  @ApiOperation({ summary: 'Add the glossary term a finding proposes, optionally edited, as the caller' })
+  addFindingTerm(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('index', ParseIntPipe) index: number,
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Body() dto: AddFindingTermDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AddFindingTermResponse> {
+    return this.findings.addTerm(workspaceId, id, index, principal, dto);
   }
 
   /**

@@ -1,13 +1,15 @@
 import { HttpException, HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { AgentRun } from '@prisma/client';
+import { Prisma, type AgentRun } from '@prisma/client';
 import type {
   AgentFinding,
   AgentFindingKind,
   AgentRunDetails,
   AgentRunComponent,
   AgentRunInput,
+  AgentRunPullRequest,
   AnswerSignalKind,
+  ApiDriftSpec,
   AnswerSurface,
   AssistantWebSource,
   AuthorableRelationType,
@@ -16,7 +18,19 @@ import type {
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
-import { AGENT_FINDING_KINDS, AGENT_RUN_MAX_DOCUMENTS, builtInTemplateRef, isAuthorableRelationType } from '@knowledge/contracts';
+import {
+  AGENT_FINDING_KINDS,
+  AGENT_RUN_MAX_DOCUMENTS,
+  buildPageRefResolver,
+  builtInTemplateRef,
+  isAuthorableRelationType,
+  type PageRefResolver,
+  type QualityDimensionScores,
+  type QualityDuplicate,
+  type QualityIssue,
+  type StyleRule,
+} from '@knowledge/contracts';
+import { LISTED_PAGE } from '../common/listed-page.js';
 import { normalizeRelation } from '../common/relations.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -28,6 +42,7 @@ import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
 import { RepoSnapshotService } from '../connectors/code-research/repo-snapshot.service.js';
 import { PullRequestService } from '../connectors/code-research/pull-request.service.js';
+import { ApiDriftService, type ApiDriftResult } from '../connectors/code-research/api-drift.service.js';
 import { ComponentUsagesService, type ChangeImpact } from '../components/component-usages.service.js';
 import { declaredPathFixes } from '../components/component-match.js';
 import { wrapUntrusted } from '../common/untrusted.js';
@@ -84,6 +99,26 @@ import {
   subdirOf,
   type DriftCandidate,
 } from './drift.js';
+import { apiDriftFinding, apiDriftPromptNote } from './api-drift.js';
+import { LINT_TEXT_MAX, enabledRules, lintMessages, readLintViolations } from './lint.js';
+import { changedText, styleFindings } from '../documents/lint/lint-check.js';
+import {
+  RUBRIC_VERSION,
+  auditMessages,
+  duplicatePeers,
+  duplicationCheck,
+  emptyDimensions,
+  isDue,
+  linkCheck,
+  overallScore,
+  ownershipCheck,
+  readModelHalf,
+  reusableModelHalf,
+  styleguideHash,
+  type ModelHalf,
+  type PriorScore,
+} from './quality.js';
+import { CompareService } from '../documents/compare.service.js';
 import { readEvidence } from '../feedback/knowledge-issues.service.js';
 import {
   COVERAGE_OUTPUT_CONTRACT,
@@ -127,6 +162,7 @@ export const RUNNABLE_AGENTS = new Set([
   'archaeologist',
   'surveyor',
   'digest',
+  'auditor',
 ]);
 
 /** A page id the model named is checked against the database only if it could be one. */
@@ -151,11 +187,13 @@ const MAX_GLOSSARY_PAGES = 15;
 const MAX_FINDINGS = 20;
 /** Web citations kept on one finding — the reader is checking a claim, not reading a bibliography. */
 const MAX_SOURCES_PER_FINDING = 8;
+/** Pages the auditor compares the audited ones with for near-duplicates — the most recently active. */
+const MAX_COMPARED = 1_000;
 
 export interface AgentRunResult {
   summary: string;
   findings: AgentFinding[];
-  /** What the run found that is not a finding; only the sentinel writes it (#236). */
+  /** What the run found that is not a finding: the sentinel's usages (#236), the glossarist's watermark (#74). */
   details?: AgentRunDetails;
 }
 
@@ -214,6 +252,8 @@ export class AgentExecutor {
     private readonly learnings: AgentLearningsService,
     private readonly componentUsages: ComponentUsagesService,
     private readonly templates: TemplatesService,
+    private readonly apiDrift: ApiDriftService,
+    private readonly compare: CompareService,
   ) {}
 
   /**
@@ -302,14 +342,22 @@ export class AgentExecutor {
         return this.surveyCoverage(run, agent, principal, report);
       case 'digest':
         return this.digest(run, agent, principal, report);
+      case 'auditor':
+        return this.audit(run, agent, principal, report);
       // Deliberately not in RUNNABLE_AGENTS (docs/features/35): that set offers
       // the Run button and feeds the schedule sweeper, and a sentinel run with
       // neither a pull request nor a report has nothing to check. Only
       // DriftTriggerService and KnowledgeIssuesService start one.
-      case 'sentinel':
-        return ((run.input ?? {}) as AgentRunInput).issueId
-          ? this.checkReport(run, agent, principal, report)
-          : this.checkDrift(run, agent, principal, report);
+      case 'sentinel': {
+        const input = (run.input ?? {}) as AgentRunInput;
+        if (input.issueId) return this.checkReport(run, agent, principal, report);
+        if (input.apiSpecDocumentId) return this.checkApiDrift(run, principal, report);
+        return this.checkDrift(run, agent, principal, report);
+      }
+      // Not in RUNNABLE_AGENTS either (#74): a lint answers one merge request
+      // check, and only LintTriggerSweeper starts one.
+      case 'linter':
+        return this.lintMergeRequest(run, agent, principal, report);
       default:
         // RUNNABLE_AGENTS is the API's copy of this switch; anything reaching
         // here got past that check, so failing loudly beats running an agent as
@@ -605,6 +653,339 @@ export class AgentExecutor {
     return out;
   }
 
+  // -------------------------------------------------------------------- linter
+
+  /**
+   * The style lint of one merge request head (#74, phase 2).
+   *
+   * Only what the merge request adds is linted: the merge-base diff's added
+   * lines, so a violation already on the target is not this author's. A page's
+   * first merge request has no target head, and then all of it is new. The
+   * prompt and the gate on what comes back are `lint.ts`'s, the same ones the
+   * editor's check uses; `styleFindings` then keeps only quotes the page holds
+   * and anchors each to the head. The run publishes nothing — the API's
+   * `LintPublishSweeper` turns its findings into threads.
+   */
+  private async lintMergeRequest(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const lint = ((run.input ?? {}) as AgentRunInput).lint;
+    if (!lint) throw new Error(t('agent.lint.noInput'));
+    if (!agent.config.enabled || agent.missing.length > 0) throw new Error(t('agent.lint.cannotRun'));
+
+    // Asked again on execution, not only at enqueue: the page may have been
+    // restricted since, and this run's findings are listed to every member.
+    const scope = await this.runScope(run, principal);
+    const mr = await this.prisma.mergeRequest.findFirst({
+      where: { id: lint.mergeRequestId, document: { workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] } },
+      include: {
+        targetBranch: { select: { headRevisionId: true } },
+        document: { select: { title: true, projectId: true } },
+      },
+    });
+    if (!mr) throw new Error(t('agent.lint.notVisible'));
+
+    const styleguide = await this.skills.effectiveStyleguide(run.workspaceId, mr.document.projectId);
+    if (!styleguide || enabledRules(styleguide.rules).length === 0) {
+      return { summary: t('agent.lint.noStyleguide'), findings: [] };
+    }
+
+    await report({ stage: 'diff' });
+    const target = mr.targetBranch.headRevisionId;
+    const diff = target
+      ? await this.compare.compare(mr.documentId, target, lint.headRevisionId, 'merge-base', { structural: false })
+      : await this.compare.compareWithNothing(mr.documentId, lint.headRevisionId, { structural: false });
+    const text = changedText(diff.hunks).slice(0, LINT_TEXT_MAX);
+    if (!text.trim()) return { summary: t('agent.lint.nothingChanged'), findings: [] };
+
+    await report({ stage: 'linting' });
+    const raw = await this.client.chat(
+      { config: agent.config, userId: principal.userId, operation: 'lint', locale: run.locale as Locale },
+      lintMessages(agent.instructions, styleguide.rules, mr.document.title, text),
+      { json: true },
+    );
+    const max = this.config.get('LINT_MAX_FINDINGS', { infer: true });
+    const { violations, dropped } = readLintViolations(safeJson(raw), styleguide.rules, text, max);
+    const page = await this.documents.getContent(mr.documentId, lint.headRevisionId);
+    const findings = styleFindings(violations, styleguide.rules, {
+      documentId: mr.documentId,
+      title: mr.document.title,
+      revisionId: lint.headRevisionId,
+      markdown: page.markdown,
+      changed: text,
+    });
+    const ungrounded = dropped + violations.length - findings.length;
+    if (ungrounded > 0) await report({ warning: t('agent.lint.dropped', { count: ungrounded }) });
+
+    return {
+      summary:
+        findings.length === 0
+          ? t('agent.lint.clean')
+          : t('agent.lint.summary', { violations: t('agent.count.violations', { count: findings.length }) }),
+      findings,
+    };
+  }
+
+  // ------------------------------------------------------------------- auditor
+
+  /**
+   * Scores every page that is due (#74, phase 4) and stores one
+   * `document_quality_scores` row each.
+   *
+   * Due means never scored, changed since, scored under an older rubric or
+   * another styleguide, or scored longer ago than the audit interval. Links,
+   * ownership and near-duplicates are facts and are recomputed every time; the
+   * model half (clarity, completeness, style) is one call per page, reused when
+   * the stored row already judged this revision against these rules — so a run
+   * over an unchanged corpus makes no model call. With no model the facts are
+   * still written, the judgements null.
+   *
+   * The rows are written here, in the worker: a score is a measurement, like
+   * the run's own findings, and attributes no act to a person. The findings
+   * are only the actionable tail — near-duplicate pairs and pages below the
+   * threshold or with broken links.
+   */
+  private async audit(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    await report({ stage: 'scanning', progress: 0.02 });
+    const scope = await this.runScope(run, principal);
+    const pages = await this.prisma.document.findMany({
+      where: {
+        workspaceId: run.workspaceId,
+        kind: 'page',
+        archivedAt: null,
+        ...LISTED_PAGE,
+        AND: [visibilityWhere(scope)],
+      },
+      select: {
+        id: true,
+        title: true,
+        projectId: true,
+        ownerId: true,
+        defaultBranch: true,
+        branches: { select: { name: true, headRevisionId: true } },
+      },
+      orderBy: { lastActivityAt: 'desc' },
+    });
+    const heads = pages
+      .map((p) => ({ ...p, headRevisionId: p.branches.find((b) => b.name === p.defaultBranch)?.headRevisionId ?? null }))
+      .filter((p): p is typeof p & { headRevisionId: string } => p.headRevisionId !== null);
+    if (heads.length === 0) return { summary: t('agent.quality.noPages'), findings: [] };
+
+    const named = new Set(((run.input ?? {}) as AgentRunInput).documentIds ?? []);
+    const candidates = named.size > 0 ? heads.filter((p) => named.has(p.id)) : heads;
+    const [priors, settings] = await Promise.all([
+      this.latestScores(candidates.map((p) => p.id)),
+      this.prisma.aiSettings.findUnique({ where: { workspaceId: run.workspaceId }, select: { qualityAuditDays: true } }),
+    ]);
+    const auditDays: number = settings?.qualityAuditDays ?? this.config.get('QUALITY_AUDIT_DAYS', { infer: true });
+
+    const styleguides = new Map<string, StyleRule[]>();
+    const rulesFor = async (projectId: string): Promise<StyleRule[]> => {
+      let rules = styleguides.get(projectId);
+      if (!rules) {
+        rules = (await this.skills.effectiveStyleguide(run.workspaceId, projectId))?.rules ?? [];
+        styleguides.set(projectId, rules);
+      }
+      return rules;
+    };
+
+    const now = new Date();
+    const modelOn = agent.config.enabled && agent.missing.length === 0;
+    const due: Array<(typeof heads)[number] & { rules: StyleRule[]; hash: string | null }> = [];
+    for (const page of candidates) {
+      const rules = await rulesFor(page.projectId);
+      const hash = styleguideHash(rules);
+      if (isDue(priors.get(page.id) ?? null, page.headRevisionId, hash, auditDays, now, modelOn)) due.push({ ...page, rules, hash });
+      if (due.length >= this.config.get('QUALITY_AUDIT_MAX_PAGES', { infer: true })) break;
+    }
+    if (due.length === 0) return { summary: t('agent.quality.upToDate'), findings: [] };
+
+    // The facts. Links resolve against every page of the workspace, not only
+    // the visible ones: a link to a restricted page is not broken, and the
+    // issue names only what this page itself says. An archived page is gone —
+    // archiving is how a page is deleted — so a link to it is broken.
+    await report({ stage: 'facts', progress: 0.1 });
+    const roster = await this.prisma.document.findMany({
+      where: { workspaceId: run.workspaceId },
+      select: { id: true, title: true, projectId: true, archivedAt: true, pendingMergeRequestId: true },
+    });
+    const documentIds = new Set(roster.filter((d) => !d.archivedAt).map((d) => d.id));
+    // Titles resolve the way the reader's resolver does: over the listed,
+    // unarchived roster, preferring the page's own project.
+    const titled = roster.filter((d) => !d.archivedAt && !d.pendingMergeRequestId).map((d) => ({ documentId: d.id, title: d.title, projectId: d.projectId }));
+    const resolvers = new Map<string, PageRefResolver>();
+    const resolverFor = (projectId: string): PageRefResolver => {
+      let resolve = resolvers.get(projectId);
+      if (!resolve) {
+        resolve = buildPageRefResolver(titled, projectId);
+        resolvers.set(projectId, resolve);
+      }
+      return resolve;
+    };
+
+    let peers = new Map<string, QualityDuplicate[]>();
+    let pairs: Array<{ a: string; b: string; similarity: number }> = [];
+    const embedded = new Set<string>();
+    const compared = heads.slice(0, MAX_COMPARED);
+    const comparedIds = new Set(compared.map((p) => p.id));
+    for (const page of due) if (!comparedIds.has(page.id)) compared.push(page);
+    if (this.config.get('EMBEDDINGS_PROVIDER', { infer: true }) === 'stub') {
+      // The stub hashes words, so its similarity is shared vocabulary, not
+      // shared meaning: every page of one product would pair with every other.
+      // Not measured, and said — the surveyor's rule.
+      await report({ warning: t('agent.quality.stubEmbeddings') });
+    } else try {
+      const byRevision = await this.graph.meanRevisionEmbeddings(run.workspaceId, compared.map((p) => p.headRevisionId));
+      const means = new Map<string, number[]>();
+      for (const page of compared) {
+        const mean = byRevision.get(page.headRevisionId);
+        if (mean) means.set(page.id, mean);
+      }
+      for (const id of means.keys()) embedded.add(id);
+      ({ peers, pairs } = duplicatePeers(means, due.map((p) => p.id), this.config.get('QUALITY_DUPLICATE_THRESHOLD', { infer: true })));
+    } catch (error) {
+      // No vector store, no duplicate check: the dimension is not measured,
+      // which is not the same as measured unique — so it is null, and said.
+      this.logger.warn(`Auditor could not read embeddings: ${String(error)}`);
+      await report({ warning: t('agent.quality.noEmbeddings') });
+    }
+    const titleOf = new Map(heads.map((p) => [p.id, p.title]));
+
+    // The judgement, page by page.
+    let modelStopped = !modelOn;
+    if (!modelOn) await report({ warning: t('agent.quality.modelOff') });
+    let called = 0;
+    let reused = 0;
+    const rows: Prisma.DocumentQualityScoreCreateManyInput[] = [];
+    const scored: Array<{ page: (typeof due)[number]; overall: number; issues: QualityIssue[] }> = [];
+
+    for (const [at, page] of due.entries()) {
+      await report({ stage: 'scoring', progress: 0.15 + (0.8 * at) / due.length });
+      const content = await this.documents.getContent(page.id, page.headRevisionId).catch(() => null);
+      if (!content) continue;
+
+      let model: ModelHalf | null = reusableModelHalf(priors.get(page.id) ?? null, page.headRevisionId, page.hash);
+      if (model) reused += 1;
+      else if (!content.markdown.trim()) {
+        // Nothing to judge, which is itself the judgement — and a fixed one, so
+        // an empty page is not re-asked of the model on every run.
+        model = { clarity: 0, completeness: 0, style: null, issues: [{ dimension: 'completeness', severity: 'warning', message: t('agent.quality.empty') }], violations: [] };
+      } else if (!modelStopped) {
+        try {
+          const raw = await this.client.chat(
+            { config: agent.config, userId: principal.userId, operation: 'audit', locale: run.locale as Locale },
+            auditMessages(agent.instructions, page.rules, page.title, content.markdown),
+            { json: true },
+          );
+          called += 1;
+          model = readModelHalf(safeJson(raw), page.rules, content.markdown);
+        } catch (error) {
+          if (error instanceof ProviderAccountError) {
+            // Every later page would fail the same way: score the facts only.
+            modelStopped = true;
+            await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+          } else {
+            this.logger.warn(`Auditor could not score "${page.title}": ${String(error)}`);
+            await report({ warning: t('agent.warning.pageNotReviewed', { title: page.title, error: reasonOf(error) }) });
+          }
+        }
+      }
+
+      const links = linkCheck(content.markdown, { documentIds, resolve: resolverFor(page.projectId) });
+      const ownership = ownershipCheck(page.ownerId);
+      const duplication = duplicationCheck(embedded.has(page.id), peers.get(page.id) ?? [], (id) => titleOf.get(id) ?? id);
+      const dimensions: QualityDimensionScores = {
+        ...emptyDimensions(),
+        clarity: model?.clarity ?? null,
+        completeness: model?.completeness ?? null,
+        style: model?.style ?? null,
+        links: links.score,
+        ownership: ownership.score,
+        duplication: duplication.score,
+      };
+      const issues = [...(model?.issues ?? []), ...links.issues, ...ownership.issues, ...duplication.issues];
+      const overall = overallScore(dimensions);
+      rows.push({
+        workspaceId: run.workspaceId,
+        projectId: page.projectId,
+        documentId: page.id,
+        revisionId: page.headRevisionId,
+        agentRunId: run.id,
+        rubricVersion: RUBRIC_VERSION,
+        styleguideHash: page.hash,
+        overall,
+        dimensions: dimensions as unknown as Prisma.InputJsonValue,
+        issues: issues as unknown as Prisma.InputJsonValue,
+        duplicates: (peers.get(page.id) ?? []) as unknown as Prisma.InputJsonValue,
+      });
+      scored.push({ page, overall, issues });
+    }
+
+    await report({ stage: 'writing', progress: 0.97 });
+    if (rows.length > 0) await this.prisma.documentQualityScore.createMany({ data: rows });
+
+    const findings: AgentFinding[] = [];
+    for (const pair of pairs) {
+      if (findings.length >= MAX_FINDINGS) break;
+      const [a, b] = [titleOf.get(pair.a) ?? pair.a, titleOf.get(pair.b) ?? pair.b];
+      findings.push({
+        kind: 'duplicate',
+        severity: 'warning',
+        title: t('agent.quality.duplicateTitle', { a, b }),
+        detail: t('agent.quality.duplicateDetail', { similarity: Math.round(pair.similarity * 100) }),
+        documentIds: [pair.a, pair.b],
+        documentTitles: [a, b],
+      });
+    }
+    const threshold = this.config.get('QUALITY_FINDING_THRESHOLD', { infer: true });
+    for (const { page, overall, issues } of [...scored].sort((x, y) => x.overall - y.overall)) {
+      if (findings.length >= MAX_FINDINGS) break;
+      const broken = issues.filter((i) => i.dimension === 'links');
+      if (overall >= threshold && broken.length === 0) continue;
+      const shown = (overall < threshold ? issues.filter((i) => i.dimension !== 'duplication') : broken).slice(0, 5);
+      findings.push({
+        kind: 'quality',
+        severity: overall < threshold ? 'warning' : 'info',
+        title: t(overall < threshold ? 'agent.quality.lowTitle' : 'agent.quality.linksTitle', { title: page.title, score: overall }),
+        detail: shown.map((i) => `- ${i.message}`).join('\n').slice(0, 2_000) || t('agent.quality.lowDetail'),
+        documentIds: [page.id],
+        documentTitles: [page.title],
+      });
+    }
+
+    const average = scored.length ? Math.round(scored.reduce((sum, s) => sum + s.overall, 0) / scored.length) : 0;
+    return {
+      summary: t('agent.quality.summary', {
+        pages: t('agent.count.pages', { count: scored.length }),
+        average,
+        calls: called,
+        reused,
+      }),
+      findings,
+    };
+  }
+
+  /** Each page's newest score, one `DISTINCT ON` over the bounded id set. */
+  private async latestScores(documentIds: string[]): Promise<Map<string, PriorScore>> {
+    if (documentIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<PriorScore & { documentId: string }>>(Prisma.sql`
+      SELECT DISTINCT ON (document_id)
+        document_id AS "documentId", revision_id AS "revisionId", rubric_version AS "rubricVersion",
+        styleguide_hash AS "styleguideHash", created_at AS "createdAt", dimensions, issues
+      FROM document_quality_scores
+      WHERE document_id IN (${Prisma.join(documentIds.map((id) => Prisma.sql`${id}::uuid`))})
+      ORDER BY document_id, created_at DESC`);
+    return new Map(rows.map((r) => [r.documentId, r]));
+  }
+
   // ---------------------------------------------------------------- glossarist
 
   /**
@@ -615,7 +996,14 @@ export class AgentExecutor {
    * that drops ungrounded terms, and the "already defined in this project"
    * lookup are one implementation, not two. Terms are proposed as findings —
    * nothing is written to the glossary, exactly as a background agent never
-   * writes.
+   * writes. Each finding carries the term itself, so *Add to glossary* is a
+   * person's click and not a second model call.
+   *
+   * Incremental (#74): a page whose head revision an earlier run already read
+   * is skipped, so successive runs walk the whole workspace, most recently
+   * active first, instead of rereading the same newest pages. The watermark is
+   * the runs' own `details.glossaryScanned` — no column, no table. Pages a
+   * person named on the run are read regardless: they asked.
    */
   private async buildGlossary(
     run: AgentRun,
@@ -623,19 +1011,36 @@ export class AgentExecutor {
     report: AgentReporter,
   ): Promise<AgentRunResult> {
     const scope = await this.runScope(run, principal);
-    const documents = await this.prisma.document.findMany({
-      where: { workspaceId: run.workspaceId, ...pageScope(run), AND: [visibilityWhere(scope)] },
-      select: { id: true, title: true },
-      orderBy: { createdAt: 'desc' },
-      take: MAX_GLOSSARY_PAGES,
-    });
-    if (documents.length === 0) return { summary: t('agent.curation.noPages'), findings: [] };
+    const named = ((run.input ?? {}) as AgentRunInput).documentIds?.length ?? 0;
+    const pages = (
+      await this.prisma.document.findMany({
+        where: {
+          workspaceId: run.workspaceId,
+          kind: 'page',
+          archivedAt: null,
+          ...LISTED_PAGE,
+          ...pageScope(run),
+          AND: [visibilityWhere(scope)],
+        },
+        select: { id: true, title: true, defaultBranch: true, branches: { select: { name: true, headRevisionId: true } } },
+        orderBy: { lastActivityAt: 'desc' },
+      })
+    )
+      .map((p) => ({ id: p.id, title: p.title, headRevisionId: p.branches.find((b) => b.name === p.defaultBranch)?.headRevisionId ?? null }))
+      .filter((p): p is typeof p & { headRevisionId: string } => p.headRevisionId !== null);
+    if (pages.length === 0) return { summary: t('agent.curation.noPages'), findings: [] };
+
+    const scannedBefore = named > 0 ? new Set<string>() : await this.glossaryScanned(run.workspaceId, pages.map((p) => p.headRevisionId));
+    const documents = pages.filter((p) => !scannedBefore.has(p.headRevisionId)).slice(0, MAX_GLOSSARY_PAGES);
+    if (documents.length === 0) return { summary: t('agent.glossary.allScanned'), findings: [] };
 
     const findings: AgentFinding[] = [];
     // Proposed once per run: the same term found on four pages is one entry to
     // add, and four findings saying so is a wall, not a review.
     const seen = new Set<string>();
-    let scanned = 0;
+    // Recorded only once `suggest` answered, so a page that failed is read again next run.
+    const scanned: string[] = [];
+    const details = (): AgentRunDetails | undefined => (scanned.length > 0 ? { glossaryScanned: scanned } : undefined);
 
     for (const [at, doc] of documents.entries()) {
       if (findings.length >= MAX_FINDINGS) break;
@@ -650,9 +1055,9 @@ export class AgentExecutor {
         // The provider is off for this workspace — every later page would say
         // the same, so stop rather than making the same failed call per page.
         if (!res.enabled) {
-          return { summary: t('agent.glossary.disabled'), findings };
+          return { summary: t('agent.glossary.disabled'), findings, details: details() };
         }
-        scanned++;
+        scanned.push(doc.headRevisionId);
         for (const s of res.suggestions) {
           // Already in the glossary: proposing it again is noise.
           if (s.existingTermId) continue;
@@ -668,6 +1073,10 @@ export class AgentExecutor {
             }`,
             documentIds: [doc.id],
             documentTitles: [doc.title],
+            // `suggest` takes the project from the page, so the term lands where it was found.
+            ...(res.projectId
+              ? { term: { term: s.term, aliases: s.aliases, definition: s.definition, projectId: res.projectId } }
+              : {}),
           });
           if (findings.length >= MAX_FINDINGS) break;
         }
@@ -677,8 +1086,9 @@ export class AgentExecutor {
         // (docs/features/18), so a text match would only work in English.
         if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
           return {
-            summary: t('agent.glossary.budgetSpent', { pages: t('agent.count.pages', { count: scanned }) }),
+            summary: t('agent.glossary.budgetSpent', { pages: t('agent.count.pages', { count: scanned.length }) }),
             findings,
+            details: details(),
           };
         }
         if (error instanceof ProviderAccountError) {
@@ -693,13 +1103,31 @@ export class AgentExecutor {
     return {
       summary:
         findings.length === 0
-          ? t('agent.glossary.nothingNew', { pages: t('agent.count.pages', { count: scanned }) })
+          ? t('agent.glossary.nothingNew', { pages: t('agent.count.pages', { count: scanned.length }) })
           : t('agent.glossary.summary', {
-              pages: t('agent.count.pages', { count: scanned }),
+              pages: t('agent.count.pages', { count: scanned.length }),
               terms: t('agent.count.terms', { count: findings.length }),
             }),
       findings,
+      details: details(),
     };
+  }
+
+  /**
+   * Which of these head revisions an earlier glossarist run already read.
+   * Asked only about the candidates, so the answer stays as small as the
+   * workspace however many runs there have been.
+   */
+  private async glossaryScanned(workspaceId: string, revisionIds: string[]): Promise<Set<string>> {
+    if (revisionIds.length === 0) return new Set();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT DISTINCT rev AS id
+        FROM agent_runs, jsonb_array_elements_text(COALESCE(details -> 'glossaryScanned', '[]'::jsonb)) AS rev
+       WHERE workspace_id = ${workspaceId}::uuid
+         AND agent_key = 'glossarist'
+         AND status = 'succeeded'
+         AND rev = ANY(${revisionIds}::text[])`);
+    return new Set(rows.map((r) => r.id));
   }
 
   // ------------------------------------------------------------ archaeologist
@@ -1055,15 +1483,24 @@ export class AgentExecutor {
     const changed = await this.pullRequests.files(connectorId, run.workspaceId, pr.number);
     if (changed.truncated) await report({ warning: t('agent.drift.truncated', { files: changed.files.length }) });
     const files = scopeFiles(changed.files, subdirOf(connector.config));
-    if (files.length === 0) return { summary: t('agent.drift.noFiles', { number: pr.number }), findings: [] };
+    // Spec ↔ code (#78) reads every changed file: the routes a docs
+    // connector's spec describes sit outside its `subdir`.
+    const api = await this.apiDriftForChange(run, connectorId, pr, changed.files, report);
+    if (files.length === 0 && !api?.specs.length) return { summary: t('agent.drift.noFiles', { number: pr.number }), findings: [] };
 
     // --- which pages it touches, strongest tie first
     await report({ stage: 'related', progress: 0.2 });
     const scope = await this.runScope(run, principal);
-    const impact = await this.changeImpact(scope, connector, pr, files, report);
-    const all = await this.driftCandidates(scope, connector, pr, files, impact, report);
+    const apiSpecs = api ? await this.visibleSpecs(scope, api.specs, report) : [];
+    // Certain, like a path fix: static analysis, whatever the model says.
+    const apiFindings = apiSpecs.map((s) => apiDriftFinding(s, pr)).filter((f): f is AgentFinding => !!f);
+    const impact = files.length ? await this.changeImpact(scope, connector, pr, files, report) : null;
+    const all = files.length ? await this.driftCandidates(scope, connector, pr, files, impact, report) : [];
+    // A spec page is the repository's file: its drift is the comparison
+    // above, and a model-written body would be overwritten by the next sync.
+    const specIds = await this.specDocumentIds(all.map((c) => c.documentId));
     // Past the cap a page is listed, never judged — one model call each.
-    const candidates = all.slice(0, MAX_DRIFT_PAGES);
+    const candidates = all.filter((c) => !specIds.has(c.documentId)).slice(0, MAX_DRIFT_PAGES);
 
     // A declared path the change removes or moves is known from the diff
     // alone, so it is a finding whatever the model says, or whether one runs.
@@ -1073,10 +1510,16 @@ export class AgentExecutor {
       if (fixes.length > 0) pathFindings.set(page.documentId, componentPathFinding({ id: page.documentId, title: page.title }, page.paths, fixes, pr));
     }
     const judged = new Set<string>();
-    const details = (): AgentRunDetails | undefined => affectedUsagesDetails(impact, judged);
+    const details = (): AgentRunDetails | undefined => {
+      const merged: AgentRunDetails = { ...affectedUsagesDetails(impact, judged), ...(apiSpecs.length ? { apiSpecs } : {}) };
+      return Object.keys(merged).length ? merged : undefined;
+    };
 
     if (candidates.length === 0) {
-      return { summary: t('agent.drift.noRelated', { number: pr.number, files: files.length }), findings: [], details: details() };
+      const summary = apiFindings.length
+        ? t('agent.drift.api.summaryPr', { number: pr.number, specs: apiSpecs.length, drifted: apiFindings.length })
+        : t('agent.drift.noRelated', { number: pr.number, files: files.length });
+      return { summary, findings: [...apiFindings, ...pathFindings.values()], details: details() };
     }
 
     // 'tools' is a preference, not a prerequisite — the curator's rule.
@@ -1102,6 +1545,7 @@ export class AgentExecutor {
       for (const [documentId, finding] of pathFindings) {
         if (!candidates.some((c) => c.documentId === documentId)) findings.push(finding);
       }
+      findings.unshift(...apiFindings);
       return {
         summary: t('agent.drift.summaryNoModel', { number: pr.number, pages: findings.length }),
         findings,
@@ -1127,6 +1571,7 @@ export class AgentExecutor {
         ? this.code.execute(name, { ...args, connectorId }, toolCtx)
         : this.readTools.execute(name, args, toolCtx);
     const byPath = new Map(files.map((f) => [f.path, f]));
+    const apiNote = apiDriftPromptNote(apiSpecs);
 
     const findings: AgentFinding[] = [];
     let checked = 0;
@@ -1167,7 +1612,8 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
 <page title=${JSON.stringify(candidate.title)} documentId="${candidate.documentId}">
 ` +
             `${content.markdown.slice(0, MAX_PAGE_CHARS)}
-</page>`,
+</page>` +
+            apiNote,
         },
       ];
 
@@ -1203,8 +1649,8 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
       }
     }
 
-    // Path findings first: they are certain, and the cap must not drop them.
-    findings.unshift(...pathFindings.values());
+    // Path and spec findings first: they are certain, and the cap must not drop them.
+    findings.unshift(...apiFindings, ...pathFindings.values());
     return {
       summary: t('agent.drift.summary', {
         number: pr.number,
@@ -1214,6 +1660,83 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
       }),
       findings: findings.slice(0, MAX_FINDINGS),
       details: details(),
+    };
+  }
+
+  /**
+   * What a change does to the agreement between the repository's specs and
+   * its routes (#78, phase 8), or null when it ties no spec. Any failure costs
+   * the comparison, never the run — the pages are still worth judging.
+   */
+  private async apiDriftForChange(
+    run: AgentRun,
+    connectorId: string,
+    pr: AgentRunPullRequest,
+    changed: Parameters<ApiDriftService['forPullRequest']>[3],
+    report: AgentReporter,
+  ): Promise<ApiDriftResult | null> {
+    try {
+      const result = await this.apiDrift.forPullRequest(connectorId, run.workspaceId, pr.headSha, changed, run.locale as Locale);
+      for (const warning of result?.warnings ?? []) await report({ warning });
+      return result;
+    } catch (error) {
+      this.logger.warn(`Sentinel could not compare specs with routes for #${pr.number}: ${String(error)}`);
+      await report({ warning: t('agent.drift.api.failed') });
+      return null;
+    }
+  }
+
+  /** The specs the run's audience may open; the rest are counted, never named. */
+  private async visibleSpecs(scope: AccessScope, specs: ApiDriftSpec[], report: AgentReporter): Promise<ApiDriftSpec[]> {
+    const visible = await this.permissions.visibleDocumentIds(scope, specs.map((s) => s.documentId));
+    const hidden = specs.filter((s) => !visible.has(s.documentId)).length;
+    if (hidden > 0) await report({ warning: t('agent.drift.api.hidden', { count: hidden }) });
+    return specs.filter((s) => visible.has(s.documentId));
+  }
+
+  /** Which of these pages are spec documents. */
+  private async specDocumentIds(ids: string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const rows = await this.prisma.document.findMany({
+      where: { id: { in: ids }, kind: { in: ['openapi', 'asyncapi'] } },
+      select: { id: true },
+    });
+    return new Set(rows.map((r) => r.id));
+  }
+
+  /**
+   * The on-demand spec ↔ code check (#78, phase 8): one spec against its
+   * repository's default branch, with no pull request and no model — the
+   * comparison is static analysis, so it runs whether or not a model is
+   * configured. Everything it finds is reported, drift that predates any
+   * change included; the result is the run's findings, the same surface as a
+   * pull request check, and nothing is published.
+   */
+  private async checkApiDrift(run: AgentRun, principal: Principal, report: AgentReporter): Promise<AgentRunResult> {
+    const input = (run.input ?? {}) as AgentRunInput;
+    const documentId = input.apiSpecDocumentId;
+    if (!documentId || !input.connectorId) throw new Error(t('agent.drift.api.needsSpec'));
+
+    await report({ stage: 'routes', progress: 0.1 });
+    const scope = await this.runScope(run, principal);
+    if (!(await this.permissions.visibleDocumentIds(scope, [documentId])).has(documentId)) {
+      throw new Error(t('agent.drift.api.restricted'));
+    }
+    const result = await this.apiDrift.forBranch(input.connectorId, run.workspaceId, documentId, run.locale as Locale);
+    for (const warning of result.warnings) await report({ warning });
+    const spec = result.specs[0];
+    if (!spec) return { summary: t('agent.drift.api.summaryUnchecked'), findings: [] };
+
+    await report({ stage: 'comparing', progress: 0.9 });
+    const details: AgentRunDetails = { apiSpecs: [spec] };
+    if (spec.routes === 0) return { summary: t('agent.drift.api.summaryNoRoutes', { title: spec.title }), findings: [], details };
+    const finding = apiDriftFinding(spec, null);
+    return {
+      summary: finding
+        ? t('agent.drift.api.summaryDrifted', { title: spec.title, count: spec.mismatchTotal, routes: spec.routes })
+        : t('agent.drift.api.summaryClean', { title: spec.title, routes: spec.routes }),
+      findings: finding ? [finding] : [],
+      details,
     };
   }
 

@@ -10,6 +10,7 @@ import {
   type ApiErrorPayload,
 } from '@knowledge/contracts'
 import { getLocale, getToken, requestTraceId } from '@/lib/api'
+import { redirectForReauth } from '@/lib/reauth'
 
 export class ApiRequestError extends Error {
   readonly payload: ApiErrorPayload
@@ -100,4 +101,9 @@ http.interceptors.request.use((config) => {
   return config
 })
 
-http.interceptors.response.use(undefined, (error: unknown) => Promise.reject(toApiRequestError(error)))
+http.interceptors.response.use(undefined, (error: unknown) => {
+  const normalized = toApiRequestError(error)
+  // Enforced SSO (#75): a 403 that asks for a fresh sign-in navigates to /login.
+  redirectForReauth(normalized.status, normalized.details)
+  return Promise.reject(normalized)
+})

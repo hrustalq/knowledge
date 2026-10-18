@@ -31,6 +31,10 @@
   "surveyorDesc": "Clusters the questions answers failed on into coverage gaps, and proposes the page that would close each.",
   "digest": "Digest",
   "digestDesc": "Summarises what changed since the last digest — new and changed pages, merged changes — as a page you can publish.",
+  "linter": "Linter",
+  "linterDesc": "Checks text against the styleguide your team wrote — only its rules, each violation quoted from the text.",
+  "auditor": "Quality auditor",
+  "auditorDesc": "Scores every page on clarity, completeness, links, ownership, near-duplicates and style, and reports the worst ones.",
   "route": {
     "explicit": "Explicitly requested.",
     "disabled": "disabled",
@@ -69,6 +73,10 @@
     "terms": {
       "one": "{count} new term",
       "other": "{count} new terms"
+    },
+    "violations": {
+      "one": "{count} styleguide violation",
+      "other": "{count} styleguide violations"
     }
   },
   "review": {
@@ -83,6 +91,7 @@
     "aliases": "Aliases: {list}.",
     "budgetSpent": "Stopped after {pages}: the workspace AI budget is spent.",
     "nothingNew": "Scanned {pages}; every term they use is already defined.",
+    "allScanned": "Every page has been scanned at its current version; nothing new to read.",
     "summary": "Scanned {pages} and proposes {terms}."
   },
   "archaeology": {
@@ -124,7 +133,12 @@
       "morePages": "{count} more page(s)",
       "hiddenPages": "{count} restricted page(s) not listed",
       "undocumented": "Documented by no page: {files}",
-      "andMore": "{list} and {count} more"
+      "andMore": "{list} and {count} more",
+      "apiHeading": "API specs",
+      "apiChanges": "spec changes: {breaking} breaking, {nonBreaking} non-breaking",
+      "apiNoRoutes": "routes not compared: no supported framework found",
+      "apiDisagreements": "{count} new disagreement(s) with the code",
+      "apiAgrees": "no new disagreement with the code"
     },
     "paths": {
       "title": "\"{title}\" declares paths this change removes or moves",
@@ -134,7 +148,29 @@
     },
     "overlayFailed": "The change's own files could not be read, so usages are counted from the configured branch only.",
     "overlayPartial": "{files} changed files could not be read at the head of the change; their usages are counted from the configured branch.",
-    "usagesFailed": "Finding the code that uses the changed components failed, so only the pages tied to the changed files were checked."
+    "usagesFailed": "Finding the code that uses the changed components failed, so only the pages tied to the changed files were checked.",
+    "api": {
+      "missingInCode": "{op} is in the spec, but no route serves it",
+      "missingInSpec": "{op} is served by the code, but no spec documents it",
+      "methodMismatch": "{op} is in the spec, but the code serves {code} on that path",
+      "more": "and {count} more",
+      "findingTitle": "\"{title}\" disagrees with the code on {count} path(s)",
+      "findingDetailPr": "Change #{number} leaves the spec and the routes disagreeing: {list}.",
+      "findingDetail": "{path} and the routes in the repository disagree: {list}.",
+      "headPartial": "{files} changed files were not read at the head of the change; their routes are counted from the configured branch.",
+      "headUnread": "{path} could not be read at the head of the change; its routes are counted from the configured branch.",
+      "specGone": "The spec file {path} is no longer in the repository, so it was not compared.",
+      "specUnparsed": "The spec file {path} did not parse, so it was not compared: {error}",
+      "failed": "Comparing the API specs with the routes in the code failed, so only the pages tied to the changed files were checked.",
+      "hidden": "{count} restricted spec(s) were compared but are not listed.",
+      "summaryPr": "Change #{number} ties {specs} spec(s); {drifted} disagree with the code.",
+      "needsSpec": "An API drift check needs a spec document and the repository it is synced from.",
+      "restricted": "The spec is restricted to some members. An agent run is listed to the whole workspace, so it is not compared here.",
+      "summaryUnchecked": "The spec was not compared: it is not in the repository, or it did not parse.",
+      "summaryNoRoutes": "\"{title}\" was not compared: no route of a supported framework (NestJS, Express, Fastify, FastAPI, Go) was found in the repository.",
+      "summaryDrifted": "\"{title}\" disagrees with the code on {count} path(s); {routes} routes were read.",
+      "summaryClean": "\"{title}\" matches the code: {routes} routes were read, and none disagrees."
+    }
   },
   "report": {
     "noContent": "\"{title}\" has no readable content to judge the report against.",
@@ -180,5 +216,42 @@
   "recipe": {
     "freshnessSweepNote": "Focus on freshness: report pages that look stale against the rest of the workspace or against the source they were imported from, as kind \"stale\", and say what has moved on.",
     "glossarySuggesterNote": "Propose glossary terms only from the page that was just merged."
+  },
+  "lint": {
+    "noInput": "This linter run names no merge request check.",
+    "cannotRun": "The linter cannot run: no AI provider is configured for it, or its model lacks JSON output.",
+    "notVisible": "The merge request is gone, or its page is not open to every member.",
+    "noStyleguide": "No styleguide applies to this page.",
+    "nothingChanged": "The merge request adds nothing to lint.",
+    "clean": "The change follows the styleguide.",
+    "summary": "{violations} in the change.",
+    "dropped": {
+      "one": "The linter reported {count} violation that does not quote the page; it was dropped.",
+      "other": "The linter reported {count} violations that do not quote the page; they were dropped."
+    },
+    "suggestion": "Suggestion:",
+    "severity": {
+      "error": "Error",
+      "warning": "Warning",
+      "suggestion": "Suggestion"
+    }
+  },
+  "quality": {
+    "noPages": "No pages to score.",
+    "upToDate": "Every page's score is current.",
+    "modelOff": "No model is configured for the auditor: clarity, completeness and style are not scored, only links, ownership and duplicates.",
+    "noEmbeddings": "Could not read page embeddings: near-duplicates were not checked.",
+    "stubEmbeddings": "Embeddings are the stub provider, which cannot tell near-duplicates apart: duplication was not measured.",
+    "brokenIdLink": "The link \"{text}\" points at a page that does not exist.",
+    "brokenTitleLink": "The reference \"{text}\" names \"{title}\", which matches no single page.",
+    "noOwner": "The page has no owner.",
+    "duplicate": "Nearly the same as \"{title}\" ({similarity}% similar).",
+    "empty": "The page is empty.",
+    "duplicateTitle": "\"{a}\" and \"{b}\" may be duplicates",
+    "duplicateDetail": "Their content is {similarity}% similar. Merge them, or make each say what the other does not.",
+    "lowTitle": "\"{title}\" scores {score}/100",
+    "linksTitle": "\"{title}\" has broken links",
+    "lowDetail": "The page scores below the quality threshold.",
+    "summary": "Scored {pages}, averaging {average}/100: {calls} judged by the model, {reused} unchanged since their last score."
   }
 }

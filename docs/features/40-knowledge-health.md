@@ -116,7 +116,8 @@ documents, search and verification alike.
 other two places a page is acted on in bulk. `pages/KnowledgeHealthPage.vue`
 and `components/health/`:
 
-- **Two tabs**, `?tab=`: **Pages** and **Settings**. The tab and the preset
+- **Three tabs**, `?tab=`: **Pages**, **Settings** and, since #74,
+  **Quality** (the auditor's scores, [53](53-doc-quality.md)). The tab and the preset
   (`?filter=`) are opening instructions, so a notification or a doc can point
   at "the unowned pages"; both are written back with `replace`, never `push`.
 - **The preset strip** is `HEALTH_FILTERS` plus _All_, each chip carrying its

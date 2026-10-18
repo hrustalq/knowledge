@@ -276,7 +276,7 @@ export class AiAgentsService {
       if (unknown.length) throw new BadRequestException(t('error.ai.agentUnknownTools', { tools: unknown.join(', ') }));
     }
     if (skillIds?.length) {
-      const found = await this.prisma.aiSkill.count({ where: { workspaceId, id: { in: skillIds } } });
+      const found = await this.prisma.aiSkill.count({ where: { workspaceId, kind: 'skill', id: { in: skillIds } } });
       if (found !== new Set(skillIds).size) throw new BadRequestException(t('error.ai.agentUnknownSkill'));
     }
     if (providerId) {

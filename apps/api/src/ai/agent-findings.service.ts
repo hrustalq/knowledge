@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type {
+  AddFindingTermResponse,
   AgentFinding,
   AgentRunInput,
   CreatePageFromFindingResponse,
@@ -24,6 +25,7 @@ import { AssistantClient } from '../assistant/assistant.client.js';
 import { AiUsageService } from './ai-usage.service.js';
 import { AgentLearningsService } from './agent-learnings.service.js';
 import { VerificationService } from '../verification/verification.service.js';
+import { GlossaryService } from '../glossary/glossary.service.js';
 import type { Principal } from '../auth/principal.js';
 
 /** How much of a cited page the drafter is shown. The workflow executor's cap. */
@@ -60,6 +62,7 @@ export class AgentFindingsService {
     private readonly usage: AiUsageService,
     private readonly verification: VerificationService,
     private readonly learnings: AgentLearningsService,
+    private readonly glossary: GlossaryService,
   ) {}
 
   /**
@@ -274,6 +277,74 @@ export class AgentFindingsService {
        WHERE id = ${runId}::uuid
     `;
     return { documentId, documentTitle: document.title, verification: res?.document.verification ?? 'outdated' };
+  }
+
+  /**
+   * Add the term a glossarist finding proposes to the glossary (#74).
+   *
+   * No model call: the run already drafted the entry, and this is a person
+   * accepting it — possibly edited — attributed to them, as `source: 'ai'`.
+   * The project is the one on the finding, i.e. the cited page's; the caller
+   * cannot file it elsewhere. `GlossaryService.create` is the one writer, so
+   * its name check answers "already defined" with its own 409.
+   *
+   * `propose`'s claim/release pair guards the window, and `termId` written
+   * back afterwards makes a second press a 409 that names the term.
+   */
+  async addTerm(
+    workspaceId: string,
+    runId: string,
+    index: number,
+    principal: Principal,
+    edits: { term?: string; definition?: string; aliases?: string[] } = {},
+  ): Promise<AddFindingTermResponse> {
+    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
+    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
+    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
+    const finding = findings[index];
+    if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+    const proposed = finding.term;
+    if (!proposed) throw new BadRequestException(t('error.ai.findingNoTerm'));
+    if (finding.termId) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.ai.findingTermAdded'),
+        reason: 'already-added',
+        termId: finding.termId,
+      });
+    }
+    if (!(await this.claim(runId, index))) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.ai.findingInFlight'),
+        reason: 'in-flight',
+      });
+    }
+
+    try {
+      const created = await this.glossary.create(
+        {
+          workspaceId,
+          projectId: proposed.projectId,
+          term: edits.term ?? proposed.term,
+          definition: edits.definition ?? proposed.definition,
+          aliases: edits.aliases ?? proposed.aliases,
+          source: 'ai',
+        },
+        principal.userId,
+      );
+      await this.prisma.$executeRaw`
+        UPDATE agent_runs
+           SET findings = jsonb_set(findings, ARRAY[${String(index)}::text, 'termId'], to_jsonb(${created.termId}::text), true)
+         WHERE id = ${runId}::uuid
+      `;
+      return { termId: created.termId, term: created.term, projectId: created.projectId };
+    } catch (error) {
+      await this.release(runId, index).catch(() => {
+        this.logger.warn(`Could not release the add-term claim on run ${runId} finding ${index}`);
+      });
+      throw error;
+    }
   }
 
   /**

@@ -190,14 +190,168 @@ export interface ListSavedFiltersResponse {
  * 409 `details` vocabulary for merge gating (see RevisionConflictResponse for
  * the diverged case): `draft` — MR is flagged draft; `approvals` — fewer
  * non-author approvals than MR_REQUIRED_APPROVALS; `diverged` — target branch
- * advanced past the merge base (fast-forward precondition).
+ * advanced past the merge base (fast-forward precondition); `breaking-api` —
+ * a spec document's source head breaks its API under a `block` policy and no
+ * admin has acknowledged that head (#78); `lint` — the page's style lint is
+ * `block` and the check of the source head is still to come, or found
+ * error-severity violations nobody has resolved, and no admin overrode it
+ * (#74). `checkStatus` and `blockingCount` say which, `checkId` is the check.
  */
 export interface MergeGateConflictDetails {
-  reason: 'draft' | 'approvals' | 'diverged';
+  reason: 'draft' | 'approvals' | 'diverged' | 'breaking-api' | 'lint';
+  breakingCount?: number;
+  checkStatus?: LintGateState['checkStatus'];
+  blockingCount?: number;
+  checkId?: string | null;
   requiredApprovals?: number;
   approvals?: number;
   currentHeadRevisionId?: string | null;
   comparisonUrl?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Merge request checks (#74)
+// ---------------------------------------------------------------------------
+
+/** What a merge request is checked for. Only the style lint, today. */
+export const MR_CHECK_KINDS = ['lint'] as const;
+export type MergeRequestCheckKind = (typeof MR_CHECK_KINDS)[number];
+
+/**
+ * A check's state. `running` is never stored: it is a pending check whose
+ * agent run the worker has claimed, derived on read. `failed` means the head
+ * has violations; `error` that the check could not run, which never blocks
+ * (fail-open).
+ */
+export const MR_CHECK_STATUSES = ['pending', 'running', 'passed', 'failed', 'error', 'skipped'] as const;
+export type MergeRequestCheckStatus = (typeof MR_CHECK_STATUSES)[number];
+
+/** Why a check was skipped or errored — only what the code emits. */
+export const MR_CHECK_REASONS = [
+  /** A newer push replaced the head before the check ran. */
+  'superseded',
+  /** No styleguide applies, or none of its rules is enabled. */
+  'no-styleguide',
+  /**
+   * The page is not open to every member. A run's findings are listed to the
+   * whole workspace, so a page some members cannot read is not linted.
+   */
+  'restricted',
+  /** The merge request's author cannot act any more (disabled, or not a member). */
+  'author-unavailable',
+  /** The author's or the workspace's AI budget is spent. */
+  'budget',
+  /** The agent run failed — the provider, the model or the prompt. */
+  'run-failed',
+  /** The run finished more than a day ago, e.g. across an outage: not published. */
+  'stale',
+] as const;
+export type MergeRequestCheckReason = (typeof MR_CHECK_REASONS)[number];
+
+/**
+ * What a merge request's style lint does (#74): `off` checks nothing and calls
+ * no model, `warn` posts the violations as threads and merges anyway, `block`
+ * refuses the merge while the check is to come or an error-severity violation
+ * is unresolved, unless an admin overrides that head.
+ * The vocabulary of {@link API_BREAKING_CHANGE_POLICIES}.
+ */
+export const LINT_POLICIES = ['off', 'warn', 'block'] as const;
+export type LintPolicy = (typeof LINT_POLICIES)[number];
+
+/**
+ * The lint policy of one scope, as asked for beside as applied. `requested` is
+ * this scope's own row (null inherits), `inherited` what it would inherit, and
+ * `effective` the narrower of the two with the deployment's ceiling
+ * (STYLE_LINT_POLICY) — or `off` while the `linter` agent is disabled.
+ * `source` names what decided it, so the settings page never shows a clamp as
+ * the setting.
+ */
+export interface LintPolicySettings {
+  workspaceId: string;
+  projectId: string | null;
+  requested: LintPolicy | null;
+  inherited: LintPolicy;
+  ceiling: LintPolicy;
+  effective: LintPolicy;
+  source: 'scope' | 'inherited' | 'ceiling' | 'agent-disabled';
+  linterEnabled: boolean;
+}
+
+// PUT /v1/lint-policy
+export interface UpdateLintPolicyRequest {
+  workspaceId: string;
+  /** Absent or null: the workspace's own policy. */
+  projectId?: string | null;
+  /** null goes back to inheriting. */
+  policy: LintPolicy | null;
+}
+
+export interface MergeRequestCheckCounts {
+  error: number;
+  warning: number;
+  suggestion: number;
+}
+
+export interface MergeRequestCheckInfo {
+  checkId: string;
+  mergeRequestId: string;
+  kind: MergeRequestCheckKind;
+  headRevisionId: string;
+  /** Whether this is the check of the source branch's current head. */
+  current: boolean;
+  status: MergeRequestCheckStatus;
+  reason: MergeRequestCheckReason | null;
+  styleguideId: string | null;
+  agentRunId: string | null;
+  /** Violations by severity, once published. */
+  counts: MergeRequestCheckCounts | null;
+  /** Lint threads of this check nobody has resolved yet. */
+  unresolved: number;
+  /** An admin's override of this head's result (#74, phase 3); null when there is none. */
+  override: MergeRequestCheckOverride | null;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+export interface MergeRequestCheckOverride {
+  by: string;
+  at: string;
+  reason: string;
+}
+
+/**
+ * What the lint gate says about the source head now — the one predicate the
+ * merge widget and `merge` share. Fail-open: a check that could not run
+ * (`error`, `skipped`) never holds a merge. `blocked` is for the caller: the
+ * gate is not enforced for the dev principal or a principal-less MCP client,
+ * the approval gate's trust semantics.
+ */
+export interface LintGateState {
+  /** The effective policy of the page; only `block` can hold. */
+  policy: LintPolicy;
+  blocked: boolean;
+  /** The current head's check, if it has one yet. */
+  checkId: string | null;
+  /** `missing`: the head has no check yet — the trigger has not reached it. */
+  checkStatus: MergeRequestCheckStatus | 'missing';
+  /** Unresolved lint threads of the current check citing an error-severity rule. */
+  blockingCount: number;
+  overridden: boolean;
+}
+
+// GET /v1/merge-requests/:id/checks — newest first.
+export interface ListMergeRequestChecksResponse {
+  mergeRequestId: string;
+  /** The policy that applies to this merge request's page. */
+  policy: LintPolicySettings;
+  /** Whether the lint would hold a merge of the current head by the caller. */
+  gate: LintGateState;
+  checks: MergeRequestCheckInfo[];
+}
+
+// POST /v1/merge-requests/:id/checks/:checkId/override — admin; bound to that head.
+export interface OverrideMergeRequestCheckRequest {
+  reason: string;
 }
 
 /**
@@ -338,6 +492,10 @@ export type MergeRequestComment = ReviewComment;
 
 export interface MergeRequestThread extends ReviewThread {
   mergeRequestId: string;
+  /** The lint check that opened it (#74); null on every other thread. */
+  checkId: string | null;
+  /** The styleguide rule a lint thread cites. */
+  ruleId: string | null;
 }
 
 // GET /v1/merge-requests/:id/threads

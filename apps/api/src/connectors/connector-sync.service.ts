@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type Connector, type ConnectorLink, type ConnectorRun, type ConnectorRunItem } from '@prisma/client';
-import type { ConnectorRunPhase } from '@knowledge/contracts';
+import { isApiSpecKind, type ConnectorRunPhase } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
@@ -579,6 +579,12 @@ export class ConnectorSyncService {
             title: link.externalTitle,
             message: t('connector.warning.documentMissing'),
           });
+          totals.skipped += 1;
+          continue;
+        }
+        // A synced API spec (#78) only ever comes in: the repository is its
+        // source of truth, and its stored copy may be a bundle of many files.
+        if (isApiSpecKind(document.kind)) {
           totals.skipped += 1;
           continue;
         }

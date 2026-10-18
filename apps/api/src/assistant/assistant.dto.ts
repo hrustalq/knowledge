@@ -23,6 +23,16 @@ export class AssistantReviewDto {
   markdown!: string;
 }
 
+export class AssistantLintDto extends AssistantReviewDto {
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: "The project the text belongs to: its styleguide applies, else the workspace's (#74)",
+  })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+}
+
 export class AssistantSuggestDto extends AssistantReviewDto {
   @ApiProperty({ example: 'Draft an outline for the missing sections' })
   @IsString()

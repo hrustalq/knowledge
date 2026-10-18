@@ -46,7 +46,9 @@
     "@nestjs/platform-ws": "^12.0.1",
     "@nestjs/swagger": "^12.0.0",
     "@nestjs/websockets": "^12.0.1",
+    "@node-saml/node-saml": "5.1.0",
     "@prisma/client": "^6.16.0",
+    "@scalar/openapi-parser": "0.29.14",
     "@vscode/tree-sitter-wasm": "^0.3.1",
     "bullmq": "^5.56.0",
     "class-transformer": "^0.5.1",
@@ -57,11 +59,14 @@
     "gray-matter": "^4.0.3",
     "ioredis": "^6.0.0",
     "js-yaml": "^5.4.1",
+    "jose": "6.2.10",
+    "ldapts": "9.2.0",
     "mammoth": "^1.12.2",
     "marked": "^18.0.11",
     "nestjs-i18n": "^10.8.5",
     "nodemailer": "^10.0.16",
     "openai": "^7.9.0",
+    "openid-client": "6.8.8",
     "pino": "^10.3.1",
     "prisma": "^6.16.0",
     "reflect-metadata": "^0.2.2",
@@ -91,6 +96,7 @@
     "supertest": "^7.0.0",
     "typescript": "^6.0.2",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.2",
+    "xml-crypto": "6.1.2"
   }
 }

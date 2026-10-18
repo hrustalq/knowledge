@@ -9,7 +9,12 @@
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
+import { toast } from 'vue-sonner'
 import { Minus, Plus, Scan } from 'lucide-vue-next'
+import type { SearchApiOperationsResponse } from '@knowledge/contracts'
+import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { operationHref } from '@/components/api-reference/use-operation'
 import KnowledgeGraph from './KnowledgeGraph.vue'
 import GraphControls from './GraphControls.vue'
 import { DEFAULT_OPTIONS, type GraphEdgeInput, type GraphNodeInput, type GraphOptions } from './graph-model'
@@ -31,6 +36,23 @@ const props = withDefaults(
 const emit = defineEmits<{ open: [id: string] }>()
 
 const { t } = useI18n()
+const router = useRouter()
+
+/**
+ * An operation node opens its card in the spec that defines it (#78). Both
+ * graph surfaces get this from here, so neither has to know that an entity can
+ * have a page of its own.
+ */
+async function openOperation(key: string) {
+  const params = new URLSearchParams({ workspaceId: getWorkspaceId(), entityKey: key, limit: '1' })
+  try {
+    const { operations } = await apiFetch<SearchApiOperationsResponse>(`/v1/api-operations?${params}`)
+    if (operations[0]) await router.push(operationHref(operations[0]))
+    else toast(t('apiLink.gone'), { description: key })
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : String(e))
+  }
+}
 
 function restore(): GraphOptions {
   if (!props.storageKey || typeof localStorage === 'undefined') return { ...DEFAULT_OPTIONS }
@@ -75,6 +97,7 @@ const summary = computed(() =>
       :query="query"
       :inset-left="264"
       @open="emit('open', $event)"
+      @open-operation="openOperation"
       @stats="stats = $event"
     />
 

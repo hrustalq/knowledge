@@ -6,6 +6,7 @@ import { SwaggerModule } from '@nestjs/swagger';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module.js';
 import { ApiExceptionFilter } from './common/api-exception.filter.js';
+import { SCIM_CONTENT_TYPE } from './common/scim-error-body.js';
 import { validationExceptionFactory } from './common/validation.js';
 import { createOpenApiDocument } from './config/swagger.js';
 import { createRootLogger, envLogLevel } from '@knowledge/observability';
@@ -48,7 +49,8 @@ async function bootstrap() {
   // The ?? is unreachable — env.ts defaults it — but ConfigService cannot prove
   // that to the compiler.
   const bodyLimit = app.get(ConfigService).get<string>('HTTP_BODY_LIMIT') ?? '2mb';
-  app.useBodyParser('json', { limit: bodyLimit });
+  // SCIM clients (#75) send `application/scim+json`, which is JSON by another name.
+  app.useBodyParser('json', { limit: bodyLimit, type: ['application/json', SCIM_CONTENT_TYPE] });
   app.useBodyParser('urlencoded', { limit: bodyLimit, extended: true });
   // Live tracked-entity updates: plain `ws` adapter for the /v1/events/ws gateway.
   app.useWebSocketAdapter(new WsAdapter(app));

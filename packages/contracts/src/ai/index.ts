@@ -9,6 +9,8 @@ import type {
 } from '@knowledge/contracts/core';
 import type { RelationInput } from '@knowledge/contracts/documents';
 import type { AiActionId } from '@knowledge/contracts/content';
+import type { ApiDriftSpec } from '@knowledge/contracts/api';
+import type { ReviewThreadAnchor } from '@knowledge/contracts/reviews';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
 // sidebar materializes from each assistant message's toolCalls trace rather
@@ -699,6 +701,13 @@ export interface CheckSourcePolicyResponse {
 
 export type AiProvider = 'none' | 'openai-compatible' | 'deepseek' | 'gen-api';
 
+export interface QualityAuditSettings {
+  days: number;
+  source: 'db' | 'env';
+  /** QUALITY_AUDIT_DAYS — what a cleared override goes back to. */
+  defaultDays: number;
+}
+
 // GET /v1/ai/settings?workspaceId= — the credential itself is never returned.
 export interface AiSettingsResponse {
   workspaceId: string;
@@ -725,6 +734,11 @@ export interface AiSettingsResponse {
   sources: AiSettingsSourceMap;
   /** How much of the open web the assistant may reach (docs/features/25). */
   webAccess: WebAccessSettings;
+  /**
+   * How often the auditor re-scores an unchanged page (#74). `days` applies;
+   * `source` says whether it is this workspace's override or QUALITY_AUDIT_DAYS.
+   */
+  qualityAudit: QualityAuditSettings;
   /** Whether the page AI actions menu may open external AI vendors (issue #68). */
   externalAiActions: ExternalAiActionsSettings;
   /** Agent-session memory: whether coding agents may propose captures, and how many (issue #73). */
@@ -874,6 +888,90 @@ export interface ListAiSkillsResponse {
   skills: AiSkillSummary[];
 }
 
+// ---- Styleguides (#74) -------------------------------------------------------
+
+/**
+ * What an `ai_skills` row is. A `skill` joins a turn by trigger word or pick; a
+ * `styleguide` never does — the linter injects it explicitly, and it is listed
+ * under its own routes, never in `GET /v1/ai/skills`.
+ */
+export const AI_SKILL_KINDS = ['skill', 'styleguide'] as const;
+export type AiSkillKind = (typeof AI_SKILL_KINDS)[number];
+
+/** A rule's severity is the rule's, never the model's: a violation inherits it. */
+export const STYLE_RULE_SEVERITIES = ['error', 'warning', 'suggestion'] as const;
+export type StyleRuleSeverity = (typeof STYLE_RULE_SEVERITIES)[number];
+
+/** One rule's text, and each side of its example. */
+export const STYLE_RULE_TEXT_MAX = 500;
+/**
+ * A rule id: a stable slug, so a finding, a thread and the dashboard can name
+ * the rule a violation breaks after its text is reworded.
+ */
+export const STYLE_RULE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+export interface StyleRule {
+  id: string;
+  /** The rule in plain words, as the team agreed it. Trusted: only admins write it. */
+  text: string;
+  severity: StyleRuleSeverity;
+  enabled: boolean;
+  example?: { bad: string; good: string };
+}
+
+export interface StyleguideSummary {
+  id: string;
+  workspaceId: string;
+  /** Null = the workspace's styleguide; set = it replaces that one for this project. */
+  projectId: string | null;
+  name: string;
+  description: string;
+  rules: StyleRule[];
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * GET /v1/ai/styleguides?workspaceId=&projectId=
+ *
+ * `styleguide` is the one that applies to a page of that project: the project's
+ * own when it has one, else the workspace's. `scope` says which it was, so the
+ * editor can show "inherited" rather than pretend the project wrote it.
+ */
+export interface GetStyleguideResponse {
+  styleguide: StyleguideSummary | null;
+  scope: 'project' | 'workspace' | null;
+  /** STYLEGUIDE_MAX_RULES — the form's limit, and the PUT's. */
+  maxRules: number;
+}
+
+/** One rule broken by the text, grounded in a verbatim quote of it. */
+export interface LintViolation {
+  ruleId: string;
+  /** Copied from the rule, whatever the model said. */
+  severity: StyleRuleSeverity;
+  /** Found verbatim in the linted text — an ungrounded quote is dropped, not shown. */
+  quote: string;
+  message: string;
+  suggestion?: string;
+}
+
+// POST /v1/assistant/lint
+export interface AssistantLintResponse {
+  /** False when no model is configured for the linter, or the linter agent is disabled. */
+  enabled: boolean;
+  /** The styleguide the text was checked against; null when none applies (no model call then). */
+  styleguide: { id: string; name: string; scope: 'project' | 'workspace' } | null;
+  violations: LintViolation[];
+  /**
+   * Violations the model reported but the harness refused: an unknown or
+   * disabled rule id, or a quote not found in the text. Counted so a model that
+   * invents is visible as one, never shown as a finding.
+   */
+  dropped: number;
+}
+
 // ---- Repo guidance import (#70) ---------------------------------------------
 
 /**
@@ -1013,6 +1111,10 @@ export type AiUsageOperation =
   | 'chat-capture'
   /** Drafting a component page from its code, for "Document this component" (#236). */
   | 'component-draft'
+  /** Checking text against the styleguide (#74): the editor's check, the MCP tool, a merge request's lint. */
+  | 'lint'
+  /** Scoring a page's clarity, completeness and style for the quality auditor (#74). */
+  | 'audit'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
@@ -1165,6 +1267,10 @@ export const BUILT_IN_AGENT_KEYS = [
   'surveyor',
   /** Summarises what changed in the workspace since its last digest (#70). */
   'digest',
+  /** Checks text against the workspace's styleguide rules (#74). */
+  'linter',
+  /** Scores every page's quality and reports the worst ones (#74). */
+  'auditor',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -1204,6 +1310,12 @@ export interface AgentRunInput {
    * check against the page, the other a change to check the page against.
    */
   issueId?: string;
+  /**
+   * The spec document an on-demand sentinel run compares against its
+   * repository's routes (#78, phase 8), with `connectorId` naming the
+   * repository. No pull request: the default branch is checked as it stands.
+   */
+  apiSpecDocumentId?: string;
   /**
    * How far back a surveyor run reads answer feedback (docs/features/38,
    * phase 4). Absent, the worker uses `COVERAGE_WINDOW_DAYS`.
@@ -1247,6 +1359,20 @@ export interface AgentRunInput {
    * as a merge request, as the run's owner, and stamps `publishedAt`.
    */
   component?: AgentRunComponent;
+  /**
+   * A linter run (#74, phase 2): the merge request, the source head it lints
+   * and the `merge_request_checks` row it answers. Set only by
+   * `LintTriggerService`, which also settles the head — the worker lints that
+   * revision even if the branch has moved since.
+   */
+  lint?: AgentRunLint;
+}
+
+/** What a linter run checks (#74). */
+export interface AgentRunLint {
+  mergeRequestId: string;
+  headRevisionId: string;
+  checkId: string;
 }
 
 /** What a "Document this component" run documents (#236). */
@@ -1743,6 +1869,12 @@ export const AGENT_RUN_TRIGGERS = [
    * `'webhook'` is by `DriftTriggerService`.
    */
   'report',
+  /**
+   * A merge request's source head needed a style lint (#74, phase 2). Emitted
+   * by exactly one service, `LintTriggerService`, for exactly one agent, the
+   * `linter`, and never from the event bus.
+   */
+  'merge-request',
 ] as const;
 export type AgentRunTrigger = (typeof AGENT_RUN_TRIGGERS)[number];
 
@@ -2007,6 +2139,10 @@ export const AGENT_FINDING_KINDS = [
   'gap',
   /** A relation the page should declare but does not (docs/features/28). */
   'relation',
+  /** A styleguide rule the text breaks (#74). Carries `ruleId` and `anchor`. */
+  'style',
+  /** A page the quality auditor scored below the threshold, or whose links are broken (#74). */
+  'quality',
   'other',
 ] as const;
 export type AgentFindingKind = (typeof AGENT_FINDING_KINDS)[number];
@@ -2103,6 +2239,39 @@ export interface AgentFinding {
    * the finding has a draft.
    */
   componentPaths?: ComponentPathFix[];
+  /**
+   * The spec ↔ code comparison this finding reports, for the spec document it
+   * cites (#78, phase 8). Set only by the sentinel, from static analysis,
+   * never by a model; such a finding carries no draft — a spec page is the
+   * repository's file, corrected there and synced back.
+   */
+  apiDrift?: ApiDriftSpec;
+  /**
+   * The styleguide rule a `style` finding breaks (#74). Its severity is the
+   * rule's, mapped by the linter, never the model's.
+   */
+  ruleId?: string;
+  /** The passage a `style` finding quotes, as a review-thread anchor on the revision it read. */
+  anchor?: ReviewThreadAnchor;
+  /** A rewrite the linter offered for the quoted passage. Applying it is a person's act. */
+  suggestion?: string;
+  /**
+   * The glossary entry a glossarist finding proposes (#74), as `suggest`
+   * returned it, so *Add to glossary* needs no second model call. `projectId`
+   * is the cited page's project — where the term lands, never the caller's
+   * choice.
+   */
+  term?: AgentFindingTerm;
+  /** The glossary term a person created from this finding. Set once; the button becomes a link. */
+  termId?: string | null;
+}
+
+/** A proposed glossary entry carried on a glossarist finding (#74). */
+export interface AgentFindingTerm {
+  term: string;
+  aliases: string[];
+  definition: string;
+  projectId: string;
 }
 
 /** One declared path a change removed or moved (#236). */
@@ -2144,6 +2313,18 @@ export interface DriftAffectedUsages {
  */
 export interface AgentRunDetails {
   affectedUsages?: DriftAffectedUsages;
+  /**
+   * Every spec document the check compared against the code (#78, phase 8),
+   * with the spec's own diff when the change edited it — what the comment's
+   * API section reads, including specs with nothing wrong.
+   */
+  apiSpecs?: ApiDriftSpec[];
+  /**
+   * The head revisions the glossarist read (#74). The next run skips a page
+   * whose head is in any earlier run's list, so the glossarist walks the whole
+   * workspace over time instead of rereading the newest pages.
+   */
+  glossaryScanned?: string[];
 }
 
 /**
@@ -2194,6 +2375,13 @@ export interface FlagFindingOutdatedResponse {
   documentTitle: string;
   /** The page's derived state after the flag — `outdated`, unless a report outranks it. */
   verification: SourceVerificationState;
+}
+
+// POST /v1/ai/agents/runs/:id/findings/:index/add-term
+export interface AddFindingTermResponse {
+  termId: string;
+  term: string;
+  projectId: string;
 }
 
 // POST /v1/ai/agents/runs/:id/findings/:index/create-page

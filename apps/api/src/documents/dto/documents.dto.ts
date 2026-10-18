@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  API_DOCUMENT_KINDS,
   AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
+  type ApiDocumentKind,
   type AuthorableRelationType,
   type DocumentCategory,
 } from '@knowledge/contracts';
@@ -156,6 +158,17 @@ export class CreateDocumentDto {
   @IsOptional()
   @IsUUID()
   parentId?: string;
+
+  @ApiPropertyOptional({
+    enum: API_DOCUMENT_KINDS,
+    description:
+      'What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and ' +
+      '`asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is ' +
+      'created (422 with `details.issues`), and default to the `reference` category.',
+  })
+  @IsOptional()
+  @IsIn(API_DOCUMENT_KINDS as unknown as string[])
+  kind?: ApiDocumentKind;
 
   @ApiPropertyOptional({
     type: DocumentTemplateDto,

@@ -45,8 +45,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Workspace audit trail — operator graph queries (admin only, Phase 5) */
+        /** Workspace audit trail, newest first (admin) — graph queries, ACL changes, the workspace's sign-in config */
         get: operations["AuthController_auditLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Platform audit trail incl. sign-ins and other workspace-less events (platform admin) */
+        get: operations["AuthController_platformAuditLogs"];
         put?: never;
         post?: never;
         delete?: never;
@@ -81,7 +98,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Email + password login; returns a ks_ session token */
+        /** Email + password login; returns a ks_ session token. 429 past 30/min per IP or 10/min per address */
         post: operations["AuthFlowController_login"];
         delete?: never;
         options?: never;
@@ -263,6 +280,319 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's live login sessions — method, IP, user agent, last seen; never the tokens */
+        get: operations["MeController_listSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke one of the caller's sessions; its token gets 401 from the next request */
+        delete: operations["MeController_revokeSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sso/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Login buttons: enabled providers of the workspace plus every platform-wide one. 404 when SSO is off */
+        get: operations["SsoController_providers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sso/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Email-first sign-in: the providers that assert this address's domain (never whether an account exists) */
+        post: operations["SsoController_discover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sso/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Trade the single-use code from /auth/sso/complete for a ks_ session token */
+        post: operations["SsoController_exchange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/ldap/{providerId}/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign in with a directory username and password (AUTH_LDAP_ENABLED). Wrong username and wrong password answer the same 401 */
+        post: operations["SsoController_ldapLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/identity-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's identity providers. Client secrets are never returned (hasSecret only) */
+        get: operations["IdentityProvidersController_list"];
+        put?: never;
+        /** Add an OIDC provider (starts disabled). 400 secretKeyMissing without SETTINGS_ENCRYPTION_KEY */
+        post: operations["IdentityProvidersController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/identity-providers/{providerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a provider, its identity links, and the sessions it opened */
+        delete: operations["IdentityProvidersController_remove"];
+        options?: never;
+        head?: never;
+        /** Change a provider. clientSecret: a value sets it, '' clears it, absent keeps it */
+        patch: operations["IdentityProvidersController_update"];
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/identity-providers/{providerId}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fetch the provider's discovery document and report what it names */
+        post: operations["IdentityProvidersController_test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/group-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's group → role mappings, and the providers a mapping may name */
+        get: operations["GroupMappingsController_list"];
+        put?: never;
+        /** Map a provider or SCIM group to a role. The same group again replaces its role. A provider mapping applies at next sign-in, a SCIM one at once */
+        post: operations["GroupMappingsController_upsert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/group-mappings/{mappingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a mapping. A provider mapping's memberships stay until the next sign-in re-syncs them; a SCIM one re-syncs at once */
+        delete: operations["GroupMappingsController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/auth-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's sign-in policy: what was asked, what applies, and the instance ceilings */
+        get: operations["AuthPolicyController_get"];
+        /** Replace the sign-in policy. 409 policyLocksYouOut when the caller would fail it; 400 without a provider to enforce */
+        put: operations["AuthPolicyController_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/sso-domains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's claimed domains, with the DNS record each one is proven by */
+        get: operations["SsoDomainsController_list"];
+        put?: never;
+        /** Claim a domain. 409 domainTaken when another workspace holds it */
+        post: operations["SsoDomainsController_claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/sso-domains/{domain}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check the TXT record now. A platform admin may pass manual: true to verify without DNS */
+        post: operations["SsoDomainsController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/sso-domains/{domain}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Give up a domain. Its addresses may use passwords again at once */
+        delete: operations["SsoDomainsController_remove"];
+        options?: never;
+        head?: never;
+        /** Enforce SSO on a verified domain, or change where its people sign in */
+        patch: operations["SsoDomainsController_update"];
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/scim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's SCIM base URL, live tokens, default role and what has been provisioned */
+        get: operations["ScimTokensController_view"];
+        /** Set the role a provisioned user gets without a mapped group. Re-syncs provisioned members at once */
+        put: operations["ScimTokensController_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/scim-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mint a kscim_ bearer token for an IdP. The secret is in this response only */
+        post: operations["ScimTokensController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/scim-tokens/{tokenId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a SCIM token. The IdP gets 401 from its next request */
+        delete: operations["ScimTokensController_revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/users": {
         parameters: {
             query?: never;
@@ -296,6 +626,40 @@ export interface paths {
         head?: never;
         /** Update a user: rename, (de)admin, disable/enable, password override */
         patch: operations["UsersController_update"];
+        trace?: never;
+    };
+    "/v1/users/{id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A user's live login sessions (platform admin, #75) */
+        get: operations["UsersController_listSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/{id}/revoke-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke every live session of a user (platform admin); API keys are untouched */
+        post: operations["UsersController_revokeSessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/workspaces": {
@@ -1242,6 +1606,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/merge-requests/{id}/api-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a spec merge request does to its API: the classified diff from the merge base, the pages linking each changed operation, the workspace policy and whether a merge would be refused. applicable=false for a page */
+        get: operations["MergeRequestsController_apiChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/merge-requests/{id}/breaking-ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Acknowledge the spec's breaking changes at the current source head, which lets a merge through a block policy. A later push needs a new acknowledgement */
+        post: operations["MergeRequestsController_acknowledgeBreaking"];
+        /** Withdraw the acknowledgement of breaking API changes */
+        delete: operations["MergeRequestsController_withdrawBreakingAck"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/merge-requests/{id}/checks/{checkId}/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Override the style check of the current source head, which lets it through a block policy. A reason is required; it is audited and shown in the activity feed. A later push needs its own pass or override */
+        post: operations["MergeRequestsController_overrideLintCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/merge-requests/{id}/approve": {
         parameters: {
             query?: never;
@@ -1268,7 +1684,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged when gated, + comparison link when the target diverged */
+        /** Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged|breaking-api when gated, + comparison link when the target diverged */
         post: operations["MergeRequestsController_merge"];
         delete?: never;
         options?: never;
@@ -1391,6 +1807,109 @@ export interface paths {
         get: operations["ActivityController_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List workspace entities with relation degree */
+        get: operations["EntitiesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/entities/aliases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A workspace's canonical entity-key aliases (ru ↔ en) */
+        get: operations["EntitiesController_listAliases"];
+        put?: never;
+        /** Declare one entity key to mean another, folding the edges that already exist */
+        post: operations["EntitiesController_createAlias"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/entities/aliases/{alias}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Retire an alias. Edges already folded onto the canonical key stay there. */
+        delete: operations["EntitiesController_removeAlias"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/entities/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Shortest relation path between two entities (knowledge.trace_relation) */
+        get: operations["EntitiesController_trace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/entities/{key}/neighbors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Entity neighborhood: edges + entities within N hops (knowledge.find_relations) */
+        get: operations["EntitiesController_neighbors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/entities/{key}/impact-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transitive impact of changing an entity (knowledge.impact_analysis) */
+        post: operations["EntitiesController_impact"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1548,109 +2067,6 @@ export interface paths {
         put?: never;
         /** Search indexed chunks: semantic, keyword (BM25) or hybrid (RRF fusion + graph expansion) */
         post: operations["SearchController_run"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/entities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List workspace entities with relation degree */
-        get: operations["EntitiesController_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/entities/aliases": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** A workspace's canonical entity-key aliases (ru ↔ en) */
-        get: operations["EntitiesController_listAliases"];
-        put?: never;
-        /** Declare one entity key to mean another, folding the edges that already exist */
-        post: operations["EntitiesController_createAlias"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/entities/aliases/{alias}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Retire an alias. Edges already folded onto the canonical key stay there. */
-        delete: operations["EntitiesController_removeAlias"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/entities/trace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Shortest relation path between two entities (knowledge.trace_relation) */
-        get: operations["EntitiesController_trace"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/entities/{key}/neighbors": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Entity neighborhood: edges + entities within N hops (knowledge.find_relations) */
-        get: operations["EntitiesController_neighbors"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/entities/{key}/impact-analysis": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Transitive impact of changing an entity (knowledge.impact_analysis) */
-        post: operations["EntitiesController_impact"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1840,6 +2256,23 @@ export interface paths {
         put?: never;
         /** LLM review of a draft (docs/features/09); enabled=false when the provider is none */
         post: operations["AssistantController_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/assistant/lint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check text against the styleguide that applies to its project (#74). Each violation cites a rule id of that styleguide and quotes the text verbatim; anything else the model reports is dropped and counted. */
+        post: operations["AssistantController_lint"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2144,6 +2577,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/styleguides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The styleguide that applies to pages of a project — its own, else the workspace one — and which it was. Viewer: members read the rules they are held to. */
+        get: operations["AiController_getStyleguide"];
+        /** Create or replace the styleguide of the workspace, or of one project */
+        put: operations["AiController_upsertStyleguide"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/styleguides/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a styleguide; a project's falls back to the workspace one */
+        delete: operations["AiController_deleteStyleguide"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai/agents": {
         parameters: {
             query?: never;
@@ -2396,6 +2864,23 @@ export interface paths {
         put?: never;
         /** Declare the page a stale finding cites outdated, as the caller */
         post: operations["AiController_markFindingOutdated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/agents/runs/{id}/findings/{index}/add-term": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add the glossary term a finding proposes, optionally edited, as the caller */
+        post: operations["AiController_addFindingTerm"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3146,6 +3631,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/lint-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The style lint policy of the workspace or of one project: its own setting, what it inherits, the deployment's ceiling and what applies */
+        get: operations["LintController_policy"];
+        /** Set the style lint policy of the workspace or of one project; null inherits */
+        put: operations["LintController_setPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/merge-requests/{id}/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A merge request's checks, newest first, with the lint policy of its page and whether it holds a merge by the caller */
+        get: operations["LintController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/merge-requests/{id}/checks/lint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lint the source head again. 409 while a check of that head is still waiting or running; 400 when lint is off */
+        post: operations["LintController_relint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/glossary": {
         parameters: {
             query?: never;
@@ -3681,6 +4218,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/api-specs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Spec documents in the workspace (or one project) and how many operations each head defines */
+        get: operations["ApiSpecsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One revision of a spec, parsed: OpenAPI upgraded to 3.1, AsyncAPI as written, internal $refs kept. The default-branch head unless revisionId is given; 400 for a page or a draft revision */
+        get: operations["ApiSpecsController_spec"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The operations and channels of one revision of a spec, in spec order. Empty while that revision is still indexing — revisionStatus says which */
+        get: operations["ApiSpecsController_operations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The classified diff between two revisions of a spec: every change by rule, breaking first. Operations match by method and path, so reordering parameters or renaming a path parameter is no change */
+        get: operations["ApiSpecsController_diff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One operation's code samples (curl, JavaScript, Python, Go): the spec's x-codeSamples where it has them, generated elsewhere, with environment-variable placeholders for credentials */
+        get: operations["ApiSpecsController_samples"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/try": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send one request to a server this revision names, for an operation it defines — the try-it proxy. 403 while the workspace's mode is off; redirects are returned, not followed; Set-Cookie is dropped */
+        post: operations["ApiSpecsController_try"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/drift-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Compare an OpenAPI spec with the routes its repository declares (NestJS, Express/Fastify, FastAPI, Go), on the default branch. Queues a sentinel run whose findings are the disagreements; a check already waiting is returned. 400 when no connected repository syncs the spec */
+        post: operations["ApiSpecsController_driftCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search API operations by method + path, summary, operationId or entity key */
+        get: operations["ApiOperationsController_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/api-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's API reference settings: what is asked for, the deployment ceiling, what applies */
+        get: operations["ApiSettingsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Override the API reference settings; null on a key inherits the deployment value */
+        patch: operations["ApiSettingsController_update"];
+        trace?: never;
+    };
     "/v1/documents/{id}/markdown": {
         parameters: {
             query?: never;
@@ -4057,6 +4748,57 @@ export interface paths {
         head?: never;
         /** Override part of the policy for this workspace; null on a key goes back to the env default */
         patch: operations["KnowledgeHealthController_updateSettings"];
+        trace?: never;
+    };
+    "/v1/quality/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quality of the workspace or one project from each page's newest score: distribution, dimension means, history per audit day, worst pages and most-violated styleguide rules */
+        get: operations["QualityController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/quality/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Scored pages with their newest score, worst first unless sorted otherwise */
+        get: operations["QualityController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page's newest quality score with its issues, near-duplicate peers the caller may open, and its history. score is null until the auditor has run */
+        get: operations["QualityController_forDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/documents/{id}/shares": {
@@ -5241,6 +5983,204 @@ export interface components {
             /** @description Days until the key stops working (1–365); omit for no expiry. */
             expiresInDays?: number;
         };
+        SsoDiscoverDto: {
+            /** @example you@corp.example */
+            email: string;
+        };
+        SsoExchangeDto: {
+            /** @description The single-use code from the /auth/sso/complete fragment */
+            code: string;
+        };
+        LdapLoginDto: {
+            /** @description What the directory knows the person by: uid, sAMAccountName, userPrincipalName or email, per the provider filter */
+            username: string;
+            password: string;
+        };
+        CreateIdentityProviderDto: {
+            /**
+             * @description IdP quirks to apply. Defaults to generic.
+             * @enum {string}
+             */
+            preset?: "keycloak" | "entra" | "google" | "yandex" | "generic";
+            /** @description Offered for sign-in. New providers start disabled. */
+            enabled?: boolean;
+            /** @description Shown as a button on /login (otherwise reached by email discovery only) */
+            showOnLogin?: boolean;
+            /** @description Offered on every login page of the instance. Platform admins only. */
+            platformWide?: boolean;
+            /** @description OIDC issuer identifier. Ignored by the google and yandex presets, which fix it. */
+            issuer?: string;
+            /** @description OIDC client id */
+            clientId?: string;
+            /** @description Scopes beyond openid; empty uses the preset defaults */
+            scopes?: string[];
+            /** @description Write-only. A value sets it, '' clears it, absent keeps it. */
+            clientSecret?: string;
+            /** @description SAML: the IdP's entity ID, which the assertion's Issuer must equal */
+            idpEntityId?: string;
+            /** @description SAML: the IdP's single sign-on URL (HTTP-Redirect binding) */
+            ssoUrl?: string;
+            /** @description SAML: the IdP's signing certificate(s), PEM; two during a rollover */
+            idpCert?: string;
+            /** @description SAML: accept responses no AuthnRequest of ours asked for (the IdP's app portal). Defaults to false. */
+            allowIdpInitiated?: boolean;
+            /** @description SAML / LDAP: attribute holding the email; null tries the usual names (SAML) or reads mail (LDAP) */
+            emailAttribute?: string | null;
+            /** @description SAML / LDAP: attribute holding the display name; null tries the usual names */
+            nameAttribute?: string | null;
+            /** @description LDAP: ldaps://host[:port], or ldap://host[:port] with startTls */
+            ldapUrl?: string;
+            /** @description LDAP: upgrade an ldap:// connection with StartTLS. Ignored for ldaps:// */
+            startTls?: boolean;
+            /** @description LDAP: the service account that searches; null searches anonymously */
+            bindDn?: string | null;
+            /** @description Write-only. LDAP: the service account's password. A value sets it, '' clears it, absent keeps it. */
+            bindPassword?: string;
+            /** @description LDAP: where the person search starts, e.g. ou=people,dc=corp,dc=example */
+            baseDn?: string;
+            /** @description LDAP: search filter with {username} where the typed value goes (escaped); null uses the default */
+            userFilter?: string | null;
+            /** @description Create an account on first sign-in (needs the address in allowedDomains) */
+            jitEnabled?: boolean;
+            /**
+             * @description Membership a JIT sign-in gets; null = none
+             * @enum {string|null}
+             */
+            defaultRole?: "guest" | "viewer" | "editor" | "admin" | null;
+            /** @description Email domains this provider may assert, e.g. corp.example */
+            allowedDomains?: string[];
+            /** @description OIDC claim (null uses the preset default), SAML attribute (null = no groups) or LDAP attribute (null = memberOf) holding group names */
+            groupsClaim?: string | null;
+            /** @enum {string} */
+            groupSyncMode?: "additive" | "authoritative";
+            /** @description Session lifetime for this provider; null = AUTH_SESSION_TTL_HOURS */
+            sessionTtlHours?: number | null;
+            /**
+             * @description oidc, saml, or ldap (only under AUTH_LDAP_ENABLED)
+             * @enum {string}
+             */
+            kind: "oidc" | "saml" | "ldap";
+            /** @description The login button label */
+            name: string;
+        };
+        UpdateIdentityProviderDto: {
+            /**
+             * @description IdP quirks to apply. Defaults to generic.
+             * @enum {string}
+             */
+            preset?: "keycloak" | "entra" | "google" | "yandex" | "generic";
+            /** @description Offered for sign-in. New providers start disabled. */
+            enabled?: boolean;
+            /** @description Shown as a button on /login (otherwise reached by email discovery only) */
+            showOnLogin?: boolean;
+            /** @description Offered on every login page of the instance. Platform admins only. */
+            platformWide?: boolean;
+            /** @description OIDC issuer identifier. Ignored by the google and yandex presets, which fix it. */
+            issuer?: string;
+            /** @description OIDC client id */
+            clientId?: string;
+            /** @description Scopes beyond openid; empty uses the preset defaults */
+            scopes?: string[];
+            /** @description Write-only. A value sets it, '' clears it, absent keeps it. */
+            clientSecret?: string;
+            /** @description SAML: the IdP's entity ID, which the assertion's Issuer must equal */
+            idpEntityId?: string;
+            /** @description SAML: the IdP's single sign-on URL (HTTP-Redirect binding) */
+            ssoUrl?: string;
+            /** @description SAML: the IdP's signing certificate(s), PEM; two during a rollover */
+            idpCert?: string;
+            /** @description SAML: accept responses no AuthnRequest of ours asked for (the IdP's app portal). Defaults to false. */
+            allowIdpInitiated?: boolean;
+            /** @description SAML / LDAP: attribute holding the email; null tries the usual names (SAML) or reads mail (LDAP) */
+            emailAttribute?: string | null;
+            /** @description SAML / LDAP: attribute holding the display name; null tries the usual names */
+            nameAttribute?: string | null;
+            /** @description LDAP: ldaps://host[:port], or ldap://host[:port] with startTls */
+            ldapUrl?: string;
+            /** @description LDAP: upgrade an ldap:// connection with StartTLS. Ignored for ldaps:// */
+            startTls?: boolean;
+            /** @description LDAP: the service account that searches; null searches anonymously */
+            bindDn?: string | null;
+            /** @description Write-only. LDAP: the service account's password. A value sets it, '' clears it, absent keeps it. */
+            bindPassword?: string;
+            /** @description LDAP: where the person search starts, e.g. ou=people,dc=corp,dc=example */
+            baseDn?: string;
+            /** @description LDAP: search filter with {username} where the typed value goes (escaped); null uses the default */
+            userFilter?: string | null;
+            /** @description Create an account on first sign-in (needs the address in allowedDomains) */
+            jitEnabled?: boolean;
+            /**
+             * @description Membership a JIT sign-in gets; null = none
+             * @enum {string|null}
+             */
+            defaultRole?: "guest" | "viewer" | "editor" | "admin" | null;
+            /** @description Email domains this provider may assert, e.g. corp.example */
+            allowedDomains?: string[];
+            /** @description OIDC claim (null uses the preset default), SAML attribute (null = no groups) or LDAP attribute (null = memberOf) holding group names */
+            groupsClaim?: string | null;
+            /** @enum {string} */
+            groupSyncMode?: "additive" | "authoritative";
+            /** @description Session lifetime for this provider; null = AUTH_SESSION_TTL_HOURS */
+            sessionTtlHours?: number | null;
+            /** @description The login button label */
+            name?: string;
+        };
+        UpsertGroupMappingDto: {
+            /**
+             * Format: uuid
+             * @description One of the workspace's identity providers, or a platform-wide one. Null or absent maps a SCIM group.
+             */
+            providerId?: string | null;
+            /**
+             * @description The group exactly as the provider's groups claim carries it; for a SCIM mapping, the SCIM group's id
+             * @example knowledge-editors
+             */
+            externalGroup: string;
+            /** @enum {string} */
+            role: "guest" | "viewer" | "editor" | "admin";
+            /** @description Also grant the trusted-operator flag (POST /v1/graph/query). Defaults to false. */
+            trustedOperator?: boolean;
+        };
+        PutAuthPolicyDto: {
+            /** @description Sessions must come from the workspace's identity providers. Null is off. */
+            ssoEnforced?: boolean | null;
+            /** @description Under enforced SSO, kn_ API keys still open the workspace. Null is yes. */
+            allowApiKeys?: boolean | null;
+            /** @description Platform admins may still sign in with a password on the workspace's enforced domains. Null is no. */
+            allowPasswordForAdmins?: boolean | null;
+            /** @description Sessions older than this must sign in again for this workspace. Applies only under AUTH_SESSION_TTL_HOURS. Null is no cap. */
+            sessionMaxAgeHours?: number | null;
+        };
+        ClaimSsoDomainDto: {
+            /**
+             * @description An email domain the workspace owns; proven by a DNS TXT record
+             * @example corp.example
+             */
+            domain: string;
+            /** @description Where people on the domain are sent to sign in: one of the workspace's providers or a platform-wide one */
+            providerId?: string;
+        };
+        VerifySsoDomainDto: {
+            /** @description Mark it verified without DNS (air-gapped installs). Platform admins only; audited. */
+            manual?: boolean;
+        };
+        UpdateSsoDomainDto: {
+            /** @description Refuse passwords for addresses on the domain. Needs a verified domain. */
+            enforced?: boolean;
+            /** @description The provider people on the domain are sent to; null = any of the workspace's */
+            providerId?: string | null;
+        };
+        PutScimSettingsDto: {
+            /**
+             * @description Role a provisioned user gets when no mapped SCIM group says more. 'none' grants nothing without a group.
+             * @enum {string}
+             */
+            defaultRole: "none" | "guest" | "viewer" | "editor" | "admin";
+        };
+        CreateScimTokenDto: {
+            /** @description What the token is for — "Entra ID provisioning". Shown in the token list. */
+            name: string;
+        };
         CreateUserDto: {
             /** @example teammate@example.com */
             email: string;
@@ -5281,6 +6221,8 @@ export interface components {
             /** @enum {string} */
             role?: "guest" | "viewer" | "editor" | "admin";
             trustedOperator?: boolean;
+            /** @description Take an IdP-managed row (source jit/group/scim) over as manual. Without it such a row answers 409 managedByIdp. */
+            convertToManual?: boolean;
         };
         CreateUserGroupDto: {
             workspaceId: string;
@@ -5402,6 +6344,11 @@ export interface components {
              * @description Feature 08 nesting: create under this document
              */
             parentId?: string;
+            /**
+             * @description What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and `asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is created (422 with `details.issues`), and default to the `reference` category.
+             * @enum {string}
+             */
+            kind?: "page" | "openapi" | "asyncapi";
             /** @description Start from a template (issue #69). Without `content` the template is rendered server-side: its title pattern, body, tags and relations become the page, and its category is the default. */
             template?: components["schemas"]["DocumentTemplateDto"];
         };
@@ -5575,12 +6522,35 @@ export interface components {
             /** @description Replace-set of reviewer user ids (workspace members) */
             reviewerIds: string[];
         };
+        OverrideLintCheckDto: {
+            /** @description Why the head may merge despite its check; kept with the override and in the audit log */
+            reason: string;
+        };
         MergeMergeRequestDto: {
             /**
              * @default merge-commit
              * @enum {string}
              */
             strategy: "merge-commit" | "squash";
+        };
+        CreateEntityAliasDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description The spelling to retire, e.g. "сервис:биллинг". Normalized server-side. */
+            alias: string;
+            /** @description The spelling to keep, e.g. "service:billing". Normalized server-side. */
+            canonicalKey: string;
+        };
+        ImpactAnalysisDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * @default dependents
+             * @enum {string}
+             */
+            direction: "dependents" | "dependencies";
+            /** @default 3 */
+            maxDepth: number;
         };
         CreateAttachmentDto: {
             /** @example architecture.png */
@@ -5640,25 +6610,6 @@ export interface components {
             expandGraph?: components["schemas"]["ExpandGraphDto"];
             filters?: components["schemas"]["SearchFiltersDto"];
         };
-        CreateEntityAliasDto: {
-            /** Format: uuid */
-            workspaceId: string;
-            /** @description The spelling to retire, e.g. "сервис:биллинг". Normalized server-side. */
-            alias: string;
-            /** @description The spelling to keep, e.g. "service:billing". Normalized server-side. */
-            canonicalKey: string;
-        };
-        ImpactAnalysisDto: {
-            /** Format: uuid */
-            workspaceId: string;
-            /**
-             * @default dependents
-             * @enum {string}
-             */
-            direction: "dependents" | "dependencies";
-            /** @default 3 */
-            maxDepth: number;
-        };
         GraphQueryDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -5713,6 +6664,17 @@ export interface components {
             workspaceId: string;
             title: string;
             markdown: string;
+        };
+        AssistantLintDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            title: string;
+            markdown: string;
+            /**
+             * Format: uuid
+             * @description The project the text belongs to: its styleguide applies, else the workspace's (#74)
+             */
+            projectId?: string;
         };
         AssistantSuggestDto: {
             /** Format: uuid */
@@ -5827,6 +6789,8 @@ export interface components {
             extractionMinConfidence?: number | null;
             /** @description Chunks of a page sent to the extractor. Null inherits EXTRACTOR_MAX_CHUNKS (20). */
             extractionMaxChunks?: number | null;
+            /** @description Days a quality score stands before the auditor re-scores an unchanged page (#74). Null inherits QUALITY_AUDIT_DAYS (7). */
+            qualityAuditDays?: number | null;
             /** @description Allow Agent mode (write tools) in the chat for this workspace */
             agentModeEnabled?: boolean;
             /** @description USD per 1M prompt tokens (cost estimate) */
@@ -5950,6 +6914,40 @@ export interface components {
             triggers?: string[];
             enabled?: boolean;
         };
+        StyleRuleExampleDto: {
+            /** @example Click on the button to save. */
+            bad: string;
+            /** @example Select Save. */
+            good: string;
+        };
+        StyleRuleDto: {
+            /**
+             * @description Stable slug: lowercase letters, digits and dashes
+             * @example ui-verbs
+             */
+            id: string;
+            /** @example Name UI actions with "select", never "click on". */
+            text: string;
+            /** @enum {string} */
+            severity: "error" | "warning" | "suggestion";
+            enabled: boolean;
+            example?: components["schemas"]["StyleRuleExampleDto"];
+        };
+        UpsertStyleguideDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description Omitted or null: the workspace's styleguide. Set: the project's, which replaces it there.
+             */
+            projectId?: string | null;
+            /** @example House style */
+            name: string;
+            /** @example How we write user-facing docs */
+            description: string;
+            /** @description At most STYLEGUIDE_MAX_RULES; ids unique */
+            rules: components["schemas"]["StyleRuleDto"][];
+        };
         UpdateAgentTriggerDto: {
             /**
              * Format: uuid
@@ -6060,6 +7058,11 @@ export interface components {
             connectorId?: string;
             /** @description Restrict a page-reading agent (curator, reviewer, glossarist) to these pages instead of the most recent ones. Pages the caller cannot open are skipped. */
             documentIds?: string[];
+        };
+        AddFindingTermDto: {
+            term?: string;
+            definition?: string;
+            aliases?: string[];
         };
         DismissAgentFindingDto: {
             /** @description Why it was wrong, as a rule for next time. Becomes a proposed learning for this agent. */
@@ -6376,6 +7379,20 @@ export interface components {
             /** @description The page this work item is about */
             documentId: string;
         };
+        UpdateLintPolicyDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description Omitted or null: the workspace's policy. Set: the project's, which replaces it there.
+             */
+            projectId?: string | null;
+            /**
+             * @description null inherits: a project the workspace, the workspace STYLE_LINT_POLICY
+             * @enum {string|null}
+             */
+            policy: "off" | "warn" | "block" | null;
+        };
         CreateGlossaryTermDto: {
             workspaceId: string;
             /** @description Project the term belongs to (must be in the same workspace) */
@@ -6640,6 +7657,39 @@ export interface components {
             projectId?: string;
             /** @description The page to nest it under */
             parentId?: string;
+        };
+        ApiTryHeaderDto: {
+            name: string;
+            value: string;
+        };
+        ApiTryRequestDto: {
+            /**
+             * Format: uuid
+             * @description The revision being viewed: the target must be one of its servers
+             */
+            revisionId: string;
+            /** @description The operation tried; the URL path must be its path */
+            entityKey: string;
+            /** @example GET */
+            method: string;
+            /** @description The full URL, query included */
+            url: string;
+            /** @description Sent per request; never stored or logged */
+            headers?: components["schemas"]["ApiTryHeaderDto"][];
+            /** @description At most 256 KB */
+            body?: string | null;
+        };
+        UpdateApiSettingsDto: {
+            /**
+             * @description null inherits API_TRY_PROXY_MODE
+             * @enum {string|null}
+             */
+            apiTryProxyMode?: "off" | "allowlist" | "open" | null;
+            /**
+             * @description The merge gate for breaking spec changes; null inherits warn
+             * @enum {string|null}
+             */
+            apiBreakingChangePolicy?: "off" | "warn" | "block" | null;
         };
         SetMessageFeedbackDto: {
             /** @enum {string} */
@@ -7082,7 +8132,7 @@ export interface components {
              * @example NOT_FOUND
              * @enum {string}
              */
-            code: "BAD_REQUEST" | "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "PAYLOAD_TOO_LARGE" | "UNSUPPORTED_MEDIA_TYPE" | "RATE_LIMITED" | "UPSTREAM_UNAVAILABLE" | "ASSISTANT_BUDGET_EXCEEDED" | "INTERNAL" | "NETWORK_ERROR" | "TIMEOUT" | "ABORTED" | "UNKNOWN";
+            code: "BAD_REQUEST" | "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "PAYLOAD_TOO_LARGE" | "UNSUPPORTED_MEDIA_TYPE" | "UNPROCESSABLE" | "RATE_LIMITED" | "UPSTREAM_UNAVAILABLE" | "ASSISTANT_BUDGET_EXCEEDED" | "INTERNAL" | "NETWORK_ERROR" | "TIMEOUT" | "ABORTED" | "UNKNOWN";
             /** @example Document 3f2a… not found */
             message: string;
             /** @description Machine-readable extras: validation errors[], conflict currentHeadRevisionId/comparisonUrl, … */
@@ -7228,6 +8278,54 @@ export interface operations {
             query: {
                 workspaceId: string;
                 limit?: string;
+                /** @description One AUDIT_ACTIONS value */
+                action?: string;
+                /** @description nextCursor from the previous page */
+                cursor?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AuthController_platformAuditLogs: {
+        parameters: {
+            query?: {
+                limit?: string;
+                /** @description One AUDIT_ACTIONS value */
+                action?: string;
+                /** @description nextCursor from the previous page */
+                cursor?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -7788,6 +8886,1057 @@ export interface operations {
             };
         };
     };
+    MeController_listSessions: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MeController_revokeSession: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoController_providers: {
+        parameters: {
+            query?: {
+                /** @description The workspace whose buttons to show (the kn_ws cookie's) */
+                workspaceId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoController_discover: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SsoDiscoverDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoController_exchange: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SsoExchangeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoController_ldapLogin: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LdapLoginDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    IdentityProvidersController_list: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    IdentityProvidersController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIdentityProviderDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    IdentityProvidersController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    IdentityProvidersController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateIdentityProviderDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    IdentityProvidersController_test: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    GroupMappingsController_list: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    GroupMappingsController_upsert: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertGroupMappingDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    GroupMappingsController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                mappingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AuthPolicyController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AuthPolicyController_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutAuthPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoDomainsController_list: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoDomainsController_claim: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimSsoDomainDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoDomainsController_verify: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifySsoDomainDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoDomainsController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoDomainsController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSsoDomainDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ScimTokensController_view: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ScimTokensController_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutScimSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ScimTokensController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateScimTokenDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ScimTokensController_revoke: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                tokenId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     UsersController_list: {
         parameters: {
             query?: never;
@@ -7885,6 +10034,86 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateUserDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    UsersController_listSessions: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    UsersController_revokeSessions: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {
@@ -11343,6 +13572,171 @@ export interface operations {
             };
         };
     };
+    MergeRequestsController_apiChanges: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_acknowledgeBreaking: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_withdrawBreakingAck: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_overrideLintCheck: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                checkId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverrideLintCheckDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     MergeRequestsController_approve: {
         parameters: {
             query?: never;
@@ -11801,6 +14195,308 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    EntitiesController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Entity type, e.g. "tag" */
+                type?: string;
+                /** @description Case-insensitive substring of the name */
+                q?: string;
+                /** @description Max entities to return (1-200) */
+                limit?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    EntitiesController_listAliases: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    EntitiesController_createAlias: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEntityAliasDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    EntitiesController_removeAlias: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                alias: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    EntitiesController_trace: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                from: string;
+                to: string;
+                maxDepth?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    EntitiesController_neighbors: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                depth?: string;
+                /** @description Comma-separated relation types */
+                types?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    EntitiesController_impact: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImpactAnalysisDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -12366,308 +15062,6 @@ export interface operations {
             };
         };
     };
-    EntitiesController_list: {
-        parameters: {
-            query: {
-                workspaceId: string;
-                /** @description Entity type, e.g. "tag" */
-                type?: string;
-                /** @description Case-insensitive substring of the name */
-                q?: string;
-                /** @description Max entities to return (1-200) */
-                limit?: string;
-            };
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    EntitiesController_listAliases: {
-        parameters: {
-            query: {
-                workspaceId: string;
-            };
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    EntitiesController_createAlias: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateEntityAliasDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    EntitiesController_removeAlias: {
-        parameters: {
-            query: {
-                workspaceId: string;
-            };
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path: {
-                alias: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    EntitiesController_trace: {
-        parameters: {
-            query: {
-                workspaceId: string;
-                from: string;
-                to: string;
-                maxDepth?: string;
-            };
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    EntitiesController_neighbors: {
-        parameters: {
-            query: {
-                workspaceId: string;
-                depth?: string;
-                /** @description Comma-separated relation types */
-                types?: string;
-            };
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path: {
-                key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    EntitiesController_impact: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path: {
-                key: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ImpactAnalysisDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
     GraphQueryController_run: {
         parameters: {
             query?: never;
@@ -13183,6 +15577,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AssistantReviewDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AssistantController_lint: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantLintDto"];
             };
         };
         responses: {
@@ -14294,6 +16730,129 @@ export interface operations {
             };
         };
     };
+    AiController_getStyleguide: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                projectId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_upsertStyleguide: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertStyleguideDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_deleteStyleguide: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     AiController_listAgents: {
         parameters: {
             query: {
@@ -15033,6 +17592,54 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_addFindingTerm: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                /** @description Position in the run's findings array */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddFindingTermDto"];
+            };
+        };
         responses: {
             201: {
                 headers: {
@@ -17426,6 +20033,170 @@ export interface operations {
             };
         };
     };
+    LintController_policy: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Omitted: the workspace's own policy */
+                projectId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    LintController_setPolicy: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLintPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    LintController_list: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    LintController_relint: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     GlossaryController_list: {
         parameters: {
             query: {
@@ -19157,6 +21928,444 @@ export interface operations {
             };
         };
     };
+    ApiSpecsController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Only the specs of this project */
+                projectId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_spec: {
+        parameters: {
+            query?: {
+                /** @description A revision of this document; the default-branch head when absent */
+                revisionId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_operations: {
+        parameters: {
+            query?: {
+                /** @description A revision of this document; the default-branch head when absent */
+                revisionId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_diff: {
+        parameters: {
+            query: {
+                /** @description The revision diffed from */
+                from: string;
+                /** @description The revision diffed to; the default-branch head when absent */
+                to?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_samples: {
+        parameters: {
+            query: {
+                /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+                entityKey: string;
+                /** @description The method, when one key has several rows */
+                method?: string;
+                /** @description One language; every language when absent */
+                lang?: "curl" | "javascript" | "python" | "go";
+                /** @description A revision of this document; the default-branch head when absent */
+                revisionId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_try: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiTryRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_driftCheck: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiOperationsController_search: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Matches method + path, summary, operationId and entity key, case-insensitively */
+                q?: string;
+                /** @description Only the operations of this spec document */
+                documentId?: string;
+                /** @description Exactly this operation, however the key is spelled (op:billing-api:post-/invoices) — resolves a link to its spec */
+                entityKey?: string;
+                /** @description Defaults to 50 */
+                limit?: number;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSettingsController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateApiSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     AiReadableController_markdown: {
         parameters: {
             query?: {
@@ -20251,6 +23460,138 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateKnowledgeHealthSettingsDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityController_summary: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Only this project; the whole workspace when absent */
+                projectId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Only this project; the whole workspace when absent */
+                projectId?: string;
+                /** @description worst (the default) | best | title | recent */
+                sort?: "worst" | "best" | "title" | "recent";
+                /** @description Title contains */
+                q?: string;
+                /** @description 50 when absent */
+                limit?: number;
+                /** @description nextCursor of the previous page */
+                cursor?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityController_forDocument: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

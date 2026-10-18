@@ -43,6 +43,8 @@ export interface StoredChunk {
  * it the ranking is over an arbitrary subset (see `searchChunks`).
  */
 const CHUNK_SCAN_LIMIT = 5000;
+/** Revisions averaged per read in `meanRevisionEmbeddings`, so each read stays under the scan cap. */
+const MEAN_BATCH = 100;
 
 /**
  * The live-projection predicate (#83). A chunk or revision-scoped edge is
@@ -85,7 +87,7 @@ function usageSnippet(usages: readonly string[], max = 1000): string {
 }
 
 /** Fact classes whose edges belong to one revision and so follow its liveness. */
-const REVISION_SCOPED_EXTRACTORS = ['frontmatter', 'inferred'] as const;
+const REVISION_SCOPED_EXTRACTORS = ['frontmatter', 'inferred', 'spec'] as const;
 
 /**
  * Relation edge types allowed in the graph (plan.md §6). Edge type names are
@@ -104,14 +106,14 @@ export interface FactInput {
   type: string;
   target: { key: string; type: string; name: string };
   /** plan.md §5 fact classes: explicit / frontmatter (deterministic) / inferred (LLM) / curated, plus code (#236). */
-  extractor: 'explicit' | 'frontmatter' | 'inferred' | 'curated' | 'code';
+  extractor: 'explicit' | 'frontmatter' | 'inferred' | 'curated' | 'code' | 'spec';
   confidence: number;
   /** Inferred facts carry their source span (plan.md §5). */
   sourceChunkId?: string;
   snippet?: string;
   /**
    * Whether the edge belongs to the live projection (#83). Only meaningful
-   * for revision-scoped classes (frontmatter / inferred); explicit and
+   * for revision-scoped classes (frontmatter / inferred / spec); explicit and
    * curated edges are document-level and always live. Defaults to true.
    */
   live?: boolean;
@@ -128,6 +130,17 @@ export interface DocumentRelation {
   sourceChunkId?: string;
   snippet?: string;
   /** False for edges of a retired revision; legacy rows read as live. */
+  live: boolean;
+}
+
+/** A revision's facts of one revision-scoped class, replaced whole. */
+export interface RevisionFactsInput {
+  workspaceId: string;
+  documentId: string;
+  revisionId: string;
+  title: string;
+  facts: FactInput[];
+  /** Part of the live projection (#83) — see `upsertRevisionChunks`. */
   live: boolean;
 }
 
@@ -351,6 +364,35 @@ export class GraphService {
     return mean;
   }
 
+  /**
+   * The mean chunk embedding of each revision (#74, the auditor's duplicate
+   * check), one read per batch rather than one per page. A revision with no
+   * indexed chunks is absent from the map. Raw vectors stay in the graph
+   * layer's callers only as means — never a chunk's own vector.
+   */
+  async meanRevisionEmbeddings(workspaceId: string, revisionIds: readonly string[]): Promise<Map<string, number[]>> {
+    const sums = new Map<string, { sum: number[]; n: number }>();
+    for (let at = 0; at < revisionIds.length; at += MEAN_BATCH) {
+      const batch = revisionIds.slice(at, at + MEAN_BATCH);
+      const rows = await this.arcade.query<{ revisionId: string; embedding: number[] }>(
+        'sql',
+        `SELECT revisionId, embedding FROM Chunk WHERE workspaceId = :workspaceId AND revisionId IN :revisionIds LIMIT ${CHUNK_SCAN_LIMIT}`,
+        { workspaceId, revisionIds: [...batch] },
+      );
+      if (rows.length >= CHUNK_SCAN_LIMIT) this.logger.error(`Mean embeddings hit the ${CHUNK_SCAN_LIMIT}-chunk scan cap; some pages are averaged over part of their chunks.`);
+      for (const r of rows) {
+        if (!Array.isArray(r.embedding) || r.embedding.length === 0) continue;
+        const acc = sums.get(r.revisionId);
+        if (!acc) sums.set(r.revisionId, { sum: [...r.embedding], n: 1 });
+        else if (acc.sum.length === r.embedding.length) {
+          for (let i = 0; i < acc.sum.length; i++) acc.sum[i] += r.embedding[i];
+          acc.n += 1;
+        }
+      }
+    }
+    return new Map([...sums].map(([id, { sum, n }]) => [id, sum.map((v) => v / n)]));
+  }
+
   /** Upsert the Document vertex (needed when relations arrive before first indexing). */
   async upsertDocumentVertex(workspaceId: string, documentId: string, title: string): Promise<void> {
     await this.arcade.command(
@@ -403,22 +445,31 @@ export class GraphService {
    * Idempotent replace of a revision's frontmatter-derived relation edges
    * (deterministic facts, plan.md §5). Explicit/curated edges are untouched.
    */
-  async replaceRevisionFrontmatterFacts(input: {
-    workspaceId: string;
-    documentId: string;
-    revisionId: string;
-    title: string;
-    facts: FactInput[];
-    /** Part of the live projection (#83) — see `upsertRevisionChunks`. */
-    live: boolean;
-  }): Promise<void> {
+  async replaceRevisionFrontmatterFacts(input: RevisionFactsInput): Promise<void> {
+    await this.replaceRevisionScopedFacts('frontmatter', input);
+  }
+
+  /**
+   * Idempotent replace of an API spec revision's `DESCRIBES` edges to its
+   * operations and channels (#78). Deterministic like frontmatter, and its own
+   * class so neither replace wipes the other's edges on the same revision.
+   */
+  async replaceRevisionSpecFacts(input: RevisionFactsInput): Promise<void> {
+    await this.replaceRevisionScopedFacts('spec', input);
+  }
+
+  private async replaceRevisionScopedFacts(
+    extractor: 'frontmatter' | 'spec',
+    input: RevisionFactsInput,
+  ): Promise<void> {
     const { workspaceId, documentId, revisionId, title, live } = input;
     const facts = await this.canonicalFacts(workspaceId, input.facts);
     for (const type of RELATION_EDGE_TYPES) {
       await this.arcade
-        .command('sql', `DELETE FROM ${type} WHERE documentId = :documentId AND revisionId = :revisionId AND extractor = 'frontmatter'`, {
+        .command('sql', `DELETE FROM ${type} WHERE documentId = :documentId AND revisionId = :revisionId AND extractor = :extractor`, {
           documentId,
           revisionId,
+          extractor,
         })
         .catch(() => {
           /* edge type may hold no rows yet */

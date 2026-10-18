@@ -17,6 +17,8 @@ import { EventsPublisher } from '../events/events.publisher.js';
 import { IngestionProducer } from './ingestion.producer.js';
 import { UNFILTERED } from '../common/document-acl.js';
 import { ComponentsService } from '../components/components.service.js';
+import { ApiSpecsService, type ApiSpecProjection } from '../api-specs/api-specs.service.js';
+import { isApiSpecKind } from '@knowledge/contracts';
 import { bindTrace, currentTrace, emitBacktest, startTrace, withTrace } from '@knowledge/observability';
 
 interface IngestionJobData {
@@ -38,6 +40,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     private readonly events: EventsPublisher,
     private readonly producer: IngestionProducer,
     private readonly components: ComponentsService,
+    private readonly apiSpecs: ApiSpecsService,
   ) {
     super();
   }
@@ -116,11 +119,30 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       const raw = await this.storage.getObjectText(revision.s3Key);
       mark('fetch', raw.length);
 
-      // 2. Parse (markdown only in Phase 1)
-      if (!revision.contentType.includes('markdown') && !revision.contentType.startsWith('text/')) {
-        throw new Error(`Unsupported content type for Phase 1 ingestion: ${revision.contentType}`);
+      // 2. Parse. A spec document (#78) is parsed by its kind, not its content
+      //    type, and indexed as its markdown projection, so everything from
+      //    step 3 on is the page pipeline unchanged. A spec that will not parse
+      //    fails the job with the validator's messages, which finalize would
+      //    have refused unless a limit was lowered since.
+      const kind = revision.document.kind;
+      let spec: ApiSpecProjection | null = null;
+      let parsed: { content: string; data: Record<string, unknown> };
+      if (isApiSpecKind(kind)) {
+        spec = await this.apiSpecs.project({
+          workspaceId: revision.document.workspaceId,
+          documentId: revision.documentId,
+          revisionId: revision.id,
+          kind,
+          raw,
+          live,
+        });
+        parsed = { content: spec.markdown, data: {} };
+      } else {
+        if (!revision.contentType.includes('markdown') && !revision.contentType.startsWith('text/')) {
+          throw new Error(`Unsupported content type for Phase 1 ingestion: ${revision.contentType}`);
+        }
+        parsed = matter(raw);
       }
-      const parsed = matter(raw);
 
       // 3. Normalize → persist normalized.json next to the source (plan.md §4 layout)
       const sections = splitMarkdown(parsed.content);
@@ -129,6 +151,18 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         headings: sections.map((s) => s.headingPath.join(' > ')),
         plainText: parsed.content,
         sections,
+        ...(spec
+          ? {
+              spec: {
+                kind,
+                specVersion: spec.spec.specVersion,
+                title: spec.spec.title,
+                version: spec.spec.version,
+                slug: spec.slug,
+                operations: spec.operations.length,
+              },
+            }
+          : {}),
       };
       const normalizedKey = revision.s3Key.replace(/[^/]+$/, 'normalized.json');
       await this.storage.putObjectJson(normalizedKey, normalized);
@@ -211,8 +245,10 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       mark('fulltext');
 
       // 7. Deterministic relation extraction (plan.md §5 "deterministic" class):
-      //    frontmatter `relations:`/`tags:` → typed edges with provenance.
-      const facts = extractFrontmatterFacts(parsed.data ?? {});
+      //    frontmatter `relations:`/`tags:`, and the operations a page's API
+      //    blocks mirror (#78) → typed edges with provenance. A spec's body is
+      //    its own projection, which declares nothing.
+      const facts = extractFrontmatterFacts(parsed.data ?? {}, spec ? '' : parsed.content);
       await this.graph.replaceRevisionFrontmatterFacts({
         workspaceId: revision.document.workspaceId,
         documentId: revision.documentId,
@@ -222,6 +258,23 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         live,
       });
       mark('relations', facts.length);
+
+      // 7a. #78: a spec DESCRIBES every operation and channel it defines.
+      //     Revision-scoped like frontmatter, so a branch's operations join the
+      //     live graph only when the branch merges. Skipped for pages: a kind
+      //     never changes, so a page has no spec edges to clear.
+      const specFacts = spec ? specDescribes(spec) : [];
+      if (spec) {
+        await this.graph.replaceRevisionSpecFacts({
+          workspaceId: revision.document.workspaceId,
+          documentId: revision.documentId,
+          revisionId: revision.id,
+          title: revision.document.title,
+          facts: specFacts,
+          live,
+        });
+      }
+      mark('spec', specFacts.length);
 
       // 7b. #236: a `component:` block on the default-branch head declares the
       //     code the page documents. A branch revision declares nothing until it
@@ -509,3 +562,21 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     }
   }
 }
+
+/** One `DESCRIBES` per distinct operation entity: an AsyncAPI channel's send and receive are one vertex. */
+function specDescribes(spec: ApiSpecProjection) {
+  const byKey = new Map<string, ApiSpecProjection['operations'][number]>();
+  for (const op of spec.operations) if (!byKey.has(op.entityKey)) byKey.set(op.entityKey, op);
+  return [...byKey.values()].map((op) => ({
+    type: 'DESCRIBES',
+    target: {
+      key: op.entityKey,
+      type: op.protocol === 'http' ? 'op' : 'channel',
+      // The spec's own spelling, so the graph view reads `GET /users/{id}`.
+      name: op.protocol === 'http' ? `${op.method} ${op.path}` : op.path,
+    },
+    extractor: 'spec' as const,
+    confidence: 1,
+  }));
+}
+

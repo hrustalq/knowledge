@@ -1,21 +1,24 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type {
-  CreateWorkspaceResponse,
-  ListWorkspaceCandidatesResponse,
-  ListWorkspaceMembersResponse,
-  ListWorkspacesResponse,
-  WorkspaceRole,
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  membershipSourceOf,
+  type CreateWorkspaceResponse,
+  type ListWorkspaceCandidatesResponse,
+  type ListWorkspaceMembersResponse,
+  type ListWorkspacesResponse,
+  type WorkspaceRole,
 } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import type { AddMemberDto, UpdateMemberDto } from './workspaces.dto.js';
 import { t } from '../i18n/t.js';
+import { removeMemberGuarded, setRoleGuarded } from './membership-guards.js';
 
 /**
  * Access-control management: workspaces + workspace_members CRUD. Role checks
  * happen in AclGuard (@Access('admin', 'workspace') on mutating routes); this
- * service adds the invariants ACLs cannot express (last-admin protection).
+ * service adds the invariants ACLs cannot express: last-admin protection
+ * (`membership-guards.ts`) and rows an identity provider manages (#75).
  */
 @Injectable()
 export class WorkspacesService {
@@ -75,6 +78,7 @@ export class WorkspacesService {
         avatarUrl: userAvatarUrl(m.user),
         role: m.role as WorkspaceRole,
         trustedOperator: m.trustedOperator,
+        source: membershipSourceOf(m.source),
         disabled: m.user.disabledAt !== null,
         createdAt: m.createdAt.toISOString(),
       })),
@@ -126,86 +130,54 @@ export class WorkspacesService {
   async addMember(workspaceId: string, dto: AddMemberDto): Promise<ListWorkspaceMembersResponse> {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email.trim().toLowerCase() } });
     if (!user) throw new NotFoundException(t('error.workspace.noUserWithEmail'));
-    await this.prisma.workspaceMember.upsert({
+    const existing = await this.prisma.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId, userId: user.id } },
-      update: { role: dto.role, trustedOperator: dto.trustedOperator ?? false },
-      create: { workspaceId, userId: user.id, role: dto.role, trustedOperator: dto.trustedOperator ?? false },
+    });
+    // Re-adding a member is a role change, and gets the same guards: the last
+    // admin is not demoted, and an IdP-managed row is not silently taken over.
+    if (existing) return this.updateMember(workspaceId, user.id, { role: dto.role, trustedOperator: dto.trustedOperator ?? false });
+    await this.prisma.workspaceMember.createMany({
+      data: [{ workspaceId, userId: user.id, role: dto.role, trustedOperator: dto.trustedOperator ?? false }],
+      skipDuplicates: true,
     });
     return this.listMembers(workspaceId);
   }
 
   async updateMember(workspaceId: string, userId: string, dto: UpdateMemberDto): Promise<ListWorkspaceMembersResponse> {
     const member = await this.requireMember(workspaceId, userId);
-    const demotingAdmin = !!dto.role && dto.role !== 'admin' && member.role === 'admin';
-    if (demotingAdmin) {
-      // Guarded single statement rather than count-then-update: see removeMember.
-      const affected = await this.prisma.$executeRaw`
-        UPDATE workspace_members
-           SET role = ${dto.role!}
-         WHERE workspace_id = ${workspaceId}::uuid
-           AND user_id = ${userId}::uuid
-           AND EXISTS (
-                 SELECT 1 FROM workspace_members other
-                  WHERE other.workspace_id = ${workspaceId}::uuid
-                    AND other.role = 'admin'
-                    AND other.user_id <> ${userId}::uuid
-               )
-      `;
-      if (affected === 0) throw new BadRequestException(t('error.workspace.lastAdminDemote'));
+    // A row JIT, group sync or SCIM wrote is theirs (#75): a hand edit would be
+    // undone at the next sign-in. Taking it over is an explicit act.
+    if (member.source !== 'manual' && !dto.convertToManual) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.workspace.managedByIdp', { source: member.source }),
+        source: membershipSourceOf(member.source),
+      });
+    }
+    if (dto.role !== undefined && !(await setRoleGuarded(this.prisma, workspaceId, userId, dto.role))) {
+      throw new BadRequestException(t('error.workspace.lastAdminDemote'));
     }
     await this.prisma.workspaceMember.update({
       where: { workspaceId_userId: { workspaceId, userId } },
       data: {
-        // The role is already written above when this is a demotion; re-applying
-        // the same value keeps one code path for trustedOperator.
-        ...(dto.role !== undefined ? { role: dto.role } : {}),
         ...(dto.trustedOperator !== undefined ? { trustedOperator: dto.trustedOperator } : {}),
+        ...(dto.convertToManual ? { source: 'manual' } : {}),
       },
     });
     return this.listMembers(workspaceId);
   }
 
-  async removeMember(workspaceId: string, userId: string): Promise<ListWorkspaceMembersResponse> {
-    const member = await this.requireMember(workspaceId, userId);
-    if (member.role !== 'admin') {
-      await this.prisma.workspaceMember.delete({ where: { workspaceId_userId: { workspaceId, userId } } });
-      await this.dropGroupMemberships(workspaceId, userId);
-      return this.listMembers(workspaceId);
-    }
-    // Last-admin protection has to be ONE statement. `count(other admins)` then
-    // `delete` is check-then-act with nothing enforcing it: two concurrent
-    // removals of the last two admins each counted one other admin and each
-    // proceeded, leaving a workspace with zero admins — which no API route can
-    // repair, since adding a member is itself admin-gated. The EXISTS subquery
-    // is evaluated inside the same statement as the delete, so exactly one wins.
-    // Raw SQL for the same reason AgentFindingsService.claim uses it: the query
-    // API cannot express a predicate over a sibling row set.
-    const affected = await this.prisma.$executeRaw`
-      DELETE FROM workspace_members
-       WHERE workspace_id = ${workspaceId}::uuid
-         AND user_id = ${userId}::uuid
-         AND EXISTS (
-               SELECT 1 FROM workspace_members other
-                WHERE other.workspace_id = ${workspaceId}::uuid
-                  AND other.role = 'admin'
-                  AND other.user_id <> ${userId}::uuid
-             )
-    `;
-    if (affected === 0) throw new BadRequestException(t('error.workspace.lastAdminRemove'));
-    await this.dropGroupMemberships(workspaceId, userId);
-    return this.listMembers(workspaceId);
-  }
-
   /**
-   * Leaving the workspace means leaving its groups and losing its page grants
-   * (#76). Kept, the rows would silently hand back everything those groups and
-   * grants held the day the person is re-added — access nobody granted.
+   * Removing an IdP-managed member is allowed: it is the one hand edit sync
+   * cannot fight over, though the next sign-in through that IdP may add them
+   * back if a mapping or the default role still says so.
    */
-  private async dropGroupMemberships(workspaceId: string, userId: string): Promise<void> {
-    await this.prisma.$transaction([
-      this.prisma.userGroupMember.deleteMany({ where: { userId, group: { workspaceId } } }),
-      this.prisma.accessGrant.deleteMany({ where: { workspaceId, subjectType: 'user', subjectId: userId } }),
-    ]);
+  async removeMember(workspaceId: string, userId: string): Promise<ListWorkspaceMembersResponse> {
+    await this.requireMember(workspaceId, userId);
+    if (!(await removeMemberGuarded(this.prisma, workspaceId, userId))) {
+      throw new BadRequestException(t('error.workspace.lastAdminRemove'));
+    }
+    return this.listMembers(workspaceId);
   }
 
   private async requireMember(workspaceId: string, userId: string) {
@@ -215,5 +187,4 @@ export class WorkspacesService {
     if (!member) throw new NotFoundException(t('error.workspace.notAMember', { userId, workspaceId }));
     return member;
   }
-
 }

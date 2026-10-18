@@ -47,6 +47,8 @@ export class ConnectorItemAiService {
     if (!item || item.runId !== runId) throw new BadRequestException(t('error.connector.itemNotFound'));
     if (item.status !== 'staged') throw new ConflictException(t('error.connector.itemNotEditable'));
     if (!item.stagedKey) throw new ConflictException(t('error.connector.itemNotEditable'));
+    // Both assists write markdown prose; a spec (#78) is data, synced as written.
+    if ((item.draft as ItemDraft | null)?.spec) throw new ConflictException(t('error.connector.specNoAssist'));
     if (op === 'merge' && item.action !== 'conflict') {
       // Merging needs two versions that disagree. Offering it elsewhere would
       // ask the model to reconcile a page with itself.

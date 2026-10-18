@@ -9,6 +9,9 @@
 export * from '@knowledge/contracts/core';
 export * from '@knowledge/contracts/documents';
 export * from '@knowledge/contracts/graph';
+export * from '@knowledge/contracts/api';
+export * from '@knowledge/contracts/api/samples';
+export * from '@knowledge/contracts/api/diff';
 export * from '@knowledge/contracts/reviews';
 export * from '@knowledge/contracts/identity';
 export * from '@knowledge/contracts/notifications';
@@ -20,4 +23,5 @@ export * from '@knowledge/contracts/publishing';
 export * from '@knowledge/contracts/connectors';
 export * from '@knowledge/contracts/chat';
 export * from '@knowledge/contracts/captures';
+export * from '@knowledge/contracts/quality';
 export * from '@knowledge/contracts/observability';

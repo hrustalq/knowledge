@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { ActivityCoreModule } from '../activity/activity-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { SearchCoreModule } from '../search/search-core.module.js';
@@ -61,6 +62,8 @@ import { WorkflowTriggerService } from './workflow-trigger.service.js';
     // An `ai.draft` step writes into a page template (issue #69). The core
     // half only: the controller's module pulls auth, which the worker cannot load.
     TemplatesCoreModule,
+    // An endpoint draft reads the spec operation it was seeded from (#78).
+    ApiSpecsCoreModule,
   ],
   providers: [
     WorkflowExecutors,

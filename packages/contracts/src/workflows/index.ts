@@ -212,6 +212,12 @@ export interface WorkflowNodeDraft {
   /** The template this draft was written against, at the version it was read — carried to the page as provenance. */
   templateRef?: TemplateRef;
   templateVersion?: number;
+  /**
+   * The spec operation this item is about (#78): an `op:` / `channel:` key a
+   * fan-out step picked from the operations it was offered. The `ai.draft`
+   * below it reads that operation and the page DESCRIBES it.
+   */
+  operationKey?: string;
 }
 
 export interface WorkflowRunNodeInfo {

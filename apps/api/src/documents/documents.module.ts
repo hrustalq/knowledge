@@ -6,7 +6,6 @@ import { DocumentsCoreModule } from './documents-core.module.js';
 import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { DocumentsController } from './documents.controller.js';
-import { CompareService } from './compare.service.js';
 import { DocumentRelationsService } from './document-relations.service.js';
 import { MergeRequestsController } from './merge-requests.controller.js';
 import { MergeRequestsService } from './merge-requests.service.js';
@@ -27,6 +26,9 @@ import { MentionRepliesService } from './mention-replies.service.js';
 import { MentionReplySweeper } from './mention-reply.sweeper.js';
 import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
+import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
+import { EntitiesModule } from '../entities/entities.module.js';
+import { LintCoreModule } from './lint/lint-core.module.js';
 
 /**
  * API side. DocumentsService itself lives in DocumentsCoreModule (worker-safe);
@@ -66,10 +68,17 @@ import { PermissionsCoreModule } from '../permissions/permissions-core.module.js
     AiReadableCoreModule,
     // Page permissions (#76): lists filter by the caller's scope, reviewers need view.
     PermissionsCoreModule,
+    // A spec's classified diff in compare and the breaking-change merge gate
+    // (#78). A leaf. EntitiesModule finds the pages linking a changed
+    // operation; it imports only graph and permissions, so there is no cycle.
+    ApiSpecsCoreModule,
+    EntitiesModule,
+    // The style lint merge gate (#74): the policy and the check reads. A leaf
+    // over Prisma and the agent registry, so there is no cycle.
+    LintCoreModule,
   ],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [
-    CompareService,
     // Frontmatter relation edits (docs/features/28). API-only by construction:
     // it opens merge requests, so it needs MergeRequestsService.
     DocumentRelationsService,
@@ -83,7 +92,6 @@ import { PermissionsCoreModule } from '../permissions/permissions-core.module.js
   ],
   exports: [
     DocumentsCoreModule,
-    CompareService,
     DocumentRelationsService,
     MergeRequestsService,
     MergeRequestThreadsService,

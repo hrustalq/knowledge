@@ -4,6 +4,7 @@ import { composeFrontmatter, keepFrontmatter, parseMarkdown, writeFrontmatter } 
 import {
   dedupeRelations,
   normalizeRelation,
+  readApiOperationRefs,
   readFrontmatterRelations,
   readFrontmatterTags,
   tagEntityKey,
@@ -249,5 +250,40 @@ describe('deterministic extraction', () => {
 
   it('drops a target that folds away to punctuation', () => {
     expect(extractFrontmatterFacts({ relations: [{ type: 'DESCRIBES', target: ' : ' }] })).toEqual([]);
+  });
+});
+
+describe('API blocks linked to a spec operation (#78)', () => {
+  const body = [
+    '<div data-kn-api="POST" data-kn-path="/invoices" data-kn-op="op:Billing-API:post-/invoices">',
+    '',
+    '### POST /invoices',
+    '',
+    '</div>',
+    '',
+    '<div data-kn-api="GET" data-kn-path="/a" data-kn-op="op:billing-api:post-/invoices"></div>',
+    '<div data-kn-api="GET" data-kn-path="/b" data-kn-op="service:billing"></div>',
+    '<div data-kn-api="GET" data-kn-path="/c" data-kn-op="channel:events:user/{}/signed&quot;up"></div>',
+    '<div data-kn-api="GET" data-kn-path="/d"></div>',
+    '<span data-kn-op="op:x:get-/y"></span>',
+  ].join('\n');
+
+  it('reads folded op/channel keys off block wrappers, once each', () => {
+    expect(readApiOperationRefs(body)).toEqual([
+      'op:billing-api:post-/invoices',
+      'channel:events:user/{}/signed"up',
+    ]);
+  });
+
+  it('makes the page IMPLEMENTS each one, beside its frontmatter facts', () => {
+    const facts = extractFrontmatterFacts({ relations: [{ type: 'IMPLEMENTS', target: 'op:billing-api:post-/invoices' }] }, body);
+    expect(facts.map((f) => `${f.type} ${f.target.key} ${f.target.type}`)).toEqual([
+      'IMPLEMENTS op:billing-api:post-/invoices op',
+      'IMPLEMENTS channel:events:user/{}/signed"up channel',
+    ]);
+  });
+
+  it('declares nothing without a body', () => {
+    expect(extractFrontmatterFacts({})).toEqual([]);
   });
 });

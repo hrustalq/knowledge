@@ -9,6 +9,7 @@ import {
 import type { Pinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import { AI_PANEL_SECTIONS, DEFAULT_AI_SECTION, isAiSection } from '@/lib/ai-sections'
+import { reauthKindOf } from '@/lib/sso'
 
 export function createRouter() {
   return createVueRouter({
@@ -23,6 +24,8 @@ export function createRouter() {
       { path: '/forgot-password', component: () => import('@/pages/ForgotPasswordPage.vue'), meta: { public: true, authCard: true } },
       { path: '/reset-password', component: () => import('@/pages/ResetPasswordPage.vue'), meta: { public: true, authCard: true } },
       { path: '/verify-email', component: () => import('@/pages/VerifyEmailPage.vue'), meta: { public: true, authCard: true } },
+      // The end of an SSO round trip (#75): trades the fragment code for a session.
+      { path: '/auth/sso/complete', component: () => import('@/pages/SsoCompletePage.vue'), meta: { public: true, authCard: true } },
       { path: '/403', component: () => import('@/pages/ForbiddenPage.vue'), meta: { public: true } },
       // A member signing in to a published site (issue #77 phase 3): needs the
       // app's session, so the guard sends anyone signed out through /login.
@@ -47,6 +50,9 @@ export function createRouter() {
         component: () => import('@/pages/EditorPage.vue'),
         meta: { fill: true, bare: true },
       },
+      // API specs (#78) are written as text, not in the page editor.
+      { path: '/create/spec', component: () => import('@/pages/ApiSpecEditorPage.vue') },
+      { path: '/documents/:id/spec', component: () => import('@/pages/ApiSpecEditorPage.vue') },
       // /upload keeps its path so every existing link, bookmark and sidebar
       // shortcut still lands; /import is the name the flow now goes by.
       // meta.fill: the wizard owns the viewport — its three steps share one
@@ -156,6 +162,10 @@ export function createRouter() {
           // and the inventory of every link. Gated in the page on
           // auth.canAdminWorkspace, as AI settings are; the API enforces admin.
           { path: 'publishing', component: () => import('@/pages/PublishingSettingsPage.vue') },
+          // API reference (#78): the try-it proxy mode. Open to every member to
+          // read, since the console needs to know; the page gates the change on
+          // auth.canAdminWorkspace and the API enforces admin.
+          { path: 'api', component: () => import('@/pages/ApiSettingsPage.vue') },
           { path: 'exports', component: () => import('@/pages/ExportsPage.vue') },
           // Workflows: like AI settings, deliberately not meta.platformAdmin —
           // this is workspace administration, so the page gates on
@@ -227,6 +237,9 @@ export function createRouter() {
           { path: 'connectors', component: () => import('@/pages/ConnectorsPage.vue') },
           // Chat bots (issue #71): workspace administration, gated like connectors.
           { path: 'chat', component: () => import('@/pages/ChatSettingsPage.vue') },
+          // Sign-in and the audit trail (#75): workspace administration, so the
+          // page gates on auth.canAdminWorkspace and the API enforces admin.
+          { path: 'security', component: () => import('@/pages/SecuritySettingsPage.vue') },
           // Accounts moved into /settings/access as a tab. Kept as a redirect
           // rather than deleted: it was a nav row and a bookmark for as long as
           // the settings shell has existed. No `platformAdmin` meta — the
@@ -264,7 +277,9 @@ export function createRouter() {
 /**
  * Auth guard (runs on SSR and client): resolves /v1/me once, then
  * - unauthenticated on a protected route → /login (401 flow)
- * - authenticated on /login|/signup → /documents
+ * - authenticated on /login|/signup → /documents, unless /login was asked to
+ *   sign them in again (`?reauth=`, a workspace's sign-in policy, #75) — the
+ *   bounce back would 403 straight into /login again, forever
  * - non-platform-admin on an admin route → /403 (RBAC)
  * - unconfirmed address under AUTH_REQUIRE_VERIFIED_EMAIL → /verify-email
  *   (docs/features/41); every other route would only answer 403 anyway
@@ -273,7 +288,7 @@ export function installAuthGuard(router: Router, pinia: Pinia) {
   router.beforeEach(async (to) => {
     const auth = useAuthStore(pinia)
     await auth.ensureLoaded()
-    if (auth.authenticated && (to.path === '/login' || to.path === '/signup')) {
+    if (auth.authenticated && ((to.path === '/login' && !reauthKindOf(to.query.reauth)) || to.path === '/signup')) {
       return { path: '/documents' }
     }
     if (to.meta.public) return true

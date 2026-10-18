@@ -237,6 +237,63 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     requires: ['json'],
   },
 
+  /**
+   * The linter (#74). The reviewer judges a draft on its own terms; the linter
+   * only against rules the team wrote down, appended after these instructions
+   * as a numbered list with ids. What it may claim is enforced after the call
+   * (agents/lint.ts): an unknown rule id or a quote not found verbatim is
+   * dropped, and the severity is the rule's, so the prompt asks for neither
+   * more nor less than the harness will accept.
+   */
+  linter: {
+    key: 'linter',
+    name: 'agent.linter',
+    description: 'agent.linterDesc',
+    instructions:
+      'You check documentation text against a styleguide — a list of rules its team agreed on. Respond ONLY ' +
+      'with a json object of the shape {"violations": [{"ruleId": string, "quote": string, "message": string, ' +
+      '"suggestion"?: string}]}. Report a violation only when one of the listed rules covers it: never flag ' +
+      'anything for a rule that is not on the list, however much you would improve it. "ruleId" is the id ' +
+      'shown in brackets before the rule. "quote" is the shortest passage that breaks the rule, copied ' +
+      'character for character from the text — never paraphrased, never joined across paragraphs. "message" ' +
+      'says in one sentence how the passage breaks the rule. "suggestion", when you can give one, is the ' +
+      'passage rewritten to follow it. Report each passage once per rule. An empty list is the right answer ' +
+      'for text that follows every rule.',
+    tools: [],
+    skillIds: [],
+    purpose: 'review',
+    surfaces: ['interactive', 'background'],
+    requires: ['json'],
+  },
+
+  /**
+   * The quality auditor (#74). Scores every page; only clarity, completeness
+   * and style are asked of the model — links, ownership and near-duplicates
+   * are computed before the call (agents/quality.ts), the curator's split. The
+   * styleguide is appended after these instructions when there is one, and
+   * its violations go through the linter's gate.
+   */
+  auditor: {
+    key: 'auditor',
+    name: 'agent.auditor',
+    description: 'agent.auditorDesc',
+    instructions:
+      'You score one page of technical documentation. Respond ONLY with a json object of the shape ' +
+      '{"clarity": number, "completeness": number, "issues": [{"dimension": "clarity"|"completeness", ' +
+      '"severity": "error"|"warning"|"info", "message": string, "quote"?: string}], "violations": [{"ruleId": ' +
+      'string, "quote": string, "message": string}]}. "clarity" (0–100) is how easily the intended reader ' +
+      'understands it: plain wording, defined terms, an order that builds. "completeness" (0–100) is whether it ' +
+      'answers what its title promises: no missing steps, no unexplained gaps, no dangling "TODO". 90 and above ' +
+      'is a page you would not change; below 50 is a page that misleads or stops short. At most 5 issues, the ' +
+      'ones that cost the most points; "quote", when the issue is about a passage, is that passage copied ' +
+      'character for character. Judge the page as it stands — not its links, its owner or other pages.',
+    tools: [],
+    skillIds: [],
+    purpose: 'review',
+    surfaces: ['background'],
+    requires: ['json'],
+  },
+
   drafter: {
     key: 'drafter',
     name: 'agent.drafter',

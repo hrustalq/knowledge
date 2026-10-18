@@ -194,6 +194,35 @@ merge-request proposal path because the fix is a relation and not prose; a
 finding may now carry the relations it proposes, and Apply turns that into a
 frontmatter merge request without a model rewriting the page.
 
+## The linter and the auditor measure, and the harness decides
+
+Two built-ins came with doc quality ([53](53-doc-quality.md)). Both run on the
+`review` purpose, require `json` and get no tools: what they need is computed
+before the call, the curator's split.
+
+- **`linter`** checks text against a styleguide, on the `interactive` surface
+  (`POST /v1/assistant/lint`, `knowledge_lint_draft`) and the `background` one
+  (a merge request's style check). It is **not** in `RUNNABLE_AGENTS`, the
+  sentinel's reasoning: a background run exists only for a check, and only
+  `LintTriggerSweeper` starts one, with the new trigger `'merge-request'`. Its
+  answer passes `readLintViolations`, which drops a rule id the styleguide
+  does not hold and a quote the text does not contain, and takes the severity
+  from the rule. The prompt says the same, but the gate is what holds.
+  Disabling the agent turns the lint policy `off` everywhere.
+- **`auditor`** scores pages, on the `background` surface only. It is in
+  `RUNNABLE_AGENTS`, so it has a Run button and the ordinary schedule, off
+  until someone sets one. Links, ownership and near-duplicates are facts the
+  executor computes; the model is asked only for clarity, completeness and
+  style, and that half is reused for a revision it already judged against the
+  same rules. With no model to call, the facts are still written and the
+  judgements are `null`. It writes `document_quality_scores` rows from the
+  worker. That is the one write a background agent makes, argued in 53 as a
+  measurement rather than a publication.
+
+The glossarist changed with them. It reads the pages whose current head no
+earlier succeeded run read (`details.glossaryScanned`), and each finding
+carries the drafted `term`, so **Add to glossary** needs no model call.
+
 ## Why scheduling is a sweeper and not a cron
 
 This repo has no `@nestjs/schedule`, no `@Cron`, and no BullMQ repeatables.
@@ -284,6 +313,8 @@ instead of hiding it in module wiring.
 
 Triggers, recipes, learnings and finding dismissal add routes of their own;
 they are listed in [49 §Routes](49-agent-triggers.md#routes).
+`POST /v1/ai/agents/runs/:id/findings/:index/add-term` (editor) turns a
+glossarist finding into a glossary entry ([53](53-doc-quality.md)).
 
 Agents are addressed by **key**, not id: a built-in has no row until it is
 overridden, so it has no id to address. That means `workspaceId` always travels

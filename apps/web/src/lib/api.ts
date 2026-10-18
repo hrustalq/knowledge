@@ -6,6 +6,7 @@ import {
   type Locale,
 } from '@knowledge/contracts'
 import { formatRelative } from './format'
+import { redirectForReauth } from './reauth'
 
 /** Fallback workspace when the caller has no memberships (AUTH_MODE=none demo flow). */
 export const DEMO_WORKSPACE_ID = '11111111-1111-4111-8111-111111111111'
@@ -444,7 +445,11 @@ async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
     } catch {
       /* not JSON — fall through to the raw-text form below */
     }
-    if (isApiErrorPayload(parsed)) throw new ApiError(res.status, parsed.message, parsed.code, parsed.details)
+    if (isApiErrorPayload(parsed)) {
+      // Enforced SSO (#75): a 403 that asks for a fresh sign-in navigates to /login.
+      redirectForReauth(res.status, parsed.details)
+      throw new ApiError(res.status, parsed.message, parsed.code, parsed.details)
+    }
     throw new ApiError(res.status, `${res.status} ${res.statusText}: ${text.slice(0, 300)}`)
   }
   return res
@@ -465,6 +470,15 @@ async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
  * only ever holds a `ks_` session token, which those routes accept; an API
  * key in a URL is refused. Per-asset tickets are #102 phase 2b.
  */
+/**
+ * The absolute URL of an API route, for a full-page navigation rather than a
+ * fetch — an SSO sign-in starts by sending the whole browser to the API, which
+ * redirects it on to the identity provider (#75).
+ */
+export function apiUrl(path: string): string {
+  return `${base}${path}`
+}
+
 export function resolveAssetUrl(path: string): string {
   if (!path.startsWith('/v1/')) return path
   const token = getToken()

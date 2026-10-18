@@ -65,17 +65,21 @@ HEAD + GET), hence the raised `timeout: 30_000, maxWait: 10_000`.
 
 ## Why the gates skip the dev principal
 
-Three gates, all evaluated before any side effect, all reported as a `reason`
-the client can branch on:
+Five gates, all evaluated before any side effect, all reported as a `reason`
+the client can branch on. They run in this order: `draft`, `approvals`, `lint`,
+`diverged`, `breaking-api`.
 
-| `reason`    | Gate                                                                      |
-| ----------- | ------------------------------------------------------------------------- |
-| `draft`     | `merge_requests.is_draft` — PATCH-toggleable, never merges while set        |
-| `approvals` | fewer than `MR_REQUIRED_APPROVALS` (default 1) non-author approvals         |
-| `diverged`  | the fast-forward precondition above, with `comparisonUrl`                   |
+| `reason`       | Gate                                                                      |
+| -------------- | ------------------------------------------------------------------------- |
+| `draft`        | `merge_requests.is_draft` — PATCH-toggleable, never merges while set        |
+| `approvals`    | fewer than `MR_REQUIRED_APPROVALS` (default 1) non-author approvals         |
+| `lint`         | under the `block` lint policy, the source head's style check is still to come or has an unresolved error-severity violation, and no admin overrode it; with `checkStatus`, `blockingCount`, `checkId` ([below](#style-lint)) |
+| `diverged`     | the fast-forward precondition above, with `comparisonUrl`                   |
+| `breaking-api` | a spec merge request with breaking changes under the `block` policy and no current ack, with `breakingCount` ([below](#breaking-api-changes)) |
 
 The author's own approval is excluded from the count. That exclusion is exactly
-why the approval gate is **skipped for the dev principal and for MCP**: in
+why the approval gate (and the lint gate, which follows it) is **skipped for
+the dev principal and for MCP**: in
 `AUTH_MODE=none` the dev principal's `userId` IS the zeros `AUTHOR_ID_STUB`
 (`00000000-0000-0000-0000-000000000000`), so every dev-created MR is authored by
 the only identity that can approve it — self-approval exclusion would deadlock
@@ -101,7 +105,8 @@ throw new ConflictException({ statusCode: 409, message, reason, ...extras });
 only) destructures `statusCode`/`error`/`message`/`code` out of the body and
 hoists **everything left over** into `details` of the `ApiErrorPayload`
 envelope. So `reason`, `requiredApprovals`, `approvals`,
-`currentHeadRevisionId` and `comparisonUrl` are written at the top level of the
+`currentHeadRevisionId`, `comparisonUrl`, `breakingCount`, `checkStatus`,
+`blockingCount` and `checkId` are written at the top level of the
 throw and arrive under `details` — typed as `MergeGateConflictDetails` in
 `@knowledge/contracts/reviews`. **Never nest `details` manually**: a hand-built
 `details` key would be hoisted into `details.details`.
@@ -110,6 +115,113 @@ The `diverged` 409 shares its shape with the `If-Match` optimistic-concurrency
 409 on `POST /:id/revisions` (`RevisionConflictResponse`), which is described in
 [02-persistence-revisions.md](02-persistence-revisions.md) — same envelope, same
 `comparisonUrl`, different trigger.
+
+## Breaking API changes
+
+A merge request on an OpenAPI or AsyncAPI document
+([feature 52](../features/52-api-reference.md)) can be refused for what it does
+to the API's clients. The diff is `ApiSpecDiffService.diff(documentId, from,
+to)`: the pure classifier `api-specs/api-diff.ts` over both revisions, every
+change one rule from the closed `API_CHANGE_RULES` catalogue
+(`@knowledge/contracts/api/diff`) with a fixed severity. It is cached in
+`revision_diffs` under the format `api-semantic-v1`. The version is part of the
+format name, so a rule change misses the cache instead of serving old
+verdicts. Operations match by method and folded path (channels by address and
+action), never by array position, so reordered parameters are no change.
+
+The policy is `workspace_settings.api_breaking_change_policy`: `off`, `warn` or
+`block`, with `null` meaning `warn`. It is a sparse settings row with no env
+ceiling, and `warn` never refuses a merge, so an empty table merges exactly as
+before. One predicate, `breakingBlocks(policy, diff, mr)`, decides: `block`,
+at least one breaking change from merge base to source head, and no current
+acknowledgement. `GET /v1/merge-requests/:id/api-changes` (its `blocked`
+field) and `merge()` both call it, so the panel cannot say "mergeable" while
+the gate says no.
+
+In `merge()`, `assertBreakingAcknowledged` runs **last**, after the diverged
+check, because it parses two specs. Past that check the target head is the
+merge base, so the gate judges the same diff the panel showed. It throws the
+flat-extras 409 `{ reason: 'breaking-api', breakingCount }`. On a page, or
+under any policy but `block`, it returns before parsing anything.
+
+**The ack is pinned to the source head.** `POST /v1/merge-requests/:id/breaking-ack`
+(admin) writes `breaking_ack_by`, `breaking_ack_at` and
+`breaking_ack_revision_id`; `DELETE` withdraws it. The ack is current only
+while `breaking_ack_revision_id` equals the source branch head. A later push
+makes it stale (`ack.current: false`), so an author cannot add breaking changes
+after an admin approved the first ones. Both acts record an activity note.
+
+A connector-synced spec ([feature 52](../features/52-api-reference.md), repo
+sync) never writes the page after its first sync. Every later change opens a
+merge request with the conflict reason `spec-changed`, in every sync mode, so
+this gate sees the change before readers do. The connector sweeper supersedes
+an older open spec MR for the same file, as it does for `regenerated` wiki
+pages.
+
+Not built: the system thread on the merge request for each breaking change to
+a linked operation. Posting it needs a trigger when the source branch's
+revision is finalized, and a GET must not post.
+
+## Style lint
+
+Issue #74 ([feature 53](../features/53-doc-quality.md)). A merge request is
+checked against the styleguide of its page's project, and the check can hold
+the merge. Everything lives in `documents/lint/`: the pure `lint-check.ts`,
+`LintChecksService` in `LintCoreModule` (both processes, so `DocumentsModule`
+can import it for the gate), and the API-only `LintModule` with the two
+sweepers and `LintController`.
+
+**One row per head.** `merge_request_checks` is unique on `(merge_request_id,
+kind, head_revision_id)`. `LintTriggerSweeper` (30 s) inserts the row for an
+open, non-draft merge request whose source head has none, and that insert is
+the claim. It enqueues a `linter` run as the merge request's author
+(`trigger: 'merge-request'`). A newer head marks a still-waiting check
+`skipped` and cancels its run. Stored statuses are `pending`, `passed`,
+`failed`, `error` and `skipped`; `running` is derived from the run.
+
+**Only what the merge request adds is linted.** The executor reads the
+merge-base diff through `CompareService` (in `DocumentsCoreModule` for this)
+and `changedText` keeps the added lines, so a violation already on the target
+is not reported. Every quote is grounded again in the whole source head and
+stored as a `text` anchor on a `style` finding.
+
+**The API publishes.** `LintPublishSweeper` (15 s) claims a finished check by
+stamping `published_at` in one guarded `updateMany`, then reconciles with the
+lint threads of earlier checks (`planLintThreads`): a standing violation keeps
+its thread, open or resolved; a new one gets a resolvable `source: 'ai'`
+thread with `agent_key = 'linter'`, `check_id` and `rule_id`; an open thread
+whose violation is gone is resolved. Identity is rule plus quote, with
+overlapping quotes of one rule counted as one. Only lint threads are read, so
+a person's thread is never touched. A run older than 24 h is `stale` and not
+published.
+
+**The policy.** `workspace_settings.lint_policy` and `projects.lint_policy`,
+`off | warn | block`, null inheriting. `STYLE_LINT_POLICY` (default `off`) is
+the ceiling and the policy of every scope that sets none. A disabled `linter`
+agent makes it `off`. `resolveLintPolicy` returns requested beside effective,
+and `GET`/`PUT /v1/lint-policy` serves it.
+
+**The gate.** `lintGate()` is the one predicate; `LintChecksService.gate()`
+feeds it and both `merge()` and `GET …/checks` (its `gate` field) call it.
+Under `block` it holds while the current head's check is missing, pending or
+running, or while it is `failed` with unresolved, resolvable lint threads whose
+`rule_id` the run's findings marked `error` (`errorRuleIds`, the severity the
+rule had when the run read it). `passed`, `error` and `skipped` never hold:
+fail-open. Resolving the last such thread through the ordinary `PATCH
+…/threads/:threadId` unblocks the merge; no route was added for it.
+
+It runs after `approvals` and before `diverged`, because a rebase would only
+produce a new head to lint, and is skipped where the approval gate is
+(`lintGateEnforced`).
+
+**The override.** `POST /v1/merge-requests/:id/checks/:checkId/override`
+(admin, `{ reason }`) is on `MergeRequestsController` beside `breaking-ack`,
+because it needs `AuditService` and the activity recorder and
+`LintChecksService` must stay worker-safe. It applies to the current head
+only and to a `pending` or `failed` check, in one guarded `updateMany`, and is
+recorded in `audit_logs` (`merge-request.lint-override`) and as a
+`merge-request.updated` activity with `changed: ['lintOverride']`. A later
+push is linted afresh and needs its own pass or override.
 
 ## Why merge base is computed on detail reads only
 
@@ -262,9 +374,11 @@ a reopen still merges.
 
 | Table                     | Notes                                                                                                                                                 |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `merge_requests`          | `status` open \| merged \| closed, `is_draft`, `author_id`, `assignee_id` (no FK — advisory), `approved_by` Json, `strategy`, `merged_revision_id`, `provenance` manual \| agent \| captured, `capture_id`. |
+| `merge_requests`          | `status` open \| merged \| closed, `is_draft`, `author_id`, `assignee_id` (no FK — advisory), `approved_by` Json, `strategy`, `merged_revision_id`, `provenance` manual \| agent \| captured, `capture_id`, nullable `breaking_ack_by` / `breaking_ack_at` / `breaking_ack_revision_id`. |
+| `workspace_settings`      | Sparse, one row per workspace; `api_breaking_change_policy` (null = `warn`) and `lint_policy` (null = the `STYLE_LINT_POLICY` ceiling) beside the try-it `api_try_proxy_mode`. `projects.lint_policy` overrides the lint policy per project. |
+| `merge_request_checks`    | One style check per `(merge_request_id, kind, head_revision_id)`: `status`, `reason`, `styleguide_id`, `agent_run_id`, `counts`, `published_at`, `overridden_by` / `overridden_at` / `override_reason`. |
 | `merge_request_reviewers` | Join table with `added_by`. Advisory; validated against `workspace_members`.                                                                            |
-| `merge_request_threads`   | `resolvable` (default true), `resolved`/`resolved_by`/`resolved_at`, `source` human \| ai, `anchor_type` line \| text \| section \| entity, `anchor` Json. |
+| `merge_request_threads`   | `resolvable` (default true), `resolved`/`resolved_by`/`resolved_at`, `source` human \| ai, `anchor_type` line \| text \| section \| entity, `anchor` Json, `check_id` / `rule_id` on a lint thread. |
 | `merge_request_comments`  | Flat, `createdAt`-ordered. `reply_to_id` self-FK `SetNull` (attribution), nullable `updated_at`, `agent_key`, `pending`.                                 |
 | `saved_filters`           | `Int` PK. `(owner_id, workspace_id, name)` unique; `query` Json holds status + search + chips.                                                           |
 
@@ -283,7 +397,12 @@ a reopen still merges.
 | `PUT /v1/merge-requests/:id/reviewers`                 | editor ·merge-request| replace-set, members only                      |
 | `GET /v1/merge-requests/:id/diff?semantic=`            | viewer ·merge-request| merge-base compare, structural always          |
 | `POST /v1/merge-requests/:id/approve`                  | editor ·merge-request| records the calling principal                  |
-| `POST /v1/merge-requests/:id/merge`                    | editor ·merge-request| 409 `draft` \| `approvals` \| `diverged`        |
+| `POST /v1/merge-requests/:id/merge`                    | editor ·merge-request| 409 `draft` \| `approvals` \| `lint` \| `diverged` \| `breaking-api` |
+| `GET /v1/merge-requests/:id/api-changes`               | viewer ·merge-request| spec MRs: classified diff, linked pages per operation, policy, ack, `blocked` |
+| `POST/DELETE /v1/merge-requests/:id/breaking-ack`      | admin ·merge-request | pins / withdraws the ack at the source head    |
+| `GET /v1/merge-requests/:id/checks`                    | viewer ·merge-request| style checks per head, `gate` for the caller   |
+| `POST /v1/merge-requests/:id/checks/lint`              | editor ·merge-request| lints the current head again                   |
+| `POST /v1/merge-requests/:id/checks/:checkId/override` | admin ·merge-request | `{ reason }`; current head, pending or failed  |
 | `POST /v1/merge-requests/:id/close`                    | editor ·merge-request|                                                |
 | `GET/POST /v1/merge-requests/:id/threads`              | viewer / editor    | reads work on merged/closed MRs                  |
 | `POST .../threads/:threadId/comments`                  | editor             | optional `replyToId`                             |
@@ -295,21 +414,28 @@ MCP exposes `knowledge_create_merge_request`, `knowledge_list_merge_requests`
 `knowledge_approve_merge_request`, `knowledge_close_merge_request`,
 `knowledge_comment_merge_request` and `knowledge_merge_revision` — all acting as
 the stub identity, which is why the approval tool's description spells out that
-self-approvals never count.
+self-approvals never count. `knowledge_diff_api_spec` (read-only) returns the
+classified spec diff between two revisions; there is no ack tool. Style checks
+are not on `knowledge_get_merge_request`; `knowledge_lint_draft` lints a draft
+before it is proposed.
 
 ## Web
 
 `/merge-requests` (`MergeRequestsPage.vue`) and `/merge-requests/:id`
 (`MergeRequestDetailPage.vue`, tabs overview/changes/structure/impact per
-[plan.md §8](../../plan.md)) were the first consumers of the generated
+[plan.md §8](../../plan.md), plus review mode and, on a spec only, **API
+changes** from `components/api-reference/ApiChangesPanel.vue`) were the first consumers of the generated
 vue-query client. `components/knowledge/DiffView.vue` was extracted from the
 revisions view and takes inline threads through a slot;
 `components/merge-requests/` holds `MergeRequestCard.vue`,
 `MergeRequestList.vue`, `MergeRequestSearchBar.vue`, `MrSidebar.vue` (assignee +
 reviewers with approval ticks), `AiCheckPane.vue` (a `/v1/assistant/review` run
-against the source head, handling `enabled:false`), `MergeWidget.vue` (readiness
-checklist, renders the gate 409s), `ThreadCard.vue` (collapsible, starts
-collapsed when resolved), `CommentComposer.vue` (split **Comment ▾** button
+against the source head, handling `enabled:false`, above a Style section with
+the current head's check), `MergeWidget.vue` (readiness
+checklist, renders the gate 409s; on a spec MR a breaking-changes row with
+**Acknowledge** / **Withdraw** for admins; a style row with **Check again** and,
+for admins, **Override**), `ThreadCard.vue` (collapsible, starts collapsed when
+resolved; a lint thread shows its rule chip), `CommentComposer.vue` (split **Comment ▾** button
 whose second item is _Start thread_ — the `resolvable` flag), `mr-ui.ts` and
 `use-members.ts`.
 

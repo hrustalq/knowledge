@@ -20,6 +20,7 @@ import { toast } from 'vue-sonner'
 import { useQueryClient } from '@tanstack/vue-query'
 import { ArrowLeft, Check, CircleAlert, History, Loader2, Plug, X } from 'lucide-vue-next'
 import {
+  API_SPECS_CONFIG_KEY,
   CONNECTOR_KIND_INFO,
   DRIFT_CHECK_CONFIG_KEY,
   DRIFT_CHECK_MODES,
@@ -34,6 +35,7 @@ import type {
   ConnectorKind,
   ConnectorSummary,
   ConnectorSyncMode,
+  ConnectorTestResponse,
 } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { Button } from '@/components/ui/button'
@@ -91,6 +93,13 @@ const fieldsFor = computed(() =>
     .filter((f): f is NonNullable<typeof f> => !!f),
 )
 
+/**
+ * Spec files the connection test found (#78). A snapshot persisted before this
+ * existed has no list, hence the fallback.
+ */
+const specSuggestions = computed(() => context.value?.specSuggestions ?? [])
+const specsAdded = computed(() => !!context.value?.config[API_SPECS_CONFIG_KEY]?.trim())
+
 /** The two kinds that download a repository archive (docs/features/27, 28). */
 const isGitKind = computed(() => kind.value === 'codebase' || kind.value === 'markdown-git')
 
@@ -141,10 +150,7 @@ async function testConnection(ctx: SetupContext) {
   // first. That is also what makes the flow resumable server-side: from here on
   // the setup has an id, not just a snapshot.
   const id = ctx.connectorId ?? ctx.editingId ?? (await saveConnector(ctx, true))
-  const res = (await api.post('/v1/connectors/{id}/test', { path: { id } })) as {
-    ok: boolean
-    detail: string | null
-  }
+  const res = (await api.post('/v1/connectors/{id}/test', { path: { id } })) as ConnectorTestResponse
   if (actor.value) actor.value.send({ type: 'SET', patch: { connectorId: id } })
   return res
 }
@@ -496,6 +502,27 @@ function startOver() {
           <div v-if="context?.testDetail" class="flex items-center gap-2 text-sm">
             <Check class="size-4 text-emerald-600 dark:text-emerald-500" />
             <span>{{ t('connectors.connected', { detail: context.testDetail }) }}</span>
+          </div>
+
+          <!-- Spec files the test found (#78). Offered, never added on their
+               own: a repository's fixtures look exactly like its real spec. -->
+          <div v-if="specSuggestions.length" class="space-y-2 rounded-md border p-3">
+            <p class="text-sm font-medium">
+              {{ t('connectors.apiSpecs.foundTitle', { count: specSuggestions.length }, specSuggestions.length) }}
+            </p>
+            <ul class="text-muted-foreground space-y-0.5 font-mono text-xs">
+              <li v-for="path in specSuggestions" :key="path" class="truncate">{{ path }}</li>
+            </ul>
+            <p class="text-muted-foreground text-xs">{{ t('connectors.apiSpecs.foundHint') }}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              :disabled="specsAdded"
+              @click="setField(API_SPECS_CONFIG_KEY, specSuggestions.join(', '))"
+            >
+              <Check v-if="specsAdded" class="size-4" aria-hidden="true" />
+              {{ specsAdded ? t('connectors.apiSpecs.added') : t('connectors.apiSpecs.add', specSuggestions.length) }}
+            </Button>
           </div>
 
           <label class="block space-y-1.5">

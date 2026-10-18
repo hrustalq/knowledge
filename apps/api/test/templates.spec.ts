@@ -21,6 +21,7 @@ import { AclGuard } from '../src/auth/acl.guard.js';
 import { DocumentsService } from '../src/documents/documents.service.js';
 import { withLocale } from '../src/i18n/t.js';
 import type { Principal } from '../src/auth/principal.js';
+import { noAuthPolicy } from './auth-policy-fakes.js';
 
 /**
  * Page templates (issue #69, phases 1–2).
@@ -538,7 +539,7 @@ function accessAs(role: 'viewer' | 'editor' | 'admin', workspaceId = WS) {
       ),
     },
     pageTemplate: { findUnique: vi.fn(async () => ({ workspaceId: WS_B })) },
-  } as never);
+  } as never, noAuthPolicy);
 }
 
 describe('template access', () => {

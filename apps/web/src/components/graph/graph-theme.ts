@@ -93,10 +93,19 @@ const ENTITY_VARS: Record<string, string> = {
   process: '--kn-draw-green',
   contract: '--kn-draw-amber',
   system: '--kn-draw-blue',
+  // Spec operations and channels (#78) are contracts, cut finer: the same hue,
+  // told apart by their square glyph rather than by a seventh colour.
+  op: '--kn-draw-amber',
+  channel: '--kn-draw-amber',
+}
+
+/** Entity types drawn as a square and opened in the API reference rather than pinned (#78). */
+export function isOperationType(entityType: string | null | undefined): boolean {
+  return entityType === 'op' || entityType === 'channel'
 }
 
 /** Order the legend renders in — most structural first, not alphabetical. */
-export const ENTITY_TYPE_ORDER = ['service', 'component', 'process', 'system', 'contract', 'team', 'role', 'concept']
+export const ENTITY_TYPE_ORDER = ['service', 'component', 'process', 'system', 'contract', 'op', 'channel', 'team', 'role', 'concept']
 
 /**
  * The lifecycle dot's colors are read off the very classes `statusDot()` hands

@@ -9,6 +9,9 @@
     "./documents": "./src/documents/index.ts",
     "./reviews": "./src/reviews/index.ts",
     "./graph": "./src/graph/index.ts",
+    "./api": "./src/api/index.ts",
+    "./api/samples": "./src/api/samples.ts",
+    "./api/diff": "./src/api/diff.ts",
     "./identity": "./src/identity/index.ts",
     "./notifications": "./src/notifications/index.ts",
     "./ai": "./src/ai/index.ts",
@@ -19,6 +22,7 @@
     "./connectors": "./src/connectors/index.ts",
     "./chat": "./src/chat/index.ts",
     "./captures": "./src/captures/index.ts",
+    "./quality": "./src/quality/index.ts",
     "./observability": "./src/observability/index.ts"
   },
   "scripts": {

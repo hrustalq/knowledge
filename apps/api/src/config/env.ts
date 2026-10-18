@@ -111,6 +111,40 @@ export const envSchema = z.object({
   AUTH_REQUIRE_VERIFIED_EMAIL: boolish(false),
 
   /**
+   * Enterprise SSO (#75). Off: every /v1/auth/sso|oidc route and the identity
+   * provider settings answer 404, and sign-in is exactly the password + key flow.
+   * Needs AUTH_MODE=api-key, and SETTINGS_ENCRYPTION_KEY to store a client secret.
+   */
+  AUTH_SSO_ENABLED: boolish(false),
+  /** Issuer / discovery / token endpoints on private ranges — an on-prem Keycloak. Mirrors AI_PLUGINS_ALLOW_PRIVATE_URLS. */
+  AUTH_SSO_ALLOW_PRIVATE_URLS: boolish(false),
+  /** Lifetime of one SSO login transaction (start → IdP → callback). */
+  AUTH_SSO_STATE_TTL_SEC: z.coerce.number().int().min(60).max(3600).default(600),
+  /**
+   * Instance ceiling on password sign-in. False: login, signup and forgot-password
+   * refuse every address but AUTH_BREAK_GLASS_EMAILS, and the login page offers SSO only.
+   */
+  AUTH_PASSWORD_LOGIN_ENABLED: boolish(true),
+  /** Comma-separated addresses that may always use a password — the way back in when an IdP is down. */
+  AUTH_BREAK_GLASS_EMAILS: z.string().default(''),
+  /**
+   * LDAP / Active Directory bind sign-in (#75) as an identity provider kind.
+   * Rides on AUTH_SSO_ENABLED: off, the kind cannot be created and an existing
+   * LDAP provider neither appears on /login nor signs anyone in.
+   */
+  AUTH_LDAP_ENABLED: boolish(false),
+  /** Plain ldap:// without StartTLS — the password crosses the wire in clear. A lab directory only. */
+  AUTH_LDAP_ALLOW_INSECURE: boolish(false),
+  /**
+   * SCIM 2.0 provisioning (#75) at /v1/scim/v2, authenticated by per-workspace
+   * `kscim_` tokens. Off: those routes and the token settings answer 404.
+   * Independent of AUTH_SSO_ENABLED; needs AUTH_MODE=api-key.
+   */
+  AUTH_SCIM_ENABLED: boolish(false),
+  /** Cap on a SCIM list page (`count`). */
+  AUTH_SCIM_MAX_PAGE: z.coerce.number().int().min(1).max(1000).default(200),
+
+  /**
    * Mailer (docs/features/41). `log` writes each message to the worker log and
    * sends nothing — the default, so dev and CI never open a socket. `smtp`
    * sends through MAIL_SMTP_URL (`smtp://` STARTTLS or `smtps://` implicit TLS),
@@ -360,6 +394,36 @@ export const envSchema = z.object({
   COVERAGE_MIN_CLUSTER_SIZE: z.coerce.number().int().min(1).default(3),
   COVERAGE_SIMILARITY: z.coerce.number().min(0).max(1).default(0.82),
   COVERAGE_MAX_QUESTIONS: z.coerce.number().int().positive().default(2_000),
+  /**
+   * Styleguides (#74): the most rules one styleguide may hold — every rule is
+   * in every lint prompt, so this bounds the prompt — and the most violations
+   * one lint reports, so a long page cannot bury its reader.
+   */
+  STYLEGUIDE_MAX_RULES: z.coerce.number().int().positive().default(50),
+  LINT_MAX_FINDINGS: z.coerce.number().int().positive().default(15),
+  /**
+   * The style lint of merge requests (#74, phase 2): the ceiling of every
+   * workspace's and project's lint policy, and the policy of one that sets
+   * none. `off` (the default) lints nothing anywhere. A scope may ask for a
+   * narrower policy, never a wider one (off < warn < block). `block` lets the
+   * merge gate hold a merge request while the check of its head is to come or
+   * found an unresolved error-severity violation (phase 3).
+   */
+  STYLE_LINT_POLICY: z.enum(['off', 'warn', 'block']).default('off'),
+  /** Lint checks one workspace may have waiting; past it a head waits for the next tick. */
+  LINT_MAX_PENDING_PER_WORKSPACE: z.coerce.number().int().positive().default(20),
+  /**
+   * The quality auditor (#74, phase 4): the most pages one run scores (one
+   * model call each, unless the page's revision was scored already), how many
+   * days a score stands before an unchanged page is re-scored (a workspace may
+   * override it in ai_settings), the mean-embedding cosine two pages must clear
+   * to be reported as near-duplicates, and the overall score below which a page
+   * becomes a finding.
+   */
+  QUALITY_AUDIT_MAX_PAGES: z.coerce.number().int().positive().default(200),
+  QUALITY_AUDIT_DAYS: z.coerce.number().int().positive().default(7),
+  QUALITY_DUPLICATE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.92),
+  QUALITY_FINDING_THRESHOLD: z.coerce.number().int().min(0).max(100).default(50),
 
   /**
    * Feature 12 AI settings: AES-256-GCM key (base64, 32 bytes) for provider
@@ -442,6 +506,31 @@ export const envSchema = z.object({
   /** The capture sweeper's tick, and how old a claim must be before it re-drives the row. */
   CAPTURE_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   CAPTURE_STALE_MS: z.coerce.number().int().positive().default(300_000),
+
+  /**
+   * API reference documents (#78). A spec larger than this, or defining more
+   * operations, is refused at finalize (422) and at ingestion — the operation
+   * count is the graph and projection fan-out of one revision.
+   */
+  API_SPEC_MAX_BYTES: z.coerce.number().int().positive().default(5_000_000),
+  API_SPEC_MAX_OPERATIONS: z.coerce.number().int().positive().default(2000),
+
+  /**
+   * The try-it proxy (#78): POST /v1/api-specs/:id/try sends a request to a
+   * server the spec names, for an API that does not allow CORS. The mode is a
+   * CEILING the workspace setting can only narrow, as WEB_ACCESS_MODE is for
+   * web research: `allowlist` reaches only hosts the workspace's source
+   * policies allow, `open` any host they do not block. `off` keeps the route
+   * refusing and the console browser-direct only.
+   */
+  API_TRY_PROXY_MODE: z.enum(['off', 'allowlist', 'open']).default('off'),
+  /** Let the proxy reach private and loopback addresses (an intranet API). Operator-only. */
+  API_TRY_ALLOW_PRIVATE_URLS: boolish(false),
+  API_TRY_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+  /** A longer response body is cut here and returned with `truncated: true`. */
+  API_TRY_MAX_RESPONSE_BYTES: z.coerce.number().int().positive().default(1_000_000),
+  /** Proxied requests per user per minute, counted in Redis. */
+  API_TRY_RATE_PER_MINUTE: z.coerce.number().int().positive().default(30),
 
   /** Allow web targets on private/loopback ranges (self-hosted SearXNG, intranet). */
   WEB_ALLOW_PRIVATE_URLS: boolish(false),

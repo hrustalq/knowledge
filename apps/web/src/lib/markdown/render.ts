@@ -226,6 +226,7 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
     'data-kn-api',
     'data-kn-path',
     'data-kn-api-section',
+    'data-kn-op',
     'data-type',
     'data-checked',
     'data-align',

@@ -13,6 +13,591 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.27.0] — 2026-10-18
+
+### Added
+
+- A document can now be an OpenAPI or AsyncAPI spec rather than a markdown
+  page. Pass `kind: 'openapi' | 'asyncapi'` to `POST /v1/documents` with
+  `content.format` `yaml` or `json`. OpenAPI 3.0, 3.1 and Swagger 2.0
+  (upgraded on read) are accepted, and so are AsyncAPI 2.x and 3.x. A spec
+  that does not validate is refused with a 422 (`code: UNPROCESSABLE`, the
+  validator's messages in `details.issues`), at create or at finalize. A
+  remote `$ref` is refused, never fetched. Once indexed, a spec is
+  searchable by its operations, summaries, parameters and schemas. The graph
+  holds one `DESCRIBES` edge per operation (`op:<slug>:<METHOD> <path>`) or
+  channel (`channel:<slug>:<address>`). Path parameters are folded, so
+  `/users/{id}` and `/users/{userId}` are one operation. A page that names
+  the same key in its frontmatter `relations:` links to the same entity. The
+  slug is fixed when the spec first indexes, so renaming `info.title` does
+  not break those links; only `x-knowledge-key` changes it. This is the
+  first phase of the API reference: the reader, try-it, the merge-request
+  diff and repo sync come in later releases. (#78)
+- Reading API specs over the API and MCP. `GET /v1/api-specs` lists the spec
+  documents you can open, with each head's operation count.
+  `GET /v1/api-specs/:id` returns one revision parsed (OpenAPI upgraded to
+  3.1, internal `$ref`s kept), and `GET /v1/api-specs/:id/operations`
+  returns its operations. `GET /v1/api-operations?q=` searches operations
+  across every spec, by method and path, summary or operationId. Agents get
+  `knowledge_list_api_operations` and `knowledge_get_api_operation`. The
+  latter returns an operation's parameters, body and responses as markdown,
+  plus the pages that link to it, such as a use case that `IMPLEMENTS` it.
+  Both work with read-only keys. `knowledge_create_revision` now writes a
+  spec document's whole YAML or JSON body; name it with `syntax`. The
+  document detail response gains `kind`. (#78)
+- A spec document now reads as an API reference rather than a page. Every
+  operation or channel gets its own card, grouped under its tag. A card shows
+  the parameters, request body, responses or messages, with schemas as a
+  collapsible field tree that marks a recursive type instead of looping. It
+  also shows examples, deprecation, and the pages that link the operation,
+  each with its fact class. When no page links it yet, the card shows the
+  frontmatter that would. An **Operations** card in the page rail lists them
+  all. Clicking a row scrolls to that operation, and the row being read stays
+  highlighted as you scroll. `?op=<entityKey>` lands on that operation.
+  Specs are written in a text editor: "API spec" in the new-page menu, or
+  Edit on a spec. The editor loads a `.yaml` / `.json` file, publishes a
+  revision, and lists the validator's messages when the spec is refused.
+  `GET /v1/api-specs/:id` now reports the spec version as written (`3.0.3`)
+  rather than the upgraded one. (#78)
+- Code samples and a try-it console on every HTTP operation of a spec. Each
+  operation shows its request as cURL, JavaScript `fetch`, Python `requests`
+  and Go `net/http`. Where the spec has `x-codeSamples` for a language, the
+  author's sample is shown instead and labelled as theirs. Credentials appear
+  as environment variables (`$TOKEN`, `process.env.TOKEN`…), never as values.
+  "Try it" opens a console with the server, parameters, credentials and body,
+  prefilled from the spec's examples, and the sample follows what you type.
+  Requests go from your browser by default; when the API refuses CORS, the
+  console says so. Credentials stay in the browser tab's `sessionStorage`.
+  The same samples are available from
+  `GET /v1/api-specs/:id/samples?entityKey=&lang=` and from
+  `knowledge_get_api_operation` with `lang`. (#78)
+- A try-it proxy for APIs that refuse browser requests, at
+  `POST /v1/api-specs/:id/try`. It is off unless the deployment allows it, and
+  workspace admins set the mode under Settings → API reference
+  (`GET`/`PATCH /v1/workspaces/:id/api-settings`). The page shows both the
+  mode asked for and the mode in force. The proxy sends only to a server named
+  by the spec revision being read, and only for an operation that revision
+  defines. `allowlist` reaches only hosts the workspace's source policies
+  allow, `open` any public host they do not block. Private addresses are
+  refused, including a name that resolves to one at connect time. Redirects
+  are returned, not followed. `Set-Cookie` never comes back, and `Cookie` /
+  `Host` are never forwarded. Each request needs the editor role and counts
+  against a per-person rate limit. The audit log records method, host and
+  path template, never headers or bodies. It is not an MCP tool. (#78)
+- Pages can now link to the operations of an API spec. In page settings,
+  **Link API operation** searches every spec you can open and adds the
+  operation as an `IMPLEMENTS` relation, and the row shows which endpoint
+  and spec the key resolves to. An API block can be linked to a spec
+  operation with **Link to spec**. A linked block takes its method and path
+  from the spec, keeps only your summary, and shows the parameters, body and
+  responses live from the spec's head. If the operation leaves the spec, the
+  block says so instead of going stale. The page then `IMPLEMENTS` the
+  operation, so it appears in the operation's linked pages.
+  `GET /v1/api-operations` takes `entityKey` to resolve one key in any
+  spelling. In the graph, operations and channels are drawn as squares and
+  open their card in the spec. In workflows, a fan-out step whose source
+  page links operations (or which runs against a spec) can tag each item
+  with one of them. The endpoint draft under that item gets the spec's text
+  for the operation and declares `DESCRIBES` on it. (#78)
+
+- Merge requests on an API spec now say what the change does to the API.
+  An **API changes** tab lists every changed operation, grouped by endpoint,
+  breaking changes first. Breaking means a client of the old spec can fail
+  against the new one: an operation or channel removed, a required parameter
+  or request field added, a parameter's type changed, an allowed value or a
+  response status or field removed, or authentication now required. Each
+  operation lists the pages that link it, so the docs a breaking change makes
+  wrong are one click away. Operations are matched by method and path, so
+  reordering parameters or renaming a path parameter is no change. The same
+  classified diff is in the revision compare, in `GET /v1/documents/:id/compare`
+  (as `api`), at `GET /v1/api-specs/:id/diff?from=&to=`, and for agents as
+  `knowledge_diff_api_spec`. Workspace admins choose what a breaking change
+  does under Settings → API reference: `warn` (the default) names it in the
+  merge widget, `block` refuses the merge with a 409 (`reason: breaking-api`,
+  `breakingCount`) until an admin acknowledges it, and `off` does neither. An
+  acknowledgement covers the branch as it was: a later push needs a new one.
+  `GET /v1/merge-requests/:id/api-changes` returns the diff, the linked pages
+  and whether a merge would be refused. (#78)
+- Markdown / Git and Codebase connectors can sync API spec files. List them
+  under **API specs**, comma-separated globs matched from the repository root
+  (`openapi.yaml, specs/**/*.json`); a file under them that declares
+  `openapi`, `swagger` or `asyncapi` becomes a spec document, and one that
+  does not (a schema fragment) is skipped. A spec split across files is
+  bundled into one document: relative `$ref`s to files in the same snapshot
+  are inlined, and a remote `$ref` is reported on the run and never fetched.
+  The first sync creates the spec page; after that, **a changed spec always
+  arrives as a merge request**, in every sync mode, so the API changes tab and
+  the breaking-change gate see it before readers do. A newer change to the
+  same file replaces the open merge request. The connection test lists the
+  spec files it finds, and the setup dialog offers to add them. Specs are
+  never pushed back to the repository, and the AI clean-up and merge assists
+  are not offered on them. Connectors that name no specs sync exactly what
+  they did. (#78)
+- The drift check now compares a synced OpenAPI spec with the routes its
+  repository declares. It reads NestJS controllers (`@ApiExcludeEndpoint`
+  routes are left out), Express, Fastify, Hono and Koa routers, FastAPI
+  decorators, and Go `net/http`, chi, gin, echo and gorilla routes. Tests,
+  fixtures, examples and vendored code are not read. A route whose path is
+  not a literal is counted, not guessed. A path matches whatever
+  its parameters are named (`:id`, `{id}`, `{userId}`), and one uniform
+  prefix such as `/v1` is allowed between the two sides. The check reports
+  three things: an operation the spec documents that no route serves (missing
+  in code), a route no spec documents (missing in spec), and a path whose
+  methods differ. A pull request that edits a spec or a file declaring a route
+  gets a finding on the spec page for each disagreement it introduces.
+  Disagreements that predate the change are not reported. The one drift
+  comment gains an **API specs** section with the spec's own diff (breaking /
+  non-breaking) when the pull request edits it. A pull request that touches
+  neither leaves the spec out. A repository with no supported framework is
+  reported as not compared, never as every operation missing. On a spec page,
+  editors can press **Check against the code** in the connector card to
+  compare the default branch as it stands
+  (`POST /v1/api-specs/:id/drift-check`, which queues a sentinel run). Neither
+  path needs a model, and spec pages are never given an AI-written correction:
+  the fix belongs in the repository's file. (#78)
+- A styleguide: the rules your team agreed on for writing docs, in plain
+  words, each with a severity (error, warning or suggestion). Admins write it
+  under **Settings → AI → Styleguide**, for the whole workspace or for one
+  project. A project's own styleguide replaces the workspace one there rather
+  than adding to it, so a project can relax a rule. Every member can read the
+  rules (`GET /v1/ai/styleguides`); admins write them with
+  `PUT /v1/ai/styleguides` and delete them with
+  `DELETE /v1/ai/styleguides/:id`. `POST /v1/assistant/lint` checks text
+  against the styleguide of its project with the new `linter` agent. The
+  panel's **Try it** box uses the same check. Each violation names the rule
+  it breaks and quotes the passage. A violation that cites no rule of the
+  styleguide, or quotes text that is not there, is dropped and counted in
+  `dropped` rather than shown. The severity always comes from the rule. With
+  no styleguide, the check makes no model call. Styleguides never appear
+  among skills and never join a chat turn. (#74)
+- Merge requests are checked against the styleguide. When a page's lint
+  policy is `warn`, every push to an open, ready merge request is linted
+  within about a minute, as its author. Only the lines the merge request adds
+  are checked, so a violation already on the target branch is not reported.
+  Each violation becomes a resolvable AI thread on the merge request,
+  anchored to the quoted passage, naming the rule it breaks. A later push
+  resolves the threads whose violation is gone and keeps the ones that still
+  stand; a thread somebody resolved is never reopened, and threads people
+  wrote are never touched. The merge widget and the AI pane show the check
+  of the current head: waiting, running, passed, the number of violations,
+  or why it did not run (no styleguide, a newer push, a page not open to
+  every member, an author who cannot act, a spent AI budget, a failed run).
+  **Check again** lints the head again. A `warn` check never holds a merge.
+  The policy is set per workspace,
+  and per project, under **Settings → AI → Styleguide** (`GET`/`PUT
+  /v1/lint-policy`), where the panel shows both the setting and what
+  applies. `GET /v1/merge-requests/:id/checks` lists a merge request's
+  checks, `POST /v1/merge-requests/:id/checks/lint` re-runs one, and review
+  threads gain `checkId` and `ruleId`. A page restricted to some members is
+  not linted, because agent runs and their findings are listed to every
+  member. (#74)
+- A `block` lint policy holds a merge request until its style is fixed.
+  Under it, `POST /v1/merge-requests/:id/merge` answers 409 with
+  `details.reason: 'lint'` while the check of the source head is still to
+  come, or while it has error-severity violations nobody has resolved
+  (`details.checkStatus`, `details.blockingCount`, `details.checkId`).
+  Resolving those threads lets the merge through; warnings and suggestions
+  never hold it. A workspace admin can instead override the check of the
+  current head with a required reason (**Override** in the merge widget,
+  `POST /v1/merge-requests/:id/checks/:checkId/override`); the override is
+  written to the audit log and shown in the merge request's activity, and
+  it covers that revision only, so the next push is checked again. A check
+  that could not run — a provider failure or a spent budget — does not hold
+  a merge, and neither does a disabled `linter` agent. As with approvals,
+  the gate is not enforced for the `AUTH_MODE=none` dev principal or an MCP
+  client with no principal. `GET /v1/merge-requests/:id/checks` gains
+  `gate` (what holds the merge now, for the caller) and each check its
+  `override`. (#74)
+- A new background agent, the **quality auditor**, scores every page from 0
+  to 100. It measures six things: clarity and completeness (judged by the
+  model), style against the page's styleguide, broken internal links (a
+  `/documents/<id>` that no longer exists, or a title reference that matches
+  no single page, by the same rule the reader renders with), whether the page
+  has an owner, and near-duplicates (pages whose content is almost the same).
+  A dimension it cannot measure, such as style with no styleguide or clarity
+  with no model, is left out of the score, not counted as zero. Run it from
+  the agents panel or on a schedule; it is off until then. Its findings are
+  the pairs of likely duplicates and the pages below the quality threshold or
+  with broken links. Each audit is kept, so later releases can show the
+  history. A page is scored again only when it changed, the styleguide
+  changed, or the score is older than the audit interval (7 days). Even then,
+  an unchanged page keeps its earlier judgement and makes no model call, so
+  re-running over an unchanged workspace costs nothing. Model calls appear in
+  AI usage as `audit`. (#74)
+- Quality scores are now visible. Knowledge health has a **Quality** tab:
+  the average for the workspace or the active project, how many pages are
+  scored, the average over time (one point per audit day, counting each
+  page's newest score as of that day), the mean of each of the six
+  dimensions, how the pages spread across score bands, the lowest-scoring
+  pages and the styleguide rules broken most often. A page with a score gets
+  a **Quality** widget in its side rail with the score, the six dimensions,
+  what cost it points (the quoted passage, the rule, the broken link) and its
+  near-duplicates; a project page gets the same summary in small. Scores
+  below the auditor's threshold are marked. Every figure counts only pages
+  you can open, and a near-duplicate you cannot open is not named. Over the
+  API: `GET /v1/quality/summary`, `GET /v1/quality/documents` and
+  `GET /v1/documents/:id/quality`. AI settings gains the audit interval
+  (`qualityAuditDays`, how long an unchanged page keeps its score). (#74)
+- Two MCP tools for agents: `knowledge_lint_draft` checks markdown against
+  the styleguide of its project before the agent writes it (the same result
+  as `POST /v1/assistant/lint`), and `knowledge_get_page_quality` returns a
+  page's newest score, issues and history. Both are read-only and offered to
+  read-only keys. (#74)
+- The glossarist's proposals can now go straight into the glossary. Each
+  proposed term in the agents panel has **Add to glossary**, which opens the
+  term, aliases and definition the agent drafted so you can correct them,
+  then adds the entry to the glossary of the project the term was found in,
+  marked as suggested by AI. It makes no model call, and a term can be added
+  from a finding only once; afterwards the finding links to the entry. Over
+  the API: `POST /v1/ai/agents/runs/:id/findings/:index/add-term` (editor).
+  The glossarist also no longer rereads the same 15 newest pages on every
+  run: it skips any page it has already read at its current version, so
+  repeated runs work through the whole workspace, most recently active pages
+  first. A page you name on the run is always read. (#74)
+
+- Settings → Profile now lists where you are signed in: each live session
+  with how it was opened, its IP address, the browser and when it was last
+  used. Sign any other session out from there and its token stops working on
+  its next request. Over the API: `GET /v1/me/sessions` and
+  `DELETE /v1/me/sessions/:sessionId`. A platform admin can list and sign out
+  anyone's sessions without disabling the account:
+  `GET /v1/users/:id/sessions` and `POST /v1/users/:id/revoke-sessions`.
+  `GET /v1/me` now says how the current session was opened (`authMethod`),
+  and each membership says who manages it (`source`, `manual` for every
+  membership today). (#75)
+- Settings → Security (workspace admins) shows the workspace's audit log for
+  the first time: graph queries, page-access changes and admin bypasses,
+  access requests, and the other recorded actions, newest first, filterable
+  by action. Sign-ins, failed sign-ins, sign-outs and revoked sessions are
+  now recorded too, with the client's IP. They belong to no workspace, so a
+  platform admin sees them by switching the view to the whole platform, or at
+  `GET /v1/admin/audit-logs`. `GET /v1/audit-logs` gains `action` and
+  `cursor` filters and returns `nextCursor`; each entry now carries `ip` and
+  `target`, and `workspaceId` can be null. This is the first phase of single
+  sign-on and SCIM. (#75)
+- Single sign-on with OpenID Connect. A workspace admin adds an identity
+  provider under Settings → Security → Providers, from a preset for
+  Keycloak, Microsoft Entra ID, Google Workspace, Yandex ID, or any OpenID
+  Connect provider. The client secret is write-only: the API returns
+  `hasSecret` and never the secret. The login page becomes email-first: the
+  address decides whether the next step is a password or the organization's
+  provider, and the workspace's providers appear as "Continue with …"
+  buttons. Sign-in uses the authorization code flow with PKCE, a nonce and a
+  single-use login transaction. A forged, replayed or expired attempt sends
+  the browser back to `/login` with a reason and records a failed sign-in.
+  The session token never appears in a URL: the browser trades a 60-second
+  single-use code for it at `POST /v1/auth/sso/exchange`. A provider may
+  create accounts on first sign-in (JIT) with a default role. It links to or
+  creates an account only for an address the provider has verified, on a
+  domain in the provider's allowed domains, so an unverified email claim can
+  never take over an existing account. `GET /v1/me` reports
+  `authMethod: 'oidc'` for these sessions, and SSO sign-ins appear in that
+  workspace's audit log. A platform admin can make a provider platform-wide,
+  so it is offered on every workspace's login page. Deleting a provider
+  signs out the sessions it opened. (#75)
+- Workspace roles from identity provider groups. Under Settings → Security
+  → Group mapping, an admin maps a group from the provider's groups claim to
+  a workspace role, and optionally to trusted operator. A workspace may map
+  its own providers or any platform-wide one. Each SSO sign-in applies the
+  mappings: the highest mapped role wins, and with no match the provider's
+  role for new members applies in its own workspace. A provider's group sync
+  is either **additive** (sign-in only raises a role) or **authoritative**
+  (each sign-in sets the role from the groups, and removes the membership
+  when no group maps). Mappings take effect at each person's next sign-in.
+  Roles set by hand are never changed. Sign-in will not demote or remove a
+  workspace's last admin: it skips the change and records it in the audit
+  log. If Entra ID sends too many groups to list, sign-in takes nothing
+  away. On Access → Members, a member managed by single sign-on shows where
+  the role comes from. Editing that member's role answers 409
+  `managedByIdp` until an admin chooses **Manage manually**
+  (`PATCH …/members/:userId` with `convertToManual: true`). From then on,
+  sign-ins leave that member alone. (#75)
+- Enforced single sign-on. Under Settings → Security → Policy a workspace
+  admin can require that every session reaching the workspace was opened
+  through one of its identity providers (or a platform-wide one). The rule
+  is checked on every request, for the web app, the API, MCP clients and
+  live updates alike. A session that fails it gets 403 with
+  `details.reason: 'ssoRequired'` and the providers to sign in through, and
+  the web app sends the person to `/login` to sign in again that way. Keys
+  keep working under enforced SSO unless the admin turns them off
+  (`apiKeysBlocked`). A session age cap (`reauthRequired`) works with or
+  without SSO. Platform admins pass the policy as break-glass, and each
+  crossing is recorded in the audit log as `auth.sso_bypassed`. Saving a
+  policy that would lock out the admin saving it (enforcing SSO from a
+  password session, say) answers 409 `policyLocksYouOut`
+  (`GET`/`PUT /v1/workspaces/:id/auth-policy`). Under Settings → Security
+  → Domains an admin claims an email domain and proves it with a DNS TXT
+  record at `_knowledge-challenge.<domain>`. The record is checked on demand
+  and every 15 minutes for a week, and a platform admin may mark a domain
+  verified by hand. Once a domain is verified, it can be enforced: password
+  sign-in, signup and password reset are refused for its addresses (403
+  `ssoRequiredForDomain`), and the login page sends them to the domain's
+  provider. Addresses in `AUTH_BREAK_GLASS_EMAILS` still get in, and a
+  workspace may let platform admins keep their password. A domain belongs
+  to one workspace; a pending claim stops holding it after a week. (#75)
+- SCIM 2.0 provisioning. An identity provider such as Microsoft Entra ID,
+  Okta or Keycloak (with a SCIM plugin) can create, update, deactivate and
+  delete a workspace's people and groups at `<API_PUBLIC_URL>/v1/scim/v2`.
+  An admin creates a bearer token under Settings → Security →
+  Provisioning; the token is shown once and only its hash is stored. A token
+  provisions its own workspace only and opens no other route. Users and
+  Groups support create, read, `PUT`, `PATCH` and delete. Lookups support
+  `userName`, `externalId` and work-email `eq` filters for users, and
+  `displayName` and `externalId` for groups, with paging. Entra's `"False"`
+  strings and capitalised ops are accepted, as is Okta's member removal by
+  filter. Errors are `application/scim+json` in the RFC 7644 shape. A new
+  user gets an SSO-only account; an existing account with the same address
+  is linked instead. A provisioned person gets the workspace's SCIM default
+  role (`viewer` unless changed, or `none`). On the Group mapping tab, an
+  admin can map a SCIM group to a role, and that applies to the group's
+  members at once. Deactivating or deleting someone removes the membership
+  provisioning manages and signs them out everywhere. Only when the
+  address's domain is one this workspace has verified does it also disable
+  the account and update the account's name and email; otherwise one
+  workspace's directory could lock someone out of another. Memberships set
+  by hand are never changed. Every provisioning change is in the audit log.
+  (`GET`/`PUT /v1/workspaces/:id/scim`, `POST`/`DELETE
+  /v1/workspaces/:id/scim-tokens`.) (#75)
+- SAML 2.0 sign-in. Under Settings → Security → Providers, an admin picks
+  **SAML 2.0** and enters the IdP's entity ID, single sign-on URL and signing
+  certificate (paste two during a key rollover). Our service-provider key
+  pair is generated when the provider is created; only its certificate
+  leaves the API, in the SP metadata at
+  `<API_PUBLIC_URL>/v1/auth/saml/:providerId/metadata`, which is also our
+  entity ID. The ACS URL is `…/acs`. Both are shown for copying, and an IdP
+  can import the metadata by URL. AuthnRequests are signed (RSA-SHA256). A
+  response is accepted only if the Response or the Assertion is signed by
+  the pinned certificate, the audience is our entity ID, the issuer is the
+  configured one, and it is no older than `AUTH_SSO_STATE_TTL_SEC` (60 s
+  clock skew). It must also answer the AuthnRequest that sign-in sent.
+  Unsigned, wrongly signed, signature-wrapped, foreign or replayed responses
+  send the browser to `/login` with a reason and are audited. Sign-ins
+  started from the IdP's app portal are refused unless the provider allows
+  them, and each assertion is accepted once. The **Attribute map** names
+  the email, name and groups attributes. Left empty, the usual Keycloak,
+  Okta, Entra and ADFS names are tried, then an email-format NameID; groups
+  are read only from a named attribute. A transient NameID is refused. JIT,
+  allowed domains, group mapping and enforced SSO work as for OpenID
+  Connect. Sessions report `authMethod: 'saml'`. (#75)
+- Sign in with an LDAP or Active Directory account. Where the instance
+  allows it, a workspace admin can add a provider of kind **LDAP / Active
+  Directory** under Settings → Security → Providers, with the directory URL,
+  the base DN, an optional service account (its password is write-only, like
+  a client secret) and an optional user filter. Its button on `/login` opens
+  a username and password form instead of redirecting; the API also takes
+  `POST /v1/auth/ldap/:providerId/login` with `{ username, password }`. The
+  API binds as the service account, finds exactly one entry whose `uid`,
+  `mail`, `sAMAccountName` or `userPrincipalName` is what was typed (the
+  value is escaped, so filter syntax cannot widen the search), then binds as
+  that entry with the typed password. A wrong username, a wrong password, an
+  empty password, two matching entries and a disabled account all get the
+  same 401, `Invalid username or password`, and the audit row records which
+  it was. An unreachable directory is a 503. The account is identified by
+  `entryUUID` or AD's `objectGUID`, never the DN, so renaming or moving
+  someone keeps their account. Email, name and groups come from `mail`,
+  `displayName` (or `cn`) and `memberOf` unless the attribute map names
+  others; group mappings match the full group DN. JIT, allowed domains,
+  group mapping and enforced SSO work as for the other kinds. Sessions
+  report `authMethod: 'ldap'`. Sign-in attempts are rate-limited per IP and
+  per username. (#75)
+- OpenID Connect back-channel logout. When a person signs out at the
+  identity provider, or an admin ends their session there, the provider can
+  now tell us: register
+  `<API_PUBLIC_URL>/v1/auth/oidc/<provider id>/backchannel-logout` (shown in
+  the Providers tab) as the client's back-channel logout URL. The logout
+  token must be signed by a key in the provider's JWKS, be issued by it for
+  our client, be under 10 minutes old, carry the logout event and no
+  `nonce`, and each token is accepted once. A token with a `sid` ends the
+  sessions that IdP session opened; one with only a `sub` ends every session
+  that person opened through that provider. Each logout is recorded as
+  `auth.session_revoked`, and so is each refused token. The Yandex preset
+  has no back-channel logout. (#75)
+- The in-app manual (**Settings → Docs**) has a **Single sign-on & SCIM**
+  article: what the operator must turn on, and how to set up Keycloak,
+  Microsoft Entra ID, Google Workspace, Yandex ID, SAML, LDAP and SCIM
+  provisioning, then require SSO without locking yourself out. (#75)
+
+### Changed
+
+- API blocks (the endpoint widget in the editor) and the operations of a
+  spec now look like Swagger UI. Each endpoint is a card tinted by its
+  method — GET blue, POST green, PUT amber, PATCH violet, DELETE red — with
+  the method as a solid badge, so a page of endpoints reads at a glance in
+  light and dark themes. Text inside the cards is larger and higher-contrast,
+  and required parameters are marked as Swagger marks them.
+  - An API block's sections (parameters, body, responses, headers) are rows
+    with a count that open and close with a short animation. Find-in-page
+    still reaches text inside a closed section and opens it. When reading, a
+    section's table is drawn as name → type · location · required rows, with
+    section names and column meanings in the reader's language; the values
+    are never translated, and stored markdown is unchanged.
+  - On a spec, each operation is one line (method, path, summary, a lock when
+    it needs credentials) that opens in place. Specs with more than three
+    operations start closed; **Expand all** opens every card. Parameters and
+    responses are Name | Description and Code | Description tables, and every
+    body has **Example** and **Schema** tabs. An example the spec does not
+    give is built from the schema and labelled as such. The schema is a
+    field tree: a closed field says what it holds ("3 fields", "array of 2
+    fields", "one of 2 variants"), levels open with a short animation, and
+    **Expand all** opens the whole schema. A type that refers to itself
+    opens one more level per click instead of stopping, up to six levels.
+    Examples and responses carry an always-visible **Copy JSON** button,
+    ready to paste into Postman or `curl --data`.
+  - "Try it" is laid out like Postman: one request bar with the method, the
+    URL as it will be sent (filled path parameters highlighted, empty ones
+    flagged) and Send; then **Params**, **Headers**, **Body** and **Auth**
+    tabs with key/value tables; then the response with its status, time and
+    size, and **Body** / **Headers** tabs. Code samples and JSON responses are
+    syntax-highlighted. Pressing Send with a required field empty jumps to
+    that field instead of doing nothing. (#78)
+
+- Password sign-in is now rate limited to 30 attempts a minute per IP
+  address and 10 a minute per email address. Past that it answers 429 with
+  `Retry-After`. While Redis is down, password sign-in is refused rather
+  than left unlimited. Settings → Security now opens on a Providers tab, with
+  the audit log on its own tab. (#75)
+
+### Fixed
+
+- The web server no longer exits when a page's background request is
+  refused during server rendering. A request the page did not wait for,
+  answered with a 4xx, used to be an unhandled rejection, which stopped the
+  process and every render in flight. It is now logged; any other unhandled
+  rejection still stops the process. Enforced SSO made this common: every
+  page a password session opened in an enforcing workspace hit it. (#75)
+- Live updates no longer ignore a subscription sent the moment the socket
+  opens. A client that subscribed from `onopen` got no reply and no error,
+  because the server started listening only after it had checked the token.
+  Messages that arrive during that check are now answered once it finishes,
+  in the order they came. (#75)
+
+### Operations
+
+- Migration `20261103100000_api_reference_kind` adds `documents.kind`
+  (default `'page'`), `documents.spec_slug` and the `api_operations` table.
+  It is additive, so rolling back to the previous image is safe.
+- New env vars, both with defaults: `API_SPEC_MAX_BYTES` (5000000) and
+  `API_SPEC_MAX_OPERATIONS` (2000). A spec above either limit is refused.
+- Migration `20261104100000_workspace_settings` adds the sparse
+  `workspace_settings` table (one row per workspace, `null` inherits). It is a
+  new table, so rolling back to the previous image is safe: that image never
+  reads it.
+- New env vars, all with defaults: `API_TRY_PROXY_MODE` (`off`; a ceiling the
+  workspace can only narrow: `off` | `allowlist` | `open`),
+  `API_TRY_ALLOW_PRIVATE_URLS` (`false`), `API_TRY_TIMEOUT_MS` (15000),
+  `API_TRY_MAX_RESPONSE_BYTES` (1000000) and `API_TRY_RATE_PER_MINUTE` (30).
+  With the defaults the proxy refuses every request, so nothing changes until
+  an operator raises the ceiling. The rate limit uses Redis and fails closed.
+- Migration `20261105100000_api_breaking_changes` adds the nullable
+  `workspace_settings.api_breaking_change_policy` and
+  `merge_requests.breaking_ack_by` / `breaking_ack_at` /
+  `breaking_ack_revision_id`. No backfill: an empty policy is `warn`, which
+  never refuses a merge. The previous image never reads them, so a rollback is
+  safe.
+- Migration `20261106100000_styleguide` adds `ai_skills.kind` (NOT NULL,
+  default `'skill'`, so no backfill), `ai_skills.project_id`,
+  `ai_skills.rules` and a partial unique index allowing one styleguide per
+  workspace or project. The previous image does not know about `kind`, so
+  after a rollback it would list a styleguide as an empty skill. Delete
+  styleguides before rolling back:
+  `DELETE FROM ai_skills WHERE kind = 'styleguide'`.
+- New env vars, both with defaults: `STYLEGUIDE_MAX_RULES` (50) and
+  `LINT_MAX_FINDINGS` (15).
+- Migration `20261107100000_merge_request_checks` adds the
+  `merge_request_checks` table, `merge_request_threads.check_id` /
+  `rule_id`, `workspace_settings.lint_policy` and `projects.lint_policy`. All
+  additive and nullable, and the previous image reads none of them, so a
+  rollback is safe.
+- New env vars, both with defaults: `STYLE_LINT_POLICY` (`off`) is the
+  ceiling, and the policy of every workspace that sets none, for merge
+  request lint (`off` | `warn` | `block`). With the default nothing is linted anywhere
+  and the trigger does not even query. `LINT_MAX_PENDING_PER_WORKSPACE` (20)
+  bounds the checks one workspace may have waiting. Each check is one model
+  call per push, billed to the merge request's author. Raising the ceiling
+  to `block` makes `block` the policy of every workspace and project that
+  sets none, so merges there wait for their style check.
+- Migration `20261108100000_document_quality_scores` adds the
+  `document_quality_scores` table and the nullable
+  `ai_settings.quality_audit_days`. Both are additive and the previous image
+  reads neither, so a rollback is safe.
+- New env vars, all with defaults: `QUALITY_AUDIT_MAX_PAGES` (200, pages one
+  auditor run scores, one model call each at most), `QUALITY_AUDIT_DAYS` (7),
+  `QUALITY_DUPLICATE_THRESHOLD` (0.92, the mean-embedding similarity two pages
+  must reach to be called near-duplicates) and `QUALITY_FINDING_THRESHOLD`
+  (50). Nothing runs until someone runs or schedules the `auditor`. On
+  `EMBEDDINGS_PROVIDER=stub` the near-duplicate check is skipped and the run
+  says so, because the stub's similarity measures shared words rather than
+  shared meaning.
+
+- Migration `20261109100000_enterprise_auth` prepares single sign-on and
+  SCIM (#75). It adds session metadata columns to `sessions` (`auth_method`
+  defaults to `'password'`), `workspace_members.source` (defaults to
+  `'manual'`), `audit_logs.ip` and `audit_logs.target`, four nullable sign-in
+  policy columns on `workspace_settings`, and the tables `identity_providers`,
+  `user_identities`, `sso_domains`, `idp_group_mappings`, `scim_tokens`,
+  `scim_users`, `scim_groups`, `scim_group_members` and `sso_auth_requests`,
+  which stay empty until later phases. `audit_logs.workspace_id` becomes
+  nullable. Every change is additive, nothing is backfilled, and the previous
+  image only reads audit rows filtered by workspace, so rolling back is safe.
+- Single sign-on is off unless `AUTH_SSO_ENABLED=true`. Turning it on needs
+  `AUTH_MODE=api-key`, and `SETTINGS_ENCRYPTION_KEY` to store a provider's
+  client secret. Register `<API_PUBLIC_URL>/v1/auth/oidc/<provider id>/callback`
+  as the redirect URI at the provider; the Providers tab shows the exact
+  value. New variables, all defaulted so an existing deployment behaves as
+  before: `AUTH_SSO_ENABLED` (`false`), `AUTH_SSO_ALLOW_PRIVATE_URLS`
+  (`false`; set it for an on-premises Keycloak on a private address),
+  `AUTH_SSO_STATE_TTL_SEC` (`600`), `AUTH_PASSWORD_LOGIN_ENABLED` (`true`;
+  `false` makes login, signup and forgot-password refuse every address
+  except those in `AUTH_BREAK_GLASS_EMAILS`) and `AUTH_BREAK_GLASS_EMAILS`
+  (empty). Migration `20261110100000_sso_request_idp_session` adds one
+  nullable column, `sso_auth_requests.idp_session_id`, which the previous
+  image never reads, so rolling back is safe. `make infra-up-keycloak`
+  starts a local Keycloak with a test realm for trying SSO out. (#75)
+- Enforced SSO adds no migration and no environment variable; the policy
+  columns and `sso_domains` came with `20261109100000_enterprise_auth`. With
+  `AUTH_SSO_ENABLED` off, no SSO policy or domain is enforced, whatever a
+  workspace saved, and the Policy tab shows the setting as not applied. When
+  SSO is on, the API checks pending domains every 15 minutes and so needs
+  outbound DNS. The same pass deletes expired login transactions and
+  expired sessions. (#75)
+- SCIM provisioning is off unless `AUTH_SCIM_ENABLED=true`, which needs
+  `AUTH_MODE=api-key` and is independent of `AUTH_SSO_ENABLED`. While off,
+  `/v1/scim/v2` and the Provisioning settings answer 404. New variables:
+  `AUTH_SCIM_ENABLED` (`false`) and `AUTH_SCIM_MAX_PAGE` (`200`, the largest
+  list page a client may ask for). Bodies sent as `application/scim+json`
+  are now parsed as JSON. Migration `20261111100000_scim_provisioning` adds
+  `workspace_settings.scim_default_role` and `scim_users.user_name` with a
+  unique index per workspace. Both are nullable, nothing wrote to
+  `scim_users` before, and the previous image reads neither, so rolling back
+  is safe. (#75)
+- SAML sign-in adds no migration and no environment variable. It uses the
+  columns `20261109100000_enterprise_auth` added, and it is on with the
+  rest of SSO (`AUTH_SSO_ENABLED`). Creating a SAML provider needs
+  `SETTINGS_ENCRYPTION_KEY`, which encrypts the generated SP private key;
+  rotating that key leaves existing SAML providers unable to sign in until
+  they are recreated, and their **Test** says so. The SSO URL must be
+  `https` unless `AUTH_SSO_ALLOW_PRIVATE_URLS` is set. The API never fetches
+  it, so SAML needs no outbound network. Rolling back to an image without
+  SAML leaves SAML providers in place but unusable. (#75)
+- LDAP sign-in is off unless both `AUTH_SSO_ENABLED=true` and
+  `AUTH_LDAP_ENABLED=true`. Turning `AUTH_LDAP_ENABLED` off again takes LDAP
+  providers off the login page and refuses their sign-ins at once, and
+  workspaces that enforce SSO stop counting them. A directory must be reached
+  over `ldaps://`, or `ldap://` with StartTLS; plain `ldap://` is refused,
+  when the provider is saved and at every sign-in, unless
+  `AUTH_LDAP_ALLOW_INSECURE=true`, which sends passwords in clear text and
+  is meant for a lab. A directory on a private address, which is the usual
+  case, needs `AUTH_SSO_ALLOW_PRIVATE_URLS=true`. The directory's TLS
+  certificate is checked against the system CAs; for an internal CA, point
+  `NODE_EXTRA_CA_CERTS` at it in the API container. Storing a service
+  account password needs `SETTINGS_ENCRYPTION_KEY`. New variables:
+  `AUTH_LDAP_ENABLED` (`false`) and `AUTH_LDAP_ALLOW_INSECURE` (`false`).
+  New dependency: `ldapts`. No migration. (#75)
+- Back-channel logout needs the API to reach the provider's JWKS URL, as
+  sign-in already does. It adds no migration and no variable. Rolling back
+  to an image without it makes the IdP's logout calls fail (404), and those
+  sessions then run to their normal expiry. (#75)
+
 ## [0.26.0] — 2026-10-16
 
 ### Added
@@ -2592,7 +3177,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.26.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/hrustalq/knowledge/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/hrustalq/knowledge/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/hrustalq/knowledge/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/hrustalq/knowledge/compare/v0.23.0...v0.24.0

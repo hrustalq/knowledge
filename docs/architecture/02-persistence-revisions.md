@@ -94,7 +94,7 @@ revisions are comparable**; a draft has no bytes to compare.
 Results are cached in `revision_diffs`. Because revisions are immutable, **the
 cache can never be stale**, so there is no invalidation path and none is needed.
 
-Two further projections ride on the same endpoint and the same cache:
+Three further projections ride on the same endpoint and the same cache:
 
 - **`?structural=`** — a path-level diff of JSON/YAML bodies, or of a markdown
   document's frontmatter (`src/documents/structural-diff.ts`), cached under the
@@ -103,6 +103,11 @@ Two further projections ride on the same endpoint and the same cache:
 - **`?semantic=`** — a graph-projection diff: the per-revision frontmatter
   relation edges, plus `GraphService.revisionEmbeddingShift`. It answers "what
   does the knowledge base now believe that it did not before".
+- **`api`** — on an OpenAPI or AsyncAPI document only, and always included
+  there: the classified spec diff (breaking / non-breaking / info per change),
+  cached under `api-semantic-v1`. It answers "what can a client of the old spec
+  no longer do". See [05](05-merge-review.md#breaking-api-changes) and
+  [feature 52](../features/52-api-reference.md).
 
 ## Optimistic concurrency
 

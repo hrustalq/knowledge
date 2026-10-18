@@ -122,7 +122,11 @@ exactly as on `documents`.
 **A suggestion lands in the source page's project, not the caller's.** Terms
 extracted from a page are vocabulary for that page's project;
 `POST /v1/glossary/suggest` derives the project from the document and returns
-it, so accepting a proposal cannot file it somewhere else.
+it, so accepting a proposal cannot file it somewhere else. The glossarist's
+findings carry the same project, and **Add to glossary** on a finding
+(`POST /v1/ai/agents/runs/:id/findings/:index/add-term`, #74) files the term
+there with `source: 'ai'` without a second model call
+([53](53-doc-quality.md)).
 
 **The roster is one lazily-loaded pinia store, and it follows the project
 switcher.** Every rendered page wants it, so it must not become a request per

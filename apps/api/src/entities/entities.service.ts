@@ -59,6 +59,34 @@ export class EntitiesService {
     return { entities };
   }
 
+  /**
+   * The pages pointing at each of `keys`, over one load of the graph the
+   * caller may see — the "affected docs" of an API diff (#78), where a
+   * per-key `neighbors` would load the workspace graph once per operation.
+   */
+  async inboundPages(
+    scope: AccessScope,
+    keys: string[],
+  ): Promise<Map<string, Array<{ documentId: string; title: string; relationType: string; extractor: string }>>> {
+    const out = new Map<string, Array<{ documentId: string; title: string; relationType: string; extractor: string }>>();
+    if (keys.length === 0) return out;
+    const wanted = new Set(keys);
+    const g = await this.graphFor(scope);
+    for (const e of g.edges) {
+      if (!wanted.has(e.targetKey)) continue;
+      const list = out.get(e.targetKey) ?? [];
+      if (list.some((p) => p.documentId === e.documentId && p.relationType === e.type)) continue;
+      list.push({
+        documentId: e.documentId,
+        title: g.documents[e.documentId]?.title ?? '(unknown)',
+        relationType: e.type,
+        extractor: e.extractor,
+      });
+      out.set(e.targetKey, list);
+    }
+    return out;
+  }
+
   /** Depth-limited neighborhood of an entity (plan.md §9 knowledge.find_relations). */
   async neighbors(
     scope: AccessScope,

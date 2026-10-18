@@ -5,6 +5,7 @@ import {
   CHANGELOG_HUB_KEY,
   CHANGELOG_UNRELEASED_KEY,
   WIKI_DEFAULT_FLOWS,
+  apiSpecGlobs,
   changelogTagKey,
   changelogTagOf,
   effectiveWikiConfig,
@@ -82,6 +83,7 @@ import {
   type ExternalRef,
 } from './connector.types.js';
 import { githubRepoAcl, githubTeamMembers } from './github-acl.js';
+import { repoSpecFiles, SPEC_KEY_PREFIX, suggestSpecFiles } from './repo-specs.js';
 
 /**
  * A repository as a subject to document (docs/features/27).
@@ -229,17 +231,23 @@ export class CodebaseAdapter implements ConnectorAdapter {
     this.codeTools = new SnapshotCodeTools(treeSitter);
   }
 
-  async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
+  async testConnection(
+    ctx: ConnectorContext,
+  ): Promise<{ ok: boolean; detail?: string; apiSpecSuggestions?: string[] }> {
     // Deliberately does not parse: this answers "can I reach it and is there
     // anything there", and a person is waiting for it in a dialog.
-    const { map } = await this.plan(ctx);
+    const { map, archive } = await this.plan(ctx);
     if (map.sourceFileCount === 0) {
       return { ok: false, detail: 'no source files were found — check the branch and subdirectory' };
     }
     const languages = map.languages.slice(0, 3).map((l) => l.language).join(', ');
+    // Spec files found in the repository (#78), offered by the setup dialog and
+    // never imported on their own — only while the connector names none.
+    const suggestions = apiSpecGlobs(ctx.config).length ? [] : suggestSpecFiles(archive.files);
     return {
       ok: true,
       detail: `${map.sourceFileCount} source file(s) in ${map.modules.length} module(s) — ${languages}`,
+      ...(suggestions.length ? { apiSpecSuggestions: suggestions } : {}),
     };
   }
 
@@ -269,6 +277,20 @@ export class CodebaseAdapter implements ConnectorAdapter {
   async fetch(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalDocument> {
     const plan = await this.plan(ctx);
     const { map, wiki, archive } = plan;
+
+    // A spec file (#78) is the file, bundled — nothing about it is derived.
+    if (ref.externalId.startsWith(SPEC_KEY_PREFIX)) {
+      const spec = repoSpecFiles(archive.files, ctx.config, ctx.locale).get(ref.externalId.slice(SPEC_KEY_PREFIX.length));
+      if (!spec) throw new Error(t('error.connector.fileGone', { path: ref.externalId.slice(SPEC_KEY_PREFIX.length) }, ctx.locale));
+      return {
+        ref: { ...ref, version: spec.version },
+        title: spec.title,
+        markdown: spec.text,
+        spec: { kind: spec.kind, syntax: spec.syntax },
+        warnings: spec.warnings,
+      };
+    }
+
     const { skipped } = archive;
     const host = repoHost(ctx);
     const warnings: string[] = [];
@@ -451,6 +473,20 @@ export class CodebaseAdapter implements ConnectorAdapter {
     }
 
     if (wiki.changelog.enabled) refs.push(...(await this.changelogUnits(ctx, plan)));
+
+    // The repository's API specs (#78), under the overview like the modules.
+    // Read from the whole archive, not under `subdir`: a spec usually sits at
+    // the root of a service whose code is in `src/`.
+    for (const spec of repoSpecFiles(files, ctx.config, ctx.locale).values()) {
+      refs.push({
+        externalId: `${SPEC_KEY_PREFIX}${spec.path}`,
+        title: spec.title,
+        url: blobUrl(ctx, spec.path, branch),
+        version: spec.version,
+        parentExternalId: OVERVIEW_KEY,
+      });
+    }
+    if (refs.length > 1) refs[0] = { ...refs[0], hasChildren: true };
     return refs;
   }
 

@@ -1,11 +1,17 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DEFAULT_API_BREAKING_CHANGE_POLICY, isApiSpecKind } from '@knowledge/contracts';
 import type {
+  ApiBreakingAck,
+  ApiBreakingChangePolicy,
+  ApiSpecDiff,
   CreateMergeRequestResponse,
   ListMergeRequestsResponse,
   ListWorkspaceMergeRequestsRequest,
   ListWorkspaceMergeRequestsResponse,
   MergeMergeRequestResponse,
+  MergeRequestApiChangesResponse,
+  MergeRequestCheckInfo,
   MergeRequestDiffResponse,
   MergeRequestInfo,
   MergeRequestProvenance,
@@ -28,6 +34,11 @@ import type { CreateMergeRequestDto, UpdateMergeRequestDto } from './dto/merge-r
 import { t } from '../i18n/t.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
+import { ApiSpecDiffService } from '../api-specs/api-spec-diff.service.js';
+import { EntitiesService } from '../entities/entities.service.js';
+import { AuditService } from '../auth/audit.service.js';
+import { LintChecksService } from './lint/lint-checks.service.js';
+import { lintGateEnforced, overridable } from './lint/lint-check.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 export const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -54,7 +65,11 @@ type MrWithBranches = MergeRequest & {
  *
  * Merge gating: draft MRs never merge; MR_REQUIRED_APPROVALS non-author
  * approvals are required (0 disables); merging into a protected branch
- * requires the workspace admin role.
+ * requires the workspace admin role; a page whose style lint is `block` waits
+ * for the check of its source head and for its error-severity violations to
+ * be resolved, or for an admin's override (#74); a spec whose source head
+ * breaks its API waits for an admin's acknowledgement under a `block` policy
+ * (#78).
  */
 @Injectable()
 export class MergeRequestsService {
@@ -71,6 +86,10 @@ export class MergeRequestsService {
     // frames for `assigned` and `review-requested` are announced from here.
     private readonly events: EventsPublisher,
     private readonly permissions: PermissionService,
+    private readonly apiDiffs: ApiSpecDiffService,
+    private readonly entities: EntitiesService,
+    private readonly lint: LintChecksService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -375,6 +394,192 @@ export class MergeRequestsService {
     return { mergeRequest: await this.toDetail(mr), compare };
   }
 
+  /**
+   * What a spec merge request does to its API (#78, phase 6): the classified
+   * diff from the merge base to the source head, the pages linking each
+   * changed operation as the caller may see them, and whether the gate would
+   * refuse a merge now. A page document answers `applicable: false`, so the
+   * merge-request page can ask without knowing the document's kind.
+   */
+  async apiChanges(mergeRequestId: string, scope: AccessScope): Promise<MergeRequestApiChangesResponse> {
+    const mr = await this.getMrOrThrow(mergeRequestId);
+    const doc = await this.prisma.document.findUniqueOrThrow({
+      where: { id: mr.documentId },
+      select: { kind: true, workspaceId: true },
+    });
+    if (!isApiSpecKind(doc.kind)) {
+      return {
+        mergeRequestId: mr.id,
+        documentId: mr.documentId,
+        applicable: false,
+        policy: DEFAULT_API_BREAKING_CHANGE_POLICY,
+        diff: null,
+        affectedPages: {},
+        ack: null,
+        blocked: false,
+      };
+    }
+    const [policy, diff] = await Promise.all([this.apiDiffs.breakingPolicy(doc.workspaceId), this.apiDiffOf(mr)]);
+    const keys = [...new Set((diff?.changes ?? []).map((c) => c.entityKey))].slice(0, 200);
+    const pages = await this.entities.inboundPages(scope, keys);
+    const affectedPages: MergeRequestApiChangesResponse['affectedPages'] = {};
+    for (const key of keys) {
+      const list = (pages.get(key) ?? []).filter((p) => p.documentId !== mr.documentId);
+      if (list.length) affectedPages[key] = list;
+    }
+    return {
+      mergeRequestId: mr.id,
+      documentId: mr.documentId,
+      applicable: true,
+      policy,
+      diff,
+      affectedPages,
+      ack: this.breakingAckOf(mr),
+      blocked: this.breakingBlocks(policy, diff, mr),
+    };
+  }
+
+  /**
+   * An admin acknowledges (or withdraws) the breaking changes at the current
+   * source head. Pinned to that head: a later push is a change nobody has
+   * read yet, so the gate closes again until it is acknowledged in turn.
+   */
+  async setBreakingAck(
+    mergeRequestId: string,
+    acknowledged: boolean,
+    scope: AccessScope,
+    actorId: string = AUTHOR_ID_STUB,
+  ): Promise<MergeRequestApiChangesResponse> {
+    const mr = await this.getMrOrThrow(mergeRequestId);
+    if (mr.status !== 'open') {
+      throw new BadRequestException(t('error.mergeRequest.notOpenForAck', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
+    }
+    const doc = await this.prisma.document.findUniqueOrThrow({ where: { id: mr.documentId }, select: { kind: true } });
+    if (!isApiSpecKind(doc.kind)) throw new BadRequestException(t('error.mergeRequest.notSpec', { id: mr.id }));
+    const head = mr.sourceBranch.headRevisionId;
+    if (!head) throw new BadRequestException(t('error.mergeRequest.branchNoRevisions', { branch: mr.sourceBranch.name }));
+
+    await this.prisma.mergeRequest.update({
+      where: { id: mr.id },
+      data: acknowledged
+        ? { breakingAckBy: actorId, breakingAckAt: new Date(), breakingAckRevisionId: head }
+        : { breakingAckBy: null, breakingAckAt: null, breakingAckRevisionId: null },
+    });
+    await this.recordActivity(mr.documentId, 'merge-request.updated', mr.id, actorId, {
+      title: mr.title,
+      changed: ['breakingAck'],
+      breakingAck: acknowledged,
+      ...(acknowledged ? { revisionId: head } : {}),
+    });
+    return this.apiChanges(mr.id, scope);
+  }
+
+  /** Merge base (or nothing, for a first merge) → source head; null for a page or an unparseable side. */
+  private async apiDiffOf(mr: MrWithBranches): Promise<ApiSpecDiff | null> {
+    const source = mr.sourceBranch.headRevisionId;
+    if (!source) return null;
+    const target = mr.targetBranch.headRevisionId;
+    const base = target ? ((await this.compare.findMergeBase(mr.documentId, target, source)) ?? target) : null;
+    return this.apiDiffs.diff(mr.documentId, base, source);
+  }
+
+  private breakingAckOf(mr: MergeRequest & { sourceBranch: DocumentBranch }): ApiBreakingAck | null {
+    if (!mr.breakingAckBy || !mr.breakingAckRevisionId) return null;
+    return {
+      by: mr.breakingAckBy,
+      at: (mr.breakingAckAt ?? mr.createdAt).toISOString(),
+      revisionId: mr.breakingAckRevisionId,
+      current: mr.breakingAckRevisionId === mr.sourceBranch.headRevisionId,
+    };
+  }
+
+  /** The one predicate the panel and the gate share. */
+  private breakingBlocks(
+    policy: ApiBreakingChangePolicy,
+    diff: ApiSpecDiff | null,
+    mr: MergeRequest & { sourceBranch: DocumentBranch },
+  ): boolean {
+    return policy === 'block' && (diff?.summary.breaking ?? 0) > 0 && !this.breakingAckOf(mr)?.current;
+  }
+
+  private async assertBreakingAcknowledged(mr: MrWithBranches, targetHeadId: string | null, sourceHeadId: string): Promise<void> {
+    const doc = await this.prisma.document.findUniqueOrThrow({
+      where: { id: mr.documentId },
+      select: { kind: true, workspaceId: true },
+    });
+    if (!isApiSpecKind(doc.kind)) return;
+    const policy = await this.apiDiffs.breakingPolicy(doc.workspaceId);
+    if (policy !== 'block') return;
+    const diff = await this.apiDiffs.diff(mr.documentId, targetHeadId, sourceHeadId);
+    if (!this.breakingBlocks(policy, diff, mr)) return;
+    const breakingCount = diff!.summary.breaking;
+    throw new ConflictException({
+      statusCode: 409,
+      message: t('error.mergeRequest.breakingApi', { id: mr.id, count: breakingCount }),
+      reason: 'breaking-api',
+      breakingCount,
+    });
+  }
+
+  /**
+   * An admin lets the current source head merge despite its style check
+   * (#74): one still to come, or one with violations left open. Bound to that
+   * head — a later push is linted afresh and needs its own pass or override.
+   * Audited, and in the activity feed with its reason.
+   */
+  async overrideLintCheck(
+    mergeRequestId: string,
+    checkId: string,
+    reason: string,
+    principal?: Principal,
+  ): Promise<{ check: MergeRequestCheckInfo }> {
+    const mr = await this.getMrOrThrow(mergeRequestId);
+    if (mr.status !== 'open') throw new BadRequestException(t('error.lint.notOpen'));
+    const check = await this.prisma.mergeRequestCheck.findFirst({ where: { id: checkId, mergeRequestId: mr.id, kind: 'lint' } });
+    if (!check) throw new NotFoundException(t('error.lint.checkNotFound', { id: checkId }));
+    if (check.headRevisionId !== mr.sourceBranch.headRevisionId) {
+      throw new ConflictException({ statusCode: 409, message: t('error.lint.overrideNotCurrent'), reason: 'lint.notCurrent' });
+    }
+    if (!overridable(check.status as MergeRequestCheckInfo['status'])) {
+      throw new ConflictException({ statusCode: 409, message: t('error.lint.notOverridable'), reason: 'lint.notOverridable' });
+    }
+
+    const actorId = principal?.userId ?? AUTHOR_ID_STUB;
+    // Guarded: two admins pressing together write one override, and a check
+    // that settled to `passed` meanwhile has nothing left to override.
+    const claimed = await this.prisma.mergeRequestCheck.updateMany({
+      where: { id: check.id, overriddenAt: null, status: { in: ['pending', 'failed'] } },
+      data: { overriddenBy: actorId, overriddenAt: new Date(), overrideReason: reason },
+    });
+    if (claimed.count === 0) {
+      throw new ConflictException({ statusCode: 409, message: t('error.lint.alreadyOverridden'), reason: 'lint.alreadyOverridden' });
+    }
+
+    const params = { mergeRequestId: mr.id, checkId: check.id, headRevisionId: check.headRevisionId, reason };
+    await this.audit.record({
+      workspaceId: check.workspaceId,
+      actor: principal?.userId ?? 'dev',
+      action: 'merge-request.lint-override',
+      params,
+      ok: true,
+    });
+    await this.recordActivity(mr.documentId, 'merge-request.updated', mr.id, actorId, {
+      title: mr.title,
+      changed: ['lintOverride'],
+      lintOverride: { checkId: check.id, reason },
+      revisionId: check.headRevisionId,
+    });
+    const { checks } = await this.lint.list(mr.id, lintGateEnforced(principal));
+    return { check: checks.find((c) => c.checkId === check.id)! };
+  }
+
+  /** The page a merge request is on — for a caller that needs its workspace first. */
+  async documentOf(mergeRequestId: string): Promise<{ documentId: string }> {
+    const mr = await this.prisma.mergeRequest.findUnique({ where: { id: mergeRequestId }, select: { documentId: true } });
+    if (!mr) throw new NotFoundException(t('error.mergeRequest.notFound', { id: mergeRequestId }));
+    return mr;
+  }
+
   /** Records approval by the calling principal; merge requires MR_REQUIRED_APPROVALS of these (author's own excluded). */
   async approve(
     mergeRequestId: string,
@@ -453,6 +658,24 @@ export class MergeRequestsService {
       });
       await this.access.requireRole(principal, doc.workspaceId, 'admin');
     }
+    // Style lint (#74): after approvals, before divergence — a rebase would
+    // only produce a new head to lint. Not enforced where approvals are not.
+    if (lintGateEnforced(principal)) {
+      const gate = await this.lint.gate(mr.id, true);
+      if (gate.blocked) {
+        throw new ConflictException({
+          statusCode: 409,
+          message:
+            gate.blockingCount > 0
+              ? t('error.mergeRequest.lintBlocking', { id: mr.id, count: gate.blockingCount })
+              : t('error.mergeRequest.lintPending', { id: mr.id }),
+          reason: 'lint',
+          checkStatus: gate.checkStatus,
+          blockingCount: gate.blockingCount,
+          checkId: gate.checkId,
+        });
+      }
+    }
 
     const sourceHeadId = mr.sourceBranch.headRevisionId;
     if (!sourceHeadId) throw new BadRequestException(t('error.mergeRequest.branchNoRevisions', { branch: mr.sourceBranch.name }));
@@ -476,6 +699,9 @@ export class MergeRequestsService {
         comparisonUrl: `/v1/documents/${mr.documentId}/compare?from=${targetHeadId}&to=${sourceHeadId}&mode=merge-base`,
       });
     }
+    // Breaking API changes (#78), last because it parses two specs: the target
+    // head is the merge base here, so this is the diff the panel showed.
+    await this.assertBreakingAcknowledged(mr, targetHeadId, sourceHeadId);
 
     const sourceHead = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: sourceHeadId } });
     const message =

@@ -9,10 +9,12 @@ import {
   Bell,
   BookMarked,
   BookOpen,
+  Braces,
   Download,
   FolderKanban,
   Globe,
   LayoutTemplate,
+  LockKeyhole,
   MessagesSquare,
   Plug,
   ShieldCheck,
@@ -41,6 +43,7 @@ const links = computed<SettingsLink[]>(() => [
   { to: '/settings/templates', label: t('nav.templates'), icon: LayoutTemplate, hint: t('settings.templatesHint') },
 
   { to: '/settings/publishing', label: t('nav.publishing'), icon: Globe, hint: t('settings.publishingHint') },
+  { to: '/settings/api', label: t('nav.apiReference'), icon: Braces, hint: t('settings.apiReferenceHint') },
   // Members, roles and — for a platform admin — the accounts themselves, all
   // under one row. Accounts used to be a second row beside this one, which put
   // "can this person sign in" and "what may they do here" in two places and
@@ -55,7 +58,10 @@ const links = computed<SettingsLink[]>(() => [
   // Admin-only, so hidden from everyone else: unlike the rows above, the page
   // has nothing to show a member who cannot manage it.
   ...(auth.canAdminWorkspace
-    ? [{ to: '/settings/chat', label: t('nav.chatBots'), icon: MessagesSquare, hint: t('settings.chatBotsHint') }]
+    ? [
+        { to: '/settings/chat', label: t('nav.chatBots'), icon: MessagesSquare, hint: t('settings.chatBotsHint') },
+        { to: '/settings/security', label: t('nav.security'), icon: LockKeyhole, hint: t('settings.securityHint') },
+      ]
     : []),
   // Last, and open to every role: it is the section you go to when one of the
   // others did not explain itself.

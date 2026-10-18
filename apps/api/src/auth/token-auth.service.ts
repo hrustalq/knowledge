@@ -3,7 +3,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
-import { apiKeyScopeOf } from '@knowledge/contracts';
+import { apiKeyScopeOf, authMethodOf } from '@knowledge/contracts';
 import { DEV_PRINCIPAL, type Principal } from './principal.js';
 import { projectPinOf } from './api-keys.service.js';
 import { SessionsService } from './sessions.service.js';
@@ -74,6 +74,7 @@ export class TokenAuthService {
     const session = await this.sessions.resolve(token);
     if (!session) throw new UnauthorizedException(t('error.auth.invalidSession'));
     if (session.user.disabledAt) throw new UnauthorizedException(t('error.auth.accountDisabled'));
+    this.sessions.touch(session.id);
     return {
       userId: session.user.id,
       email: session.user.email,
@@ -84,6 +85,9 @@ export class TokenAuthService {
       locale: asLocale(session.user.locale),
       emailVerified: session.user.emailVerifiedAt !== null,
       sessionId: session.id,
+      authMethod: authMethodOf(session.authMethod),
+      sessionCreatedAt: session.createdAt.toISOString(),
+      ...(session.providerId ? { providerId: session.providerId } : {}),
     };
   }
 

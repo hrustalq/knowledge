@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
+  AuthMethod,
   AuthSessionResponse,
   ForgotPasswordResponse,
   ResendVerificationResponse,
@@ -20,7 +21,11 @@ import { userAvatarUrl } from '../common/avatar-url.js';
 import { MailProducer } from '../mail/mail.producer.js';
 import { hashPassword, verifyPassword } from './password.js';
 import type { Principal } from './principal.js';
-import { SessionsService } from './sessions.service.js';
+import { SessionsService, type SessionMeta } from './sessions.service.js';
+import { passwordAllowedFor } from './password-policy.js';
+import { AuthPolicyService, type EnforcedDomain } from './auth-policy.service.js';
+import { AuditService } from './audit.service.js';
+import type { RequestMeta } from '../common/client-ip.js';
 import { hashToken, mintToken } from './auth-tokens.js';
 import { toMeResponse } from './me-response.js';
 import { asLocale } from '../i18n/locale.js';
@@ -28,6 +33,16 @@ import { currentLocale, t } from '../i18n/t.js';
 
 /** Floor between two verification mails to one person — a resend button is easy to hold down. */
 const RESEND_COOLDOWN_MS = 60_000;
+
+/** How a session is being opened, beyond who for: what the session and its audit row record. */
+export interface IssueSessionOptions extends Pick<SessionMeta, 'providerId' | 'idpSessionId' | 'ttlHours'> {
+  authMethod: AuthMethod;
+  /** The workspace the sign-in belongs to — an SSO provider's. Null for a password sign-in. */
+  workspaceId: string | null;
+  via: 'login' | 'signup' | 'sso';
+  /** A password got past an enforced domain (break-glass email or admin exception): said in the audit row. */
+  breakGlass?: boolean;
+}
 
 /**
  * Auth flow (login / signup / password restoration) layered on Phase 5 auth.
@@ -43,6 +58,8 @@ export class AuthFlowService {
     private readonly config: ConfigService,
     private readonly sessions: SessionsService,
     private readonly mail: MailProducer,
+    private readonly audit: AuditService,
+    private readonly policy: AuthPolicyService,
   ) {}
 
   /** `debugToken` outside production: a dev or e2e flow must not need an inbox. */
@@ -50,11 +67,16 @@ export class AuthFlowService {
     return this.config.get<string>('NODE_ENV') !== 'production';
   }
 
-  async signup(email: string, displayName: string, password: string): Promise<AuthSessionResponse> {
+  async signup(email: string, displayName: string, password: string, meta?: RequestMeta): Promise<AuthSessionResponse> {
     if (!this.config.get<boolean>('AUTH_SIGNUP_ENABLED')) {
       throw new ForbiddenException(t('error.auth.signupDisabled'));
     }
     const normalized = email.trim().toLowerCase();
+    // A signup is a password account: under an SSO-only ceiling it would be one nobody can use.
+    if (!passwordAllowedFor(normalized, this.config)) throw new ForbiddenException(t('error.auth.passwordLoginDisabled'));
+    // A verified, enforced domain signs up through its IdP (JIT), never with a password.
+    const enforced = await this.passwordBlockedBy(normalized);
+    if (enforced) throw this.domainRefusal(enforced);
     const existing = await this.prisma.user.findUnique({ where: { email: normalized } });
     if (existing) throw new ConflictException(t('error.auth.emailTaken'));
 
@@ -82,25 +104,114 @@ export class AuthFlowService {
         });
       }
     }
-    return this.openSession(user);
+    return this.issueSession(user, meta, { authMethod: 'password', workspaceId: null, via: 'signup' });
   }
 
-  async login(email: string, password: string): Promise<AuthSessionResponse> {
-    const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+  async login(email: string, password: string, meta?: RequestMeta): Promise<AuthSessionResponse> {
+    const normalized = email.trim().toLowerCase();
+    // The ceiling is instance-wide, so saying so reveals nothing about the account.
+    if (!passwordAllowedFor(normalized, this.config)) {
+      this.recordFailure(normalized, 'password-login-disabled', meta);
+      throw new ForbiddenException(t('error.auth.passwordLoginDisabled'));
+    }
+    // A verified, enforced domain (#75 phase 4) is domain-wide too.
+    const domain = await this.policy.enforcedDomainFor(normalized);
+    const breakGlass = domain !== null || this.config.get<boolean>('AUTH_PASSWORD_LOGIN_ENABLED') === false;
+    const enforced = domain && !this.policy.isBreakGlass(normalized) ? domain : null;
+    // No admin exception on this domain: refused before any password is looked at.
+    if (enforced && !enforced.allowPasswordForAdmins) {
+      this.recordFailure(normalized, 'sso-required-for-domain', meta);
+      throw this.domainRefusal(enforced);
+    }
+    const user = await this.prisma.user.findUnique({ where: { email: normalized } });
+    const reason = !user
+      ? 'unknown-email'
+      : !user.passwordHash
+        ? 'no-password'
+        : user.disabledAt
+          ? 'disabled'
+          : (await verifyPassword(password, user.passwordHash))
+            ? null
+            : 'wrong-password';
+    // With the admin exception on, the refusal is the same 403 for a wrong
+    // password, an unknown address and a non-admin — so the answer never says
+    // which addresses belong to an admin. Only the right admin password passes.
+    if (enforced && (reason || !user?.isAdmin)) {
+      this.recordFailure(normalized, reason ? `sso-required-for-domain:${reason}` : 'sso-required-for-domain', meta, user?.id);
+      throw this.domainRefusal(enforced);
+    }
     // Uniform failure: never reveal whether the email, password, or account state is wrong.
-    if (!user?.passwordHash || user.disabledAt || !(await verifyPassword(password, user.passwordHash))) {
+    // The reason goes to the audit trail only, which a platform admin reads.
+    if (reason || !user) {
+      this.recordFailure(normalized, reason ?? 'unknown-email', meta, user?.id);
       throw new UnauthorizedException(t('error.auth.invalidCredentials'));
     }
-    return this.openSession(user);
+    return this.issueSession(user, meta, {
+      authMethod: 'password',
+      workspaceId: domain?.workspaceId ?? null,
+      via: 'login',
+      // A password past an SSO-only ceiling or an enforced domain: someone used the way back in.
+      ...(breakGlass ? { breakGlass: true } : {}),
+    });
   }
 
-  async logout(principal: Principal): Promise<void> {
-    if (principal.sessionId) await this.sessions.revoke(principal.sessionId);
+  /**
+   * The enforced domain that refuses `email` a password, or null (#75 phase 4).
+   * AUTH_BREAK_GLASS_EMAILS passes; the admin exception is the caller's to
+   * judge, because it needs the password first.
+   */
+  private async passwordBlockedBy(email: string): Promise<EnforcedDomain | null> {
+    const enforced = await this.policy.enforcedDomainFor(email);
+    return enforced && !this.policy.isBreakGlass(email) ? enforced : null;
+  }
+
+  /** Domain-wide, so it reveals nothing about the account; `providerId` is where to send the person. */
+  private domainRefusal(enforced: EnforcedDomain): ForbiddenException {
+    return new ForbiddenException({
+      statusCode: HttpStatus.FORBIDDEN,
+      message: t('error.auth.ssoRequiredForDomain', { domain: enforced.domain }),
+      reason: 'ssoRequiredForDomain',
+      domain: enforced.domain,
+      providerId: enforced.providerId,
+    });
+  }
+
+  private recordFailure(email: string, error: string, meta: RequestMeta | undefined, target?: string): void {
+    void this.audit.record({
+      workspaceId: null,
+      actor: 'anonymous',
+      action: 'auth.login_failed',
+      params: { method: 'password', email: email.slice(0, 320) },
+      ok: false,
+      error,
+      ip: meta?.ip,
+      target: target ?? null,
+    });
+  }
+
+  async logout(principal: Principal, meta?: RequestMeta): Promise<void> {
+    if (!principal.sessionId) return;
+    await this.sessions.revoke(principal.sessionId);
+    void this.audit.record({
+      workspaceId: null,
+      actor: principal.userId,
+      action: 'auth.logout',
+      params: { sessionId: principal.sessionId },
+      ok: true,
+      ip: meta?.ip,
+      target: principal.userId,
+    });
   }
 
   async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
-    const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    const normalized = email.trim().toLowerCase();
+    // A reset link for a password that cannot be used would only be a way to mint one.
+    if (!passwordAllowedFor(normalized, this.config)) return { ok: true };
+    const enforced = await this.passwordBlockedBy(normalized);
+    const user = await this.prisma.user.findUnique({ where: { email: normalized } });
     if (!user || user.disabledAt) return { ok: true }; // no account enumeration
+    // An enforced domain mints no reset link, except for the admin its exception lets in.
+    if (enforced && !(enforced.allowPasswordForAdmins && user.isAdmin)) return { ok: true };
 
     const { token, tokenHash } = mintToken('kr_');
     const ttlMin = this.config.get<number>('AUTH_RESET_TTL_MIN') ?? 30;
@@ -205,9 +316,35 @@ export class AuthFlowService {
     return token;
   }
 
-  /** Session + MeResponse for signup/login responses. */
-  private async openSession(user: User): Promise<AuthSessionResponse> {
-    const { token, session } = await this.sessions.create(user.id);
+  /**
+   * Session + MeResponse for every way of signing in — password, signup, SSO
+   * (#75). A signup is its first sign-in, and audited as one. An SSO sign-in
+   * is audited under its provider's workspace, so that workspace's admins see it.
+   */
+  async issueSession(user: User, meta: RequestMeta | undefined, opts: IssueSessionOptions): Promise<AuthSessionResponse> {
+    const { token, session } = await this.sessions.create(user.id, {
+      authMethod: opts.authMethod,
+      ...(opts.providerId ? { providerId: opts.providerId } : {}),
+      ...(opts.idpSessionId ? { idpSessionId: opts.idpSessionId } : {}),
+      ...(opts.ttlHours ? { ttlHours: opts.ttlHours } : {}),
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+    });
+    void this.audit.record({
+      workspaceId: opts.workspaceId,
+      actor: user.id,
+      action: 'auth.login',
+      params: {
+        method: opts.authMethod,
+        via: opts.via,
+        sessionId: session.id,
+        ...(opts.providerId ? { providerId: opts.providerId } : {}),
+        ...(opts.breakGlass ? { breakGlass: true } : {}),
+      },
+      ok: true,
+      ip: meta?.ip,
+      target: user.id,
+    });
     const memberships = await this.prisma.workspaceMember.findMany({ where: { userId: user.id } });
     const me = toMeResponse(
       {
@@ -219,6 +356,8 @@ export class AuthFlowService {
         isAdmin: user.isAdmin,
         locale: asLocale(user.locale),
         emailVerified: user.emailVerifiedAt !== null,
+        sessionId: session.id,
+        authMethod: opts.authMethod,
       },
       memberships,
       this.config.get<boolean>('AUTH_REQUIRE_VERIFIED_EMAIL') === true,

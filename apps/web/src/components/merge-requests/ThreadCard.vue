@@ -87,6 +87,8 @@ const emit = defineEmits<{
 
 const { nameOf } = useMembers()
 const { agentNames } = useAgentNames()
+/** Set on a merge request's lint threads; page comments never carry it. */
+const ruleId = computed(() => ('ruleId' in props.thread ? (props.thread.ruleId as string | null) : null))
 const auth = useAuthStore()
 const panelId = useId()
 
@@ -275,6 +277,15 @@ const replyTarget = computed(() =>
         >
           <Bot class="size-3" /> {{ t('common.ai') }}
         </span>
+        <!-- A lint thread names the styleguide rule it cites (#74); its text
+             is the comment's first line. Review threads only. -->
+        <span
+          v-if="ruleId"
+          class="shrink-0 truncate rounded bg-muted px-1 py-px font-mono text-[11px] text-muted-foreground"
+          :title="t('mr.lint.ruleChip', { rule: ruleId })"
+        >
+          {{ ruleId }}
+        </span>
         <span
           v-if="thread.resolved"
           class="flex shrink-0 items-center gap-1 whitespace-nowrap text-emerald-600 dark:text-emerald-400"
@@ -367,8 +378,10 @@ const replyTarget = computed(() =>
                 <!-- An agent replies under the identity of whoever tagged it —
                      it has no account — so the person is named here rather than
                      silently standing in as the author. -->
+                <!-- A lint thread (#74) was started by no one's tag: the
+                     check runs on the merge request author's behalf. -->
                 <span v-if="comment.agentKey" class="max-w-full truncate">
-                  · {{ t('mention.viaActor', { actor: nameOf(comment.authorId) }) }}
+                  · {{ t(ruleId && i === 0 ? 'mr.lint.onBehalfOf' : 'mention.viaActor', { actor: nameOf(comment.authorId) }) }}
                 </span>
                 <span class="shrink-0" :title="fullTime(comment.createdAt)">
                   · {{ timelineTime(comment.createdAt) }}

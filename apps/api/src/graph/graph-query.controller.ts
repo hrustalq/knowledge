@@ -36,7 +36,7 @@ export class GraphQueryController {
     const base = {
       workspaceId: dto.workspaceId,
       actor: principal.mode === 'dev' ? 'dev' : principal.userId,
-      action: 'graph.query',
+      action: 'graph.query' as const,
       // The query reads raw stores past every page restriction (#76): only an
       // admin operator reaches it, and admins bypass restrictions anyway, but
       // the row says so in as many words.

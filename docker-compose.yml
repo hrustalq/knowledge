@@ -145,6 +145,25 @@ services:
     ports: ["127.0.0.1:3100:3000"]
     command: ["gotenberg", "--chromium-allow-list=^file:///tmp/.*", "--api-timeout=300s"]
 
+  # Issue #75 optional OpenID provider for trying SSO locally (docs/features/54).
+  # Not started by default:  make infra-up-keycloak, then run the API with
+  # AUTH_MODE=api-key AUTH_SSO_ENABLED=true AUTH_SSO_ALLOW_PRIVATE_URLS=true and
+  # add a Keycloak provider with issuer http://localhost:8180/realms/knowledge,
+  # client `knowledge`, secret `knowledge-dev-secret`, domain corp.example.
+  # keycloak/realm-knowledge.json seeds test users ada/ada (verified) and
+  # eve/eve (unverified address). Admin console: admin/admin. Loopback only.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    profiles: ["keycloak"]
+    command: ["start-dev", "--import-realm", "--http-port=8180"]
+    ports: ["127.0.0.1:8180:8180"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: http://localhost:8180
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+
 volumes:
   pgdata:
   miniodata:

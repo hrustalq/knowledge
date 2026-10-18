@@ -138,6 +138,9 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 49 | Agent triggers       | Events, a signed webhook, a mention or a time of day start agent runs; `AgentTriggerService` is the only `trigger:'event'` writer; recipes, admin-approved learnings, repo guidance as disabled skills |
 | 50 | Agent memory         | `knowledge_capture_*` → staged row → raw-cosine dedupe → MR with `provenance: 'captured'`; `capture` key passes editor only on `{ capture: true }` calls; head-less new pages hidden via `pending_merge_request_id`; terms via the inbox |
 | 51 | Component pages      | `component:` → `component_declarations`; each pull replaces `code_imports` + `code_files`; rules only in `component-match.ts`; `code` edges via `replaceCodeFacts`; Used by is read-time under `AccessScope`; drafts = archaeologist run + `proposePage` |
+| 52 | API reference        | `documents.kind` openapi/asyncapi; ingestion branches on kind → markdown projection + `api_operations` + revision-scoped `spec` `DESCRIBES`; `{param}` folds in `normalizeEntityKey`; slug pinned; try-it proxy is env-ceilinged, never MCP; `breakingBlocks` gates merge; synced spec changes always MR |
+| 53 | Doc quality          | Styleguide = `ai_skills` `kind='styleguide'`, project replaces workspace; `readLintViolations` drops unknown rules/ungrounded quotes, severity is the rule's; MR lint = added lines only, sweeper-triggered per head, published API-side; `lintGate` is the one predicate (fail-open); scores are append-only rows the worker writes |
+| 54 | Enterprise auth      | OIDC/SAML/LDAP providers per workspace (`platformWide` opt-in), JIT only on a verified address in `allowedDomains`; token via a 60 s fragment exchange code; `RoleSyncService` is the one non-manual membership writer; enforced SSO inside `requireRole` (`AuthPolicyService`, 30 s cache); SCIM `kscim_` is a credential, never a principal |
 
 ## Conventions
 
@@ -237,4 +240,5 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - `corepack` does not exist on this Node install; pnpm is pinned only via the `packageManager` field.
 - Reindexing is idempotent by design: `GraphService.upsertRevisionChunks` deletes the revision's chunks and vertex before recreating them, and the processor skips jobs already `completed`.
 - Relation edge type names are **SQL-interpolated**, so every type is validated against `RELATION_EDGE_TYPES` in `GraphService`. **Never widen that list without keeping the allowlist check.**
+- A new `AUDIT_ACTIONS` value needs en/ru labels (`security.audit.actions.<action with . → _>`) **and** a literal `action: '<value>'` somewhere in `src` — `audit.service.spec.ts` fails otherwise, and a ternary does not count.
 - With the default `AUTH_MODE=none` every request passes as the dev principal, whose userId **is** the zeros `AUTHOR_ID_STUB`. Test ACLs and merge gates with a bootstrapped key, not in dev mode — and `make auth-bootstrap` makes a **platform admin**, who bypasses every page restriction. `test/page-permissions.e2e-spec.ts` creates its own non-admin people.

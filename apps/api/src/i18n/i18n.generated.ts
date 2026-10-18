@@ -38,6 +38,10 @@ export type I18nTranslations = {
         "surveyorDesc": string;
         "digest": string;
         "digestDesc": string;
+        "linter": string;
+        "linterDesc": string;
+        "auditor": string;
+        "auditorDesc": string;
         "route": {
             "explicit": string;
             "disabled": string;
@@ -83,6 +87,12 @@ export type I18nTranslations = {
                 "few": string;
                 "many": string;
             };
+            "violations": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
         };
         "review": {
             "cannotRun": string;
@@ -96,6 +106,7 @@ export type I18nTranslations = {
             "aliases": string;
             "budgetSpent": string;
             "nothingNew": string;
+            "allScanned": string;
             "summary": string;
         };
         "archaeology": {
@@ -138,6 +149,11 @@ export type I18nTranslations = {
                 "hiddenPages": string;
                 "undocumented": string;
                 "andMore": string;
+                "apiHeading": string;
+                "apiChanges": string;
+                "apiNoRoutes": string;
+                "apiDisagreements": string;
+                "apiAgrees": string;
             };
             "paths": {
                 "title": string;
@@ -148,6 +164,28 @@ export type I18nTranslations = {
             "overlayFailed": string;
             "overlayPartial": string;
             "usagesFailed": string;
+            "api": {
+                "missingInCode": string;
+                "missingInSpec": string;
+                "methodMismatch": string;
+                "more": string;
+                "findingTitle": string;
+                "findingDetailPr": string;
+                "findingDetail": string;
+                "headPartial": string;
+                "headUnread": string;
+                "specGone": string;
+                "specUnparsed": string;
+                "failed": string;
+                "hidden": string;
+                "summaryPr": string;
+                "needsSpec": string;
+                "restricted": string;
+                "summaryUnchecked": string;
+                "summaryNoRoutes": string;
+                "summaryDrifted": string;
+                "summaryClean": string;
+            };
         };
         "report": {
             "noContent": string;
@@ -193,6 +231,45 @@ export type I18nTranslations = {
         "recipe": {
             "freshnessSweepNote": string;
             "glossarySuggesterNote": string;
+        };
+        "lint": {
+            "noInput": string;
+            "cannotRun": string;
+            "notVisible": string;
+            "noStyleguide": string;
+            "nothingChanged": string;
+            "clean": string;
+            "summary": string;
+            "dropped": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "suggestion": string;
+            "severity": {
+                "error": string;
+                "warning": string;
+                "suggestion": string;
+            };
+        };
+        "quality": {
+            "noPages": string;
+            "upToDate": string;
+            "modelOff": string;
+            "noEmbeddings": string;
+            "stubEmbeddings": string;
+            "brokenIdLink": string;
+            "brokenTitleLink": string;
+            "noOwner": string;
+            "duplicate": string;
+            "empty": string;
+            "duplicateTitle": string;
+            "duplicateDetail": string;
+            "lowTitle": string;
+            "linksTitle": string;
+            "lowDetail": string;
+            "summary": string;
         };
     };
     "assistant": {
@@ -340,6 +417,8 @@ export type I18nTranslations = {
             "description": string;
             "wikiTitle": string;
             "wikiDescription": string;
+            "specTitle": string;
+            "specDescription": string;
         };
         "warning": {
             "passthrough": string;
@@ -372,6 +451,13 @@ export type I18nTranslations = {
                 "truncated": string;
                 "tagNotFound": string;
                 "unavailable": string;
+            };
+            "apiSpec": {
+                "bundled": string;
+                "remote": string;
+                "missing": string;
+                "outside": string;
+                "unreadable": string;
             };
         };
         "pushVersionMessage": string;
@@ -435,6 +521,13 @@ export type I18nTranslations = {
             "apiKeyProjectsNeedCapture": string;
             "apiKeyProjectNotAllowed": string;
             "apiKeyLimit": string;
+            "sessionNotFound": string;
+            "passwordLoginDisabled": string;
+            "rateLimited": string;
+            "ssoRequired": string;
+            "ssoRequiredForDomain": string;
+            "apiKeysBlocked": string;
+            "sessionTooOld": string;
         };
         "workspace": {
             "notFound": string;
@@ -442,6 +535,7 @@ export type I18nTranslations = {
             "notAMember": string;
             "lastAdminDemote": string;
             "lastAdminRemove": string;
+            "managedByIdp": string;
         };
         "user": {
             "notFound": string;
@@ -514,6 +608,11 @@ export type I18nTranslations = {
             "divergedWhileMerging": string;
             "alreadyOpen": string;
             "notMembers": string;
+            "breakingApi": string;
+            "notSpec": string;
+            "notOpenForAck": string;
+            "lintPending": string;
+            "lintBlocking": string;
         };
         "thread": {
             "notFoundOnDocument": string;
@@ -642,6 +741,8 @@ export type I18nTranslations = {
             "agentWebhookDeliveryId": string;
             "skillNoUpstream": string;
             "findingComponentDraft": string;
+            "findingNoTerm": string;
+            "findingTermAdded": string;
         };
         "assistant": {
             "providerDisabled": string;
@@ -749,6 +850,7 @@ export type I18nTranslations = {
             "identityNotFound": string;
             "identityNotMember": string;
             "guidanceNotARepository": string;
+            "specNoAssist": string;
         };
         "routeNotFound": string;
         "validationFailed": string;
@@ -980,6 +1082,110 @@ export type I18nTranslations = {
             "kitClient": string;
             "kitNotOffered": string;
             "keyNotHere": string;
+        };
+        "apiSpec": {
+            "parseFailed": string;
+            "format": string;
+            "template": string;
+            "notSpec": string;
+            "notDiffable": string;
+            "driftNotLinked": string;
+            "driftNoRepository": string;
+            "driftNotHttp": string;
+            "driftDisabled": string;
+        };
+        "apiTry": {
+            "disabled": string;
+            "operationNotInSpec": string;
+            "targetNotInSpec": string;
+            "relativeServer": string;
+            "privateAddress": string;
+            "notAllowed": string;
+            "tooLarge": string;
+            "rateLimited": string;
+            "unreachable": string;
+            "timeout": string;
+            "revisionDraft": string;
+            "unresolved": string;
+        };
+        "styleguide": {
+            "notFound": string;
+            "tooManyRules": string;
+            "duplicateRuleId": string;
+            "scopeTaken": string;
+        };
+        "lint": {
+            "notOpen": string;
+            "off": string;
+            "running": string;
+            "busy": string;
+            "checkNotFound": string;
+            "overrideNotCurrent": string;
+            "notOverridable": string;
+            "alreadyOverridden": string;
+        };
+        "sso": {
+            "disabled": string;
+            "providerNotFound": string;
+            "exchangeInvalid": string;
+            "secretKeyMissing": string;
+            "kindNotSupported": string;
+            "platformWideAdminOnly": string;
+            "issuerRequired": string;
+            "clientIdRequired": string;
+            "idpEntityIdRequired": string;
+            "ssoUrlInvalid": string;
+            "idpCertInvalid": string;
+            "issuerInvalid": string;
+            "issuerNotHttps": string;
+            "issuerUnresolved": string;
+            "issuerPrivate": string;
+            "invalidDomain": string;
+            "groupMappingNotFound": string;
+            "groupNameRequired": string;
+            "groupMappingProvider": string;
+            "domainNotFound": string;
+            "domainTaken": string;
+            "domainNotVerified": string;
+            "domainProvider": string;
+            "domainNoProvider": string;
+            "manualVerifyAdminOnly": string;
+            "policyNoProvider": string;
+            "policyLocksYouOut": string;
+            "ldapUrlInvalid": string;
+            "ldapInsecure": string;
+            "ldapHostUnresolved": string;
+            "ldapHostPrivate": string;
+            "baseDnRequired": string;
+            "userFilterInvalid": string;
+            "ldapInvalidCredentials": string;
+            "ldapUnavailable": string;
+            "ldapRefused": string;
+        };
+        "scim": {
+            "disabled": string;
+            "unauthorized": string;
+            "userNotFound": string;
+            "groupNotFound": string;
+            "invalidFilter": string;
+            "userExists": string;
+            "emailProvisioned": string;
+            "externalIdExists": string;
+            "groupExists": string;
+            "displayNameRequired": string;
+            "bodyObject": string;
+            "userNameRequired": string;
+            "activeBoolean": string;
+            "emailRequired": string;
+            "patchOperations": string;
+            "patchOp": string;
+            "patchRemoveNeedsPath": string;
+            "patchPath": string;
+            "patchValueObject": string;
+            "memberValue": string;
+            "tokenLimit": string;
+            "tokenNotFound": string;
+            "mappingGroup": string;
         };
     };
     "import": {

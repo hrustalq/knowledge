@@ -158,7 +158,10 @@
     "publishing": "Publishing",
     "exports": "Exports",
     "chatBots": "Chat bots",
-    "captures": "Captures"
+    "captures": "Captures",
+    "newApiSpec": "API spec",
+    "apiReference": "API reference",
+    "security": "Security"
   },
   "role": {
     "guest": "Guest",
@@ -217,7 +220,39 @@
     "verifyContinue": "Continue",
     "verifySignOut": "Sign out",
     "verifyBanner": "Confirm your email address — we sent a link to {email}.",
-    "verifyBannerDismiss": "Dismiss"
+    "verifyBannerDismiss": "Dismiss",
+    "sso": {
+      "continue": "Continue",
+      "checking": "Checking…",
+      "or": "or",
+      "continueWith": "Continue with {name}",
+      "domainUsesSso": "{email} signs in through your organization.",
+      "usePassword": "Use a password instead",
+      "changeEmail": "Use another address",
+      "passwordDisabled": "Password sign-in is turned off on this instance. Ask an administrator for your organization’s single sign-on.",
+      "completing": "Finishing sign-in…",
+      "completeFailed": "This sign-in link is invalid, expired or already used. Sign in again.",
+      "errors": {
+        "invalid-state": "That sign-in attempt expired or was already used. Try again.",
+        "provider-error": "The identity provider did not complete the sign-in. Try again, or ask an administrator to check the provider.",
+        "id-token-invalid": "The identity provider’s answer could not be verified. Ask an administrator to check the provider.",
+        "email-missing": "The identity provider did not share an email address.",
+        "email-not-verified": "The identity provider has not confirmed your email address, so it cannot be linked to an account.",
+        "domain-not-allowed": "This identity provider cannot sign in addresses on your domain.",
+        "jit-disabled": "There is no account for you yet, and this provider does not create one. Ask an administrator to invite you.",
+        "account-disabled": "This account is disabled.",
+        "failed": "Single sign-on is not available for this provider."
+      },
+      "domainEnforced": "Your organization requires single sign-on for this address, so a password cannot be used.",
+      "reauth": {
+        "sso": "This workspace requires single sign-on. Sign in through your organization to continue.",
+        "session": "This workspace asks you to sign in again after a while. Sign in to continue."
+      },
+      "ldapTitle": "Sign in with {name}",
+      "ldapHint": "Use the username and password of your organization’s directory.",
+      "username": "Username",
+      "back": "Back"
+    }
   },
   "documents": {
     "title": "Pages",
@@ -269,7 +304,9 @@
     "templatesHint": "Page shapes to start from",
     "publishingHint": "Public links to pages",
     "exportsHint": "Files you exported",
-    "chatBotsHint": "Answer questions in Telegram, citing your pages."
+    "chatBotsHint": "Answer questions in Telegram, citing your pages.",
+    "apiReferenceHint": "Try-it proxy for spec pages",
+    "securityHint": "Sign-in and the audit trail"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -733,6 +770,14 @@
       "result": "{created} new, {updated} updated, {pending} awaiting review, {removed} removed",
       "truncated": "Cut to the skill budget: {paths}",
       "skipped": "Skipped: {paths}"
+    },
+    "apiSpecs": {
+      "foundTitle": "Found one API spec in this repository | Found {count} API specs in this repository",
+      "foundHint": "Sync them as API reference pages beside the other pages. Later changes to a spec arrive as merge requests, with breaking changes called out. You can edit the list under the connector's API specs setting.",
+      "add": "Sync this spec | Sync these {n} specs",
+      "added": "Added to API specs",
+      "specNote": "An API spec file, shown as it will be stored. Once the page exists, every change to it arrives as a merge request.",
+      "assistOff": "The AI assists rewrite markdown, so they are not offered for an API spec."
     }
   },
   "workflow": {
@@ -1281,7 +1326,11 @@
       "requestedReview": "requested review from {who}",
       "aReviewer": "a reviewer",
       "mergedSquash": "merged this as a squashed revision",
-      "mergedCommit": "merged this with a merge commit"
+      "mergedCommit": "merged this with a merge commit",
+      "ackedBreaking": "acknowledged the breaking API changes",
+      "withdrewBreakingAck": "withdrew the acknowledgement of breaking API changes",
+      "overrodeLint": "overrode the style check",
+      "overrodeLintBecause": "overrode the style check: “{reason}”"
     },
     "requestedToMerge": "requested to merge",
     "into": "into",
@@ -1340,6 +1389,65 @@
       "anAgent": "an agent session",
       "session": "session",
       "viewCaptures": "View in captures"
+    },
+    "tabApi": "API changes",
+    "api": {
+      "notParsed": "One side of this merge request no longer parses as a spec, so there is no API verdict.",
+      "policy": {
+        "off": "This workspace does not check breaking API changes.",
+        "warn": "This workspace warns about breaking API changes but does not block a merge.",
+        "block": "This workspace blocks a merge with breaking API changes until an admin acknowledges them."
+      },
+      "noneBreaking": "No breaking API changes",
+      "breaking": "{n} breaking API change | {n} breaking API changes",
+      "blocked": "merging is blocked until an admin acknowledges",
+      "warnOnly": "merging is allowed (warn)",
+      "ackedBy": "acknowledged by {name}",
+      "ackStale": "{name} acknowledged an earlier revision; the branch has changed since",
+      "acknowledge": "Acknowledge",
+      "withdraw": "Withdraw",
+      "review": "Review",
+      "acknowledged": "Breaking changes acknowledged",
+      "withdrawn": "Acknowledgement withdrawn",
+      "ackHint": "Only a workspace admin can acknowledge breaking changes.",
+      "blockedToast": "{n} breaking API change needs an admin’s acknowledgement before this merges | {n} breaking API changes need an admin’s acknowledgement before this merges"
+    },
+    "lint": {
+      "notYet": "Style not checked yet",
+      "pending": "Style check waiting",
+      "running": "Checking style…",
+      "passed": "Follows the styleguide",
+      "failed": "{n} styleguide violation | {n} styleguide violations",
+      "unresolved": "{n} unresolved | {n} unresolved",
+      "warnOnly": "does not hold the merge",
+      "recheck": "Check again",
+      "queued": "Style check queued",
+      "paneTitle": "Style",
+      "inDiscussion": "Each violation is a thread in the discussion.",
+      "ruleChip": "Styleguide rule {rule}",
+      "reason": {
+        "superseded": "Skipped: a newer push replaced this head",
+        "no-styleguide": "Not checked: no styleguide applies to this page",
+        "restricted": "Not checked: the page is not open to every member",
+        "author-unavailable": "Not checked: the author can no longer act in this workspace",
+        "budget": "Style check could not run: the AI budget is spent",
+        "run-failed": "Style check could not run",
+        "stale": "Not published: the check finished more than a day ago"
+      },
+      "onBehalfOf": "on behalf of {actor}",
+      "blocking": "{n} blocking | {n} blocking",
+      "blocksMerge": "merging is blocked until the error threads are resolved",
+      "waitsMerge": "merging waits for the check",
+      "noneBlocking": "nothing of error severity is open",
+      "overriddenBy": "overridden by {name}",
+      "override": "Override",
+      "overrideTitle": "Override the style check",
+      "overrideHint": "Lets this revision merge despite its style check. It holds for this revision only: a later push is checked again. The reason is kept in the activity feed and the audit log.",
+      "reasonLabel": "Reason",
+      "overridden": "Style check overridden",
+      "adminHint": "Resolve the error threads, or ask a workspace admin to override.",
+      "blockedToast": "{n} unresolved error-severity style violation holds this merge | {n} unresolved error-severity style violations hold this merge",
+      "pendingToast": "This merge waits for the style check of the source revision"
     }
   },
   "assistant": {
@@ -1446,7 +1554,8 @@
         "frontmatter": "From frontmatter",
         "inferred": "Inferred relation",
         "curated": "Curated relation",
-        "code": "Derived from code"
+        "code": "Derived from code",
+        "spec": "From the API spec"
       }
     },
     "saveToKb": {
@@ -1553,7 +1662,8 @@
     "structural": "Structural ({source})",
     "view": "view",
     "compareTitle": "Compare {from} → {to}",
-    "mergeBaseAt": "merge base {id}"
+    "mergeBaseAt": "merge base {id}",
+    "apiChanges": "API changes"
   },
   "count": {
     "messages": "{n} message | {n} messages",
@@ -1920,6 +2030,7 @@
     },
     "tabRuns": "Runs",
     "tabCoverage": "Coverage",
+    "tabStyleguide": "Styleguide",
     "tabFeedback": "Feedback",
     "runs": {
       "subtitle": "Background runs. An agent proposes; nothing it finds changes a page.",
@@ -1939,7 +2050,8 @@
         "manual": "manual",
         "schedule": "scheduled",
         "webhook": "pull request",
-        "report": "report"
+        "report": "report",
+        "merge-request": "merge request"
       },
       "stage": {
         "scanning": "Scanning pages",
@@ -1956,13 +2068,22 @@
         "judging": "Checking pages against the change",
         "signals": "Reading answer feedback",
         "clustering": "Clustering questions",
-        "topics": "Naming topics"
+        "topics": "Naming topics",
+        "linting": "Checking the change against the styleguide",
+        "facts": "Checking links, owners and duplicates",
+        "scoring": "Scoring pages",
+        "writing": "Saving scores"
       },
       "propose": "Propose fix",
       "proposed": "Opened a merge request: {title}",
       "proposedPage": "Proposed page: {title}",
       "createPage": "Create page",
       "pageCreated": "Created the page \"{title}\"",
+      "addTerm": "Add to glossary",
+      "addTermTitle": "Add to the glossary",
+      "addTermDesc": "It lands in the glossary of the project “{page}” belongs to, marked as suggested by AI. Correct anything the model got wrong before adding it.",
+      "termAdded": "Added “{term}” to the glossary",
+      "viewTerm": "View in glossary",
       "viewProposal": "View merge request",
       "markOutdated": "Mark outdated",
       "markedOutdated": "Marked \"{title}\" outdated",
@@ -2094,7 +2215,8 @@
       "glossary": "Glossary",
       "public_ask": "Site Ask",
       "chat-capture": "Saved from chat",
-      "component-draft": "Component draft"
+      "component-draft": "Component draft",
+      "lint": "Lint"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",
@@ -2321,7 +2443,79 @@
       },
       "parentRoot": "Project root",
       "parentMissing": "A page that no longer exists"
-    }
+    },
+    "styleguide": {
+      "scope": "Applies to",
+      "scopeWorkspace": "Whole workspace",
+      "scopeWorkspaceHint": "Every project without a styleguide of its own follows this one.",
+      "scopeProjectHint": "A project's own styleguide replaces the workspace one there — it is not merged with it.",
+      "defaultName": "Styleguide",
+      "defaultProjectName": "Styleguide — {project}",
+      "descriptionPlaceholder": "Who it is for, and what it is not for",
+      "rules": "Rules",
+      "ruleCount": "{count} of {max}",
+      "rulePlaceholder": "One rule, in plain words — e.g. Name UI actions with \"select\", never \"click on\".",
+      "ruleText": "Rule {n}",
+      "severity": "Severity",
+      "addExample": "Add an example",
+      "hideExample": "Hide example",
+      "exampleBad": "Breaks the rule",
+      "exampleGood": "Follows it",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "removeRule": "Remove rule {n}",
+      "addRule": "Add a rule",
+      "discard": "Discard changes",
+      "delete": "Delete styleguide",
+      "saved": "Styleguide saved",
+      "deleted": "Styleguide deleted",
+      "deleteTitle": "Delete \"{name}\"?",
+      "deleteBody": "Text will no longer be checked against these rules anywhere in the workspace, except in projects with a styleguide of their own.",
+      "deleteProjectBody": "This project goes back to following the workspace styleguide, if there is one.",
+      "inherits": "This project has no styleguide of its own. It follows the workspace one, \"{name}\".",
+      "override": "Write one for this project",
+      "emptyTitle": "No styleguide yet",
+      "emptyBody": "Write down the rules your team agreed on, in plain words, each with a severity. The linter checks text against these rules and nothing else, and every violation it reports quotes the passage that breaks one.",
+      "example1": "Error — Name UI actions with \"select\", never \"click on\".",
+      "example2": "Warning — Write headings in sentence case.",
+      "example3": "Suggestion — Address the reader as \"you\", not \"we\".",
+      "create": "Write the styleguide",
+      "tryTitle": "Try it",
+      "tryHint": "Paste some text to check it against the saved rules. This makes a model call.",
+      "tryUnsaved": "The check uses the saved rules. Save first to try your changes.",
+      "tryPlaceholder": "To save your changes, click on the Save button.",
+      "check": "Check",
+      "checking": "Checking…",
+      "clean": "No rule is broken.",
+      "linterOff": "The linter is off: no model is configured for it, or the agent is disabled.",
+      "suggestion": "Suggested:",
+      "dropped": "No reports dropped | 1 report dropped: it cited no rule of this styleguide, or quoted text that is not there | {count} reports dropped: they cited no rule of this styleguide, or quoted text that is not there",
+      "policy": {
+        "title": "Check merge requests",
+        "saved": "Lint policy saved",
+        "inheritDefault": "Default ({value})",
+        "inheritProject": "As the workspace ({value})",
+        "choice": {
+          "off": "Off",
+          "warn": "Warn — post violations as threads",
+          "block": "Block — hold the merge on unresolved errors"
+        },
+        "value": {
+          "off": "off",
+          "warn": "warn",
+          "block": "block"
+        },
+        "noteScope": "Merge requests on these pages: {value}.",
+        "noteInherited": "Inherited from the workspace: {value}.",
+        "noteDefault": "The deployment default (STYLE_LINT_POLICY): {value}.",
+        "noteClamped": "Asked for {asked}, but the deployment allows at most {ceiling} (STYLE_LINT_POLICY).",
+        "noteAgentDisabled": "Off: the Linter agent is disabled in Agents."
+      }
+    },
+    "qualityAudit": "Quality audit",
+    "qualityAuditDesc": "How the auditor agent keeps page quality scores current.",
+    "qualityAuditDays": "Re-score unchanged pages after (days)",
+    "qualityAuditHint": "A page is re-scored as soon as it changes. An unchanged page keeps its score for {days} days; leave the field empty to use the server default ({defaultDays})."
   },
   "search": {
     "activeFilters": "{n} filter | {n} filters",
@@ -2504,7 +2698,8 @@
     "pages": "Pages",
     "glossary": "Glossary",
     "site": "Site",
-    "usedBy": "Used by"
+    "usedBy": "Used by",
+    "quality": "Quality"
   },
   "knowledgeIssue": {
     "report": "Report a problem",
@@ -2758,6 +2953,15 @@
       "title": "Not notified: {names} cannot open this page | Not notified: {names} cannot open this page",
       "hint": "If you manage this page, grant them view from Access…; otherwise ask one of its managers.",
       "grant": "Open Access…"
+    },
+    "source": {
+      "manual": "Manual",
+      "jit": "SSO",
+      "group": "Group",
+      "scim": "SCIM",
+      "managedHint": "Managed by single sign-on: sign-ins set this role from the identity provider. Take it over to edit it by hand.",
+      "takeOver": "Manage manually",
+      "takeOverConfirm": "Manage {name} by hand? Sign-ins will stop changing their role here."
     }
   },
   "users": {
@@ -3175,7 +3379,9 @@
     "process": "Processes",
     "system": "Systems",
     "contract": "Contracts",
-    "entity": "Other"
+    "entity": "Other",
+    "op": "API operations",
+    "channel": "Channels"
   },
   "filters": {
     "author": "Author",
@@ -3408,6 +3614,26 @@
       "status": "Keys, client configs and the agent skill live together under Connect AI.",
       "devMode": "Not applicable while the API runs with AUTH_MODE=none.",
       "manage": "Manage keys"
+    },
+    "sessions": {
+      "title": "Where you are signed in",
+      "hint": "Every browser or device with a live session. Sign one out and it has to log in again on its next request.",
+      "current": "This browser",
+      "revoke": "Sign out",
+      "revoked": "Session signed out",
+      "failed": "Could not sign that session out",
+      "none": "No other sessions.",
+      "lastSeen": "Last active {when}",
+      "neverSeen": "Not used since sign-in",
+      "signedIn": "Signed in {when}",
+      "unknownDevice": "Unknown device",
+      "onDevice": "{browser} on {os}",
+      "method": {
+        "password": "Password",
+        "oidc": "Single sign-on (OIDC)",
+        "saml": "Single sign-on (SAML)",
+        "ldap": "Directory (LDAP)"
+      }
     }
   },
   "mention": {
@@ -3824,7 +4050,8 @@
     "subtitle": "{count} live page {scope} | {count} live pages {scope}",
     "tab": {
       "pages": "Pages",
-      "settings": "Settings"
+      "settings": "Settings",
+      "quality": "Quality"
     },
     "presets": "Presets",
     "preset": {
@@ -4708,6 +4935,721 @@
       "review": "Review the drafted page",
       "failed": "The draft failed.",
       "notOpened": "The page was drafted but could not be opened as a merge request. It is on the archaeologist's run."
+    }
+  },
+  "apiRef": {
+    "nav": "Operations",
+    "untagged": "Other operations",
+    "untaggedChannels": "Channels",
+    "operationCount": "{n} operation | {n} operations",
+    "servers": "Servers",
+    "indexing": "Indexing this revision — operations appear when it finishes.",
+    "empty": "This spec defines no operations.",
+    "missing": "This operation is not in the spec revision being shown.",
+    "deprecated": "Deprecated",
+    "operationId": "Operation ID",
+    "auth": "Auth",
+    "entityKey": "Entity key",
+    "params": "Parameters",
+    "body": "Request body",
+    "responses": "Responses",
+    "messages": "Messages",
+    "message": "Message {n}",
+    "payload": "Payload",
+    "required": "required",
+    "recursive": "{name}, recursive",
+    "truncated": "… nested deeper",
+    "kind": {
+      "openapi": "OpenAPI",
+      "asyncapi": "AsyncAPI"
+    },
+    "syntax": {
+      "yaml": "YAML",
+      "json": "JSON"
+    },
+    "channel": "channel",
+    "format": "Format",
+    "versionLabel": "Version",
+    "linked": {
+      "title": "Linked pages",
+      "loading": "Looking for pages that link this operation…",
+      "empty": "No page links this operation yet. Link it from a page with Link API operation in the page settings, or an API block’s Link to spec — or name its key in frontmatter:",
+      "copyKey": "Copy key",
+      "copied": "Copied",
+      "copyFailed": "Could not copy — select the key and copy it by hand"
+    },
+    "tab": {
+      "example": "Example",
+      "schema": "Schema",
+      "label": "Body view"
+    },
+    "generatedExample": "Built from the schema — the spec gives no example.",
+    "noSchema": "The spec describes no schema for this body.",
+    "col": {
+      "name": "Name",
+      "description": "Description",
+      "code": "Code"
+    },
+    "requiredMark": "* required",
+    "exampleLabel": "Example:",
+    "needsAuth": "Needs credentials: {schemes}",
+    "noDescription": "No description",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
+    "schema": {
+      "fields": "{n} field | {n} fields",
+      "arrayFields": "array of {n} field | array of {n} fields",
+      "variants": "one of {n} variant | one of {n} variants",
+      "noFields": "No fields described."
+    }
+  },
+  "apiLink": {
+    "search": "Search API operations",
+    "placeholder": "Method and path, summary or operationId",
+    "failed": "Could not search operations — try again",
+    "noMatch": "No operation matches “{query}”",
+    "noSpecs": "No API specs here yet. Add an OpenAPI or AsyncAPI spec, and its operations show up here to link.",
+    "relation": "Link API operation",
+    "gone": "No spec you can open defines this operation any more",
+    "workflow": "API operation",
+    "block": {
+      "link": "Link to spec",
+      "linked": "From spec",
+      "unlink": "Unlink from spec",
+      "copy": "Copy method and path",
+      "copied": "Copied"
+    },
+    "live": {
+      "label": "Operation from the spec",
+      "open": "Open in reference",
+      "gone": "No spec you can open defines this operation any more:",
+      "failed": "Could not load this operation from its spec:",
+      "spec": "From the spec"
+    },
+    "in": {
+      "path": "path",
+      "query": "query",
+      "header": "header",
+      "cookie": "cookie",
+      "body": "body"
+    }
+  },
+  "apiSpecEditor": {
+    "title": "Title",
+    "titlePlaceholder": "Billing API",
+    "kind": "Format",
+    "syntax": "Syntax",
+    "body": "Spec",
+    "loadFile": "Load file",
+    "kindFixed": "The format is fixed once a spec exists.",
+    "titleRequired": "Give the spec a title.",
+    "invalid": "The spec does not validate ({n} issue): | The spec does not validate ({n} issues):",
+    "create": "Create spec",
+    "publish": "Publish revision",
+    "saving": "Saving…",
+    "created": "Spec created — indexing its operations.",
+    "saved": "Revision published — indexing its operations.",
+    "unchanged": "Nothing changed: this is already the latest revision.",
+    "newHeading": "New API spec",
+    "editHeading": "Edit API spec",
+    "hint": "Paste an OpenAPI (3.0, 3.1, Swagger 2.0) or AsyncAPI (2.x, 3.x) spec, or load a file. It is checked when you save."
+  },
+  "apiSamples": {
+    "title": "Request",
+    "label": "Code sample language",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailedShort": "Copy failed",
+    "copyFailed": "Could not copy — select the code and copy it by hand",
+    "fromSpec": "Written by the spec’s author — it does not follow the values in the console.",
+    "fromSpecLabelled": "“{label}”, written by the spec’s author — it does not follow the values in the console.",
+    "copyJson": "Copy JSON"
+  },
+  "apiTry": {
+    "open": "Try it",
+    "close": "Close",
+    "via": {
+      "label": "Send from",
+      "browser": "Browser",
+      "proxy": "Proxy"
+    },
+    "server": "Server",
+    "noServer": "This spec names no server",
+    "choose": "Choose…",
+    "contentType": "Body content type",
+    "proxyBlocked": {
+      "off": "The proxy is off for this workspace, so requests go from your browser.",
+      "role": "Sending through the proxy needs the editor role.",
+      "settings": "API reference settings"
+    },
+    "auth": {
+      "title": "Credentials",
+      "token": "Bearer token",
+      "apiKey": "API key",
+      "username": "Username",
+      "password": "Password",
+      "kept": "Kept in this browser tab only — never saved, never put in a code sample.",
+      "forget": "Forget credentials"
+    },
+    "send": "Send request",
+    "sending": "Sending…",
+    "missing": "Fill in {names} first.",
+    "relativeServer": "This spec names no absolute server URL, so there is nowhere to send the request.",
+    "corsHint": "No response reached this page from {host}. Either the API does not allow requests from a browser on another site (CORS), or it could not be reached.",
+    "corsUseProxy": "Switch “Send from” to Proxy to send it from the server instead.",
+    "corsNoProxy": "An admin can turn on the proxy in API reference settings, or send it from a terminal with the cURL sample.",
+    "response": "Response",
+    "ms": "{n} ms",
+    "sentVia": {
+      "browser": "from your browser",
+      "proxy": "through the proxy"
+    },
+    "tab": {
+      "body": "Body",
+      "headers": "Headers"
+    },
+    "binary": "Not text — shown as base64.",
+    "emptyBody": "Empty body.",
+    "truncated": "Cut at {size}; the response was longer.",
+    "browserHeaders": "A browser shows only the headers the API exposes to it (Access-Control-Expose-Headers).",
+    "dropped": "Not forwarded by the proxy: {names}.",
+    "req": {
+      "label": "Request parts",
+      "params": "Params",
+      "headers": "Headers",
+      "body": "Body",
+      "auth": "Auth",
+      "filled": "{n} filled in"
+    },
+    "col": {
+      "key": "Key",
+      "value": "Value",
+      "description": "Description"
+    },
+    "idle": "Send the request — the response appears here.",
+    "metric": {
+      "status": "Status",
+      "time": "Time",
+      "size": "Size"
+    },
+    "resetBody": "Reset to the example"
+  },
+  "apiSettings": {
+    "title": "API reference",
+    "subtitle": "How the try-it console on spec pages may reach the APIs they describe.",
+    "proxy": {
+      "title": "Try-it proxy",
+      "subtitle": "Requests go from the reader’s browser by default. The proxy sends them from the server instead, for APIs that refuse browser requests — only to servers the spec names, only for its operations, and only for editors."
+    },
+    "mode": {
+      "off": {
+        "label": "Off",
+        "body": "Every request goes from the reader’s browser. APIs without CORS cannot be tried."
+      },
+      "allowlist": {
+        "label": "Allowlisted hosts",
+        "body": "The proxy reaches only hosts the workspace’s source policies allow."
+      },
+      "open": {
+        "label": "Any public host",
+        "body": "The proxy reaches any public host the source policies do not block. Private addresses stay refused."
+      }
+    },
+    "policies": "Source policies",
+    "fromEnv": "From the deployment",
+    "inForce": "In force",
+    "cappedTo": "Capped to {mode}",
+    "clampExplained": "This workspace asks for “{requested}”, but the deployment allows at most “{ceiling}” (API_TRY_PROXY_MODE), so “{ceiling}” is what applies.",
+    "limits": "Per person: {perMinute} requests a minute, {timeout} s each, bodies up to {request} out and {response} back.",
+    "inherit": "Use the deployment’s setting ({mode})",
+    "adminOnly": "Only a workspace admin can change this.",
+    "saved": "Saved",
+    "breaking": {
+      "title": "Breaking changes in merge requests",
+      "subtitle": "What a merge request on a spec does when it removes an operation, adds a required parameter or drops a response a client relies on. The changes are listed on its API changes tab either way.",
+      "default": "Default",
+      "inherit": "Use the default (warn)",
+      "mode": {
+        "off": {
+          "label": "Off",
+          "body": "No readiness check and no gate. The diff is still shown."
+        },
+        "warn": {
+          "label": "Warn",
+          "body": "The merge widget names the breaking changes; anyone who may merge still can."
+        },
+        "block": {
+          "label": "Block",
+          "body": "A merge is refused until a workspace admin acknowledges the breaking changes. A later push needs a new acknowledgement."
+        }
+      }
+    }
+  },
+  "apiDiff": {
+    "severity": {
+      "breaking": "Breaking",
+      "nonBreaking": "Non-breaking",
+      "info": "Info"
+    },
+    "count": {
+      "breaking": "{n} breaking",
+      "nonBreaking": "{n} non-breaking",
+      "info": "{n} info"
+    },
+    "rule": {
+      "operation-removed": "Operation removed",
+      "operation-added": "Operation added",
+      "operation-deprecated": "Operation deprecated",
+      "required-param-added": "Required parameter added",
+      "optional-param-added": "Optional parameter added",
+      "param-removed": "Parameter removed",
+      "param-became-required": "Parameter is now required",
+      "param-type-changed": "Parameter type changed",
+      "request-body-required": "Request body is now required",
+      "request-property-required-added": "Request field is now required",
+      "property-type-changed": "Field type changed",
+      "enum-value-removed": "Allowed value removed",
+      "enum-value-added": "Allowed value added",
+      "response-status-removed": "Response status removed",
+      "response-status-added": "Response status added",
+      "response-property-removed": "Response field removed",
+      "response-property-added": "Response field added",
+      "security-requirement-added": "Authentication now required",
+      "security-requirement-removed": "Authentication requirement dropped",
+      "channel-removed": "Channel removed",
+      "channel-added": "Channel added",
+      "message-payload-field-removed": "Message field removed",
+      "message-payload-field-added": "Message field added"
+    },
+    "filterLabel": "Show changes by severity",
+    "noChanges": "No API changes. Every operation a client calls is unchanged.",
+    "noneShown": "No changes of the selected severity.",
+    "removed": "Removed",
+    "added": "New",
+    "was": "was",
+    "now": "now",
+    "affectedPages": "Pages that may now be wrong",
+    "linkedPages": "Pages linking this operation",
+    "openInReference": "Open in reference",
+    "value": {
+      "optional": "optional",
+      "required": "required"
+    }
+  },
+  "apiDrift": {
+    "check": "Check against the code",
+    "checking": "Comparing with the code…",
+    "failed": "The check did not finish.",
+    "codeServes": "The code serves {methods} here",
+    "more": "{n} more | {n} more",
+    "kind": {
+      "missing-in-code": "Not in code",
+      "missing-in-spec": "Not in spec",
+      "method-mismatch": "Method differs"
+    }
+  },
+  "quality": {
+    "headline": "Pages {scope} average {average}",
+    "scored": "{scored} of {total} page scored | {scored} of {total} pages scored",
+    "unscored": "{n} not scored yet | {n} not scored yet",
+    "lastAudit": "last audit {when}",
+    "stale": "changed since scored",
+    "issues": "{n} issue | {n} issues",
+    "empty": {
+      "title": "No page has been scored yet",
+      "body": "The auditor agent scores each page on clarity, completeness, links, ownership, duplication and style. Scores appear here after its first run — on its schedule, or started by hand.",
+      "run": "Run the auditor from AI settings",
+      "askAdmin": "A workspace admin can run the auditor from AI settings."
+    },
+    "history": {
+      "title": "Over time",
+      "hint": "The average as it stood at the end of each audit day. Below {threshold}, the auditor reports a page.",
+      "summary": "Score went from {from} on {start} to {to} on {end}",
+      "up": "up {n}",
+      "down": "down {n}",
+      "single": "One audit so far, on {date}. The line starts with the second."
+    },
+    "dimensions": {
+      "title": "Where the points go",
+      "hint": "The mean of each dimension over the pages where it could be measured.",
+      "measured": "on {n} page | on {n} pages",
+      "notMeasured": "not measured yet"
+    },
+    "dimension": {
+      "clarity": {
+        "label": "Clarity",
+        "hint": "Is it easy to follow — structure, sentences, defined terms."
+      },
+      "completeness": {
+        "label": "Completeness",
+        "hint": "Does it cover what a page like this needs, without gaps or placeholders."
+      },
+      "links": {
+        "label": "Links",
+        "hint": "Do its links to other pages resolve to a page that exists."
+      },
+      "ownership": {
+        "label": "Ownership",
+        "hint": "Does the page have an owner who answers for it."
+      },
+      "duplication": {
+        "label": "Duplication",
+        "hint": "Is it distinct from every other page, or does another say the same thing."
+      },
+      "style": {
+        "label": "Style",
+        "hint": "Does it follow the styleguide that applies to its project."
+      }
+    },
+    "distribution": {
+      "title": "Distribution",
+      "hint": "Pages per score band.",
+      "label": "Pages per score band",
+      "band": "Score {band}"
+    },
+    "worst": {
+      "title": "Lowest scores"
+    },
+    "rules": {
+      "title": "Rules broken most",
+      "hint": "Styleguide rules the newest scores cite.",
+      "none": "No styleguide rule is broken on a scored page.",
+      "count": "{count}× on {pages} page | {count}× on {pages} pages",
+      "gone": "No longer in the styleguide",
+      "edit": "Edit the styleguide"
+    },
+    "severity": {
+      "error": "Error",
+      "warning": "Warning",
+      "info": "Note"
+    },
+    "rail": {
+      "scored": "scored {when}",
+      "stale": "The page changed after this score; it is re-scored at the next audit.",
+      "issues": "What cost points",
+      "peers": "Near-duplicates",
+      "similarity": "{n}% alike",
+      "preview": "{n} / 100",
+      "previewStale": "{n} / 100 · changed"
+    },
+    "project": {
+      "average": "Average {average}.",
+      "open": "Open quality"
+    }
+  },
+  "security": {
+    "title": "Security",
+    "subtitle": "How people sign in, and what was done with elevated rights.",
+    "adminOnly": "Only workspace admins can see the security settings.",
+    "audit": {
+      "title": "Audit log",
+      "hint": "Graph queries, access-control changes and bypasses, and sign-ins. Newest first.",
+      "scope": {
+        "label": "Show",
+        "workspace": "This workspace",
+        "platform": "Whole platform"
+      },
+      "platformHint": "Includes sign-ins and other events that belong to no workspace.",
+      "filter": {
+        "label": "Action",
+        "all": "All actions"
+      },
+      "columns": {
+        "when": "When",
+        "action": "Action",
+        "actor": "By",
+        "target": "Subject",
+        "ip": "IP address",
+        "result": "Result"
+      },
+      "anonymous": "Anonymous",
+      "empty": "Nothing recorded yet.",
+      "emptyFiltered": "Nothing recorded for this action.",
+      "actions": {
+        "graph_query": "Graph query",
+        "acl_bypass": "Admin read past a restriction",
+        "acl_update": "Page access changed",
+        "acl_request": "Access requested",
+        "acl_request_approve": "Access request approved",
+        "acl_request_deny": "Access request denied",
+        "ai-readable_llms-full": "Full-text export for AI read",
+        "api_try": "API console request",
+        "feedback_export": "Answer feedback exported",
+        "merge-request_lint-override": "Style lint overridden on merge",
+        "auth_login": "Signed in",
+        "auth_login_failed": "Sign-in failed",
+        "auth_logout": "Signed out",
+        "auth_session_revoked": "Session revoked",
+        "sso_provider_created": "Identity provider added",
+        "sso_provider_updated": "Identity provider changed",
+        "sso_provider_deleted": "Identity provider removed",
+        "sso_jit_user_created": "Account created on SSO sign-in",
+        "sso_identity_linked": "SSO sign-in linked to an account",
+        "sso_group_mapping_created": "Group mapping set",
+        "sso_group_mapping_deleted": "Group mapping removed",
+        "role_sync_applied": "Role synced from identity provider",
+        "role_sync_blocked_last_admin": "Role sync skipped (last admin)",
+        "sso_domain_claimed": "Domain claimed",
+        "sso_domain_verified": "Domain verified",
+        "sso_domain_enforced": "Single sign-on enforcement changed for a domain",
+        "sso_domain_updated": "Domain changed",
+        "sso_domain_removed": "Domain removed",
+        "sso_policy_updated": "Sign-in policy changed",
+        "auth_sso_bypassed": "Platform admin passed enforced sign-on",
+        "scim_user_created": "SCIM: user created",
+        "scim_user_updated": "SCIM: user updated",
+        "scim_user_deactivated": "SCIM: user deactivated",
+        "scim_user_deleted": "SCIM: user deleted",
+        "scim_group_created": "SCIM: group created",
+        "scim_group_updated": "SCIM: group updated",
+        "scim_group_deleted": "SCIM: group deleted",
+        "scim_token_created": "SCIM token created",
+        "scim_token_revoked": "SCIM token revoked",
+        "scim_settings_updated": "SCIM settings changed"
+      }
+    },
+    "tabs": {
+      "providers": "Providers",
+      "groups": "Group mapping",
+      "audit": "Audit log",
+      "domains": "Domains",
+      "policy": "Policy",
+      "provisioning": "Provisioning"
+    },
+    "providers": {
+      "title": "Identity providers",
+      "hint": "Sign people in with your organization’s OpenID Connect, SAML 2.0 or, where enabled, LDAP directory. New providers start disabled.",
+      "disabled": "Single sign-on is not enabled on this instance. An operator turns it on with AUTH_SSO_ENABLED=true (and AUTH_MODE=api-key).",
+      "empty": "No identity providers yet.",
+      "add": "Add provider",
+      "addTitle": "Add an identity provider",
+      "editTitle": "Edit identity provider",
+      "formHint": "Register the redirect URI shown after saving as an allowed redirect in the provider’s client.",
+      "preset": "Provider",
+      "name": "Button label",
+      "namePlaceholder": "Company SSO",
+      "issuer": "Issuer URL",
+      "clientId": "Client ID",
+      "clientSecret": "Client secret",
+      "secretStored": "Stored — leave empty to keep it",
+      "secretNone": "Not set (public client)",
+      "secretsNotWritable": "Secrets cannot be stored: SETTINGS_ENCRYPTION_KEY is not set on the server.",
+      "clearSecret": "Remove the stored secret",
+      "allowedDomains": "Allowed email domains",
+      "allowedDomainsHint": "Comma-separated. Accounts are linked or created only for verified addresses on these domains.",
+      "jit": "Create accounts on first sign-in",
+      "jitHint": "Otherwise only people who already have an account can sign in.",
+      "defaultRole": "Role for new members",
+      "noRole": "No membership",
+      "advanced": "Advanced",
+      "scopes": "Scopes (besides openid)",
+      "groupsClaim": "Groups claim",
+      "groupSyncMode": "Group sync",
+      "sessionTtl": "Session lifetime, hours",
+      "sessionTtlDefault": "Instance default",
+      "showOnLogin": "Show a button on the sign-in page",
+      "platformWideToggle": "Offer on every workspace’s sign-in page (platform-wide)",
+      "enableToggle": "Enabled",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saved": "Provider saved",
+      "test": "Test",
+      "testOk": "Discovery document read — issuer {issuer}",
+      "testFailed": "Could not read the discovery document: {error}",
+      "edit": "Edit",
+      "remove": "Remove",
+      "removed": "Provider removed",
+      "removeConfirm": "Remove {name}? People who signed in with it are signed out, and their link to it is forgotten.",
+      "enabled": "Enabled",
+      "disabledBadge": "Disabled",
+      "platformWide": "Platform-wide",
+      "jitBadge": "Creates accounts",
+      "domainsList": "Domains: {domains}",
+      "redirectUri": "Redirect URI",
+      "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "presets": {
+        "keycloak": "Keycloak",
+        "entra": "Microsoft Entra ID",
+        "google": "Google Workspace",
+        "yandex": "Yandex ID",
+        "generic": "OpenID Connect"
+      },
+      "issuerPlaceholder": {
+        "keycloak": "https://sso.example.com/realms/company",
+        "entra": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+        "google": "https://accounts.google.com",
+        "yandex": "https://oauth.yandex.ru",
+        "generic": "https://idp.example.com"
+      },
+      "protocol": "Protocol",
+      "kinds": {
+        "oidc": "OpenID Connect",
+        "saml": "SAML 2.0",
+        "ldap": "LDAP / Active Directory"
+      },
+      "formHintSaml": "After saving, give the identity provider the SP metadata URL shown in the list, or its entity ID and ACS URL.",
+      "idpEntityId": "IdP entity ID",
+      "ssoUrl": "Single sign-on URL",
+      "idpCert": "IdP signing certificate",
+      "idpCertHint": "PEM, including the BEGIN CERTIFICATE line. During a key rollover, paste both certificates.",
+      "attributeMap": "Attribute map",
+      "attributeMapHint": "Which assertion attributes hold the person’s details. Leave a field empty to try the usual names.",
+      "emailAttribute": "Email",
+      "nameAttribute": "Name",
+      "groupsAttribute": "Groups",
+      "groupsAttributeHint": "Without a groups attribute, no groups are read and group mapping does not apply.",
+      "allowIdpInitiated": "Accept sign-ins started from the identity provider’s app portal",
+      "allowIdpInitiatedHint": "Each assertion is still accepted only once, and only while it is fresh.",
+      "metadataUrl": "SP metadata (entity ID)",
+      "acsUrl": "ACS URL",
+      "copyEndpoint": "Copy {label}",
+      "testOkSaml": "Configuration is valid. IdP entity ID {issuer}",
+      "testFailedSaml": "The configuration has a problem: {error}",
+      "formHintLdap": "People sign in with their directory username and password. After saving, use Test to check that the service account can search the base DN.",
+      "ldapUrl": "Directory URL",
+      "ldapUrlHint": "ldaps://host:636, or ldap://host:389 with StartTLS.",
+      "startTls": "Use StartTLS",
+      "bindDn": "Service account DN",
+      "bindDnHint": "The account that searches for people. Leave empty to search anonymously.",
+      "bindPassword": "Service account password",
+      "baseDn": "Base DN",
+      "userFilter": "User filter",
+      "userFilterHint": "Write {placeholder} where the typed username goes. Leave empty to match uid, mail, sAMAccountName or userPrincipalName.",
+      "attributeMapHintLdap": "Which entry attributes hold the person’s details. Leave a field empty for mail, displayName (or cn) and memberOf.",
+      "groupsAttributeHintLdap": "Group mappings match the full group DN, for example cn=editors,ou=groups,dc=corp,dc=example.",
+      "testOkLdap": "Bound and searched the base DN at {issuer}",
+      "testFailedLdap": "The directory test failed: {error}",
+      "backchannelLogoutUri": "Back-channel logout URI"
+    },
+    "groupMapping": {
+      "title": "Group mapping",
+      "hint": "Give people a workspace role from the groups your identity provider sends. The highest mapped role wins. Changes apply at each person’s next sign-in, and roles you set by hand on the Access page are never changed.",
+      "noProviders": "Add an identity provider first — a mapping names the provider whose groups it reads.",
+      "provider": "Provider",
+      "group": "Group",
+      "groupPlaceholder": "knowledge-editors",
+      "role": "Role",
+      "operator": "Also make them trusted operators (graph queries)",
+      "operatorBadge": "operator",
+      "add": "Map group",
+      "added": "Mapped “{group}”",
+      "replaced": "Changed the role for “{group}”",
+      "removed": "Mapping removed",
+      "removeConfirm": "Remove the mapping for “{group}”? Roles it granted stay until people sign in again.",
+      "remove": "Remove",
+      "empty": "No groups mapped yet. Without a mapping, sign-ins get the provider’s role for new members, if it has one.",
+      "providerGone": "removed provider",
+      "presetClaim": "This provider has no groups claim set, so the preset’s default claim is read.",
+      "mode": {
+        "additive": "Additive: sign-in only ever raises a role. Nothing is taken away when a group disappears.",
+        "authoritative": "Authoritative: each sign-in sets the role exactly as the groups say, and removes the membership when no group maps."
+      },
+      "modeBadge": {
+        "additive": "Additive",
+        "authoritative": "Authoritative"
+      },
+      "disabled": "Single sign-on and SCIM provisioning are both off on this instance. An operator turns them on with AUTH_SSO_ENABLED or AUTH_SCIM_ENABLED.",
+      "scimSource": "SCIM group",
+      "scimPick": "Choose a provisioned group",
+      "scimNone": "No groups provisioned yet",
+      "scimGroupOption": "{name} ({count})",
+      "scimHint": "A SCIM group's mapping applies at once to everyone in it. Provisioned people in no mapped group get the default role from the Provisioning tab.",
+      "scimBadge": "SCIM",
+      "scimGroupGone": "deleted group",
+      "removeConfirmScim": "Remove the mapping for “{group}”? Its members drop to the provisioning default role now."
+    },
+    "domains": {
+      "title": "Domains",
+      "hint": "Prove that your organization owns an email domain, then require single sign-on for every address on it: password sign-in, signup and password reset stop working for those addresses.",
+      "domain": "Domain",
+      "provider": "Sign in through",
+      "anyProvider": "Any of this workspace’s providers",
+      "claim": "Claim domain",
+      "claimed": "Claimed {domain}. Publish the DNS record to verify it.",
+      "empty": "No domains claimed yet.",
+      "status": {
+        "pending": "Pending verification",
+        "verified": "Verified",
+        "enforced": "SSO enforced"
+      },
+      "publish": "Add this TXT record at your DNS provider, then press Verify. It is also checked every 15 minutes for a week.",
+      "recordName": "Name",
+      "recordValue": "Value",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "verify": "Verify now",
+      "verified": "{domain} is verified",
+      "markVerified": "Mark verified (platform admin)",
+      "rechecking": "Checked automatically until {until}",
+      "verifyErrors": {
+        "no-record": "No TXT record found at {record} yet. DNS changes can take a while to appear.",
+        "mismatch": "A TXT record exists at {record}, but its value is not the one shown here.",
+        "lookup-failed": "DNS could not be reached just now. Try again in a minute."
+      },
+      "enforce": "Require single sign-on",
+      "enforceConfirm": "Require single sign-on for every address on {domain}? Password sign-in stops working for them at once, except for break-glass addresses.",
+      "enforcedOn": "Single sign-on is now required on {domain}",
+      "enforcedOff": "Passwords work again on {domain}",
+      "enforcedHint": "People on this domain sign in only through single sign-on. Break-glass addresses set by the operator still work.",
+      "notEnforcedHint": "Verified, but passwords still work. Turn this on once people have signed in with SSO at least once.",
+      "remove": "Remove",
+      "removed": "Domain removed",
+      "removeConfirm": "Remove {domain}? Passwords work again for its addresses at once.",
+      "domainPlaceholder": "corp.example"
+    },
+    "policy": {
+      "title": "Sign-in policy",
+      "hint": "Rules for reaching this workspace, checked on every request — the web app, API keys, MCP clients and live updates alike.",
+      "ssoOff": "Single sign-on is not enabled on this instance (AUTH_SSO_ENABLED), so the SSO settings below cannot apply. The session age limit still does.",
+      "ssoEnforced": "Require single sign-on for this workspace",
+      "ssoEnforcedHint": "Only sessions opened through {providers} reach this workspace. Everyone else is asked to sign in again through SSO.",
+      "noProviders": "Enable an identity provider for this workspace first.",
+      "notApplied": "Saved, but not applied: single sign-on is off on this instance.",
+      "allowApiKeys": "Still accept API keys",
+      "allowApiKeysHint": "Keys keep working for scripts and MCP clients. Turn this off to accept only SSO sessions.",
+      "allowPasswordForAdmins": "Let platform admins use a password on enforced domains",
+      "allowPasswordForAdminsHint": "A way in for the people who fix SSO when it breaks. Platform admins can always reach the workspace; this decides whether they may sign in with a password.",
+      "sessionMaxAge": "Sign in again after (hours)",
+      "sessionMaxAgeNone": "No limit",
+      "sessionMaxAgeHint": "Sessions older than this must sign in again to reach this workspace. Sessions on this instance last {ttl} hours at most.",
+      "sessionMaxAgeClamped": "This is no shorter than the instance’s {ttl}-hour session lifetime, so it has no effect.",
+      "breakGlass": "Platform admins pass these rules, and every time they do it is recorded in the audit log. Addresses in AUTH_BREAK_GLASS_EMAILS can always use a password.",
+      "enforceConfirm": "Require single sign-on? Everyone signed in with a password is asked to sign in again through SSO.",
+      "save": "Save policy",
+      "saved": "Sign-in policy saved",
+      "lockout": {
+        "password-session": "You are signed in with a password, so this would lock you out. Sign in through the workspace’s identity provider first, then save.",
+        "foreign-provider": "You signed in through a provider this workspace does not use, so this would lock you out.",
+        "api-key": "You are using an API key, which this policy would block.",
+        "session-too-old": "Your session is older than the limit you set, so this would sign you out of the workspace. Sign in again first."
+      }
+    },
+    "scim": {
+      "title": "Provisioning (SCIM)",
+      "hint": "Let your identity provider create, update and deactivate this workspace's people over SCIM 2.0. Give it the base URL and a token. Deactivating someone in the IdP removes their membership and signs them out; roles you set by hand on the Access page stay.",
+      "disabled": "SCIM provisioning is off on this instance. An operator turns it on with AUTH_SCIM_ENABLED.",
+      "baseUrl": "SCIM base URL",
+      "counts": "{users} people provisioned ({active} active) · {groups} groups",
+      "defaultRole": "Role without a mapped group",
+      "defaultRoleHint": "What a provisioned person gets when none of their groups is mapped on the Group mapping tab. Changing it re-applies to everyone provisioned.",
+      "defaultRoleSaved": "Default role saved and applied",
+      "noRole": "No membership",
+      "tokens": "Tokens",
+      "tokenName": "New token",
+      "tokenNamePlaceholder": "Entra ID provisioning",
+      "create": "Create token",
+      "freshTitle": "Token “{name}” created",
+      "freshHint": "Copy it into your identity provider now. It is not shown again: only a hash is stored.",
+      "bearer": "Bearer token",
+      "freshDone": "I've copied it",
+      "empty": "No tokens yet. Create one per identity provider.",
+      "lastUsed": "used {when}",
+      "neverUsed": "never used",
+      "revoke": "Revoke",
+      "revokeConfirm": "Revoke “{name}”? The identity provider gets 401 from its next request.",
+      "revoked": "Token revoked"
     }
   }
 }

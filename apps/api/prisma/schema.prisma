@@ -82,6 +82,15 @@ model Document {
   /// sites, llms.txt) leave it out while it is set, and the merge clears it.
   /// Readable by id meanwhile, so the reviewer can open it. No FK, house policy.
   pendingMergeRequestId String?   @map("pending_merge_request_id") @db.Uuid
+  /// What the body is (#78): `page` (markdown, every document before #78) or
+  /// an API spec, `openapi` | `asyncapi` (API_DOCUMENT_KINDS). Set at create
+  /// and never changed — a revision is parsed by its document's kind.
+  kind                  String    @default("page")
+  /// A spec's operation-key slug (`op:<slug>:…`), pinned at its first indexed
+  /// revision so editing `info.title` does not fork every operation entity.
+  /// Only an explicit `x-knowledge-key` on the default-branch head re-pins it.
+  /// Null for pages and for a spec not yet indexed.
+  specSlug              String?   @map("spec_slug")
   /// Page restriction switch (#76). On: only grantees (and admins) pass this
   /// node, and so its whole subtree.
   restricted            Boolean   @default(false)
@@ -107,6 +116,7 @@ model Document {
   shareLinks           ShareLink[]
   siteAudienceRules    SiteAudienceRule[]
   componentDeclaration ComponentDeclaration?
+  apiOperations        ApiOperation[]
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, category])
@@ -120,6 +130,7 @@ model Document {
   @@index([workspaceId, verificationExpiresAt])
   @@index([workspaceId, lastActivityAt])
   @@index([workspaceId, archivedAt])
+  @@index([workspaceId, kind])
   @@map("documents")
 }
 
@@ -273,24 +284,31 @@ model MergeRequest {
   approvedBy  Json    @default("[]") @map("approved_by")
 
   // merge-commit | squash — set when merged.
-  strategy         String?
-  mergedRevisionId String?   @map("merged_revision_id") @db.Uuid
+  strategy              String?
+  mergedRevisionId      String?   @map("merged_revision_id") @db.Uuid
   /// MR_PROVENANCES: manual | agent | captured (issue #73). Who opened it, not
   /// who wrote the code: an agent-session capture is still authored by the
   /// key's owner, and the merge gates treat it exactly as theirs.
-  provenance       String    @default("manual")
+  provenance            String    @default("manual")
   /// The knowledge_captures row this merge request was proposed from. No FK,
   /// like merged_revision_id: the capture is the record of where it came from.
-  captureId        String?   @map("capture_id") @db.Uuid
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  mergedAt         DateTime? @map("merged_at") @db.Timestamptz
-  closedAt         DateTime? @map("closed_at") @db.Timestamptz
+  captureId             String?   @map("capture_id") @db.Uuid
+  /// An admin's acknowledgement of a spec's breaking changes (#78): who, when,
+  /// and the source head they read. No FK, house policy. A later push makes it
+  /// stale — the gate passes only while the acknowledged head is still the head.
+  breakingAckBy         String?   @map("breaking_ack_by") @db.Uuid
+  breakingAckAt         DateTime? @map("breaking_ack_at") @db.Timestamptz
+  breakingAckRevisionId String?   @map("breaking_ack_revision_id") @db.Uuid
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  mergedAt              DateTime? @map("merged_at") @db.Timestamptz
+  closedAt              DateTime? @map("closed_at") @db.Timestamptz
 
   document     Document               @relation(fields: [documentId], references: [id])
   sourceBranch DocumentBranch         @relation("mrSource", fields: [sourceBranchId], references: [id])
   targetBranch DocumentBranch         @relation("mrTarget", fields: [targetBranchId], references: [id])
   reviewers    MergeRequestReviewer[]
   threads      MergeRequestThread[]
+  checks       MergeRequestCheck[]
 
   @@index([documentId, status])
   @@index([authorId])
@@ -338,13 +356,88 @@ model MergeRequestThread {
   anchorType     String?   @map("anchor_type")
   // line: {revisionId, line, excerpt?} · section: {heading} · entity: {entityKey}
   anchor         Json?
+  /// The lint check that opened it (#74), so a re-lint resolves its own stale
+  /// threads and never a person's. Re-pointed to the newest check while the
+  /// violation stands. No FK, like agent_run_id.
+  checkId        String?   @map("check_id") @db.Uuid
+  /// The StyleRule.id a lint thread cites.
+  ruleId         String?   @map("rule_id")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   mergeRequest MergeRequest          @relation(fields: [mergeRequestId], references: [id])
   comments     MergeRequestComment[]
 
   @@index([mergeRequestId])
+  @@index([checkId])
   @@map("merge_request_threads")
+}
+
+/// One lint pass of one merge request's source head (#74). Identity is
+/// (mergeRequestId, kind, headRevisionId): a head is linted once, a push is a
+/// new row, and the insert is the claim. `publishedAt` is the publish claim.
+/// A page's quality at one audit (#74, phase 4). Append-only: the history is
+/// the rows, and a dashboard is a groupBy over them — each row is a fact about
+/// one revision at one time, not an aggregate. Written by the worker, the one
+/// stated exception to "the worker generates, the API publishes": a score is a
+/// measurement, like agent_runs.findings, and attributes no act to a person.
+/// No FK on workspace/project/document ids (house policy; a deleted page's
+/// history simply stops).
+model DocumentQualityScore {
+  id             String   @id @default(uuid()) @db.Uuid
+  workspaceId    String   @map("workspace_id") @db.Uuid
+  /// Denormalized at write time, so a project dashboard needs no join.
+  projectId      String   @map("project_id") @db.Uuid
+  documentId     String   @map("document_id") @db.Uuid
+  revisionId     String   @map("revision_id") @db.Uuid
+  agentRunId     String?  @map("agent_run_id") @db.Uuid
+  rubricVersion  Int      @map("rubric_version")
+  /// Fingerprint of the enabled styleguide rules the model half read; null
+  /// when there were none. A changed styleguide re-scores the style half.
+  styleguideHash String?  @map("styleguide_hash")
+  /// 0–100: the weighted mean of the measured dimensions.
+  overall        Int
+  /// QualityDimension → 0–100 | null (null = not measured).
+  dimensions     Json
+  /// QualityIssue[], capped.
+  issues         Json     @default("[]")
+  /// QualityDuplicate[] — near-duplicate peers.
+  duplicates     Json     @default("[]")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([documentId, createdAt])
+  @@map("document_quality_scores")
+}
+
+model MergeRequestCheck {
+  id             String    @id @default(uuid()) @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  mergeRequestId String    @map("merge_request_id") @db.Uuid
+  /// MR_CHECK_KINDS
+  kind           String    @default("lint")
+  headRevisionId String    @map("head_revision_id") @db.Uuid
+  styleguideId   String?   @map("styleguide_id") @db.Uuid
+  /// pending → passed | failed | error | skipped. `running` is derived from the run.
+  status         String    @default("pending")
+  /// MR_CHECK_REASONS — why a check was skipped or errored.
+  reason         String?
+  agentRunId     String?   @map("agent_run_id") @db.Uuid
+  /// {error, warning, suggestion} at publish time.
+  counts         Json?
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz
+  /// An admin's override of a blocking result (phase 3), bound to this head.
+  overriddenBy   String?   @map("overridden_by") @db.Uuid
+  overriddenAt   DateTime? @map("overridden_at") @db.Timestamptz
+  overrideReason String?   @map("override_reason")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  mergeRequest MergeRequest @relation(fields: [mergeRequestId], references: [id])
+
+  @@unique([mergeRequestId, kind, headRevisionId])
+  @@index([workspaceId, status, createdAt])
+  @@map("merge_request_checks")
 }
 
 model MergeRequestComment {
@@ -477,6 +570,8 @@ model Project {
   avatarUpdatedAt DateTime? @map("avatar_updated_at") @db.Timestamptz
   /// Project restriction switch (#76): every page in it inherits the restriction.
   restricted      Boolean   @default(false)
+  /// off | warn | block — the style lint of its merge requests (#74); null is the workspace's.
+  lintPolicy      String?   @map("lint_policy")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   documents     Document[]
@@ -522,6 +617,9 @@ model User {
   passwordResets     PasswordResetToken[]
   emailVerifications EmailVerificationToken[]
   apiKeys            ApiKey[]
+  identities         UserIdentity[]
+  scimRecords        ScimUser[]
+  scimGroups         ScimGroupMember[]
 
   @@map("users")
 }
@@ -558,16 +656,28 @@ model ApiKey {
 
 // Auth flow: opaque `ks_` login session tokens (only the SHA-256 is stored).
 model Session {
-  id        String    @id @default(uuid()) @db.Uuid
-  userId    String    @map("user_id") @db.Uuid
-  tokenHash String    @unique @map("token_hash")
-  expiresAt DateTime  @map("expires_at") @db.Timestamptz
-  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  tokenHash    String    @unique @map("token_hash")
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  // #75: how this session was opened (AUTH_METHODS in contracts). The default
+  // is true of every row that predates SSO, so the column needed no backfill.
+  authMethod   String    @default("password") @map("auth_method")
+  // identity_providers.id for an SSO login; null for a password session.
+  providerId   String?   @map("provider_id") @db.Uuid
+  // The IdP's own session id (OIDC `sid`), matched by back-channel logout.
+  idpSessionId String?   @map("idp_session_id")
+  ip           String?
+  userAgent    String?   @map("user_agent")
+  // Touched at most once a minute by TokenAuthService, like api_keys.last_used_at.
+  lastSeenAt   DateTime? @map("last_seen_at") @db.Timestamptz
 
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
+  @@index([providerId, idpSessionId])
   @@map("sessions")
 }
 
@@ -615,6 +725,9 @@ model WorkspaceMember {
   // Gate for knowledge.query_graph / POST /v1/graph/query (plan.md §9:
   // trusted-operator only). Orthogonal to role on purpose.
   trustedOperator Boolean  @default(false) @map("trusted_operator")
+  // #75: who manages this row (MEMBERSHIP_SOURCES). Role sync and SCIM touch
+  // only rows they created; `manual` is never changed by them.
+  source          String   @default("manual")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id])
@@ -722,7 +835,9 @@ model AccessRequest {
 // Phase 5 audit trail: every trusted-operator graph query is recorded here.
 model AuditLog {
   id          String   @id @default(uuid()) @db.Uuid
-  workspaceId String   @map("workspace_id") @db.Uuid
+  // Null for a platform event that belongs to no workspace — a sign-in, say,
+  // which happens before any workspace is known (#75).
+  workspaceId String?  @map("workspace_id") @db.Uuid
   // users.id in api-key mode; synthetic actor ("dev", "mcp-operator") otherwise.
   actor       String
   action      String
@@ -731,9 +846,14 @@ model AuditLog {
   durationMs  Int?     @map("duration_ms")
   ok          Boolean  @default(true)
   error       String?
+  // Client address of the request that caused it, when there was one.
+  ip          String?
+  // Who or what the action was done to: a user id, a provider id.
+  target      String?
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   @@index([workspaceId, createdAt])
+  @@index([action, createdAt])
   @@map("audit_logs")
 }
 
@@ -1031,6 +1151,10 @@ model AiSettings {
   /// documents.parent_id; null puts them at the project root.
   captureParentDocumentId   String?  @map("capture_parent_document_id") @db.Uuid
 
+  /// Days a page's quality score stands before the auditor re-scores an
+  /// unchanged page (#74, phase 4). Null inherits QUALITY_AUDIT_DAYS.
+  qualityAuditDays Int? @map("quality_audit_days")
+
   updatedBy String?  @map("updated_by") @db.Uuid
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -1149,10 +1273,21 @@ model AiSkill {
   /// live `instructions` of an enabled skill.
   pendingInstructions String?   @map("pending_instructions")
   sourceRemovedAt     DateTime? @map("source_removed_at") @db.Timestamptz
+  /// 'skill' | 'styleguide' (AI_SKILL_KINDS, #74). A styleguide never joins a
+  /// turn by trigger word: the linter injects it explicitly.
+  kind                String    @default("skill")
+  /// Styleguide scope: null = workspace-wide; set = replaces it for one project.
+  /// No FK (house style).
+  projectId           String?   @map("project_id") @db.Uuid
+  /// StyleRule[] — only for kind='styleguide'. Json, not an array (the `triggers` precedent).
+  rules               Json?
 
   @@unique([workspaceId, name])
   /// One skill per guidance file. NULLs are distinct in PG, so manual rows never collide.
   @@unique([workspaceId, sourceConnectorId, sourcePath])
+  /// One styleguide per (workspace, project) is a raw partial unique index in
+  /// the migration (ai_skills_one_styleguide_per_scope), not expressible here.
+  @@index([workspaceId, kind, projectId])
   @@index([workspaceId, createdAt])
   @@map("ai_skills")
 }
@@ -3074,4 +3209,253 @@ model ChatCapture {
   @@unique([answerId, kind])
   @@index([status, createdAt])
   @@map("chat_captures")
+}
+
+/// The operations and channels of one spec revision (#78): a projection of the
+/// revision, derived at ingestion and replaced whole when that revision is
+/// re-indexed (the `upsertRevisionChunks` pattern). It exists so the reference
+/// sidebar, the MR diff and the operation picker are SQL reads, not a re-parse
+/// of the spec — never a second answer: the spec in S3 is the truth.
+model ApiOperation {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// From the document, never the caller. No FK, house policy.
+  workspaceId String   @map("workspace_id") @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  /// No FK: revisions are immutable and never deleted once indexed.
+  revisionId  String   @map("revision_id") @db.Uuid
+  /// `http` | `async`
+  protocol    String
+  /// `GET`… for HTTP; `send` / `receive` (2.x `publish` / `subscribe`) for AsyncAPI.
+  method      String?
+  /// As the spec spells it: `/users/{id}`, or a channel address.
+  path        String
+  operationId String?  @map("operation_id")
+  /// Canonical (`operationEntityKey` / `channelEntityKey`), the graph vertex.
+  entityKey   String   @map("entity_key")
+  summary     String?
+  tags        String[] @default([])
+  deprecated  Boolean  @default(false)
+  /// JSON pointer into the spec, for deep links.
+  pointer     String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  /// Method too: one AsyncAPI channel (one entity) carries a send and a receive.
+  @@unique([revisionId, entityKey, method])
+  @@index([workspaceId, entityKey])
+  @@index([documentId, revisionId])
+  @@map("api_operations")
+}
+
+/// Workspace settings outside AI and publishing (#78), one sparse row per
+/// workspace: `null` inherits the deployment default or ceiling, so an empty
+/// table reproduces the env exactly. Other milestones add their columns here
+/// rather than starting another one-row table.
+model WorkspaceSettings {
+  workspaceId             String   @id @map("workspace_id") @db.Uuid
+  /// off | allowlist | open — narrowed by API_TRY_PROXY_MODE, never widened.
+  apiTryProxyMode         String?  @map("api_try_proxy_mode")
+  /// off | warn | block — the merge gate for breaking spec changes; null is `warn`.
+  apiBreakingChangePolicy String?  @map("api_breaking_change_policy")
+  /// off | warn | block — the style lint of merge requests (#74); null is STYLE_LINT_POLICY.
+  lintPolicy              String?  @map("lint_policy")
+  /// #75 enterprise auth. Enforced SSO: a session must come from one of this
+  /// workspace's providers. Null is off.
+  ssoEnforced             Boolean? @map("sso_enforced")
+  /// Under enforced SSO, whether `kn_` keys still open this workspace; null is yes.
+  allowApiKeys            Boolean? @map("allow_api_keys")
+  /// Platform admins may still sign in with a password on an enforced domain; null is no.
+  allowPasswordForAdmins  Boolean? @map("allow_password_for_admins")
+  /// Cap on a session's age in this workspace, under AUTH_SESSION_TTL_HOURS; null inherits.
+  sessionMaxAgeHours      Int?     @map("session_max_age_hours")
+  /// #75 SCIM: the role a provisioned user gets without a mapped SCIM group —
+  /// a WORKSPACE_ROLES value or `none`; null is `viewer`.
+  scimDefaultRole         String?  @map("scim_default_role")
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  updatedBy               String?  @map("updated_by") @db.Uuid
+
+  @@map("workspace_settings")
+}
+
+// ---------------------------------------------------------------------------
+// #75 enterprise auth: SSO (OIDC, SAML, LDAP), SCIM provisioning, group → role
+// mapping. Every table is new, so a code rollback leaves them unread.
+
+/// A sign-in source a workspace trusts. Owned by a workspace; a platform admin
+/// may mark one `platformWide` so a single-tenant install has one IdP for all.
+model IdentityProvider {
+  id              String   @id @default(uuid()) @db.Uuid
+  workspaceId     String   @map("workspace_id") @db.Uuid
+  /// IDP_KINDS — oidc | saml | ldap.
+  kind            String
+  /// IDP_PRESETS — keycloak | entra | google | yandex | generic.
+  preset          String   @default("generic")
+  /// The login button label.
+  name            String
+  enabled         Boolean  @default(false)
+  showOnLogin     Boolean  @default(true) @map("show_on_login")
+  platformWide    Boolean  @default(false) @map("platform_wide")
+  /// Non-secret settings: issuer, client id, scopes, claim map, SAML endpoints, LDAP base DN.
+  config          Json     @default("{}")
+  /// secret-box ciphertext: OIDC client secret, LDAP bind password, SAML SP key. Write-only over the API.
+  secretCipher    String?  @map("secret_cipher")
+  jitEnabled      Boolean  @default(false) @map("jit_enabled")
+  /// Role a JIT user gets without a group mapping hit; null = no membership.
+  defaultRole     String?  @map("default_role")
+  /// Email domains this provider may assert. Linking to an existing account requires one.
+  allowedDomains  String[] @default([]) @map("allowed_domains")
+  groupsClaim     String?  @map("groups_claim")
+  /// GROUP_SYNC_MODES — additive | authoritative.
+  groupSyncMode   String   @default("additive") @map("group_sync_mode")
+  /// Session lifetime for this provider's logins; null = AUTH_SESSION_TTL_HOURS.
+  sessionTtlHours Int?     @map("session_ttl_hours")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  identities   UserIdentity[]
+  mappings     IdpGroupMapping[]
+  authRequests SsoAuthRequest[]
+  domains      SsoDomain[]
+
+  @@index([workspaceId])
+  @@map("identity_providers")
+}
+
+/// One person as one provider knows them. A user signed in through two IdPs has two.
+model UserIdentity {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  providerId  String    @map("provider_id") @db.Uuid
+  /// OIDC `sub`, SAML NameID, LDAP entryUUID / objectGUID.
+  subject     String
+  emailAtLink String?   @map("email_at_link")
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider IdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, subject])
+  @@index([userId])
+  @@map("user_identities")
+}
+
+/// An email domain a workspace claims. Only a verified one may be enforced, so
+/// an unproven claim can never lock password users out.
+model SsoDomain {
+  /// Lower-case, punycode.
+  domain            String    @id
+  workspaceId       String    @map("workspace_id") @db.Uuid
+  providerId        String?   @map("provider_id") @db.Uuid
+  /// Expected in the TXT record `_knowledge-challenge.<domain>`.
+  verificationToken String    @map("verification_token")
+  verifiedAt        DateTime? @map("verified_at") @db.Timestamptz
+  enforced          Boolean   @default(false)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  provider IdentityProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@map("sso_domains")
+}
+
+/// An IdP group (a claim value, or a SCIM group when providerId is null) → a workspace role.
+model IdpGroupMapping {
+  id              String   @id @default(uuid()) @db.Uuid
+  workspaceId     String   @map("workspace_id") @db.Uuid
+  providerId      String?  @map("provider_id") @db.Uuid
+  externalGroup   String   @map("external_group")
+  role            String
+  trustedOperator Boolean  @default(false) @map("trusted_operator")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  provider IdentityProvider? @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, providerId, externalGroup])
+  @@map("idp_group_mappings")
+}
+
+/// A workspace's SCIM bearer token (`kscim_`). Only the SHA-256 is stored; it is never a principal.
+model ScimToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String
+  tokenHash   String    @unique @map("token_hash")
+  prefix      String
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId])
+  @@map("scim_tokens")
+}
+
+/// What one workspace's SCIM client says about a user. Users are global; this row is not.
+model ScimUser {
+  workspaceId String   @map("workspace_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  externalId  String?  @map("external_id")
+  /// The client's `userName`, lower-cased: SCIM matches it case-insensitively
+  /// and it is unique per workspace. Often the email, but an Entra UPN need not be.
+  userName    String?  @map("user_name")
+  active      Boolean  @default(true)
+  raw         Json     @default("{}")
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@unique([workspaceId, externalId])
+  @@unique([workspaceId, userName])
+  @@map("scim_users")
+}
+
+model ScimGroup {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  externalId  String?  @map("external_id")
+  displayName String   @map("display_name")
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  members ScimGroupMember[]
+
+  @@unique([workspaceId, displayName])
+  @@map("scim_groups")
+}
+
+model ScimGroupMember {
+  groupId String @map("group_id") @db.Uuid
+  userId  String @map("user_id") @db.Uuid
+
+  group ScimGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@map("scim_group_members")
+}
+
+/// A single-use SSO login transaction: state, nonce and PKCE live here, never
+/// in the browser. Consumed by one guarded update; purged after expiry.
+model SsoAuthRequest {
+  id               String    @id @default(uuid()) @db.Uuid
+  providerId       String    @map("provider_id") @db.Uuid
+  stateHash        String    @unique @map("state_hash")
+  nonce            String?
+  codeVerifier     String?   @map("code_verifier")
+  samlRequestId    String?   @map("saml_request_id")
+  returnTo         String    @map("return_to")
+  /// The 60 s fragment code the web trades for a session (never the token itself).
+  exchangeCodeHash String?   @unique @map("exchange_code_hash")
+  userId           String?   @map("user_id") @db.Uuid
+  /// The IdP's session id (OIDC `sid`), carried from the callback to the session the exchange opens.
+  idpSessionId     String?   @map("idp_session_id")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz
+  consumedAt       DateTime? @map("consumed_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  provider IdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("sso_auth_requests")
 }

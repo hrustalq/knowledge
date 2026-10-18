@@ -22,6 +22,7 @@ import {
   BookMarked,
   Download,
   FileText,
+  Gauge,
   GitMerge,
   Globe,
   Info,
@@ -29,7 +30,7 @@ import {
   Users,
   Workflow as WorkflowIcon,
 } from 'lucide-vue-next'
-import type { ListActivityResponse, ProjectOverviewResponse, ProjectSiteResponse } from '@knowledge/contracts'
+import type { ListActivityResponse, ProjectOverviewResponse, ProjectSiteResponse, QualitySummaryResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/api/queries'
 import { getWorkspaceId, relativeTime } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -41,6 +42,8 @@ import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import UserChip from '@/components/people/UserChip.vue'
 import ProjectAvatar from '@/components/projects/ProjectAvatar.vue'
 import ExportDialog from '@/components/knowledge/ExportDialog.vue'
+import QualityDistribution from '@/components/quality/QualityDistribution.vue'
+import { scoreTone } from '@/components/quality/quality-ui'
 import { useProjectsStore } from '@/stores/projects'
 import { useAuthStore } from '@/stores/auth'
 
@@ -54,6 +57,8 @@ const exportOpen = ref(false)
 const RAIL_WIDGETS = [
   { id: 'overview', label: t('rail.overview'), icon: Info, expandable: false },
   { id: 'people', label: t('rail.people'), icon: Users, expandable: false },
+  // The auditor's scores (#74), once there are any.
+  { id: 'quality', label: t('rail.quality'), icon: Gauge, expandable: false },
   { id: 'activity', label: t('rail.activity'), icon: ActivityIcon, expandable: true },
   { id: 'merge-requests', label: t('rail.changes'), icon: GitMerge, expandable: false },
   { id: 'glossary', label: t('rail.glossary'), icon: BookMarked, expandable: false },
@@ -81,6 +86,16 @@ const activityPreview = useQuery(
     }),
   ),
 )
+
+/** The quality summary (#74): the widget exists only once a page here has a score. */
+const qualityQuery = useQuery(
+  computed(() =>
+    apiQueryOptions('/v1/quality/summary', { query: { workspaceId: getWorkspaceId(), projectId: projectId.value } }),
+  ),
+)
+const quality = computed(() => qualityQuery.data.value as QualitySummaryResponse | undefined)
+/** The dashboard scopes by the active project, so it is offered only when this is the one. */
+const qualityLinkable = computed(() => projects.activeId === projectId.value)
 
 /** The published site (docs/features/44), if there is one — a status, not the settings. */
 const siteQuery = useQuery(
@@ -114,6 +129,7 @@ const visibleWidgets = computed(() => {
   return RAIL_WIDGETS.filter((w) => {
     if (!c) return w.id === 'overview'
     if (w.id === 'glossary') return c.glossaryTerms > 0
+    if (w.id === 'quality') return (quality.value?.scoredPages ?? 0) > 0
     if (w.id === 'connectors') return c.connectors > 0
     if (w.id === 'workflows') return c.workflows > 0
     if (w.id === 'merge-requests') return c.openMergeRequests > 0
@@ -130,6 +146,7 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
   return {
     overview: c ? t('count.pages', { n: c.documents }, c.documents) : null,
     people: people ? t('count.people', { n: people }, people) : null,
+    quality: quality.value?.average != null ? t('quality.rail.preview', { n: quality.value.average }) : null,
     activity: latest ? relativeTime(latest.createdAt) : null,
     'merge-requests': c?.openMergeRequests
       ? t('count.open', { n: c.openMergeRequests }, c.openMergeRequests)
@@ -294,6 +311,32 @@ const isActive = computed(() => projectId.value === projects.activeId)
             :limit="12"
             height="20rem"
           />
+
+          <div v-else-if="w.id === 'quality' && quality && quality.average !== null" class="space-y-3 text-sm">
+            <p class="text-muted-foreground">
+              <i18n-t keypath="quality.project.average" scope="global">
+                <template #average>
+                  <span class="font-semibold tabular-nums" :class="scoreTone(quality.average, quality.lowThreshold)">{{ quality.average }}</span>
+                </template>
+              </i18n-t>
+              {{ t('quality.scored', { scored: quality.scoredPages, total: quality.totalPages }, quality.totalPages) }}
+            </p>
+            <QualityDistribution :counts="quality.distribution" :threshold="quality.lowThreshold" compact />
+            <ol v-if="quality.worst.length" class="space-y-1">
+              <li v-for="row in quality.worst.slice(0, 3)" :key="row.documentId" class="flex items-baseline gap-2">
+                <span class="w-6 shrink-0 text-right text-xs font-semibold tabular-nums" :class="scoreTone(row.overall, quality.lowThreshold)">
+                  {{ row.overall }}
+                </span>
+                <RouterLink
+                  :to="{ path: `/documents/${row.documentId}`, query: { tab: 'quality' } }"
+                  class="min-w-0 truncate hover:underline"
+                >{{ row.title }}</RouterLink>
+              </li>
+            </ol>
+            <RouterLink v-if="qualityLinkable" :to="{ path: '/knowledge-health', query: { tab: 'quality' } }" class="inline-block text-primary hover:underline">
+              {{ t('quality.project.open') }}
+            </RouterLink>
+          </div>
 
           <div v-else-if="w.id === 'site'" class="space-y-2 text-sm">
             <a

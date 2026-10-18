@@ -1,7 +1,16 @@
 // Auth store: resolves /v1/me once per app instance (per SSR request / per
 // client load), owns the session token, and drives router guards + nav state.
 import { defineStore } from 'pinia'
-import type { AuthSessionResponse, Locale, MeResponse, WorkspaceRole } from '@knowledge/contracts'
+import type {
+  AuthMethod,
+  AuthSessionResponse,
+  Locale,
+  MeResponse,
+  SsoDiscoverResponse,
+  SsoExchangeResponse,
+  SsoProvidersResponse,
+  WorkspaceRole,
+} from '@knowledge/contracts'
 import { ApiError, apiFetch, getWorkspaceId, setActiveWorkspace, setToken } from '@/lib/api'
 
 export const useAuthStore = defineStore('auth', {
@@ -15,6 +24,8 @@ export const useAuthStore = defineStore('auth', {
     /** AUTH_MODE=none — no login UI, full access. */
     isDev: (s) => s.me?.mode === 'dev',
     isAdmin: (s) => s.me?.isAdmin ?? false,
+    /** How the current session was opened (#75); null for an API key or the dev principal. */
+    authMethod: (s): AuthMethod | null => s.me?.authMethod ?? null,
     /**
      * AUTH_REQUIRE_VERIFIED_EMAIL is on and this address is unconfirmed: the API
      * refuses everything but /me, logout and resend, so the app is a single
@@ -69,6 +80,40 @@ export const useAuthStore = defineStore('auth', {
         body: JSON.stringify({ email, password }),
       })
       this.adoptSession(res)
+    },
+    /**
+     * The login page's SSO buttons (#75), or null when SSO is off on this
+     * instance — the routes answer 404 then, and the page is the plain
+     * password form it always was.
+     */
+    async ssoProviders(workspaceId: string): Promise<SsoProvidersResponse | null> {
+      try {
+        return await apiFetch<SsoProvidersResponse>(`/v1/auth/sso/providers?workspaceId=${encodeURIComponent(workspaceId)}`)
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return null
+        throw e
+      }
+    },
+    /** Email-first sign-in: which providers assert this address's domain. */
+    discover(email: string): Promise<SsoDiscoverResponse> {
+      return apiFetch<SsoDiscoverResponse>('/v1/auth/sso/discover', { method: 'POST', body: JSON.stringify({ email }) })
+    },
+    /** LDAP sign-in (#75): the directory checks the password, so there is no redirect leg. */
+    async ldapLogin(providerId: string, username: string, password: string) {
+      const res = await apiFetch<AuthSessionResponse>(`/v1/auth/ldap/${encodeURIComponent(providerId)}/login`, {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      })
+      this.adoptSession(res)
+    },
+    /** Trade the callback's fragment code for a session; answers where the sign-in started. */
+    async exchangeSsoCode(code: string): Promise<string> {
+      const res = await apiFetch<SsoExchangeResponse>('/v1/auth/sso/exchange', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      })
+      this.adoptSession(res)
+      return res.returnTo
     },
     async signup(email: string, displayName: string, password: string) {
       const res = await apiFetch<AuthSessionResponse>('/v1/auth/signup', {

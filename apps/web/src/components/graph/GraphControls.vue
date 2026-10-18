@@ -17,7 +17,7 @@ import { useI18n } from 'vue-i18n'
 import { ChevronRight, Search, X } from 'lucide-vue-next'
 import { Checkbox } from '@/components/ui/checkbox'
 import { labelFor } from '@/lib/labels'
-import { ENTITY_TYPE_ORDER, entityCssVar } from './graph-theme'
+import { ENTITY_TYPE_ORDER, entityCssVar, isOperationType } from './graph-theme'
 import { PAGES_GROUP, type GraphOptions } from './graph-model'
 
 const props = defineProps<{
@@ -148,10 +148,12 @@ const hiddenGroups = computed(() => props.options.hidden.length)
         :aria-pressed="!options.hidden.includes(g.key)"
         @click="toggleGroup(g.key)"
       >
-        <!-- Filled disc for pages, ring for entities: the same two silhouettes
-             the canvas draws, so the legend is a sample and not a translation. -->
+        <!-- Filled disc for pages, ring for entities, square for spec
+             operations: the silhouettes the canvas draws, so the legend is a
+             sample and not a translation. -->
         <span
-          class="size-2.5 shrink-0 rounded-full"
+          class="size-2.5 shrink-0"
+          :class="isOperationType(g.key) ? 'rounded-[2px]' : 'rounded-full'"
           :style="g.page
             ? { background: `var(${g.cssVar})` }
             : { boxShadow: `inset 0 0 0 1.5px var(${g.cssVar})` }"

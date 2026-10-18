@@ -56,6 +56,8 @@ import { ProvenanceService } from '../feedback/provenance.service.js';
 import { expiryFor, VerificationPolicyService } from '../verification/verification-policy.service.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { t } from '../i18n/t.js';
+import { ApiSpecsService } from '../api-specs/api-specs.service.js';
+import { API_SPEC_SYNTAXES, apiSpecContentType, apiSpecSyntaxOf, isApiSpecKind, type ApiDocumentKind } from '@knowledge/contracts';
 import { WORKSPACE_READER } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
@@ -105,6 +107,7 @@ export class DocumentsService {
     private readonly policy: VerificationPolicyService,
     private readonly templates: TemplatesService,
     private readonly permissions: PermissionService,
+    private readonly apiSpecs: ApiSpecsService,
   ) {}
 
   async createDocument(input: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
@@ -112,8 +115,23 @@ export class DocumentsService {
     // never silently re-parent the page.
     await this.projects.requireProjectInWorkspace(input.projectId, input.workspaceId);
 
+    // #78: an API spec is parsed by its kind. A template body is markdown, so
+    // a spec cannot start from one, and an inline spec is checked before the
+    // page exists rather than leaving a page with a refused draft behind.
+    const kind = input.kind ?? 'page';
+    if (isApiSpecKind(kind)) {
+      if (input.template) throw new BadRequestException(t('error.apiSpec.template'));
+      if (input.content && !(API_SPEC_SYNTAXES as readonly string[]).includes(input.content.format)) {
+        throw new BadRequestException(t('error.apiSpec.format', { format: input.content.format }));
+      }
+      if (input.content) await this.apiSpecs.assertValid(input.content.text, kind);
+    }
     const { dto, template } = await this.applyTemplate(input, authorId);
-    const contentType = dto.content ? `text/${dto.content.format}` : 'text/markdown';
+    const contentType = isApiSpecKind(kind)
+      ? apiSpecContentType(kind, dto.content?.format === 'json' ? 'json' : 'yaml')
+      : dto.content
+        ? `text/${dto.content.format}`
+        : 'text/markdown';
 
     // Feature 08: nested creation — the parent must exist in the same project.
     let parent: { path: string; depth: number } | null = null;
@@ -144,7 +162,8 @@ export class DocumentsService {
           workspaceId: dto.workspaceId,
           projectId: dto.projectId,
           title: dto.title,
-          category: dto.category ?? 'other',
+          category: dto.category ?? (isApiSpecKind(kind) ? 'reference' : 'other'),
+          kind,
           parentId: dto.parentId ?? null,
           path: `${parent?.path ?? '/'}${id}/`,
           depth: (parent?.depth ?? -1) + 1,
@@ -169,7 +188,12 @@ export class DocumentsService {
           status: 'draft',
         },
       });
-      const s3Key = this.storage.revisionObjectKey(dto.workspaceId, document.id, revision.id, 'source.md');
+      const s3Key = this.storage.revisionObjectKey(
+        dto.workspaceId,
+        document.id,
+        revision.id,
+        this.storage.sourceObjectName(contentType),
+      );
       await this.prisma.documentRevision.update({ where: { id: revision.id }, data: { s3Key } });
       return { document, revision: { ...revision, s3Key } };
     });
@@ -353,7 +377,8 @@ export class DocumentsService {
     const revision = await this.createDraftRevision(documentId, {
       branch: dto.branch,
       message: dto.message,
-      contentType: dto.contentType ?? 'text/markdown',
+      // No default here: createDraftRevision picks one from the document's kind.
+      contentType: dto.contentType,
       authorId,
     });
     return this.toRevisionInfo(revision);
@@ -375,6 +400,10 @@ export class DocumentsService {
     }
 
     const text = await this.storage.getObjectText(revision.s3Key);
+    // #78: a spec that will not parse is refused here, with the validator's
+    // messages, rather than queued to fail in the worker. The draft stays, so
+    // the caller can upload a corrected body to the same revision.
+    if (isApiSpecKind(document.kind)) await this.apiSpecs.assertValid(text, document.kind);
     const contentHash = createHash('sha256').update(text, 'utf-8').digest('hex');
 
     // Content-hash idempotency (plan.md §4), scoped per branch: a merge
@@ -694,6 +723,7 @@ export class DocumentsService {
         headRevisionId: headId,
         headRevisionStatus: (revision.status as RevisionStatus) ?? null,
         createdAt: document.createdAt.toISOString(),
+        kind: document.kind as ApiDocumentKind,
         // The stamp, the flag and their reading against the head and the
         // clock (docs/features/38 + 39). Writes live in VerificationService.
         ...this.trustFields(document, headId, issues.get(documentId) ?? 0, settings.inactiveAfterDays),
@@ -883,7 +913,9 @@ export class DocumentsService {
     }
 
     const raw = await this.storage.getObjectText(revision.s3Key);
-    const parsed = matter(raw);
+    // A spec (#78) is returned verbatim: it has no frontmatter, and a YAML
+    // spec may well open with a `---` document marker gray-matter would eat.
+    const parsed = isApiSpecKind(document.kind) ? { data: {}, content: raw } : matter(raw);
     return {
       documentId,
       revisionId: revision.id,
@@ -1705,6 +1737,7 @@ export class DocumentsService {
     // takes a `KEY SHARE` lock on that branch row, and `MergeRequestsService.merge`
     // already holds it `FOR UPDATE` on the outer connection. A second connection
     // here waits for a lock that cannot be released until this call returns.
+    const contentType = this.revisionContentType(document.kind, opts.contentType);
     return this.prisma.withTransaction(async () => {
       const max = await this.prisma.documentRevision.aggregate({
         where: { documentId },
@@ -1715,14 +1748,19 @@ export class DocumentsService {
           documentId,
           branchId: branch.id,
           revisionNumber: (max._max.revisionNumber ?? 0) + 1,
-          contentType: opts.contentType ?? 'text/markdown',
+          contentType,
           s3Key: '',
           authorId: opts.authorId ?? AUTHOR_ID_STUB,
           message: opts.message,
           status: 'draft',
         },
       });
-      const s3Key = this.storage.revisionObjectKey(document.workspaceId, documentId, revision.id, 'source.md');
+      const s3Key = this.storage.revisionObjectKey(
+        document.workspaceId,
+        documentId,
+        revision.id,
+        this.storage.sourceObjectName(contentType),
+      );
       const updated = await this.prisma.documentRevision.update({
         where: { id: revision.id },
         data: { s3Key },
@@ -1734,6 +1772,18 @@ export class DocumentsService {
       }
       return updated;
     });
+  }
+
+  /**
+   * A new revision's content type. A page keeps what the caller asked for
+   * (markdown by default). A spec (#78) is always stored under its kind's
+   * `vnd` type, in the syntax the caller named — a merge or an MCP write that
+   * says `text/markdown` cannot turn a spec revision into a page body, because
+   * the kind, not the type, decides how it is parsed.
+   */
+  private revisionContentType(kind: string, requested?: string): string {
+    if (!isApiSpecKind(kind)) return requested ?? 'text/markdown';
+    return apiSpecContentType(kind, (requested && apiSpecSyntaxOf(requested)) || 'yaml');
   }
 
   private toRevisionInfo(r: DocumentRevision): RevisionInfo {

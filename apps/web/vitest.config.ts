@@ -5,9 +5,11 @@ import { defineConfig } from 'vitest/config'
 // Components are exercised in the browser, not here, so no Vue plugin and no DOM.
 export default defineConfig({
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
+    alias: [
+      { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+      // The editor's extensions import their node views; a spec only needs the schema.
+      { find: /^.*\.vue$/, replacement: fileURLToPath(new URL('./test/sfc-stub.ts', import.meta.url)) },
+    ],
   },
   test: {
     // server/ is server.js's unbundled Node helpers (plain JS).

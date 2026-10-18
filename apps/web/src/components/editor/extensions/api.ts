@@ -1,9 +1,9 @@
 /**
  * The API contract block: one HTTP endpoint, documented.
  *
- * Like every other block here, `renderHTML` is the exact shape
- * `lib/markdown/serialize.ts` expects and `lib/markdown/render.ts` produces.
- * Change one, change all three.
+ * The spec (attributes, parse and render rules) lives in
+ * `@knowledge/editor-schema`; this file adds the node views and the insert
+ * command with its translated template.
  *
  * The encoding follows the rule in `lib/markdown/nodes.ts` — markdown stays
  * canonical and text stays visible. Method and path ride as attributes for the
@@ -13,9 +13,10 @@
  * as a JSON fence would be invisible to search, to the graph and to the
  * assistant; written this way it is a readable API reference even on GitHub.
  */
-import { Node, mergeAttributes, type JSONContent } from '@tiptap/core'
+import type { JSONContent } from '@tiptap/core'
 import { VueNodeViewRenderer } from '@tiptap/vue-3'
-import { KN, isApiSection, isHttpMethod, type ApiSectionKind, type HttpMethod } from '@/lib/markdown/nodes'
+import { ApiContract as ApiContractSpec, ApiSection as ApiSectionSpec } from '@knowledge/editor-schema'
+import type { ApiSectionKind, HttpMethod } from '@/lib/markdown/nodes'
 import ApiContractNode from '../nodes/ApiContractNode.vue'
 import ApiSectionNode from '../nodes/ApiSectionNode.vue'
 
@@ -32,72 +33,11 @@ export interface ApiOptions {
   t: (key: string) => string
 }
 
-export const ApiContract = Node.create<ApiOptions>({
-  name: 'knApi',
-  group: 'block',
-  content: 'knApiSection+',
-  defining: true,
-
+export const ApiContract = ApiContractSpec.extend<ApiOptions>({
   addOptions() {
     // Identity fallback so the node is usable without configuration; the editor
     // passes the real translator, as it does for CommentAnchors.
     return { t: (key: string) => key }
-  },
-
-  addAttributes() {
-    return {
-      method: {
-        default: 'GET' as HttpMethod,
-        parseHTML: (element) => {
-          const raw = (element.getAttribute(KN.api) ?? '').toUpperCase()
-          return isHttpMethod(raw) ? raw : 'GET'
-        },
-        renderHTML: (attributes) => ({ [KN.api]: attributes.method }),
-      },
-      path: {
-        default: '/',
-        parseHTML: (element) => element.getAttribute(KN.apiPath) || '/',
-        renderHTML: (attributes) => ({ [KN.apiPath]: attributes.path }),
-      },
-      // The spec operation this block mirrors (#78). Set, the read view draws
-      // the operation live from the spec and the page IMPLEMENTS it.
-      op: {
-        default: null as string | null,
-        parseHTML: (element) => element.getAttribute(KN.apiOp) || null,
-        renderHTML: (attributes) => (attributes.op ? { [KN.apiOp]: attributes.op } : {}),
-      },
-    }
-  },
-
-  parseHTML() {
-    return [
-      {
-        tag: `div[${KN.api}]`,
-        // The endpoint line is an attribute rendered as a heading, not content.
-        // Hand ProseMirror a copy without it — the way Expand drops its
-        // <summary> — or the header would also appear as the body's first
-        // block. The method check keeps a user's own leading heading safe.
-        contentElement: (element) => {
-          const clone = element.cloneNode(true) as HTMLElement
-          const first = clone.firstElementChild
-          const lead = (first?.textContent ?? '').trim().split(/\s+/)[0]?.toUpperCase() ?? ''
-          if (first && /^H[1-6]$/.test(first.tagName) && isHttpMethod(lead)) first.remove()
-          return clone
-        },
-      },
-    ]
-  },
-
-  renderHTML({ node, HTMLAttributes }) {
-    return [
-      'div',
-      mergeAttributes(HTMLAttributes),
-      // A real <h3>: both outlines (MarkdownView's `h1, h2, h3` and
-      // DocumentCanvas's `.kn-prose h1, h2, h3`) then list the endpoint, so the
-      // page rail reads the same whether you are reading or editing.
-      ['h3', {}, `${node.attrs.method as string} ${node.attrs.path as string}`],
-      ['div', { 'data-kn-api-body': '' }, 0],
-    ]
   },
 
   addNodeView() {
@@ -114,36 +54,7 @@ export const ApiContract = Node.create<ApiOptions>({
   },
 })
 
-export const ApiSection = Node.create({
-  name: 'knApiSection',
-  content: 'block+',
-  // Deliberately not `isolating`: these sections are stacked, not side by side,
-  // so Backspace at the top of one should join the previous the way it does
-  // between any two blocks. (knLayoutColumn isolates because columns are
-  // parallel and joining them would be meaningless.)
-  defining: true,
-
-  addAttributes() {
-    return {
-      kind: {
-        default: 'summary' as ApiSectionKind,
-        parseHTML: (element) => {
-          const raw = element.getAttribute(KN.apiSection) ?? 'summary'
-          return isApiSection(raw) ? raw : 'summary'
-        },
-        renderHTML: (attributes) => ({ [KN.apiSection]: attributes.kind }),
-      },
-    }
-  },
-
-  parseHTML() {
-    return [{ tag: `div[${KN.apiSection}]` }]
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes), 0]
-  },
-
+export const ApiSection = ApiSectionSpec.extend({
   addNodeView() {
     return VueNodeViewRenderer(ApiSectionNode)
   },

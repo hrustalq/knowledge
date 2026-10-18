@@ -551,3 +551,37 @@ export interface ListActivityResponse {
 
 // ---------------------------------------------------------------------------
 // Activity kinds — the four things a person does to a knowledge base.
+
+// ---------------------------------------------------------------------------
+// Real-time co-editing (#80, docs/features/56): one shared draft per branch.
+
+/** `collab:{workspaceId}:{documentId}:{branchId}` — what a provider asks the `/v1/collab` socket for. */
+export function collabDocName(workspaceId: string, documentId: string, branchId: string): string {
+  return `collab:${workspaceId}:${documentId}:${branchId}`;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The inverse, or `null` for anything malformed. The workspace part is a
+ * routing hint only: the server re-resolves it from the document in PG.
+ */
+export function parseCollabDocName(
+  name: string,
+): { workspaceId: string; documentId: string; branchId: string } | null {
+  const [prefix, workspaceId, documentId, branchId, ...rest] = name.split(':');
+  if (prefix !== 'collab' || rest.length > 0) return null;
+  if (![workspaceId, documentId, branchId].every((id) => id !== undefined && UUID_RE.test(id))) return null;
+  return { workspaceId: workspaceId!, documentId: documentId!, branchId: branchId! };
+}
+
+/**
+ * Why a document was refused. Hocuspocus multiplexes documents over one
+ * socket, so a refusal is a per-document `permission-denied` reason, not a
+ * close code. A refused page never names itself (feature 48).
+ */
+export const COLLAB_DENY_REASONS = ['unauthorized', 'forbidden'] as const;
+export type CollabDenyReason = (typeof COLLAB_DENY_REASONS)[number];
+
+/** Socket and per-document close codes the `/v1/collab` server sends. */
+export const COLLAB_CLOSE_CODES = { tooLarge: 4413, disabled: 4503 } as const;

@@ -1,0 +1,33 @@
+{
+  "name": "@knowledge/editor-schema",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./nodes": "./src/nodes.ts",
+    "./markdown": "./src/markdown.ts"
+  },
+  "scripts": {
+    "lint": "echo editor-schema: no lint",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@knowledge/contracts": "workspace:*",
+    "@tiptap/core": "^3.31.3",
+    "@tiptap/extension-code-block-lowlight": "^3.31.3",
+    "@tiptap/extension-highlight": "^3.31.3",
+    "@tiptap/extension-image": "^3.31.3",
+    "@tiptap/extension-list": "^3.31.3",
+    "@tiptap/extension-table": "^3.31.3",
+    "@tiptap/extension-text-align": "^3.31.3",
+    "@tiptap/pm": "^3.31.3",
+    "@tiptap/starter-kit": "^3.31.3",
+    "lowlight": "^3.3.0",
+    "marked": "^18.0.11"
+  },
+  "devDependencies": {
+    "@knowledge/tsconfig": "workspace:*",
+    "typescript": "^5.7.0"
+  }
+}

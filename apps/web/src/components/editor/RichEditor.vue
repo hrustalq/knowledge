@@ -18,14 +18,9 @@ import { useI18n } from 'vue-i18n'
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import type { Editor as CoreEditor } from '@tiptap/core'
-import StarterKit from '@tiptap/starter-kit'
-import { TaskItem, TaskList } from '@tiptap/extension-list'
-import { TableKit } from '@tiptap/extension-table'
 import { Placeholder } from '@tiptap/extensions'
-import Highlight from '@tiptap/extension-highlight'
-import TextAlign from '@tiptap/extension-text-align'
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import { createLowlight, common } from 'lowlight'
+import { IMAGE_OPTIONS, baseExtensions } from '@knowledge/editor-schema'
 import {
   AtSign,
   Bot,
@@ -637,17 +632,8 @@ onMounted(() => {
     editable: props.editable,
     content: toHtml(props.modelValue),
     extensions: [
-      StarterKit.configure({
-        codeBlock: false,
-        link: { openOnClick: false, autolink: true, HTMLAttributes: { rel: 'noopener noreferrer nofollow' } },
-        heading: { levels: [1, 2, 3, 4] },
-      }),
-      CodeBlockLowlight.configure({ lowlight, defaultLanguage: null }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      TableKit.configure({ table: { resizable: true, lastColumnResizable: false } }),
-      Highlight,
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      // Shared with the API's headless schema (@knowledge/editor-schema).
+      ...baseExtensions(lowlight),
       Placeholder.configure({
         placeholder: ({ node }) =>
           node.type.name === 'heading'
@@ -666,7 +652,7 @@ onMounted(() => {
       Mermaid,
       Drawing,
       FileEmbed,
-      ResizableImage.configure({ inline: false, allowBase64: false }),
+      ResizableImage.configure(IMAGE_OPTIONS),
       StatusMark,
       DocMention,
       UserMention,

@@ -15,7 +15,26 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- The server side of real-time co-editing (#80, phase 1), off by default. With
+  `COLLAB_ENABLED=true`, a `/v1/collab` WebSocket serves one shared Yjs draft
+  per document branch. The draft is seeded once from the branch head, stored in
+  PG, and kept in sync across API instances through Redis. A page you may view
+  joins read-only, and a page you may edit joins as a writer. No editor connects
+  to it yet; that is phase 3. The editor's node specs now live in the new
+  buildless package `@knowledge/editor-schema`, so the API builds the same
+  schema the editor does.
+
 ### Operations
+
+- Migration `20261112100000_collab_drafts` adds the `collab_drafts` table and
+  nothing else. It survives a code rollback, because the previous image never
+  reads it. New env vars, all with defaults and none required:
+  `COLLAB_ENABLED` (`false`), `COLLAB_STORE_DEBOUNCE_MS` (`2000`),
+  `COLLAB_STORE_MAX_DEBOUNCE_MS` (`10000`) and `COLLAB_MAX_DOC_BYTES` (8 MiB).
+  With the flag off, no Hocuspocus instance or Redis connection is created, and
+  the socket closes with 4503.
 
 - Production embeds with bge-m3 (1024-d) served by Ollama.app on the host,
   not the hash stub (#257). The `production` environment carries

@@ -117,6 +117,7 @@ model Document {
   siteAudienceRules    SiteAudienceRule[]
   componentDeclaration ComponentDeclaration?
   apiOperations        ApiOperation[]
+  collabDrafts         CollabDraft[]
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, category])
@@ -142,10 +143,11 @@ model DocumentBranch {
   protected      Boolean  @default(false)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  document   Document           @relation(fields: [documentId], references: [id])
-  revisions  DocumentRevision[]
-  mrAsSource MergeRequest[]     @relation("mrSource")
-  mrAsTarget MergeRequest[]     @relation("mrTarget")
+  document     Document           @relation(fields: [documentId], references: [id])
+  revisions    DocumentRevision[]
+  mrAsSource   MergeRequest[]     @relation("mrSource")
+  mrAsTarget   MergeRequest[]     @relation("mrTarget")
+  collabDrafts CollabDraft[]
 
   @@unique([documentId, name])
   @@map("document_branches")
@@ -192,6 +194,42 @@ model DocumentRevision {
   @@unique([documentId, branchId, contentHash])
   @@index([fulltextStaleAt])
   @@map("document_revisions")
+}
+
+/// One shared, CRDT-backed editing session per branch (#80, docs/features/56).
+/// NOT a DocumentRevision: revisions stay immutable, and publishing a draft
+/// writes an ordinary revision through finalize. Created lazily on the first
+/// connect to a (document, branch), seeded once from the branch head — the
+/// unique pair is what makes the seed single across API instances. No FK on
+/// workspace_id or user ids (house rule).
+model CollabDraft {
+  id                   String    @id @default(uuid()) @db.Uuid
+  workspaceId          String    @map("workspace_id") @db.Uuid
+  documentId           String    @map("document_id") @db.Uuid
+  branchId             String    @map("branch_id") @db.Uuid
+  /// Revision the draft was seeded from or last rebased onto; null for a branch with no head.
+  baseRevisionId       String?   @map("base_revision_id") @db.Uuid
+  /// Y.encodeStateAsUpdate of the whole doc. Hot state; checkpoints go to MinIO.
+  state                Bytes
+  stateBytes           Int       @map("state_bytes")
+  /// Y state vector at the last publish: "unpublished changes" = the doc's differs.
+  publishedStateVector Bytes?    @map("published_state_vector")
+  /// `SCHEMA_VERSION` of @knowledge/editor-schema the state was written with.
+  schemaVersion        String    @map("schema_version")
+  /// Distinct user ids that wrote since the last publish (co-author credit).
+  contributors         Json      @default("[]")
+  lastEditedBy         String?   @map("last_edited_by") @db.Uuid
+  lastCheckpointAt     DateTime? @map("last_checkpoint_at") @db.Timestamptz
+  resetAt              DateTime? @map("reset_at") @db.Timestamptz
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  document Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  branch   DocumentBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, branchId])
+  @@index([workspaceId, updatedAt])
+  @@map("collab_drafts")
 }
 
 /// Confluence-style page attachments (images, PDFs, files embedded in the

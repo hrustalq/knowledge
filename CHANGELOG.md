@@ -13,6 +13,24 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Operations
+
+- Production embeds with bge-m3 (1024-d) served by Ollama.app on the host,
+  not the hash stub (#257). The `production` environment carries
+  `EMBEDDINGS_PROVIDER=openai-compatible`,
+  `EMBEDDINGS_BASE_URL=http://host.docker.internal:11434/v1`,
+  `EMBEDDINGS_MODEL=bge-m3` and `EMBEDDINGS_DIM=1024`. These are applied
+  already (a rerun of the v0.27.0 deploy on 2026-10-18), and every branch head
+  is reindexed. `.env.production.example` now requires the two new keys, so
+  a deploy fails early if they are missing from the environment. The host needs
+  `bge-m3` pulled and the `dev.hrustalq.ollama-keepalive` LaunchAgent, which
+  keeps the model loaded. **Rollback:** set `EMBEDDINGS_PROVIDER=stub` and
+  `EMBEDDINGS_DIM=768` and redeploy. The sweeper's drift check then reindexes
+  every head back, with no code change. Until a page is reindexed, its chunks
+  drop out of the vector leg, though BM25 still finds it.
+
 ## [0.27.0] — 2026-10-18
 
 ### Added

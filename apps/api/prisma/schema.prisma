@@ -617,6 +617,9 @@ model User {
   passwordResets     PasswordResetToken[]
   emailVerifications EmailVerificationToken[]
   apiKeys            ApiKey[]
+  identities         UserIdentity[]
+  scimRecords        ScimUser[]
+  scimGroups         ScimGroupMember[]
 
   @@map("users")
 }
@@ -653,16 +656,28 @@ model ApiKey {
 
 // Auth flow: opaque `ks_` login session tokens (only the SHA-256 is stored).
 model Session {
-  id        String    @id @default(uuid()) @db.Uuid
-  userId    String    @map("user_id") @db.Uuid
-  tokenHash String    @unique @map("token_hash")
-  expiresAt DateTime  @map("expires_at") @db.Timestamptz
-  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  tokenHash    String    @unique @map("token_hash")
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  // #75: how this session was opened (AUTH_METHODS in contracts). The default
+  // is true of every row that predates SSO, so the column needed no backfill.
+  authMethod   String    @default("password") @map("auth_method")
+  // identity_providers.id for an SSO login; null for a password session.
+  providerId   String?   @map("provider_id") @db.Uuid
+  // The IdP's own session id (OIDC `sid`), matched by back-channel logout.
+  idpSessionId String?   @map("idp_session_id")
+  ip           String?
+  userAgent    String?   @map("user_agent")
+  // Touched at most once a minute by TokenAuthService, like api_keys.last_used_at.
+  lastSeenAt   DateTime? @map("last_seen_at") @db.Timestamptz
 
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
+  @@index([providerId, idpSessionId])
   @@map("sessions")
 }
 
@@ -710,6 +725,9 @@ model WorkspaceMember {
   // Gate for knowledge.query_graph / POST /v1/graph/query (plan.md §9:
   // trusted-operator only). Orthogonal to role on purpose.
   trustedOperator Boolean  @default(false) @map("trusted_operator")
+  // #75: who manages this row (MEMBERSHIP_SOURCES). Role sync and SCIM touch
+  // only rows they created; `manual` is never changed by them.
+  source          String   @default("manual")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id])
@@ -817,7 +835,9 @@ model AccessRequest {
 // Phase 5 audit trail: every trusted-operator graph query is recorded here.
 model AuditLog {
   id          String   @id @default(uuid()) @db.Uuid
-  workspaceId String   @map("workspace_id") @db.Uuid
+  // Null for a platform event that belongs to no workspace — a sign-in, say,
+  // which happens before any workspace is known (#75).
+  workspaceId String?  @map("workspace_id") @db.Uuid
   // users.id in api-key mode; synthetic actor ("dev", "mcp-operator") otherwise.
   actor       String
   action      String
@@ -826,9 +846,14 @@ model AuditLog {
   durationMs  Int?     @map("duration_ms")
   ok          Boolean  @default(true)
   error       String?
+  // Client address of the request that caused it, when there was one.
+  ip          String?
+  // Who or what the action was done to: a user id, a provider id.
+  target      String?
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   @@index([workspaceId, createdAt])
+  @@index([action, createdAt])
   @@map("audit_logs")
 }
 
@@ -3235,8 +3260,193 @@ model WorkspaceSettings {
   apiBreakingChangePolicy String?  @map("api_breaking_change_policy")
   /// off | warn | block — the style lint of merge requests (#74); null is STYLE_LINT_POLICY.
   lintPolicy              String?  @map("lint_policy")
+  /// #75 enterprise auth. Enforced SSO: a session must come from one of this
+  /// workspace's providers. Null is off.
+  ssoEnforced             Boolean? @map("sso_enforced")
+  /// Under enforced SSO, whether `kn_` keys still open this workspace; null is yes.
+  allowApiKeys            Boolean? @map("allow_api_keys")
+  /// Platform admins may still sign in with a password on an enforced domain; null is no.
+  allowPasswordForAdmins  Boolean? @map("allow_password_for_admins")
+  /// Cap on a session's age in this workspace, under AUTH_SESSION_TTL_HOURS; null inherits.
+  sessionMaxAgeHours      Int?     @map("session_max_age_hours")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 
   @@map("workspace_settings")
+}
+
+// ---------------------------------------------------------------------------
+// #75 enterprise auth: SSO (OIDC, SAML, LDAP), SCIM provisioning, group → role
+// mapping. Every table is new, so a code rollback leaves them unread.
+
+/// A sign-in source a workspace trusts. Owned by a workspace; a platform admin
+/// may mark one `platformWide` so a single-tenant install has one IdP for all.
+model IdentityProvider {
+  id              String   @id @default(uuid()) @db.Uuid
+  workspaceId     String   @map("workspace_id") @db.Uuid
+  /// IDP_KINDS — oidc | saml | ldap.
+  kind            String
+  /// IDP_PRESETS — keycloak | entra | google | yandex | generic.
+  preset          String   @default("generic")
+  /// The login button label.
+  name            String
+  enabled         Boolean  @default(false)
+  showOnLogin     Boolean  @default(true) @map("show_on_login")
+  platformWide    Boolean  @default(false) @map("platform_wide")
+  /// Non-secret settings: issuer, client id, scopes, claim map, SAML endpoints, LDAP base DN.
+  config          Json     @default("{}")
+  /// secret-box ciphertext: OIDC client secret, LDAP bind password, SAML SP key. Write-only over the API.
+  secretCipher    String?  @map("secret_cipher")
+  jitEnabled      Boolean  @default(false) @map("jit_enabled")
+  /// Role a JIT user gets without a group mapping hit; null = no membership.
+  defaultRole     String?  @map("default_role")
+  /// Email domains this provider may assert. Linking to an existing account requires one.
+  allowedDomains  String[] @default([]) @map("allowed_domains")
+  groupsClaim     String?  @map("groups_claim")
+  /// GROUP_SYNC_MODES — additive | authoritative.
+  groupSyncMode   String   @default("additive") @map("group_sync_mode")
+  /// Session lifetime for this provider's logins; null = AUTH_SESSION_TTL_HOURS.
+  sessionTtlHours Int?     @map("session_ttl_hours")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  identities   UserIdentity[]
+  mappings     IdpGroupMapping[]
+  authRequests SsoAuthRequest[]
+  domains      SsoDomain[]
+
+  @@index([workspaceId])
+  @@map("identity_providers")
+}
+
+/// One person as one provider knows them. A user signed in through two IdPs has two.
+model UserIdentity {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  providerId  String    @map("provider_id") @db.Uuid
+  /// OIDC `sub`, SAML NameID, LDAP entryUUID / objectGUID.
+  subject     String
+  emailAtLink String?   @map("email_at_link")
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider IdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, subject])
+  @@index([userId])
+  @@map("user_identities")
+}
+
+/// An email domain a workspace claims. Only a verified one may be enforced, so
+/// an unproven claim can never lock password users out.
+model SsoDomain {
+  /// Lower-case, punycode.
+  domain            String    @id
+  workspaceId       String    @map("workspace_id") @db.Uuid
+  providerId        String?   @map("provider_id") @db.Uuid
+  /// Expected in the TXT record `_knowledge-challenge.<domain>`.
+  verificationToken String    @map("verification_token")
+  verifiedAt        DateTime? @map("verified_at") @db.Timestamptz
+  enforced          Boolean   @default(false)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  provider IdentityProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@map("sso_domains")
+}
+
+/// An IdP group (a claim value, or a SCIM group when providerId is null) → a workspace role.
+model IdpGroupMapping {
+  id              String   @id @default(uuid()) @db.Uuid
+  workspaceId     String   @map("workspace_id") @db.Uuid
+  providerId      String?  @map("provider_id") @db.Uuid
+  externalGroup   String   @map("external_group")
+  role            String
+  trustedOperator Boolean  @default(false) @map("trusted_operator")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  provider IdentityProvider? @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, providerId, externalGroup])
+  @@map("idp_group_mappings")
+}
+
+/// A workspace's SCIM bearer token (`kscim_`). Only the SHA-256 is stored; it is never a principal.
+model ScimToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String
+  tokenHash   String    @unique @map("token_hash")
+  prefix      String
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId])
+  @@map("scim_tokens")
+}
+
+/// What one workspace's SCIM client says about a user. Users are global; this row is not.
+model ScimUser {
+  workspaceId String   @map("workspace_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  externalId  String?  @map("external_id")
+  active      Boolean  @default(true)
+  raw         Json     @default("{}")
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@unique([workspaceId, externalId])
+  @@map("scim_users")
+}
+
+model ScimGroup {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  externalId  String?  @map("external_id")
+  displayName String   @map("display_name")
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  members ScimGroupMember[]
+
+  @@unique([workspaceId, displayName])
+  @@map("scim_groups")
+}
+
+model ScimGroupMember {
+  groupId String @map("group_id") @db.Uuid
+  userId  String @map("user_id") @db.Uuid
+
+  group ScimGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@map("scim_group_members")
+}
+
+/// A single-use SSO login transaction: state, nonce and PKCE live here, never
+/// in the browser. Consumed by one guarded update; purged after expiry.
+model SsoAuthRequest {
+  id               String    @id @default(uuid()) @db.Uuid
+  providerId       String    @map("provider_id") @db.Uuid
+  stateHash        String    @unique @map("state_hash")
+  nonce            String?
+  codeVerifier     String?   @map("code_verifier")
+  samlRequestId    String?   @map("saml_request_id")
+  returnTo         String    @map("return_to")
+  /// The 60 s fragment code the web trades for a session (never the token itself).
+  exchangeCodeHash String?   @unique @map("exchange_code_hash")
+  userId           String?   @map("user_id") @db.Uuid
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz
+  consumedAt       DateTime? @map("consumed_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  provider IdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("sso_auth_requests")
 }

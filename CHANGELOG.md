@@ -255,6 +255,27 @@ in the pull request that introduces them — see
   repeated runs work through the whole workspace, most recently active pages
   first. A page you name on the run is always read. (#74)
 
+- Settings → Profile now lists where you are signed in: each live session
+  with how it was opened, its IP address, the browser and when it was last
+  used. Sign any other session out from there and its token stops working on
+  its next request. Over the API: `GET /v1/me/sessions` and
+  `DELETE /v1/me/sessions/:sessionId`. A platform admin can list and sign out
+  anyone's sessions without disabling the account:
+  `GET /v1/users/:id/sessions` and `POST /v1/users/:id/revoke-sessions`.
+  `GET /v1/me` now says how the current session was opened (`authMethod`),
+  and each membership says who manages it (`source`, `manual` for every
+  membership today). (#75)
+- Settings → Security (workspace admins) shows the workspace's audit log for
+  the first time: graph queries, page-access changes and admin bypasses,
+  access requests, and the other recorded actions, newest first, filterable
+  by action. Sign-ins, failed sign-ins, sign-outs and revoked sessions are
+  now recorded too, with the client's IP. They belong to no workspace, so a
+  platform admin sees them by switching the view to the whole platform, or at
+  `GET /v1/admin/audit-logs`. `GET /v1/audit-logs` gains `action` and
+  `cursor` filters and returns `nextCursor`; each entry now carries `ip` and
+  `target`, and `workspaceId` can be null. This is the first phase of single
+  sign-on and SCIM. (#75)
+
 ### Changed
 
 - API blocks (the endpoint widget in the editor) and the operations of a
@@ -346,6 +367,17 @@ in the pull request that introduces them — see
   `EMBEDDINGS_PROVIDER=stub` the near-duplicate check is skipped and the run
   says so, because the stub's similarity measures shared words rather than
   shared meaning.
+
+- Migration `20261109100000_enterprise_auth` prepares single sign-on and
+  SCIM (#75). It adds session metadata columns to `sessions` (`auth_method`
+  defaults to `'password'`), `workspace_members.source` (defaults to
+  `'manual'`), `audit_logs.ip` and `audit_logs.target`, four nullable sign-in
+  policy columns on `workspace_settings`, and the tables `identity_providers`,
+  `user_identities`, `sso_domains`, `idp_group_mappings`, `scim_tokens`,
+  `scim_users`, `scim_groups`, `scim_group_members` and `sso_auth_requests`,
+  which stay empty until later phases. `audit_logs.workspace_id` becomes
+  nullable. Every change is additive, nothing is backfilled, and the previous
+  image only reads audit rows filtered by workspace, so rolling back is safe.
 
 ## [0.26.0] — 2026-10-16
 

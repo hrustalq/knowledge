@@ -234,6 +234,9 @@ export function createRouter() {
           { path: 'connectors', component: () => import('@/pages/ConnectorsPage.vue') },
           // Chat bots (issue #71): workspace administration, gated like connectors.
           { path: 'chat', component: () => import('@/pages/ChatSettingsPage.vue') },
+          // Sign-in and the audit trail (#75): workspace administration, so the
+          // page gates on auth.canAdminWorkspace and the API enforces admin.
+          { path: 'security', component: () => import('@/pages/SecuritySettingsPage.vue') },
           // Accounts moved into /settings/access as a tab. Kept as a redirect
           // rather than deleted: it was a nav row and a bookmark for as long as
           // the settings shell has existed. No `platformAdmin` meta — the

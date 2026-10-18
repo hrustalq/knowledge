@@ -21,6 +21,8 @@ import { MailProducer } from '../mail/mail.producer.js';
 import { hashPassword, verifyPassword } from './password.js';
 import type { Principal } from './principal.js';
 import { SessionsService } from './sessions.service.js';
+import { AuditService } from './audit.service.js';
+import type { RequestMeta } from '../common/client-ip.js';
 import { hashToken, mintToken } from './auth-tokens.js';
 import { toMeResponse } from './me-response.js';
 import { asLocale } from '../i18n/locale.js';
@@ -43,6 +45,7 @@ export class AuthFlowService {
     private readonly config: ConfigService,
     private readonly sessions: SessionsService,
     private readonly mail: MailProducer,
+    private readonly audit: AuditService,
   ) {}
 
   /** `debugToken` outside production: a dev or e2e flow must not need an inbox. */
@@ -50,7 +53,7 @@ export class AuthFlowService {
     return this.config.get<string>('NODE_ENV') !== 'production';
   }
 
-  async signup(email: string, displayName: string, password: string): Promise<AuthSessionResponse> {
+  async signup(email: string, displayName: string, password: string, meta?: RequestMeta): Promise<AuthSessionResponse> {
     if (!this.config.get<boolean>('AUTH_SIGNUP_ENABLED')) {
       throw new ForbiddenException(t('error.auth.signupDisabled'));
     }
@@ -82,20 +85,51 @@ export class AuthFlowService {
         });
       }
     }
-    return this.openSession(user);
+    return this.openSession(user, meta, 'signup');
   }
 
-  async login(email: string, password: string): Promise<AuthSessionResponse> {
-    const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+  async login(email: string, password: string, meta?: RequestMeta): Promise<AuthSessionResponse> {
+    const normalized = email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { email: normalized } });
+    const reason = !user
+      ? 'unknown-email'
+      : !user.passwordHash
+        ? 'no-password'
+        : user.disabledAt
+          ? 'disabled'
+          : (await verifyPassword(password, user.passwordHash))
+            ? null
+            : 'wrong-password';
     // Uniform failure: never reveal whether the email, password, or account state is wrong.
-    if (!user?.passwordHash || user.disabledAt || !(await verifyPassword(password, user.passwordHash))) {
+    // The reason goes to the audit trail only, which a platform admin reads.
+    if (reason || !user) {
+      void this.audit.record({
+        workspaceId: null,
+        actor: 'anonymous',
+        action: 'auth.login_failed',
+        params: { method: 'password', email: normalized.slice(0, 320) },
+        ok: false,
+        error: reason ?? undefined,
+        ip: meta?.ip,
+        target: user?.id ?? null,
+      });
       throw new UnauthorizedException(t('error.auth.invalidCredentials'));
     }
-    return this.openSession(user);
+    return this.openSession(user, meta, 'login');
   }
 
-  async logout(principal: Principal): Promise<void> {
-    if (principal.sessionId) await this.sessions.revoke(principal.sessionId);
+  async logout(principal: Principal, meta?: RequestMeta): Promise<void> {
+    if (!principal.sessionId) return;
+    await this.sessions.revoke(principal.sessionId);
+    void this.audit.record({
+      workspaceId: null,
+      actor: principal.userId,
+      action: 'auth.logout',
+      params: { sessionId: principal.sessionId },
+      ok: true,
+      ip: meta?.ip,
+      target: principal.userId,
+    });
   }
 
   async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
@@ -205,9 +239,22 @@ export class AuthFlowService {
     return token;
   }
 
-  /** Session + MeResponse for signup/login responses. */
-  private async openSession(user: User): Promise<AuthSessionResponse> {
-    const { token, session } = await this.sessions.create(user.id);
+  /** Session + MeResponse for signup/login responses. A signup is its first sign-in, and audited as one. */
+  private async openSession(user: User, meta: RequestMeta | undefined, via: 'login' | 'signup'): Promise<AuthSessionResponse> {
+    const { token, session } = await this.sessions.create(user.id, {
+      authMethod: 'password',
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+    });
+    void this.audit.record({
+      workspaceId: null,
+      actor: user.id,
+      action: 'auth.login',
+      params: { method: 'password', via, sessionId: session.id },
+      ok: true,
+      ip: meta?.ip,
+      target: user.id,
+    });
     const memberships = await this.prisma.workspaceMember.findMany({ where: { userId: user.id } });
     const me = toMeResponse(
       {
@@ -219,6 +266,8 @@ export class AuthFlowService {
         isAdmin: user.isAdmin,
         locale: asLocale(user.locale),
         emailVerified: user.emailVerifiedAt !== null,
+        sessionId: session.id,
+        authMethod: 'password',
       },
       memberships,
       this.config.get<boolean>('AUTH_REQUIRE_VERIFIED_EMAIL') === true,

@@ -87,3 +87,15 @@ export class ParseUuidPipe extends ParseUUIDPipe {
     });
   }
 }
+
+/** {@link ParseUuidPipe} for an optional parameter: absent passes as undefined, present must be a UUID. */
+@Injectable()
+export class OptionalUuidPipe extends ParseUUIDPipe {
+  constructor() {
+    super({
+      optional: true,
+      exceptionFactory: () =>
+        new BadRequestException(t('error.invalidUuid', { subject: t('subject.id') })),
+    });
+  }
+}

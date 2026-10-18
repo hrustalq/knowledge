@@ -59,7 +59,7 @@ export class AnswerFeedbackAdminController {
     const base = {
       workspaceId,
       actor: principal.mode === 'dev' ? 'dev' : principal.userId,
-      action: 'feedback.export',
+      action: 'feedback.export' as const,
       params: { from: from ?? null, to: to ?? null, apiKeyId: principal.apiKey?.id ?? null },
     };
     const stream = this.dataset.cases(workspaceId, { from, to });

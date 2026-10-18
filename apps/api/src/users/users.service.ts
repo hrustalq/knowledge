@@ -1,10 +1,18 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { ListUsersResponse, UserSummary, WorkspaceRole } from '@knowledge/contracts';
+import {
+  membershipSourceOf,
+  type ListSessionsResponse,
+  type ListUsersResponse,
+  type RevokeSessionsResponse,
+  type UserSummary,
+  type WorkspaceRole,
+} from '@knowledge/contracts';
 import type { Prisma, User, WorkspaceMember } from '@prisma/client';
 import { hashPassword } from '../auth/password.js';
 import type { Principal } from '../auth/principal.js';
 import { SessionsService } from '../auth/sessions.service.js';
+import { AuditService } from '../auth/audit.service.js';
 import { mintToken } from '../auth/auth-tokens.js';
 import { MailProducer } from '../mail/mail.producer.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -23,6 +31,7 @@ export class UsersService {
     private readonly sessions: SessionsService,
     private readonly mail: MailProducer,
     private readonly config: ConfigService,
+    private readonly audit: AuditService,
   ) {}
 
   async list(): Promise<ListUsersResponse> {
@@ -98,6 +107,32 @@ export class UsersService {
     return this.toSummary(updated);
   }
 
+  async listSessions(userId: string): Promise<ListSessionsResponse> {
+    await this.assertExists(userId);
+    return { sessions: await this.sessions.listForUser(userId) };
+  }
+
+  /** Sign a person out everywhere (#75) without disabling them; their API keys keep working. */
+  async revokeSessions(actor: Principal, userId: string, ip: string | null): Promise<RevokeSessionsResponse> {
+    await this.assertExists(userId);
+    const revoked = await this.sessions.revokeAllForUser(userId);
+    void this.audit.record({
+      workspaceId: null,
+      actor: actor.userId,
+      action: 'auth.session_revoked',
+      params: { by: 'admin', count: revoked },
+      ok: true,
+      ip,
+      target: userId,
+    });
+    return { revoked };
+  }
+
+  private async assertExists(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) throw new NotFoundException(t('error.user.notFound', { id: userId }));
+  }
+
   private toSummary(user: User & { memberships: WorkspaceMember[]; apiKeys: { id: string }[] }): UserSummary {
     return {
       userId: user.id,
@@ -114,6 +149,7 @@ export class UsersService {
         workspaceId: m.workspaceId,
         role: m.role as WorkspaceRole,
         trustedOperator: m.trustedOperator,
+        source: membershipSourceOf(m.source),
       })),
     };
   }

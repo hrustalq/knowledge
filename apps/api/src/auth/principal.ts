@@ -1,4 +1,4 @@
-import type { ApiKeyScope, AvatarUrl, Locale, WorkspaceRole } from '@knowledge/contracts';
+import type { ApiKeyScope, AuthMethod, AvatarUrl, Locale, WorkspaceRole } from '@knowledge/contracts';
 
 /**
  * Resolved caller identity (Phase 5, plan.md §11). Attached to the request by
@@ -38,6 +38,13 @@ export interface Principal {
   emailVerified?: boolean;
   /** Set when authenticated via a ks_ session token — lets logout revoke exactly this session. */
   sessionId?: string;
+  /**
+   * How that session was opened (#75), and through which identity provider.
+   * Set only for a session: enforced SSO reads them to tell a password session
+   * from one its own IdP issued.
+   */
+  authMethod?: AuthMethod;
+  providerId?: string;
   /**
    * Set when authenticated via a `kn_` key (docs/features/33): what that key
    * narrows the person down to. Enforced in AccessService.requireRole, so every

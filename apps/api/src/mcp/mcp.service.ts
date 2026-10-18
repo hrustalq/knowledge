@@ -1345,7 +1345,7 @@ export class McpService {
         const base = {
           workspaceId,
           actor: principal.mode === 'dev' ? 'mcp-operator' : principal.userId,
-          action: 'graph.query',
+          action: 'graph.query' as const,
           // Past every page restriction, as the REST twin records (#76).
           params: { query, limit: limit ?? 200, aclBypass: true },
         };

@@ -20,6 +20,81 @@ export interface WorkspaceMembership {
   role: WorkspaceRole;
   /** Gate for POST /v1/graph/query / knowledge.query_graph (plan.md section 9). */
   trustedOperator: boolean;
+  /** Who manages the row (#75): a person by hand, or an identity provider. */
+  source: MembershipSource;
+}
+
+// ---------------------------------------------------------------------------
+// Enterprise auth (#75): how a session was opened and who manages a membership.
+// ---------------------------------------------------------------------------
+
+/** `sessions.auth_method`. Every session that predates SSO is `password`. */
+export const AUTH_METHODS = ['password', 'oidc', 'saml', 'ldap'] as const;
+export type AuthMethod = (typeof AUTH_METHODS)[number];
+
+/**
+ * `workspace_members.source`. Only `manual` rows are edited by people; the
+ * others belong to JIT, group sync or SCIM, which never touch a `manual` one.
+ */
+export const MEMBERSHIP_SOURCES = ['manual', 'jit', 'group', 'scim'] as const;
+export type MembershipSource = (typeof MEMBERSHIP_SOURCES)[number];
+
+/** A stored value outside the vocabulary reads as its default, never as a new kind. */
+export function authMethodOf(stored: string): AuthMethod {
+  return (AUTH_METHODS as readonly string[]).includes(stored) ? (stored as AuthMethod) : 'password';
+}
+export function membershipSourceOf(stored: string): MembershipSource {
+  return (MEMBERSHIP_SOURCES as readonly string[]).includes(stored) ? (stored as MembershipSource) : 'manual';
+}
+
+/**
+ * `audit_logs.action`. Every value here is written by at least one code path,
+ * and `audit.service.spec.ts` fails if one stops being: a filter must not offer
+ * an action nothing records. Later phases of #75 add their actions with the
+ * code that emits them.
+ */
+export const AUDIT_ACTIONS = [
+  'graph.query',
+  'acl.bypass',
+  'acl.update',
+  'acl.request',
+  'acl.request.approve',
+  'acl.request.deny',
+  'ai-readable.llms-full',
+  'api.try',
+  'feedback.export',
+  'merge-request.lint-override',
+  'auth.login',
+  'auth.login_failed',
+  'auth.logout',
+  'auth.session_revoked',
+] as const;
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/** One login session, as its owner (or a platform admin) sees it. Never the token. */
+export interface SessionView {
+  id: string;
+  authMethod: AuthMethod;
+  /** identity_providers.id for an SSO login. */
+  providerId: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  /** Null until the session is first used after sign-in. */
+  lastSeenAt: string | null;
+  expiresAt: string;
+  /** The session this request came in on. */
+  current: boolean;
+}
+
+// GET /v1/me/sessions, GET /v1/users/:id/sessions
+export interface ListSessionsResponse {
+  sessions: SessionView[];
+}
+
+// POST /v1/users/:id/revoke-sessions
+export interface RevokeSessionsResponse {
+  revoked: number;
 }
 
 // GET /v1/me
@@ -47,6 +122,8 @@ export interface MeResponse {
   isAdmin: boolean;
   /** UI + API language (docs/features/18). 'en' for the dev principal, which has no users row. */
   locale: Locale;
+  /** How the current session was opened (#75); null for an API key or the dev principal. */
+  authMethod: AuthMethod | null;
   /** The address is proven (docs/features/41). Always true for the dev principal. */
   emailVerified: boolean;
   /**
@@ -69,10 +146,16 @@ export interface GraphQueryResponse {
 
 export interface AuditLogEntry {
   id: string;
-  workspaceId: string;
-  /** users.id, or a synthetic actor ("dev", "mcp-operator") outside api-key mode. */
+  /** Null for a platform event — a sign-in belongs to no workspace (#75). */
+  workspaceId: string | null;
+  /** users.id, or a synthetic actor ("dev", "mcp-operator", "anonymous"). */
   actor: string;
+  /** An {@link AuditAction}; typed as string because old rows may hold a retired one. */
   action: string;
+  /** Client address of the request behind it, when there was one. */
+  ip: string | null;
+  /** Who or what it was done to — a user id, a provider id. */
+  target: string | null;
   params: Record<string, unknown>;
   rowCount: number | null;
   durationMs: number | null;
@@ -81,10 +164,18 @@ export interface AuditLogEntry {
   createdAt: string;
 }
 
-// GET /v1/audit-logs?workspaceId=
+// GET /v1/audit-logs?workspaceId=&action=&cursor=
 export interface ListAuditLogsResponse {
   workspaceId: string;
   entries: AuditLogEntry[];
+  /** Pass as `cursor` for the next (older) page; null on the last one. */
+  nextCursor: string | null;
+}
+
+// GET /v1/admin/audit-logs?action=&cursor= (platform admin; includes platform events)
+export interface ListPlatformAuditLogsResponse {
+  entries: AuditLogEntry[];
+  nextCursor: string | null;
 }
 
 /** A fact as asserted at a point in the revision DAG (Phase 5 historical queries). */

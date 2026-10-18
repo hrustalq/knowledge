@@ -33,7 +33,8 @@
     "apiKeyWorkspaceNotMember": "You can only pin a key to a workspace you belong to ({workspaceId}).",
     "apiKeyProjectsNeedCapture": "Only a key with capture scope can be pinned to projects.",
     "apiKeyProjectNotAllowed": "You can only pin a key to a project you can reach, inside the key's workspace ({projectId}).",
-    "apiKeyLimit": "You already have {max} active API keys — revoke one before creating another."
+    "apiKeyLimit": "You already have {max} active API keys — revoke one before creating another.",
+    "sessionNotFound": "Session not found"
   },
   "workspace": {
     "notFound": "Workspace {id} not found",

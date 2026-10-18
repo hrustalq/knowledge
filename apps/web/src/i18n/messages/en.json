@@ -160,7 +160,8 @@
     "chatBots": "Chat bots",
     "captures": "Captures",
     "newApiSpec": "API spec",
-    "apiReference": "API reference"
+    "apiReference": "API reference",
+    "security": "Security"
   },
   "role": {
     "guest": "Guest",
@@ -272,7 +273,8 @@
     "publishingHint": "Public links to pages",
     "exportsHint": "Files you exported",
     "chatBotsHint": "Answer questions in Telegram, citing your pages.",
-    "apiReferenceHint": "Try-it proxy for spec pages"
+    "apiReferenceHint": "Try-it proxy for spec pages",
+    "securityHint": "Sign-in and the audit trail"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -3571,6 +3573,26 @@
       "status": "Keys, client configs and the agent skill live together under Connect AI.",
       "devMode": "Not applicable while the API runs with AUTH_MODE=none.",
       "manage": "Manage keys"
+    },
+    "sessions": {
+      "title": "Where you are signed in",
+      "hint": "Every browser or device with a live session. Sign one out and it has to log in again on its next request.",
+      "current": "This browser",
+      "revoke": "Sign out",
+      "revoked": "Session signed out",
+      "failed": "Could not sign that session out",
+      "none": "No other sessions.",
+      "lastSeen": "Last active {when}",
+      "neverSeen": "Not used since sign-in",
+      "signedIn": "Signed in {when}",
+      "unknownDevice": "Unknown device",
+      "onDevice": "{browser} on {os}",
+      "method": {
+        "password": "Password",
+        "oidc": "Single sign-on (OIDC)",
+        "saml": "Single sign-on (SAML)",
+        "ldap": "Directory (LDAP)"
+      }
     }
   },
   "mention": {
@@ -5272,6 +5294,52 @@
     "project": {
       "average": "Average {average}.",
       "open": "Open quality"
+    }
+  },
+  "security": {
+    "title": "Security",
+    "subtitle": "Who signed in, and what was done with elevated rights.",
+    "adminOnly": "Only workspace admins can see the security settings.",
+    "audit": {
+      "title": "Audit log",
+      "hint": "Graph queries, access-control changes and bypasses, and sign-ins. Newest first.",
+      "scope": {
+        "label": "Show",
+        "workspace": "This workspace",
+        "platform": "Whole platform"
+      },
+      "platformHint": "Includes sign-ins and other events that belong to no workspace.",
+      "filter": {
+        "label": "Action",
+        "all": "All actions"
+      },
+      "columns": {
+        "when": "When",
+        "action": "Action",
+        "actor": "By",
+        "target": "Subject",
+        "ip": "IP address",
+        "result": "Result"
+      },
+      "anonymous": "Anonymous",
+      "empty": "Nothing recorded yet.",
+      "emptyFiltered": "Nothing recorded for this action.",
+      "actions": {
+        "graph_query": "Graph query",
+        "acl_bypass": "Admin read past a restriction",
+        "acl_update": "Page access changed",
+        "acl_request": "Access requested",
+        "acl_request_approve": "Access request approved",
+        "acl_request_deny": "Access request denied",
+        "ai-readable_llms-full": "Full-text export for AI read",
+        "api_try": "API console request",
+        "feedback_export": "Answer feedback exported",
+        "merge-request_lint-override": "Style lint overridden on merge",
+        "auth_login": "Signed in",
+        "auth_login_failed": "Sign-in failed",
+        "auth_logout": "Signed out",
+        "auth_session_revoked": "Session revoked"
+      }
     }
   }
 }

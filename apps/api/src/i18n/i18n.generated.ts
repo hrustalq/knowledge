@@ -521,6 +521,7 @@ export type I18nTranslations = {
             "apiKeyProjectsNeedCapture": string;
             "apiKeyProjectNotAllowed": string;
             "apiKeyLimit": string;
+            "sessionNotFound": string;
         };
         "workspace": {
             "notFound": string;

@@ -7,6 +7,7 @@ import { AnswerFeedbackService, signalKindFor } from '../src/feedback/answer-fee
 import { AnswerVoteDto } from '../src/feedback/answer-feedback.dto.js';
 import { AccessService } from '../src/auth/access.service.js';
 import type { Principal } from '../src/auth/principal.js';
+import { noAuthPolicy } from './auth-policy-fakes.js';
 
 /**
  * Votes and implicit signals (docs/features/38, issue #67 phase 2): one vote
@@ -287,7 +288,7 @@ describe('AccessService.workspaceOfAssistantMessage', () => {
         ),
       },
     };
-    const access = new AccessService(prisma as never);
+    const access = new AccessService(prisma as never, noAuthPolicy);
     expect(await access.workspaceOfAssistantMessage(REPLY)).toBe(WS);
     await expect(access.workspaceOfAssistantMessage(QUESTION)).rejects.toBeInstanceOf(NotFoundException);
   });

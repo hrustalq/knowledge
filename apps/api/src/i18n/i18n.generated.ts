@@ -524,6 +524,10 @@ export type I18nTranslations = {
             "sessionNotFound": string;
             "passwordLoginDisabled": string;
             "rateLimited": string;
+            "ssoRequired": string;
+            "ssoRequiredForDomain": string;
+            "apiKeysBlocked": string;
+            "sessionTooOld": string;
         };
         "workspace": {
             "notFound": string;
@@ -1137,6 +1141,14 @@ export type I18nTranslations = {
             "groupMappingNotFound": string;
             "groupNameRequired": string;
             "groupMappingProvider": string;
+            "domainNotFound": string;
+            "domainTaken": string;
+            "domainNotVerified": string;
+            "domainProvider": string;
+            "domainNoProvider": string;
+            "manualVerifyAdminOnly": string;
+            "policyNoProvider": string;
+            "policyLocksYouOut": string;
         };
     };
     "import": {

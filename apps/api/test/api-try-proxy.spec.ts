@@ -32,6 +32,7 @@ import { ACCESS_META, type AccessSpec } from '../src/auth/access.decorator.js';
 import { AccessService } from '../src/auth/access.service.js';
 import type { Principal } from '../src/auth/principal.js';
 import { guardedLookup } from '../src/common/safe-fetch.js';
+import { noAuthPolicy } from './auth-policy-fakes.js';
 
 /** The try-it proxy (#78, phase 4): every guard, at the point of action. */
 
@@ -291,7 +292,7 @@ describe('the route', () => {
     const spec = Reflect.getMetadata(ACCESS_META, ApiSpecsController.prototype.try) as AccessSpec;
     expect(spec).toMatchObject({ role: 'editor', source: 'document' });
     const prisma = { workspaceMember: { findUnique: vi.fn(async () => ({ role: 'editor', trustedOperator: false })) } };
-    const access = new AccessService(prisma as never);
+    const access = new AccessService(prisma as never, noAuthPolicy);
     const readKey: Principal = { ...USER, mode: 'api-key', apiKey: { id: 'k', scope: 'read', workspaceId: null } };
     await expect(access.requireRole(readKey, WS, spec.role)).rejects.toThrow(/apiKeyReadOnly/);
     await expect(access.requireRole({ ...readKey, apiKey: { id: 'k', scope: 'write', workspaceId: null } }, WS, spec.role)).resolves.toBeUndefined();

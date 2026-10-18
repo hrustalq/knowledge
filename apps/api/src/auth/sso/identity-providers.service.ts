@@ -23,6 +23,8 @@ import type { Principal } from '../principal.js';
 import type { CreateIdentityProviderDto, UpdateIdentityProviderDto } from './identity-providers.dto.js';
 import { OIDC_PRESETS, presetOf } from './oidc-presets.js';
 import { oidcConfigOf, OidcService } from './oidc.service.js';
+import { LIVE_IDP_KINDS } from './live-kinds.js';
+import { AuthPolicyService } from '../auth-policy.service.js';
 
 const ISSUER_KEYS = {
   invalid: 'error.sso.issuerInvalid',
@@ -59,6 +61,7 @@ export class IdentityProvidersService {
     config: ConfigService<Env, true>,
     private readonly oidc: OidcService,
     private readonly audit: AuditService,
+    private readonly policy: AuthPolicyService,
   ) {
     this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
     this.allowPrivate = config.get('AUTH_SSO_ALLOW_PRIVATE_URLS', { infer: true });
@@ -73,12 +76,14 @@ export class IdentityProvidersService {
   }
 
   async create(workspaceId: string, dto: CreateIdentityProviderDto, principal: Principal): Promise<IdentityProviderView> {
-    if (!LIVE_KINDS.includes(dto.kind)) throw new BadRequestException(t('error.sso.kindNotSupported', { kind: dto.kind }));
+    if (!LIVE_IDP_KINDS.includes(dto.kind)) throw new BadRequestException(t('error.sso.kindNotSupported', { kind: dto.kind }));
     const fields = await this.fields(dto, principal, null);
     const row = await this.prisma.identityProvider.create({
       data: { workspaceId, kind: dto.kind, name: dto.name.trim(), ...fields },
     });
     void this.audit.record({ ...this.entry(principal, row, changedFields(dto)), action: 'sso.provider_created' });
+    // Which providers satisfy enforced SSO may have changed — here and, for a platform-wide one, everywhere.
+    this.policy.invalidate();
     return this.view(row);
   }
 
@@ -96,6 +101,7 @@ export class IdentityProvidersService {
     });
     this.oidc.forget(row.id);
     void this.audit.record({ ...this.entry(principal, row, changedFields(dto)), action: 'sso.provider_updated' });
+    this.policy.invalidate();
     return this.view(row);
   }
 
@@ -109,6 +115,7 @@ export class IdentityProvidersService {
     });
     this.oidc.forget(existing.id);
     void this.audit.record({ ...this.entry(principal, existing, [], { sessionsRevoked: count }), action: 'sso.provider_deleted' });
+    this.policy.invalidate();
   }
 
   async test(workspaceId: string, providerId: string): Promise<TestIdentityProviderResponse> {
@@ -220,8 +227,6 @@ export class IdentityProvidersService {
   }
 }
 
-/** Kinds a provider may be created as today. SAML and LDAP join with their phases. */
-const LIVE_KINDS: IdpKind[] = ['oidc'];
 
 /** Which fields a body set, by name — the secret only as "the secret changed", never its value. */
 function changedFields(dto: UpdateIdentityProviderDto): string[] {

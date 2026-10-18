@@ -10,16 +10,22 @@ import { SsoLoginService } from './sso-login.service.js';
 import { GroupMappingsController } from './group-mappings.controller.js';
 import { GroupMappingsService } from './group-mappings.service.js';
 import { RoleSyncService } from './role-sync.service.js';
+import { AuthPolicyController, SsoDomainsController } from './enforcement.controller.js';
+import { SsoDomainsService } from './sso-domains.service.js';
+import { DNS_TXT_LOOKUP, systemTxtLookup } from './sso-dns.js';
+import { SsoMaintenanceSweeper } from './sso-maintenance.sweeper.js';
 
 /**
  * Enterprise SSO (#75). API-only — it carries controllers, and the API
  * authenticates while the worker never does — so `AppModule` alone imports
- * it. Sessions, the audit trail, the shared session response and the rate
+ * it. The policy itself (`AuthPolicyService`) is in `AuthCoreModule`, because
+ * `requireRole` reads it in every process; its routes and the domains are
+ * here. Sessions, the audit trail, the shared session response and the rate
  * limiter come from the global `AuthModule`.
  */
 @Module({
   imports: [PrismaModule],
-  controllers: [SsoController, IdentityProvidersController, GroupMappingsController],
+  controllers: [SsoController, IdentityProvidersController, GroupMappingsController, AuthPolicyController, SsoDomainsController],
   providers: [
     OidcService,
     SsoLoginService,
@@ -27,6 +33,9 @@ import { RoleSyncService } from './role-sync.service.js';
     IdentityProvidersService,
     RoleSyncService,
     GroupMappingsService,
+    SsoDomainsService,
+    SsoMaintenanceSweeper,
+    { provide: DNS_TXT_LOOKUP, useFactory: systemTxtLookup },
     SsoEnabledGuard,
   ],
 })

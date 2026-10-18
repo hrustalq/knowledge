@@ -77,6 +77,13 @@ export const AUDIT_ACTIONS = [
   'sso.group_mapping_deleted',
   'role_sync.applied',
   'role_sync.blocked_last_admin',
+  'sso.domain_claimed',
+  'sso.domain_verified',
+  'sso.domain_enforced',
+  'sso.domain_updated',
+  'sso.domain_removed',
+  'sso.policy_updated',
+  'auth.sso_bypassed',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -125,6 +132,87 @@ export interface ListGroupMappingsResponse {
   mappings: GroupMappingView[];
   /** Providers a mapping may name: the workspace's own and every platform-wide one. */
   providers: { id: string; name: string; groupSyncMode: GroupSyncMode; groupsClaim: string | null }[];
+}
+
+// ---------------------------------------------------------------------------
+// Enforced SSO (#75 phase 4): a workspace policy, and email domains a
+// workspace has proven it owns.
+// ---------------------------------------------------------------------------
+
+/**
+ * The `workspace_settings` auth columns as an admin set them. `null` inherits:
+ * an empty row is no enforcement, keys allowed, no admin password exception,
+ * and the instance session lifetime.
+ */
+export interface WorkspaceAuthPolicySettings {
+  /** Sessions must come from one of this workspace's (or a platform-wide) providers. */
+  ssoEnforced: boolean | null;
+  /** Under enforced SSO, `kn_` keys still open the workspace. Null is yes. */
+  allowApiKeys: boolean | null;
+  /** Platform admins may still use a password on this workspace's enforced domains. Null is no. */
+  allowPasswordForAdmins: boolean | null;
+  /** A session older than this must sign in again to reach the workspace. Null is no cap. */
+  sessionMaxAgeHours: number | null;
+}
+
+/** What the API enforces after the instance ceilings. */
+export interface WorkspaceAuthPolicyApplied {
+  ssoEnforced: boolean;
+  allowApiKeys: boolean;
+  allowPasswordForAdmins: boolean;
+  /** Null when no cap applies — none asked, or one no shorter than AUTH_SESSION_TTL_HOURS. */
+  sessionMaxAgeHours: number | null;
+}
+
+// GET/PUT /v1/workspaces/:id/auth-policy
+export interface WorkspaceAuthPolicyView {
+  workspaceId: string;
+  asked: WorkspaceAuthPolicySettings;
+  applied: WorkspaceAuthPolicyApplied;
+  /** The instance values that clamp `asked`: AUTH_SSO_ENABLED (with AUTH_MODE=api-key) and AUTH_SESSION_TTL_HOURS. */
+  ceilings: { ssoEnabled: boolean; sessionTtlHours: number };
+  /** Enabled providers whose sessions satisfy enforcement. */
+  providers: { id: string; name: string }[];
+  updatedAt: string | null;
+}
+
+/** `PUT /v1/workspaces/:id/auth-policy` refuses to save a policy its own caller would fail. */
+export type AuthPolicyFailure = 'password-session' | 'foreign-provider' | 'api-key' | 'session-too-old';
+
+/** An email domain a workspace claims. Only a verified one may be enforced. */
+export interface SsoDomainView {
+  /** Lower-case punycode. */
+  domain: string;
+  workspaceId: string;
+  /** The provider people on this domain are sent to; null = any of the workspace's. */
+  providerId: string | null;
+  providerName: string | null;
+  /** The DNS name to publish the TXT record at: `_knowledge-challenge.<domain>`. */
+  recordName: string;
+  /** The TXT record's value. */
+  verificationToken: string;
+  verifiedAt: string | null;
+  /** Password sign-in, signup and reset are refused for addresses on this domain. */
+  enforced: boolean;
+  createdAt: string;
+  /** Until when the API keeps rechecking DNS by itself; null once verified. */
+  recheckUntil: string | null;
+}
+
+// GET /v1/workspaces/:id/sso-domains
+export interface ListSsoDomainsResponse {
+  domains: SsoDomainView[];
+  /** Providers a domain may send people to: the workspace's own and every platform-wide one. */
+  providers: { id: string; name: string }[];
+  /** The caller is a platform admin and may mark a domain verified without DNS. */
+  canVerifyManually: boolean;
+}
+
+// POST /v1/workspaces/:id/sso-domains/:domain/verify
+export interface VerifySsoDomainResponse {
+  domain: SsoDomainView;
+  /** Why DNS did not prove it, when it did not: `no-record`, `mismatch`, `lookup-failed`. */
+  error: 'no-record' | 'mismatch' | 'lookup-failed' | null;
 }
 
 /** The non-secret half of an OIDC provider (`identity_providers.config`). */
@@ -196,6 +284,11 @@ export interface SsoProvidersResponse {
 export interface SsoDiscoverResponse {
   /** `sso` when a provider asserts this address's domain. Never says whether an account exists. */
   method: 'password' | 'sso';
+  /**
+   * The domain is verified and enforced (#75 phase 4): a password is refused
+   * for it, break-glass aside. Says nothing about whether an account exists.
+   */
+  enforced: boolean;
   providers: SsoLoginProvider[];
   /** A password may still be used for this address (the ceiling, or a break-glass entry). */
   passwordAllowed: boolean;

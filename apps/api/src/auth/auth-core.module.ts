@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { AccessService } from './access.service.js';
 import { AuditService } from './audit.service.js';
+import { AuthPolicyService } from './auth-policy.service.js';
 
 /**
  * Controller-free, guard-free half of the auth layer (docs/features/20).
@@ -20,7 +21,9 @@ import { AuditService } from './audit.service.js';
   imports: [PrismaModule],
   // AuditService rides along (Prisma only): PermissionService audits an
   // admin's bypass reads from whichever process asked (#76).
-  providers: [AccessService, AuditService],
-  exports: [AccessService, AuditService],
+  // AuthPolicyService (#75): requireRole enforces a workspace's sign-in policy
+  // in every process, so a background tool call meets the same rule.
+  providers: [AccessService, AuditService, AuthPolicyService],
+  exports: [AccessService, AuditService, AuthPolicyService],
 })
 export class AuthCoreModule {}

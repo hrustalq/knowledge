@@ -1342,6 +1342,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/workspaces/{id}/auth-policy",
+      "tag": "auth",
+      "summary": "The workspace's sign-in policy: what was asked, what applies, and the instance ceilings",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/workspaces/{id}/auth-policy",
+      "tag": "auth",
+      "summary": "Replace the sign-in policy. 409 policyLocksYouOut when the caller would fail it; 400 without a provider to enforce",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/workspaces/{id}/group-mappings",
       "tag": "auth",
       "summary": "The workspace's group → role mappings, and the providers a mapping may name",
@@ -1415,6 +1435,56 @@
       "path": "/v1/workspaces/{id}/identity-providers/{providerId}/test",
       "tag": "auth",
       "summary": "Fetch the provider's discovery document and report what it names",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/sso-domains",
+      "tag": "auth",
+      "summary": "The workspace's claimed domains, with the DNS record each one is proven by",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workspaces/{id}/sso-domains",
+      "tag": "auth",
+      "summary": "Claim a domain. 409 domainTaken when another workspace holds it",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/workspaces/{id}/sso-domains/{domain}",
+      "tag": "auth",
+      "summary": "Give up a domain. Its addresses may use passwords again at once",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/workspaces/{id}/sso-domains/{domain}",
+      "tag": "auth",
+      "summary": "Enforce SSO on a verified domain, or change where its people sign in",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workspaces/{id}/sso-domains/{domain}/verify",
+      "tag": "auth",
+      "summary": "Check the TXT record now. A platform admin may pass manual: true to verify without DNS",
       "role": "admin",
       "source": "workspace",
       "public": false,

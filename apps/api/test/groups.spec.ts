@@ -7,6 +7,7 @@ import { AclGuard } from '../src/auth/acl.guard.js';
 import { ROLE_ORDER, type Principal } from '../src/auth/principal.js';
 import { GroupsService } from '../src/permissions/groups.service.js';
 import { WorkspacesService } from '../src/workspaces/workspaces.service.js';
+import { noAuthPolicy } from './auth-policy-fakes.js';
 
 /**
  * Page permissions, phase 1 (issue #76): groups and the guest role.
@@ -52,7 +53,7 @@ function accessAs(role: string, workspaceId = WS) {
       ),
     },
     userGroup: { findUnique: vi.fn(async () => ({ workspaceId: WS_B })) },
-  } as never);
+  } as never, noAuthPolicy);
 }
 
 describe('the guest role', () => {

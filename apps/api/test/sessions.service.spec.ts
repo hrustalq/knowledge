@@ -114,12 +114,13 @@ describe('TokenAuthService session resolution', () => {
       emailVerifiedAt: new Date(), disabledAt: null, avatarKey: null, avatarUpdatedAt: null,
     };
     const sessions = {
-      resolve: vi.fn(async () => ({ id: 's1', authMethod: 'oidc', providerId: 'p1', user })),
+      resolve: vi.fn(async () => ({ id: 's1', authMethod: 'oidc', providerId: 'p1', createdAt: new Date('2026-10-18T09:00:00Z'), user })),
       touch: vi.fn(),
     };
     const auth = new TokenAuthService(config as never, {} as never, sessions as never, {} as never);
     const principal = await auth.resolve('ks_x');
-    expect(principal).toMatchObject({ mode: 'session', sessionId: 's1', authMethod: 'oidc', providerId: 'p1' });
+    // sessionCreatedAt is what a workspace's session age cap reads (#75 phase 4).
+    expect(principal).toMatchObject({ mode: 'session', sessionId: 's1', authMethod: 'oidc', providerId: 'p1', sessionCreatedAt: '2026-10-18T09:00:00.000Z' });
     expect(sessions.touch).toHaveBeenCalledWith('s1');
 
     // /me reports it for a session, and null for anything that is not one.
@@ -132,7 +133,7 @@ describe('TokenAuthService session resolution', () => {
       id: 'u1', email: 'a@example.com', displayName: 'A', isAdmin: false, locale: 'en',
       emailVerifiedAt: null, disabledAt: null, avatarKey: null, avatarUpdatedAt: null,
     };
-    const sessions = { resolve: vi.fn(async () => ({ id: 's1', authMethod: 'password', providerId: null, user })), touch: vi.fn() };
+    const sessions = { resolve: vi.fn(async () => ({ id: 's1', authMethod: 'password', providerId: null, createdAt: new Date(), user })), touch: vi.fn() };
     const auth = new TokenAuthService(config as never, {} as never, sessions as never, {} as never);
     const principal = await auth.resolve('ks_x');
     expect(principal.authMethod).toBe('password');

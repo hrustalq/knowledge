@@ -13,8 +13,10 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AuditLogTable from '@/components/security/AuditLogTable.vue'
+import AuthPolicyPanel from '@/components/security/AuthPolicyPanel.vue'
 import GroupMappingsPanel from '@/components/security/GroupMappingsPanel.vue'
 import IdentityProvidersPanel from '@/components/security/IdentityProvidersPanel.vue'
+import SsoDomainsPanel from '@/components/security/SsoDomainsPanel.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -25,7 +27,9 @@ const canManage = computed(() => auth.canAdminWorkspace)
 // `label` is a message key — resolved with t() where the tab renders.
 const TABS = [
   { key: 'providers', label: 'security.tabs.providers' },
+  { key: 'domains', label: 'security.tabs.domains' },
   { key: 'groups', label: 'security.tabs.groups' },
+  { key: 'policy', label: 'security.tabs.policy' },
   { key: 'audit', label: 'security.tabs.audit' },
 ] as const
 type TabKey = (typeof TABS)[number]['key']
@@ -66,7 +70,9 @@ function setTab(key: TabKey) {
         </button>
       </div>
       <IdentityProvidersPanel v-if="tab === 'providers'" />
+      <SsoDomainsPanel v-else-if="tab === 'domains'" />
       <GroupMappingsPanel v-else-if="tab === 'groups'" />
+      <AuthPolicyPanel v-else-if="tab === 'policy'" />
       <AuditLogTable v-else />
     </template>
   </div>

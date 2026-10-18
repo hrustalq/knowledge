@@ -86,6 +86,7 @@ export class TokenAuthService {
       emailVerified: session.user.emailVerifiedAt !== null,
       sessionId: session.id,
       authMethod: authMethodOf(session.authMethod),
+      sessionCreatedAt: session.createdAt.toISOString(),
       ...(session.providerId ? { providerId: session.providerId } : {}),
     };
   }

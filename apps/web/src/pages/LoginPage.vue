@@ -7,6 +7,10 @@
  *
  * The SSO probe runs in the browser only: until it answers, the page renders
  * the plain form, so SSR and the first client render agree.
+ *
+ * `?reauth=sso|session&workspaceId=` is how a workspace that enforces SSO
+ * sends a password session here (#75 phase 4): the notice says why, and the
+ * buttons are that workspace's providers rather than the remembered one's.
  */
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -16,7 +20,7 @@ import { KeyRound } from 'lucide-vue-next'
 import type { SsoLoginProvider, SsoProvidersResponse } from '@knowledge/contracts'
 import { useAuthStore } from '@/stores/auth'
 import { getWorkspaceId } from '@/lib/api'
-import { ownPath, ssoErrorOf, ssoStartUrl } from '@/lib/sso'
+import { ownPath, reauthKindOf, ssoErrorOf, ssoStartUrl } from '@/lib/sso'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -32,6 +36,11 @@ const busy = ref(false)
 
 const redirect = computed(() => ownPath(route.query.redirect))
 const callbackError = computed(() => ssoErrorOf(route.query.error))
+const reauth = computed(() => reauthKindOf(route.query.reauth))
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const providersFor = computed(() =>
+  typeof route.query.workspaceId === 'string' && UUID.test(route.query.workspaceId) ? route.query.workspaceId : getWorkspaceId(),
+)
 
 /** null until probed, and stays null when SSO is off. */
 const sso = ref<SsoProvidersResponse | null>(null)
@@ -39,10 +48,12 @@ const sso = ref<SsoProvidersResponse | null>(null)
 const step = ref<'email' | 'password' | 'sso'>('email')
 const matched = ref<SsoLoginProvider[]>([])
 const passwordAllowed = ref(true)
+/** The address's domain is verified and enforced: the password is gone for a reason the person can act on. */
+const domainEnforced = ref(false)
 
 onMounted(async () => {
   try {
-    sso.value = await auth.ssoProviders(getWorkspaceId())
+    sso.value = await auth.ssoProviders(providersFor.value)
   } catch {
     sso.value = null // a failed probe leaves the password form, which still works
   }
@@ -58,6 +69,7 @@ async function submit() {
       const found = await auth.discover(email.value)
       matched.value = found.providers
       passwordAllowed.value = found.passwordAllowed
+      domainEnforced.value = found.enforced
       step.value = found.method === 'sso' ? 'sso' : 'password'
       return
     }
@@ -98,6 +110,9 @@ const startUrl = (p: SsoLoginProvider) => ssoStartUrl(p.id, redirect.value)
         >
           {{ t(`auth.sso.errors.${callbackError}`) }}
         </p>
+        <p v-else-if="reauth" role="status" class="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+          {{ t(`auth.sso.reauth.${reauth}`) }}
+        </p>
 
         <!-- The address belongs to an identity provider. -->
         <div v-if="emailFirst && step === 'sso'" class="space-y-3">
@@ -135,7 +150,7 @@ const startUrl = (p: SsoLoginProvider) => ssoStartUrl(p.id, redirect.value)
             />
           </div>
           <template v-if="showPassword">
-            <p v-if="emailFirst && !passwordAllowed" class="text-sm text-muted-foreground">{{ t('auth.sso.passwordDisabled') }}</p>
+            <p v-if="emailFirst && !passwordAllowed" class="text-sm text-muted-foreground">{{ t(domainEnforced ? 'auth.sso.domainEnforced' : 'auth.sso.passwordDisabled') }}</p>
             <div v-else class="space-y-1">
               <label class="text-sm font-medium" for="password">{{ t('auth.password') }}</label>
               <Input id="password" v-model="password" type="password" required autocomplete="current-password" />

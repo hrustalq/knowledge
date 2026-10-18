@@ -7,6 +7,7 @@ import { AUDIT_ACTIONS } from '@knowledge/contracts';
 import { AuditService } from '../src/auth/audit.service.js';
 import { AuthFlowService } from '../src/auth/auth-flow.service.js';
 import { hashPassword } from '../src/auth/password.js';
+import { noAuthPolicy } from './auth-policy-fakes.js';
 
 /**
  * The audit trail (#75 phase 1). What is pinned:
@@ -86,7 +87,7 @@ describe('sign-in audit', () => {
       user: { findUnique: vi.fn(async () => user) },
       workspaceMember: { findMany: vi.fn(async () => []) },
     };
-    const flow = new AuthFlowService(prisma as never, config as never, sessions as never, {} as never, audit as never);
+    const flow = new AuthFlowService(prisma as never, config as never, sessions as never, {} as never, audit as never, noAuthPolicy);
     return { flow, audit, sessions };
   }
 

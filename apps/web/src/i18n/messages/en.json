@@ -242,6 +242,11 @@
         "jit-disabled": "There is no account for you yet, and this provider does not create one. Ask an administrator to invite you.",
         "account-disabled": "This account is disabled.",
         "failed": "Single sign-on is not available for this provider."
+      },
+      "domainEnforced": "Your organization requires single sign-on for this address, so a password cannot be used.",
+      "reauth": {
+        "sso": "This workspace requires single sign-on. Sign in through your organization to continue.",
+        "session": "This workspace asks you to sign in again after a while. Sign in to continue."
       }
     }
   },
@@ -5379,13 +5384,22 @@
         "sso_group_mapping_created": "Group mapping set",
         "sso_group_mapping_deleted": "Group mapping removed",
         "role_sync_applied": "Role synced from identity provider",
-        "role_sync_blocked_last_admin": "Role sync skipped (last admin)"
+        "role_sync_blocked_last_admin": "Role sync skipped (last admin)",
+        "sso_domain_claimed": "Domain claimed",
+        "sso_domain_verified": "Domain verified",
+        "sso_domain_enforced": "Single sign-on enforcement changed for a domain",
+        "sso_domain_updated": "Domain changed",
+        "sso_domain_removed": "Domain removed",
+        "sso_policy_updated": "Sign-in policy changed",
+        "auth_sso_bypassed": "Platform admin passed enforced sign-on"
       }
     },
     "tabs": {
       "providers": "Providers",
       "groups": "Group mapping",
-      "audit": "Audit log"
+      "audit": "Audit log",
+      "domains": "Domains",
+      "policy": "Policy"
     },
     "providers": {
       "title": "Identity providers",
@@ -5481,6 +5495,73 @@
       "modeBadge": {
         "additive": "Additive",
         "authoritative": "Authoritative"
+      }
+    },
+    "domains": {
+      "title": "Domains",
+      "hint": "Prove that your organization owns an email domain, then require single sign-on for every address on it: password sign-in, signup and password reset stop working for those addresses.",
+      "domain": "Domain",
+      "provider": "Sign in through",
+      "anyProvider": "Any of this workspace’s providers",
+      "claim": "Claim domain",
+      "claimed": "Claimed {domain}. Publish the DNS record to verify it.",
+      "empty": "No domains claimed yet.",
+      "status": {
+        "pending": "Pending verification",
+        "verified": "Verified",
+        "enforced": "SSO enforced"
+      },
+      "publish": "Add this TXT record at your DNS provider, then press Verify. It is also checked every 15 minutes for a week.",
+      "recordName": "Name",
+      "recordValue": "Value",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "verify": "Verify now",
+      "verified": "{domain} is verified",
+      "markVerified": "Mark verified (platform admin)",
+      "rechecking": "Checked automatically until {until}",
+      "verifyErrors": {
+        "no-record": "No TXT record found at {record} yet. DNS changes can take a while to appear.",
+        "mismatch": "A TXT record exists at {record}, but its value is not the one shown here.",
+        "lookup-failed": "DNS could not be reached just now. Try again in a minute."
+      },
+      "enforce": "Require single sign-on",
+      "enforceConfirm": "Require single sign-on for every address on {domain}? Password sign-in stops working for them at once, except for break-glass addresses.",
+      "enforcedOn": "Single sign-on is now required on {domain}",
+      "enforcedOff": "Passwords work again on {domain}",
+      "enforcedHint": "People on this domain sign in only through single sign-on. Break-glass addresses set by the operator still work.",
+      "notEnforcedHint": "Verified, but passwords still work. Turn this on once people have signed in with SSO at least once.",
+      "remove": "Remove",
+      "removed": "Domain removed",
+      "removeConfirm": "Remove {domain}? Passwords work again for its addresses at once.",
+      "domainPlaceholder": "corp.example"
+    },
+    "policy": {
+      "title": "Sign-in policy",
+      "hint": "Rules for reaching this workspace, checked on every request — the web app, API keys, MCP clients and live updates alike.",
+      "ssoOff": "Single sign-on is not enabled on this instance (AUTH_SSO_ENABLED), so the SSO settings below cannot apply. The session age limit still does.",
+      "ssoEnforced": "Require single sign-on for this workspace",
+      "ssoEnforcedHint": "Only sessions opened through {providers} reach this workspace. Everyone else is asked to sign in again through SSO.",
+      "noProviders": "Enable an identity provider for this workspace first.",
+      "notApplied": "Saved, but not applied: single sign-on is off on this instance.",
+      "allowApiKeys": "Still accept API keys",
+      "allowApiKeysHint": "Keys keep working for scripts and MCP clients. Turn this off to accept only SSO sessions.",
+      "allowPasswordForAdmins": "Let platform admins use a password on enforced domains",
+      "allowPasswordForAdminsHint": "A way in for the people who fix SSO when it breaks. Platform admins can always reach the workspace; this decides whether they may sign in with a password.",
+      "sessionMaxAge": "Sign in again after (hours)",
+      "sessionMaxAgeNone": "No limit",
+      "sessionMaxAgeHint": "Sessions older than this must sign in again to reach this workspace. Sessions on this instance last {ttl} hours at most.",
+      "sessionMaxAgeClamped": "This is no shorter than the instance’s {ttl}-hour session lifetime, so it has no effect.",
+      "breakGlass": "Platform admins pass these rules, and every time they do it is recorded in the audit log. Addresses in AUTH_BREAK_GLASS_EMAILS can always use a password.",
+      "enforceConfirm": "Require single sign-on? Everyone signed in with a password is asked to sign in again through SSO.",
+      "save": "Save policy",
+      "saved": "Sign-in policy saved",
+      "lockout": {
+        "password-session": "You are signed in with a password, so this would lock you out. Sign in through the workspace’s identity provider first, then save.",
+        "foreign-provider": "You signed in through a provider this workspace does not use, so this would lock you out.",
+        "api-key": "You are using an API key, which this policy would block.",
+        "session-too-old": "Your session is older than the limit you set, so this would sign you out of the workspace. Sign in again first."
       }
     }
   }

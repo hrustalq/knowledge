@@ -6,6 +6,7 @@ import {
   type Locale,
 } from '@knowledge/contracts'
 import { formatRelative } from './format'
+import { redirectForReauth } from './reauth'
 
 /** Fallback workspace when the caller has no memberships (AUTH_MODE=none demo flow). */
 export const DEMO_WORKSPACE_ID = '11111111-1111-4111-8111-111111111111'
@@ -444,7 +445,11 @@ async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
     } catch {
       /* not JSON — fall through to the raw-text form below */
     }
-    if (isApiErrorPayload(parsed)) throw new ApiError(res.status, parsed.message, parsed.code, parsed.details)
+    if (isApiErrorPayload(parsed)) {
+      // Enforced SSO (#75): a 403 that asks for a fresh sign-in navigates to /login.
+      redirectForReauth(res.status, parsed.details)
+      throw new ApiError(res.status, parsed.message, parsed.code, parsed.details)
+    }
     throw new ApiError(res.status, `${res.status} ${res.statusText}: ${text.slice(0, 300)}`)
   }
   return res

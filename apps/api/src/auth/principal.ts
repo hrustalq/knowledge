@@ -45,6 +45,8 @@ export interface Principal {
    */
   authMethod?: AuthMethod;
   providerId?: string;
+  /** When that session was opened (ISO; it survives a `kt_` ticket's JSON) — a workspace's age cap reads it. */
+  sessionCreatedAt?: string;
   /**
    * Set when authenticated via a `kn_` key (docs/features/33): what that key
    * narrows the person down to. Enforced in AccessService.requireRole, so every

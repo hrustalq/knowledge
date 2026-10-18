@@ -9,6 +9,7 @@ import {
 import type { Pinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import { AI_PANEL_SECTIONS, DEFAULT_AI_SECTION, isAiSection } from '@/lib/ai-sections'
+import { reauthKindOf } from '@/lib/sso'
 
 export function createRouter() {
   return createVueRouter({
@@ -276,7 +277,9 @@ export function createRouter() {
 /**
  * Auth guard (runs on SSR and client): resolves /v1/me once, then
  * - unauthenticated on a protected route → /login (401 flow)
- * - authenticated on /login|/signup → /documents
+ * - authenticated on /login|/signup → /documents, unless /login was asked to
+ *   sign them in again (`?reauth=`, a workspace's sign-in policy, #75) — the
+ *   bounce back would 403 straight into /login again, forever
  * - non-platform-admin on an admin route → /403 (RBAC)
  * - unconfirmed address under AUTH_REQUIRE_VERIFIED_EMAIL → /verify-email
  *   (docs/features/41); every other route would only answer 403 anyway
@@ -285,7 +288,7 @@ export function installAuthGuard(router: Router, pinia: Pinia) {
   router.beforeEach(async (to) => {
     const auth = useAuthStore(pinia)
     await auth.ensureLoaded()
-    if (auth.authenticated && (to.path === '/login' || to.path === '/signup')) {
+    if (auth.authenticated && ((to.path === '/login' && !reauthKindOf(to.query.reauth)) || to.path === '/signup')) {
       return { path: '/documents' }
     }
     if (to.meta.public) return true

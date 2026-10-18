@@ -2,11 +2,18 @@ import { describe, expect, it, vi } from 'vitest'
 import { SSO_LOGIN_ERRORS } from '@knowledge/contracts'
 import en from '@/i18n/messages/en.json'
 import ru from '@/i18n/messages/ru.json'
-import { fragmentCode, ownPath, ssoErrorOf, ssoStartUrl } from './sso'
+import { fragmentCode, ownPath, reauthKindOf, ssoErrorOf, ssoStartUrl } from './sso'
 
 vi.mock('@/lib/api', () => ({ apiUrl: (p: string) => `/api${p}` }))
 
 describe('SSO sign-in helpers (#75)', () => {
+  it('reads ?reauth= as sso or session only — the router guard keeps a signed-in user on /login for it', () => {
+    expect(reauthKindOf('sso')).toBe('sso')
+    expect(reauthKindOf('session')).toBe('session')
+    expect(reauthKindOf('1')).toBeNull()
+    expect(reauthKindOf(['sso'])).toBeNull()
+  })
+
   it('reads the exchange code from the fragment only', () => {
     expect(fragmentCode('#code=abc-123')).toBe('abc-123')
     expect(fragmentCode('code=abc')).toBe('abc')

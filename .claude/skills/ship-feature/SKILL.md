@@ -1,6 +1,6 @@
 ---
 name: ship-feature
-description: "Take a feature, fix or docs change in this repo from request to production: check the request is unambiguous, open a labelled GitHub issue, cut a feature branch linked to that issue, then PR into dev, and (when asked) release, promote to main, tag and verify the deploy. Use when the user asks to build/implement/add/fix something and ship it, 'ship this', 'open a PR', 'release', 'deploy', 'cut a version', 'promote dev to main', 'сделай фичу', 'выкати', 'зарелизь'."
+description: "Take a feature, fix or docs change in this repo from request to production: check the request is unambiguous, open a labelled GitHub issue, cut a feature branch linked to that issue, write it under the right /ponytail level (and /impeccable for web UI), self-review with /ponytail-review, then PR into dev, and (when asked) release, promote to main, tag and verify the deploy. Use when the user asks to build/implement/add/fix something and ship it, 'ship this', 'open a PR', 'release', 'deploy', 'cut a version', 'promote dev to main', 'сделай фичу', 'выкати', 'зарелизь'."
 ---
 
 # Shipping a feature
@@ -24,16 +24,21 @@ Two long-lived branches, and which one you are on decides everything:
   is pushed.
 
 This skill starts from a request and ends at a verified deploy. Nothing is coded
-until the request is understood and has an issue; writing the feature itself is
-ordinary coding and is not covered here.
+until the request is understood and has an issue. Writing the code is ordinary
+coding, but which helper skills shape it is decided here (Stage 2½): the
+`ponytail` family for every code change, at a level picked by risk, and
+`impeccable` whenever the change reaches the web UI.
 
 ## The shape of it
 
 ```
 request -> is it clear? (ask until it is) -> GitHub issue, typed by label
-  -> branch linked to the issue (from main) -> code
-  -> changelog entry -> PR --base dev -> CI -> squash -> close issue   (integrates)
-  -> chore/release-vX.Y.Z (from dev) -> version bump -> PR --base dev -> CI -> squash
+  -> branch linked to the issue (from main or dev)
+  -> code under /ponytail <level> (+ /impeccable <command> for web UI)
+  -> /ponytail-review own diff -> changelog entry
+  -> PR --base dev -> CI -> squash -> close issue                      (integrates)
+  -> /ponytail-debt since last tag -> chore/release-vX.Y.Z (from dev)
+  -> version bump -> PR --base dev -> CI -> squash
   -> PR --base main --head dev -> CI -> MERGE COMMIT                    (promotes)
   -> tag vX.Y.Z on origin/main -> push                                  (deploys)
   -> watch the run -> verify the deployed version
@@ -150,7 +155,110 @@ If `--checkout` is refused because the tree is dirty, the branch still exists on
 the remote: `git fetch origin && git switch -c feat/<N>-<short-name> --track
 origin/feat/<N>-<short-name>`.
 
-Now write the code.
+Now write the code — after picking its skills.
+
+## Stage 2½ — writing it: which skills to load
+
+Two skill families shape the code, and the right version of each depends on the
+issue. Pick from Stage 0's kind and the paths in the issue's plan, load them
+with the Skill tool **before the first edit**, and say in one line which you
+picked and why (`/ponytail lite: touches permissions/; /impeccable harden: new
+form`). A wrong pick is cheap to correct when it is visible and invisible when
+it is not.
+
+### Ponytail — every code change, at the level the risk allows
+
+Pick the level in two steps: the issue sets a **base level**, then the trust
+paths it touches drop to `lite` **for those hunks only**.
+
+**1. Base level, from the issue (first matching row wins):**
+
+| the issue is…                                         | load                                   | why                                                                                                                                                                                                |
+| ----------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "find what to cut", with no target yet                | `ponytail-audit`, then `ponytail` full | Run the audit **before** Stage 1 and put its ranked list in the Stage 0 restatement, so the user picks the cuts. Those become the issue's plan (one issue; split only cuts that could ship alone) and the scope: build them at full, nothing beyond. Confirm each "no callers" with the Read tool — see the shell-search trap. |
+| "simplify / remove / delete X", X named               | `ponytail ultra`                       | Deletion before addition; challenge whatever of X survives. Challenges that go past X go in the PR body as suggestions, not into the diff.                                                       |
+| a bug fix                                             | `ponytail` (full)                      | Root cause, not symptom: find every caller of the function you are about to touch and fix it once where they all route through.                                                                  |
+| a feature, or a chore that changes code               | `ponytail` (full)                      | The ladder. Rung 2 matters most here: a `*CoreModule` service, a `lib/` helper, a `components/ui` piece or a `@knowledge/contracts` constant usually already exists.                             |
+| docs-only (`docs/`, `*.md`, `CHANGELOG.md`), release  | none                                   | Ponytail is for code. Feature docs and runbooks are requested prose.                                                                                                                             |
+
+**2. Trust paths drop to `lite`, hunk by hunk.** Code in `permissions/`,
+`auth/`, an MCP tool handler's guard, `common/safe-url.ts`, `ai/secret-box.ts`,
+webhook signature and GitHub App JWT code, a Prisma migration, the ingestion
+pipeline, or a merge gate is written at `lite` whatever the base level: build
+what the issue asks, name the lazier alternative in one line and let the user
+pick. On these paths the repo's conventions are the contract, and a "simpler"
+version that drops one is a security or data bug.
+
+The rest of the same diff keeps the base level. A feature that adds one
+migration is still `full` for its service, controller and UI; only the
+migration file is `lite`. A bug that lives entirely in `permissions/` is `lite`
+throughout. Announce both when both apply (`/ponytail full; lite for the
+migration and the @Access route`). A path not on this list but doing the same
+job — a gate every event passes through, a check that a resource belongs to
+the caller's workspace — counts as one.
+
+Ponytail governs the code, not the paper trail. The issue body, PR description,
+changelog entry and Operations notes are requested prose and stay complete; its
+"at most three short lines" rule is for your chat replies about the code.
+
+What this repo never lets ponytail cut, whatever the level, because each one is
+enforced somewhere that fails only later (CI, runtime, or production): the
+`guard.*` call at the top of an MCP handler, a required `AccessScope` /
+`DocumentAclFilter` parameter, a `default` on a new env var, `@Access` on a new
+route, the backfill in a NOT NULL migration, both `en` and `ru` i18n keys, and
+the one runnable check ponytail itself asks for. These sit under ponytail's own
+"When NOT to be lazy" — say so if a review flags them.
+
+Mark a deliberate shortcut with a `// ponytail: <ceiling>, <upgrade trigger>`
+comment, as ponytail asks; Stage 4 harvests them.
+
+### Impeccable — when the change reaches the web UI
+
+Load it when the plan touches `apps/web/src/**` components, pages, styles or
+user-facing copy. Not for API, worker, MCP or docs-only work, and not for a
+web change with no visible effect (a store refactor, a typed-client regen).
+
+`apps/web/PRODUCT.md` and `apps/web/DESIGN.md` exist, so this is never
+greenfield: run impeccable's `context` with `--target` set to the component or
+route and refine the incumbent world unless the issue explicitly asks for a
+redesign. The app shell is **Operate** mode; the share reader and published
+sites (`/s/*`, features 43–44) are **Read**.
+
+Rows combine: run every row that matches, in table order. `polish` is for a
+refinement that skipped `shape`; a shaped surface gets its finish from `shape`
+and `harden`.
+
+| scenario                                                  | command                                                                                                |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| new page, panel, dialog or multi-step flow                | `shape` before any code — post its brief as a comment on the issue — then build it per its new-work    |
+| extending or changing an existing component               | no command (ordinary refinement), then `polish` on the target before the PR                           |
+| forms, error / empty / loading states, long-text overflow | `harden`; a first-run empty state is `onboard`                                                         |
+| labels, error messages, microcopy only                    | `clarify` — and update both `en` and `ru` catalogues                                                   |
+| broken on mobile or a narrow pane                         | `adapt`                                                                                                |
+| slow render, jank, layout shift                           | `optimize`                                                                                             |
+| "this looks wrong / off" bug with no clear cause          | `audit` (or `critique` for a UX complaint) on the target first; its finding decides the fix command   |
+
+Any UI change ends with one `audit` pass on the touched route — desktop and
+mobile widths together — before Stage 3. Follow impeccable's bounded
+verification: one batched inspection, one fix round, at most one confirmation.
+An open-ended polish loop costs more and finds less than review does.
+
+### When both apply
+
+They disagree on purpose, so split the authority: **impeccable decides what the
+surface looks like and how it behaves; ponytail decides how much code delivers
+it.** Concretely —
+
+- Reuse the app's components and lift store-free logic into `lib/` rather than
+  building a parallel widget (the reader is built this way on purpose).
+- No new npm dependency for something CSS, a native element or an installed
+  package already does — that is ponytail's rung 4–5, and impeccable's craft
+  floor agrees.
+- Never cut what impeccable's craft floor requires: focus states, contrast,
+  reduced-motion handling, empty and error states, hit targets. Those are
+  ponytail's "accessibility basics" too.
+- Impeccable's "go all out" is about design quality, not code volume. A bold
+  result built from existing tokens and components is the target.
 
 ## Stage 3 — the feature PR
 
@@ -167,6 +275,15 @@ git diff --cached --stat                      # always read this back
 
 Committing someone's half-finished refactor inside your feature is both hard to
 review and hard to undo. If you cannot tell which changes are yours, ask.
+
+**Review your own diff for over-engineering first.** Run `ponytail-review` on
+what you are about to stage (`git diff origin/dev...` plus the staged set) and
+apply its `delete:` / `stdlib:` / `native:` / `yagni:` / `shrink:` findings
+before committing — it lists, it never edits, so you apply them. Reject a
+finding that would cut one of the never-cut items from Stage 2½ and say why in
+a line. Put its `net:` line in the PR body. A docs-only PR skips this; it is a
+complexity review, not a correctness one, so it does not replace reading the
+diff for bugs.
 
 1. **Write the changelog entry now, in this PR.** `CHANGELOG.md` under
    `## [Unreleased]`, following `docs/templates/changelog-entry.md`. Recreate
@@ -231,6 +348,15 @@ git log --oneline "$(git describe --tags --abbrev=0)..origin/dev"
 | any `feat`             | **MINOR** — 0.6.0 → 0.7.0 |
 | only `fix` / `perf`    | **PATCH** — 0.6.0 → 0.6.1 |
 | `feat!` / breaking     | **MINOR** while under 1.0 |
+
+Before cutting the branch, run `ponytail-debt` and keep only the `ponytail:`
+markers added since the last tag
+(`git diff "$(git describe --tags --abbrev=0)"..origin/dev | grep '^+.*ponytail:'`).
+Each one is a shortcut this release ships with a known ceiling. List them in
+the release PR body; a marker tagged `no-trigger`, or one whose ceiling a
+production workload will hit, gets an issue now rather than "later". This only
+reports — the release branch still carries the three edits below and nothing
+else.
 
 ```bash
 git switch -c chore/release-vX.Y.Z origin/dev
@@ -416,7 +542,8 @@ docker compose -f ~/Homelab/infra/knowledge/docker-compose.prod.yml up -d
 
 ## Reporting
 
-State what actually happened: the PR numbers, the tag, the run conclusion, and
+State which skills shaped the code (`/ponytail full`, `/impeccable harden`) and
+what `/ponytail-review` cut. State what actually happened: the PR numbers, the tag, the run conclusion, and
 the version production reported back. If a step was skipped or a check was not
 waited for, say which. A release summary that implies verification you did not
 perform is worse than no summary, because it is the thing someone will rely on

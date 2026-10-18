@@ -725,8 +725,14 @@ export const envSchema = z.object({
   COLLAB_STORE_DEBOUNCE_MS: z.coerce.number().int().min(100).default(2000),
   /** …and at least this often while someone keeps typing: the most a crash can lose. */
   COLLAB_STORE_MAX_DEBOUNCE_MS: z.coerce.number().int().min(100).default(10000),
-  /** Encoded Y state ceiling per draft. A store above it is refused and the draft's peers are closed with 4413. */
+  /** Encoded Y state ceiling per draft. A store above it is refused and the draft's peers are closed (reason `too-large`). */
   COLLAB_MAX_DOC_BYTES: z.coerce.number().int().positive().default(8 * 1024 * 1024),
+  /**
+   * Open co-editing connections are re-judged this often (credential still
+   * live, page still open, edit gained or lost). `acl.changed` re-checks its
+   * workspace at once; a plain role change has no event, so this is its bound.
+   */
+  COLLAB_REAUTH_INTERVAL_SECONDS: z.coerce.number().int().min(5).default(300),
 
   /**
    * Minimum level written to stdout (stderr in the MCP process, whose stdout is

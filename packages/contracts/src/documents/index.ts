@@ -576,12 +576,38 @@ export function parseCollabDocName(
 }
 
 /**
- * Why a document was refused. Hocuspocus multiplexes documents over one
- * socket, so a refusal is a per-document `permission-denied` reason, not a
- * close code. A refused page never names itself (feature 48).
+ * Why a document was refused or closed. Hocuspocus multiplexes documents over
+ * one socket, so both arrive per document as a reason string, never a close
+ * code: a refusal as `permission-denied`, a close as a close message the
+ * provider reports as `{ code: 1000, reason }`. A refused page never names
+ * itself (feature 48).
+ *
+ * - `unauthorized` — no valid `kt_` ticket, or the credential behind it has
+ *   since been revoked or its account disabled.
+ * - `forbidden` — the page cannot be opened (any more).
+ * - `access-changed` — view stays but edit was gained or lost: rejoin with a
+ *   fresh ticket to learn the new scope.
+ * - `too-large` — the draft passed COLLAB_MAX_DOC_BYTES and stopped saving.
  */
-export const COLLAB_DENY_REASONS = ['unauthorized', 'forbidden'] as const;
+export const COLLAB_DENY_REASONS = ['unauthorized', 'forbidden', 'access-changed', 'too-large'] as const;
 export type CollabDenyReason = (typeof COLLAB_DENY_REASONS)[number];
 
-/** Socket and per-document close codes the `/v1/collab` server sends. */
-export const COLLAB_CLOSE_CODES = { tooLarge: 4413, disabled: 4503 } as const;
+/** The one socket-level close: COLLAB_ENABLED is off. */
+export const COLLAB_DISABLED_CLOSE_CODE = 4503;
+
+/**
+ * Awareness `user`, as every peer sees it. The server overwrites these fields
+ * from the connection's principal on every awareness update, so a name or
+ * avatar on a caret is never the client's claim. Other fields pass through.
+ */
+export interface CollabUser {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+/** `GET /v1/collab/capabilities` — whether this deployment co-edits, and the schema a client must match to write. */
+export interface CollabCapabilitiesResponse {
+  enabled: boolean;
+  schemaVersion: string;
+}

@@ -25,6 +25,17 @@ in the pull request that introduces them — see
   to it yet; that is phase 3. The editor's node specs now live in the new
   buildless package `@knowledge/editor-schema`, so the API builds the same
   schema the editor does.
+- Who may co-edit a draft, checked for as long as they stay (#80, phase 2).
+  Joining `/v1/collab` now takes a single-use `kt_` ticket from
+  `POST /v1/auth/url-ticket`; a session token or API key is refused there. An
+  open connection is re-judged when a page's access changes and every
+  `COLLAB_REAUTH_INTERVAL_SECONDS`: a revoked key, an ended session or a
+  disabled account is closed, a page restricted away is closed, and an editor
+  demoted to viewer (or the reverse) is closed with `access-changed` so the
+  client rejoins in its new scope. Every caret's name and avatar is now set by
+  the server from the signed-in person, whatever the client sends.
+  `GET /v1/collab/capabilities` says whether co-editing is on and which editor
+  schema version a peer must match.
 
 ### Operations
 
@@ -32,9 +43,9 @@ in the pull request that introduces them — see
   nothing else. It survives a code rollback, because the previous image never
   reads it. New env vars, all with defaults and none required:
   `COLLAB_ENABLED` (`false`), `COLLAB_STORE_DEBOUNCE_MS` (`2000`),
-  `COLLAB_STORE_MAX_DEBOUNCE_MS` (`10000`) and `COLLAB_MAX_DOC_BYTES` (8 MiB).
-  With the flag off, no Hocuspocus instance or Redis connection is created, and
-  the socket closes with 4503.
+  `COLLAB_STORE_MAX_DEBOUNCE_MS` (`10000`), `COLLAB_MAX_DOC_BYTES` (8 MiB) and
+  `COLLAB_REAUTH_INTERVAL_SECONDS` (`300`). With the flag off, no Hocuspocus
+  instance or Redis connection is created, and the socket closes with 4503.
 
 - Production embeds with bge-m3 (1024-d) served by Ollama.app on the host,
   not the hash stub (#257). The `production` environment carries

@@ -61,13 +61,40 @@ export class TokenAuthService {
    */
   async resolveQueryToken(token: string): Promise<Principal> {
     if (this.config.get('AUTH_MODE') !== 'api-key') return DEV_PRINCIPAL;
-    if (UrlTicketsService.isTicket(token)) {
-      const principal = await this.tickets.redeem(token);
-      if (!principal) throw new UnauthorizedException(t('error.auth.invalidUrlTicket'));
-      return principal;
-    }
+    if (UrlTicketsService.isTicket(token)) return this.resolveTicket(token);
     if (token.startsWith('ks_')) return this.resolveSession(token);
     throw new UnauthorizedException(t('error.auth.apiKeyInUrl'));
+  }
+
+  /**
+   * A `kt_` ticket and nothing else: what the `/v1/collab` socket accepts
+   * (#80), so no credential that outlives a minute ever crosses it.
+   */
+  async resolveTicket(token: string | undefined): Promise<Principal> {
+    if (this.config.get('AUTH_MODE') !== 'api-key') return DEV_PRINCIPAL;
+    const principal = token && UrlTicketsService.isTicket(token) ? await this.tickets.redeem(token) : null;
+    if (!principal) throw new UnauthorizedException(t('error.auth.invalidUrlTicket'));
+    return principal;
+  }
+
+  /**
+   * Whether the credential a principal was resolved from still stands: the
+   * account is enabled and its session or API key is neither revoked nor
+   * expired. For a connection that outlives its ticket (#80), re-asked on an
+   * interval — a principal is a snapshot of mint time.
+   */
+  async isCurrent(principal: Principal): Promise<boolean> {
+    if (principal.mode === 'dev') return true;
+    const now = new Date();
+    const select = { revokedAt: true, expiresAt: true } as const;
+    const live = (row: { revokedAt: Date | null; expiresAt: Date | null } | null) =>
+      !!row && !row.revokedAt && !(row.expiresAt && row.expiresAt <= now);
+    const [user, keyLive, sessionLive] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: principal.userId }, select: { disabledAt: true } }),
+      principal.apiKey ? this.prisma.apiKey.findUnique({ where: { id: principal.apiKey.id }, select }).then(live) : true,
+      principal.sessionId ? this.prisma.session.findUnique({ where: { id: principal.sessionId }, select }).then(live) : true,
+    ]);
+    return !!user && !user.disabledAt && keyLive && sessionLive;
   }
 
   private async resolveSession(token: string): Promise<Principal> {

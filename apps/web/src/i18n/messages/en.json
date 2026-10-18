@@ -2944,6 +2944,15 @@
       "title": "Not notified: {names} cannot open this page | Not notified: {names} cannot open this page",
       "hint": "If you manage this page, grant them view from Access…; otherwise ask one of its managers.",
       "grant": "Open Access…"
+    },
+    "source": {
+      "manual": "Manual",
+      "jit": "SSO",
+      "group": "Group",
+      "scim": "SCIM",
+      "managedHint": "Managed by single sign-on: sign-ins set this role from the identity provider. Take it over to edit it by hand.",
+      "takeOver": "Manage manually",
+      "takeOverConfirm": "Manage {name} by hand? Sign-ins will stop changing their role here."
     }
   },
   "users": {
@@ -5366,11 +5375,16 @@
         "sso_provider_updated": "Identity provider changed",
         "sso_provider_deleted": "Identity provider removed",
         "sso_jit_user_created": "Account created on SSO sign-in",
-        "sso_identity_linked": "SSO sign-in linked to an account"
+        "sso_identity_linked": "SSO sign-in linked to an account",
+        "sso_group_mapping_created": "Group mapping set",
+        "sso_group_mapping_deleted": "Group mapping removed",
+        "role_sync_applied": "Role synced from identity provider",
+        "role_sync_blocked_last_admin": "Role sync skipped (last admin)"
       }
     },
     "tabs": {
       "providers": "Providers",
+      "groups": "Group mapping",
       "audit": "Audit log"
     },
     "providers": {
@@ -5401,6 +5415,7 @@
       "advanced": "Advanced",
       "scopes": "Scopes (besides openid)",
       "groupsClaim": "Groups claim",
+      "groupSyncMode": "Group sync",
       "sessionTtl": "Session lifetime, hours",
       "sessionTtlDefault": "Instance default",
       "showOnLogin": "Show a button on the sign-in page",
@@ -5438,6 +5453,34 @@
         "google": "https://accounts.google.com",
         "yandex": "https://oauth.yandex.ru",
         "generic": "https://idp.example.com"
+      }
+    },
+    "groupMapping": {
+      "title": "Group mapping",
+      "hint": "Give people a workspace role from the groups your identity provider sends. The highest mapped role wins. Changes apply at each person’s next sign-in, and roles you set by hand on the Access page are never changed.",
+      "noProviders": "Add an identity provider first — a mapping names the provider whose groups it reads.",
+      "provider": "Provider",
+      "group": "Group",
+      "groupPlaceholder": "knowledge-editors",
+      "role": "Role",
+      "operator": "Also make them trusted operators (graph queries)",
+      "operatorBadge": "operator",
+      "add": "Map group",
+      "added": "Mapped “{group}”",
+      "replaced": "Changed the role for “{group}”",
+      "removed": "Mapping removed",
+      "removeConfirm": "Remove the mapping for “{group}”? Roles it granted stay until people sign in again.",
+      "remove": "Remove",
+      "empty": "No groups mapped yet. Without a mapping, sign-ins get the provider’s role for new members, if it has one.",
+      "providerGone": "removed provider",
+      "presetClaim": "This provider has no groups claim set, so the preset’s default claim is read.",
+      "mode": {
+        "additive": "Additive: sign-in only ever raises a role. Nothing is taken away when a group disappears.",
+        "authoritative": "Authoritative: each sign-in sets the role exactly as the groups say, and removes the membership when no group maps."
+      },
+      "modeBadge": {
+        "additive": "Additive",
+        "authoritative": "Authoritative"
       }
     }
   }

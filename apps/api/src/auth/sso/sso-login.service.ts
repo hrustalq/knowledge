@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type IdentityProvider, type User } from '@prisma/client';
-import { WORKSPACE_ROLES, type SsoLoginError } from '@knowledge/contracts';
+import type { SsoLoginError } from '@knowledge/contracts';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { currentLocale } from '../../i18n/t.js';
 import { AuditService } from '../audit.service.js';
 import type { ExternalIdentity } from './oidc-claims.js';
 import { presetOf } from './oidc-presets.js';
+import { RoleSyncService } from './role-sync.service.js';
 
 export type SsoLoginOutcome =
   | { ok: true; user: User; created: boolean }
@@ -26,8 +27,8 @@ const domainOf = (email: string): string => email.slice(email.lastIndexOf('@') +
  * 3. Otherwise, with JIT on and the same two conditions, a new SSO-only
  *    account (no password) is created.
  * 4. A disabled account is refused whichever way it was found.
- * 5. JIT with a default role gives a membership of the provider's workspace
- *    to someone who has none — never touching one that exists.
+ * 5. Memberships follow the asserted groups and the JIT default role
+ *    (`RoleSyncService`), never touching a row a person set by hand.
  *
  * Sessions are not opened here: the browser trades a single-use code for one
  * (`SsoFlowService.exchange`), so the token never travels in a URL.
@@ -37,6 +38,7 @@ export class SsoLoginService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly roleSync: RoleSyncService,
   ) {}
 
   async resolve(provider: IdentityProvider, identity: ExternalIdentity): Promise<SsoLoginOutcome> {
@@ -45,7 +47,12 @@ export class SsoLoginService {
     const { user, created } = found;
     if (user.disabledAt) return { ok: false, error: 'account-disabled', reason: 'disabled', userId: user.id };
 
-    await this.grantDefaultMembership(provider, user.id);
+    await this.roleSync.apply({
+      provider,
+      userId: user.id,
+      groups: identity.groups,
+      groupsKnown: !identity.notes.includes('groups-overage'),
+    });
     await this.prisma.userIdentity.updateMany({
       where: { providerId: provider.id, subject: identity.subject },
       data: { lastLoginAt: new Date() },
@@ -134,15 +141,5 @@ export class SsoLoginService {
       return { ok: false, error: 'domain-not-allowed', reason: `hd ${identity.hostedDomain ?? 'missing'} not allowed` };
     }
     return null;
-  }
-
-  private async grantDefaultMembership(provider: IdentityProvider, userId: string): Promise<void> {
-    const role = provider.defaultRole;
-    if (!provider.jitEnabled || !role || !(WORKSPACE_ROLES as readonly string[]).includes(role)) return;
-    // skipDuplicates: an existing membership — manual or not — is left as it is.
-    await this.prisma.workspaceMember.createMany({
-      data: [{ workspaceId: provider.workspaceId, userId, role, source: 'jit' }],
-      skipDuplicates: true,
-    });
   }
 }

@@ -190,6 +190,10 @@ function report(): void {
   const ingestTotal: number[] = [];
   const ingestSteps = new Map<string, number[]>();
   let ingestFailures = 0;
+  const collabStores: number[] = [];
+  const collabBytes: number[] = [];
+  const collabRefused = new Map<string, number>();
+  let collabPeers = 0;
   let unparsable = 0;
 
   for (const file of files) {
@@ -230,6 +234,13 @@ function report(): void {
           }
           break;
         }
+        case 'collab.store': {
+          collabStores.push(ms);
+          collabBytes.push(Number(e.bytes ?? 0));
+          collabPeers = Math.max(collabPeers, Number(e.peers ?? 0));
+          if (e.outcome !== 'stored') collabRefused.set(String(e.outcome), (collabRefused.get(String(e.outcome)) ?? 0) + 1);
+          break;
+        }
       }
     }
   }
@@ -260,6 +271,15 @@ function report(): void {
     console.log(summarize('ingest total', ingestTotal));
     for (const [step, values] of ingestSteps) console.log(summarize(`  ${step}`, values));
     console.log(`  failed               ${ingestFailures}/${ingestTotal.length}`);
+  }
+  if (collabStores.length) {
+    console.log(summarize('collab.store', collabStores));
+    const size = [...collabBytes].sort((a, b) => a - b);
+    const kb = (q: number) => `${(percentile(size, q) / 1024).toFixed(1)}KB`;
+    console.log(`  draft size           p50=${kb(50)}  p95=${kb(95)}  max=${kb(100)}`);
+    console.log(`  most peers on a doc  ${collabPeers}`);
+    const refused = [...collabRefused.entries()].map(([outcome, n]) => `${outcome}:${n}`).join('  ');
+    console.log(`  refused              ${refused || 'none'}`);
   }
   console.log('');
 }

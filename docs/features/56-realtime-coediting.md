@@ -1,273 +1,420 @@
-# 56 — Real-time co-editing of drafts (decision record, draft)
+# 56 — Real-time co-editing of drafts
 
-Issue [#80](https://github.com/hrustalq/knowledge/issues/80). **Status: phase 0
-(spike) done, verdict GO.** This document records what the spike measured and
-which parts of the plan in #80 it changes. Phase 6 rewrites it into the usual
-feature document once the feature ships.
+Issue [#80](https://github.com/hrustalq/knowledge/issues/80), shipped as seven
+PRs: the phase 0 spike (#306), phases 1–5 (#307–#311) and phase 6 (the one
+carrying this document). **Off by default**: `COLLAB_ENABLED=false` is today's
+single-user editor, unchanged.
 
-The spike code sits on the throwaway branch
-[`spike/80-collab`](https://github.com/hrustalq/knowledge/tree/spike/80-collab)
-and is never merged. It holds a Hocuspocus gateway in `apps/api/src/collab/`,
-Node probes in `apps/api/spike/`, the fixture spec
-`apps/web/src/components/editor/spike-collab-roundtrip.spec.ts` (run with
-`npx vitest run -c vitest.spike.config.ts`), Collaboration wired into
-`RichEditor.vue` behind `?collab=<name>`, and a two-context Playwright test in
-`apps/web/e2e/`. Every number below came from that branch on the laptop:
-two API instances (`:3000`, `:3001`) against one local Redis, plus the web dev
-server.
+Before this, one page had one editor at a time. Two tabs on the same page
+wrote the same localStorage working copy ([03](03-editor.md)), last write won,
+and two people found out about each other through a 409 on publish. Every
+serious wiki lets several people edit one page at once, with live cursors.
+Ours has to do it without giving up the rule that a revision is immutable
+([02](../architecture/02-persistence-revisions.md)).
 
-## Decisions settled before the spike
+So the shared thing is not a revision. It is a **draft**: one Yjs document per
+(page, branch), edited by everyone who has the page open, stored as mutable
+state beside the revisions. **Publish** turns what the draft holds into an
+ordinary revision through the existing `If-Match` → presigned PUT → finalize
+path, and the draft carries on from there.
 
-These are recorded on the issue (comment of 2026-10-18):
+## What
 
-- One phase per PR into `dev`, with a handoff comment on #80 after each phase.
-- Seeding: **option A, the server seeds** a new draft from the branch head.
-- Browser end-to-end tests: **Playwright**, with a two-context co-editing test.
-- A merge request whose source branch has unpublished draft changes gets a
-  **warning only**, never a merge gate.
-- The only switch is the **`COLLAB_ENABLED` env flag**. There is no
-  per-workspace setting in v1.
+- **Typing reaches everyone on the page** as it happens: the body and every
+  page field (title, tags, category, parent, project, relations and the
+  revision message). Other people show as faces in the editor header and as
+  carets labelled with their name, in their avatar colour.
+- **A status dot** says where this tab stands: live, offline (edits stay on
+  this device and sync on reconnect), connecting, or stopped and why
+  (signed out, no access any more, draft too large, co-editing switched off).
+  A viewer joins read-only. So does a tab whose editor build is older than the
+  server's schema, with a "reload to edit" note.
+- **"Unpublished changes"** opens the diff of the draft against the published
+  page. Publishing writes one revision on the draft's branch and credits
+  everyone who wrote in the draft since the last publish as co-authors, shown
+  as faces in the revision history. Edits someone makes after you press
+  Publish stay unpublished; they are neither lost nor claimed.
+- **Someone published another way** (MCP, a merge, a connector): the editor
+  says so as it happens, the review diffs the draft against what they
+  published, and you choose **Publish on top** or **Discard draft**.
+- **Discard** resets the draft to the published page for everyone in it, on
+  every API instance, and clears each browser's offline copy, including a
+  browser that was offline when it happened.
+- **Branches.** `/documents/:id/edit?branch=<name>` edits that branch's draft.
+  A feature branch's draft is how a group works on a proposed change before
+  opening a merge request.
+- **Badges.** The document page and an open merge request show who has a
+  branch's draft open and whose changes are unpublished. On a merge request
+  this is a warning, never a merge gate.
+- **The editor assistant's suggestions are shared**
+  ([34](34-editor-assistant.md#in-a-shared-draft-80)): everyone sees one as it is
+  written, credited to the agent and the person who asked, and any editor may
+  keep or discard it.
 
-## Verdict
+## How it works
 
-**GO, with Hocuspocus embedded in the API and server-side seeding.** Every risk
-the issue named either held up or turned out cheaper than feared. The changes
-the spike forces on the plan are listed under [Plan changes](#plan-changes).
+### One draft per branch
 
-| Question | Answer | Evidence |
+`collab_drafts` (`apps/api/prisma/schema.prisma`, `CollabDraftsService`) holds
+one row per (document, branch): the encoded Y state, a Y snapshot of it, the
+`published_snapshot` it is compared with, the base revision, the contributors
+since the last publish, and `reset_at`. **It is not a `DocumentRevision`**;
+those stay immutable, and a revision in status `draft` is still only "row
+exists, bytes not uploaded yet".
+
+The Y.Doc has three parts:
+
+| Part | Type | Holds |
 | --- | --- | --- |
-| Does `@hocuspocus/server` work behind a Nest gateway? | Yes, as a library | Second `@WebSocketGateway({ path: '/v1/collab' })` beside `/v1/events/ws` on the same `WsAdapter` and port, with both serving at once and no adapter noise in the logs |
-| Do peers on different instances converge? | Yes, via `@hocuspocus/extension-redis` | 200 edits from `:3000` to `:3001`: p50 **1.0 ms**, p95 **2.4 ms**, max 4.3 ms, and both copies equal |
-| Latency in a real browser | p95 well under the 500 ms criterion | Playwright, two contexts: a typed marker shows in the other context after **48–75 ms**, typing time included (3 of 3 runs) |
-| Is a draft seeded exactly once? | Yes, with a guarded insert | 5 clients across both instances at once: one seed. 10 fresh docs: 10 seeds, one copy each |
-| Are read-only writes enforced server-side? | Yes | A `readOnly` connection's insert never reached a writer peer |
-| Do the editor's extensions build a schema headless? | Yes, with only the `.vue` node views stubbed | The full schema builds under jsdom: 31 node types, 8 marks |
-| Does every custom node survive the Y.Doc? | Yes, byte for byte | 16 fixtures: `md → PM → Y → wire → PM → md` equals today's `md → PM → md`, and `PM.eq` holds |
-| Are all node attributes JSON-safe? | Yes | No object or function attribute on any node. The whiteboard scene is one string attribute, so it merges atomically, last writer wins |
-| Concurrent edits | Merge into valid markdown | Two peers typing in one table cell and a third edit in a panel: both serialize identically, and the merged markdown re-parses to itself |
-| Cost of a server-side seed | Small | **3.4 ms** for a typical page (1.3 KB of markdown), **31 ms** for a 25 KB page |
-| Memory and CPU | Fine at the target load | See [Load](#load) |
+| `body` (`BODY_FIELD`) | `Y.XmlFragment` | The page, bound to the editor by Tiptap Collaboration |
+| `meta` (`META_FIELD`) | `Y.Map` | Page fields: `title`, `tags`, `message` as `Y.Text` (two people can type in one), the rest as last-writer-wins values (`@knowledge/editor-schema/page-fields`) |
+| `suggestions` | `Y.Map` of `Y.Map` | The assistant's pending suggestions ([34](34-editor-assistant.md#in-a-shared-draft-80)) |
 
-## Findings that change the plan
+**The server seeds a draft once**, from the branch head, the first time anyone
+opens it. `packages/editor-schema` is the editor's node specs and markdown
+parser without the Vue node views, so the API builds the editor's exact schema
+under jsdom (no scripts, no network) and turns the head's markdown into Y
+state. Every instance with a peer may try at once; the insert is guarded
+(`ON CONFLICT DO NOTHING`) and every instance adopts the row that won, because
+two seeds merged into one doc would show the page twice.
 
-### 1. Auth failure is per document, not a socket close code
+**Storing** is Hocuspocus's debounced `onStoreDocument`: the full state, every
+`COLLAB_STORE_DEBOUNCE_MS` and at least every `COLLAB_STORE_MAX_DEBOUNCE_MS`
+under continuous typing, on the instance the edit arrived at (updates relayed
+over Redis skip the hook, so two instances do not write twice). The store
+credits the writer from the connection's principal, never from the client, and
+refuses a state larger than `COLLAB_MAX_DOC_BYTES`: the peers close with
+`too-large`, and the last stored state stays.
 
-Hocuspocus multiplexes documents over one socket. When `onAuthenticate`
-throws, the client gets a `permission-denied` message carrying
-`error.reason`, and the socket stays open for its other documents. A denied
-peer in the spike received `reason: 'forbidden'` and never synced.
+**Checkpoints.** `CollabCheckpointSweeper` (API-side, fixed tick, no cron)
+copies a draft edited since its last checkpoint to MinIO at
+`workspaces/{ws}/documents/{doc}/drafts/{branch}/checkpoint.ydoc`, at most
+every `COLLAB_CHECKPOINT_INTERVAL_MINUTES`, and keeps the newest
+`COLLAB_CHECKPOINT_KEEP` versions of that one key. A guarded claim makes one
+instance write it. The same sweeper drops drafts that hold nothing unpublished
+and that nobody touched for `COLLAB_DRAFT_RETENTION_DAYS`. A draft with
+unpublished changes is never dropped.
 
-So the close codes in §8 of the issue (4401 and 4403 per document) become
-**reasons** (`unauthorized`, `forbidden`, `disabled`, `schema-mismatch`). The
-`COLLAB_CLOSE_CODES` contract becomes `COLLAB_DENY_REASONS`. A real socket
-close is left for the cases Hocuspocus closes itself (an unparsable frame
-closes with 4401, its own `Unauthorized`).
+### The socket
 
-Reset and too-large still work per document. `hocuspocus.closeConnections(name)`
-closes every connection to one draft. An error thrown from
-`beforeHandleMessage` closes that document's connection with the error's `code`
-and `reason`. **Verified in phase 2: it does not.** A per-document close is
-a close *message* that carries only the reason, and the provider reports it as
-`{ code: 1000, reason }` (`collab-auth.e2e-spec.ts` pins this). So every
-per-document outcome is a reason in `COLLAB_DENY_REASONS` (`too-large`,
-`access-changed`, and later the reset), and the only close code left is 4503
-on the socket when the flag is off. After a close message the provider does
-not rejoin by itself: the client decides, from the reason, whether to rejoin
-with a fresh ticket.
+`/v1/collab` is a second `@WebSocketGateway` beside `/v1/events/ws`, on the
+same `WsAdapter` and port (`apps/api/src/collab/collab.gateway.ts`). It embeds
+`@hocuspocus/server` as a library and hands it each socket.
+`@hocuspocus/extension-redis` relays updates and awareness between instances
+on its own connections, so CRDT traffic never rides the best-effort
+`knowledge:events` bus. `CollabModule` is API-only; dependency-cruiser keeps it
+out of the worker and MCP entrypoints.
 
-### 2. Tickets already exist: reuse `kt_`
+A doc name is `collab:{workspaceId}:{documentId}:{branchId}` (`collabDocName`).
+The workspace part is never trusted: admission resolves the workspace from the
+document in PG and checks that the branch is the document's.
 
-`apps/api/src/auth/url-tickets.service.ts` (#102) already issues short-lived,
-single-use URL tickets. They are minted by `POST /v1/auth/url-ticket`, stored
-as a SHA-256 in Redis, redeemed with `GETDEL`, and expire after
-`AUTH_URL_TICKET_TTL_SEC` (60 s). This is the ticket §7 of the issue
-re-specifies. The provider's `token` option accepts an async function, so it
-mints a fresh `kt_` for every (re)connect.
+**Admission** (`onAuthenticate`, per document, because Hocuspocus multiplexes
+documents over one socket):
 
-So **drop** `collab-ticket.service.ts` and `POST /v1/documents/:id/collab/ticket`.
-Binding a ticket to one document and branch adds nothing: `onAuthenticate`
-re-checks access for the requested document anyway. The flag and the schema
-version the ticket response was going to carry move to
-`GET /v1/collab/capabilities` (`{ enabled, schemaVersion, url }`), following
-the `GET /v1/exports/capabilities` precedent.
+1. The token is `collabToken(ticket, generation)`: a single-use `kt_` URL
+   ticket (`POST /v1/auth/url-ticket`, 60 s) and nothing longer-lived, so no
+   session token or API key ever crosses the socket. A fresh ticket is minted
+   for every (re)join.
+2. Page permissions decide ([48](48-page-permissions.md)): view to join, edit
+   to write. Without edit the connection is read-only, and Hocuspocus drops
+   its updates server-side. A read-only API key lands there too.
+3. A device copy from another seeding of the draft is refused with `reset`
+   (see [Generations](#discard-and-generations)).
 
-### 3. Access is page permissions, not a workspace role
+Every per-document outcome is a **reason**, not a close code
+(`COLLAB_DENY_REASONS`: `unauthorized`, `forbidden`, `access-changed`,
+`too-large`, `reset`). A refused page never names itself. The only socket close
+code is 4503, when the flag is off. The provider never rejoins by itself after
+a reason; the client's `outcomeOf` decides whether to rejoin or stop.
 
-The issue predates page permissions (#76, feature 48). A workspace `viewer`
-role is no longer enough to open a page. `onAuthenticate` must ask the same
-predicate as every REST route with `@Access(…, 'document')`:
-`PermissionService.requireResource(principal, workspaceId, { type: 'document', id }, role)`,
-with `viewer` to connect and `editor` to write. A refused page must not leak
-its title in the deny reason (feature 48's rule).
+**A connection outlives its ticket**, so it is re-judged on `acl.changed` for
+its workspace and every `COLLAB_REAUTH_INTERVAL_SECONDS` (the only path that
+sees a plain role change). A revoked key, an ended session or a disabled
+account closes with `unauthorized`. A page restricted away closes with
+`forbidden`. Gaining or losing edit closes with `access-changed`, and the
+client rejoins in its new scope rather than typing into a connection whose
+writes are dropped.
 
-Revocation: `KNOWN_EVENT_TYPES` has **no** membership or role-change event, so
-§8's "listen for role changes" has nothing to listen to. The bus does carry
-`acl.changed` (`permissions/acl-events.service.ts`, per workspace). So: re-check
-the open connections of a workspace on `acl.changed`, and re-check all of them
-every `COLLAB_REAUTH_INTERVAL_SECONDS`. That interval is the only path for a
-plain role change.
+**Identity is the server's word.** Every awareness update a connection sends
+has its `user` fields (`userId`, `name`, `avatarUrl`) overwritten from the
+connection's principal (`beforeHandleAwareness`). A caret's name and colour
+come from there.
 
-### 4. Seeding A is a four-file split, not a rewrite
+### Publishing
 
-The issue estimated extracting a DOM-free schema as possibly L on its own. The
-spike loaded the editor's **real** extensions under jsdom, with only the `.vue`
-imports aliased to a stub, and built the complete schema. A node view only runs
-when an `EditorView` exists, so the specs are already DOM-free.
+The editor's publish (`EditorPage.save()`):
 
-`packages/editor-schema` therefore means:
+1. reads the draft's id and base from `GET :id/drafts`;
+2. calls `seal()`, which clears the revision `message` for everyone (it
+   belongs to the revision, not the page) and takes a Y snapshot;
+3. serializes the body in the same tick, so nothing lands between the snapshot
+   and the markdown;
+4. sends `POST :id/revisions` with `collabDraftId`, `draftSnapshot` and
+   `If-Match: <base>` (or the moved head for Publish on top), then the usual
+   PUT and finalize.
 
-- Splitting the four extension files that import SFCs (`blocks.ts`, `api.ts`,
-  `inline.ts`, `media.ts`). The spec goes to the package, and the web keeps
-  `Spec.extend({ addNodeView: () => VueNodeViewRenderer(X) })`.
-- Moving `lib/markdown/render.ts` and `nodes.ts` into the package.
-  `render.ts` uses relative `./nodes.js` imports today, which the **buildless
-  package constraints** forbid, so those become self-references.
-- `ApiContract` and `CommentAnchors` take a `t` option. The server seed passes
-  a translator for its locale.
+`finalizeRevision` rebases the draft inside its existing transaction, on the
+dedupe path too: the base becomes the new revision, the snapshot becomes
+`published_snapshot`, and the contributors become the revision's
+`coAuthorIds`. "Unpublished" is `snapshot ≠ published_snapshot`, decoded with
+`Y.equalSnapshots`. It is a snapshot and not a state vector, because a state
+vector does not move on a deletion. Publishing is refused while anyone's
+assistant suggestion is undecided.
 
-Use **jsdom** for `generateJSON` on the server. It is what the spike measured,
-and it is already in the lockfile (a `apps/web` dependency). happy-dom is not
-needed.
+When the head moves by another path, the editor hears `revision.finalized`
+and compares the head with the draft base. A 409 on publish takes the same
+path: notice, review diff against the new head, then **Publish on top** or
+**Discard draft**. There is no automatic content merge; the diff review is the
+only safeguard ([02](../architecture/02-persistence-revisions.md#limits)).
 
-The guarded insert is what prevents the classic double seed across instances.
-`onLoadDocument` runs independently on every instance that has a peer. The
-spike stood in for `INSERT … ON CONFLICT DO NOTHING` + re-read with Redis
-`SET NX` + re-read, and the loser adopted the winner's state. Phase 1 does
-the same in PG.
+### Discard and generations
 
-### 5. The editor must never `setContent` in collab mode
+`DELETE /v1/documents/:id/drafts/:branchId` (editor) reseeds the row in place
+from the branch head and moves `reset_at`. It publishes `draft.reset`, and
+every instance's gateway closes that draft's peers with `reset`. Three guards
+keep the old draft from coming back:
 
-This is the most important editor finding. With Collaboration on, tab B's
-**working-copy restore** (`useWorkingCopy`, localStorage) called `setContent`
-before the provider's first sync. Y then merged that local seed with the
-server's state, and the page body appeared **twice** for everyone. It is the
-classic Y seeding bug, reproduced in the real app through a path the issue did
-not list.
+- **Stores are guarded on `(id, reset_at)`.** A doc loaded before the reset
+  can never write over the reseed. A refused store closes its peers with
+  `reset` too, so a lost `draft.reset` event heals itself.
+- **Admission waits for a reset doc to unload** (`settled`), so a peer that
+  rejoins at once gets the reseed rather than the doc it was closed out of.
+- **Generations** (phase 6). Each draft row has a generation,
+  `generationOf(row)`: its id and `reset_at`, so a reset and a dropped-then-
+  reopened draft both make a new one. After a peer joins, the server sends it
+  the generation as a stateless message (`CollabJoined`). The browser keeps it
+  beside its IndexedDB copy (in y-indexeddb's key–value store, outside the
+  Y.Doc, so it never syncs) and sends it back in its token on every join. A
+  copy from another generation is refused with `reset` **before its sync step
+  is read**. The client then clears the copy and reopens the page. This covers
+  a browser that was offline when someone discarded the draft, whether it
+  reopens the page later or held it open throughout. Without it, that copy
+  would merge the old page, and any stale suggestions, into the reseed.
 
-In collab mode, therefore:
+On `reset` the web drops its Y.Doc and IndexedDB copy (`forget()`), says the
+draft was discarded, and reopens the page from the start.
 
-- **No** `content:` and **no** `setContent` at all: neither the `modelValue`
-  watcher in `RichEditor.vue` (L779–793 today), nor the `resolvePage` re-parse,
-  nor a restore. The Y.Doc is the only writer of the body.
-- `useWorkingCopy` is off from the first render, not after the first sync.
-  §10's "offer the old localStorage copy" import must apply as an ordinary
-  edit *after* `synced`, and only on a click.
+### Offline
 
-### 6. AI suggestions: confirmed broken as predicted, and one plan item is redundant
+`use-collab.ts` keeps an IndexedDB copy per doc name (`y-indexeddb`). Edits
+made while the socket is down land in it and sync on reconnect; Yjs merges
+them, so an offline edit on a current copy arrives once
+(`collab-publish.e2e-spec.ts` pins this). A page opened fully offline shows
+this device's copy, read-only until the server answers.
 
-`applyAiEdit` in tab A inserted its preview, and the text replicated to tab B
-as **plain content**. B showed no violet gutter and no Keep/Discard bar,
-because the suggestion list lives in A's plugin state. Phase 5's redesign
-(suggestion state in the Y.Doc, attributed) is needed as planned.
+### The editor
 
-But y-tiptap already honours `addToHistory: false`: its `UndoManager` uses
-`captureTransaction: tr => tr.getMeta('addToHistory') !== false`. In the spike,
-A's undo skipped the streamed suggestion. §6's dedicated `kn-ai-stream`
-transaction origin is therefore **unnecessary**. Keep the existing meta.
+- `use-collab.ts` is imported dynamically by `EditorPage`, only when
+  `GET /v1/collab/capabilities` says `enabled`. The server render and a
+  deployment with the flag off never load Yjs. It creates the Y.Doc, the
+  provider, the IndexedDB copy and a reactive `status`, and turns provider
+  events into states (`followProvider`).
+- `RichEditor.vue` takes an optional `collab` prop: StarterKit's undo/redo off,
+  Collaboration and CollaborationCaret on. **In collab mode nothing ever calls
+  `setContent`**: the Y.Doc is the only writer of the body. A local seed before
+  the first sync is the classic Yjs double-page bug, and the spike reproduced
+  it through the working-copy restore.
+- The per-browser working copy is off from the first render. A copy saved
+  before the page went live is offered once, and applied to the draft only on
+  a click.
+- Page fields bind to `meta` (`bindPageFields`). A text field follows whatever
+  `Y.Text` its key holds now, because two tabs seeding one key at once leave
+  one text and the loser has to switch to it (the Playwright test found this).
+- If the draft cannot be joined within 10 s, the editor falls back to
+  single-user editing.
+- `CollabPresence.vue`, `CollabStatus.vue` and `CollabDraftBadge.vue` (document
+  page and merge request sidebar) render from `status` and `GET :id/drafts`.
 
-### 7. A block move loses a concurrent edit inside the block
+### Events
 
-Yjs has no move operation. The drag handle moves a block as delete + insert.
-In the spike, B edited inside an expand while offline, A dragged that expand to
-the end, B reconnected, and **B's edit was gone** (the moved copy is new
-content). This is the issue's risk of "a node view that replaces the node",
-caused by the drag handle rather than a node view.
+`draft.changed` (someone joined or left a draft, or it was checkpointed) and
+`draft.reset` travel on `knowledge:events`. They are deliberately not
+`document.*`: everything keyed on `document.*` would fire on every editor join.
+`api/live-cache.ts` refreshes the drafts query on both. Neither raises a toast.
 
-v1 accepts this and documents it. Moves are rare and quick, and the realistic
-case (two people in one block during a drag) is narrow. A fix needs either a
-Yjs move (not in 13.x) or a "block is being edited by …" lock on the drag
-handle. Revisit after dogfooding.
+## Routes
 
-### 8. Smaller ones
+```
+GET    /v1/collab/capabilities           { enabled, schemaVersion } — authenticated only
+GET    /v1/documents/:id/drafts          viewer · each branch's draft: base, unpublished, contributors, activePeers
+DELETE /v1/documents/:id/drafts/:branchId editor · discard: reseed from the head, peers rejoin (reset)
+POST   /v1/documents/:id/revisions       editor · now takes optional collabDraftId + draftSnapshot
+WS     /v1/collab                         Hocuspocus; token = collabToken(kt_ ticket, generation)
+```
 
-- **Undo is per peer.** A's undo removed only A's text, and B's later edit
-  survived. This is the desired behaviour, verified.
-- **Node-view attribute edits sync.** Changing the API block's method in B
-  appeared in A.
-- **Carets need CSS.** `CollaborationCaret` draws the label and selection but
-  ships no styles. Unstyled, the label renders as a full-width bar. Phase 3
-  styles it from `avatarColor(userId)`.
-- **The Redis extension brings its own `ioredis` (~5.6)**, separate from the
-  API's ^6. No conflict, and its traffic stays off `knowledge:events`, as §1
-  wanted.
-- **Stores happen only on the instance where an edit originated.** Updates
-  arriving over Redis skip the store hooks, so two instances do not double
-  every PG write.
+Revisions in API responses carry `coAuthorIds`, an empty list unless they came
+from a shared draft.
 
-### Pre-existing gaps found on the way (not collab)
+## Configuration
 
-The fixture corpus exposed three places where today's markdown pipeline
-already normalizes or loses something, with or without Y:
+All have defaults; none is required.
 
-- **`TextAlign` is dropped on serialize.** A centered paragraph publishes as a
-  plain one, so alignment set in the editor never survives a publish.
-- In edit mode, `[[Page title]]` (with no resolver) round-trips as
-  `\[\[Page title\]\]`.
-- `> [!warning]` normalizes to `> [!WARNING]` (harmless).
+| Variable | Default | |
+| --- | --- | --- |
+| `COLLAB_ENABLED` | `false` | Off: no Hocuspocus instance, no Redis connection, the socket closes 4503, `GET :id/drafts` is empty |
+| `COLLAB_STORE_DEBOUNCE_MS` | `2000` | Quiet time before a store |
+| `COLLAB_STORE_MAX_DEBOUNCE_MS` | `10000` | Longest wait under continuous typing; the most a crash can lose |
+| `COLLAB_MAX_DOC_BYTES` | `8388608` | Encoded state cap (8 MiB) |
+| `COLLAB_REAUTH_INTERVAL_SECONDS` | `300` | Re-check of every open connection |
+| `COLLAB_CHECKPOINT_INTERVAL_MINUTES` | `15` | |
+| `COLLAB_CHECKPOINT_KEEP` | `20` | Versions of the checkpoint key per draft |
+| `COLLAB_DRAFT_RETENTION_DAYS` | `30` | Only drafts with nothing unpublished |
 
-The first is a real bug and worth its own issue. It is outside #80's scope.
+The web derives the socket URL the way `api/live.ts` does. It needs no
+variable of its own.
+
+## Observability
+
+Every store emits one `collab.store` measurement event to the ops JSONL stream
+(`OPS_JSONL_ENABLED`, `@knowledge/observability`). It records the store's
+duration (encode, snapshot and PG write), the draft's encoded size, the
+connections the draft has on this instance, and the outcome: `stored`,
+`stale` (refused after a reset) or `too-large`. `make backtest ARGS=--report`
+summarizes them: store latency percentiles, draft size, the most peers on one
+draft, and the refusals.
 
 ## Load
 
-50 documents × 5 peers = 250 sockets, split across both instances. One typist
-per document at about **1.5 KB/s** (34 chars every 20 ms) and an awareness
-update from every peer every 200 ms, for 60 s. All peers converged.
+`make collab-load` (`apps/api/test/collab-load.ts`) creates pages, joins
+`--peers` providers per page across the given API instances, has one typist
+per page append 34 characters every 20 ms while every peer moves its cursor
+every 200 ms, and reports edit latency to the other peers, convergence and
+draft size. It needs `AUTH_MODE=none` and archives its pages afterwards.
 
-| | `:3000` (typists' instance) | `:3001` |
+Measured on 2026-10-19 on the laptop: two API instances built from this
+branch, one local Redis and Postgres, and the load generator on the same
+machine. 5 peers per page, typists spread over both instances.
+
+| | 10 pages × 5 peers, 30 s | 50 pages × 5 peers, 60 s |
 | --- | --- | --- |
-| CPU (one core), sampled every 8 s | 38–62 %, about 45 % on average | 23–35 % |
-| RSS, idle → under load | 269 → 305 MB (the whole API) | 228 → 249 MB |
-| Store writes | **1 per active doc per `COLLAB_STORE_MAX_DEBOUNCE_MS` (10 s)** under continuous typing, about 5/s at 50 docs | 0 |
-| Bytes written | about 40 KB per write on average, growing with the document | — |
+| Typing per page | 1.5 KB/s | 1.6 KB/s |
+| Edit latency to other peers | p50 **3 ms**, p95 **8 ms**, max 33 ms | p50 **10 ms**, p95 **57 ms**, max 173 ms |
+| Converged | 10/10 | 50/50 |
+| CPU per instance (one core) | 16–29 % | 50–73 % ramping to about 100 % |
+| RSS per instance | 375–490 MB | 340 → 520 / 355 → 650 MB |
+| Stores | — | 300 in 52 s (**5.8/s**, one per page per 10 s), 545 KB/s written |
+| Store duration | — | p50 52 ms, p95 210 ms (CPU-bound) |
+| Draft size after the run | 79 KB | 163 KB |
 
-The writes are **full state**, not increments: each store re-encodes the whole
-Y.Doc. That is fine at this scale. The worst case is an 8 MiB document
-(`COLLAB_MAX_DOC_BYTES`) rewritten every 10 s while someone types, about
-0.8 MB/s for one document, and phase 6's load test should watch for it.
-Encoded Y state was 2.6× the markdown at seed (1,257 B of markdown, 3,247 B of
-state). Tombstones grow it from there, which is why the re-encode after publish
-listed in the risks stays.
+At 50 busy pages both instances were CPU-bound, and the edit p95 stayed far
+under the 500 ms target. The cost is the full-state store: each store
+re-encodes the whole Y.Doc and computes its snapshot, and at 163 KB that is
+most of the CPU. A busy page costs one store per `COLLAB_STORE_MAX_DEBOUNCE_MS`
+however many people type in it. The worst case is still an 8 MiB draft
+rewritten every 10 s while someone types, about 0.8 MB/s for one page. The
+50-page run is far past the expected load: production runs one instance and
+sees a handful of concurrent editors.
 
-## Playwright
+## Rollout
 
-`@playwright/test` 1.64 ran the two-context test against the dev stack using
-`channel: 'chrome'`. The installed Chrome means no browser download. GitHub's
-Ubuntu runner images ship Chrome too. The cost lands in CI: `ci.yml` runs no
-services today, so the co-editing test needs **its own job** that starts the
-compose infra, builds, and runs the API and the web before
-`playwright test`. It belongs in phase 3, next to the first test it runs.
+`COLLAB_ENABLED` stays `false` in this release. Flipping the default (or
+setting it in the `production` environment) is a separate change after a
+dogfood pass on the dev stack:
 
-## Plan changes
+- [ ] Two people (or two browsers) on one page: typing, the title and tags,
+  carets with names, faces in the header.
+- [ ] One asks the assistant; the other sees the credit, "writing for …", and
+  can keep or discard.
+- [ ] Publish from one; the other's chip clears; later edits stay unpublished;
+  the revision shows both as co-authors.
+- [ ] Publish the same page through MCP; the editor shows the head-moved
+  notice; Publish on top and Discard both work.
+- [ ] Take one browser offline, edit, reconnect: the edit arrives once.
+- [ ] Take one browser offline, discard the draft from the other, reconnect:
+  the offline tab reopens the reset page, and the old text does not come back.
+- [ ] A viewer joins read-only; demoting an editor turns their tab read-only
+  within `COLLAB_REAUTH_INTERVAL_SECONDS`.
+- [ ] A merge request whose source branch has a draft shows the warning.
 
-Applied to #80's phases, by phase:
+## Departures from the plan in #80
 
-| Phase | Change |
-| --- | --- |
-| 1 | Seeding A uses jsdom. Guarded insert as above. Otherwise unchanged. |
-| 1 | Add the `packages/editor-schema` split (four extension files + `render.ts`/`nodes.ts`) here rather than treating it as an L add-on to phase 3. The server seed needs it in phase 1. |
-| 2 | Drop `collab-ticket.service.ts` and `POST :id/collab/ticket`. Reuse `kt_` tickets. Add `GET /v1/collab/capabilities`. |
-| 2 | Authorize with `PermissionService.requireResource` (page permissions), not `AccessService.requireRole`. Re-check on `acl.changed` plus the interval. |
-| 2 | Per-document deny **reasons** replace the 4401/4403 close codes. Verify that custom close codes 4409 and 4413 reach the provider. |
-| 3 | Collab mode never calls `setContent`, and `useWorkingCopy` is off from the first render. Caret styles. Add the Playwright CI job and the first two-context test. |
-| 5 | Drop the custom `kn-ai-stream` origin, because `addToHistory: false` already keeps streamed suggestions out of undo. |
-| 6 | Document the block-move limitation (finding 7). The load test watches full-state write volume. |
+- **Tickets.** `kt_` URL tickets (#102) instead of a collab ticket service
+  and `POST :id/collab/ticket`. Binding a ticket to a page added nothing,
+  because admission re-checks the page anyway.
+- **Page permissions**, not workspace roles: the issue predates feature 48.
+  Revocation listens to `acl.changed` plus the interval; there is no role-change
+  event to listen to.
+- **Reasons, not close codes** (4401/4403/4409/4413): Hocuspocus closes a
+  document, not the socket, and the provider sees only the reason.
+- **Events** are `draft.changed` / `draft.reset`, not `document.draft.changed`.
+- **`draftSnapshot`, not `stateVector`**: a state vector misses deletions.
+- **One checkpoint key per draft**, with versions in the versioned bucket,
+  rather than one key per timestamp.
+- **`If-Match` is not required to equal the draft base.** It is the client's
+  statement of what it builds on, and Publish on top must be able to say so.
+- **Suggestions in a side map**, not schema marks: `SCHEMA_VERSION` did not
+  change, and an old tab cannot corrupt them. No awareness `agent` field:
+  "writing for …" is derived from the shared list and awareness liveness.
+- **No `kn-ai-stream` origin**: `addToHistory: false` already keeps streamed
+  suggestions out of y-tiptap's undo.
+- **Schema mismatch** is checked by the client against
+  `GET /v1/collab/capabilities`, not by a `sys` map in the doc.
+- **Device copies carry a generation** (phase 6) rather than comparing
+  `resetAt` in the doc, so nothing is written into the draft to detect a reset.
+- **Not built:** `COLLAB_MAX_PEERS_PER_DOC`, a per-connection message rate
+  limit and `COLLAB_IDLE_UNLOAD_SECONDS` (Hocuspocus unloads a doc once its
+  last peer leaves and the store finishes). The ticket TTL is
+  `AUTH_URL_TICKET_TTL_SEC`.
 
-## Open questions answered
+## Limits
 
-From the issue's *Risks & open questions*:
+- **A block move loses a concurrent edit inside the block.** Yjs has no move;
+  the drag handle moves a block as delete + insert, so an edit inside the block
+  from a peer who was offline during the move is gone. Accepted for v1. A fix
+  needs a Yjs move or a "being edited" lock on the drag handle.
+- **Publish on top overwrites** whatever the other path published. The review
+  diff is the only safeguard until content merge exists.
+- **`activePeers` is per instance.** It counts awareness on the instance that
+  answers, including peers relayed from instances that have the doc loaded. It
+  is exact with one instance (production); a scaled-out deployment needs a
+  Redis presence key.
+- **Presence lists your own other tabs**, under your name.
+- **A device copy with no remembered generation is not checked.** That is a
+  copy saved before this release, or one whose tab closed between the first
+  sync and the server's join message (a few milliseconds). Such a copy across
+  a reset would still merge.
+- **Read-only writes are dropped but not counted.** Hocuspocus answers them
+  with a sync status the client sees, and exposes no hook. The editor never
+  sends them, because a read-only tab cannot type.
+- **Suggestion entries whose range no longer resolves** (both ends deleted by
+  peers) are skipped on read but never removed from the map. They are a few
+  bytes each.
+- **Stores write the full state**, not increments (see [Load](#load)).
+  Tombstones grow the state between resets; nothing re-encodes it after a
+  publish yet.
+- **A schema change** (a new node or attribute in `@knowledge/editor-schema`)
+  turns every open tab on the old build read-only until it reloads.
+- **Comment anchors** are quote-based, so heavy concurrent editing can orphan
+  them sooner. Feature 15's "outdated" path handles them; this is not measured
+  at volume.
 
-- **Transport:** works cleanly, and Redlock's `ioredis` is separate (finding 8).
-- **Schema drift:** unchanged. The `schemaVersion` gate (read-only on mismatch)
-  stays.
-- **Server-side schema:** cheaper than feared (finding 4).
-- **Undo semantics:** per-peer undo verified. Keep-as-author-edit is still to
-  verify in phase 5.
-- **Custom node views:** attribute last-writer-wins is fine. The drag handle's
-  move is the real loss case (finding 7).
-- **Comment anchors** under heavy concurrent edits: not measured. The
-  extension loaded and decorated without errors, and volume is phase 6.
-- **MR gate:** warn only (decided).
-- **Storage growth:** full-state writes measured (see [Load](#load)).
-  Re-encode after publish stays in the plan.
-- **Browser e2e:** Playwright (decided), feasible as shown.
-- **Per-workspace setting:** none in v1 (decided).
+## Phase 0: the spike's decision record
+
+The spike (throwaway branch
+[`spike/80-collab`](https://github.com/hrustalq/knowledge/tree/spike/80-collab),
+never merged) answered the issue's open questions on the laptop with two API
+instances against one Redis. Verdict **GO**: Hocuspocus embedded in the API,
+with the server seeding new drafts (option A).
+
+| Question | Answer | Evidence |
+| --- | --- | --- |
+| `@hocuspocus/server` behind a Nest gateway? | Yes, as a library | Second gateway on the same `WsAdapter` and port, both serving |
+| Peers on different instances converge? | Yes, via the Redis extension | 200 edits across instances: p50 1.0 ms, p95 2.4 ms |
+| Latency in a real browser | Well under 500 ms | Playwright, two contexts: 48–75 ms, typing included |
+| Seeded exactly once? | Yes, with a guarded insert | 5 clients across both instances at once: one seed |
+| Read-only enforced server-side? | Yes | A read-only insert never reached a writer peer |
+| Headless schema? | Yes, only `.vue` node views stubbed | 31 node types and 8 marks under jsdom |
+| Every custom node survives the Y.Doc? | Yes, byte for byte | 16 fixtures: `md → PM → Y → PM → md` equals `md → PM → md` |
+| Attributes JSON-safe? | Yes | The whiteboard scene is one string attribute: last writer wins |
+| Server seed cost | Small | 3.4 ms for 1.3 KB of markdown, 31 ms for 25 KB |
+
+Decided before the spike (comment on #80, 2026-10-18): server seeding,
+Playwright for a two-context test (CI job `coedit-e2e`), a merge-request
+warning rather than a gate, and the env flag as the only switch, with no
+per-workspace setting.
+
+The spike also found three pre-existing gaps in the markdown pipeline,
+unrelated to Y: `TextAlign` is dropped on serialize, `[[Page title]]`
+round-trips escaped in edit mode, and `> [!warning]` normalizes to
+`> [!WARNING]`.

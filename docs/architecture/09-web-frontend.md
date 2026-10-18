@@ -260,6 +260,14 @@ cytoscape because cytoscape nodes cannot be Vue components;
 `startLive()` throws under SSR outright, and `stores/events.ts` returns early —
 neither an `EventSource` nor a `WebSocket` has any meaning during a render.
 
+Co-editing ([56](../features/56-realtime-coediting.md)) goes one step further:
+`components/editor/use-collab.ts` (Yjs, the Hocuspocus provider, IndexedDB) is
+a **dynamic import** that `EditorPage` makes in `onMounted`, and only after
+`GET /v1/collab/capabilities` says `enabled`. The server render and a
+deployment with the flag off never load Yjs at all; the SSR pass renders the
+editor's existing skeleton. In collab mode the editor never calls
+`setContent`, because the Y.Doc is the only writer of the body.
+
 ## Limits
 
 Pinia state is transferred, but vue-query's cache is not: a server-rendered page

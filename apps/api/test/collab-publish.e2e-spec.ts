@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import * as Y from 'yjs';
 import { HocuspocusProvider } from '@hocuspocus/provider';
-import { collabDocName, type CollabDraftInfo, type ListCollabDraftsResponse } from '@knowledge/contracts';
+import { collabDocName, collabToken, type CollabDraftInfo, type ListCollabDraftsResponse } from '@knowledge/contracts';
 import { BODY_FIELD } from '../src/collab/collab-drafts.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { StorageService } from '../src/storage/storage.service.js';
@@ -15,7 +15,9 @@ import { StorageService } from '../src/storage/storage.service.js';
  * edits made after the published snapshot stay unpublished, a moved head is
  * the usual 409, a content-equal publish still rebases, and discarding the
  * draft closes its peers on every instance with `reset` and reseeds it from
- * the head. Runs as the AUTH_MODE=none dev principal. Needs `make infra-up`.
+ * the head. A device copy from before the reset is refused (#80 phase 6),
+ * and an offline edit on a current copy merges in once. Runs as the
+ * AUTH_MODE=none dev principal. Needs `make infra-up`.
  */
 
 process.env.COLLAB_ENABLED = 'true';
@@ -42,7 +44,14 @@ const encode = (doc: Y.Doc) => Buffer.from(Y.encodeSnapshot(Y.snapshot(doc))).to
 
 describe('publishing a shared draft (e2e)', () => {
   const apps: INestApplication[] = [];
-  const peers: { provider: HocuspocusProvider; document: Y.Doc; closed: string[] }[] = [];
+  const peers: {
+    provider: HocuspocusProvider;
+    document: Y.Doc;
+    closed: string[];
+    denied: string[];
+    /** What the server said this copy belongs to — what the editor keeps beside its IndexedDB copy. */
+    generation?: string;
+  }[] = [];
   let prisma: PrismaService;
   let ports: number[];
   let documentId: string;
@@ -60,17 +69,22 @@ describe('publishing a shared draft (e2e)', () => {
     return (app.getHttpServer().address() as AddressInfo).port;
   }
 
-  function peer(port: number) {
+  /** A peer; `copy` is a device copy it opens with, as the editor reopens its IndexedDB copy. */
+  function peer(port: number, copy?: { state: Uint8Array; generation: string | null }) {
     const document = new Y.Doc();
+    if (copy) Y.applyUpdate(document, copy.state);
     const p: (typeof peers)[number] = {
       document,
       closed: [],
+      denied: [],
       provider: new HocuspocusProvider({
         url: `ws://127.0.0.1:${port}/v1/collab`,
         name,
         document,
-        token: 'dev',
+        token: collabToken('dev', copy?.generation ?? null),
         onClose: ({ event }) => void p.closed.push(event.reason),
+        onAuthenticationFailed: ({ reason }) => void p.denied.push(reason),
+        onStateless: ({ payload }) => void (p.generation = JSON.parse(payload).generation),
       }),
     };
     // What the editor's caret extension does; the server fills in who this is.
@@ -216,5 +230,37 @@ describe('publishing a shared draft (e2e)', () => {
     const row = await prisma.collabDraft.findUniqueOrThrow({ where: { documentId_branchId: { documentId, branchId } } });
     expect(row.resetAt).not.toBeNull();
     await http().delete(`/v1/documents/${documentId}/drafts/${randomUUID()}`).expect(404);
+  });
+
+  it('refuses a device copy from before the reset, before it can merge', async () => {
+    const [a, , fresh] = peers;
+    expect(a!.generation).toBeTruthy();
+    expect(fresh!.generation).toBeTruthy();
+    expect(fresh!.generation).not.toBe(a!.generation);
+
+    // A's copy, kept offline through the discard, comes back.
+    const stale = peer(ports[0]!, { state: Y.encodeStateAsUpdate(a!.document), generation: a!.generation! });
+    await until(() => stale.denied.includes('reset'), 'the stale copy to be refused with reset');
+    await new Promise((r) => setTimeout(r, 500));
+    const row = await prisma.collabDraft.findUniqueOrThrow({ where: { documentId_branchId: { documentId, branchId } } });
+    const server = new Y.Doc();
+    Y.applyUpdate(server, row.state);
+    expect(text(server)).not.toContain('Typed by B');
+    expect(text(fresh!.document)).not.toContain('Typed by B');
+  });
+
+  it('merges an edit made offline on a current copy, once', async () => {
+    const fresh = peers[2]!;
+    const offline = new Y.Doc();
+    Y.applyUpdate(offline, Y.encodeStateAsUpdate(fresh.document));
+    type(offline, 'Written offline');
+
+    const back = peer(ports[0]!, { state: Y.encodeStateAsUpdate(offline), generation: fresh.generation! });
+    await until(() => back.provider.isSynced, 'the copy to rejoin');
+    await until(() => text(fresh.document).includes('Written offline'), 'the offline edit to reach the other peer');
+    await stored('Written offline');
+    expect(text(fresh.document).split('On top.').length - 1).toBe(1);
+    expect(text(back.document)).toBe(text(fresh.document));
+    expect(back.denied).toEqual([]);
   });
 });

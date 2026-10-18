@@ -1,13 +1,14 @@
 import { JSDOM } from 'jsdom';
 import * as Y from 'yjs';
 import { yXmlFragmentToProseMirrorRootNode } from '@tiptap/y-tiptap';
-import { collabDocName, parseCollabDocName } from '@knowledge/contracts';
+import { collabDocName, collabToken, parseCollabDocName, parseCollabToken } from '@knowledge/contracts';
 import { editorSchema, parseMarkdown } from '@knowledge/editor-schema';
 import { META_FIELD, pageMetaOf, seedPageMeta } from '@knowledge/editor-schema/page-fields';
 import {
   BODY_FIELD,
   CollabDraftTooLargeError,
   CollabDraftsService,
+  generationOf,
   sameSnapshot,
   seedState,
   snapshotOf,
@@ -154,5 +155,18 @@ describe('collab drafts (#80 phases 1 and 4)', () => {
     for (const bad of ['collab:a:b:c', `collab:${ids.join(':')}:extra`, `draft:${ids.join(':')}`, `collab:${ids[0]}:${ids[1]}`]) {
       expect(parseCollabDocName(bad)).toBeNull();
     }
+  });
+
+  it('carries a copy’s generation beside its ticket, and a new one per reseed (phase 6)', () => {
+    const row = { id: '33333333-3333-4333-8333-333333333333', resetAt: null };
+    const seeded = generationOf(row);
+    const reset = generationOf({ ...row, resetAt: new Date(1_760_000_000_123) });
+    expect(reset).not.toBe(seeded);
+    expect(generationOf({ ...row, id: '44444444-4444-4444-8444-444444444444' })).not.toBe(seeded);
+
+    expect(parseCollabToken(collabToken('kt_abc', reset))).toEqual({ ticket: 'kt_abc', generation: reset });
+    expect(parseCollabToken(collabToken('kt_abc', null))).toEqual({ ticket: 'kt_abc', generation: null });
+    // AUTH_MODE=none mints no ticket; the copy still counts.
+    expect(parseCollabToken(collabToken('', seeded))).toEqual({ ticket: '', generation: seeded });
   });
 });

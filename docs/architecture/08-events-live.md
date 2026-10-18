@@ -150,6 +150,32 @@ plain objects.
 
 A 30-second ping/pong heartbeat terminates sockets that stop answering.
 
+## The second gateway: `/v1/collab`
+
+Co-editing ([feature 56](../features/56-realtime-coediting.md)) runs a second
+`@WebSocketGateway` on the same `WsAdapter` and port. It shares none of the
+above protocol: it hands each socket to an embedded Hocuspocus, which speaks
+binary y-protocols frames and multiplexes documents. What it shares is the
+stance:
+
+- **It authenticates itself**, per document: only a single-use `kt_` ticket is
+  accepted (no `ks_`/`kn_` in a socket URL), and page permissions decide view
+  or edit. Outcomes are per-document reasons, not close codes; the only close
+  code is 4503 with `COLLAB_ENABLED` off. `LIVE_WS_ENABLED` does not switch it
+  off.
+- **CRDT traffic never rides `knowledge:events`.** Updates and awareness go
+  between instances through `@hocuspocus/extension-redis` on its own
+  connections (`kn:collab` prefix). The bus carries only the two things a
+  page needs to *react* to, `draft.changed` and `draft.reset`. Both are
+  deliberately outside `document.*`, so an editor joining does not reload the
+  page, toast, or offer a workflow trigger.
+- **`acl.changed` re-judges open connections** of that workspace, exactly as
+  it narrows a `/v1/events/ws` subscription, plus a
+  `COLLAB_REAUTH_INTERVAL_SECONDS` sweep for role changes, which have no event.
+- **A lost `draft.reset` heals itself.** Each instance closes its own peers on
+  the event, and a store from a doc loaded before the reset is refused and
+  closes them anyway.
+
 ## Access control, then tracking
 
 The filters are separate and none substitutes for another.

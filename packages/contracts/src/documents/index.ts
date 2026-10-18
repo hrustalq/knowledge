@@ -589,11 +589,36 @@ export function parseCollabDocName(
  *   fresh ticket to learn the new scope.
  * - `too-large` — the draft passed COLLAB_MAX_DOC_BYTES and stopped saving.
  * - `reset` — someone discarded the draft and it was reseeded from the branch
- *   head. Rejoin with a **new** Y.Doc and this device's copy cleared: merging
- *   the old state into the reseeded one would show the page twice.
+ *   head, or this device's copy is from before such a reseed
+ *   (`collabToken`). Rejoin with a **new** Y.Doc and this device's copy
+ *   cleared: merging the old state into the reseeded one would show the page
+ *   twice.
  */
 export const COLLAB_DENY_REASONS = ['unauthorized', 'forbidden', 'access-changed', 'too-large', 'reset'] as const;
 export type CollabDenyReason = (typeof COLLAB_DENY_REASONS)[number];
+
+/**
+ * What a peer sends as its Hocuspocus token: its `kt_` ticket and, when this
+ * device holds a copy of the draft, the generation that copy came from. A
+ * draft gets a new generation whenever it is reseeded (a reset, or dropped
+ * and opened again). The server refuses a copy from another generation with
+ * `reset` before it syncs, so an offline copy of a discarded draft is never
+ * merged into its reseed. A `kt_` ticket never contains a space.
+ */
+export function collabToken(ticket: string, generation: string | null): string {
+  return generation ? `${ticket} ${generation}` : ticket;
+}
+
+/** The inverse. A plain ticket claims no copy. */
+export function parseCollabToken(token: string): { ticket: string; generation: string | null } {
+  const at = token.indexOf(' ');
+  return at < 0 ? { ticket: token, generation: null } : { ticket: token.slice(0, at), generation: token.slice(at + 1) || null };
+}
+
+/** The stateless message a peer gets once it joined: the generation to remember beside its copy. */
+export interface CollabJoined {
+  generation: string;
+}
 
 /** The one socket-level close: COLLAB_ENABLED is off. */
 export const COLLAB_DISABLED_CLOSE_CODE = 4503;

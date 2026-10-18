@@ -16,7 +16,8 @@ import { getToken } from '@/lib/api'
 export type LiveEventListener = (event: KnowledgeEvent) => void
 export type LiveErrorListener = (error: ApiErrorPayload) => void
 
-function wsBase(): string {
+/** The WebSocket origin: `/v1/events/ws` here, `/v1/collab` for shared drafts (#80). */
+export function wsBase(): string {
   const explicit = import.meta.env.VITE_WS_URL as string | undefined
   if (explicit) return explicit
   // Dev: straight to the API (the Vite middleware proxy does not upgrade WS).

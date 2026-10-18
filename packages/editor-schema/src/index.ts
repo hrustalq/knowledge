@@ -586,10 +586,14 @@ export const AgentMention = Node.create({
  * The stock extensions, configured once. The editor adds behaviour on top
  * (placeholder, slash menu, drag handle…); anything that changes the schema
  * belongs here.
+ *
+ * `undoRedo: false` for a shared draft (#80): Collaboration brings its own
+ * per-peer undo, and ProseMirror's history would undo other people's edits.
  */
-export function baseExtensions(lowlight = createLowlight()): AnyExtension[] {
+export function baseExtensions(lowlight = createLowlight(), { undoRedo = true } = {}): AnyExtension[] {
   return [
     StarterKit.configure({
+      ...(undoRedo ? {} : { undoRedo: false as const }),
       codeBlock: false,
       link: { openOnClick: false, autolink: true, HTMLAttributes: { rel: 'noopener noreferrer nofollow' } },
       heading: { levels: [1, 2, 3, 4] },
@@ -644,6 +648,9 @@ export function schemaVersion(schema: Schema): string {
 }
 
 export const SCHEMA_VERSION = schemaVersion(editorSchema);
+
+/** The Y.XmlFragment a shared draft keeps the page body in (#80): what the server seeds and the editor binds. */
+export const BODY_FIELD = 'body';
 
 /**
  * markdown → ProseMirror document, the way the editor opens a page. The DOM is

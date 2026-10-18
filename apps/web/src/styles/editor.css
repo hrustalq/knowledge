@@ -1507,6 +1507,75 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-unstaged-chip[data-failed] { color: var(--destructive); }
 .kn-unstaged-chip[data-failed] .kn-dirty-dot { background: var(--destructive); }
 
+/* --------------------------------------------------- shared drafts (#80) */
+
+/* Where this tab stands with the draft: a dot and a word, like the unstaged chip. */
+.kn-collab-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.kn-collab-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--muted-foreground);
+  opacity: 0.55;
+}
+/* Live is structure — others are in the page with you — so it wears the one indigo. */
+.kn-collab-status[data-tone='live'] .kn-collab-dot { background: var(--primary); opacity: 1; }
+.kn-collab-status[data-tone='stopped'] { color: var(--destructive); }
+.kn-collab-status[data-tone='stopped'] .kn-collab-dot { background: var(--destructive); opacity: 1; }
+.kn-collab-dot[data-pulse] { animation: kn-collab-pulse 1.4s ease-in-out infinite; }
+@keyframes kn-collab-pulse { 50% { opacity: 0.15; } }
+@media (prefers-reduced-motion: reduce) { .kn-collab-dot[data-pulse] { animation: none; } }
+@media (max-width: 639.98px) {
+  .kn-collab-status-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+
+/* Who else is here: overlapping faces, each ringed in the header's own ground. */
+.kn-collab-presence { display: inline-flex; align-items: center; padding-inline-end: 0.25rem; }
+.kn-collab-presence > * { box-shadow: 0 0 0 2px var(--background); }
+.kn-collab-presence > * + * { margin-inline-start: -0.3rem; }
+.kn-collab-more {
+  display: grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding-inline: 0.25rem;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+/* Another person's caret: a hairline in their hue, their name above it.
+ * CollaborationCaret ships no styles; unstyled, the label is a full-width bar. */
+.kn-caret {
+  position: relative;
+  margin-inline: -1px;
+  border-inline-start: 2px solid var(--kn-caret);
+  word-break: normal;
+  pointer-events: none;
+}
+.kn-caret-label {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px 4px 4px 0;
+  background: var(--kn-caret-ink, var(--kn-caret));
+  color: #fff;
+  font: 600 0.68rem/1.35 ui-sans-serif, system-ui, sans-serif;
+  white-space: nowrap;
+  user-select: none;
+}
+.kn-caret-selection { background: color-mix(in oklab, var(--kn-caret) 22%, transparent); }
+
 /* A copy kept from before the page was last published: a decision, not a toast. */
 .kn-stale-copy {
   display: flex;

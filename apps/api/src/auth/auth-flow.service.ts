@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
+  AuthMethod,
   AuthSessionResponse,
   ForgotPasswordResponse,
   ResendVerificationResponse,
@@ -20,7 +21,8 @@ import { userAvatarUrl } from '../common/avatar-url.js';
 import { MailProducer } from '../mail/mail.producer.js';
 import { hashPassword, verifyPassword } from './password.js';
 import type { Principal } from './principal.js';
-import { SessionsService } from './sessions.service.js';
+import { SessionsService, type SessionMeta } from './sessions.service.js';
+import { passwordAllowedFor } from './password-policy.js';
 import { AuditService } from './audit.service.js';
 import type { RequestMeta } from '../common/client-ip.js';
 import { hashToken, mintToken } from './auth-tokens.js';
@@ -30,6 +32,14 @@ import { currentLocale, t } from '../i18n/t.js';
 
 /** Floor between two verification mails to one person — a resend button is easy to hold down. */
 const RESEND_COOLDOWN_MS = 60_000;
+
+/** How a session is being opened, beyond who for: what the session and its audit row record. */
+export interface IssueSessionOptions extends Pick<SessionMeta, 'providerId' | 'idpSessionId' | 'ttlHours'> {
+  authMethod: AuthMethod;
+  /** The workspace the sign-in belongs to — an SSO provider's. Null for a password sign-in. */
+  workspaceId: string | null;
+  via: 'login' | 'signup' | 'sso';
+}
 
 /**
  * Auth flow (login / signup / password restoration) layered on Phase 5 auth.
@@ -58,6 +68,8 @@ export class AuthFlowService {
       throw new ForbiddenException(t('error.auth.signupDisabled'));
     }
     const normalized = email.trim().toLowerCase();
+    // A signup is a password account: under an SSO-only ceiling it would be one nobody can use.
+    if (!passwordAllowedFor(normalized, this.config)) throw new ForbiddenException(t('error.auth.passwordLoginDisabled'));
     const existing = await this.prisma.user.findUnique({ where: { email: normalized } });
     if (existing) throw new ConflictException(t('error.auth.emailTaken'));
 
@@ -85,11 +97,24 @@ export class AuthFlowService {
         });
       }
     }
-    return this.openSession(user, meta, 'signup');
+    return this.issueSession(user, meta, { authMethod: 'password', workspaceId: null, via: 'signup' });
   }
 
   async login(email: string, password: string, meta?: RequestMeta): Promise<AuthSessionResponse> {
     const normalized = email.trim().toLowerCase();
+    // The ceiling is instance-wide, so saying so reveals nothing about the account.
+    if (!passwordAllowedFor(normalized, this.config)) {
+      void this.audit.record({
+        workspaceId: null,
+        actor: 'anonymous',
+        action: 'auth.login_failed',
+        params: { method: 'password', email: normalized.slice(0, 320) },
+        ok: false,
+        error: 'password-login-disabled',
+        ip: meta?.ip,
+      });
+      throw new ForbiddenException(t('error.auth.passwordLoginDisabled'));
+    }
     const user = await this.prisma.user.findUnique({ where: { email: normalized } });
     const reason = !user
       ? 'unknown-email'
@@ -115,7 +140,7 @@ export class AuthFlowService {
       });
       throw new UnauthorizedException(t('error.auth.invalidCredentials'));
     }
-    return this.openSession(user, meta, 'login');
+    return this.issueSession(user, meta, { authMethod: 'password', workspaceId: null, via: 'login' });
   }
 
   async logout(principal: Principal, meta?: RequestMeta): Promise<void> {
@@ -133,7 +158,10 @@ export class AuthFlowService {
   }
 
   async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
-    const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    const normalized = email.trim().toLowerCase();
+    // A reset link for a password that cannot be used would only be a way to mint one.
+    if (!passwordAllowedFor(normalized, this.config)) return { ok: true };
+    const user = await this.prisma.user.findUnique({ where: { email: normalized } });
     if (!user || user.disabledAt) return { ok: true }; // no account enumeration
 
     const { token, tokenHash } = mintToken('kr_');
@@ -239,18 +267,30 @@ export class AuthFlowService {
     return token;
   }
 
-  /** Session + MeResponse for signup/login responses. A signup is its first sign-in, and audited as one. */
-  private async openSession(user: User, meta: RequestMeta | undefined, via: 'login' | 'signup'): Promise<AuthSessionResponse> {
+  /**
+   * Session + MeResponse for every way of signing in — password, signup, SSO
+   * (#75). A signup is its first sign-in, and audited as one. An SSO sign-in
+   * is audited under its provider's workspace, so that workspace's admins see it.
+   */
+  async issueSession(user: User, meta: RequestMeta | undefined, opts: IssueSessionOptions): Promise<AuthSessionResponse> {
     const { token, session } = await this.sessions.create(user.id, {
-      authMethod: 'password',
+      authMethod: opts.authMethod,
+      ...(opts.providerId ? { providerId: opts.providerId } : {}),
+      ...(opts.idpSessionId ? { idpSessionId: opts.idpSessionId } : {}),
+      ...(opts.ttlHours ? { ttlHours: opts.ttlHours } : {}),
       ip: meta?.ip,
       userAgent: meta?.userAgent,
     });
     void this.audit.record({
-      workspaceId: null,
+      workspaceId: opts.workspaceId,
       actor: user.id,
       action: 'auth.login',
-      params: { method: 'password', via, sessionId: session.id },
+      params: {
+        method: opts.authMethod,
+        via: opts.via,
+        sessionId: session.id,
+        ...(opts.providerId ? { providerId: opts.providerId } : {}),
+      },
       ok: true,
       ip: meta?.ip,
       target: user.id,
@@ -267,7 +307,7 @@ export class AuthFlowService {
         locale: asLocale(user.locale),
         emailVerified: user.emailVerifiedAt !== null,
         sessionId: session.id,
-        authMethod: 'password',
+        authMethod: opts.authMethod,
       },
       memberships,
       this.config.get<boolean>('AUTH_REQUIRE_VERIFIED_EMAIL') === true,

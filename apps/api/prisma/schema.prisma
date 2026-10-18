@@ -3441,6 +3441,8 @@ model SsoAuthRequest {
   /// The 60 s fragment code the web trades for a session (never the token itself).
   exchangeCodeHash String?   @unique @map("exchange_code_hash")
   userId           String?   @map("user_id") @db.Uuid
+  /// The IdP's session id (OIDC `sid`), carried from the callback to the session the exchange opens.
+  idpSessionId     String?   @map("idp_session_id")
   expiresAt        DateTime  @map("expires_at") @db.Timestamptz
   consumedAt       DateTime? @map("consumed_at") @db.Timestamptz
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz

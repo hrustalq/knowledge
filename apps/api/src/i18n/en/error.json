@@ -34,7 +34,9 @@
     "apiKeyProjectsNeedCapture": "Only a key with capture scope can be pinned to projects.",
     "apiKeyProjectNotAllowed": "You can only pin a key to a project you can reach, inside the key's workspace ({projectId}).",
     "apiKeyLimit": "You already have {max} active API keys — revoke one before creating another.",
-    "sessionNotFound": "Session not found"
+    "sessionNotFound": "Session not found",
+    "passwordLoginDisabled": "Password sign-in is turned off on this instance — sign in with your organization's single sign-on",
+    "rateLimited": "Too many attempts — wait a minute and try again"
   },
   "workspace": {
     "notFound": "Workspace {id} not found",
@@ -627,5 +629,20 @@
     "overrideNotCurrent": "Only the check of the current source head can be overridden; a newer push replaced this one.",
     "notOverridable": "This check does not hold the merge — there is nothing to override.",
     "alreadyOverridden": "This head's check is already overridden."
+  },
+  "sso": {
+    "disabled": "Single sign-on is not enabled on this instance",
+    "providerNotFound": "Identity provider not found",
+    "exchangeInvalid": "This sign-in link is invalid, expired or already used — sign in again",
+    "secretKeyMissing": "The client secret cannot be stored: SETTINGS_ENCRYPTION_KEY is not set on the server",
+    "kindNotSupported": "Identity providers of kind {kind} are not supported yet — use oidc",
+    "platformWideAdminOnly": "Only a platform admin can make a provider platform-wide",
+    "issuerRequired": "The issuer URL is required",
+    "clientIdRequired": "The client ID is required",
+    "issuerInvalid": "The issuer is not a valid URL",
+    "issuerNotHttps": "The issuer must use https",
+    "issuerUnresolved": "The issuer host {host} does not resolve",
+    "issuerPrivate": "The issuer resolves to a private address ({address}). Set AUTH_SSO_ALLOW_PRIVATE_URLS=true for an on-premises identity provider",
+    "invalidDomain": "\"{domain}\" is not a domain name"
   }
 }

@@ -176,6 +176,11 @@ infra-up-mailpit: ## Start infra INCLUDING the optional Mailpit catcher (:1025 S
 	$(COMPOSE) --profile mailpit up -d
 	$(COMPOSE) --profile mailpit ps
 
+.PHONY: infra-up-keycloak
+infra-up-keycloak: ## Start infra INCLUDING the optional Keycloak OpenID provider (:8180; set AUTH_SSO_ENABLED + AUTH_MODE=api-key)
+	$(COMPOSE) --profile keycloak up -d
+	$(COMPOSE) --profile keycloak ps
+
 .PHONY: infra-up-gotenberg
 infra-up-gotenberg: ## Start infra INCLUDING the optional Gotenberg PDF converter (:3100; set GOTENBERG_URL=http://localhost:3100)
 	$(COMPOSE) --profile gotenberg up -d
@@ -326,3 +331,4 @@ smoke: ## Quick health check: api /docs, web /, arcadedb, minio, postgres, redis
 	@curl -sf "http://localhost:8888/search?q=ping&format=json" >/dev/null 2>&1 && echo "✔ searxng  :8888 (json)" || echo "- searxng  :8888 optional (make infra-up-searxng)"
 	@curl -sfo /dev/null http://localhost:8025/livez 2>&1 && echo "✔ mailpit  :8025" || echo "- mailpit  :8025 optional (make infra-up-mailpit)"
 	@curl -sfo /dev/null http://localhost:3100/health 2>&1 && echo "✔ gotenberg :3100" || echo "- gotenberg :3100 optional (make infra-up-gotenberg)"
+	@curl -sfo /dev/null http://localhost:8180/realms/knowledge/.well-known/openid-configuration 2>&1 && echo "✔ keycloak :8180" || echo "- keycloak :8180 optional (make infra-up-keycloak)"

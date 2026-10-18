@@ -464,6 +464,8 @@ export interface AssistantDraftEdit {
    * editor drops whatever it previewed, and the model is told to try again.
    */
   state: 'streaming' | 'ready' | 'rejected';
+  /** The agent the turn runs as — what a shared draft (#80) credits the suggestion to. */
+  agent: { key: string; name: string };
 }
 export interface PostAssistantMessageResponse {
   /** False when ASSISTANT_PROVIDER=none — UI degrades instead of erroring. */

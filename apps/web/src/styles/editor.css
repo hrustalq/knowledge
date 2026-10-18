@@ -1536,6 +1536,10 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   .kn-collab-status-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 
+/* An agent writing for someone else: the assistant's violet, the way its caret in the text is. */
+.kn-collab-writing .kn-collab-dot { background: var(--kn-panel-important); opacity: 1; }
+.kn-collab-writing .kn-collab-status-label { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; }
+
 /* Who else is here: overlapping faces, each ringed in the header's own ground. */
 .kn-collab-presence { display: inline-flex; align-items: center; padding-inline-end: 0.25rem; }
 .kn-collab-presence > * { box-shadow: 0 0 0 2px var(--background); }
@@ -2392,6 +2396,10 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-ai-accept:hover { background: color-mix(in oklch, var(--primary) 90%, transparent); }
 .kn-ai-discard { background: var(--background); color: var(--muted-foreground); border: 1px solid var(--border); }
 .kn-ai-discard:hover { color: var(--foreground); background: var(--accent); }
+/* In a shared draft: whose suggestion this is. */
+.kn-ai-credit { font-size: 0.75rem; color: var(--muted-foreground); margin-inline-end: 0.15rem; }
+/* A viewer sees a suggestion, not the decision. */
+.ProseMirror[contenteditable='false'] .kn-ai-actions button { display: none; }
 /* A suggested deletion has nothing in the page to tint: what would go is shown here. */
 .kn-ai-removed {
   flex-basis: 100%;

@@ -104,5 +104,35 @@ exists only once something is sent. Rename/delete dialogs moved into
   The panel can do it by quoting; an inline entry point is the natural follow-up.
 - Word-level diff inside a replaced block. Replace shows the new block only; a
   deletion shows what would go under its action bar.
-- A suggestion survives only in the tab it was made in. By design it is never
-  written to the working copy.
+- Alone, a suggestion survives only in the tab it was made in. By design it is
+  never written to the working copy. A shared draft is the exception (below).
+
+## In a shared draft (#80)
+
+When the page is co-edited ([56](56-realtime-coediting.md)), a suggestion is
+shared, not per-tab:
+
+- **Everyone sees it.** The list lives in the Y.Doc's `suggestions` map, one
+  entry per suggestion: its range as two relative positions on the body's
+  top-level blocks, what it replaced (`Slice.toJSON()`), its state, the agent
+  the turn ran as (`draft-edit` frames now carry `agent`) and who asked. Peers
+  show the same violet gutter and Keep/Discard bar, with a "Reviewer · for Ada"
+  credit. The credit is the writer's word, like any content in the draft.
+- **Any editor decides.** Keep and Discard work from every writable tab and
+  take the entry off the list before the page changes. A viewer sees the bar
+  without buttons.
+- **Undo stays per person.** Streaming is `addToHistory: false`, which the
+  Collaboration undo manager already honours, so nobody's undo walks a
+  suggestion. Keeping is the keeper's own edit: their undo takes it back.
+- **A suggestion outlives its writer.** If the tab that was streaming leaves,
+  peers treat the suggestion as finished, so it can still be decided.
+- **Publishing is refused while any peer's suggestion is pending**, because
+  `aiPending` counts the shared list. `serializeKept` leaves every peer's
+  suggestion out either way.
+- The header shows "Reviewer is writing for Ada…" while another tab's turn
+  streams.
+
+The range is in whole blocks, so the start sticks to the first suggested block
+and the end to the last. A block a peer adds just outside the range stays
+outside it, and a discard never removes it. A peer's edit *inside* the range is
+still replaced by Discard, as one person's own edit is.

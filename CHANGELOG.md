@@ -412,6 +412,10 @@ in the pull request that introduces them — see
   that person opened through that provider. Each logout is recorded as
   `auth.session_revoked`, and so is each refused token. The Yandex preset
   has no back-channel logout. (#75)
+- The in-app manual (**Settings → Docs**) has a **Single sign-on & SCIM**
+  article: what the operator must turn on, and how to set up Keycloak,
+  Microsoft Entra ID, Google Workspace, Yandex ID, SAML, LDAP and SCIM
+  provisioning, then require SSO without locking yourself out. (#75)
 
 ### Changed
 

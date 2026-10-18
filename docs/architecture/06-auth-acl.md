@@ -202,14 +202,21 @@ The same predicate reaches the per-person surfaces:
 
 Everything is hashed; nothing reversible is stored.
 
-| Secret        | Prefix | Storage                                                                            |
-| ------------- | ------ | ---------------------------------------------------------------------------------- |
-| Password      | —      | **scrypt** via `node:crypto`, no dependencies                                      |
-| Session token | `ks_`  | SHA-256 in `sessions`                                                              |
-| API key       | `kn_`  | SHA-256 in `api_keys` (many per user)                                              |
-| Reset token   | `kr_`  | SHA-256, single-use, TTL `AUTH_RESET_TTL_MIN` (an invite: `AUTH_INVITE_TTL_HOURS`) |
-| Verify token  | `kv_`  | SHA-256 + the address it was sent to, single-use, TTL `AUTH_VERIFY_TTL_HOURS`      |
-| URL ticket    | `kt_`  | SHA-256 key in Redis, `GETDEL` on use, TTL `AUTH_URL_TICKET_TTL_SEC` (60 s)        |
+| Secret            | Prefix   | Storage                                                                            |
+| ----------------- | -------- | ---------------------------------------------------------------------------------- |
+| Password          | —        | **scrypt** via `node:crypto`, no dependencies                                      |
+| Session token     | `ks_`    | SHA-256 in `sessions`                                                              |
+| API key           | `kn_`    | SHA-256 in `api_keys` (many per user)                                              |
+| Reset token       | `kr_`    | SHA-256, single-use, TTL `AUTH_RESET_TTL_MIN` (an invite: `AUTH_INVITE_TTL_HOURS`) |
+| Verify token      | `kv_`    | SHA-256 + the address it was sent to, single-use, TTL `AUTH_VERIFY_TTL_HOURS`      |
+| URL ticket        | `kt_`    | SHA-256 key in Redis, `GETDEL` on use, TTL `AUTH_URL_TICKET_TTL_SEC` (60 s)        |
+| SCIM token        | `kscim_` | SHA-256 in `scim_tokens`, one workspace each, shown once                           |
+| SSO exchange code | —        | SHA-256 on its `sso_auth_requests` row, single-use, 60 s, in a URL fragment only   |
+
+The one reversible secret is an identity provider's: an OIDC client secret, a
+SAML SP private key or an LDAP bind password, held in
+`identity_providers.secret_cipher` under `ai/secret-box.ts` (AES-256-GCM,
+`SETTINGS_ENCRYPTION_KEY`) and write-only over the API (`hasSecret`).
 
 API keys are **shown once** — at bootstrap, or on Settings → Connect AI — and
 never retrievable. A key may be **read-only**, **pinned to one workspace**, or
@@ -246,6 +253,93 @@ also echoed as `debugToken` outside production. Signup auto-joins
 link; any followed link sets `users.email_verified_at`. With
 `AUTH_REQUIRE_VERIFIED_EMAIL=true`, an unverified **session** reaches only the
 `@UnverifiedOk` routes (403 `emailUnverified` elsewhere, WS close 4403).
+
+## Single sign-on (#75)
+
+The product view, with the routes and every variable, is
+[features/54](../features/54-enterprise-auth.md). This section is how the code
+holds together. Everything below sits behind `AUTH_MODE=api-key` and a flag:
+`SsoEnabledGuard` answers 404 while `AUTH_SSO_ENABLED` is off, `ScimEnabledGuard`
+while `AUTH_SCIM_ENABLED` is, and `liveIdpKinds(config)`
+(`auth/sso/live-kinds.ts`) is the one list of kinds that can sign anyone in.
+It drops `ldap` without `AUTH_LDAP_ENABLED`, and creation, the login page,
+discovery and enforcement all read it.
+
+**Sessions say how they were opened.** `sessions.auth_method` (`password`,
+`oidc`, `saml`, `ldap`; the column default made every older row `password`),
+`provider_id`, `idp_session_id` (OIDC `sid`, matched by back-channel logout),
+`ip`, `user_agent` and `last_seen_at`. `TokenAuthService` touches the last one
+at most once a minute and puts `authMethod`, `providerId` and
+`sessionCreatedAt` on the principal. Every kind ends in
+`AuthFlowService.issueSession`, the same call password login makes, so a
+provider's session differs from a password session only in those columns and
+in `identity_providers.session_ttl_hours`.
+
+**One login path, three front doors.** `SsoFlowService` owns the transaction.
+OIDC (`OidcService`, `openid-client` with code + PKCE and a nonce) and SAML
+(`SamlService`, `@node-saml/node-saml`, signed AuthnRequests and a pinned IdP
+certificate) are redirect flows. Both write a `sso_auth_requests` row at start,
+spend it at the callback or ACS with a guarded `updateMany`, and end in the
+private `signIn(provider, identity, rowId, …)`. That call mints the exchange
+code and redirects to the web's `/sso/complete#code=…`. LDAP (`LdapService`,
+`ldapts`) has no redirect leg: a service bind, an escaped search
+(`sizeLimit: 2`), a user bind, then the same tail with no exchange. Each
+protocol reduces its answer to an `ExternalIdentity` (`oidc-claims.ts`,
+`saml-profile.ts`, `ldap-profile.ts`), and `SsoLoginService.resolve` alone
+turns that into a user. It finds the `user_identities` row, or links or creates
+one only for a verified address on one of the provider's `allowedDomains`. That
+is the rule that keeps an unverified email claim from taking over an account.
+
+Replay protection is two guarded statements. The login transaction and the
+exchange code are spent with an `updateMany` that matches only an unspent row,
+so a second use changes nothing. A SAML assertion ID and a back-channel `jti`
+are spent by inserting a consumed row whose `state_hash` is unique
+(`sha256('<kind>:<provider>:<id>')`), so a second use is a P2002, never a
+second session. The SP's own outbound fetches
+(discovery, JWKS, token, userinfo) go through `common/safe-url.ts`, and
+`AUTH_SSO_ALLOW_PRIVATE_URLS` is the one opening for an on-prem IdP.
+
+**Roles from groups.** `RoleSyncService` is the only writer of a membership
+whose `source` is not `manual`. It runs after every SSO sign-in (`apply`,
+against the mappings of the provider used) and on every SCIM change
+(`applyScim`, against the mappings with no provider). It never touches a
+`manual` row, and it skips and audits a change that would leave a workspace
+without an admin. The membership guards in `workspaces/membership-guards.ts`
+answer 409 `managedByIdp` to a hand edit of a synced row, so a person and a
+sync cannot fight over one.
+
+**The enforcement point is `requireRole`.** `AccessService.requireRole` asks
+`AuthPolicyService.enforce` after a key's narrowing, so REST, MCP tool guards, the
+WS `subscribe` and a background tool call meet one rule. `policyFailure` is a
+pure function of the principal and the effective policy, which is why the policy
+`PUT` can ask it of its own caller before saving (409 `policyLocksYouOut`). The
+effective policy is the sparse `workspace_settings` columns clamped by the
+instance: with SSO off nothing is enforced, whatever a row says, because nobody
+could satisfy it. It is cached in-process for 30 s and invalidated on a local
+write. `AuthPolicyService` lives in `AuthCoreModule`, beside `AccessService`,
+for that reason. A principal with neither a session nor a key (an agent run
+executing as its owner) is not judged. A platform admin passes, audited as
+`auth.sso_bypassed` once an hour per credential and workspace.
+
+**Domains** are proven by a TXT record at `_knowledge-challenge.<domain>`.
+`SsoDomainsService` checks on demand. The API's `SsoMaintenanceSweeper`
+rechecks pending claims on a fixed 15-minute tick (no cron, as everywhere), and
+the same pass deletes expired login transactions and expired sessions. A
+verified, enforced domain is read by `AuthFlowService` before login, signup and
+forgot-password.
+
+**SCIM is a separate credential, not a principal.** `/v1/scim/v2` is
+`@Public()` to the global guards and behind `ScimTokenGuard`, which turns
+`Bearer kscim_…` into the workspace it provisions. No `requireRole` ever sees
+it, so the token opens nothing else. Errors are built by
+`common/scim-error-body.ts` (common is a dependency-cruiser leaf, so the shape
+lives there rather than in `scim/`). Disabling a global account is gated on the
+address's domain being verified by the provisioning workspace.
+
+**Rate limits** on the anonymous routes reuse `PublicRateLimiter` through
+`AuthRateLimitGuard` with a per-route bucket: per IP always, and per address or
+username where the body names one. Login, LDAP and exchange fail closed when
+Redis is down. Discovery fails open.
 
 ## The trusted-operator escape hatch
 
@@ -286,14 +380,14 @@ restricted node on D's chain. The rule is expressed as extra `denied` nodes
 `visibilitySql` and `documentFilterFor` apply it unchanged. A clamped scope
 never bypasses: an admin's run is read by people who are not admins.
 
-| Run | Acts for | Audience |
-| --- | --- | --- |
-| Assistant turn in the pane | the asker | none: the asker's own pages |
-| Chat bot answer in a DM | the linked person | none |
-| Chat bot answer in a group | the linked person | workspace |
-| Chat subscription digest | nobody | workspace (`OPEN_TO_WORKSPACE`) |
-| Agent run (every kind) | the run's owner | workspace: findings are listed to every member, and the sentinel's verdict reaches a pull request |
-| Workflow `search` step | the run's owner | the run's source page |
+| Run                        | Acts for          | Audience                                                                                          |
+| -------------------------- | ----------------- | ------------------------------------------------------------------------------------------------- |
+| Assistant turn in the pane | the asker         | none: the asker's own pages                                                                       |
+| Chat bot answer in a DM    | the linked person | none                                                                                              |
+| Chat bot answer in a group | the linked person | workspace                                                                                         |
+| Chat subscription digest   | nobody            | workspace (`OPEN_TO_WORKSPACE`)                                                                   |
+| Agent run (every kind)     | the run's owner   | workspace: findings are listed to every member, and the sentinel's verdict reaches a pull request |
+| Workflow `search` step     | the run's owner   | the run's source page                                                                             |
 
 The assistant's read tools take the audience from `AssistantToolContext.audience`
 and ask `scopeFor` (then `audienceScope`) **on every tool call**, so a grant
@@ -311,6 +405,11 @@ judge a report on a page the clamp hides fails the run with
 `PermissionsCoreModule` carries `GroupsService`, `PermissionService` and
 `ResourceAccessService` for every process; `AuthModule` imports it because
 `AclGuard` asks it about the page behind a `:id`.
+`AuthCoreModule` also carries `AuthPolicyService`, because `requireRole`
+enforces a workspace's sign-in policy in every process. `SsoModule` (providers,
+the login flow, group mappings, policy and domain routes, the maintenance
+sweeper) and `ScimModule` (which imports it for `RoleSyncService`) are imported
+by `AppModule` alone.
 `UsersModule`, `WorkspacesModule` and `PermissionsModule` are **API-only**, for the same reason as `GraphQueryModule`: they carry
 controllers, and controllers must not load in the worker
 ([01](01-entrypoints-modules.md)).
@@ -336,6 +435,18 @@ POST /v1/access-requests/:id/approve | deny                     @Access(viewer, 
 POST /v1/access-requests/:id/cancel                             @Access(viewer, 'access-request', { guests: true }), requester only
 POST /v1/graph/query                                              trusted_operator
 GET  /v1/audit-logs                                               admin
+GET  /v1/admin/audit-logs                                         @PlatformAdmin()
+GET  /v1/me/sessions   DELETE /v1/me/sessions/:sessionId          self
+GET  /v1/users/:id/sessions   POST /v1/users/:id/revoke-sessions  @PlatformAdmin()
+GET  /v1/auth/sso/providers   POST /v1/auth/sso/discover | exchange      @Public(), SSO on
+GET  /v1/auth/oidc/:providerId/start | callback                   @Public(), SSO on
+POST /v1/auth/oidc/:providerId/backchannel-logout                 @Public(), signed logout_token
+GET  /v1/auth/saml/:providerId/start | metadata   POST …/acs      @Public(), SSO on
+POST /v1/auth/ldap/:providerId/login                              @Public(), SSO + LDAP on
+*    /v1/workspaces/:id/identity-providers | group-mappings       @Access(admin, 'workspace')
+*    /v1/workspaces/:id/auth-policy | sso-domains                 @Access(admin, 'workspace')
+*    /v1/workspaces/:id/scim | scim-tokens                        @Access(admin, 'workspace'), SCIM on
+*    /v1/scim/v2/Users | Groups | ServiceProviderConfig | …       @Public() + ScimTokenGuard (kscim_)
 ```
 
 ## The public surface
@@ -424,5 +535,11 @@ at all: the web server answers it only for an internal peer with no
   that would make it a 404 for them.
 - Mail is outbound only: no bounce handling, so a dead address stays unverified
   rather than being flagged.
+- The sign-in policy is cached in-process for 30 s. After an admin turns
+  enforcement on, another API instance or the worker may let a password session
+  through for up to that long. The instance that saved it enforces at once.
+- SSO has no SAML single logout and no SP key rotation. LDAP trusts the system
+  CAs plus `NODE_EXTRA_CA_CERTS`, with no per-provider CA. See
+  [features/54 §Limits](../features/54-enterprise-auth.md#limits).
 - The trusted-operator query is read-only by construction but still trusts the
   blocklist; it is an escape hatch, not a query API.

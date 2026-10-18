@@ -14,16 +14,18 @@ import type { PrismaService } from '../prisma/prisma.service.js';
  * cannot express a predicate over a sibling row set.
  *
  * Both return false when the guard refused (or the row is gone, or is
- * `manual` under `managedOnly`); the caller decides whether that is a 400 or
+ * outside `sources`); the caller decides whether that is a 400 or
  * an audited skip.
  */
 
 export interface GuardOptions {
   /**
-   * Leave a `manual` row alone (role sync, #75). In the statement rather than
-   * read beforehand, so an admin taking the row over mid-sign-in wins.
+   * Touch the row only while its `source` is one of these (role sync and SCIM,
+   * #75), so neither ever writes a `manual` row or the other's. In the
+   * statement rather than read beforehand, so an admin taking the row over
+   * mid-sign-in wins. Absent: any row.
    */
-  managedOnly?: boolean;
+  sources?: readonly string[];
 }
 
 /** Set a member's role, refused only when it would demote the last admin. */
@@ -34,13 +36,13 @@ export async function setRoleGuarded(
   role: string,
   opts: GuardOptions = {},
 ): Promise<boolean> {
-  const managedOnly = opts.managedOnly ?? false;
+  const sources = opts.sources ? [...opts.sources] : null;
   const affected = await prisma.$executeRaw`
     UPDATE workspace_members
        SET role = ${role}
      WHERE workspace_id = ${workspaceId}::uuid
        AND user_id = ${userId}::uuid
-       AND (${managedOnly}::boolean = false OR source <> 'manual')
+       AND (${sources}::text[] IS NULL OR source = ANY(${sources}::text[]))
        AND (role <> 'admin' OR ${role}::text = 'admin' OR EXISTS (
              SELECT 1 FROM workspace_members other
               WHERE other.workspace_id = ${workspaceId}::uuid
@@ -61,12 +63,12 @@ export async function removeMemberGuarded(
   userId: string,
   opts: GuardOptions = {},
 ): Promise<boolean> {
-  const managedOnly = opts.managedOnly ?? false;
+  const sources = opts.sources ? [...opts.sources] : null;
   const affected = await prisma.$executeRaw`
     DELETE FROM workspace_members
      WHERE workspace_id = ${workspaceId}::uuid
        AND user_id = ${userId}::uuid
-       AND (${managedOnly}::boolean = false OR source <> 'manual')
+       AND (${sources}::text[] IS NULL OR source = ANY(${sources}::text[]))
        AND (role <> 'admin' OR EXISTS (
              SELECT 1 FROM workspace_members other
               WHERE other.workspace_id = ${workspaceId}::uuid

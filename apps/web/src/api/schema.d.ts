@@ -428,7 +428,7 @@ export interface paths {
         /** The workspace's group → role mappings, and the providers a mapping may name */
         get: operations["GroupMappingsController_list"];
         put?: never;
-        /** Map a provider group to a role. The same group again replaces its role. Applies at next sign-in */
+        /** Map a provider or SCIM group to a role. The same group again replaces its role. A provider mapping applies at next sign-in, a SCIM one at once */
         post: operations["GroupMappingsController_upsert"];
         delete?: never;
         options?: never;
@@ -446,7 +446,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove a mapping. Memberships it granted stay until the next sign-in re-syncs them */
+        /** Remove a mapping. A provider mapping's memberships stay until the next sign-in re-syncs them; a SCIM one re-syncs at once */
         delete: operations["GroupMappingsController_remove"];
         options?: never;
         head?: never;
@@ -522,6 +522,58 @@ export interface paths {
         head?: never;
         /** Enforce SSO on a verified domain, or change where its people sign in */
         patch: operations["SsoDomainsController_update"];
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/scim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's SCIM base URL, live tokens, default role and what has been provisioned */
+        get: operations["ScimTokensController_view"];
+        /** Set the role a provisioned user gets without a mapped group. Re-syncs provisioned members at once */
+        put: operations["ScimTokensController_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/scim-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mint a kscim_ bearer token for an IdP. The secret is in this response only */
+        post: operations["ScimTokensController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/scim-tokens/{tokenId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a SCIM token. The IdP gets 401 from its next request */
+        delete: operations["ScimTokensController_revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/users": {
@@ -6004,10 +6056,13 @@ export interface components {
             name?: string;
         };
         UpsertGroupMappingDto: {
-            /** @description One of the workspace's identity providers, or a platform-wide one */
-            providerId: string;
             /**
-             * @description The group exactly as the provider's groups claim carries it
+             * Format: uuid
+             * @description One of the workspace's identity providers, or a platform-wide one. Null or absent maps a SCIM group.
+             */
+            providerId?: string | null;
+            /**
+             * @description The group exactly as the provider's groups claim carries it; for a SCIM mapping, the SCIM group's id
              * @example knowledge-editors
              */
             externalGroup: string;
@@ -6044,6 +6099,17 @@ export interface components {
             enforced?: boolean;
             /** @description The provider people on the domain are sent to; null = any of the workspace's */
             providerId?: string | null;
+        };
+        PutScimSettingsDto: {
+            /**
+             * @description Role a provisioned user gets when no mapped SCIM group says more. 'none' grants nothing without a group.
+             * @enum {string}
+             */
+            defaultRole: "none" | "guest" | "viewer" | "editor" | "admin";
+        };
+        CreateScimTokenDto: {
+            /** @description What the token is for — "Entra ID provisioning". Shown in the token list. */
+            name: string;
         };
         CreateUserDto: {
             /** @example teammate@example.com */
@@ -9563,6 +9629,175 @@ export interface operations {
         };
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ScimTokensController_view: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ScimTokensController_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutScimSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ScimTokensController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateScimTokenDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ScimTokensController_revoke: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                tokenId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };

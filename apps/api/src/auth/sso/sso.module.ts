@@ -4,7 +4,7 @@ import { IdentityProvidersController } from './identity-providers.controller.js'
 import { IdentityProvidersService } from './identity-providers.service.js';
 import { OidcService } from './oidc.service.js';
 import { SsoController } from './sso.controller.js';
-import { SsoEnabledGuard } from './sso-enabled.guard.js';
+import { SsoEnabledGuard, SsoOrScimEnabledGuard } from './sso-enabled.guard.js';
 import { SsoFlowService } from './sso-flow.service.js';
 import { SsoLoginService } from './sso-login.service.js';
 import { GroupMappingsController } from './group-mappings.controller.js';
@@ -37,6 +37,9 @@ import { SsoMaintenanceSweeper } from './sso-maintenance.sweeper.js';
     SsoMaintenanceSweeper,
     { provide: DNS_TXT_LOOKUP, useFactory: systemTxtLookup },
     SsoEnabledGuard,
+    SsoOrScimEnabledGuard,
   ],
+  // ScimModule re-syncs roles on provisioning changes through the same service.
+  exports: [RoleSyncService],
 })
 export class SsoModule {}

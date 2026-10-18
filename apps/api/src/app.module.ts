@@ -3,6 +3,7 @@ import { BootstrapModule } from './config/bootstrap.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { SsoModule } from './auth/sso/sso.module.js';
+import { ScimModule } from './scim/scim.module.js';
 import { UsersModule } from './users/users.module.js';
 import { WorkspacesModule } from './workspaces/workspaces.module.js';
 import { PermissionsModule } from './permissions/permissions.module.js';
@@ -50,6 +51,8 @@ import { ChatModule } from './chat/chat.module.js';
     AuthModule,
     // Enterprise SSO (#75): API-only, every route 404s unless AUTH_SSO_ENABLED.
     SsoModule,
+    // SCIM provisioning (#75): API-only, every route 404s unless AUTH_SCIM_ENABLED.
+    ScimModule,
     UsersModule,
     WorkspacesModule,
     PermissionsModule,

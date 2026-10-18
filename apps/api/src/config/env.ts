@@ -127,6 +127,14 @@ export const envSchema = z.object({
   AUTH_PASSWORD_LOGIN_ENABLED: boolish(true),
   /** Comma-separated addresses that may always use a password — the way back in when an IdP is down. */
   AUTH_BREAK_GLASS_EMAILS: z.string().default(''),
+  /**
+   * SCIM 2.0 provisioning (#75) at /v1/scim/v2, authenticated by per-workspace
+   * `kscim_` tokens. Off: those routes and the token settings answer 404.
+   * Independent of AUTH_SSO_ENABLED; needs AUTH_MODE=api-key.
+   */
+  AUTH_SCIM_ENABLED: boolish(false),
+  /** Cap on a SCIM list page (`count`). */
+  AUTH_SCIM_MAX_PAGE: z.coerce.number().int().min(1).max(1000).default(200),
 
   /**
    * Mailer (docs/features/41). `log` writes each message to the worker log and

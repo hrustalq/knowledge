@@ -84,6 +84,16 @@ export const AUDIT_ACTIONS = [
   'sso.domain_removed',
   'sso.policy_updated',
   'auth.sso_bypassed',
+  'scim.user_created',
+  'scim.user_updated',
+  'scim.user_deactivated',
+  'scim.user_deleted',
+  'scim.group_created',
+  'scim.group_updated',
+  'scim.group_deleted',
+  'scim.token_created',
+  'scim.token_revoked',
+  'scim.settings_updated',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -109,19 +119,24 @@ export const GROUP_SYNC_MODES = ['additive', 'authoritative'] as const;
 export type GroupSyncMode = (typeof GROUP_SYNC_MODES)[number];
 
 /**
- * One IdP group → one workspace role (#75 phase 3). On every SSO sign-in the
- * person's groups are matched against the mappings of the provider they used;
- * the highest mapped role wins, and any matching mapping with
- * `trustedOperator` grants it. Rows a person set by hand are never touched.
+ * One IdP group → one workspace role (#75 phases 3 and 5). On every SSO
+ * sign-in the person's groups are matched against the mappings of the
+ * provider they used; a SCIM group's mapping (no provider) applies as soon as
+ * provisioning changes the group. The highest mapped role wins, and any
+ * matching mapping with `trustedOperator` grants it. Rows a person set by hand
+ * are never touched.
  */
 export interface GroupMappingView {
   id: string;
   workspaceId: string;
-  providerId: string;
-  /** The provider's name, for the table; null if it has since been removed. */
+  /** Null for a SCIM group's mapping. */
+  providerId: string | null;
+  /** The provider's name, for the table; null if it has since been removed, or for a SCIM mapping. */
   providerName: string | null;
-  /** The value as it arrives in the provider's groups claim. */
+  /** The value as it arrives in the provider's groups claim, or the SCIM group's id. */
   externalGroup: string;
+  /** A SCIM mapping's group name; null if the client has since deleted the group, or for a provider mapping. */
+  scimGroupName: string | null;
   role: WorkspaceRole;
   trustedOperator: boolean;
   createdAt: string;
@@ -130,8 +145,57 @@ export interface GroupMappingView {
 // GET /v1/workspaces/:id/group-mappings
 export interface ListGroupMappingsResponse {
   mappings: GroupMappingView[];
-  /** Providers a mapping may name: the workspace's own and every platform-wide one. */
+  /** Providers a mapping may name: the workspace's own and every platform-wide one. Empty while SSO is off. */
   providers: { id: string; name: string; groupSyncMode: GroupSyncMode; groupsClaim: string | null }[];
+  /** Groups the workspace's SCIM client has pushed. Empty while SCIM is off. */
+  scimGroups: { id: string; displayName: string; memberCount: number }[];
+  /** Which kinds of mapping the instance offers: AUTH_SSO_ENABLED and AUTH_SCIM_ENABLED (both under AUTH_MODE=api-key). */
+  enabled: { sso: boolean; scim: boolean };
+}
+
+// ---------------------------------------------------------------------------
+// SCIM 2.0 provisioning (#75 phase 5). A workspace's IdP creates, updates and
+// deactivates its people over /v1/scim/v2 with a `kscim_` bearer token. The
+// token is a credential for that workspace's provisioning only — never a
+// principal, so it opens no other route.
+// ---------------------------------------------------------------------------
+
+/**
+ * `workspace_settings.scim_default_role`: what a provisioned user is given
+ * when no mapped SCIM group says more. `none` grants nothing without a group.
+ */
+export const SCIM_DEFAULT_ROLES = ['none', ...WORKSPACE_ROLES] as const;
+export type ScimDefaultRole = (typeof SCIM_DEFAULT_ROLES)[number];
+
+/** A SCIM token as its workspace's admins see it. Never the secret. */
+export interface ScimTokenView {
+  id: string;
+  name: string;
+  /** `kscim_` and the next 8 characters: enough to recognise it in the IdP's settings. */
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+// GET/PUT /v1/workspaces/:id/scim
+export interface ScimSettingsView {
+  workspaceId: string;
+  /** The SCIM base URL to paste into the IdP: `${API_PUBLIC_URL}/v1/scim/v2`. */
+  baseUrl: string;
+  /** Stored null reads as `viewer`. */
+  defaultRole: ScimDefaultRole;
+  tokens: ScimTokenView[];
+  /** Users and groups the client has provisioned into this workspace. */
+  users: number;
+  activeUsers: number;
+  groups: number;
+}
+
+// POST /v1/workspaces/:id/scim-tokens
+export interface ScimTokenCreated {
+  token: ScimTokenView;
+  /** The bearer token itself, shown once. Only its SHA-256 is stored. */
+  secret: string;
 }
 
 // ---------------------------------------------------------------------------

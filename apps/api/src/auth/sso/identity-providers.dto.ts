@@ -151,11 +151,20 @@ export class SsoExchangeDto {
 }
 
 export class UpsertGroupMappingDto {
-  @ApiProperty({ description: "One of the workspace's identity providers, or a platform-wide one" })
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description: "One of the workspace's identity providers, or a platform-wide one. Null or absent maps a SCIM group.",
+  })
+  @IsOptional()
   @IsUUID()
-  providerId!: string;
+  providerId?: string | null;
 
-  @ApiProperty({ description: "The group exactly as the provider's groups claim carries it", example: 'knowledge-editors' })
+  @ApiProperty({
+    description: "The group exactly as the provider's groups claim carries it; for a SCIM mapping, the SCIM group's id",
+    example: 'knowledge-editors',
+  })
   @IsString()
   @IsNotEmpty()
   @MaxLength(256, { message: vmsg('maxLength') })

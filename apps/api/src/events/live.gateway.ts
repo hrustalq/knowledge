@@ -110,6 +110,39 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       socket.close(4503, 'live updates disabled');
       return;
     }
+    // Listen before the first await. A client that subscribes from `onopen`
+    // sends while the token is still being resolved below, and `ws` drops a
+    // frame that arrives with no listener — no reply, no error (#75). Frames
+    // wait on `ready` and run in arrival order once it settles; if
+    // authentication fails they are discarded with the socket.
+    let authenticated!: (ok: boolean) => void;
+    const ready = new Promise<boolean>((resolve) => (authenticated = resolve));
+    // Raw protocol (contracts LiveClientMessage) — @SubscribeMessage's
+    // {event,data} envelope is skipped on purpose so browser clients can
+    // speak plain JSON.
+    // One wrap at the entry point: every t() inside handleMessage — including
+    // those in AccessService — then answers in this socket's language.
+    // One trace scope per message, for the same reason there is one withLocale
+    // wrap here: an upgrade runs no middleware, so nothing upstream has opened
+    // either scope. A message is the unit of work a request would have been.
+    socket.on('message', (raw) => {
+      const text = raw.toString();
+      void ready.then((ok) => {
+        if (!ok) return;
+        return withTrace(
+          startTrace('ws', {
+            route: '/v1/events/ws',
+            userId: this.state.get(socket)?.principal.userId,
+          }),
+          () => withLocale(locale, () => this.handleMessage(socket, text)),
+        );
+      });
+    });
+    socket.on('pong', () => {
+      const st = this.state.get(socket);
+      if (st) st.alive = true;
+    });
+
     const url = new URL(request.url ?? '/', 'http://localhost');
     const header = request.headers['authorization'];
     const bearer = typeof header === 'string' && header.startsWith('Bearer ')
@@ -121,36 +154,17 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       // translated — their ambient t() has no request context out here.
       const principal = await withLocale(locale, () => this.tokenAuth.resolve(token));
       if (this.tokenAuth.blocksUnverified(principal)) {
+        authenticated(false);
         socket.close(4403, 'email unverified');
         return;
       }
       this.state.set(socket, { principal, subscriptions: new Map(), alive: true });
+      authenticated(true);
     } catch (e) {
+      authenticated(false);
       this.sendError(socket, e);
       socket.close(4401, 'authentication failed');
-      return;
     }
-    socket.on('pong', () => {
-      const st = this.state.get(socket);
-      if (st) st.alive = true;
-    });
-    // Raw protocol (contracts LiveClientMessage) — @SubscribeMessage's
-    // {event,data} envelope is skipped on purpose so browser clients can
-    // speak plain JSON.
-    // One wrap at the entry point: every t() inside handleMessage — including
-    // those in AccessService — then answers in this socket's language.
-    // One trace scope per message, for the same reason there is one withLocale
-    // wrap here: an upgrade runs no middleware, so nothing upstream has opened
-    // either scope. A message is the unit of work a request would have been.
-    socket.on('message', (raw) =>
-      void withTrace(
-        startTrace('ws', {
-          route: '/v1/events/ws',
-          userId: this.state.get(socket)?.principal.userId,
-        }),
-        () => withLocale(locale, () => this.handleMessage(socket, raw.toString())),
-      ),
-    );
   }
 
   handleDisconnect(socket: WebSocket): void {

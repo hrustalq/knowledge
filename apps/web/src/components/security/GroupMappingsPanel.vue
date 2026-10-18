@@ -1,10 +1,12 @@
 <script setup lang="ts">
 /**
  * Settings → Security → Group mapping (#75): which IdP group grants which
- * workspace role. A mapping names one of the workspace's providers or a
- * platform-wide one. Nothing is rewritten when a mapping changes — it applies
- * at each person's next sign-in, which the hint says, because an admin who
- * expects the roster to move at once will think the save failed.
+ * workspace role. A mapping names one of the workspace's providers (or a
+ * platform-wide one), or a group the SCIM client pushed. A provider mapping
+ * rewrites nothing when it changes — it applies at each person's next
+ * sign-in, which the hint says, because an admin who expects the roster to
+ * move at once will think the save failed. A SCIM mapping does apply at once:
+ * provisioning already knows who is in the group.
  *
  * Posting a group that is already mapped replaces its role (the API upserts),
  * so there is no edit dialog: add it again with the new role.
@@ -29,14 +31,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 const { t } = useI18n()
 const workspaceId = getWorkspaceId()
 const path = { id: workspaceId }
+/** The source Select's value for "a SCIM group" — providers are named by id. */
+const SCIM = '__scim__'
 
 const list = useQuery({
   ...apiQueryOptions('/v1/workspaces/{id}/group-mappings', { path }),
   retry: false,
 })
 const data = computed(() => list.data.value as ListGroupMappingsResponse | undefined)
-const ssoOff = computed(() => list.error.value instanceof ApiRequestError && list.error.value.status === 404)
+const bothOff = computed(() => list.error.value instanceof ApiRequestError && list.error.value.status === 404)
 const providerById = computed(() => new Map((data.value?.providers ?? []).map((p) => [p.id, p])))
+const scimOn = computed(() => !!data.value?.enabled.scim)
+const canMap = computed(() => !!data.value?.providers.length || scimOn.value)
 
 const invalidates = () => [['/v1/workspaces/{id}/group-mappings']]
 const upsert = useApiMutation('post', '/v1/workspaces/{id}/group-mappings', { invalidates })
@@ -44,27 +50,36 @@ const remove = useApiMutation('delete', '/v1/workspaces/{id}/group-mappings/{map
 
 const form = reactive({ providerId: '', externalGroup: '', role: 'viewer' as WorkspaceRole, trustedOperator: false })
 
-// Preselect the first provider once they load, so the common one-IdP case is one field.
+// Preselect the first source once they load, so the common one-IdP case is one field.
 watch(
-  () => data.value?.providers,
-  (providers) => {
-    if (providers?.length && !providers.some((p) => p.id === form.providerId)) form.providerId = providers[0].id
+  data,
+  (d) => {
+    if (!d) return
+    const sources = [...d.providers.map((p) => p.id), ...(d.enabled.scim ? [SCIM] : [])]
+    if (sources.length && !sources.includes(form.providerId)) form.providerId = sources[0]
   },
   { immediate: true },
 )
 
 const formProvider = computed(() => providerById.value.get(form.providerId))
+const formScim = computed(() => form.providerId === SCIM)
+const scimGroupName = (id: string) => data.value?.scimGroups.find((g) => g.id === id)?.displayName ?? id
+
+// A SCIM group is picked from what the client pushed, so switching sources clears the field.
+watch(formScim, () => (form.externalGroup = ''))
 
 async function add() {
   const group = form.externalGroup.trim()
   if (!group || !form.providerId) return
-  const replacing = data.value?.mappings.some((m) => m.providerId === form.providerId && m.externalGroup === group)
+  const providerId = formScim.value ? null : form.providerId
+  const replacing = data.value?.mappings.some((m) => m.providerId === providerId && m.externalGroup === group)
+  const label = formScim.value ? scimGroupName(group) : group
   try {
     await upsert.mutateAsync({
       path,
-      body: { providerId: form.providerId, externalGroup: group, role: form.role, trustedOperator: form.trustedOperator },
+      body: { providerId, externalGroup: group, role: form.role, trustedOperator: form.trustedOperator },
     })
-    toast.success(t(replacing ? 'security.groupMapping.replaced' : 'security.groupMapping.added', { group }))
+    toast.success(t(replacing ? 'security.groupMapping.replaced' : 'security.groupMapping.added', { group: label }))
     form.externalGroup = ''
     form.trustedOperator = false
   } catch (e) {
@@ -74,7 +89,9 @@ async function add() {
 
 async function confirmRemove(m: GroupMappingView) {
   // A native confirm keeps this one destructive action from needing its own dialog state.
-  if (!window.confirm(t('security.groupMapping.removeConfirm', { group: m.externalGroup }))) return
+  const group = m.providerId ? m.externalGroup : (m.scimGroupName ?? m.externalGroup)
+  const key = m.providerId ? 'security.groupMapping.removeConfirm' : 'security.groupMapping.removeConfirmScim'
+  if (!window.confirm(t(key, { group }))) return
   try {
     await remove.mutateAsync({ path: { ...path, mappingId: m.id } })
     toast.success(t('security.groupMapping.removed'))
@@ -91,16 +108,16 @@ async function confirmRemove(m: GroupMappingView) {
       <p class="mt-0.5 max-w-prose text-sm text-muted-foreground">{{ t('security.groupMapping.hint') }}</p>
     </div>
 
-    <p v-if="ssoOff" class="rounded-md border border-dashed px-4 py-6 text-sm text-muted-foreground">
-      {{ t('security.providers.disabled') }}
+    <p v-if="bothOff" class="rounded-md border border-dashed px-4 py-6 text-sm text-muted-foreground">
+      {{ t('security.groupMapping.disabled') }}
     </p>
     <PageState v-else-if="list.isPending.value" state="loading" :rows="2" row-class="h-12" />
     <PageState v-else-if="list.isError.value" state="error" :error="list.error.value" />
-    <p v-else-if="!data?.providers.length" class="rounded-md border border-dashed px-4 py-6 text-sm text-muted-foreground">
+    <p v-else-if="!canMap" class="rounded-md border border-dashed px-4 py-6 text-sm text-muted-foreground">
       {{ t('security.groupMapping.noProviders') }}
     </p>
 
-    <template v-else>
+    <template v-else-if="data">
       <form class="grid gap-3 rounded-md border p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.8fr)_auto] sm:items-end" @submit.prevent="add">
         <div class="grid gap-1">
           <label class="text-sm font-medium" for="gm-provider">{{ t('security.groupMapping.provider') }}</label>
@@ -108,12 +125,23 @@ async function confirmRemove(m: GroupMappingView) {
             <SelectTrigger id="gm-provider" class="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="p in data.providers" :key="p.id" :value="p.id">{{ p.name }}</SelectItem>
+              <SelectItem v-if="scimOn" :value="SCIM">{{ t('security.groupMapping.scimSource') }}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div class="grid gap-1">
           <label class="text-sm font-medium" for="gm-group">{{ t('security.groupMapping.group') }}</label>
-          <Input id="gm-group" v-model="form.externalGroup" required maxlength="256" autocomplete="off" :placeholder="t('security.groupMapping.groupPlaceholder')" />
+          <Select v-if="formScim" v-model="form.externalGroup" :disabled="!data.scimGroups.length">
+            <SelectTrigger id="gm-group" class="w-full">
+              <SelectValue :placeholder="t(data.scimGroups.length ? 'security.groupMapping.scimPick' : 'security.groupMapping.scimNone')" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="g in data.scimGroups" :key="g.id" :value="g.id">
+                {{ t('security.groupMapping.scimGroupOption', { name: g.displayName, count: g.memberCount }) }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <Input v-else id="gm-group" v-model="form.externalGroup" required maxlength="256" autocomplete="off" :placeholder="t('security.groupMapping.groupPlaceholder')" />
         </div>
         <div class="grid gap-1">
           <label class="text-sm font-medium" for="gm-role">{{ t('security.groupMapping.role') }}</label>
@@ -131,7 +159,8 @@ async function confirmRemove(m: GroupMappingView) {
           <Checkbox :model-value="form.trustedOperator" @update:model-value="form.trustedOperator = !!$event" />
           {{ t('security.groupMapping.operator') }}
         </label>
-        <p v-if="formProvider" class="text-xs text-muted-foreground sm:col-span-4">
+        <p v-if="formScim" class="text-xs text-muted-foreground sm:col-span-4">{{ t('security.groupMapping.scimHint') }}</p>
+        <p v-else-if="formProvider" class="text-xs text-muted-foreground sm:col-span-4">
           {{ t(`security.groupMapping.mode.${formProvider.groupSyncMode}`) }}
           <template v-if="!formProvider.groupsClaim"> {{ t('security.groupMapping.presetClaim') }}</template>
         </p>
@@ -143,13 +172,17 @@ async function confirmRemove(m: GroupMappingView) {
       <ul v-else class="divide-y rounded-md border">
         <li v-for="m in data.mappings" :key="m.id" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
           <Users class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <code class="min-w-0 truncate rounded bg-muted px-1.5 py-0.5 text-sm">{{ m.externalGroup }}</code>
+          <code v-if="m.providerId" class="min-w-0 truncate rounded bg-muted px-1.5 py-0.5 text-sm">{{ m.externalGroup }}</code>
+          <span v-else class="min-w-0 truncate text-sm font-medium">{{ m.scimGroupName ?? t('security.groupMapping.scimGroupGone') }}</span>
           <span class="text-muted-foreground text-sm" aria-hidden="true">→</span>
           <Badge variant="outline">{{ t(`role.${m.role}`) }}</Badge>
           <span v-if="m.trustedOperator" class="flex items-center gap-1 text-xs text-muted-foreground">
             <Wrench class="size-3" aria-hidden="true" />{{ t('security.groupMapping.operatorBadge') }}
           </span>
-          <span class="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+          <span v-if="!m.providerId" class="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant="secondary">{{ t('security.groupMapping.scimBadge') }}</Badge>
+          </span>
+          <span v-else class="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
             {{ m.providerName ?? t('security.groupMapping.providerGone') }}
             <Badge v-if="providerById.get(m.providerId)" variant="secondary">
               {{ t(`security.groupMapping.modeBadge.${providerById.get(m.providerId)!.groupSyncMode}`) }}

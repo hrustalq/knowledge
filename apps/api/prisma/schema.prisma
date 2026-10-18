@@ -3269,6 +3269,9 @@ model WorkspaceSettings {
   allowPasswordForAdmins  Boolean? @map("allow_password_for_admins")
   /// Cap on a session's age in this workspace, under AUTH_SESSION_TTL_HOURS; null inherits.
   sessionMaxAgeHours      Int?     @map("session_max_age_hours")
+  /// #75 SCIM: the role a provisioned user gets without a mapped SCIM group —
+  /// a WORKSPACE_ROLES value or `none`; null is `viewer`.
+  scimDefaultRole         String?  @map("scim_default_role")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 
@@ -3393,6 +3396,9 @@ model ScimUser {
   workspaceId String   @map("workspace_id") @db.Uuid
   userId      String   @map("user_id") @db.Uuid
   externalId  String?  @map("external_id")
+  /// The client's `userName`, lower-cased: SCIM matches it case-insensitively
+  /// and it is unique per workspace. Often the email, but an Entra UPN need not be.
+  userName    String?  @map("user_name")
   active      Boolean  @default(true)
   raw         Json     @default("{}")
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
@@ -3401,6 +3407,7 @@ model ScimUser {
 
   @@id([workspaceId, userId])
   @@unique([workspaceId, externalId])
+  @@unique([workspaceId, userName])
   @@map("scim_users")
 }
 

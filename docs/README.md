@@ -78,6 +78,7 @@ Features 01–17 come from the original list in [`../features.md`](../features.m
 | 51  | Component pages (`component:` declarations, reverse-import index, Used by, `code` edges, drift ties and Affected usages, Document this component, missing-paths health filter) | [features/51-component-pages.md](features/51-component-pages.md)   | ✅ #236                     |
 | 52  | API reference (OpenAPI/AsyncAPI spec documents, operation entities, reference reader, code samples, try-it proxy, page linking, classified spec diff and breaking-change gate, repo sync, spec ↔ code drift) | [features/52-api-reference.md](features/52-api-reference.md)       | ✅ #78                      |
 | 53  | Doc quality (styleguide per workspace/project, `linter` agent, merge request lint threads, `block` lint gate with admin override, `auditor` quality scores, Quality tab and rail, glossary from content) | [features/53-doc-quality.md](features/53-doc-quality.md)           | ✅ #74                      |
+| 54  | Enterprise auth (OIDC, SAML and LDAP sign-in, JIT, group → role mapping, enforced SSO and verified domains, SCIM 2.0 provisioning, session list, back-channel logout, workspace audit log) | [features/54-enterprise-auth.md](features/54-enterprise-auth.md)   | ✅ #75                      |
 
 Open work against the agents feature is tracked in
 [features/20-agents-todo.md](features/20-agents-todo.md).

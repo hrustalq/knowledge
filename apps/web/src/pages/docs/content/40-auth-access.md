@@ -1,7 +1,7 @@
 ---
 title: Authentication and access
 section: Administration
-summary: Two auth modes, two token kinds, and where each of the four permission checks happens.
+summary: Two auth modes, the token kinds, single sign-on, and where each of the four permission checks happens.
 ---
 
 # Authentication and access
@@ -17,19 +17,23 @@ summary: Two auth modes, two token kinds, and where each of the four permission 
 **Test permissions with a bootstrapped key, never in dev mode.** In `none` everything
 passes, including the routes you forgot to guard.
 
-## Two token kinds
+## Token kinds
 
-| Prefix | Is                                      | Minted by                                                               |
-| ------ | --------------------------------------- | ----------------------------------------------------------------------- |
-| `ks_`  | a session, TTL `AUTH_SESSION_TTL_HOURS` | login                                                                   |
-| `kn_`  | an API key — named, many per person     | **Settings → Connect AI**, or `make auth-bootstrap email=…`; shown once |
+| Prefix   | Is                                       | Minted by                                                               |
+| -------- | ---------------------------------------- | ----------------------------------------------------------------------- |
+| `ks_`    | a session, TTL `AUTH_SESSION_TTL_HOURS`  | password login, or single sign-on                                       |
+| `kn_`    | an API key — named, many per person      | **Settings → Connect AI**, or `make auth-bootstrap email=…`; shown once |
+| `kscim_` | a SCIM provisioning token, one workspace | **Settings → Security → Provisioning**; shown once                      |
 
-Both are stored as SHA-256 hashes and never in plaintext. Passwords use scrypt from
+All are stored as SHA-256 hashes and never in plaintext. A `kscim_` token is not a
+person: it opens the SCIM endpoints of its own workspace and nothing else. Passwords use scrypt from
 `node:crypto` — no dependency. Password reset tokens (`kr_`) are single-use with a short
 TTL; reset links are logged rather than mailed, and echoed in the response outside
 production.
 
 Disabling a user, resetting their password or overriding it **revokes their sessions**.
+Each session records how it was opened (`password`, `oidc`, `saml` or `ldap`), its IP,
+browser and last use. **Settings → Profile** lists yours and signs any of them out.
 
 An API key can be **read-only**, **pinned to one workspace** or **expiring**, and each is
 revoked on its own. The narrowing only ever takes rights away: a read-only key held by a
@@ -69,6 +73,15 @@ audited rather than assumed.
 - **`is_admin`** on the user — platform admin. Bypasses workspace ACLs and gates account
   management. Self-disable and self-de-admin are blocked, so the last one cannot lock
   everyone out.
+
+## Single sign-on
+
+With `AUTH_SSO_ENABLED`, a workspace signs people in through its own identity provider:
+OpenID Connect (Keycloak, Entra ID, Google, Yandex ID, or any other), SAML 2.0, or an LDAP /
+Active Directory bind. Roles can come from the provider's groups, a SCIM client can create
+and remove people, and a workspace can **require** SSO: every session reaching it must then
+come from one of its providers, checked inside the same `requireRole` as every other
+permission. Setup is in [Single sign-on & SCIM](/settings/docs/sso-scim).
 
 ## Signup
 

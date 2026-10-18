@@ -1,0 +1,57 @@
+{
+  "realm": "knowledge",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "groups": [{ "name": "engineering" }, { "name": "docs-admins" }],
+  "users": [
+    {
+      "username": "ada",
+      "email": "ada@corp.example",
+      "emailVerified": true,
+      "firstName": "Ada",
+      "lastName": "Lovelace",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "ada", "temporary": false }],
+      "groups": ["/engineering"]
+    },
+    {
+      "username": "eve",
+      "email": "eve@corp.example",
+      "emailVerified": false,
+      "firstName": "Eve",
+      "lastName": "Unverified",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "eve", "temporary": false }]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "knowledge",
+      "name": "Knowledge (local dev)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "knowledge-dev-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:3000/v1/auth/oidc/*"],
+      "webOrigins": ["http://localhost:5173"],
+      "attributes": { "pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "http://localhost:5173/*" },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

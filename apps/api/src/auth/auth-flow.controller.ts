@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post, Req } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
@@ -23,6 +23,7 @@ import {
 import type { Principal } from './principal.js';
 import { UrlTicketsService } from './url-tickets.service.js';
 import { requestMeta } from '../common/client-ip.js';
+import { AuthRateLimit, AuthRateLimitGuard } from './auth-rate-limit.guard.js';
 
 /**
  * Auth flow endpoints. signup/login/forgot/reset are @Public (they mint the
@@ -47,7 +48,9 @@ export class AuthFlowController {
   @Public()
   @HttpCode(200)
   @Post('login')
-  @ApiOperation({ summary: 'Email + password login; returns a ks_ session token' })
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit('login')
+  @ApiOperation({ summary: 'Email + password login; returns a ks_ session token. 429 past 30/min per IP or 10/min per address' })
   login(@Body() dto: LoginDto, @Req() req: Request): Promise<AuthSessionResponse> {
     return this.flow.login(dto.email, dto.password, requestMeta(req));
   }

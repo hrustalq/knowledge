@@ -275,6 +275,26 @@ in the pull request that introduces them — see
   `cursor` filters and returns `nextCursor`; each entry now carries `ip` and
   `target`, and `workspaceId` can be null. This is the first phase of single
   sign-on and SCIM. (#75)
+- Single sign-on with OpenID Connect. A workspace admin adds an identity
+  provider under Settings → Security → Providers, from a preset for
+  Keycloak, Microsoft Entra ID, Google Workspace, Yandex ID, or any OpenID
+  Connect provider. The client secret is write-only: the API returns
+  `hasSecret` and never the secret. The login page becomes email-first: the
+  address decides whether the next step is a password or the organization's
+  provider, and the workspace's providers appear as "Continue with …"
+  buttons. Sign-in uses the authorization code flow with PKCE, a nonce and a
+  single-use login transaction. A forged, replayed or expired attempt sends
+  the browser back to `/login` with a reason and records a failed sign-in.
+  The session token never appears in a URL: the browser trades a 60-second
+  single-use code for it at `POST /v1/auth/sso/exchange`. A provider may
+  create accounts on first sign-in (JIT) with a default role. It links to or
+  creates an account only for an address the provider has verified, on a
+  domain in the provider's allowed domains, so an unverified email claim can
+  never take over an existing account. `GET /v1/me` reports
+  `authMethod: 'oidc'` for these sessions, and SSO sign-ins appear in that
+  workspace's audit log. A platform admin can make a provider platform-wide,
+  so it is offered on every workspace's login page. Deleting a provider
+  signs out the sessions it opened. (#75)
 
 ### Changed
 
@@ -309,6 +329,12 @@ in the pull request that introduces them — see
     size, and **Body** / **Headers** tabs. Code samples and JSON responses are
     syntax-highlighted. Pressing Send with a required field empty jumps to
     that field instead of doing nothing. (#78)
+
+- Password sign-in is now rate limited to 30 attempts a minute per IP
+  address and 10 a minute per email address. Past that it answers 429 with
+  `Retry-After`. While Redis is down, password sign-in is refused rather
+  than left unlimited. Settings → Security now opens on a Providers tab, with
+  the audit log on its own tab. (#75)
 
 ### Operations
 
@@ -378,6 +404,20 @@ in the pull request that introduces them — see
   which stay empty until later phases. `audit_logs.workspace_id` becomes
   nullable. Every change is additive, nothing is backfilled, and the previous
   image only reads audit rows filtered by workspace, so rolling back is safe.
+- Single sign-on is off unless `AUTH_SSO_ENABLED=true`. Turning it on needs
+  `AUTH_MODE=api-key`, and `SETTINGS_ENCRYPTION_KEY` to store a provider's
+  client secret. Register `<API_PUBLIC_URL>/v1/auth/oidc/<provider id>/callback`
+  as the redirect URI at the provider; the Providers tab shows the exact
+  value. New variables, all defaulted so an existing deployment behaves as
+  before: `AUTH_SSO_ENABLED` (`false`), `AUTH_SSO_ALLOW_PRIVATE_URLS`
+  (`false`; set it for an on-premises Keycloak on a private address),
+  `AUTH_SSO_STATE_TTL_SEC` (`600`), `AUTH_PASSWORD_LOGIN_ENABLED` (`true`;
+  `false` makes login, signup and forgot-password refuse every address
+  except those in `AUTH_BREAK_GLASS_EMAILS`) and `AUTH_BREAK_GLASS_EMAILS`
+  (empty). Migration `20261110100000_sso_request_idp_session` adds one
+  nullable column, `sso_auth_requests.idp_session_id`, which the previous
+  image never reads, so rolling back is safe. `make infra-up-keycloak`
+  starts a local Keycloak with a test realm for trying SSO out. (#75)
 
 ## [0.26.0] — 2026-10-16
 

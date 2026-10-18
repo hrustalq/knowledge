@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BootstrapModule } from './config/bootstrap.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { SsoModule } from './auth/sso/sso.module.js';
 import { UsersModule } from './users/users.module.js';
 import { WorkspacesModule } from './workspaces/workspaces.module.js';
 import { PermissionsModule } from './permissions/permissions.module.js';
@@ -47,6 +48,8 @@ import { ChatModule } from './chat/chat.module.js';
     BootstrapModule,
     PrismaModule,
     AuthModule,
+    // Enterprise SSO (#75): API-only, every route 404s unless AUTH_SSO_ENABLED.
+    SsoModule,
     UsersModule,
     WorkspacesModule,
     PermissionsModule,

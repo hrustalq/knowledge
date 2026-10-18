@@ -10,10 +10,13 @@ import { AuthController } from './auth.controller.js';
 import { AuthFlowController } from './auth-flow.controller.js';
 import { AuthFlowService } from './auth-flow.service.js';
 import { AuthGuard } from './auth.guard.js';
+import { AuthRateLimitGuard } from './auth-rate-limit.guard.js';
 import { MeController } from './me.controller.js';
 import { SessionsService } from './sessions.service.js';
 import { TokenAuthService } from './token-auth.service.js';
 import { UrlTicketsService } from './url-tickets.service.js';
+import { PublicRateLimiter } from '../public/public-rate-limit.js';
+import { PublicStore } from '../public/public-store.js';
 
 /**
  * Phase 5 governance (plan.md §11). Global: AuthGuard resolves the caller on
@@ -32,10 +35,17 @@ import { UrlTicketsService } from './url-tickets.service.js';
     TokenAuthService,
     UrlTicketsService,
     AuthFlowService,
+    // The anonymous auth routes' budgets (#75): the same Redis fixed window the
+    // public routes count with, registered here as api-specs registers it.
+    PublicStore,
+    PublicRateLimiter,
+    AuthRateLimitGuard,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: AclGuard },
   ],
   // AuthCoreModule is re-exported so existing importers keep getting AccessService.
-  exports: [AuthCoreModule, SessionsService, TokenAuthService],
+  // AuthFlowService + the limiter: SSO sign-in (#75) opens its sessions and
+  // counts its routes the way a password login does.
+  exports: [AuthCoreModule, SessionsService, TokenAuthService, AuthFlowService, PublicRateLimiter, AuthRateLimitGuard],
 })
 export class AuthModule {}

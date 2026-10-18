@@ -522,6 +522,8 @@ export type I18nTranslations = {
             "apiKeyProjectNotAllowed": string;
             "apiKeyLimit": string;
             "sessionNotFound": string;
+            "passwordLoginDisabled": string;
+            "rateLimited": string;
         };
         "workspace": {
             "notFound": string;
@@ -1116,6 +1118,21 @@ export type I18nTranslations = {
             "overrideNotCurrent": string;
             "notOverridable": string;
             "alreadyOverridden": string;
+        };
+        "sso": {
+            "disabled": string;
+            "providerNotFound": string;
+            "exchangeInvalid": string;
+            "secretKeyMissing": string;
+            "kindNotSupported": string;
+            "platformWideAdminOnly": string;
+            "issuerRequired": string;
+            "clientIdRequired": string;
+            "issuerInvalid": string;
+            "issuerNotHttps": string;
+            "issuerUnresolved": string;
+            "issuerPrivate": string;
+            "invalidDomain": string;
         };
     };
     "import": {

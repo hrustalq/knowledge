@@ -1164,7 +1164,7 @@
       "method": "POST",
       "path": "/v1/auth/login",
       "tag": "auth",
-      "summary": "Email + password login; returns a ks_ session token",
+      "summary": "Email + password login; returns a ks_ session token. 429 past 30/min per IP or 10/min per address",
       "role": null,
       "source": null,
       "public": true,
@@ -1205,6 +1205,36 @@
       "path": "/v1/auth/signup",
       "tag": "auth",
       "summary": "Create an account with email + password; returns a ks_ session token",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/sso/discover",
+      "tag": "auth",
+      "summary": "Email-first sign-in: the providers that assert this address's domain (never whether an account exists)",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/sso/exchange",
+      "tag": "auth",
+      "summary": "Trade the single-use code from /auth/sso/complete for a ks_ session token",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/auth/sso/providers",
+      "tag": "auth",
+      "summary": "Login buttons: enabled providers of the workspace plus every platform-wide one. 404 when SSO is off",
       "role": null,
       "source": null,
       "public": true,
@@ -1307,6 +1337,56 @@
       "summary": "Revoke one of the caller's sessions; its token gets 401 from the next request",
       "role": null,
       "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/identity-providers",
+      "tag": "auth",
+      "summary": "The workspace's identity providers. Client secrets are never returned (hasSecret only)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workspaces/{id}/identity-providers",
+      "tag": "auth",
+      "summary": "Add an OIDC provider (starts disabled). 400 secretKeyMissing without SETTINGS_ENCRYPTION_KEY",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/workspaces/{id}/identity-providers/{providerId}",
+      "tag": "auth",
+      "summary": "Remove a provider, its identity links, and the sessions it opened",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/workspaces/{id}/identity-providers/{providerId}",
+      "tag": "auth",
+      "summary": "Change a provider. clientSecret: a value sets it, '' clears it, absent keeps it",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workspaces/{id}/identity-providers/{providerId}/test",
+      "tag": "auth",
+      "summary": "Fetch the provider's discovery document and report what it names",
+      "role": "admin",
+      "source": "workspace",
       "public": false,
       "platformAdmin": false
     },

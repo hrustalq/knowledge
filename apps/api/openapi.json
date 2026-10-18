@@ -185,10 +185,10 @@
             }
           },
           {
-            "name": "before",
+            "name": "cursor",
             "required": false,
             "in": "query",
-            "description": "nextBefore from the previous page",
+            "description": "nextCursor from the previous page",
             "schema": {
               "type": "string"
             }
@@ -260,10 +260,10 @@
             }
           },
           {
-            "name": "before",
+            "name": "cursor",
             "required": false,
             "in": "query",
-            "description": "nextBefore from the previous page",
+            "description": "nextCursor from the previous page",
             "schema": {
               "type": "string"
             }
@@ -425,7 +425,7 @@
             }
           }
         },
-        "summary": "Email + password login; returns a ks_ session token",
+        "summary": "Email + password login; returns a ks_ session token. 429 past 30/min per IP or 10/min per address",
         "tags": [
           "auth"
         ]
@@ -1128,6 +1128,507 @@
           }
         },
         "summary": "Revoke one of the caller's sessions; its token gets 401 from the next request",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/sso/providers": {
+      "get": {
+        "operationId": "SsoController_providers",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": false,
+            "in": "query",
+            "description": "The workspace whose buttons to show (the kn_ws cookie's)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Login buttons: enabled providers of the workspace plus every platform-wide one. 404 when SSO is off",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/sso/discover": {
+      "post": {
+        "operationId": "SsoController_discover",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SsoDiscoverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Email-first sign-in: the providers that assert this address's domain (never whether an account exists)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/sso/exchange": {
+      "post": {
+        "operationId": "SsoController_exchange",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SsoExchangeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Trade the single-use code from /auth/sso/complete for a ks_ session token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/identity-providers": {
+      "get": {
+        "operationId": "IdentityProvidersController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace's identity providers. Client secrets are never returned (hasSecret only)",
+        "tags": [
+          "auth"
+        ]
+      },
+      "post": {
+        "operationId": "IdentityProvidersController_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIdentityProviderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Add an OIDC provider (starts disabled). 400 secretKeyMissing without SETTINGS_ENCRYPTION_KEY",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/identity-providers/{providerId}": {
+      "patch": {
+        "operationId": "IdentityProvidersController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "providerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateIdentityProviderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Change a provider. clientSecret: a value sets it, '' clears it, absent keeps it",
+        "tags": [
+          "auth"
+        ]
+      },
+      "delete": {
+        "operationId": "IdentityProvidersController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "providerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a provider, its identity links, and the sessions it opened",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/identity-providers/{providerId}/test": {
+      "post": {
+        "operationId": "IdentityProvidersController_test",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "providerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Fetch the provider's discovery document and report what it names",
         "tags": [
           "auth"
         ]
@@ -27711,6 +28212,223 @@
         "required": [
           "name"
         ]
+      },
+      "SsoDiscoverDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "you@corp.example"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "SsoExchangeDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The single-use code from the /auth/sso/complete fragment"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "CreateIdentityProviderDto": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": [
+              "keycloak",
+              "entra",
+              "google",
+              "yandex",
+              "generic"
+            ],
+            "description": "IdP quirks to apply. Defaults to generic."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Offered for sign-in. New providers start disabled."
+          },
+          "showOnLogin": {
+            "type": "boolean",
+            "description": "Shown as a button on /login (otherwise reached by email discovery only)"
+          },
+          "platformWide": {
+            "type": "boolean",
+            "description": "Offered on every login page of the instance. Platform admins only."
+          },
+          "issuer": {
+            "type": "string",
+            "description": "OIDC issuer identifier. Ignored by the google and yandex presets, which fix it."
+          },
+          "clientId": {
+            "type": "string",
+            "description": "OIDC client id"
+          },
+          "scopes": {
+            "description": "Scopes beyond openid; empty uses the preset defaults",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "clientSecret": {
+            "type": "string",
+            "description": "Write-only. A value sets it, '' clears it, absent keeps it."
+          },
+          "jitEnabled": {
+            "type": "boolean",
+            "description": "Create an account on first sign-in (needs the address in allowedDomains)"
+          },
+          "defaultRole": {
+            "type": "string",
+            "enum": [
+              "guest",
+              "viewer",
+              "editor",
+              "admin"
+            ],
+            "nullable": true,
+            "description": "Membership a JIT sign-in gets; null = none"
+          },
+          "allowedDomains": {
+            "description": "Email domains this provider may assert, e.g. corp.example",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "groupsClaim": {
+            "type": "string",
+            "nullable": true,
+            "description": "Claim holding group names; null uses the preset default"
+          },
+          "groupSyncMode": {
+            "type": "string",
+            "enum": [
+              "additive",
+              "authoritative"
+            ]
+          },
+          "sessionTtlHours": {
+            "type": "number",
+            "nullable": true,
+            "description": "Session lifetime for this provider; null = AUTH_SESSION_TTL_HOURS"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "oidc",
+              "saml",
+              "ldap"
+            ],
+            "description": "Only oidc is accepted until SAML and LDAP ship"
+          },
+          "name": {
+            "type": "string",
+            "description": "The login button label"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ]
+      },
+      "UpdateIdentityProviderDto": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": [
+              "keycloak",
+              "entra",
+              "google",
+              "yandex",
+              "generic"
+            ],
+            "description": "IdP quirks to apply. Defaults to generic."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Offered for sign-in. New providers start disabled."
+          },
+          "showOnLogin": {
+            "type": "boolean",
+            "description": "Shown as a button on /login (otherwise reached by email discovery only)"
+          },
+          "platformWide": {
+            "type": "boolean",
+            "description": "Offered on every login page of the instance. Platform admins only."
+          },
+          "issuer": {
+            "type": "string",
+            "description": "OIDC issuer identifier. Ignored by the google and yandex presets, which fix it."
+          },
+          "clientId": {
+            "type": "string",
+            "description": "OIDC client id"
+          },
+          "scopes": {
+            "description": "Scopes beyond openid; empty uses the preset defaults",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "clientSecret": {
+            "type": "string",
+            "description": "Write-only. A value sets it, '' clears it, absent keeps it."
+          },
+          "jitEnabled": {
+            "type": "boolean",
+            "description": "Create an account on first sign-in (needs the address in allowedDomains)"
+          },
+          "defaultRole": {
+            "type": "string",
+            "enum": [
+              "guest",
+              "viewer",
+              "editor",
+              "admin"
+            ],
+            "nullable": true,
+            "description": "Membership a JIT sign-in gets; null = none"
+          },
+          "allowedDomains": {
+            "description": "Email domains this provider may assert, e.g. corp.example",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "groupsClaim": {
+            "type": "string",
+            "nullable": true,
+            "description": "Claim holding group names; null uses the preset default"
+          },
+          "groupSyncMode": {
+            "type": "string",
+            "enum": [
+              "additive",
+              "authoritative"
+            ]
+          },
+          "sessionTtlHours": {
+            "type": "number",
+            "nullable": true,
+            "description": "Session lifetime for this provider; null = AUTH_SESSION_TTL_HOURS"
+          },
+          "name": {
+            "type": "string",
+            "description": "The login button label"
+          }
+        }
       },
       "CreateUserDto": {
         "type": "object",

@@ -11,6 +11,7 @@ import { Access, CurrentPrincipal, Public } from '../../auth/access.decorator.js
 import type { Principal } from '../../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../../common/validation.js';
 import type { Env } from '../../config/env.js';
+import { safeReturnTo } from '../../common/safe-return-to.js';
 import { GithubAppService } from './github-app.service.js';
 import { GithubBrowseService } from './github-browse.service.js';
 import { GithubOauthService } from './github-oauth.service.js';
@@ -65,7 +66,7 @@ export class GithubController {
     }
 
     const userId = principal.userId;
-    const state = this.oauth.sign(workspaceId, userId, safeReturnTo(returnTo));
+    const state = this.oauth.sign(workspaceId, userId, safeReturnTo(returnTo, '/settings/connectors'));
     if (!state) return { configured: false, connected: false, ...empty };
 
     const identity = await this.oauth.identityFor(userId);
@@ -204,15 +205,4 @@ export class GithubController {
 /** GitHub ids are 64-bit integers; anything else is not one and must not reach BigInt(). */
 function isNumericId(value: string | undefined): value is string {
   return typeof value === 'string' && /^\d{1,19}$/.test(value);
-}
-
-/**
- * The return path is echoed into a redirect, so it must be a path on our own
- * web app and nothing else. Anything absolute, protocol-relative or absent
- * collapses to the connectors screen — an open redirect here would be handed
- * out by a URL that looks like ours.
- */
-function safeReturnTo(raw: string | undefined): string {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/settings/connectors';
-  return raw;
 }

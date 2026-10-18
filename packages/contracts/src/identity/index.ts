@@ -68,8 +68,131 @@ export const AUDIT_ACTIONS = [
   'auth.login_failed',
   'auth.logout',
   'auth.session_revoked',
+  'sso.provider_created',
+  'sso.provider_updated',
+  'sso.provider_deleted',
+  'sso.jit_user_created',
+  'sso.identity_linked',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+// ---------------------------------------------------------------------------
+// Identity providers (#75 phase 2). Owned by a workspace; a platform admin may
+// mark one `platformWide` so a single-tenant install offers it on every login.
+// ---------------------------------------------------------------------------
+
+/** `identity_providers.kind`. Only `oidc` signs anyone in yet; SAML and LDAP follow. */
+export const IDP_KINDS = ['oidc', 'saml', 'ldap'] as const;
+export type IdpKind = (typeof IDP_KINDS)[number];
+
+/**
+ * `identity_providers.preset`: which IdP's quirks apply. `yandex` is OAuth 2 +
+ * userinfo rather than OIDC (no discovery document, no id_token), so its
+ * endpoints are fixed and `issuer` is ignored.
+ */
+export const IDP_PRESETS = ['keycloak', 'entra', 'google', 'yandex', 'generic'] as const;
+export type IdpPreset = (typeof IDP_PRESETS)[number];
+
+/** Additive grants what the IdP's groups map to; authoritative also takes away what they no longer do. */
+export const GROUP_SYNC_MODES = ['additive', 'authoritative'] as const;
+export type GroupSyncMode = (typeof GROUP_SYNC_MODES)[number];
+
+/** The non-secret half of an OIDC provider (`identity_providers.config`). */
+export interface OidcProviderConfig {
+  /** The issuer identifier; discovery is `<issuer>/.well-known/openid-configuration`. */
+  issuer: string;
+  clientId: string;
+  /** `openid` is always requested; these are added to it. */
+  scopes: string[];
+}
+
+export interface IdentityProviderView {
+  id: string;
+  workspaceId: string;
+  kind: IdpKind;
+  preset: IdpPreset;
+  name: string;
+  enabled: boolean;
+  showOnLogin: boolean;
+  platformWide: boolean;
+  config: OidcProviderConfig;
+  /** A client secret is stored. The secret itself never leaves the API. */
+  hasSecret: boolean;
+  jitEnabled: boolean;
+  defaultRole: WorkspaceRole | null;
+  /** Email domains this provider may assert. Linking and JIT both need the address to be in one. */
+  allowedDomains: string[];
+  groupsClaim: string | null;
+  groupSyncMode: GroupSyncMode;
+  sessionTtlHours: number | null;
+  /** What to register at the IdP as the redirect URI. */
+  redirectUri: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /v1/workspaces/:id/identity-providers
+export interface ListIdentityProvidersResponse {
+  providers: IdentityProviderView[];
+  /** SETTINGS_ENCRYPTION_KEY is set: a client secret can be saved. */
+  secretsWritable: boolean;
+}
+
+// POST /v1/workspaces/:id/identity-providers/:providerId/test
+export interface TestIdentityProviderResponse {
+  ok: boolean;
+  /** The issuer the discovery document names, when it was reached. */
+  issuer: string | null;
+  authorizationEndpoint: string | null;
+  error: string | null;
+}
+
+/** A provider as the login page shows it: enough for a button, nothing more. */
+export interface SsoLoginProvider {
+  id: string;
+  name: string;
+  kind: IdpKind;
+  preset: IdpPreset;
+}
+
+// GET /v1/auth/sso/providers?workspaceId=
+export interface SsoProvidersResponse {
+  providers: SsoLoginProvider[];
+  /** AUTH_PASSWORD_LOGIN_ENABLED: the password form is offered at all. */
+  passwordLogin: boolean;
+}
+
+// POST /v1/auth/sso/discover
+export interface SsoDiscoverResponse {
+  /** `sso` when a provider asserts this address's domain. Never says whether an account exists. */
+  method: 'password' | 'sso';
+  providers: SsoLoginProvider[];
+  /** A password may still be used for this address (the ceiling, or a break-glass entry). */
+  passwordAllowed: boolean;
+}
+
+// POST /v1/auth/sso/exchange
+export interface SsoExchangeResponse extends AuthSessionResponse {
+  /** The web path the sign-in started from. */
+  returnTo: string;
+}
+
+/**
+ * Why an SSO callback sent the browser back to `/login?error=`. The reason in
+ * detail goes to the audit trail; the browser gets one of these.
+ */
+export const SSO_LOGIN_ERRORS = [
+  'invalid-state',
+  'provider-error',
+  'id-token-invalid',
+  'email-missing',
+  'email-not-verified',
+  'domain-not-allowed',
+  'jit-disabled',
+  'account-disabled',
+  'failed',
+] as const;
+export type SsoLoginError = (typeof SSO_LOGIN_ERRORS)[number];
 
 /** One login session, as its owner (or a platform admin) sees it. Never the token. */
 export interface SessionView {

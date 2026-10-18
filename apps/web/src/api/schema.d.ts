@@ -98,7 +98,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Email + password login; returns a ks_ session token */
+        /** Email + password login; returns a ks_ session token. 429 past 30/min per IP or 10/min per address */
         post: operations["AuthFlowController_login"];
         delete?: never;
         options?: never;
@@ -309,6 +309,110 @@ export interface paths {
         post?: never;
         /** Revoke one of the caller's sessions; its token gets 401 from the next request */
         delete: operations["MeController_revokeSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sso/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Login buttons: enabled providers of the workspace plus every platform-wide one. 404 when SSO is off */
+        get: operations["SsoController_providers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sso/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Email-first sign-in: the providers that assert this address's domain (never whether an account exists) */
+        post: operations["SsoController_discover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sso/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Trade the single-use code from /auth/sso/complete for a ks_ session token */
+        post: operations["SsoController_exchange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/identity-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's identity providers. Client secrets are never returned (hasSecret only) */
+        get: operations["IdentityProvidersController_list"];
+        put?: never;
+        /** Add an OIDC provider (starts disabled). 400 secretKeyMissing without SETTINGS_ENCRYPTION_KEY */
+        post: operations["IdentityProvidersController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/identity-providers/{providerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a provider, its identity links, and the sessions it opened */
+        delete: operations["IdentityProvidersController_remove"];
+        options?: never;
+        head?: never;
+        /** Change a provider. clientSecret: a value sets it, '' clears it, absent keeps it */
+        patch: operations["IdentityProvidersController_update"];
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/identity-providers/{providerId}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fetch the provider's discovery document and report what it names */
+        post: operations["IdentityProvidersController_test"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5704,6 +5808,95 @@ export interface components {
             /** @description Days until the key stops working (1–365); omit for no expiry. */
             expiresInDays?: number;
         };
+        SsoDiscoverDto: {
+            /** @example you@corp.example */
+            email: string;
+        };
+        SsoExchangeDto: {
+            /** @description The single-use code from the /auth/sso/complete fragment */
+            code: string;
+        };
+        CreateIdentityProviderDto: {
+            /**
+             * @description IdP quirks to apply. Defaults to generic.
+             * @enum {string}
+             */
+            preset?: "keycloak" | "entra" | "google" | "yandex" | "generic";
+            /** @description Offered for sign-in. New providers start disabled. */
+            enabled?: boolean;
+            /** @description Shown as a button on /login (otherwise reached by email discovery only) */
+            showOnLogin?: boolean;
+            /** @description Offered on every login page of the instance. Platform admins only. */
+            platformWide?: boolean;
+            /** @description OIDC issuer identifier. Ignored by the google and yandex presets, which fix it. */
+            issuer?: string;
+            /** @description OIDC client id */
+            clientId?: string;
+            /** @description Scopes beyond openid; empty uses the preset defaults */
+            scopes?: string[];
+            /** @description Write-only. A value sets it, '' clears it, absent keeps it. */
+            clientSecret?: string;
+            /** @description Create an account on first sign-in (needs the address in allowedDomains) */
+            jitEnabled?: boolean;
+            /**
+             * @description Membership a JIT sign-in gets; null = none
+             * @enum {string|null}
+             */
+            defaultRole?: "guest" | "viewer" | "editor" | "admin" | null;
+            /** @description Email domains this provider may assert, e.g. corp.example */
+            allowedDomains?: string[];
+            /** @description Claim holding group names; null uses the preset default */
+            groupsClaim?: string | null;
+            /** @enum {string} */
+            groupSyncMode?: "additive" | "authoritative";
+            /** @description Session lifetime for this provider; null = AUTH_SESSION_TTL_HOURS */
+            sessionTtlHours?: number | null;
+            /**
+             * @description Only oidc is accepted until SAML and LDAP ship
+             * @enum {string}
+             */
+            kind: "oidc" | "saml" | "ldap";
+            /** @description The login button label */
+            name: string;
+        };
+        UpdateIdentityProviderDto: {
+            /**
+             * @description IdP quirks to apply. Defaults to generic.
+             * @enum {string}
+             */
+            preset?: "keycloak" | "entra" | "google" | "yandex" | "generic";
+            /** @description Offered for sign-in. New providers start disabled. */
+            enabled?: boolean;
+            /** @description Shown as a button on /login (otherwise reached by email discovery only) */
+            showOnLogin?: boolean;
+            /** @description Offered on every login page of the instance. Platform admins only. */
+            platformWide?: boolean;
+            /** @description OIDC issuer identifier. Ignored by the google and yandex presets, which fix it. */
+            issuer?: string;
+            /** @description OIDC client id */
+            clientId?: string;
+            /** @description Scopes beyond openid; empty uses the preset defaults */
+            scopes?: string[];
+            /** @description Write-only. A value sets it, '' clears it, absent keeps it. */
+            clientSecret?: string;
+            /** @description Create an account on first sign-in (needs the address in allowedDomains) */
+            jitEnabled?: boolean;
+            /**
+             * @description Membership a JIT sign-in gets; null = none
+             * @enum {string|null}
+             */
+            defaultRole?: "guest" | "viewer" | "editor" | "admin" | null;
+            /** @description Email domains this provider may assert, e.g. corp.example */
+            allowedDomains?: string[];
+            /** @description Claim holding group names; null uses the preset default */
+            groupsClaim?: string | null;
+            /** @enum {string} */
+            groupSyncMode?: "additive" | "authoritative";
+            /** @description Session lifetime for this provider; null = AUTH_SESSION_TTL_HOURS */
+            sessionTtlHours?: number | null;
+            /** @description The login button label */
+            name?: string;
+        };
         CreateUserDto: {
             /** @example teammate@example.com */
             email: string;
@@ -7801,8 +7994,8 @@ export interface operations {
                 limit?: string;
                 /** @description One AUDIT_ACTIONS value */
                 action?: string;
-                /** @description nextBefore from the previous page */
-                before?: string;
+                /** @description nextCursor from the previous page */
+                cursor?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -7845,8 +8038,8 @@ export interface operations {
                 limit?: string;
                 /** @description One AUDIT_ACTIONS value */
                 action?: string;
-                /** @description nextBefore from the previous page */
-                before?: string;
+                /** @description nextCursor from the previous page */
+                cursor?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -8460,6 +8653,342 @@ export interface operations {
         requestBody?: never;
         responses: {
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoController_providers: {
+        parameters: {
+            query?: {
+                /** @description The workspace whose buttons to show (the kn_ws cookie's) */
+                workspaceId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoController_discover: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SsoDiscoverDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoController_exchange: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SsoExchangeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    IdentityProvidersController_list: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    IdentityProvidersController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIdentityProviderDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    IdentityProvidersController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    IdentityProvidersController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateIdentityProviderDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    IdentityProvidersController_test: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

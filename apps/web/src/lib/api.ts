@@ -465,6 +465,15 @@ async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
  * only ever holds a `ks_` session token, which those routes accept; an API
  * key in a URL is refused. Per-asset tickets are #102 phase 2b.
  */
+/**
+ * The absolute URL of an API route, for a full-page navigation rather than a
+ * fetch — an SSO sign-in starts by sending the whole browser to the API, which
+ * redirects it on to the identity provider (#75).
+ */
+export function apiUrl(path: string): string {
+  return `${base}${path}`
+}
+
 export function resolveAssetUrl(path: string): string {
   if (!path.startsWith('/v1/')) return path
   const token = getToken()

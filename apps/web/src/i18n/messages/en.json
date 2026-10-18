@@ -220,7 +220,30 @@
     "verifyContinue": "Continue",
     "verifySignOut": "Sign out",
     "verifyBanner": "Confirm your email address — we sent a link to {email}.",
-    "verifyBannerDismiss": "Dismiss"
+    "verifyBannerDismiss": "Dismiss",
+    "sso": {
+      "continue": "Continue",
+      "checking": "Checking…",
+      "or": "or",
+      "continueWith": "Continue with {name}",
+      "domainUsesSso": "{email} signs in through your organization.",
+      "usePassword": "Use a password instead",
+      "changeEmail": "Use another address",
+      "passwordDisabled": "Password sign-in is turned off on this instance. Ask an administrator for your organization’s single sign-on.",
+      "completing": "Finishing sign-in…",
+      "completeFailed": "This sign-in link is invalid, expired or already used. Sign in again.",
+      "errors": {
+        "invalid-state": "That sign-in attempt expired or was already used. Try again.",
+        "provider-error": "The identity provider did not complete the sign-in. Try again, or ask an administrator to check the provider.",
+        "id-token-invalid": "The identity provider’s answer could not be verified. Ask an administrator to check the provider.",
+        "email-missing": "The identity provider did not share an email address.",
+        "email-not-verified": "The identity provider has not confirmed your email address, so it cannot be linked to an account.",
+        "domain-not-allowed": "This identity provider cannot sign in addresses on your domain.",
+        "jit-disabled": "There is no account for you yet, and this provider does not create one. Ask an administrator to invite you.",
+        "account-disabled": "This account is disabled.",
+        "failed": "Single sign-on is not available for this provider."
+      }
+    }
   },
   "documents": {
     "title": "Pages",
@@ -5298,7 +5321,7 @@
   },
   "security": {
     "title": "Security",
-    "subtitle": "Who signed in, and what was done with elevated rights.",
+    "subtitle": "How people sign in, and what was done with elevated rights.",
     "adminOnly": "Only workspace admins can see the security settings.",
     "audit": {
       "title": "Audit log",
@@ -5338,7 +5361,83 @@
         "auth_login": "Signed in",
         "auth_login_failed": "Sign-in failed",
         "auth_logout": "Signed out",
-        "auth_session_revoked": "Session revoked"
+        "auth_session_revoked": "Session revoked",
+        "sso_provider_created": "Identity provider added",
+        "sso_provider_updated": "Identity provider changed",
+        "sso_provider_deleted": "Identity provider removed",
+        "sso_jit_user_created": "Account created on SSO sign-in",
+        "sso_identity_linked": "SSO sign-in linked to an account"
+      }
+    },
+    "tabs": {
+      "providers": "Providers",
+      "audit": "Audit log"
+    },
+    "providers": {
+      "title": "Identity providers",
+      "hint": "Sign people in with your organization’s OpenID Connect provider. New providers start disabled.",
+      "disabled": "Single sign-on is not enabled on this instance. An operator turns it on with AUTH_SSO_ENABLED=true (and AUTH_MODE=api-key).",
+      "empty": "No identity providers yet.",
+      "add": "Add provider",
+      "addTitle": "Add an identity provider",
+      "editTitle": "Edit identity provider",
+      "formHint": "Register the redirect URI shown after saving as an allowed redirect in the provider’s client.",
+      "preset": "Provider",
+      "name": "Button label",
+      "namePlaceholder": "Company SSO",
+      "issuer": "Issuer URL",
+      "clientId": "Client ID",
+      "clientSecret": "Client secret",
+      "secretStored": "Stored — leave empty to keep it",
+      "secretNone": "Not set (public client)",
+      "secretsNotWritable": "Secrets cannot be stored: SETTINGS_ENCRYPTION_KEY is not set on the server.",
+      "clearSecret": "Remove the stored secret",
+      "allowedDomains": "Allowed email domains",
+      "allowedDomainsHint": "Comma-separated. Accounts are linked or created only for verified addresses on these domains.",
+      "jit": "Create accounts on first sign-in",
+      "jitHint": "Otherwise only people who already have an account can sign in.",
+      "defaultRole": "Role for new members",
+      "noRole": "No membership",
+      "advanced": "Advanced",
+      "scopes": "Scopes (besides openid)",
+      "groupsClaim": "Groups claim",
+      "sessionTtl": "Session lifetime, hours",
+      "sessionTtlDefault": "Instance default",
+      "showOnLogin": "Show a button on the sign-in page",
+      "platformWideToggle": "Offer on every workspace’s sign-in page (platform-wide)",
+      "enableToggle": "Enabled",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saved": "Provider saved",
+      "test": "Test",
+      "testOk": "Discovery document read — issuer {issuer}",
+      "testFailed": "Could not read the discovery document: {error}",
+      "edit": "Edit",
+      "remove": "Remove",
+      "removed": "Provider removed",
+      "removeConfirm": "Remove {name}? People who signed in with it are signed out, and their link to it is forgotten.",
+      "enabled": "Enabled",
+      "disabledBadge": "Disabled",
+      "platformWide": "Platform-wide",
+      "jitBadge": "Creates accounts",
+      "domainsList": "Domains: {domains}",
+      "redirectUri": "Redirect URI",
+      "copy": "Copy redirect URI",
+      "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "presets": {
+        "keycloak": "Keycloak",
+        "entra": "Microsoft Entra ID",
+        "google": "Google Workspace",
+        "yandex": "Yandex ID",
+        "generic": "OpenID Connect"
+      },
+      "issuerPlaceholder": {
+        "keycloak": "https://sso.example.com/realms/company",
+        "entra": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+        "google": "https://accounts.google.com",
+        "yandex": "https://oauth.yandex.ru",
+        "generic": "https://idp.example.com"
       }
     }
   }

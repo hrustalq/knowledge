@@ -111,6 +111,24 @@ export const envSchema = z.object({
   AUTH_REQUIRE_VERIFIED_EMAIL: boolish(false),
 
   /**
+   * Enterprise SSO (#75). Off: every /v1/auth/sso|oidc route and the identity
+   * provider settings answer 404, and sign-in is exactly the password + key flow.
+   * Needs AUTH_MODE=api-key, and SETTINGS_ENCRYPTION_KEY to store a client secret.
+   */
+  AUTH_SSO_ENABLED: boolish(false),
+  /** Issuer / discovery / token endpoints on private ranges — an on-prem Keycloak. Mirrors AI_PLUGINS_ALLOW_PRIVATE_URLS. */
+  AUTH_SSO_ALLOW_PRIVATE_URLS: boolish(false),
+  /** Lifetime of one SSO login transaction (start → IdP → callback). */
+  AUTH_SSO_STATE_TTL_SEC: z.coerce.number().int().min(60).max(3600).default(600),
+  /**
+   * Instance ceiling on password sign-in. False: login, signup and forgot-password
+   * refuse every address but AUTH_BREAK_GLASS_EMAILS, and the login page offers SSO only.
+   */
+  AUTH_PASSWORD_LOGIN_ENABLED: boolish(true),
+  /** Comma-separated addresses that may always use a password — the way back in when an IdP is down. */
+  AUTH_BREAK_GLASS_EMAILS: z.string().default(''),
+
+  /**
    * Mailer (docs/features/41). `log` writes each message to the worker log and
    * sends nothing — the default, so dev and CI never open a socket. `smtp`
    * sends through MAIL_SMTP_URL (`smtp://` STARTTLS or `smtps://` implicit TLS),

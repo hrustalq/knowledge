@@ -19,6 +19,11 @@ import { onClickOutside, onKeyStroke } from '@vueuse/core'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import type { Editor as CoreEditor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
+// SPIKE #80: Collaboration behind ?collab
+import * as Y from 'yjs'
+import { HocuspocusProvider } from '@hocuspocus/provider'
+import Collaboration from '@tiptap/extension-collaboration'
+import CollaborationCaret from '@tiptap/extension-collaboration-caret'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { TableKit } from '@tiptap/extension-table'
 import { Placeholder } from '@tiptap/extensions'
@@ -632,12 +637,28 @@ function toHtml(markdown: string): string {
 onMounted(() => document.addEventListener('pointerdown', onPointerDownOutside))
 onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDownOutside))
 
+let spikeProvider: HocuspocusProvider | undefined
+const spikeCollab = typeof window !== 'undefined' && props.editable && new URLSearchParams(location.search).has('collab')
 onMounted(() => {
+  const spikeDoc = new Y.Doc()
+  const docId = location.pathname.split('/')[2]
+  if (spikeCollab) {
+    spikeProvider = new HocuspocusProvider({ url: 'ws://localhost:3000/v1/collab', name: `collab:ws:${docId}:main`, document: spikeDoc, token: 'dev' })
+    ;(window as unknown as { __spike: unknown }).__spike = { doc: spikeDoc, provider: spikeProvider }
+  }
+  const spikeName = new URLSearchParams(location.search).get('collab') || 'anon'
   const instance = new Editor({
     editable: props.editable,
-    content: toHtml(props.modelValue),
+    content: spikeCollab ? undefined : toHtml(props.modelValue),
     extensions: [
+      ...(spikeCollab
+        ? [
+            Collaboration.configure({ document: spikeDoc, field: 'body' }),
+            CollaborationCaret.configure({ provider: spikeProvider, user: { name: spikeName, color: spikeName === 'b' ? '#c2410c' : '#0e7490' } }),
+          ]
+        : []),
       StarterKit.configure({
+        ...(spikeCollab ? { undoRedo: false as const } : {}),
         codeBlock: false,
         link: { openOnClick: false, autolink: true, HTMLAttributes: { rel: 'noopener noreferrer nofollow' } },
         heading: { levels: [1, 2, 3, 4] },
@@ -707,6 +728,12 @@ onMounted(() => {
   })
   editor.value = instance
   lastEmitted = props.modelValue
+  if (spikeCollab && spikeProvider) {
+    ;(window as unknown as { __spike: Record<string, unknown> }).__spike.editor = instance
+    spikeProvider.on('synced', () => {
+      if (spikeDoc.getXmlFragment('body').length === 0 && props.modelValue) instance.commands.setContent(toHtml(props.modelValue))
+    })
+  }
 
   // Serializing walks the whole document, so it waits for a 200 ms pause in
   // typing: smooth on long pages, still immediate to a save (which flushes).
@@ -781,6 +808,12 @@ watch(
   (next) => {
     const instance = editor.value
     if (!instance || next === lastEmitted) return
+    if (spikeCollab) {
+      // SPIKE: seed an empty shared doc once, never overwrite a populated one.
+      if (instance.state.doc.textContent.length === 0 && next) instance.commands.setContent(toHtml(next), { emitUpdate: false })
+      lastEmitted = next
+      return
+    }
     // External change (loaded a document, restored a working copy): re-parse.
     // An edit still waiting out its pause described the text being replaced,
     // and a suggestion made against that text has nothing left to suggest into.
@@ -816,6 +849,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  spikeProvider?.destroy()
   subscriptions.unsubscribe()
   sync?.dispose()
   editor.value?.destroy()

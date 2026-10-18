@@ -20,6 +20,7 @@ import { EntitiesModule } from './entities/entities.module.js';
 import { ActivityModule } from './activity/activity.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { EventsApiModule } from './events/events-api.module.js';
+import { CollabModule } from './collab/collab.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 import { ConnectorsModule } from './connectors/connectors.module.js';
 import { DriftModule } from './connectors/drift/drift.module.js';
@@ -68,6 +69,7 @@ import { ChatModule } from './chat/chat.module.js';
     ActivityModule,
     NotificationsModule,
     EventsApiModule,
+    CollabModule,
     AssistantModule,
     AiModule,
     ConnectorsModule,

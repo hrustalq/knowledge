@@ -34,6 +34,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.700.0",
     "@aws-sdk/s3-request-presigner": "^3.700.0",
+    "@hocuspocus/extension-redis": "4.7.1",
+    "@hocuspocus/server": "4.7.1",
     "@knowledge/contracts": "workspace:*",
     "@knowledge/observability": "workspace:*",
     "@knowledge/workflow": "workspace:*",
@@ -58,8 +60,8 @@
     "fflate": "^0.8.3",
     "gray-matter": "^4.0.3",
     "ioredis": "^6.0.0",
-    "js-yaml": "^5.4.1",
     "jose": "6.2.10",
+    "js-yaml": "^5.4.1",
     "ldapts": "9.2.0",
     "mammoth": "^1.12.2",
     "marked": "^18.0.11",
@@ -76,9 +78,11 @@
     "unpdf": "^1.8.1",
     "web-tree-sitter": "^0.27.0",
     "ws": "^8.21.3",
+    "yjs": "13.6.33",
     "zod": "^4.1.0"
   },
   "devDependencies": {
+    "@hocuspocus/provider": "4.7.1",
     "@nestjs/cli": "^12.0.0",
     "@nestjs/mau": "^0.2.6",
     "@nestjs/schematics": "^12.0.0",

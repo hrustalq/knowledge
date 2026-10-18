@@ -716,6 +716,19 @@ export const envSchema = z.object({
   LIVE_WS_MAX_SUBSCRIPTIONS: z.coerce.number().int().positive().max(64).default(8),
 
   /**
+   * Real-time co-editing of drafts over /v1/collab (#80, docs/features/56).
+   * Off is today's behaviour exactly: the socket refuses with 4503 and no
+   * Hocuspocus instance or Redis connection is ever created.
+   */
+  COLLAB_ENABLED: boolish(false),
+  /** A shared draft is persisted this long after the last edit… */
+  COLLAB_STORE_DEBOUNCE_MS: z.coerce.number().int().min(100).default(2000),
+  /** …and at least this often while someone keeps typing: the most a crash can lose. */
+  COLLAB_STORE_MAX_DEBOUNCE_MS: z.coerce.number().int().min(100).default(10000),
+  /** Encoded Y state ceiling per draft. A store above it is refused and the draft's peers are closed with 4413. */
+  COLLAB_MAX_DOC_BYTES: z.coerce.number().int().positive().default(8 * 1024 * 1024),
+
+  /**
    * Minimum level written to stdout (stderr in the MCP process, whose stdout is
    * the JSON-RPC transport). Declared here so a typo fails boot, but note the
    * asymmetry: the entrypoints build their logger *before* DI exists, so they

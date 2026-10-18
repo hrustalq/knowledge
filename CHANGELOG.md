@@ -358,6 +358,27 @@ in the pull request that introduces them — see
   by hand are never changed. Every provisioning change is in the audit log.
   (`GET`/`PUT /v1/workspaces/:id/scim`, `POST`/`DELETE
   /v1/workspaces/:id/scim-tokens`.) (#75)
+- SAML 2.0 sign-in. Under Settings → Security → Providers, an admin picks
+  **SAML 2.0** and enters the IdP's entity ID, single sign-on URL and signing
+  certificate (paste two during a key rollover). Our service-provider key
+  pair is generated when the provider is created; only its certificate
+  leaves the API, in the SP metadata at
+  `<API_PUBLIC_URL>/v1/auth/saml/:providerId/metadata`, which is also our
+  entity ID. The ACS URL is `…/acs`. Both are shown for copying, and an IdP
+  can import the metadata by URL. AuthnRequests are signed (RSA-SHA256). A
+  response is accepted only if the Response or the Assertion is signed by
+  the pinned certificate, the audience is our entity ID, the issuer is the
+  configured one, and it is no older than `AUTH_SSO_STATE_TTL_SEC` (60 s
+  clock skew). It must also answer the AuthnRequest that sign-in sent.
+  Unsigned, wrongly signed, signature-wrapped, foreign or replayed responses
+  send the browser to `/login` with a reason and are audited. Sign-ins
+  started from the IdP's app portal are refused unless the provider allows
+  them, and each assertion is accepted once. The **Attribute map** names
+  the email, name and groups attributes. Left empty, the usual Keycloak,
+  Okta, Entra and ADFS names are tried, then an email-format NameID; groups
+  are read only from a named attribute. A transient NameID is refused. JIT,
+  allowed domains, group mapping and enforced SSO work as for OpenID
+  Connect. Sessions report `authMethod: 'saml'`. (#75)
 
 ### Changed
 
@@ -512,6 +533,15 @@ in the pull request that introduces them — see
   unique index per workspace. Both are nullable, nothing wrote to
   `scim_users` before, and the previous image reads neither, so rolling back
   is safe. (#75)
+- SAML sign-in adds no migration and no environment variable. It uses the
+  columns `20261109100000_enterprise_auth` added, and it is on with the
+  rest of SSO (`AUTH_SSO_ENABLED`). Creating a SAML provider needs
+  `SETTINGS_ENCRYPTION_KEY`, which encrypts the generated SP private key;
+  rotating that key leaves existing SAML providers unable to sign in until
+  they are recreated, and their **Test** says so. The SSO URL must be
+  `https` unless `AUTH_SSO_ALLOW_PRIVATE_URLS` is set. The API never fetches
+  it, so SAML needs no outbound network. Rolling back to an image without
+  SAML leaves SAML providers in place but unusable. (#75)
 
 ## [0.26.0] — 2026-10-16
 

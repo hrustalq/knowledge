@@ -288,6 +288,31 @@ export interface OidcProviderConfig {
   scopes: string[];
 }
 
+/**
+ * The non-secret half of a SAML provider (#75 phase 6). The groups attribute
+ * is the provider's `groupsClaim`, shared with OIDC; the SP key pair is made
+ * on create and only its certificate leaves the API, inside the metadata.
+ */
+export interface SamlProviderConfig {
+  /** The IdP's entity ID: the assertion's `Issuer` must equal it. */
+  idpEntityId: string;
+  /** Where the browser is sent with the AuthnRequest (HTTP-Redirect binding). */
+  ssoUrl: string;
+  /** PEM certificate(s) the IdP signs with; two during a rollover. */
+  idpCert: string;
+  /** Accept a response no AuthnRequest of ours asked for (a tile in the IdP's app portal). */
+  allowIdpInitiated: boolean;
+  /** Attribute holding the address; null tries the usual names, then an email-format NameID. */
+  emailAttribute: string | null;
+  /** Attribute holding the display name; null tries the usual names. */
+  nameAttribute: string | null;
+}
+
+export interface SamlProviderView extends SamlProviderConfig {
+  /** Our entity ID, which is also the URL the SP metadata is served at. */
+  entityId: string;
+}
+
 export interface IdentityProviderView {
   id: string;
   workspaceId: string;
@@ -297,7 +322,10 @@ export interface IdentityProviderView {
   enabled: boolean;
   showOnLogin: boolean;
   platformWide: boolean;
+  /** OIDC settings; empty strings for a SAML provider. */
   config: OidcProviderConfig;
+  /** SAML settings and our SP endpoints; null for OIDC. */
+  saml: SamlProviderView | null;
   /** A client secret is stored. The secret itself never leaves the API. */
   hasSecret: boolean;
   jitEnabled: boolean;
@@ -307,7 +335,7 @@ export interface IdentityProviderView {
   groupsClaim: string | null;
   groupSyncMode: GroupSyncMode;
   sessionTtlHours: number | null;
-  /** What to register at the IdP as the redirect URI. */
+  /** What to register at the IdP: the OIDC redirect URI, or the SAML ACS URL. */
   redirectUri: string;
   createdAt: string;
   updatedAt: string;

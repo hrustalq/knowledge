@@ -27,9 +27,11 @@ import {
 import { vmsg } from '../../common/validation.js';
 
 /**
- * The editable fields of an identity provider (#75). The OIDC settings are
- * flat here and stored as `identity_providers.config`; the client secret is
- * write-only — sent to set it, `''` to clear it, absent to keep it.
+ * The editable fields of an identity provider (#75). The OIDC and SAML
+ * settings are flat here and stored as `identity_providers.config`; each kind
+ * ignores the other's. The OIDC client secret is write-only — sent to set it,
+ * `''` to clear it, absent to keep it. A SAML provider's SP key is made on
+ * create and is not editable.
  */
 class IdentityProviderFieldsDto {
   @ApiPropertyOptional({ enum: IDP_PRESETS, description: 'IdP quirks to apply. Defaults to generic.' })
@@ -78,6 +80,41 @@ class IdentityProviderFieldsDto {
   @MaxLength(2000, { message: vmsg('maxLength') })
   clientSecret?: string;
 
+  @ApiPropertyOptional({ description: "SAML: the IdP's entity ID, which the assertion's Issuer must equal" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, { message: vmsg('maxLength') })
+  idpEntityId?: string;
+
+  @ApiPropertyOptional({ description: "SAML: the IdP's single sign-on URL (HTTP-Redirect binding)" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000, { message: vmsg('maxLength') })
+  ssoUrl?: string;
+
+  @ApiPropertyOptional({ description: "SAML: the IdP's signing certificate(s), PEM; two during a rollover" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20000, { message: vmsg('maxLength') })
+  idpCert?: string;
+
+  @ApiPropertyOptional({ description: "SAML: accept responses no AuthnRequest of ours asked for (the IdP's app portal). Defaults to false." })
+  @IsOptional()
+  @IsBoolean()
+  allowIdpInitiated?: boolean;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'SAML: attribute holding the email; null tries the usual names' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300, { message: vmsg('maxLength') })
+  emailAttribute?: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'SAML: attribute holding the display name; null tries the usual names' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300, { message: vmsg('maxLength') })
+  nameAttribute?: string | null;
+
   @ApiPropertyOptional({ description: 'Create an account on first sign-in (needs the address in allowedDomains)' })
   @IsOptional()
   @IsBoolean()
@@ -96,7 +133,11 @@ class IdentityProviderFieldsDto {
   @MaxLength(253, { each: true, message: vmsg('maxLength') })
   allowedDomains?: string[];
 
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'Claim holding group names; null uses the preset default' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'OIDC claim (null uses the preset default) or SAML attribute (null = no groups) holding group names',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(100, { message: vmsg('maxLength') })
@@ -116,7 +157,7 @@ class IdentityProviderFieldsDto {
 }
 
 export class CreateIdentityProviderDto extends IdentityProviderFieldsDto {
-  @ApiProperty({ enum: IDP_KINDS, description: 'Only oidc is accepted until SAML and LDAP ship' })
+  @ApiProperty({ enum: IDP_KINDS, description: 'oidc or saml; ldap is refused until it ships' })
   @IsIn(IDP_KINDS)
   kind!: IdpKind;
 

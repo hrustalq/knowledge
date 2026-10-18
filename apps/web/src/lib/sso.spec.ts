@@ -24,6 +24,7 @@ describe('SSO sign-in helpers (#75)', () => {
 
   it('starts at the API with the return path encoded', () => {
     expect(ssoStartUrl('p1', '/documents/a?b=1')).toBe('/api/v1/auth/oidc/p1/start?returnTo=%2Fdocuments%2Fa%3Fb%3D1')
+    expect(ssoStartUrl('p1', '/documents', 'saml')).toBe('/api/v1/auth/saml/p1/start?returnTo=%2Fdocuments')
   })
 
   it('accepts only the callback errors the API sends', () => {

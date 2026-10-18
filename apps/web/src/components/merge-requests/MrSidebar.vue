@@ -32,6 +32,7 @@ import { Label } from '@/components/ui/label'
 import UserAvatar from './UserAvatar.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
 import UserChip from '@/components/people/UserChip.vue'
+import CollabDraftBadge from '@/components/editor/CollabDraftBadge.vue'
 import AiCheckPane from './AiCheckPane.vue'
 import { useMembers } from './use-members'
 
@@ -343,6 +344,13 @@ const revisionRows = computed(() =>
               </dd>
             </div>
           </dl>
+          <!-- Warn only (#80): a source branch's unpublished draft is not in this diff, and never gates the merge. -->
+          <CollabDraftBadge
+            v-if="mr.status === 'open'"
+            :document-id="mr.documentId"
+            :branch="mr.sourceBranch"
+            context="mr"
+          />
         </section>
 
         <!-- notifications (docs/features/22) -->

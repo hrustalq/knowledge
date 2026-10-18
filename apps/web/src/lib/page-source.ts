@@ -8,12 +8,9 @@
  * publishing writes.
  */
 import { normalizeEntityKey } from '@knowledge/contracts'
+import type { RelationRow } from '@knowledge/editor-schema/page-fields'
 
-export interface RelationRow {
-  type: string
-  key: string
-  name: string
-}
+export { readFrontmatter, type RelationRow } from '@knowledge/editor-schema/page-fields'
 
 /** Everything on screen in the editor that publishing turns into a revision. */
 export interface PageFields {
@@ -57,34 +54,6 @@ export const EMPTY_PAGE: PageFields = {
   tags: '',
   message: '',
   template: null,
-}
-
-/** The frontmatter keys the settings sheet models. Everything else is carried verbatim. */
-const MODELLED_KEYS = new Set(['relations', 'tags'])
-
-/** Split parsed frontmatter into the rows the settings sheet edits and the keys it only carries. */
-export function readFrontmatter(frontmatter: Record<string, unknown> | null | undefined): {
-  relations: RelationRow[]
-  tags: string
-  other: Record<string, unknown>
-} {
-  const fm = frontmatter ?? {}
-  const other = Object.fromEntries(Object.entries(fm).filter(([key]) => !MODELLED_KEYS.has(key)))
-  const relations = Array.isArray(fm.relations)
-    ? (fm.relations as Array<Record<string, unknown>>)
-        .map((r): RelationRow | null => {
-          const target = r.target
-          if (typeof target === 'string') return { type: String(r.type ?? ''), key: target, name: '' }
-          if (target && typeof target === 'object') {
-            const t = target as Record<string, unknown>
-            return { type: String(r.type ?? ''), key: String(t.key ?? ''), name: String(t.name ?? '') }
-          }
-          return null
-        })
-        .filter((r): r is RelationRow => r !== null && !!r.type && !!r.key)
-    : []
-  const tags = Array.isArray(fm.tags) ? (fm.tags as unknown[]).map(String).join(', ') : ''
-  return { relations, tags, other }
 }
 
 /**

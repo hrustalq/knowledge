@@ -137,6 +137,8 @@ export interface RevisionInfo {
   message: string | null;
   createdAt: string;
   finalizedAt: string | null;
+  /** Published from a shared draft (#80): everyone who wrote in it since the previous publish. Empty otherwise. */
+  coAuthorIds: string[];
 }
 
 export interface ChunkSummary {
@@ -337,6 +339,13 @@ export const KNOWN_EVENT_TYPES = [
   'revision.indexed',
   'revision.failed',
   'revision.dependent-reindex',
+  // A branch's shared draft (#80): someone joined or left it, or it was
+  // checkpointed (`changed`); someone discarded it (`reset`, which also closes
+  // its peers on every API instance). `subjectId` is the branch id. Not
+  // `document.*`: everything that reacts to a page event (the detail reload,
+  // toasts, workflow triggers) would fire on every tab that opens an editor.
+  'draft.changed',
+  'draft.reset',
   'relations.curated',
   'relations.deleted',
   'merge-request.created',

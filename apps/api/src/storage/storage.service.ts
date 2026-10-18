@@ -213,6 +213,24 @@ export class StorageService {
     } while (keyMarker || versionIdMarker);
   }
 
+  /**
+   * Keep the newest `keep` versions of a key and delete the rest — a key
+   * rewritten on a schedule (a draft checkpoint) is its own history in the
+   * versioned bucket, and this is its retention.
+   */
+  async pruneObjectVersions(objectKey: string, keep: number): Promise<void> {
+    // ponytail: one page (1000 versions); a key rewritten more often than it is pruned would need paging.
+    const listed = await this.s3.send(new ListObjectVersionsCommand({ Bucket: this.bucket, Prefix: objectKey }));
+    // Listed newest first, so everything past `keep` is older.
+    const old = (listed.Versions ?? [])
+      .filter((v) => v.Key === objectKey && v.VersionId)
+      .slice(keep)
+      .map((v) => ({ Key: v.Key!, VersionId: v.VersionId! }));
+    if (old.length > 0) {
+      await this.s3.send(new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: old, Quiet: true } }));
+    }
+  }
+
   async headObject(objectKey: string): Promise<HeadResult | null> {
     try {
       const res = await this.s3.send(new HeadObjectCommand({ Bucket: this.bucket, Key: objectKey }));

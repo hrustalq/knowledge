@@ -52,6 +52,24 @@ in the pull request that introduces them — see
   plain text (phase 5), and a publish by someone else is not yet shown in the
   draft, so your next publish gets the usual "published since you started"
   error (phase 4).
+- Publishing a shared draft now rebases it (#80, phase 4). Publish writes an
+  ordinary revision as before, and the draft then counts as published up to
+  the moment you pressed it: edits other people make after that stay
+  "unpublished" instead of vanishing or being claimed. The revision records
+  everyone who wrote in the draft since the last publish, shown as co-author
+  faces in the revision history. Opening a page no longer counts as a change.
+  When someone publishes the same page another way (MCP, a merge, a connector),
+  the editor says so as it happens, the review compares the draft with what
+  they published, and you choose **Publish on top** or **Discard draft**.
+  Discard resets the draft to the published page for everyone in it, on every
+  API instance, and clears each browser's offline copy. The document page and
+  an open merge request now show who is editing a branch's draft and whose
+  changes are unpublished; on a merge request this is a warning only, never a
+  merge gate. `/documents/:id/edit?branch=<name>` edits that branch and its
+  draft instead of the default one. New routes: `GET /v1/documents/:id/drafts`
+  and `DELETE /v1/documents/:id/drafts/:branchId`. `POST /:id/revisions` takes
+  optional `collabDraftId` and `draftSnapshot`. Revisions in API responses now
+  carry `coAuthorIds`, an empty list unless they came from a shared draft.
 
 ### Operations
 
@@ -62,6 +80,19 @@ in the pull request that introduces them — see
   `COLLAB_STORE_MAX_DEBOUNCE_MS` (`10000`), `COLLAB_MAX_DOC_BYTES` (8 MiB) and
   `COLLAB_REAUTH_INTERVAL_SECONDS` (`300`). With the flag off, no Hocuspocus
   instance or Redis connection is created, and the socket closes with 4503.
+- Migration `20261113100000_collab_publish` renames
+  `collab_drafts.published_state_vector` to `published_snapshot` (the column
+  was never written), adds `collab_drafts.snapshot`, and adds three nullable
+  columns to `document_revisions`: `collab_draft_id`, `collab_snapshot` and
+  `co_author_ids`. There is no backfill. It survives a rollback to v0.27.0,
+  which reads none of these. New env vars, all with defaults:
+  `COLLAB_CHECKPOINT_INTERVAL_MINUTES` (`15`), `COLLAB_CHECKPOINT_KEEP` (`20`)
+  and `COLLAB_DRAFT_RETENTION_DAYS` (`30`). With the flag on, a draft edited
+  since its last checkpoint is copied to MinIO at
+  `workspaces/{ws}/documents/{doc}/drafts/{branch}/checkpoint.ydoc` at most
+  every interval, and the newest `KEEP` versions are kept. A draft with
+  nothing unpublished and untouched for the retention period is dropped and
+  reseeds the next time it is opened.
 
 - Production embeds with bge-m3 (1024-d) served by Ollama.app on the host,
   not the hash stub (#257). The `production` environment carries

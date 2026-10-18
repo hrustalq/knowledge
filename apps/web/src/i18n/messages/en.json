@@ -1663,7 +1663,8 @@
     "view": "view",
     "compareTitle": "Compare {from} → {to}",
     "mergeBaseAt": "merge base {id}",
-    "apiChanges": "API changes"
+    "apiChanges": "API changes",
+    "coAuthors": "{n} co-author from a shared draft | {n} co-authors from a shared draft"
   },
   "count": {
     "messages": "{n} message | {n} messages",
@@ -3192,6 +3193,10 @@
           "disabled": {
             "label": "Live editing off",
             "hint": "Live editing was switched off on this server. Reload the page to edit on your own."
+          },
+          "reset": {
+            "label": "Reopening",
+            "hint": "Someone discarded the shared draft. It is reopening from the published page."
           }
         }
       },
@@ -3208,8 +3213,29 @@
         "apply": "Apply to draft",
         "ignore": "Discard"
       },
-      "unavailable": "Live editing is unavailable right now, so you are editing on your own."
-    }
+      "unavailable": "Live editing is unavailable right now, so you are editing on your own.",
+      "reset": "The shared draft was discarded, so it reopened from the published page.",
+      "headMoved": {
+        "title": "Published since this draft started",
+        "body": "Someone published this page another way, so publishing the draft as it stands would undo their change. Review what changed, then publish on top of it or discard the draft.",
+        "review": "Review changes",
+        "publishOnTop": "Publish on top"
+      },
+      "discard": {
+        "action": "Discard draft",
+        "title": "Discard the shared draft?",
+        "body": "Every unpublished change in it is lost, and it reopens from the published page.",
+        "bodyPeers": "Every unpublished change in it is lost, and it reopens from the published page for you and {n} other person editing now. | Every unpublished change in it is lost, and it reopens from the published page for you and the {n} other people editing now.",
+        "confirm": "Discard draft"
+      },
+      "badge": {
+        "editing": "{n} editing now | {n} editing now",
+        "unpublished": "Unpublished changes by",
+        "unpublishedMr": "The source branch has unpublished draft changes by",
+        "open": "Open the draft"
+      }
+    },
+    "branchNotFound": "This page has no branch {name}, so you are editing its default branch."
   },
   "toolbar": {
     "formatting": "Formatting",

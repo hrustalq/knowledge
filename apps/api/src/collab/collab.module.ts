@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
+import { EventsModule } from '../events/events.module.js';
 import { EventsSubscriberModule } from '../events/events-subscriber.module.js';
+import { StorageModule } from '../storage/storage.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
-import { CollabController } from './collab.controller.js';
+import { CollabController, CollabDraftsController } from './collab.controller.js';
+import { CollabCheckpointSweeper } from './collab-checkpoint.sweeper.js';
 import { CollabDraftsService } from './collab-drafts.service.js';
 import { CollabGateway } from './collab.gateway.js';
 
@@ -13,8 +16,8 @@ import { CollabGateway } from './collab.gateway.js';
  * without an import.
  */
 @Module({
-  imports: [DocumentsCoreModule, PermissionsCoreModule, EventsSubscriberModule],
-  controllers: [CollabController],
-  providers: [CollabDraftsService, CollabGateway],
+  imports: [DocumentsCoreModule, PermissionsCoreModule, EventsModule, EventsSubscriberModule, StorageModule],
+  controllers: [CollabController, CollabDraftsController],
+  providers: [CollabDraftsService, CollabGateway, CollabCheckpointSweeper],
 })
 export class CollabModule {}

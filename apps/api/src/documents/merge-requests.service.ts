@@ -17,11 +17,10 @@ import type {
   MergeRequestProvenance,
   MergeRequestStatus,
   MergeStrategy,
-  RevisionInfo,
-  RevisionStatus,
 } from '@knowledge/contracts';
-import type { DocumentBranch, DocumentRevision, MergeRequest, MergeRequestReviewer } from '@prisma/client';
+import type { DocumentBranch, MergeRequest, MergeRequestReviewer } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { toRevisionInfo } from './revision-info.js';
 import { StorageService } from '../storage/storage.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { AccessService } from '../auth/access.service.js';
@@ -799,7 +798,7 @@ export class MergeRequestsService {
     });
     return {
       mergeRequest: await this.toDetail(updated),
-      mergedRevision: mergedRevision ? this.toRevisionInfo(mergedRevision) : null,
+      mergedRevision: mergedRevision ? toRevisionInfo(mergedRevision) : null,
     };
   }
 
@@ -922,19 +921,6 @@ export class MergeRequestsService {
     return Array.isArray(mr.approvedBy) ? (mr.approvedBy as string[]) : [];
   }
 
-  private toRevisionInfo(r: DocumentRevision): RevisionInfo {
-    return {
-      revisionId: r.id,
-      documentId: r.documentId,
-      revisionNumber: r.revisionNumber,
-      contentHash: r.contentHash,
-      contentType: r.contentType,
-      status: r.status as RevisionStatus,
-      message: r.message,
-      createdAt: r.createdAt.toISOString(),
-      finalizedAt: r.finalizedAt?.toISOString() ?? null,
-    };
-  }
 
   /**
    * Public so MergeRequestThreadsService can record against the same funnel.

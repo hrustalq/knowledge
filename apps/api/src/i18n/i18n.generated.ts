@@ -574,6 +574,11 @@ export type I18nTranslations = {
             "headMoved": string;
             "needsFinalized": string;
         };
+        "collab": {
+            "draftMismatch": string;
+            "draftNotFound": string;
+            "snapshotInvalid": string;
+        };
         "revision": {
             "notFoundOnDocument": string;
             "notComparable": string;

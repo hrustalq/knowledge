@@ -63,6 +63,7 @@ import type {
 import { apiFetch, getWorkspaceId, relativeTime, statusVariant } from '@/lib/api'
 import { isOpenIssueStatus } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
+import CollabDraftBadge from '@/components/editor/CollabDraftBadge.vue'
 import ComponentDeclarationNotice from '@/components/code/ComponentDeclarationNotice.vue'
 import UsedByRail from '@/components/code/UsedByRail.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -727,6 +728,7 @@ watch(
             · {{ t('documents.finalizedAt', { when: formatDateTime(detail.revision.finalizedAt) }) }}
           </template>
         </p>
+        <CollabDraftBadge :document-id="documentId" :branch="detail.document.defaultBranch" context="page" />
       </template>
 
       <!-- Rail: everything about the page rather than in it ------------- -->

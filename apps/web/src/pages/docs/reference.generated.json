@@ -1882,6 +1882,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/documents/{id}/drafts",
+      "tag": "collab",
+      "summary": "Each branch's shared draft: its base, whether it holds unpublished changes, who wrote them, who has it open",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/documents/{id}/drafts/{branchId}",
+      "tag": "collab",
+      "summary": "Discard a branch's shared draft: it is reseeded from the branch head, and everyone in it rejoins (reason `reset`)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/code-usages",
       "tag": "connectors",
       "summary": "Where a file, directory or glob is used in one of the workspace's code connectors, the pages documenting each usage site, and the component pages covering the path. Pages the caller may not open are counted, never titled",

@@ -79,6 +79,12 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
     invalidate: () => [['/v1/documents'], ['/v1/documents/tree'], ['/v1/knowledge-health'], ['/v1/knowledge-health/summary']],
   },
   {
+    // A branch's shared draft (#80): joined, left, checkpointed or discarded.
+    // Its own prefix, not `document.*`, so none of the page rules above fire.
+    on: 'draft.*',
+    invalidate: (e) => (e.documentId ? [['/v1/documents/{id}/drafts', { id: e.documentId }]] : []),
+  },
+  {
     on: 'revision.*',
     invalidate: (e) => [
       ['/v1/documents'],
@@ -92,6 +98,8 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
             ['/v1/documents/{id}/revisions', { id: e.documentId }],
             ['/v1/documents/{id}/content', { id: e.documentId }],
             ['/v1/documents/{id}/graph', { id: e.documentId }],
+            // A publish from a draft rebases it: nothing unpublished any more.
+            ['/v1/documents/{id}/drafts', { id: e.documentId }],
           ]
         : []),
     ],

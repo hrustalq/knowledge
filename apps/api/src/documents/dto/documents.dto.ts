@@ -11,6 +11,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBase64,
   IsBoolean,
   IsIn,
   IsInt,
@@ -297,6 +298,25 @@ export class CreateRevisionDto {
   @IsOptional()
   @IsString()
   contentType?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'Published from this shared draft (#80): finalize rebases the draft onto the new revision. Must be the draft of `branch`.',
+  })
+  @IsOptional()
+  @IsUUID()
+  collabDraftId?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description:
+      'Base64 `Y.encodeSnapshot` of the draft at the moment its content was serialized. Edits after it stay unpublished. Required with collabDraftId.',
+  })
+  @ValidateIf((dto: CreateRevisionDto) => dto.collabDraftId !== undefined)
+  @IsBase64()
+  // ponytail: 1 MiB of base64 — a snapshot is a state vector plus a delete set, KBs for a page; raise if long-lived drafts hit it.
+  @MaxLength(1_398_104)
+  draftSnapshot?: string;
 }
 
 export class CreateBranchDto {

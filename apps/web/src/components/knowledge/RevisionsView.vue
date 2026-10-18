@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import DiffView from '@/components/knowledge/DiffView.vue'
+import UserChip from '@/components/people/UserChip.vue'
 import ApiChangesPanel from '@/components/api-reference/ApiChangesPanel.vue'
 
 const { t } = useI18n()
@@ -138,7 +139,18 @@ watch(branchFilter, () => void load())
             <td class="px-3 py-2 font-mono text-xs">{{ r.revisionId.slice(0, 8) }}</td>
             <td class="px-3 py-2">{{ r.branch ?? '—' }}</td>
             <td class="px-3 py-2"><Badge :variant="statusVariant(r.status)">{{ r.status }}</Badge></td>
-            <td class="max-w-48 truncate px-3 py-2 text-muted-foreground">{{ r.message ?? '—' }}</td>
+            <td class="max-w-48 px-3 py-2 text-muted-foreground">
+              <span class="block truncate">{{ r.message ?? '—' }}</span>
+              <!-- Published from a shared draft (#80): who wrote in it since the publish before. -->
+              <span
+                v-if="r.coAuthorIds.length"
+                class="kn-collab-presence mt-1"
+                role="group"
+                :aria-label="t('revisions.coAuthors', { n: r.coAuthorIds.length }, r.coAuthorIds.length)"
+              >
+                <UserChip v-for="id in r.coAuthorIds" :key="id" :user-id="id" size="sm" avatar-only />
+              </span>
+            </td>
             <td class="px-3 py-2 font-mono text-xs text-muted-foreground">
               {{ r.parentRevisionIds.map((p) => p.slice(0, 8)).join(', ') || '—' }}
             </td>

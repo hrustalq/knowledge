@@ -3,12 +3,16 @@ import * as Y from 'yjs';
 import { yXmlFragmentToProseMirrorRootNode } from '@tiptap/y-tiptap';
 import { collabDocName, parseCollabDocName } from '@knowledge/contracts';
 import { editorSchema, parseMarkdown } from '@knowledge/editor-schema';
+import { META_FIELD, pageMetaOf, seedPageMeta } from '@knowledge/editor-schema/page-fields';
 import {
   BODY_FIELD,
   CollabDraftTooLargeError,
   CollabDraftsService,
+  sameSnapshot,
   seedState,
+  snapshotOf,
 } from '../src/collab/collab-drafts.service.js';
+import { CollabCheckpointSweeper, checkpointKey } from '../src/collab/collab-checkpoint.sweeper.js';
 
 /** One of every custom node the seed has to carry (doc 56's fixture corpus, condensed). */
 const PAGE = `# Title
@@ -53,15 +57,19 @@ Ask <span data-kn-user="00000000-0000-4000-8000-000000000001">@Ada</span> and <s
 
 const dom = new JSDOM('').window.document;
 
-function body(state: Uint8Array) {
+function load(state: Uint8Array) {
   const doc = new Y.Doc();
   Y.applyUpdate(doc, state);
-  return yXmlFragmentToProseMirrorRootNode(doc.getXmlFragment(BODY_FIELD), editorSchema);
+  return doc;
 }
 
-describe('collab drafts (#80 phase 1)', () => {
+function body(state: Uint8Array) {
+  return yXmlFragmentToProseMirrorRootNode(load(state).getXmlFragment(BODY_FIELD), editorSchema);
+}
+
+describe('collab drafts (#80 phases 1 and 4)', () => {
   it('seeds the body exactly as the editor opens the page', () => {
-    const seeded = body(seedState(PAGE));
+    const seeded = body(seedState(PAGE).state);
     expect(seeded.eq(parseMarkdown(PAGE, dom))).toBe(true);
     const types = new Set<string>();
     seeded.descendants((n) => void types.add(n.type.name));
@@ -71,16 +79,73 @@ describe('collab drafts (#80 phase 1)', () => {
   });
 
   it('seeds a branch with no head as an empty page', () => {
-    expect(body(seedState('')).eq(parseMarkdown('', dom))).toBe(true);
+    expect(body(seedState('').state).eq(parseMarkdown('', dom))).toBe(true);
   });
 
   it('refuses a store over COLLAB_MAX_DOC_BYTES without writing', async () => {
-    const prisma = { $executeRaw: vi.fn() };
+    const prisma = { $executeRaw: vi.fn().mockResolvedValue(1) };
     const drafts = new CollabDraftsService({ get: () => 10 } as never, prisma as never, {} as never);
-    await expect(drafts.store('d', 'b', new Uint8Array(11), 'u')).rejects.toBeInstanceOf(CollabDraftTooLargeError);
+    const row = { id: 'r', resetAt: null };
+    const snapshot = new Uint8Array();
+    await expect(drafts.store(row, { state: new Uint8Array(11), snapshot, userId: 'u' })).rejects.toBeInstanceOf(CollabDraftTooLargeError);
     expect(prisma.$executeRaw).not.toHaveBeenCalled();
-    await drafts.store('d', 'b', new Uint8Array(10), 'u');
+    expect(await drafts.store(row, { state: new Uint8Array(10), snapshot, userId: 'u' })).toBe(true);
     expect(prisma.$executeRaw).toHaveBeenCalledOnce();
+  });
+
+  it('reports a store against a reset or dropped row as refused', async () => {
+    const prisma = { $executeRaw: vi.fn().mockResolvedValue(0) };
+    const drafts = new CollabDraftsService({ get: () => 100 } as never, prisma as never, {} as never);
+    expect(await drafts.store({ id: 'r', resetAt: new Date() }, { state: new Uint8Array(1), snapshot: new Uint8Array() })).toBe(false);
+  });
+
+  it('seeds the page fields the way the editor loads them, so opening writes nothing', () => {
+    const fields = pageMetaOf(
+      { title: 'Billing', category: 'guide', parentId: null, projectId: 'p1' },
+      { tags: ['a', 'b'], relations: [{ type: 'DEPENDS_ON', target: 'service:billing' }] },
+    );
+    const doc = load(seedState('# Hi', fields).state);
+    const meta = doc.getMap<unknown>(META_FIELD);
+    expect(String(meta.get('title'))).toBe('Billing');
+    expect(String(meta.get('tags'))).toBe('a, b');
+    expect(String(meta.get('message'))).toBe('');
+    expect(meta.get('parentId')).toBe('');
+    expect(meta.get('relations')).toEqual([{ type: 'DEPENDS_ON', key: 'service:billing', name: '' }]);
+    // The editor's own seed finds every key present and writes nothing.
+    const before = snapshotOf(doc);
+    seedPageMeta(doc, fields);
+    expect(sameSnapshot(before, snapshotOf(doc))).toBe(true);
+  });
+
+  it('sees a deletion as a change, which a state vector would not', () => {
+    const { state, snapshot } = seedState('Hello world');
+    const doc = load(state);
+    expect(sameSnapshot(snapshot, snapshotOf(doc))).toBe(true);
+    const text = doc.getXmlFragment(BODY_FIELD).get(0) as Y.XmlElement;
+    (text.get(0) as Y.XmlText).delete(0, 6);
+    expect(Y.encodeStateVector(doc)).toEqual(Y.encodeStateVectorFromUpdate(state));
+    expect(sameSnapshot(snapshot, snapshotOf(doc))).toBe(false);
+  });
+
+  it('checkpoints a due draft once, even with two instances sweeping', async () => {
+    const due = [{ id: 'd1', workspace_id: 'w', document_id: 'doc', branch_id: 'b', last_checkpoint_at: null }];
+    let claimed = false;
+    const drafts = {
+      dueForCheckpoint: vi.fn().mockResolvedValue(due),
+      // The guarded UPDATE: the first claim wins, the second sees the moved timestamp.
+      claimCheckpoint: vi.fn(async () => (claimed ? null : ((claimed = true), new Uint8Array([1, 2])))),
+      dropIdle: vi.fn().mockResolvedValue(0),
+    };
+    const storage = { putObjectBytes: vi.fn(), pruneObjectVersions: vi.fn() };
+    const events = { publish: vi.fn() };
+    const config = { get: (key: string) => ({ COLLAB_CHECKPOINT_INTERVAL_MINUTES: 15, COLLAB_CHECKPOINT_KEEP: 3, COLLAB_DRAFT_RETENTION_DAYS: 30 })[key] };
+    const sweepers = [0, 1].map(() => new CollabCheckpointSweeper(config as never, drafts as never, storage as never, events as never));
+    await Promise.all(sweepers.map((s) => s.sweep()));
+    expect(storage.putObjectBytes).toHaveBeenCalledOnce();
+    expect(storage.putObjectBytes).toHaveBeenCalledWith(checkpointKey('w', 'doc', 'b'), new Uint8Array([1, 2]), 'application/octet-stream');
+    expect(storage.pruneObjectVersions).toHaveBeenCalledWith(checkpointKey('w', 'doc', 'b'), 3);
+    expect(events.publish).toHaveBeenCalledWith({ type: 'draft.changed', workspaceId: 'w', documentId: 'doc', subjectId: 'b' });
+    expect(drafts.dropIdle).toHaveBeenCalledWith(30);
   });
 
   it('parses only the names it builds', () => {

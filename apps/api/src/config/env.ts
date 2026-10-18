@@ -733,6 +733,12 @@ export const envSchema = z.object({
    * workspace at once; a plain role change has no event, so this is its bound.
    */
   COLLAB_REAUTH_INTERVAL_SECONDS: z.coerce.number().int().min(5).default(300),
+  /** A draft edited since its last checkpoint gets a MinIO copy at most this often (recovery, not hot state). */
+  COLLAB_CHECKPOINT_INTERVAL_MINUTES: z.coerce.number().int().min(1).default(15),
+  /** Checkpoint versions kept per draft; older ones are deleted. */
+  COLLAB_CHECKPOINT_KEEP: z.coerce.number().int().min(1).default(20),
+  /** A draft with nothing unpublished and untouched this long is dropped; it reseeds on next open. Never one with unpublished changes. */
+  COLLAB_DRAFT_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
 
   /**
    * Minimum level written to stdout (stderr in the MCP process, whose stdout is

@@ -536,6 +536,9 @@ importers:
       marked:
         specifier: ^18.0.11
         version: 18.0.11
+      yjs:
+        specifier: 13.6.33
+        version: 13.6.33
     devDependencies:
       '@knowledge/tsconfig':
         specifier: workspace:*
@@ -8711,7 +8714,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 4.1.11(@types/node@25.9.5)(@vitest/coverage-v8@4.1.11)(jsdom@30.1.1(@noble/hashes@1.8.0))(vite@8.2.2(@types/node@25.9.5)(jiti@2.7.0)(stylus@0.57.0)(yaml@2.9.0))
+      vitest: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@30.1.1(@noble/hashes@1.8.0))(vite@8.2.2(@types/node@24.13.3)(jiti@2.7.0)(stylus@0.57.0)(yaml@2.9.0))
 
   '@vitest/expect@4.1.11':
     dependencies:

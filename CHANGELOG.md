@@ -70,6 +70,16 @@ in the pull request that introduces them — see
   and `DELETE /v1/documents/:id/drafts/:branchId`. `POST /:id/revisions` takes
   optional `collabDraftId` and `draftSnapshot`. Revisions in API responses now
   carry `coAuthorIds`, an empty list unless they came from a shared draft.
+- The editor assistant's suggestions are shared in a co-edited page (#80,
+  phase 5). Everyone in the draft sees a suggestion as it is written, credited
+  to the agent and to the person who asked ("Reviewer · for Ada"), and anyone
+  who may edit can keep or discard it. A viewer sees it without the buttons.
+  Your undo never walks someone else's suggestion; keeping one makes it your
+  edit, which your undo takes back. Publishing is refused while anyone's
+  suggestion is undecided. The header says "Reviewer is writing for Ada…"
+  while another person's turn streams, and a suggestion whose writer closed
+  the tab mid-stream becomes decidable for everyone else. `draft-edit` stream
+  frames now carry the turn's `agent` (`key`, `name`).
 
 ### Operations
 

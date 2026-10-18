@@ -199,7 +199,7 @@ const props = withDefaults(
      * the page as markdown, but a new value is never parsed back in — a local
      * seed merged into the shared one would show the page twice.
      */
-    collab?: Pick<CollabHandle, 'extensions'>
+    collab?: Pick<CollabHandle, 'extensions' | 'suggestions'>
   }>(),
   {
     pages: () => [],
@@ -283,6 +283,8 @@ const format = shallowRef<FormatState>(EMPTY_FORMAT)
  * than read in a template, for the reason `format` is.
  */
 const aiPending = shallowRef<{ count: number; streaming: boolean }>({ count: 0, streaming: false })
+/** In a shared draft: the agents writing into it for someone else right now (#80). */
+const aiWriters = shallowRef<{ agent: string; name: string }[]>([])
 
 /**
  * The page as the author has it — every pending suggestion put back to what
@@ -675,7 +677,7 @@ onMounted(() => {
       CommentAnchors.configure({ t }),
       GlossaryTerms,
       // Its accept/discard bar builds labels, so it needs the translator too.
-      AiSuggestions.configure({ t }),
+      AiSuggestions.configure({ t, shared: props.collab?.suggestions ?? null }),
     ],
     editorProps: {
       attributes: { class: 'kn-prose', spellcheck: 'true' },
@@ -714,6 +716,10 @@ onMounted(() => {
       const items = pendingSuggestions(instance.state)
       const next = { count: items.length, streaming: items.some((i) => i.state === 'streaming') }
       if (!shallowEqual(next, aiPending.value)) aiPending.value = next
+      const writers = items
+        .filter((i) => i.state === 'streaming' && !i.mine && i.agent)
+        .map((i) => ({ agent: i.agent!.name, name: i.requestedBy?.name ?? '' }))
+      if (JSON.stringify(writers) !== JSON.stringify(aiWriters.value)) aiWriters.value = writers
       // Accepting changes what the page *is* without changing the document —
       // the text was already there — so no update event fires and the model
       // would never hear about it. Say it now: the author just made a decision.
@@ -835,6 +841,7 @@ defineExpose({
   },
   /** Suggestions the assistant has written into the page and nobody has decided on yet. */
   aiPending,
+  aiWriters,
   /** One streamed `draft-edit` frame from the assistant, applied as a suggestion. */
   applyAiEdit(edit: AssistantDraftEdit) {
     editor.value?.commands.applyAiEdit(edit)

@@ -18,6 +18,7 @@ import { IndexeddbPersistence } from 'y-indexeddb'
 import type { AnyExtension } from '@tiptap/core'
 import Collaboration from '@tiptap/extension-collaboration'
 import CollaborationCaret from '@tiptap/extension-collaboration-caret'
+import { ySyncPluginKey } from '@tiptap/y-tiptap'
 import {
   COLLAB_DENY_REASONS,
   COLLAB_DISABLED_CLOSE_CODE,
@@ -30,6 +31,10 @@ import { META_FIELD, seedPageMeta } from '@knowledge/editor-schema/page-fields'
 import { apiFetch, getToken } from '@/lib/api'
 import { avatarColor, avatarColorDeep } from '@/lib/avatar'
 import { wsBase } from '@/api/live'
+import type { SharedSuggestion, SuggestionStore } from './extensions/ai-suggestions'
+
+/** The assistant's pending suggestions, one Y.Map each (`suggestionStore`). */
+export const SUGGESTIONS_FIELD = 'suggestions'
 
 /** Where this tab stands with the draft. */
 export type CollabState =
@@ -75,6 +80,8 @@ export interface CollabHandle {
   ready: Promise<boolean>
   /** The editor's half: the body binding and the carets. Built once, at mount. */
   extensions(): AnyExtension[]
+  /** The assistant's suggestions, shared with every peer (`AiSuggestions`' `shared`). */
+  suggestions: SuggestionStore
   /**
    * The moment a publish reads the draft: clears the revision message for
    * everyone (it belongs to the revision, not the page) and returns the
@@ -104,7 +111,12 @@ async function ticket(): Promise<string> {
   return (await apiFetch<UrlTicketResponse>('/v1/auth/url-ticket', { method: 'POST' })).ticket
 }
 
-export function createCollab(options: { name: string; schemaMatches: boolean }): CollabHandle {
+export function createCollab(options: {
+  name: string
+  schemaMatches: boolean
+  /** Who this tab asks the assistant for — credited on its suggestions. */
+  me?: { userId: string; name: string } | null
+}): CollabHandle {
   const doc = new Y.Doc()
   const local = new IndexeddbPersistence(options.name, doc)
   const status = shallowReactive<CollabStatus>({
@@ -170,6 +182,7 @@ export function createCollab(options: { name: string; schemaMatches: boolean }):
         }),
       }),
     ],
+    suggestions: suggestionStore(doc, awareness, options.me ?? null),
     seal() {
       const message = doc.getMap<unknown>(META_FIELD).get('message')
       if (message instanceof Y.Text) setText(message, '')
@@ -185,6 +198,96 @@ export function createCollab(options: { name: string; schemaMatches: boolean }):
       await local.clearData()
       doc.destroy()
     },
+  }
+}
+
+/**
+ * The suggestion list over the Y.Doc. Each entry's range is a pair of relative
+ * positions on the body's top-level blocks: the start sticks to the first
+ * suggested block and the end to the last, so a block a peer adds just
+ * outside the range stays outside it — a discard never takes their text.
+ * The credit is the writer's word, like any content in the draft.
+ */
+export function suggestionStore(
+  doc: Y.Doc,
+  awareness: {
+    getStates(): Map<number, unknown>
+    on(event: 'change', run: (change: { added: number[]; removed: number[] }) => void): void
+    off(event: 'change', run: (change: { added: number[]; removed: number[] }) => void): void
+  },
+  me: SuggestionStore['me'],
+): SuggestionStore {
+  const map = doc.getMap<Y.Map<unknown>>(SUGGESTIONS_FIELD)
+  const body = doc.getXmlFragment(BODY_FIELD)
+  const indexOf = (json: unknown) => {
+    const at = json ? Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(json), doc) : null
+    return at?.type === body ? at.index : null
+  }
+  const put = (entry: Y.Map<unknown>, key: string, value: unknown) => {
+    if (JSON.stringify(entry.get(key)) !== JSON.stringify(value)) entry.set(key, value)
+  }
+  return {
+    me,
+    read() {
+      const writers = awareness.getStates()
+      const out: SharedSuggestion[] = []
+      map.forEach((entry, id) => {
+        const fromIndex = indexOf(entry.get('from'))
+        const toIndex = indexOf(entry.get('to'))
+        if (fromIndex === null || toIndex === null) return
+        const clientId = entry.get('clientId') as number
+        out.push({
+          id,
+          fromIndex,
+          toIndex,
+          original: entry.get('original'),
+          originalText: (entry.get('originalText') as string) ?? '',
+          state: entry.get('state') === 'streaming' ? 'streaming' : 'ready',
+          agent: (entry.get('agent') as SharedSuggestion['agent']) ?? null,
+          requestedBy: (entry.get('requestedBy') as SharedSuggestion['requestedBy']) ?? null,
+          mine: clientId === doc.clientID,
+          live: writers.has(clientId),
+        })
+      })
+      return out
+    },
+    write(item) {
+      doc.transact(() => {
+        let entry = map.get(item.id)
+        if (!entry) {
+          entry = new Y.Map()
+          map.set(item.id, entry)
+          // Written once: what the suggestion replaced does not change while it streams.
+          entry.set('original', item.original)
+          entry.set('originalText', item.originalText)
+          entry.set('agent', item.agent)
+          entry.set('requestedBy', me)
+          entry.set('clientId', doc.clientID)
+        }
+        put(entry, 'from', Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(body, item.fromIndex, 0)))
+        put(entry, 'to', Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(body, item.toIndex, -1)))
+        put(entry, 'state', item.state)
+      })
+    },
+    remove(ids) {
+      doc.transact(() => ids.forEach((id) => map.delete(id)))
+    },
+    subscribe(run) {
+      const onList = (_events: unknown, tr: Y.Transaction) => {
+        if (!tr.local) run()
+      }
+      // Cursor moves update awareness all the time; only arrivals and departures change a writer's liveness.
+      const onPeers = ({ added, removed }: { added: number[]; removed: number[] }) => {
+        if (added.length > 0 || removed.length > 0) run()
+      }
+      map.observeDeep(onList)
+      awareness.on('change', onPeers)
+      return () => {
+        map.unobserveDeep(onList)
+        awareness.off('change', onPeers)
+      }
+    },
+    isRemote: (tr) => (tr.getMeta(ySyncPluginKey) as { isChangeOrigin?: boolean } | undefined)?.isChangeOrigin === true,
   }
 }
 

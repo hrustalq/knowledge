@@ -77,6 +77,7 @@ import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useTemplatesStore } from '@/stores/templates'
 import { useEventsStore } from '@/stores/events'
+import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -135,6 +136,7 @@ const router = useRouter()
 const store = useDocumentsStore()
 const projects = useProjectsStore()
 const templates = useTemplatesStore()
+const auth = useAuthStore()
 
 const editId = ref<string | null>((route.params.id as string | undefined) ?? null)
 const isEdit = computed(() => editId.value !== null)
@@ -422,6 +424,7 @@ async function startCollab(
   const handle = createCollab({
     name: collabDocName(doc.workspaceId, doc.documentId, on.branchId),
     schemaMatches: caps.schemaVersion === SCHEMA_VERSION,
+    me: auth.me ? { userId: auth.me.userId, name: auth.me.displayName } : null,
   })
   const ready = await Promise.race([
     handle.ready,
@@ -1227,7 +1230,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="ml-auto flex items-center gap-1.5">
-          <CollabPresence v-if="collab" :peers="collab.status.peers" />
+          <CollabPresence v-if="collab" :peers="collab.status.peers" :writers="editorRef?.aiWriters ?? []" />
           <Button
             variant="ghost"
             size="sm"

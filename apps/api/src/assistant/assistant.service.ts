@@ -10,6 +10,7 @@ import type {
   AssistantRelatedResponse,
   AssistantReviewResponse,
   AssistantSource,
+  AssistantDraftEdit,
   AssistantStreamFrame,
   AssistantSuggestResponse,
   AssistantToolCall,
@@ -142,6 +143,11 @@ function conversational(agent: ResolvedAgent, mode: AssistantChatMode): boolean 
   if (agent.builtIn && !CHAT_BUILT_INS.has(agent.key)) return false;
   if (mode !== 'agent' && agent.tools.some((tool) => WRITE_TOOL_NAMES.has(tool))) return false;
   return true;
+}
+
+/** Who a `draft-edit` is credited to in a shared draft (#80): the agent the turn runs as. */
+function agentOf(turn: PreparedTurn): AssistantDraftEdit['agent'] {
+  return { key: turn.agent.key, name: turn.agent.name };
 }
 
 /**
@@ -692,7 +698,7 @@ export class AssistantService {
     emit({ type: 'status', phase: 'thinking' });
     let announcedSources = 0;
     let announcedPrompt = false;
-    const previewDraftEdit = this.draftPreviewer(emit);
+    const previewDraftEdit = this.draftPreviewer(emit, agentOf(turn));
 
     const { content, trace, cancelled } = await this.client.runWithToolsStream(
       { ...call, config: turn.agent.config, operation: 'chat-stream' },
@@ -1021,11 +1027,14 @@ export class AssistantService {
     const op = edit.op as DraftEditOp;
     const anchor = DRAFT_EDIT_OPS.includes(op) && draftEditNeedsAnchor(op) ? edit.anchor : null;
     if (refusal) {
-      emit({ type: 'draft-edit', edit: { id, op: DRAFT_EDIT_OPS.includes(op) ? op : 'append', anchor, markdown: '', state: 'rejected' } });
+      emit({
+        type: 'draft-edit',
+        edit: { id, op: DRAFT_EDIT_OPS.includes(op) ? op : 'append', anchor, markdown: '', state: 'rejected', agent: agentOf(turn) },
+      });
       return { content: JSON.stringify({ error: refusal }), ok: false };
     }
     turn.draft = applyDraftEdit(turn.draft, { op, anchor, markdown: edit.markdown });
-    emit({ type: 'draft-edit', edit: { id, op, anchor, markdown: edit.markdown, state: 'ready' } });
+    emit({ type: 'draft-edit', edit: { id, op, anchor, markdown: edit.markdown, state: 'ready', agent: agentOf(turn) } });
     return {
       content: JSON.stringify({
         ok: true,
@@ -1043,7 +1052,7 @@ export class AssistantService {
    * has nowhere to start drawing. After that, the growing `markdown` goes out
    * at most every {@link DRAFT_PREVIEW_MS}.
    */
-  private draftPreviewer(emit: (frame: AssistantStreamFrame) => void) {
+  private draftPreviewer(emit: (frame: AssistantStreamFrame) => void, agent: AssistantDraftEdit['agent']) {
     const sent = new Map<string, { at: number; length: number }>();
     return (id: string, raw: string): void => {
       const args = scanPartialObject(raw);
@@ -1058,7 +1067,7 @@ export class AssistantService {
       sent.set(id, { at: now, length: markdown.length });
       emit({
         type: 'draft-edit',
-        edit: { id, op, anchor: needsAnchor ? args.anchor!.value : null, markdown, state: 'streaming' },
+        edit: { id, op, anchor: needsAnchor ? args.anchor!.value : null, markdown, state: 'streaming', agent },
       });
     };
   }

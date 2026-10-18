@@ -3201,7 +3201,8 @@
         }
       },
       "presence": {
-        "editing": "{n} other person editing: {names} | {n} other people editing: {names}"
+        "editing": "{n} other person editing: {names} | {n} other people editing: {names}",
+        "agentWriting": "{agent} is writing for {name}…"
       },
       "unpublished": {
         "label": "Unpublished changes",
@@ -3998,6 +3999,7 @@
     "discardAll": "Discard all",
     "accept": "Keep",
     "discard": "Discard",
+    "suggestedBy": "{agent} · for {name}",
     "suggestionActions": "Assistant suggestion",
     "decideBeforePublish": "Keep or discard the assistant's suggestion before publishing | Keep or discard the assistant's {n} suggestions before publishing",
     "placeholder": "Ask about this page, or for a change to it…"

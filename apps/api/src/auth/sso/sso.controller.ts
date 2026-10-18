@@ -1,10 +1,11 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type { SsoDiscoverResponse, SsoExchangeResponse, SsoProvidersResponse } from '@knowledge/contracts';
 import { Public } from '../access.decorator.js';
 import { AuthRateLimit, AuthRateLimitGuard } from '../auth-rate-limit.guard.js';
 import { requestMeta } from '../../common/client-ip.js';
+import { t } from '../../i18n/t.js';
 import { SsoDiscoverDto, SsoExchangeDto } from './identity-providers.dto.js';
 import { SsoEnabledGuard } from './sso-enabled.guard.js';
 import { SsoFlowService } from './sso-flow.service.js';
@@ -67,5 +68,39 @@ export class SsoController {
   async callback(@Param('providerId') providerId: string, @Req() req: Request, @Res() res: Response): Promise<void> {
     const query = new URL(req.originalUrl, 'http://callback.invalid').searchParams;
     res.redirect(await this.sso.callback(providerId, query, requestMeta(req)));
+  }
+
+  @Public()
+  @Get('saml/:providerId/start')
+  @ApiExcludeEndpoint()
+  async samlStart(
+    @Param('providerId') providerId: string,
+    @Res() res: Response,
+    @Query('returnTo') returnTo?: string,
+  ): Promise<void> {
+    res.redirect(await this.sso.samlStart(providerId, returnTo));
+  }
+
+  /** The IdP's HTTP-POST binding. 303, so the browser follows with a GET rather than re-posting. */
+  @Public()
+  @Post('saml/:providerId/acs')
+  @ApiExcludeEndpoint()
+  async samlAcs(
+    @Param('providerId') providerId: string,
+    @Body() body: Record<string, unknown>,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    res.redirect(303, await this.sso.samlAcs(providerId, body ?? {}, requestMeta(req)));
+  }
+
+  /** Our SP metadata, which is also our entity ID: public by nature, it holds only our certificate. */
+  @Public()
+  @Get('saml/:providerId/metadata')
+  @ApiExcludeEndpoint()
+  async samlMetadata(@Param('providerId') providerId: string, @Res() res: Response): Promise<void> {
+    const xml = await this.sso.samlMetadata(providerId);
+    if (!xml) throw new NotFoundException(t('error.sso.providerNotFound'));
+    res.type('application/samlmetadata+xml').send(xml);
   }
 }

@@ -5414,7 +5414,7 @@
     },
     "providers": {
       "title": "Identity providers",
-      "hint": "Sign people in with your organization’s OpenID Connect provider. New providers start disabled.",
+      "hint": "Sign people in with your organization’s OpenID Connect or SAML 2.0 provider. New providers start disabled.",
       "disabled": "Single sign-on is not enabled on this instance. An operator turns it on with AUTH_SSO_ENABLED=true (and AUTH_MODE=api-key).",
       "empty": "No identity providers yet.",
       "add": "Add provider",
@@ -5462,7 +5462,6 @@
       "jitBadge": "Creates accounts",
       "domainsList": "Domains: {domains}",
       "redirectUri": "Redirect URI",
-      "copy": "Copy redirect URI",
       "copied": "Copied",
       "copyFailed": "Copy failed",
       "presets": {
@@ -5478,7 +5477,30 @@
         "google": "https://accounts.google.com",
         "yandex": "https://oauth.yandex.ru",
         "generic": "https://idp.example.com"
-      }
+      },
+      "protocol": "Protocol",
+      "kinds": {
+        "oidc": "OpenID Connect",
+        "saml": "SAML 2.0"
+      },
+      "formHintSaml": "After saving, give the identity provider the SP metadata URL shown in the list, or its entity ID and ACS URL.",
+      "idpEntityId": "IdP entity ID",
+      "ssoUrl": "Single sign-on URL",
+      "idpCert": "IdP signing certificate",
+      "idpCertHint": "PEM, including the BEGIN CERTIFICATE line. During a key rollover, paste both certificates.",
+      "attributeMap": "Attribute map",
+      "attributeMapHint": "Which assertion attributes hold the person’s details. Leave a field empty to try the usual names.",
+      "emailAttribute": "Email",
+      "nameAttribute": "Name",
+      "groupsAttribute": "Groups",
+      "groupsAttributeHint": "Without a groups attribute, no groups are read and group mapping does not apply.",
+      "allowIdpInitiated": "Accept sign-ins started from the identity provider’s app portal",
+      "allowIdpInitiatedHint": "Each assertion is still accepted only once, and only while it is fresh.",
+      "metadataUrl": "SP metadata (entity ID)",
+      "acsUrl": "ACS URL",
+      "copyEndpoint": "Copy {label}",
+      "testOkSaml": "Configuration is valid. IdP entity ID {issuer}",
+      "testFailedSaml": "The configuration has a problem: {error}"
     },
     "groupMapping": {
       "title": "Group mapping",

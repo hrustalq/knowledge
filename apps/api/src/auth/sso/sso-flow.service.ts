@@ -1,9 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { IdentityProvider } from '@prisma/client';
+import { Prisma, type IdentityProvider } from '@prisma/client';
 import * as client from 'openid-client';
 import {
+  authMethodOf,
   IDP_KINDS,
   type IdpKind,
   type SsoDiscoverResponse,
@@ -25,6 +26,9 @@ import { OIDC_PRESETS, presetOf } from './oidc-presets.js';
 import { OidcService } from './oidc.service.js';
 import { SsoLoginService } from './sso-login.service.js';
 import { LIVE_IDP_KINDS } from './live-kinds.js';
+import type { ExternalIdentity } from './oidc-claims.js';
+import { SamlService, type SamlExpected } from './saml.service.js';
+import { identityFromSamlProfile, samlConfigOf } from './saml-profile.js';
 
 /** The fragment code's lifetime: long enough for one page load, short enough to be useless later. */
 const EXCHANGE_TTL_MS = 60_000;
@@ -43,7 +47,9 @@ const toLoginProvider = (p: IdentityProvider): SsoLoginProvider => ({
 });
 
 /**
- * The SSO login transaction (#75): start → IdP → callback → exchange.
+ * The SSO login transaction (#75): start → IdP → callback → exchange. OIDC
+ * comes back on a GET callback, SAML on a POST to the ACS; both end in the
+ * same fragment code.
  *
  * Everything that must not be forged lives server-side in `sso_auth_requests`:
  * the browser carries only an opaque `state` there and back, stored as its
@@ -68,6 +74,7 @@ export class SsoFlowService {
     private readonly flow: AuthFlowService,
     private readonly audit: AuditService,
     private readonly policy: AuthPolicyService,
+    private readonly saml: SamlService,
   ) {
     this.web = config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
     this.stateTtlMs = config.get('AUTH_SSO_STATE_TTL_SEC', { infer: true }) * 1000;
@@ -129,7 +136,7 @@ export class SsoFlowService {
   /** Open a transaction and answer where to send the browser — the IdP, or back to /login on failure. */
   async start(providerId: string, returnTo: string | undefined): Promise<string> {
     const back = safeReturnTo(returnTo, DEFAULT_RETURN);
-    const provider = await this.liveProvider(providerId);
+    const provider = await this.liveProvider(providerId, 'oidc');
     if (!provider) return this.loginUrl('failed', back);
 
     const oauth2 = OIDC_PRESETS[presetOf(provider.preset)].oauth2;
@@ -178,7 +185,7 @@ export class SsoFlowService {
       data: { consumedAt: new Date() },
     });
     if (spent.count === 0) return this.fail(provider, 'invalid-state', 'state replayed', back, meta);
-    if (!provider || !provider.enabled || !LIVE_IDP_KINDS.includes(provider.kind as IdpKind)) {
+    if (!provider || !provider.enabled || provider.kind !== 'oidc') {
       return this.fail(provider, 'failed', 'provider disabled', back, meta);
     }
 
@@ -201,23 +208,144 @@ export class SsoFlowService {
       return this.fail(provider, 'id-token-invalid', (e as Error).message, back, meta);
     }
     if (!claims.ok) return this.fail(provider, claims.error, claims.reason, back, meta);
-    if (claims.identity.notes.length) {
-      this.logger.warn({ msg: 'sso sign-in notes', providerId: provider.id, notes: claims.identity.notes });
+    return this.signIn(provider, claims.identity, row.id, back, meta);
+  }
+
+  /** SAML, SP-initiated: record the AuthnRequest, then send the browser to the IdP with it. */
+  async samlStart(providerId: string, returnTo: string | undefined): Promise<string> {
+    const back = safeReturnTo(returnTo, DEFAULT_RETURN);
+    const provider = await this.liveProvider(providerId, 'saml');
+    if (!provider) return this.loginUrl('failed', back);
+
+    const relayState = randomBytes(32).toString('base64url');
+    try {
+      const { url, requestId } = await this.saml.authorizationUrl(provider, relayState);
+      await this.prisma.ssoAuthRequest.create({
+        data: {
+          providerId: provider.id,
+          stateHash: sha256(relayState),
+          samlRequestId: requestId,
+          returnTo: back,
+          expiresAt: new Date(Date.now() + this.stateTtlMs),
+        },
+      });
+      return url;
+    } catch (e) {
+      this.logger.warn({ msg: 'saml start failed', providerId, err: (e as Error).message });
+      return this.fail(provider, 'provider-error', (e as Error).message, back);
+    }
+  }
+
+  /**
+   * The IdP's POST to our ACS. `RelayState` names the transaction of an
+   * SP-initiated sign-in, spent once like an OIDC `state`; without one, the
+   * response is unsolicited and accepted only where the provider allows it.
+   * Either way the assertion's ID is then spent too, so the same assertion
+   * cannot come back as an unsolicited one with its `RelayState` stripped.
+   */
+  async samlAcs(providerId: string, body: Record<string, unknown>, meta: RequestMeta): Promise<string> {
+    const samlResponse = typeof body.SAMLResponse === 'string' ? body.SAMLResponse : '';
+    const relayState = typeof body.RelayState === 'string' ? body.RelayState : '';
+    const provider = await this.samlProvider(providerId);
+    const row = relayState
+      ? await this.prisma.ssoAuthRequest.findUnique({ where: { stateHash: sha256(relayState) } })
+      : null;
+    const solicited = row !== null && row.providerId === providerId && row.samlRequestId !== null;
+    const back = solicited ? row.returnTo : DEFAULT_RETURN;
+
+    if (!provider || !provider.enabled) return this.fail(provider, 'failed', 'provider disabled', back, meta);
+    let expected: SamlExpected | null = null;
+    if (solicited) {
+      if (row.consumedAt || row.expiresAt < new Date()) {
+        return this.fail(provider, 'invalid-state', row.consumedAt ? 'state replayed' : 'state expired', back, meta);
+      }
+      const spent = await this.prisma.ssoAuthRequest.updateMany({ where: { id: row.id, consumedAt: null }, data: { consumedAt: new Date() } });
+      if (spent.count === 0) return this.fail(provider, 'invalid-state', 'state replayed', back, meta);
+      expected = { requestId: row.samlRequestId!, issuedAt: row.createdAt };
+    } else if (!samlConfigOf(provider).allowIdpInitiated) {
+      return this.fail(provider, 'invalid-state', row ? 'state foreign' : 'unsolicited response', back, meta);
+    }
+    if (!samlResponse) return this.fail(provider, 'provider-error', 'no SAMLResponse', back, meta);
+
+    let assertion;
+    try {
+      assertion = await this.saml.validate(provider, samlResponse, expected);
+    } catch (e) {
+      const status = (e as Error).name === 'SamlStatusError';
+      return this.fail(provider, status ? 'provider-error' : 'id-token-invalid', (e as Error).message, back, meta);
+    }
+    try {
+      // The marker outlives every moment the assertion could still be accepted, then the sweeper purges it.
+      await this.prisma.ssoAuthRequest.create({
+        data: {
+          providerId: provider.id,
+          stateHash: sha256(`saml-assertion:${provider.id}:${assertion.assertionId}`),
+          returnTo: back,
+          consumedAt: new Date(),
+          expiresAt: new Date(Date.now() + this.saml.assertionLifetimeMs),
+        },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        return this.fail(provider, 'invalid-state', 'assertion replayed', back, meta);
+      }
+      throw e;
     }
 
-    const outcome = await this.login.resolve(provider, claims.identity);
+    const { emailAttribute, nameAttribute } = samlConfigOf(provider);
+    const claims = identityFromSamlProfile(assertion.profile, { emailAttribute, nameAttribute, groupsAttribute: provider.groupsClaim });
+    if (!claims.ok) return this.fail(provider, claims.error, claims.reason, back, meta);
+    return this.signIn(provider, claims.identity, solicited ? row.id : null, back, meta);
+  }
+
+  /** The SP metadata of a SAML provider, enabled or not — an admin needs it before switching it on. */
+  async samlMetadata(providerId: string): Promise<string | null> {
+    const provider = await this.samlProvider(providerId);
+    return provider ? this.saml.metadata(provider) : null;
+  }
+
+  /** A SAML provider by id, enabled or not: the ACS audits a disabled one's refusals under its name. */
+  private samlProvider(providerId: string): Promise<IdentityProvider | null> {
+    return isUuid(providerId) ? this.prisma.identityProvider.findFirst({ where: { id: providerId, kind: 'saml' } }) : Promise.resolve(null);
+  }
+
+  /**
+   * Who the provider said signed in → an account, and the fragment code the
+   * web trades for its session. The code goes on the transaction row, or on a
+   * fresh one for an unsolicited SAML response, which has none.
+   */
+  private async signIn(
+    provider: IdentityProvider,
+    identity: ExternalIdentity,
+    rowId: string | null,
+    back: string,
+    meta: RequestMeta,
+  ): Promise<string> {
+    if (identity.notes.length) {
+      this.logger.warn({ msg: 'sso sign-in notes', providerId: provider.id, notes: identity.notes });
+    }
+    const outcome = await this.login.resolve(provider, identity);
     if (!outcome.ok) return this.fail(provider, outcome.error, outcome.reason, back, meta, outcome.userId);
 
     const code = randomBytes(32).toString('base64url');
-    await this.prisma.ssoAuthRequest.update({
-      where: { id: row.id },
-      data: {
-        exchangeCodeHash: sha256(code),
-        userId: outcome.user.id,
-        idpSessionId: claims.identity.idpSessionId,
-        expiresAt: new Date(Date.now() + EXCHANGE_TTL_MS),
-      },
-    });
+    const exchange = {
+      exchangeCodeHash: sha256(code),
+      userId: outcome.user.id,
+      idpSessionId: identity.idpSessionId,
+      expiresAt: new Date(Date.now() + EXCHANGE_TTL_MS),
+    };
+    if (rowId) await this.prisma.ssoAuthRequest.update({ where: { id: rowId }, data: exchange });
+    else {
+      await this.prisma.ssoAuthRequest.create({
+        data: {
+          providerId: provider.id,
+          stateHash: sha256(randomBytes(32).toString('base64url')),
+          returnTo: back,
+          consumedAt: new Date(),
+          ...exchange,
+        },
+      });
+    }
     return `${this.web}/auth/sso/complete#code=${encodeURIComponent(code)}`;
   }
 
@@ -235,7 +363,7 @@ export class SsoFlowService {
     const user = await this.prisma.user.findUnique({ where: { id: row.userId } });
     if (!user || user.disabledAt) throw new UnauthorizedException(t('error.auth.accountDisabled'));
     const session = await this.flow.issueSession(user, meta, {
-      authMethod: 'oidc',
+      authMethod: authMethodOf(row.provider.kind),
       providerId: row.providerId,
       idpSessionId: row.idpSessionId,
       ttlHours: row.provider.sessionTtlHours,
@@ -245,9 +373,9 @@ export class SsoFlowService {
     return { ...session, returnTo: row.returnTo };
   }
 
-  private async liveProvider(providerId: string): Promise<IdentityProvider | null> {
+  private async liveProvider(providerId: string, kind: IdpKind): Promise<IdentityProvider | null> {
     if (!isUuid(providerId)) return null;
-    return this.prisma.identityProvider.findFirst({ where: { id: providerId, enabled: true, kind: { in: LIVE_IDP_KINDS } } });
+    return this.prisma.identityProvider.findFirst({ where: { id: providerId, enabled: true, kind } });
   }
 
   /** Audit the failure with its real reason; send the browser back to /login with only the category. */
@@ -263,7 +391,7 @@ export class SsoFlowService {
       workspaceId: provider?.workspaceId ?? null,
       actor: 'anonymous',
       action: 'auth.login_failed',
-      params: { method: 'oidc', providerId: provider?.id ?? null, error },
+      params: { method: authMethodOf(provider?.kind ?? 'oidc'), providerId: provider?.id ?? null, error },
       ok: false,
       error: reason.slice(0, 500),
       ip: meta?.ip,

@@ -1133,6 +1133,9 @@ export type I18nTranslations = {
             "platformWideAdminOnly": string;
             "issuerRequired": string;
             "clientIdRequired": string;
+            "idpEntityIdRequired": string;
+            "ssoUrlInvalid": string;
+            "idpCertInvalid": string;
             "issuerInvalid": string;
             "issuerNotHttps": string;
             "issuerUnresolved": string;

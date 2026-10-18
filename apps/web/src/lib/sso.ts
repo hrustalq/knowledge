@@ -1,4 +1,4 @@
-import { SSO_LOGIN_ERRORS, type SsoLoginError } from '@knowledge/contracts'
+import { SSO_LOGIN_ERRORS, type IdpKind, type SsoLoginError } from '@knowledge/contracts'
 import { apiUrl } from '@/lib/api'
 
 /**
@@ -15,9 +15,10 @@ export function fragmentCode(hash: string): string | null {
   return code && code.length <= 200 ? code : null
 }
 
-/** Where a "Continue with …" button sends the browser: the API's start route, which redirects to the IdP. */
-export function ssoStartUrl(providerId: string, returnTo: string): string {
-  return apiUrl(`/v1/auth/oidc/${encodeURIComponent(providerId)}/start?returnTo=${encodeURIComponent(returnTo)}`)
+/** Where a "Continue with …" button sends the browser: the API's start route for its protocol, which redirects to the IdP. */
+export function ssoStartUrl(providerId: string, returnTo: string, kind: IdpKind = 'oidc'): string {
+  const protocol = kind === 'saml' ? 'saml' : 'oidc'
+  return apiUrl(`/v1/auth/${protocol}/${encodeURIComponent(providerId)}/start?returnTo=${encodeURIComponent(returnTo)}`)
 }
 
 /** `?error=` on /login after a failed callback, if it is one the API sends. Anything else reads as none. */

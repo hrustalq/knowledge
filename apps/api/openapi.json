@@ -29180,6 +29180,32 @@
             "type": "string",
             "description": "Write-only. A value sets it, '' clears it, absent keeps it."
           },
+          "idpEntityId": {
+            "type": "string",
+            "description": "SAML: the IdP's entity ID, which the assertion's Issuer must equal"
+          },
+          "ssoUrl": {
+            "type": "string",
+            "description": "SAML: the IdP's single sign-on URL (HTTP-Redirect binding)"
+          },
+          "idpCert": {
+            "type": "string",
+            "description": "SAML: the IdP's signing certificate(s), PEM; two during a rollover"
+          },
+          "allowIdpInitiated": {
+            "type": "boolean",
+            "description": "SAML: accept responses no AuthnRequest of ours asked for (the IdP's app portal). Defaults to false."
+          },
+          "emailAttribute": {
+            "type": "string",
+            "nullable": true,
+            "description": "SAML: attribute holding the email; null tries the usual names"
+          },
+          "nameAttribute": {
+            "type": "string",
+            "nullable": true,
+            "description": "SAML: attribute holding the display name; null tries the usual names"
+          },
           "jitEnabled": {
             "type": "boolean",
             "description": "Create an account on first sign-in (needs the address in allowedDomains)"
@@ -29205,7 +29231,7 @@
           "groupsClaim": {
             "type": "string",
             "nullable": true,
-            "description": "Claim holding group names; null uses the preset default"
+            "description": "OIDC claim (null uses the preset default) or SAML attribute (null = no groups) holding group names"
           },
           "groupSyncMode": {
             "type": "string",
@@ -29226,7 +29252,7 @@
               "saml",
               "ldap"
             ],
-            "description": "Only oidc is accepted until SAML and LDAP ship"
+            "description": "oidc or saml; ldap is refused until it ships"
           },
           "name": {
             "type": "string",
@@ -29283,6 +29309,32 @@
             "type": "string",
             "description": "Write-only. A value sets it, '' clears it, absent keeps it."
           },
+          "idpEntityId": {
+            "type": "string",
+            "description": "SAML: the IdP's entity ID, which the assertion's Issuer must equal"
+          },
+          "ssoUrl": {
+            "type": "string",
+            "description": "SAML: the IdP's single sign-on URL (HTTP-Redirect binding)"
+          },
+          "idpCert": {
+            "type": "string",
+            "description": "SAML: the IdP's signing certificate(s), PEM; two during a rollover"
+          },
+          "allowIdpInitiated": {
+            "type": "boolean",
+            "description": "SAML: accept responses no AuthnRequest of ours asked for (the IdP's app portal). Defaults to false."
+          },
+          "emailAttribute": {
+            "type": "string",
+            "nullable": true,
+            "description": "SAML: attribute holding the email; null tries the usual names"
+          },
+          "nameAttribute": {
+            "type": "string",
+            "nullable": true,
+            "description": "SAML: attribute holding the display name; null tries the usual names"
+          },
           "jitEnabled": {
             "type": "boolean",
             "description": "Create an account on first sign-in (needs the address in allowedDomains)"
@@ -29308,7 +29360,7 @@
           "groupsClaim": {
             "type": "string",
             "nullable": true,
-            "description": "Claim holding group names; null uses the preset default"
+            "description": "OIDC claim (null uses the preset default) or SAML attribute (null = no groups) holding group names"
           },
           "groupSyncMode": {
             "type": "string",

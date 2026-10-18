@@ -88,7 +88,7 @@ function changeEmail() {
   matched.value = []
 }
 
-const startUrl = (p: SsoLoginProvider) => ssoStartUrl(p.id, redirect.value)
+const startUrl = (p: SsoLoginProvider) => ssoStartUrl(p.id, redirect.value, p.kind)
 </script>
 
 <template>

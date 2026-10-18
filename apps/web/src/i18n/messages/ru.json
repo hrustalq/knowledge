@@ -5414,7 +5414,7 @@
     },
     "providers": {
       "title": "Провайдеры удостоверений",
-      "hint": "Вход через OpenID Connect-провайдер вашей организации. Новый провайдер создаётся выключенным.",
+      "hint": "Вход через OpenID Connect или SAML 2.0 вашей организации. Новые провайдеры создаются отключёнными.",
       "disabled": "Единый вход на этом сервере не включён. Оператор включает его переменной AUTH_SSO_ENABLED=true (и AUTH_MODE=api-key).",
       "empty": "Провайдеров удостоверений пока нет.",
       "add": "Добавить провайдер",
@@ -5462,7 +5462,6 @@
       "jitBadge": "Создаёт учётные записи",
       "domainsList": "Домены: {domains}",
       "redirectUri": "URI перенаправления",
-      "copy": "Скопировать URI перенаправления",
       "copied": "Скопировано",
       "copyFailed": "Не удалось скопировать",
       "presets": {
@@ -5478,7 +5477,30 @@
         "google": "https://accounts.google.com",
         "yandex": "https://oauth.yandex.ru",
         "generic": "https://idp.example.com"
-      }
+      },
+      "protocol": "Протокол",
+      "kinds": {
+        "oidc": "OpenID Connect",
+        "saml": "SAML 2.0"
+      },
+      "formHintSaml": "После сохранения передайте провайдеру URL метаданных SP из списка или его entity ID и ACS URL.",
+      "idpEntityId": "Entity ID провайдера",
+      "ssoUrl": "URL единого входа (SSO)",
+      "idpCert": "Сертификат подписи провайдера",
+      "idpCertHint": "PEM вместе со строкой BEGIN CERTIFICATE. На время смены ключа вставьте оба сертификата.",
+      "attributeMap": "Сопоставление атрибутов",
+      "attributeMapHint": "Какие атрибуты утверждения содержат данные человека. Оставьте поле пустым, чтобы искать по обычным именам.",
+      "emailAttribute": "Email",
+      "nameAttribute": "Имя",
+      "groupsAttribute": "Группы",
+      "groupsAttributeHint": "Без атрибута групп группы не читаются и сопоставление групп не применяется.",
+      "allowIdpInitiated": "Принимать вход, начатый на портале приложений провайдера",
+      "allowIdpInitiatedHint": "Каждое утверждение по-прежнему принимается только один раз и только пока оно свежее.",
+      "metadataUrl": "Метаданные SP (entity ID)",
+      "acsUrl": "ACS URL",
+      "copyEndpoint": "Скопировать: {label}",
+      "testOkSaml": "Настройки в порядке. Entity ID провайдера: {issuer}",
+      "testFailedSaml": "Проблема в настройках: {error}"
     },
     "groupMapping": {
       "title": "Сопоставление групп",

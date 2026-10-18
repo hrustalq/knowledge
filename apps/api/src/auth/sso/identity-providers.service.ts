@@ -10,6 +10,7 @@ import {
   type IdentityProviderView,
   type IdpKind,
   type ListIdentityProvidersResponse,
+  type SamlProviderView,
   type TestIdentityProviderResponse,
   type WorkspaceRole,
 } from '@knowledge/contracts';
@@ -24,6 +25,9 @@ import type { CreateIdentityProviderDto, UpdateIdentityProviderDto } from './ide
 import { OIDC_PRESETS, presetOf } from './oidc-presets.js';
 import { oidcConfigOf, OidcService } from './oidc.service.js';
 import { LIVE_IDP_KINDS } from './live-kinds.js';
+import { generateSpKeyPair, parseCertificates } from './saml-cert.js';
+import { samlConfigOf } from './saml-profile.js';
+import { SamlService } from './saml.service.js';
 import { AuthPolicyService } from '../auth-policy.service.js';
 
 const ISSUER_KEYS = {
@@ -37,6 +41,7 @@ const ISSUER_KEYS = {
 const AUDITED_FIELDS = [
   'name', 'preset', 'enabled', 'showOnLogin', 'platformWide', 'issuer', 'clientId', 'scopes', 'jitEnabled',
   'defaultRole', 'allowedDomains', 'groupsClaim', 'groupSyncMode', 'sessionTtlHours',
+  'idpEntityId', 'ssoUrl', 'idpCert', 'allowIdpInitiated', 'emailAttribute', 'nameAttribute',
 ] as const;
 
 /** `corp.example`, `@Corp.Example`, `bücher.example` → one lower-case punycode form, or null when it is no domain. */
@@ -47,7 +52,9 @@ export function normalizeDomain(raw: string): string | null {
 
 /**
  * A workspace's identity providers (#75). The client secret goes through
- * secret-box and never comes back out — the view says `hasSecret` only.
+ * secret-box and never comes back out — the view says `hasSecret` only. A
+ * SAML provider's SP private key is generated here on create, into the same
+ * column, and never leaves the API either; its certificate is public.
  * Child ids are always re-checked against the route's workspace, so another
  * workspace's provider id is a 404 here, not a 403 that confirms it exists.
  */
@@ -62,6 +69,7 @@ export class IdentityProvidersService {
     private readonly oidc: OidcService,
     private readonly audit: AuditService,
     private readonly policy: AuthPolicyService,
+    private readonly saml: SamlService,
   ) {
     this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
     this.allowPrivate = config.get('AUTH_SSO_ALLOW_PRIVATE_URLS', { infer: true });
@@ -77,9 +85,9 @@ export class IdentityProvidersService {
 
   async create(workspaceId: string, dto: CreateIdentityProviderDto, principal: Principal): Promise<IdentityProviderView> {
     if (!LIVE_IDP_KINDS.includes(dto.kind)) throw new BadRequestException(t('error.sso.kindNotSupported', { kind: dto.kind }));
-    const fields = await this.fields(dto, principal, null);
+    const fields = await this.fields(dto.kind, dto, principal, null);
     const row = await this.prisma.identityProvider.create({
-      data: { workspaceId, kind: dto.kind, name: dto.name.trim(), ...fields },
+      data: { workspaceId, kind: dto.kind, name: dto.name.trim(), ...fields, ...(dto.kind === 'saml' ? this.spKeyPair(fields) : {}) },
     });
     void this.audit.record({ ...this.entry(principal, row, changedFields(dto)), action: 'sso.provider_created' });
     // Which providers satisfy enforced SSO may have changed — here and, for a platform-wide one, everywhere.
@@ -94,7 +102,7 @@ export class IdentityProvidersService {
     principal: Principal,
   ): Promise<IdentityProviderView> {
     const existing = await this.owned(workspaceId, providerId);
-    const fields = await this.fields(dto, principal, existing);
+    const fields = await this.fields(existing.kind as IdpKind, dto, principal, existing);
     const row = await this.prisma.identityProvider.update({
       where: { id: existing.id },
       data: { ...(dto.name !== undefined ? { name: dto.name.trim() } : {}), ...fields },
@@ -119,7 +127,8 @@ export class IdentityProvidersService {
   }
 
   async test(workspaceId: string, providerId: string): Promise<TestIdentityProviderResponse> {
-    return this.oidc.test(await this.owned(workspaceId, providerId));
+    const provider = await this.owned(workspaceId, providerId);
+    return provider.kind === 'saml' ? this.saml.test(provider) : this.oidc.test(provider);
   }
 
   private async owned(workspaceId: string, providerId: string): Promise<IdentityProvider> {
@@ -130,15 +139,41 @@ export class IdentityProvidersService {
 
   /** Validate and translate a create/update body into columns. `existing` is null on create. */
   private async fields(
+    kind: IdpKind,
     dto: UpdateIdentityProviderDto,
     principal: Principal,
     existing: IdentityProvider | null,
-  ): Promise<Omit<Prisma.IdentityProviderUncheckedCreateInput, 'workspaceId' | 'kind' | 'name'>> {
+  ): Promise<ProviderColumns> {
     // Platform-wide reaches every workspace's login page: only someone who may act on all of them sets it.
     if (dto.platformWide !== undefined && dto.platformWide !== (existing?.platformWide ?? false) && !principal.isAdmin) {
       throw new ForbiddenException(t('error.sso.platformWideAdminOnly'));
     }
 
+    let allowedDomains: string[] | undefined;
+    if (dto.allowedDomains) {
+      allowedDomains = [];
+      for (const raw of dto.allowedDomains) {
+        const domain = normalizeDomain(raw);
+        if (!domain) throw new BadRequestException(t('error.sso.invalidDomain', { domain: raw.slice(0, 100) }));
+        if (!allowedDomains.includes(domain)) allowedDomains.push(domain);
+      }
+    }
+
+    return {
+      ...(kind === 'saml' ? this.samlFields(dto, existing) : await this.oidcFields(dto, existing)),
+      ...(dto.enabled !== undefined ? { enabled: dto.enabled } : {}),
+      ...(dto.showOnLogin !== undefined ? { showOnLogin: dto.showOnLogin } : {}),
+      ...(dto.platformWide !== undefined ? { platformWide: dto.platformWide } : {}),
+      ...(dto.jitEnabled !== undefined ? { jitEnabled: dto.jitEnabled } : {}),
+      ...(dto.defaultRole !== undefined ? { defaultRole: dto.defaultRole } : {}),
+      ...(allowedDomains ? { allowedDomains } : {}),
+      ...(dto.groupsClaim !== undefined ? { groupsClaim: dto.groupsClaim?.trim() || null } : {}),
+      ...(dto.groupSyncMode !== undefined ? { groupSyncMode: dto.groupSyncMode } : {}),
+      ...(dto.sessionTtlHours !== undefined ? { sessionTtlHours: dto.sessionTtlHours } : {}),
+    };
+  }
+
+  private async oidcFields(dto: UpdateIdentityProviderDto, existing: IdentityProvider | null): Promise<ProviderColumns> {
     const preset = presetOf(dto.preset ?? existing?.preset ?? 'generic');
     const current = existing ? oidcConfigOf(existing) : { issuer: '', clientId: '', scopes: [] };
     const issuer = (dto.issuer ?? current.issuer).trim().replace(/\/+$/, '');
@@ -151,16 +186,6 @@ export class IdentityProvidersService {
       await assertSafeExternalUrl(issuer, this.allowPrivate, ISSUER_KEYS);
     }
     if (!clientId) throw new BadRequestException(t('error.sso.clientIdRequired'));
-
-    let allowedDomains: string[] | undefined;
-    if (dto.allowedDomains) {
-      allowedDomains = [];
-      for (const raw of dto.allowedDomains) {
-        const domain = normalizeDomain(raw);
-        if (!domain) throw new BadRequestException(t('error.sso.invalidDomain', { domain: raw.slice(0, 100) }));
-        if (!allowedDomains.includes(domain)) allowedDomains.push(domain);
-      }
-    }
 
     let secretCipher: string | null | undefined;
     if (dto.clientSecret !== undefined) {
@@ -178,17 +203,63 @@ export class IdentityProvidersService {
     return {
       preset,
       config: { issuer: OIDC_PRESETS[preset].issuer ?? issuer, clientId, scopes },
-      ...(dto.enabled !== undefined ? { enabled: dto.enabled } : {}),
-      ...(dto.showOnLogin !== undefined ? { showOnLogin: dto.showOnLogin } : {}),
-      ...(dto.platformWide !== undefined ? { platformWide: dto.platformWide } : {}),
-      ...(dto.jitEnabled !== undefined ? { jitEnabled: dto.jitEnabled } : {}),
-      ...(dto.defaultRole !== undefined ? { defaultRole: dto.defaultRole } : {}),
-      ...(allowedDomains ? { allowedDomains } : {}),
-      ...(dto.groupsClaim !== undefined ? { groupsClaim: dto.groupsClaim?.trim() || null } : {}),
-      ...(dto.groupSyncMode !== undefined ? { groupSyncMode: dto.groupSyncMode } : {}),
-      ...(dto.sessionTtlHours !== undefined ? { sessionTtlHours: dto.sessionTtlHours } : {}),
       ...(secretCipher !== undefined ? { secretCipher } : {}),
     };
+  }
+
+  /**
+   * The SAML half. The SP certificate is carried over from the stored config
+   * (an admin never sends it), and the OIDC client secret is ignored: the
+   * column holds the SP key here, and a stray `clientSecret` must not
+   * overwrite it.
+   */
+  private samlFields(dto: UpdateIdentityProviderDto, existing: IdentityProvider | null): ProviderColumns {
+    const current = samlConfigOf(existing ?? { config: {} });
+    const idpEntityId = (dto.idpEntityId ?? current.idpEntityId).trim();
+    const ssoUrl = (dto.ssoUrl ?? current.ssoUrl).trim();
+    const idpCert = (dto.idpCert ?? current.idpCert).trim();
+    const attribute = (sent: string | null | undefined, kept: string | null) => (sent === undefined ? kept : sent?.trim() || null);
+
+    if (!idpEntityId) throw new BadRequestException(t('error.sso.idpEntityIdRequired'));
+    let url: URL | null = null;
+    try {
+      url = new URL(ssoUrl);
+    } catch {
+      // reported below
+    }
+    // Only the browser goes there, so no DNS check — but never plain http to an IdP on the internet.
+    if (!url || !(url.protocol === 'https:' || (url.protocol === 'http:' && this.allowPrivate))) {
+      throw new BadRequestException(t('error.sso.ssoUrlInvalid'));
+    }
+    const certs = parseCertificates(idpCert);
+    if (!certs) throw new BadRequestException(t('error.sso.idpCertInvalid'));
+
+    return {
+      preset: 'generic',
+      config: {
+        idpEntityId,
+        ssoUrl: url.href,
+        idpCert: certs.join('\n'),
+        allowIdpInitiated: dto.allowIdpInitiated ?? current.allowIdpInitiated,
+        emailAttribute: attribute(dto.emailAttribute, current.emailAttribute),
+        nameAttribute: attribute(dto.nameAttribute, current.nameAttribute),
+        spCert: current.spCert,
+      },
+    };
+  }
+
+  /** A new SAML provider's SP key pair: the key into secret-box, the certificate beside the settings. */
+  // ponytail: made once on create, no rotation route; add one when an IdP asks for an SP cert rollover or SETTINGS_ENCRYPTION_KEY is rotated.
+  private spKeyPair(fields: ProviderColumns): Pick<ProviderColumns, 'config' | 'secretCipher'> {
+    const pair = generateSpKeyPair('Knowledge SAML SP');
+    let secretCipher: string;
+    try {
+      secretCipher = encryptSecret(pair.privateKeyPem, this.key);
+    } catch (e) {
+      if (e instanceof MissingEncryptionKeyError) throw new BadRequestException(t('error.sso.secretKeyMissing'));
+      throw e;
+    }
+    return { config: { ...(fields.config as Record<string, unknown>), spCert: pair.certPem.trim() }, secretCipher };
   }
 
   /** An audit row about a provider, less its action — which each call site spells out. */
@@ -213,6 +284,7 @@ export class IdentityProvidersService {
       showOnLogin: r.showOnLogin,
       platformWide: r.platformWide,
       config: oidcConfigOf(r),
+      saml: r.kind === 'saml' ? this.samlView(r) : null,
       hasSecret: r.secretCipher !== null,
       jitEnabled: r.jitEnabled,
       defaultRole: (WORKSPACE_ROLES as readonly string[]).includes(r.defaultRole ?? '') ? (r.defaultRole as WorkspaceRole) : null,
@@ -220,12 +292,19 @@ export class IdentityProvidersService {
       groupsClaim: r.groupsClaim,
       groupSyncMode: (GROUP_SYNC_MODES as readonly string[]).includes(r.groupSyncMode) ? (r.groupSyncMode as GroupSyncMode) : 'additive',
       sessionTtlHours: r.sessionTtlHours,
-      redirectUri: this.oidc.redirectUri(r.id),
+      redirectUri: r.kind === 'saml' ? this.saml.acsUrl(r.id) : this.oidc.redirectUri(r.id),
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     };
   }
+
+  private samlView(r: IdentityProvider): SamlProviderView {
+    const { spCert: _cert, ...settings } = samlConfigOf(r);
+    return { ...settings, entityId: this.saml.entityId(r.id) };
+  }
 }
+
+type ProviderColumns = Omit<Prisma.IdentityProviderUncheckedCreateInput, 'workspaceId' | 'kind' | 'name'>;
 
 
 /** Which fields a body set, by name — the secret only as "the secret changed", never its value. */

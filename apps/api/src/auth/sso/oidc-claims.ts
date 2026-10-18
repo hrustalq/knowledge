@@ -33,12 +33,12 @@ const MAX_GROUP_LENGTH = 256;
 
 type Claims = Record<string, unknown>;
 
-const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
+export const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
 /** Some IdPs send `"true"`: a string is believed only when it says exactly that. */
 const truthy = (v: unknown): boolean => v === true || v === 'true';
 
-function groupsFrom(value: unknown): string[] {
+export function groupsFrom(value: unknown): string[] {
   const list = Array.isArray(value) ? value : typeof value === 'string' ? [value] : [];
   return [...new Set(list.filter((g): g is string => typeof g === 'string' && g.length > 0 && g.length <= MAX_GROUP_LENGTH))].slice(
     0,

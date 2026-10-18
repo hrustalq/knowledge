@@ -5994,6 +5994,18 @@ export interface components {
             scopes?: string[];
             /** @description Write-only. A value sets it, '' clears it, absent keeps it. */
             clientSecret?: string;
+            /** @description SAML: the IdP's entity ID, which the assertion's Issuer must equal */
+            idpEntityId?: string;
+            /** @description SAML: the IdP's single sign-on URL (HTTP-Redirect binding) */
+            ssoUrl?: string;
+            /** @description SAML: the IdP's signing certificate(s), PEM; two during a rollover */
+            idpCert?: string;
+            /** @description SAML: accept responses no AuthnRequest of ours asked for (the IdP's app portal). Defaults to false. */
+            allowIdpInitiated?: boolean;
+            /** @description SAML: attribute holding the email; null tries the usual names */
+            emailAttribute?: string | null;
+            /** @description SAML: attribute holding the display name; null tries the usual names */
+            nameAttribute?: string | null;
             /** @description Create an account on first sign-in (needs the address in allowedDomains) */
             jitEnabled?: boolean;
             /**
@@ -6003,14 +6015,14 @@ export interface components {
             defaultRole?: "guest" | "viewer" | "editor" | "admin" | null;
             /** @description Email domains this provider may assert, e.g. corp.example */
             allowedDomains?: string[];
-            /** @description Claim holding group names; null uses the preset default */
+            /** @description OIDC claim (null uses the preset default) or SAML attribute (null = no groups) holding group names */
             groupsClaim?: string | null;
             /** @enum {string} */
             groupSyncMode?: "additive" | "authoritative";
             /** @description Session lifetime for this provider; null = AUTH_SESSION_TTL_HOURS */
             sessionTtlHours?: number | null;
             /**
-             * @description Only oidc is accepted until SAML and LDAP ship
+             * @description oidc or saml; ldap is refused until it ships
              * @enum {string}
              */
             kind: "oidc" | "saml" | "ldap";
@@ -6037,6 +6049,18 @@ export interface components {
             scopes?: string[];
             /** @description Write-only. A value sets it, '' clears it, absent keeps it. */
             clientSecret?: string;
+            /** @description SAML: the IdP's entity ID, which the assertion's Issuer must equal */
+            idpEntityId?: string;
+            /** @description SAML: the IdP's single sign-on URL (HTTP-Redirect binding) */
+            ssoUrl?: string;
+            /** @description SAML: the IdP's signing certificate(s), PEM; two during a rollover */
+            idpCert?: string;
+            /** @description SAML: accept responses no AuthnRequest of ours asked for (the IdP's app portal). Defaults to false. */
+            allowIdpInitiated?: boolean;
+            /** @description SAML: attribute holding the email; null tries the usual names */
+            emailAttribute?: string | null;
+            /** @description SAML: attribute holding the display name; null tries the usual names */
+            nameAttribute?: string | null;
             /** @description Create an account on first sign-in (needs the address in allowedDomains) */
             jitEnabled?: boolean;
             /**
@@ -6046,7 +6070,7 @@ export interface components {
             defaultRole?: "guest" | "viewer" | "editor" | "admin" | null;
             /** @description Email domains this provider may assert, e.g. corp.example */
             allowedDomains?: string[];
-            /** @description Claim holding group names; null uses the preset default */
+            /** @description OIDC claim (null uses the preset default) or SAML attribute (null = no groups) holding group names */
             groupsClaim?: string | null;
             /** @enum {string} */
             groupSyncMode?: "additive" | "authoritative";

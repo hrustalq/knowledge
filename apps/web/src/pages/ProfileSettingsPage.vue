@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Your own account: name, language, password, API key.
+ * Your own account: name, language, password, API key, where you are signed in.
  *
  * Four independent saves rather than one form with one Save, because these have
  * four different consequences — a rename is cosmetic, a language change reloads
@@ -37,6 +37,7 @@ import { Label } from '@/components/ui/label'
 import UserAvatar from '@/components/merge-requests/UserAvatar.vue'
 import AvatarPicker from '@/components/people/AvatarPicker.vue'
 import LinkedChatAccounts from '@/components/profile/LinkedChatAccounts.vue'
+import ActiveSessions from '@/components/profile/ActiveSessions.vue'
 
 const { t, locale } = useI18n()
 const auth = useAuthStore()
@@ -293,6 +294,12 @@ async function savePassword() {
 
           <li class="px-5 py-4">
             <LinkedChatAccounts />
+          </li>
+
+          <!-- Only a login session has sessions to list: an API key or the
+               dev principal has no users row behind it to sign out. -->
+          <li v-if="auth.me.mode === 'session'" class="px-5 py-4">
+            <ActiveSessions />
           </li>
         </ul>
       </section>

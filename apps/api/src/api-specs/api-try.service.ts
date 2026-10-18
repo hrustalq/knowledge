@@ -160,7 +160,7 @@ export class ApiTryService {
     const auditBase = {
       workspaceId,
       actor: principal.userId,
-      action: 'api.try',
+      action: 'api.try' as const,
       // What was tried, never with what: no header, no query, no body.
       params: { documentId, revisionId: req.revisionId, entityKey: normalizeEntityKey(req.entityKey), method, host: target.host, path: pathTemplate },
     };

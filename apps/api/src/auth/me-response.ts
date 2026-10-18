@@ -1,4 +1,4 @@
-import type { MeResponse, WorkspaceRole } from '@knowledge/contracts';
+import { membershipSourceOf, type MeResponse, type WorkspaceRole } from '@knowledge/contracts';
 import type { WorkspaceMember } from '@prisma/client';
 import type { Principal } from './principal.js';
 
@@ -9,7 +9,7 @@ import type { Principal } from './principal.js';
  */
 export function toMeResponse(
   principal: Principal,
-  memberships: Pick<WorkspaceMember, 'workspaceId' | 'role' | 'trustedOperator'>[],
+  memberships: Pick<WorkspaceMember, 'workspaceId' | 'role' | 'trustedOperator' | 'source'>[],
   verificationRequired: boolean,
 ): MeResponse {
   return {
@@ -20,12 +20,14 @@ export function toMeResponse(
     mode: principal.mode,
     isAdmin: principal.isAdmin,
     locale: principal.locale,
+    authMethod: principal.mode === 'session' ? (principal.authMethod ?? 'password') : null,
     emailVerified: principal.emailVerified ?? true,
     emailVerificationRequired: verificationRequired,
     memberships: memberships.map((m) => ({
       workspaceId: m.workspaceId,
       role: m.role as WorkspaceRole,
       trustedOperator: m.trustedOperator,
+      source: membershipSourceOf(m.source),
     })),
   };
 }

@@ -1,4 +1,3 @@
-import { isIP } from 'node:net';
 import {
   HttpException,
   HttpStatus,
@@ -12,37 +11,10 @@ import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PublicStore } from './public-store.js';
 
-/** IPv4 private, loopback, link-local and CGNAT ranges, and their IPv6 equivalents. */
-function isInternal(address: string): boolean {
-  const ip = address.startsWith('::ffff:') ? address.slice(7) : address;
-  if (isIP(ip) === 4) {
-    const [a, b] = ip.split('.').map(Number);
-    return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
-      (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127);
-  }
-  const lower = ip.toLowerCase();
-  return lower === '::1' || lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80:');
-}
-
-/**
- * The address a public request is counted against.
- *
- * Nothing reaches the API from the internet directly: Caddy proxies `/api/*`
- * and the web SSR calls it over the internal network, both from a private
- * address, both carrying the visitor in X-Forwarded-For (see Caddyfile and
- * apps/web/server.js). So the header is believed only when the peer is
- * internal, and then its first entry is the visitor. A peer on a public
- * address is counted as itself, whatever header it sends.
- */
-export function clientIp(req: { ip?: string; socket?: { remoteAddress?: string }; headers: Record<string, unknown> }): string {
-  const peer = req.socket?.remoteAddress ?? req.ip ?? 'unknown';
-  const forwarded = req.headers['x-forwarded-for'];
-  if (isInternal(peer) && typeof forwarded === 'string' && forwarded.trim()) {
-    const first = forwarded.split(',')[0].trim();
-    if (isIP(first)) return first;
-  }
-  return peer;
-}
+// Lifted to common/ when the auth flow started recording it (#75); re-exported
+// so the publishing call sites keep their import.
+import { clientIp } from '../common/client-ip.js';
+export { clientIp };
 
 export class RateLimitedException extends HttpException {
   /** `reason` tells limits apart for a client (flat extras, hoisted into `details`). */

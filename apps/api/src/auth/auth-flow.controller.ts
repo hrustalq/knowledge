@@ -1,4 +1,5 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   AuthSessionResponse,
@@ -21,6 +22,7 @@ import {
 } from './auth-flow.dto.js';
 import type { Principal } from './principal.js';
 import { UrlTicketsService } from './url-tickets.service.js';
+import { requestMeta } from '../common/client-ip.js';
 
 /**
  * Auth flow endpoints. signup/login/forgot/reset are @Public (they mint the
@@ -38,24 +40,24 @@ export class AuthFlowController {
   @Public()
   @Post('signup')
   @ApiOperation({ summary: 'Create an account with email + password; returns a ks_ session token' })
-  signup(@Body() dto: SignupDto): Promise<AuthSessionResponse> {
-    return this.flow.signup(dto.email, dto.displayName, dto.password);
+  signup(@Body() dto: SignupDto, @Req() req: Request): Promise<AuthSessionResponse> {
+    return this.flow.signup(dto.email, dto.displayName, dto.password, requestMeta(req));
   }
 
   @Public()
   @HttpCode(200)
   @Post('login')
   @ApiOperation({ summary: 'Email + password login; returns a ks_ session token' })
-  login(@Body() dto: LoginDto): Promise<AuthSessionResponse> {
-    return this.flow.login(dto.email, dto.password);
+  login(@Body() dto: LoginDto, @Req() req: Request): Promise<AuthSessionResponse> {
+    return this.flow.login(dto.email, dto.password, requestMeta(req));
   }
 
   @HttpCode(200)
   @Post('logout')
   @UnverifiedOk()
   @ApiOperation({ summary: 'Revoke the current session token (no-op for API keys / dev mode)' })
-  async logout(@CurrentPrincipal() principal: Principal): Promise<LogoutResponse> {
-    await this.flow.logout(principal);
+  async logout(@CurrentPrincipal() principal: Principal, @Req() req: Request): Promise<LogoutResponse> {
+    await this.flow.logout(principal, requestMeta(req));
     return { ok: true };
   }
 

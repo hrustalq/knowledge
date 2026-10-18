@@ -14,6 +14,7 @@ import {
   FolderKanban,
   Globe,
   LayoutTemplate,
+  LockKeyhole,
   MessagesSquare,
   Plug,
   ShieldCheck,
@@ -57,7 +58,10 @@ const links = computed<SettingsLink[]>(() => [
   // Admin-only, so hidden from everyone else: unlike the rows above, the page
   // has nothing to show a member who cannot manage it.
   ...(auth.canAdminWorkspace
-    ? [{ to: '/settings/chat', label: t('nav.chatBots'), icon: MessagesSquare, hint: t('settings.chatBotsHint') }]
+    ? [
+        { to: '/settings/chat', label: t('nav.chatBots'), icon: MessagesSquare, hint: t('settings.chatBotsHint') },
+        { to: '/settings/security', label: t('nav.security'), icon: LockKeyhole, hint: t('settings.securityHint') },
+      ]
     : []),
   // Last, and open to every role: it is the section you go to when one of the
   // others did not explain itself.

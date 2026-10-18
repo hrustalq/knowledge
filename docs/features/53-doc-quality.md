@@ -357,8 +357,9 @@ Web:
 - Raising `STYLE_LINT_POLICY` to `block` makes `block` the policy of every
   workspace and project that sets none, so merges there wait for their check.
   Each check is one model call per push, billed to the merge request's author.
-- Production runs the stub embeddings provider, so the auditor's duplication
-  dimension is `null` there until a real provider is configured.
+- On `EMBEDDINGS_PROVIDER=stub` the auditor's duplication dimension is
+  `null`. Production has run bge-m3 since 2026-10-18 (#257), so it is measured
+  there.
 
 ## Deliberate deferrals
 

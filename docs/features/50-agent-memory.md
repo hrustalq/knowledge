@@ -464,8 +464,8 @@ What the run says beyond the two numbers:
   lead. A paraphrase scores lower and is missed more often.
 - **The stub cannot make the amend decision.** A section scores a median 0.445
   against its own page and 0.500 against the nearest other one, and every amend
-  threshold sums to 100% or more. Production runs the stub
-  (`EMBEDDINGS_PROVIDER=stub` in the `production` environment). For a stub
+  threshold sums to 100% or more. Production ran the stub until 2026-10-18,
+  when #257 moved it to bge-m3 (see the second production run below). For a stub
   workspace the run suggests a dedupe override of 0.78. It drops no more than
   0.92 (6.7%) and misses 23.3% of restatements instead of 40%. Amend then
   follows it down to 0.78, which on the stub is no worse than 0.80 (107.8%
@@ -504,6 +504,55 @@ It confirms the stub finding on a corpus nobody tuned against:
 
 The override is a workspace capture setting and has not been applied.
 
+**Production run of 2026-10-18** (v0.27.0, after #257 moved production to
+bge-m3 served by Ollama on the host and reindexed every branch head). Same
+command, same workspace, and the same 23 cases and 11 template headings.
+
+| Class (p5 / p50 / p95) | bge-m3, 1024-d (stored) | stub, 768-d (2026-10-17) |
+| ---------------------- | ----------------------- | ------------------------ |
+| amend                  | 0.569 / 0.668 / 0.762   | 0.128 / 0.274 / 0.405    |
+| new page               | 0.582 / 0.701 / 0.829   | 0.282 / 0.458 / 0.664    |
+| restatement            | 0.883 / 0.979 / 0.990   | 0.558 / 0.974 / 0.990    |
+| same-title new fact    | 0.620 / 0.732 / 0.800   | 0.173 / 0.299 / 0.491    |
+
+| Amend | scattered | wrong page | false amend | sum    |
+| ----- | --------- | ---------- | ----------- | ------ |
+| 0.76  | 56.5%     | 34.8%      | 34.8%       | 126.1% |
+| 0.80  | 73.9%     | 21.7%      | 21.7%       | 117.4% |
+| 0.84  | 100.0%    | 0.0%       | 0.0%        | 100.0% |
+
+| Dedupe | missed | dropped | sum   |
+| ------ | ------ | ------- | ----- |
+| 0.78   | 0.0%   | 13.0%   | 13.0% |
+| 0.84   | 0.0%   | 0.0%    | 0.0%  |
+| 0.88   | 4.3%   | 0.0%    | 4.3%  |
+| 0.92   | 17.4%  | 0.0%    | 17.4% |
+
+- **Amend now fires, but on this corpus it does worse than never amending.**
+  At 0.80, 6 of the 23 amend cases clear the threshold, against none on the
+  stub. Only one of them lands on its own page, though: the other 5 go to the
+  wrong page, and 5 unrelated pages would gain a section. The sum, 117.4%, is
+  worse than the stub's 100%, and
+  the demo corpus's ~93% was not reached. The cause is the one the demo run
+  found, only sharper. Another page outranks a section's own page in 17 of 23
+  cases (21 on the stub), and the new-page median (0.70) sits above the amend
+  median (0.67). Many RTech OMS pages are still scaffolds with placeholder
+  slots (`_заполнить_`), so what remains of a page looks like its siblings.
+  The Demo Workspace has 5 live pages and was not measured. Only from
+  0.84 up does amend stop firing, which is where the unweighted optimum lands.
+- **The 0.78 dedupe override above is now wrong.** On bge-m3 it drops 13% of
+  same-title new facts (3 cases), where 0.92 drops none. It was a stub-only
+  workaround and was never applied.
+- **Dedupe at 0.92 misses as many restatements as the stub did** (17.4%, 4
+  cases) and drops nothing. 0.84 scores no errors here, but with 23 cases that
+  is a 4-case difference, inside the noise. On the demo corpus, lowering
+  dedupe cost drops.
+
+**The defaults stay at 0.92 / 0.80.** Changing thresholds was out of scope for
+#257. Whether RTech OMS should amend at all while its pages are mostly
+template text is a separate decision. A workspace amend override of 0.84 or
+higher stops amending there.
+
 To re-run after changing the embedding model, run the same command and
 compare against these tables. Run one backtest at a time, because ArcadeDB
 runs out of memory on concurrent scans.
@@ -538,9 +587,6 @@ knowledge base on a live reply.
 
 ## Not done
 
-- **Production runs the stub.** The [production run](#calibration) shows it
-  cannot make the amend decision at any threshold. Moving production to a real
-  embedding model, and reindexing, is what would make amend work there.
 - **No integration.** An amend appends a deterministic section. It does not
   rewrite the page around the new fact. A drafter pass is the obvious next
   step.

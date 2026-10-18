@@ -335,6 +335,29 @@ in the pull request that introduces them — see
   provider. Addresses in `AUTH_BREAK_GLASS_EMAILS` still get in, and a
   workspace may let platform admins keep their password. A domain belongs
   to one workspace; a pending claim stops holding it after a week. (#75)
+- SCIM 2.0 provisioning. An identity provider such as Microsoft Entra ID,
+  Okta or Keycloak (with a SCIM plugin) can create, update, deactivate and
+  delete a workspace's people and groups at `<API_PUBLIC_URL>/v1/scim/v2`.
+  An admin creates a bearer token under Settings → Security →
+  Provisioning; the token is shown once and only its hash is stored. A token
+  provisions its own workspace only and opens no other route. Users and
+  Groups support create, read, `PUT`, `PATCH` and delete. Lookups support
+  `userName`, `externalId` and work-email `eq` filters for users, and
+  `displayName` and `externalId` for groups, with paging. Entra's `"False"`
+  strings and capitalised ops are accepted, as is Okta's member removal by
+  filter. Errors are `application/scim+json` in the RFC 7644 shape. A new
+  user gets an SSO-only account; an existing account with the same address
+  is linked instead. A provisioned person gets the workspace's SCIM default
+  role (`viewer` unless changed, or `none`). On the Group mapping tab, an
+  admin can map a SCIM group to a role, and that applies to the group's
+  members at once. Deactivating or deleting someone removes the membership
+  provisioning manages and signs them out everywhere. Only when the
+  address's domain is one this workspace has verified does it also disable
+  the account and update the account's name and email; otherwise one
+  workspace's directory could lock someone out of another. Memberships set
+  by hand are never changed. Every provisioning change is in the audit log.
+  (`GET`/`PUT /v1/workspaces/:id/scim`, `POST`/`DELETE
+  /v1/workspaces/:id/scim-tokens`.) (#75)
 
 ### Changed
 
@@ -384,6 +407,11 @@ in the pull request that introduces them — see
   process and every render in flight. It is now logged; any other unhandled
   rejection still stops the process. Enforced SSO made this common: every
   page a password session opened in an enforcing workspace hit it. (#75)
+- Live updates no longer ignore a subscription sent the moment the socket
+  opens. A client that subscribed from `onopen` got no reply and no error,
+  because the server started listening only after it had checked the token.
+  Messages that arrive during that check are now answered once it finishes,
+  in the order they came. (#75)
 
 ### Operations
 
@@ -474,6 +502,16 @@ in the pull request that introduces them — see
   SSO is on, the API checks pending domains every 15 minutes and so needs
   outbound DNS. The same pass deletes expired login transactions and
   expired sessions. (#75)
+- SCIM provisioning is off unless `AUTH_SCIM_ENABLED=true`, which needs
+  `AUTH_MODE=api-key` and is independent of `AUTH_SSO_ENABLED`. While off,
+  `/v1/scim/v2` and the Provisioning settings answer 404. New variables:
+  `AUTH_SCIM_ENABLED` (`false`) and `AUTH_SCIM_MAX_PAGE` (`200`, the largest
+  list page a client may ask for). Bodies sent as `application/scim+json`
+  are now parsed as JSON. Migration `20261111100000_scim_provisioning` adds
+  `workspace_settings.scim_default_role` and `scim_users.user_name` with a
+  unique index per workspace. Both are nullable, nothing wrote to
+  `scim_users` before, and the previous image reads neither, so rolling back
+  is safe. (#75)
 
 ## [0.26.0] — 2026-10-16
 

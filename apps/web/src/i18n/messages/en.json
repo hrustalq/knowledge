@@ -5391,7 +5391,17 @@
         "sso_domain_updated": "Domain changed",
         "sso_domain_removed": "Domain removed",
         "sso_policy_updated": "Sign-in policy changed",
-        "auth_sso_bypassed": "Platform admin passed enforced sign-on"
+        "auth_sso_bypassed": "Platform admin passed enforced sign-on",
+        "scim_user_created": "SCIM: user created",
+        "scim_user_updated": "SCIM: user updated",
+        "scim_user_deactivated": "SCIM: user deactivated",
+        "scim_user_deleted": "SCIM: user deleted",
+        "scim_group_created": "SCIM: group created",
+        "scim_group_updated": "SCIM: group updated",
+        "scim_group_deleted": "SCIM: group deleted",
+        "scim_token_created": "SCIM token created",
+        "scim_token_revoked": "SCIM token revoked",
+        "scim_settings_updated": "SCIM settings changed"
       }
     },
     "tabs": {
@@ -5399,7 +5409,8 @@
       "groups": "Group mapping",
       "audit": "Audit log",
       "domains": "Domains",
-      "policy": "Policy"
+      "policy": "Policy",
+      "provisioning": "Provisioning"
     },
     "providers": {
       "title": "Identity providers",
@@ -5495,7 +5506,16 @@
       "modeBadge": {
         "additive": "Additive",
         "authoritative": "Authoritative"
-      }
+      },
+      "disabled": "Single sign-on and SCIM provisioning are both off on this instance. An operator turns them on with AUTH_SSO_ENABLED or AUTH_SCIM_ENABLED.",
+      "scimSource": "SCIM group",
+      "scimPick": "Choose a provisioned group",
+      "scimNone": "No groups provisioned yet",
+      "scimGroupOption": "{name} ({count})",
+      "scimHint": "A SCIM group's mapping applies at once to everyone in it. Provisioned people in no mapped group get the default role from the Provisioning tab.",
+      "scimBadge": "SCIM",
+      "scimGroupGone": "deleted group",
+      "removeConfirmScim": "Remove the mapping for “{group}”? Its members drop to the provisioning default role now."
     },
     "domains": {
       "title": "Domains",
@@ -5563,6 +5583,31 @@
         "api-key": "You are using an API key, which this policy would block.",
         "session-too-old": "Your session is older than the limit you set, so this would sign you out of the workspace. Sign in again first."
       }
+    },
+    "scim": {
+      "title": "Provisioning (SCIM)",
+      "hint": "Let your identity provider create, update and deactivate this workspace's people over SCIM 2.0. Give it the base URL and a token. Deactivating someone in the IdP removes their membership and signs them out; roles you set by hand on the Access page stay.",
+      "disabled": "SCIM provisioning is off on this instance. An operator turns it on with AUTH_SCIM_ENABLED.",
+      "baseUrl": "SCIM base URL",
+      "counts": "{users} people provisioned ({active} active) · {groups} groups",
+      "defaultRole": "Role without a mapped group",
+      "defaultRoleHint": "What a provisioned person gets when none of their groups is mapped on the Group mapping tab. Changing it re-applies to everyone provisioned.",
+      "defaultRoleSaved": "Default role saved and applied",
+      "noRole": "No membership",
+      "tokens": "Tokens",
+      "tokenName": "New token",
+      "tokenNamePlaceholder": "Entra ID provisioning",
+      "create": "Create token",
+      "freshTitle": "Token “{name}” created",
+      "freshHint": "Copy it into your identity provider now. It is not shown again: only a hash is stored.",
+      "bearer": "Bearer token",
+      "freshDone": "I've copied it",
+      "empty": "No tokens yet. Create one per identity provider.",
+      "lastUsed": "used {when}",
+      "neverUsed": "never used",
+      "revoke": "Revoke",
+      "revokeConfirm": "Revoke “{name}”? The identity provider gets 401 from its next request.",
+      "revoked": "Token revoked"
     }
   }
 }

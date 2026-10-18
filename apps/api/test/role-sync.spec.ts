@@ -60,17 +60,17 @@ function fakeDb(members: Row[], mappings: Row[] = []) {
     $executeRaw: vi.fn(async (strings: TemplateStringsArray, ...v: unknown[]) => {
       const sql = strings.join('?');
       if (sql.includes('UPDATE workspace_members')) {
-        const [role, ws, user, managedOnly] = v as [string, string, string, boolean];
+        const [role, ws, user, sources] = v as [string, string, string, string[] | null];
         const row = find(ws, user);
-        if (!row || (managedOnly && row.source === 'manual')) return 0;
+        if (!row || (sources && !sources.includes(row.source))) return 0;
         if (row.role === 'admin' && role !== 'admin' && !otherAdmin(ws, user)) return 0;
         row.role = role;
         return 1;
       }
       if (sql.includes('DELETE FROM workspace_members')) {
-        const [ws, user, managedOnly] = v as [string, string, boolean];
+        const [ws, user, sources] = v as [string, string, string[] | null];
         const row = find(ws, user);
-        if (!row || (managedOnly && row.source === 'manual')) return 0;
+        if (!row || (sources && !sources.includes(row.source))) return 0;
         if (row.role === 'admin' && !otherAdmin(ws, user)) return 0;
         db.members.splice(db.members.indexOf(row), 1);
         return 1;

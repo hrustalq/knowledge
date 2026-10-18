@@ -660,5 +660,30 @@
     "manualVerifyAdminOnly": "Only a platform admin can mark a domain verified without DNS",
     "policyNoProvider": "Enforcing single sign-on needs an enabled identity provider for this workspace",
     "policyLocksYouOut": "Saving this would lock you out ({failure}). Sign in through the workspace's identity provider first, then try again"
+  },
+  "scim": {
+    "disabled": "SCIM provisioning is not enabled on this instance",
+    "unauthorized": "A valid SCIM bearer token is required",
+    "userNotFound": "User {id} not found",
+    "groupNotFound": "Group {id} not found",
+    "invalidFilter": "Unsupported filter. Use a single eq comparison on userName, externalId, emails.value or id (Users), or on displayName, externalId or id (Groups)",
+    "userExists": "A user with userName {userName} or this externalId is already provisioned",
+    "emailProvisioned": "The address {email} is already provisioned in this workspace or belongs to another account",
+    "externalIdExists": "A user with externalId {externalId} is already provisioned",
+    "groupExists": "A group named {displayName} already exists",
+    "displayNameRequired": "displayName is required",
+    "bodyObject": "The request body must be a JSON object",
+    "userNameRequired": "userName is required (at most 320 characters)",
+    "activeBoolean": "active must be a boolean",
+    "emailRequired": "An email address is required, in emails or as userName",
+    "patchOperations": "A PATCH body needs a non-empty Operations array of {op, path, value} objects",
+    "patchOp": "Unsupported PATCH op {op}: use add, replace or remove",
+    "patchRemoveNeedsPath": "A remove operation needs a path",
+    "patchPath": "Unsupported PATCH path {path}",
+    "patchValueObject": "An operation without a path needs an object value",
+    "memberValue": "A member must be an object with a value (the user id)",
+    "tokenLimit": "This workspace already has {max} active SCIM tokens — revoke one before creating another.",
+    "tokenNotFound": "SCIM token not found",
+    "mappingGroup": "Choose a group the workspace's SCIM client has provisioned"
   }
 }

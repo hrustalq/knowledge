@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { type ApiErrorCode, type ApiErrorPayload, API_ERROR_CODES, errorCodeForStatus } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { currentTrace, redactUrl } from '@knowledge/observability';
+import { SCIM_CONTENT_TYPE, SCIM_PATH_PREFIX, scimErrorBody, type ScimType } from './scim-error-body.js';
 
 /**
  * Global HTTP exception filter: normalizes EVERY error — HttpException,
@@ -130,6 +131,15 @@ export class ApiExceptionFilter implements ExceptionFilter {
     };
 
     res.setHeader('x-request-id', requestId);
+    // A SCIM client (#75) parses RFC 7644's error shape, not ours: same status,
+    // same translated message, and the scimType a ScimError carries. Decided by
+    // path rather than by the throw, so an unmatched route, a body-parser
+    // failure or a 500 under /v1/scim reaches the client in its shape too.
+    if ((req.originalUrl ?? req.url).startsWith(SCIM_PATH_PREFIX)) {
+      const scimType = exception instanceof HttpException ? (exception.getResponse() as { scimType?: ScimType }).scimType : undefined;
+      res.status(status).type(SCIM_CONTENT_TYPE).send(JSON.stringify(scimErrorBody(status, message, scimType)));
+      return;
+    }
     res.status(status).json(payload);
   }
 }

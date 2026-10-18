@@ -1150,6 +1150,31 @@ export type I18nTranslations = {
             "policyNoProvider": string;
             "policyLocksYouOut": string;
         };
+        "scim": {
+            "disabled": string;
+            "unauthorized": string;
+            "userNotFound": string;
+            "groupNotFound": string;
+            "invalidFilter": string;
+            "userExists": string;
+            "emailProvisioned": string;
+            "externalIdExists": string;
+            "groupExists": string;
+            "displayNameRequired": string;
+            "bodyObject": string;
+            "userNameRequired": string;
+            "activeBoolean": string;
+            "emailRequired": string;
+            "patchOperations": string;
+            "patchOp": string;
+            "patchRemoveNeedsPath": string;
+            "patchPath": string;
+            "patchValueObject": string;
+            "memberValue": string;
+            "tokenLimit": string;
+            "tokenNotFound": string;
+            "mappingGroup": string;
+        };
     };
     "import": {
         "stage": {

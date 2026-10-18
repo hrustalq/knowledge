@@ -2,8 +2,7 @@
 /**
  * /settings/security (#75): a workspace's sign-in settings and its audit
  * trail. Admin-only, like the routes behind it. Providers first, the audit log
- * last; domains, group mapping, SCIM and policy join between them with the
- * phases that build them.
+ * last; domains, group mapping, provisioning (SCIM) and policy between them.
  *
  * Hand-rolled tab strip, as on /settings/connectors: `?tab=` is an opening
  * instruction, not two-way state.
@@ -16,6 +15,7 @@ import AuditLogTable from '@/components/security/AuditLogTable.vue'
 import AuthPolicyPanel from '@/components/security/AuthPolicyPanel.vue'
 import GroupMappingsPanel from '@/components/security/GroupMappingsPanel.vue'
 import IdentityProvidersPanel from '@/components/security/IdentityProvidersPanel.vue'
+import ScimPanel from '@/components/security/ScimPanel.vue'
 import SsoDomainsPanel from '@/components/security/SsoDomainsPanel.vue'
 
 const { t } = useI18n()
@@ -29,6 +29,7 @@ const TABS = [
   { key: 'providers', label: 'security.tabs.providers' },
   { key: 'domains', label: 'security.tabs.domains' },
   { key: 'groups', label: 'security.tabs.groups' },
+  { key: 'provisioning', label: 'security.tabs.provisioning' },
   { key: 'policy', label: 'security.tabs.policy' },
   { key: 'audit', label: 'security.tabs.audit' },
 ] as const
@@ -72,6 +73,7 @@ function setTab(key: TabKey) {
       <IdentityProvidersPanel v-if="tab === 'providers'" />
       <SsoDomainsPanel v-else-if="tab === 'domains'" />
       <GroupMappingsPanel v-else-if="tab === 'groups'" />
+      <ScimPanel v-else-if="tab === 'provisioning'" />
       <AuthPolicyPanel v-else-if="tab === 'policy'" />
       <AuditLogTable v-else />
     </template>

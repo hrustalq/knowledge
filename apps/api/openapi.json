@@ -1750,7 +1750,7 @@
             }
           }
         },
-        "summary": "Map a provider group to a role. The same group again replaces its role. Applies at next sign-in",
+        "summary": "Map a provider or SCIM group to a role. The same group again replaces its role. A provider mapping applies at next sign-in, a SCIM one at once",
         "tags": [
           "auth"
         ]
@@ -1815,7 +1815,7 @@
             }
           }
         },
-        "summary": "Remove a mapping. Memberships it granted stay until the next sign-in re-syncs them",
+        "summary": "Remove a mapping. A provider mapping's memberships stay until the next sign-in re-syncs them; a SCIM one re-syncs at once",
         "tags": [
           "auth"
         ]
@@ -2273,6 +2273,260 @@
           }
         },
         "summary": "Give up a domain. Its addresses may use passwords again at once",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/scim": {
+      "get": {
+        "operationId": "ScimTokensController_view",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace's SCIM base URL, live tokens, default role and what has been provisioned",
+        "tags": [
+          "auth"
+        ]
+      },
+      "put": {
+        "operationId": "ScimTokensController_put",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutScimSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set the role a provisioned user gets without a mapped group. Re-syncs provisioned members at once",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/scim-tokens": {
+      "post": {
+        "operationId": "ScimTokensController_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateScimTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Mint a kscim_ bearer token for an IdP. The secret is in this response only",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/scim-tokens/{tokenId}": {
+      "delete": {
+        "operationId": "ScimTokensController_revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tokenId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Revoke a SCIM token. The IdP gets 401 from its next request",
         "tags": [
           "auth"
         ]
@@ -29079,11 +29333,13 @@
         "properties": {
           "providerId": {
             "type": "string",
-            "description": "One of the workspace's identity providers, or a platform-wide one"
+            "format": "uuid",
+            "nullable": true,
+            "description": "One of the workspace's identity providers, or a platform-wide one. Null or absent maps a SCIM group."
           },
           "externalGroup": {
             "type": "string",
-            "description": "The group exactly as the provider's groups claim carries it",
+            "description": "The group exactly as the provider's groups claim carries it; for a SCIM mapping, the SCIM group's id",
             "example": "knowledge-editors"
           },
           "role": {
@@ -29101,7 +29357,6 @@
           }
         },
         "required": [
-          "providerId",
           "externalGroup",
           "role"
         ]
@@ -29170,6 +29425,37 @@
             "description": "The provider people on the domain are sent to; null = any of the workspace's"
           }
         }
+      },
+      "PutScimSettingsDto": {
+        "type": "object",
+        "properties": {
+          "defaultRole": {
+            "type": "string",
+            "enum": [
+              "none",
+              "guest",
+              "viewer",
+              "editor",
+              "admin"
+            ],
+            "description": "Role a provisioned user gets when no mapped SCIM group says more. 'none' grants nothing without a group."
+          }
+        },
+        "required": [
+          "defaultRole"
+        ]
+      },
+      "CreateScimTokenDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "What the token is for — \"Entra ID provisioning\". Shown in the token list."
+          }
+        },
+        "required": [
+          "name"
+        ]
       },
       "CreateUserDto": {
         "type": "object",

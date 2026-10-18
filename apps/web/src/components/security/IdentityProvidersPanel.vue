@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * Settings → Security → Providers (#75): a workspace's OpenID Connect and
- * SAML 2.0 providers. The client secret is write-only — the API returns
+ * Settings → Security → Providers (#75): a workspace's OpenID Connect,
+ * SAML 2.0 and (where the instance allows it) LDAP providers. The client
+ * secret and the LDAP bind password are write-only — the API returns
  * `hasSecret` and nothing more, so the field is always empty and says whether
  * one is stored. What the IdP needs from us (the redirect URI, or the SAML
  * ACS and metadata URLs) is shown for copying. A SAML provider's SP key pair
@@ -72,11 +73,18 @@ const EXAMPLES = {
   emailAttribute: 'email',
   nameAttribute: 'displayName',
   idpCert: '-----BEGIN CERTIFICATE-----',
+  ldapUrl: 'ldaps://dc.corp.example:636',
+  bindDn: 'cn=knowledge,ou=services,dc=corp,dc=example',
+  baseDn: 'ou=people,dc=corp,dc=example',
+  userFilter: '(&(objectClass=person)(uid={username}))',
+  ldapEmail: 'mail',
+  ldapGroups: 'memberOf',
 }
 /** A Select item cannot carry the empty string, so "no default role" needs a value of its own. */
 const NO_ROLE = '__none__'
 
-const KINDS: IdpKind[] = ['oidc', 'saml']
+/** What this instance lets a new provider be; LDAP only under AUTH_LDAP_ENABLED. */
+const kinds = computed<IdpKind[]>(() => data.value?.kinds ?? ['oidc', 'saml'])
 
 const blank = () => ({
   kind: 'oidc' as IdpKind,
@@ -101,6 +109,12 @@ const blank = () => ({
   allowIdpInitiated: false,
   emailAttribute: '',
   nameAttribute: '',
+  ldapUrl: '',
+  startTls: true,
+  bindDn: '',
+  bindPassword: '',
+  baseDn: '',
+  userFilter: '',
 })
 
 const open = ref(false)
@@ -138,14 +152,24 @@ function startEdit(p: IdentityProviderView) {
     ssoUrl: p.saml?.ssoUrl ?? '',
     idpCert: p.saml?.idpCert ?? '',
     allowIdpInitiated: p.saml?.allowIdpInitiated ?? false,
-    emailAttribute: p.saml?.emailAttribute ?? '',
-    nameAttribute: p.saml?.nameAttribute ?? '',
+    emailAttribute: p.saml?.emailAttribute ?? p.ldap?.emailAttribute ?? '',
+    nameAttribute: p.saml?.nameAttribute ?? p.ldap?.nameAttribute ?? '',
+    ldapUrl: p.ldap?.url ?? '',
+    startTls: p.ldap?.startTls ?? true,
+    bindDn: p.ldap?.bindDn ?? '',
+    bindPassword: '',
+    baseDn: p.ldap?.baseDn ?? '',
+    userFilter: p.ldap?.userFilter ?? '',
   })
   clearSecret.value = false
   open.value = true
 }
 
 const split = (s: string, by: RegExp) => s.split(by).map((x) => x.trim()).filter(Boolean)
+/** Write-only: a value sets it, '' clears it, absent keeps what is stored. */
+const secret = (value: string) => (value ? value : clearSecret.value ? '' : undefined)
+/** StartTLS applies to a plain ldap:// URL only; ldaps:// is TLS from the first byte. */
+const plainLdap = computed(() => form.ldapUrl.trim().toLowerCase().startsWith('ldap://'))
 
 /** The protocol's own fields: each kind's settings are sent only for that kind. */
 function protocolFields() {
@@ -159,13 +183,26 @@ function protocolFields() {
       nameAttribute: form.nameAttribute.trim() || null,
     }
   }
+  if (form.kind === 'ldap') {
+    const bindPassword = secret(form.bindPassword)
+    return {
+      ldapUrl: form.ldapUrl.trim(),
+      startTls: plainLdap.value && form.startTls,
+      bindDn: form.bindDn.trim() || null,
+      baseDn: form.baseDn.trim(),
+      userFilter: form.userFilter.trim() || null,
+      emailAttribute: form.emailAttribute.trim() || null,
+      nameAttribute: form.nameAttribute.trim() || null,
+      ...(bindPassword !== undefined ? { bindPassword } : {}),
+    }
+  }
+  const clientSecret = secret(form.clientSecret)
   return {
     preset: form.preset,
     ...(FIXED_ISSUER.includes(form.preset) ? {} : { issuer: form.issuer.trim() }),
     clientId: form.clientId.trim(),
     scopes: split(form.scopes, /[\s,]+/),
-    // Write-only: a value sets it, '' clears it, absent keeps what is stored.
-    ...(form.clientSecret ? { clientSecret: form.clientSecret } : clearSecret.value ? { clientSecret: '' } : {}),
+    ...(clientSecret !== undefined ? { clientSecret } : {}),
   }
 }
 
@@ -204,9 +241,9 @@ async function save() {
 async function runTest(p: IdentityProviderView) {
   try {
     const res = (await test.mutateAsync({ path: { ...path, providerId: p.id } })) as TestIdentityProviderResponse
-    const saml = p.kind === 'saml'
-    if (res.ok) toast.success(t(saml ? 'security.providers.testOkSaml' : 'security.providers.testOk', { issuer: res.issuer ?? '' }))
-    else toast.error(t(saml ? 'security.providers.testFailedSaml' : 'security.providers.testFailed', { error: res.error ?? '' }))
+    const suffix = p.kind === 'saml' ? 'Saml' : p.kind === 'ldap' ? 'Ldap' : ''
+    if (res.ok) toast.success(t(`security.providers.testOk${suffix}`, { issuer: res.issuer ?? '' }))
+    else toast.error(t(`security.providers.testFailed${suffix}`, { error: res.error ?? '' }))
   } catch (e) {
     toast.error(errorMessage(e, t))
   }
@@ -225,7 +262,13 @@ async function confirmRemove(p: IdentityProviderView) {
 
 /** What the IdP's admin copies from us, per protocol. */
 function endpoints(p: IdentityProviderView): { label: string; value: string }[] {
-  if (!p.saml) return [{ label: t('security.providers.redirectUri'), value: p.redirectUri }]
+  if (p.kind === 'ldap') return []
+  if (!p.saml) {
+    return [
+      { label: t('security.providers.redirectUri'), value: p.redirectUri },
+      ...(p.backchannelLogoutUri ? [{ label: t('security.providers.backchannelLogoutUri'), value: p.backchannelLogoutUri }] : []),
+    ]
+  }
   return [
     { label: t('security.providers.metadataUrl'), value: p.saml.entityId },
     { label: t('security.providers.acsUrl'), value: p.redirectUri },
@@ -268,7 +311,7 @@ const busy = computed(() => create.isPending.value || update.isPending.value)
         <div class="flex flex-wrap items-center gap-2">
           <KeyRound class="size-4 text-muted-foreground" aria-hidden="true" />
           <span class="font-medium">{{ p.name }}</span>
-          <Badge variant="outline">{{ p.kind === 'saml' ? t('security.providers.kinds.saml') : t(`security.providers.presets.${p.preset}`) }}</Badge>
+          <Badge variant="outline">{{ p.kind === 'oidc' ? t(`security.providers.presets.${p.preset}`) : t(`security.providers.kinds.${p.kind}`) }}</Badge>
           <Badge :variant="p.enabled ? 'default' : 'secondary'">
             {{ p.enabled ? t('security.providers.enabled') : t('security.providers.disabledBadge') }}
           </Badge>
@@ -281,7 +324,7 @@ const busy = computed(() => create.isPending.value || update.isPending.value)
           </div>
         </div>
         <div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          <span class="min-w-0 truncate">{{ p.saml?.idpEntityId ?? p.config.issuer }}</span>
+          <span class="min-w-0 truncate">{{ p.saml?.idpEntityId ?? p.ldap?.url ?? p.config.issuer }}</span>
           <span v-if="p.allowedDomains.length">{{ t('security.providers.domainsList', { domains: p.allowedDomains.join(', ') }) }}</span>
         </div>
         <div v-for="e in endpoints(p)" :key="e.value" class="flex min-w-0 items-center gap-2 text-xs">
@@ -307,7 +350,7 @@ const busy = computed(() => create.isPending.value || update.isPending.value)
       <DialogContent class="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{{ editing ? t('security.providers.editTitle') : t('security.providers.addTitle') }}</DialogTitle>
-          <DialogDescription>{{ form.kind === 'saml' ? t('security.providers.formHintSaml') : t('security.providers.formHint') }}</DialogDescription>
+          <DialogDescription>{{ t(form.kind === 'saml' ? 'security.providers.formHintSaml' : form.kind === 'ldap' ? 'security.providers.formHintLdap' : 'security.providers.formHint') }}</DialogDescription>
         </DialogHeader>
         <form id="idp-form" class="grid gap-3" @submit.prevent="save">
           <div v-if="!editing" class="grid gap-1">
@@ -315,7 +358,7 @@ const busy = computed(() => create.isPending.value || update.isPending.value)
             <Select v-model="form.kind">
               <SelectTrigger id="idp-kind"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="kind in KINDS" :key="kind" :value="kind">{{ t(`security.providers.kinds.${kind}`) }}</SelectItem>
+                <SelectItem v-for="kind in kinds" :key="kind" :value="kind">{{ t(`security.providers.kinds.${kind}`) }}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -332,6 +375,73 @@ const busy = computed(() => create.isPending.value || update.isPending.value)
             <label class="text-sm font-medium" for="idp-name">{{ t('security.providers.name') }}</label>
             <Input id="idp-name" v-model="form.name" required maxlength="80" :placeholder="t('security.providers.namePlaceholder')" />
           </div>
+          <template v-if="form.kind === 'ldap'">
+            <div class="grid gap-1">
+              <label class="text-sm font-medium" for="idp-ldap-url">{{ t('security.providers.ldapUrl') }}</label>
+              <Input
+                id="idp-ldap-url"
+                v-model="form.ldapUrl"
+                required
+                maxlength="500"
+                autocomplete="off"
+                spellcheck="false"
+                aria-describedby="idp-ldap-url-hint"
+                :placeholder="EXAMPLES.ldapUrl"
+              />
+              <p id="idp-ldap-url-hint" class="text-xs text-muted-foreground">{{ t('security.providers.ldapUrlHint') }}</p>
+              <label v-if="plainLdap" class="flex items-center gap-2 text-sm">
+                <Checkbox :model-value="form.startTls" @update:model-value="form.startTls = !!$event" />{{ t('security.providers.startTls') }}
+              </label>
+            </div>
+            <div class="grid gap-1">
+              <label class="text-sm font-medium" for="idp-base-dn">{{ t('security.providers.baseDn') }}</label>
+              <Input id="idp-base-dn" v-model="form.baseDn" required maxlength="1000" autocomplete="off" spellcheck="false" :placeholder="EXAMPLES.baseDn" />
+            </div>
+            <div class="grid gap-1">
+              <label class="text-sm font-medium" for="idp-bind-dn">{{ t('security.providers.bindDn') }}</label>
+              <Input
+                id="idp-bind-dn"
+                v-model="form.bindDn"
+                maxlength="1000"
+                autocomplete="off"
+                spellcheck="false"
+                aria-describedby="idp-bind-dn-hint"
+                :placeholder="EXAMPLES.bindDn"
+              />
+              <p id="idp-bind-dn-hint" class="text-xs text-muted-foreground">{{ t('security.providers.bindDnHint') }}</p>
+            </div>
+            <div class="grid gap-1">
+              <label class="text-sm font-medium" for="idp-bind-password">{{ t('security.providers.bindPassword') }}</label>
+              <Input
+                id="idp-bind-password"
+                v-model="form.bindPassword"
+                type="password"
+                autocomplete="new-password"
+                :disabled="data && !data.secretsWritable"
+                :placeholder="editing?.hasSecret ? t('security.providers.secretStored') : ''"
+              />
+              <p v-if="data && !data.secretsWritable" class="text-xs text-muted-foreground">{{ t('security.providers.secretsNotWritable') }}</p>
+              <label v-else-if="editing?.hasSecret" class="flex items-center gap-2 text-xs text-muted-foreground">
+                <Checkbox :model-value="clearSecret" @update:model-value="clearSecret = !!$event" />{{ t('security.providers.clearSecret') }}
+              </label>
+            </div>
+            <div class="grid gap-1">
+              <label class="text-sm font-medium" for="idp-user-filter">{{ t('security.providers.userFilter') }}</label>
+              <Input
+                id="idp-user-filter"
+                v-model="form.userFilter"
+                maxlength="1000"
+                autocomplete="off"
+                spellcheck="false"
+                class="font-mono text-xs md:text-xs"
+                aria-describedby="idp-user-filter-hint"
+                :placeholder="EXAMPLES.userFilter"
+              />
+              <p id="idp-user-filter-hint" class="text-xs text-muted-foreground">
+                {{ t('security.providers.userFilterHint', { placeholder: '{username}' }) }}
+              </p>
+            </div>
+          </template>
           <template v-if="form.kind === 'saml'">
             <div class="grid gap-1">
               <label class="text-sm font-medium" for="idp-entity">{{ t('security.providers.idpEntityId') }}</label>
@@ -357,26 +467,27 @@ const busy = computed(() => create.isPending.value || update.isPending.value)
               />
               <p id="idp-cert-hint" class="text-xs text-muted-foreground">{{ t('security.providers.idpCertHint') }}</p>
             </div>
-            <fieldset class="grid gap-3 rounded-md border px-3 pt-2 pb-3">
-              <legend class="px-1 text-sm font-medium">{{ t('security.providers.attributeMap') }}</legend>
-              <p class="-mt-1 text-xs text-muted-foreground">{{ t('security.providers.attributeMapHint') }}</p>
-              <div class="grid gap-3 sm:grid-cols-3">
-                <div class="grid min-w-0 gap-1">
-                  <label class="text-xs font-medium" for="idp-attr-email">{{ t('security.providers.emailAttribute') }}</label>
-                  <Input id="idp-attr-email" v-model="form.emailAttribute" maxlength="300" spellcheck="false" :placeholder="EXAMPLES.emailAttribute" />
-                </div>
-                <div class="grid min-w-0 gap-1">
-                  <label class="text-xs font-medium" for="idp-attr-name">{{ t('security.providers.nameAttribute') }}</label>
-                  <Input id="idp-attr-name" v-model="form.nameAttribute" maxlength="300" spellcheck="false" :placeholder="EXAMPLES.nameAttribute" />
-                </div>
-                <div class="grid min-w-0 gap-1">
-                  <label class="text-xs font-medium" for="idp-attr-groups">{{ t('security.providers.groupsAttribute') }}</label>
-                  <Input id="idp-attr-groups" v-model="form.groupsClaim" maxlength="100" spellcheck="false" :placeholder="EXAMPLES.groupsClaim" />
-                </div>
-              </div>
-              <p class="text-xs text-muted-foreground">{{ t('security.providers.groupsAttributeHint') }}</p>
-            </fieldset>
           </template>
+          <!-- SAML and LDAP read the person from named attributes; OIDC from standard claims. -->
+          <fieldset v-if="form.kind !== 'oidc'" class="grid gap-3 rounded-md border px-3 pt-2 pb-3">
+            <legend class="px-1 text-sm font-medium">{{ t('security.providers.attributeMap') }}</legend>
+            <p class="-mt-1 text-xs text-muted-foreground">{{ t(form.kind === 'ldap' ? 'security.providers.attributeMapHintLdap' : 'security.providers.attributeMapHint') }}</p>
+            <div class="grid gap-3 sm:grid-cols-3">
+              <div class="grid min-w-0 gap-1">
+                <label class="text-xs font-medium" for="idp-attr-email">{{ t('security.providers.emailAttribute') }}</label>
+                <Input id="idp-attr-email" v-model="form.emailAttribute" maxlength="300" spellcheck="false" :placeholder="form.kind === 'ldap' ? EXAMPLES.ldapEmail : EXAMPLES.emailAttribute" />
+              </div>
+              <div class="grid min-w-0 gap-1">
+                <label class="text-xs font-medium" for="idp-attr-name">{{ t('security.providers.nameAttribute') }}</label>
+                <Input id="idp-attr-name" v-model="form.nameAttribute" maxlength="300" spellcheck="false" :placeholder="EXAMPLES.nameAttribute" />
+              </div>
+              <div class="grid min-w-0 gap-1">
+                <label class="text-xs font-medium" for="idp-attr-groups">{{ t('security.providers.groupsAttribute') }}</label>
+                <Input id="idp-attr-groups" v-model="form.groupsClaim" maxlength="100" spellcheck="false" :placeholder="form.kind === 'ldap' ? EXAMPLES.ldapGroups : EXAMPLES.groupsClaim" />
+              </div>
+            </div>
+            <p class="text-xs text-muted-foreground">{{ t(form.kind === 'ldap' ? 'security.providers.groupsAttributeHintLdap' : 'security.providers.groupsAttributeHint') }}</p>
+          </fieldset>
           <div v-if="form.kind === 'oidc' && !FIXED_ISSUER.includes(form.preset)" class="grid gap-1">
             <label class="text-sm font-medium" for="idp-issuer">{{ t('security.providers.issuer') }}</label>
             <Input id="idp-issuer" v-model="form.issuer" required type="url" :placeholder="t(`security.providers.issuerPlaceholder.${form.preset}`)" />

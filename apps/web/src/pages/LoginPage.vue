@@ -11,15 +11,18 @@
  * `?reauth=sso|session&workspaceId=` is how a workspace that enforces SSO
  * sends a password session here (#75 phase 4): the notice says why, and the
  * buttons are that workspace's providers rather than the remembered one's.
+ *
+ * An LDAP provider (#75 phase 7) has no identity provider to redirect to: its
+ * button opens a username + password step in this card instead.
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { KeyRound } from 'lucide-vue-next'
 import type { SsoLoginProvider, SsoProvidersResponse } from '@knowledge/contracts'
 import { useAuthStore } from '@/stores/auth'
-import { getWorkspaceId } from '@/lib/api'
+import { ApiError, getWorkspaceId } from '@/lib/api'
 import { ownPath, reauthKindOf, ssoErrorOf, ssoStartUrl } from '@/lib/sso'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
@@ -44,8 +47,11 @@ const providersFor = computed(() =>
 
 /** null until probed, and stays null when SSO is off. */
 const sso = ref<SsoProvidersResponse | null>(null)
-/** `email`: asking for the address; `password`: the address may use one; `sso`: its domain belongs to a provider. */
-const step = ref<'email' | 'password' | 'sso'>('email')
+/**
+ * `email`: asking for the address; `password`: the address may use one; `sso`:
+ * its domain belongs to a provider; `ldap`: directory credentials for `ldapProvider`.
+ */
+const step = ref<'email' | 'password' | 'sso' | 'ldap'>('email')
 const matched = ref<SsoLoginProvider[]>([])
 const passwordAllowed = ref(true)
 /** The address's domain is verified and enforced: the password is gone for a reason the person can act on. */
@@ -89,6 +95,42 @@ function changeEmail() {
 }
 
 const startUrl = (p: SsoLoginProvider) => ssoStartUrl(p.id, redirect.value, p.kind)
+
+const ldapProvider = ref<SsoLoginProvider | null>(null)
+const username = ref('')
+
+/** A redirect provider is a link to its start route; an LDAP one opens the credentials step here. */
+const providerButton = (p: SsoLoginProvider) =>
+  p.kind === 'ldap' ? { as: 'button', type: 'button', onClick: () => openLdap(p) } : { as: 'a', href: startUrl(p) }
+
+function openLdap(p: SsoLoginProvider) {
+  ldapProvider.value = p
+  username.value = email.value
+  password.value = ''
+  step.value = 'ldap'
+  // The step replaces the button that was focused; keep the keyboard where the typing goes.
+  void nextTick(() => document.getElementById(username.value ? 'ldap-password' : 'ldap-username')?.focus())
+}
+
+function leaveLdap() {
+  password.value = ''
+  step.value = matched.value.length ? 'sso' : 'email'
+}
+
+async function submitLdap() {
+  if (!ldapProvider.value) return
+  busy.value = true
+  try {
+    await auth.ldapLogin(ldapProvider.value.id, username.value, password.value)
+    await router.push(redirect.value)
+  } catch (e) {
+    // A refusal after the directory accepted the password names its reason the way a failed redirect does.
+    const reason = e instanceof ApiError ? ssoErrorOf(e.details?.loginError) : null
+    toast.error(reason ? t(`auth.sso.errors.${reason}`) : (e as Error).message)
+  } finally {
+    busy.value = false
+  }
+}
 </script>
 
 <template>
@@ -117,7 +159,7 @@ const startUrl = (p: SsoLoginProvider) => ssoStartUrl(p.id, redirect.value, p.ki
         <!-- The address belongs to an identity provider. -->
         <div v-if="emailFirst && step === 'sso'" class="space-y-3">
           <p class="text-sm text-muted-foreground">{{ t('auth.sso.domainUsesSso', { email }) }}</p>
-          <Button v-for="p in matched" :key="p.id" as="a" :href="startUrl(p)" class="w-full">
+          <Button v-for="p in matched" :key="p.id" v-bind="providerButton(p)" class="w-full">
             <KeyRound class="size-4" aria-hidden="true" />
             {{ t('auth.sso.continueWith', { name: p.name }) }}
           </Button>
@@ -135,6 +177,28 @@ const startUrl = (p: SsoLoginProvider) => ssoStartUrl(p.id, redirect.value, p.ki
             </button>
           </div>
         </div>
+
+        <!-- A directory provider: its own username and password, checked by the API against the directory. -->
+        <form v-else-if="step === 'ldap' && ldapProvider" class="space-y-3" @submit.prevent="submitLdap">
+          <div class="space-y-1">
+            <h2 class="text-sm font-medium">{{ t('auth.sso.ldapTitle', { name: ldapProvider.name }) }}</h2>
+            <p class="text-sm text-muted-foreground">{{ t('auth.sso.ldapHint') }}</p>
+          </div>
+          <div class="space-y-1">
+            <label class="text-sm font-medium" for="ldap-username">{{ t('auth.sso.username') }}</label>
+            <Input id="ldap-username" v-model="username" required maxlength="256" autocomplete="username" autocapitalize="none" spellcheck="false" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-sm font-medium" for="ldap-password">{{ t('auth.password') }}</label>
+            <Input id="ldap-password" v-model="password" type="password" required autocomplete="current-password" />
+          </div>
+          <Button class="w-full" type="submit" :disabled="busy">{{ busy ? t('auth.signingIn') : t('auth.logIn') }}</Button>
+          <div class="text-sm text-muted-foreground">
+            <button type="button" class="-mx-2 inline-flex min-h-11 items-center px-2 hover:text-foreground hover:underline" @click="leaveLdap">
+              {{ t('auth.sso.back') }}
+            </button>
+          </div>
+        </form>
 
         <form v-else class="space-y-3" @submit.prevent="submit">
           <div class="space-y-1">
@@ -166,7 +230,7 @@ const startUrl = (p: SsoLoginProvider) => ssoStartUrl(p.id, redirect.value, p.ki
 
         <!-- `min-h-11` is the touch target, and the negative inline margin
              keeps it from pushing the two links away from the form's edges. -->
-        <div v-if="step !== 'sso'" class="mt-1 flex items-center justify-between text-sm text-muted-foreground">
+        <div v-if="step === 'email' || step === 'password'" class="mt-1 flex items-center justify-between text-sm text-muted-foreground">
           <button
             v-if="emailFirst && step === 'password'"
             type="button"
@@ -184,7 +248,7 @@ const startUrl = (p: SsoLoginProvider) => ssoStartUrl(p.id, redirect.value, p.ki
           <div class="flex items-center gap-3 text-xs text-muted-foreground">
             <span class="h-px flex-1 bg-border" />{{ t('auth.sso.or') }}<span class="h-px flex-1 bg-border" />
           </div>
-          <Button v-for="p in sso.providers" :key="p.id" as="a" :href="startUrl(p)" variant="outline" class="w-full">
+          <Button v-for="p in sso.providers" :key="p.id" v-bind="providerButton(p)" variant="outline" class="w-full">
             <KeyRound class="size-4" aria-hidden="true" />
             {{ t('auth.sso.continueWith', { name: p.name }) }}
           </Button>

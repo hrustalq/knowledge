@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { IdentityProvider } from '@prisma/client';
 import * as client from 'openid-client';
+import { createRemoteJWKSet, customFetch, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import type { OidcProviderConfig, TestIdentityProviderResponse } from '@knowledge/contracts';
 import { decryptSecret, parseKey } from '../../ai/secret-box.js';
 import { safeFetch } from '../../common/safe-fetch.js';
@@ -21,6 +22,17 @@ export interface OidcChecks {
 const DISCOVERY_TTL_MS = 10 * 60_000;
 /** Seconds: an IdP that does not answer fails the login, it does not hang it. */
 const HTTP_TIMEOUT_SEC = 10;
+/** Back-Channel Logout 1.0 §2.4: the `events` member a logout token must carry. */
+const BACKCHANNEL_EVENT = 'http://schemas.openid.net/event/backchannel-logout';
+/** A logout token older than this is refused: the OP sends it the moment the session ends. */
+export const LOGOUT_TOKEN_MAX_AGE_SEC = 600;
+
+/** Who a verified logout token ends: one IdP session (`sid`), every session of one subject (`sub`), or both narrowed. */
+export interface LogoutClaims {
+  sid: string | null;
+  sub: string | null;
+  jti: string | null;
+}
 
 export function oidcConfigOf(provider: Pick<IdentityProvider, 'config'>): OidcProviderConfig {
   const raw = (provider.config ?? {}) as Record<string, unknown>;
@@ -47,6 +59,8 @@ export class OidcService {
   private readonly allowPrivate: boolean;
   private readonly apiBase: string;
   private readonly cache = new Map<string, { stamp: string; at: number; config: client.Configuration }>();
+  /** jose caches the keys and refetches on an unknown `kid`; one set per provider and JWKS URL. */
+  private readonly jwks = new Map<string, { uri: string; keys: JWTVerifyGetKey }>();
 
   constructor(config: ConfigService<Env, true>) {
     this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
@@ -57,6 +71,50 @@ export class OidcService {
   /** What an admin registers at the IdP, and what the code is redeemed against. */
   redirectUri(providerId: string): string {
     return `${this.apiBase}/v1/auth/oidc/${providerId}/callback`;
+  }
+
+  /** Where the IdP posts logout tokens. Null for an OAuth 2 preset, which issues no id_token to end. */
+  backchannelLogoutUri(provider: Pick<IdentityProvider, 'id' | 'preset'>): string | null {
+    return OIDC_PRESETS[presetOf(provider.preset)].oauth2 ? null : `${this.apiBase}/v1/auth/oidc/${provider.id}/backchannel-logout`;
+  }
+
+  /**
+   * Verify a back-channel logout token (OIDC Back-Channel Logout 1.0 §2.6):
+   * signed by a key from the provider's JWKS, issued by it, for our client,
+   * recent, carrying the logout event, naming a `sid` or a `sub`, and never a
+   * `nonce` — which is what keeps an id_token from being replayed as one.
+   * Throws with the reason, which only the audit row sees.
+   */
+  async logoutClaims(provider: IdentityProvider, token: string): Promise<LogoutClaims> {
+    if (OIDC_PRESETS[presetOf(provider.preset)].oauth2) throw new Error('this preset has no back-channel logout');
+    const meta = (await this.configuration(provider)).serverMetadata();
+    if (!meta.jwks_uri) throw new Error('the discovery document names no jwks_uri');
+    let hit = this.jwks.get(provider.id);
+    if (!hit || hit.uri !== meta.jwks_uri) {
+      hit = {
+        uri: meta.jwks_uri,
+        keys: createRemoteJWKSet(new URL(meta.jwks_uri), {
+          timeoutDuration: HTTP_TIMEOUT_SEC * 1000,
+          [customFetch]: (url, options) => safeFetch(url, options as unknown as RequestInit, this.allowPrivate),
+        }),
+      };
+      this.jwks.set(provider.id, hit);
+    }
+    const { payload } = await jwtVerify(token, hit.keys, {
+      issuer: meta.issuer,
+      audience: oidcConfigOf(provider).clientId,
+      maxTokenAge: LOGOUT_TOKEN_MAX_AGE_SEC,
+      clockTolerance: 60,
+    });
+    const events = payload.events as Record<string, unknown> | undefined;
+    if (!events || typeof events !== 'object' || typeof events[BACKCHANNEL_EVENT] !== 'object' || events[BACKCHANNEL_EVENT] === null) {
+      throw new Error('no back-channel logout event');
+    }
+    if (payload.nonce !== undefined) throw new Error('a logout token carries no nonce');
+    const sid = typeof payload.sid === 'string' && payload.sid ? payload.sid : null;
+    const sub = typeof payload.sub === 'string' && payload.sub ? payload.sub : null;
+    if (!sid && !sub) throw new Error('neither sid nor sub');
+    return { sid, sub, jti: typeof payload.jti === 'string' && payload.jti ? payload.jti : null };
   }
 
   /** The URL that sends the browser to the IdP. */
@@ -135,6 +193,7 @@ export class OidcService {
 
   forget(providerId: string): void {
     this.cache.delete(providerId);
+    this.jwks.delete(providerId);
   }
 
   private async configuration(provider: IdentityProvider): Promise<client.Configuration> {

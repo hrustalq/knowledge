@@ -1162,6 +1162,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/auth/ldap/{providerId}/login",
+      "tag": "auth",
+      "summary": "Sign in with a directory username and password (AUTH_LDAP_ENABLED). Wrong username and wrong password answer the same 401",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/auth/login",
       "tag": "auth",
       "summary": "Email + password login; returns a ks_ session token. 429 past 30/min per IP or 10/min per address",

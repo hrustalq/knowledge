@@ -1309,6 +1309,73 @@
         ]
       }
     },
+    "/v1/auth/ldap/{providerId}/login": {
+      "post": {
+        "operationId": "SsoController_ldapLogin",
+        "parameters": [
+          {
+            "name": "providerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LdapLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Sign in with a directory username and password (AUTH_LDAP_ENABLED). Wrong username and wrong password answer the same 401",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/v1/workspaces/{id}/identity-providers": {
       "get": {
         "operationId": "IdentityProvidersController_list",
@@ -29135,6 +29202,22 @@
           "code"
         ]
       },
+      "LdapLoginDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "What the directory knows the person by: uid, sAMAccountName, userPrincipalName or email, per the provider filter"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
       "CreateIdentityProviderDto": {
         "type": "object",
         "properties": {
@@ -29199,12 +29282,38 @@
           "emailAttribute": {
             "type": "string",
             "nullable": true,
-            "description": "SAML: attribute holding the email; null tries the usual names"
+            "description": "SAML / LDAP: attribute holding the email; null tries the usual names (SAML) or reads mail (LDAP)"
           },
           "nameAttribute": {
             "type": "string",
             "nullable": true,
-            "description": "SAML: attribute holding the display name; null tries the usual names"
+            "description": "SAML / LDAP: attribute holding the display name; null tries the usual names"
+          },
+          "ldapUrl": {
+            "type": "string",
+            "description": "LDAP: ldaps://host[:port], or ldap://host[:port] with startTls"
+          },
+          "startTls": {
+            "type": "boolean",
+            "description": "LDAP: upgrade an ldap:// connection with StartTLS. Ignored for ldaps://"
+          },
+          "bindDn": {
+            "type": "string",
+            "nullable": true,
+            "description": "LDAP: the service account that searches; null searches anonymously"
+          },
+          "bindPassword": {
+            "type": "string",
+            "description": "Write-only. LDAP: the service account's password. A value sets it, '' clears it, absent keeps it."
+          },
+          "baseDn": {
+            "type": "string",
+            "description": "LDAP: where the person search starts, e.g. ou=people,dc=corp,dc=example"
+          },
+          "userFilter": {
+            "type": "string",
+            "nullable": true,
+            "description": "LDAP: search filter with {username} where the typed value goes (escaped); null uses the default"
           },
           "jitEnabled": {
             "type": "boolean",
@@ -29231,7 +29340,7 @@
           "groupsClaim": {
             "type": "string",
             "nullable": true,
-            "description": "OIDC claim (null uses the preset default) or SAML attribute (null = no groups) holding group names"
+            "description": "OIDC claim (null uses the preset default), SAML attribute (null = no groups) or LDAP attribute (null = memberOf) holding group names"
           },
           "groupSyncMode": {
             "type": "string",
@@ -29252,7 +29361,7 @@
               "saml",
               "ldap"
             ],
-            "description": "oidc or saml; ldap is refused until it ships"
+            "description": "oidc, saml, or ldap (only under AUTH_LDAP_ENABLED)"
           },
           "name": {
             "type": "string",
@@ -29328,12 +29437,38 @@
           "emailAttribute": {
             "type": "string",
             "nullable": true,
-            "description": "SAML: attribute holding the email; null tries the usual names"
+            "description": "SAML / LDAP: attribute holding the email; null tries the usual names (SAML) or reads mail (LDAP)"
           },
           "nameAttribute": {
             "type": "string",
             "nullable": true,
-            "description": "SAML: attribute holding the display name; null tries the usual names"
+            "description": "SAML / LDAP: attribute holding the display name; null tries the usual names"
+          },
+          "ldapUrl": {
+            "type": "string",
+            "description": "LDAP: ldaps://host[:port], or ldap://host[:port] with startTls"
+          },
+          "startTls": {
+            "type": "boolean",
+            "description": "LDAP: upgrade an ldap:// connection with StartTLS. Ignored for ldaps://"
+          },
+          "bindDn": {
+            "type": "string",
+            "nullable": true,
+            "description": "LDAP: the service account that searches; null searches anonymously"
+          },
+          "bindPassword": {
+            "type": "string",
+            "description": "Write-only. LDAP: the service account's password. A value sets it, '' clears it, absent keeps it."
+          },
+          "baseDn": {
+            "type": "string",
+            "description": "LDAP: where the person search starts, e.g. ou=people,dc=corp,dc=example"
+          },
+          "userFilter": {
+            "type": "string",
+            "nullable": true,
+            "description": "LDAP: search filter with {username} where the typed value goes (escaped); null uses the default"
           },
           "jitEnabled": {
             "type": "boolean",
@@ -29360,7 +29495,7 @@
           "groupsClaim": {
             "type": "string",
             "nullable": true,
-            "description": "OIDC claim (null uses the preset default) or SAML attribute (null = no groups) holding group names"
+            "description": "OIDC claim (null uses the preset default), SAML attribute (null = no groups) or LDAP attribute (null = memberOf) holding group names"
           },
           "groupSyncMode": {
             "type": "string",

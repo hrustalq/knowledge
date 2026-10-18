@@ -128,6 +128,14 @@ export const envSchema = z.object({
   /** Comma-separated addresses that may always use a password — the way back in when an IdP is down. */
   AUTH_BREAK_GLASS_EMAILS: z.string().default(''),
   /**
+   * LDAP / Active Directory bind sign-in (#75) as an identity provider kind.
+   * Rides on AUTH_SSO_ENABLED: off, the kind cannot be created and an existing
+   * LDAP provider neither appears on /login nor signs anyone in.
+   */
+  AUTH_LDAP_ENABLED: boolish(false),
+  /** Plain ldap:// without StartTLS — the password crosses the wire in clear. A lab directory only. */
+  AUTH_LDAP_ALLOW_INSECURE: boolish(false),
+  /**
    * SCIM 2.0 provisioning (#75) at /v1/scim/v2, authenticated by per-workspace
    * `kscim_` tokens. Off: those routes and the token settings answer 404.
    * Independent of AUTH_SSO_ENABLED; needs AUTH_MODE=api-key.

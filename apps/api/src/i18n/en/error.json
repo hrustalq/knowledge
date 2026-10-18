@@ -640,7 +640,7 @@
     "providerNotFound": "Identity provider not found",
     "exchangeInvalid": "This sign-in link is invalid, expired or already used — sign in again",
     "secretKeyMissing": "The client secret cannot be stored: SETTINGS_ENCRYPTION_KEY is not set on the server",
-    "kindNotSupported": "Identity providers of kind {kind} are not supported yet — use oidc",
+    "kindNotSupported": "Identity providers of kind {kind} are not enabled on this instance",
     "platformWideAdminOnly": "Only a platform admin can make a provider platform-wide",
     "issuerRequired": "The issuer URL is required",
     "clientIdRequired": "The client ID is required",
@@ -662,7 +662,16 @@
     "domainNoProvider": "Enforcing {domain} would leave its people no way in — enable an identity provider for this workspace first",
     "manualVerifyAdminOnly": "Only a platform admin can mark a domain verified without DNS",
     "policyNoProvider": "Enforcing single sign-on needs an enabled identity provider for this workspace",
-    "policyLocksYouOut": "Saving this would lock you out ({failure}). Sign in through the workspace's identity provider first, then try again"
+    "policyLocksYouOut": "Saving this would lock you out ({failure}). Sign in through the workspace's identity provider first, then try again",
+    "ldapUrlInvalid": "The directory URL must be ldaps://host[:port], or ldap://host[:port] with StartTLS — no path or credentials",
+    "ldapInsecure": "Plain ldap:// without StartTLS sends passwords in clear text. Use ldaps:// or turn on StartTLS (AUTH_LDAP_ALLOW_INSECURE=true permits it on a lab instance)",
+    "ldapHostUnresolved": "The directory host {host} does not resolve",
+    "ldapHostPrivate": "The directory host resolves to a private address ({address}). Set AUTH_SSO_ALLOW_PRIVATE_URLS=true for an on-premises directory",
+    "baseDnRequired": "The base DN is required",
+    "userFilterInvalid": "The user filter must be an LDAP filter in parentheses that contains {username}",
+    "ldapInvalidCredentials": "Invalid username or password",
+    "ldapUnavailable": "The directory could not be reached. Try again, or ask your administrator",
+    "ldapRefused": "Your directory account cannot sign in to this workspace"
   },
   "scim": {
     "disabled": "SCIM provisioning is not enabled on this instance",

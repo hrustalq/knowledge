@@ -98,6 +98,14 @@ export const useAuthStore = defineStore('auth', {
     discover(email: string): Promise<SsoDiscoverResponse> {
       return apiFetch<SsoDiscoverResponse>('/v1/auth/sso/discover', { method: 'POST', body: JSON.stringify({ email }) })
     },
+    /** LDAP sign-in (#75): the directory checks the password, so there is no redirect leg. */
+    async ldapLogin(providerId: string, username: string, password: string) {
+      const res = await apiFetch<AuthSessionResponse>(`/v1/auth/ldap/${encodeURIComponent(providerId)}/login`, {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      })
+      this.adoptSession(res)
+    },
     /** Trade the callback's fragment code for a session; answers where the sign-in started. */
     async exchangeSsoCode(code: string): Promise<string> {
       const res = await apiFetch<SsoExchangeResponse>('/v1/auth/sso/exchange', {

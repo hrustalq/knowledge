@@ -1152,6 +1152,15 @@ export type I18nTranslations = {
             "manualVerifyAdminOnly": string;
             "policyNoProvider": string;
             "policyLocksYouOut": string;
+            "ldapUrlInvalid": string;
+            "ldapInsecure": string;
+            "ldapHostUnresolved": string;
+            "ldapHostPrivate": string;
+            "baseDnRequired": string;
+            "userFilterInvalid": string;
+            "ldapInvalidCredentials": string;
+            "ldapUnavailable": string;
+            "ldapRefused": string;
         };
         "scim": {
             "disabled": string;

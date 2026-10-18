@@ -71,8 +71,8 @@ jobs:
 
   # Browser end-to-end (#80): two Chrome contexts co-edit one page through the
   # real stack. Its own job because `check` runs no services: this one starts
-  # the compose infra, the API (COLLAB_ENABLED=true, AUTH_MODE=none) and the
-  # web dev server, then runs Playwright against the runner's installed Chrome.
+  # the compose infra, the worker, the API (COLLAB_ENABLED=true, AUTH_MODE=none)
+  # and the web dev server, then runs Playwright against the runner's Chrome.
   coedit-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -109,8 +109,17 @@ jobs:
         run: pnpm exec turbo run build --filter=@knowledge/api
 
       # From each app's own directory: the API writes its i18n types relative to cwd.
-      - name: Start the API and the web
+      # The worker goes first: it creates the graph schema, and the SSR pass
+      # reads the graph, so the web cannot render before the schema exists.
+      - name: Start the worker, the API and the web
         run: |
+          (cd apps/api && nohup node dist/worker.main.js > "$RUNNER_TEMP/worker.log" 2>&1 &)
+          for i in $(seq 1 60); do
+            curl -sf -u root:playwithdata localhost:2480/api/v1/query/knowledge \
+              -d '{"language":"sql","command":"select name from schema:types where name = \"Document\""}' \
+              | grep -q '"Document"' && break
+            sleep 2
+          done
           (cd apps/api && nohup node dist/main.js > "$RUNNER_TEMP/api.log" 2>&1 &)
           (cd apps/web && nohup node server > "$RUNNER_TEMP/web.log" 2>&1 &)
           for i in $(seq 1 90); do
@@ -118,7 +127,8 @@ jobs:
               && curl -sf -o /dev/null localhost:5173/ && exit 0
             sleep 2
           done
-          echo "stack did not come up"; tail -50 "$RUNNER_TEMP/api.log"; tail -50 "$RUNNER_TEMP/web.log"; exit 1
+          echo "stack did not come up"
+          tail -50 "$RUNNER_TEMP/worker.log" "$RUNNER_TEMP/api.log" "$RUNNER_TEMP/web.log"; exit 1
 
       - name: Playwright
         run: pnpm --filter @knowledge/web run test:e2e
@@ -131,6 +141,7 @@ jobs:
         with:
           name: coedit-e2e
           path: |
+            ${{ runner.temp }}/worker.log
             ${{ runner.temp }}/api.log
             ${{ runner.temp }}/web.log
             apps/web/playwright-report

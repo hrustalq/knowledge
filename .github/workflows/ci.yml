@@ -68,3 +68,71 @@ jobs:
       # would kill a running dev server) — so this is the only gate that runs it.
       - name: Build
         run: pnpm build
+
+  # Browser end-to-end (#80): two Chrome contexts co-edit one page through the
+  # real stack. Its own job because `check` runs no services: this one starts
+  # the compose infra, the API (COLLAB_ENABLED=true, AUTH_MODE=none) and the
+  # web dev server, then runs Playwright against the runner's installed Chrome.
+  coedit-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Env files
+        run: |
+          cp .env.example .env
+          cp .env.example apps/api/.env
+          echo "COLLAB_ENABLED=true" >> apps/api/.env
+
+      - name: Infra
+        run: docker compose up -d postgres minio minio-init redis arcadedb
+
+      - name: Migrate
+        run: |
+          pnpm db:generate
+          for i in $(seq 1 30); do docker compose exec -T postgres pg_isready -U knowledge && break; sleep 2; done
+          pnpm --filter @knowledge/api exec prisma migrate deploy
+
+      - name: Build the API
+        run: pnpm exec turbo run build --filter=@knowledge/api
+
+      # From each app's own directory: the API writes its i18n types relative to cwd.
+      - name: Start the API and the web
+        run: |
+          (cd apps/api && nohup node dist/main.js > "$RUNNER_TEMP/api.log" 2>&1 &)
+          (cd apps/web && nohup node server > "$RUNNER_TEMP/web.log" 2>&1 &)
+          for i in $(seq 1 90); do
+            curl -sf localhost:3000/v1/collab/capabilities | grep -q '"enabled":true' \
+              && curl -sf -o /dev/null localhost:5173/ && exit 0
+            sleep 2
+          done
+          echo "stack did not come up"; tail -50 "$RUNNER_TEMP/api.log"; tail -50 "$RUNNER_TEMP/web.log"; exit 1
+
+      - name: Playwright
+        run: pnpm --filter @knowledge/web run test:e2e
+        env:
+          CI: 'true'
+
+      - name: Logs and report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coedit-e2e
+          path: |
+            ${{ runner.temp }}/api.log
+            ${{ runner.temp }}/web.log
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7

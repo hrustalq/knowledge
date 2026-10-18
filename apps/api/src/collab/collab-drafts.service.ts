@@ -3,13 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { JSDOM } from 'jsdom';
 import * as Y from 'yjs';
 import { prosemirrorToYDoc } from '@tiptap/y-tiptap';
-import { SCHEMA_VERSION, parseMarkdown } from '@knowledge/editor-schema';
+import { BODY_FIELD, SCHEMA_VERSION, parseMarkdown } from '@knowledge/editor-schema';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
-/** The XmlFragment the editor's Collaboration extension binds to. */
-export const BODY_FIELD = 'body';
+export { BODY_FIELD };
 
 /**
  * One document for every seed. jsdom runs no scripts and loads no resources by

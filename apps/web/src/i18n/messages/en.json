@@ -3153,7 +3153,63 @@
     "statusColor": "Status: {color}",
     "untitledPage": "Untitled page",
     "fromTemplate": "from {name}",
-    "fromATemplate": "from a template"
+    "fromATemplate": "from a template",
+    "collab": {
+      "status": {
+        "connecting": {
+          "label": "Connecting…",
+          "hint": "Joining the shared draft."
+        },
+        "live": {
+          "label": "Live",
+          "hint": "Your edits reach everyone in this draft as you type."
+        },
+        "readOnly": {
+          "label": "Read-only",
+          "hint": "You can follow this draft but not edit it."
+        },
+        "offline": {
+          "label": "Offline",
+          "hint": "Your edits are kept on this device and sync when the connection comes back."
+        },
+        "schemaMismatch": {
+          "label": "Reload to edit",
+          "hint": "This tab runs an older editor than the server, so it is read-only. Reload the page to edit."
+        },
+        "stopped": {
+          "unauthorized": {
+            "label": "Signed out",
+            "hint": "Your sign-in no longer covers this draft. Sign in again and reopen the page."
+          },
+          "forbidden": {
+            "label": "No access",
+            "hint": "You can no longer open this page."
+          },
+          "too-large": {
+            "label": "Not saving",
+            "hint": "The draft is over the size limit and stopped saving. Copy anything you still need before you leave."
+          },
+          "disabled": {
+            "label": "Live editing off",
+            "hint": "Live editing was switched off on this server. Reload the page to edit on your own."
+          }
+        }
+      },
+      "presence": {
+        "editing": "{n} other person editing: {names} | {n} other people editing: {names}"
+      },
+      "unpublished": {
+        "label": "Unpublished changes",
+        "hint": "The shared draft differs from the published page. Click to review."
+      },
+      "localCopy": {
+        "title": "Changes kept in this browser from {when}",
+        "body": "They were made before this page was edited live. Applying them replaces the shared draft for everyone — review the diff after.",
+        "apply": "Apply to draft",
+        "ignore": "Discard"
+      },
+      "unavailable": "Live editing is unavailable right now, so you are editing on your own."
+    }
   },
   "toolbar": {
     "formatting": "Formatting",

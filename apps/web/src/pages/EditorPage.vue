@@ -18,12 +18,17 @@
 // browser as they are made, restored when the page is reopened, reviewable as
 // a diff against the published head, and discarded only on request.
 //
+// With COLLAB_ENABLED on, an existing page is edited as a shared draft (#80,
+// docs/features/56): the body and the page fields live in a Y.Doc everyone on
+// the page edits at once, the working copy steps aside for the draft's own
+// copy on this device, and publishing is unchanged.
+//
 // A new page can start from a template (issue #69): `/create?template=` opens
 // on the skeleton the gallery rendered, and the template is sent as provenance
 // when the page is created. `/template` inserts one at the cursor of any page,
 // and "Save as template" goes the other way.
 import { useI18n } from 'vue-i18n'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { onKeyStroke, useStorage } from '@vueuse/core'
@@ -31,6 +36,8 @@ import { History, LayoutTemplate, MoreHorizontal, Route, Settings2, Sparkles, X 
 import {
   AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
+  collabDocName,
+  type CollabCapabilitiesResponse,
   type CompareResponse,
   type CreateDocumentResponse,
   type CreateUploadResponse,
@@ -38,9 +45,11 @@ import {
   type DocumentContentResponse,
   type DocumentDetailResponse,
   type FinalizeRevisionResponse,
+  type ListBranchesResponse,
   type RenderTemplateResponse,
   type RevisionInfo,
 } from '@knowledge/contracts'
+import { SCHEMA_VERSION, editorSchema, parseMarkdown } from '@knowledge/editor-schema'
 import { ApiError, apiFetch, getWorkspaceId } from '@/lib/api'
 import { errorMessage } from '@/api/errors'
 import { presignedPut } from '@/lib/presigned-put'
@@ -107,6 +116,10 @@ import ApiOperationPicker, { type PickedOperation } from '@/components/api-refer
 import ApiOperationRef from '@/components/api-reference/ApiOperationRef.vue'
 import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/components/templates/SaveAsTemplateDialog.vue'
 import { useWorkingCopy } from '@/components/editor/use-working-copy'
+import { docToMarkdown } from '@/components/editor/editor-streams'
+import type { CollabHandle } from '@/components/editor/use-collab'
+import CollabStatus from '@/components/editor/CollabStatus.vue'
+import CollabPresence from '@/components/editor/CollabPresence.vue'
 import DiffView from '@/components/knowledge/DiffView.vue'
 import EditorAiPanel from '@/components/editor/EditorAiPanel.vue'
 import { connectDraft } from '@/stores/assistant'
@@ -351,8 +364,95 @@ const baseFields = ref<PageFields | null>(null)
 
 const storageKey = computed(() => workingCopyKey(getWorkspaceId(), editId.value))
 
+/* ------------------------------------------------------ shared draft */
+
+/** The page's shared draft, once joined (#80). `null` edits alone, exactly as before. */
+const collab = shallowRef<CollabHandle | null>(null)
+let unbindFields: (() => void) | null = null
+/** A working copy from before this page was edited live, offered once, applied only on a click. */
+const localCopy = ref<WorkingCopy | null>(null)
+
+/** How long joining may hold the skeleton before the page opens single-user instead. */
+const COLLAB_JOIN_TIMEOUT_MS = 10_000
+
+/**
+ * Join the default branch's shared draft and hold the editor until it is here
+ * to show. Anything short of that — no branch, a refusal, a socket that never
+ * opens — leaves the page as it always was: single-user, working copy and all.
+ */
+async function startCollab(detail: DocumentDetailResponse, caps: CollabCapabilitiesResponse) {
+  const doc = detail.document
+  const { branches } = await apiFetch<ListBranchesResponse>(`/v1/documents/${doc.documentId}/branches`)
+  const branch = branches.find((b) => b.name === doc.defaultBranch)
+  if (!branch) return
+  // Loaded only here: a deployment that does not co-edit never fetches Yjs.
+  const { createCollab, bindPageFields, META_FIELD } = await import('@/components/editor/use-collab')
+  const handle = createCollab({
+    name: collabDocName(doc.workspaceId, doc.documentId, branch.branchId),
+    schemaMatches: caps.schemaVersion === SCHEMA_VERSION,
+  })
+  const ready = await Promise.race([
+    handle.ready,
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), COLLAB_JOIN_TIMEOUT_MS)),
+  ])
+  if (!ready) {
+    handle.destroy()
+    toast.info(t('editor.collab.unavailable'))
+    return
+  }
+  // The published page as the editor would write it: what "unpublished" is
+  // measured against. The editor itself only ever holds the draft.
+  baseFields.value = {
+    ...currentFields(),
+    body: docToMarkdown(parseMarkdown(body.value, document), editorSchema),
+    message: '',
+  }
+  collab.value = handle
+  const bind = () => {
+    if (collab.value !== handle) return
+    unbindFields = bindPageFields(handle.doc, {
+      texts: { title, tags, message },
+      values: { category, parentId, projectId, relations: relationRows },
+    })
+  }
+  // Fields the draft lacks are seeded from what was loaded, which only the
+  // server's copy can say: this device's copy may predate them.
+  if (handle.doc.getMap(META_FIELD).size > 0) bind()
+  else void handle.synced.then(bind)
+}
+
+onBeforeUnmount(() => {
+  unbindFields?.()
+  collab.value?.destroy()
+})
+
+function offerLocalCopy() {
+  const stored = readWorkingCopy(storageKey.value)
+  const base = baseFields.value
+  if (!stored || !base) return
+  if (samePage(stored, base)) removeWorkingCopy(storageKey.value)
+  else localCopy.value = stored
+}
+
+/** The old copy, laid over the shared draft as one ordinary edit everyone receives. */
+function applyLocalCopy() {
+  const stored = localCopy.value
+  localCopy.value = null
+  if (!stored) return
+  applyFields(stored)
+  editorRef.value?.replaceContent(stored.body)
+  removeWorkingCopy(storageKey.value)
+}
+
+function discardLocalCopy() {
+  localCopy.value = null
+  removeWorkingCopy(storageKey.value)
+}
+
 const workingCopy = useWorkingCopy({
-  key: () => storageKey.value,
+  // A shared draft keeps its own copy on this device (IndexedDB); a second,
+  // per-browser one restored into it would be a second seed.
+  key: () => (collab.value ? null : storageKey.value),
   fields: currentFields,
   base: () => {
     const base = baseFields.value
@@ -371,6 +471,12 @@ const unstaged = workingCopy.unstaged
 const staleCopy = ref<WorkingCopy | null>(null)
 
 function onEditorReady() {
+  if (collab.value) {
+    // Brings `body` level with the draft; the baseline is the published head.
+    editorRef.value?.flush()
+    offerLocalCopy()
+    return
+  }
   if (baseFields.value) return
   // Flushing sets `body` to the editor's normalised form of what was loaded.
   editorRef.value?.flush()
@@ -632,9 +738,11 @@ onMounted(async () => {
   if (!editId.value) return
   loading.value = true
   try {
-    const [detail, content] = await Promise.all([
+    const [detail, content, caps] = await Promise.all([
       apiFetch<DocumentDetailResponse>(`/v1/documents/${editId.value}`),
       apiFetch<DocumentContentResponse>(`/v1/documents/${editId.value}/content`),
+      // Unknown means off: the page opens single-user, as it always has.
+      apiFetch<CollabCapabilitiesResponse>('/v1/collab/capabilities').catch(() => null),
     ])
     // An archived page is read-only until unarchived (docs/features/39);
     // the API would refuse the publish, so refuse the editing first.
@@ -653,6 +761,7 @@ onMounted(async () => {
     otherFrontmatter.value = fm.other
     relationRows.value = fm.relations
     tags.value = fm.tags
+    if (caps?.enabled) await startCollab(detail, caps).catch(() => toast.info(t('editor.collab.unavailable')))
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -871,7 +980,7 @@ function destination(): string {
  * "throw this away", and they are kept unless the author says so.
  */
 function cancel() {
-  if (!unstaged.value) {
+  if (!unstaged.value || collab.value) {
     void router.push(destination())
     return
   }
@@ -910,7 +1019,8 @@ function keepAndLeave() {
 // (`kn_editor_confirm_leave`); a refused write asks regardless, since there
 // leaving really would lose the edits.
 onBeforeRouteLeave((to) => {
-  if (leaving || !unstaged.value || busy.value) return true
+  // A shared draft is already kept, on the server and on this device.
+  if (leaving || collab.value || !unstaged.value || busy.value) return true
   const stored = workingCopy.flush()
   if (stored && !confirmLeave.value) return true
   pendingLeave = () => router.push(to.fullPath)
@@ -923,7 +1033,7 @@ onBeforeRouteLeave((to) => {
 // Closing the tab or reloading: write the copy, then the browser's own prompt
 // — a custom one cannot be shown there — under the same rule as above.
 function beforeUnload(event: BeforeUnloadEvent) {
-  if (!unstaged.value) return
+  if (collab.value || !unstaged.value) return
   if (workingCopy.flush() && !confirmLeave.value) return
   event.preventDefault()
   event.returnValue = ''
@@ -944,14 +1054,17 @@ onBeforeUnmount(() => {
           <span v-if="!isEdit && template" class="kn-page-state">
             {{ templateName ? t('editor.fromTemplate', { name: templateName }) : t('editor.fromATemplate') }}
           </span>
-          <!-- The working copy's state, and the way into what it holds. -->
+          <CollabStatus v-if="collab" :status="collab.status" />
+          <!-- The working copy's state (or the shared draft's), and the way into what it holds. -->
           <button
             v-if="unstaged"
             type="button"
             class="kn-unstaged-chip"
             :data-failed="workingCopy.persistFailed.value ? 'true' : undefined"
             :title="
-              workingCopy.persistFailed.value
+              collab
+                ? t('editor.collab.unpublished.hint')
+                : workingCopy.persistFailed.value
                 ? t('editor.unstaged.notSaved')
                 : workingCopy.savedAt.value
                   ? t('editor.unstaged.savedLocally', { when: formatDateTime(new Date(workingCopy.savedAt.value)) })
@@ -960,11 +1073,14 @@ onBeforeUnmount(() => {
             @click="openReview"
           >
             <span class="kn-dirty-dot" aria-hidden="true" />
-            <span class="kn-unstaged-label">{{ t('editor.unstaged.label') }}</span>
+            <span class="kn-unstaged-label">
+              {{ collab ? t('editor.collab.unpublished.label') : t('editor.unstaged.label') }}
+            </span>
           </button>
         </div>
 
         <div class="ml-auto flex items-center gap-1.5">
+          <CollabPresence v-if="collab" :peers="collab.status.peers" />
           <Button
             variant="ghost"
             size="sm"
@@ -999,7 +1115,7 @@ onBeforeUnmount(() => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" :disabled="busy || loading" @click="save">
+          <Button size="sm" :disabled="busy || loading || (collab !== null && !collab.status.writable)" @click="save">
             {{ busy ? t('common.saving') : isEdit ? t('editor.publish') : t('editor.createAndIndex') }}
           </Button>
         </div>
@@ -1029,9 +1145,30 @@ onBeforeUnmount(() => {
               <Button size="sm" variant="outline" @click="restoreStale">{{ t('editor.unstaged.restore') }}</Button>
             </div>
 
+            <div v-if="localCopy" class="kn-stale-copy" role="status">
+              <History class="size-4 shrink-0" aria-hidden="true" />
+              <div class="min-w-0 flex-1">
+                <p class="font-medium">
+                  {{ t('editor.collab.localCopy.title', { when: formatDateTime(new Date(localCopy.savedAt)) }) }}
+                </p>
+                <p class="text-muted-foreground">{{ t('editor.collab.localCopy.body') }}</p>
+              </div>
+              <Button size="sm" variant="ghost" @click="discardLocalCopy">{{ t('editor.collab.localCopy.ignore') }}</Button>
+              <Button
+                size="sm"
+                variant="outline"
+                :disabled="!collab?.status.writable"
+                @click="applyLocalCopy"
+              >
+                {{ t('editor.collab.localCopy.apply') }}
+              </Button>
+            </div>
+
             <RichEditor
               ref="editorRef"
               v-model="body"
+              :collab="collab ?? undefined"
+              :editable="!collab || collab.status.writable"
               :pages="mentionablePages"
               :resolve-document-id="ensureDocumentId"
               :template-context="templateContext"
@@ -1045,6 +1182,7 @@ onBeforeUnmount(() => {
                   rows="1"
                   :placeholder="t('editor.pageTitle')"
                   :aria-label="t('editor.pageTitle')"
+                  :readonly="collab !== null && !collab.status.writable"
                   spellcheck="false"
                   @keydown.enter.prevent="editorRef?.focus()"
                 />
@@ -1135,7 +1273,8 @@ onBeforeUnmount(() => {
         <p v-else class="text-sm text-muted-foreground">{{ t('editor.unstaged.noSourceChanges') }}</p>
 
         <DialogFooter>
-          <Button variant="ghost" class="text-destructive" @click="discardUnstaged">
+          <!-- A shared draft is everyone's: throwing it away is phase 4's reset, not this. -->
+          <Button v-if="!collab" variant="ghost" class="text-destructive" @click="discardUnstaged">
             {{ t('editor.unstaged.discardAll') }}
           </Button>
           <Button @click="reviewOpen = false">{{ t('editor.keepEditing') }}</Button>
@@ -1153,7 +1292,8 @@ onBeforeUnmount(() => {
           </SheetDescription>
         </SheetHeader>
 
-        <div class="space-y-5 px-4 pb-8">
+        <!-- One switch for every field: a read-only peer's writes would be dropped by the server anyway. -->
+        <fieldset class="min-w-0 space-y-5 px-4 pb-8" :disabled="collab !== null && !collab.status.writable">
           <Autocomplete
             v-model="projectSelection"
             :label="t('editor.project')"
@@ -1238,7 +1378,7 @@ onBeforeUnmount(() => {
             <Label for="editor-tags" class="kn-field-label">{{ t('editor.tags') }}</Label>
             <Input id="editor-tags" v-model="tags" :placeholder="t('editor.tagsPlaceholder')" class="h-8 text-xs" />
           </div>
-        </div>
+        </fieldset>
       </SheetContent>
     </Sheet>
 

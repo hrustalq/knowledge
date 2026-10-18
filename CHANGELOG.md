@@ -36,6 +36,22 @@ in the pull request that introduces them — see
   the server from the signed-in person, whatever the client sends.
   `GET /v1/collab/capabilities` says whether co-editing is on and which editor
   schema version a peer must match.
+- Several people can now edit one page at once (#80, phase 3), when the server
+  runs with `COLLAB_ENABLED=true`. Opening an existing page's editor joins its
+  shared draft on the default branch. Typing, the title, tags, category, parent,
+  project, relations and the revision message reach everyone on the page as
+  they change. Other people show as faces in the header and as named carets in
+  their avatar colour. A status dot says whether you are live, offline (edits
+  are kept on this device and sync on reconnect), read-only, or stopped and why.
+  An "Unpublished changes" chip opens the diff against the published page, and
+  publishing works as before. In a shared draft the per-browser working copy is
+  off. A copy saved before the page went live is offered once, and applied to
+  the draft only on a click. With the flag off, or if the draft cannot be
+  joined within 10 s, the editor works on its own exactly as before. Known
+  limits until later phases: an assistant suggestion reaches other people as
+  plain text (phase 5), and a publish by someone else is not yet shown in the
+  draft, so your next publish gets the usual "published since you started"
+  error (phase 4).
 
 ### Operations
 

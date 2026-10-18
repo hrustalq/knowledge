@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./nodes": "./src/nodes.ts",
-    "./markdown": "./src/markdown.ts"
+    "./markdown": "./src/markdown.ts",
+    "./page-fields": "./src/page-fields.ts"
   },
   "scripts": {
     "lint": "echo editor-schema: no lint",
@@ -24,7 +25,8 @@
     "@tiptap/pm": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
     "lowlight": "^3.3.0",
-    "marked": "^18.0.11"
+    "marked": "^18.0.11",
+    "yjs": "13.6.33"
   },
   "devDependencies": {
     "@knowledge/tsconfig": "workspace:*",

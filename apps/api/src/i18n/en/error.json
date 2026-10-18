@@ -87,6 +87,11 @@
     "headMoved": "Branch {name} head is {actual}, not {expected} — compare before retrying",
     "needsFinalized": "Revision {id} is {status} — branches must start from a finalized revision"
   },
+  "collab": {
+    "draftMismatch": "Draft {draftId} is not the shared draft of branch {branch} on document {documentId}",
+    "draftNotFound": "Branch {branchId} of document {documentId} has no shared draft",
+    "snapshotInvalid": "draftSnapshot is not a Y snapshot"
+  },
   "revision": {
     "notFoundOnDocument": "Revision {revisionId} not found on document {documentId}",
     "notComparable": "Revision {id} is {status} — only finalized revisions can be compared"

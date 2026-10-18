@@ -588,8 +588,11 @@ export function parseCollabDocName(
  * - `access-changed` — view stays but edit was gained or lost: rejoin with a
  *   fresh ticket to learn the new scope.
  * - `too-large` — the draft passed COLLAB_MAX_DOC_BYTES and stopped saving.
+ * - `reset` — someone discarded the draft and it was reseeded from the branch
+ *   head. Rejoin with a **new** Y.Doc and this device's copy cleared: merging
+ *   the old state into the reseeded one would show the page twice.
  */
-export const COLLAB_DENY_REASONS = ['unauthorized', 'forbidden', 'access-changed', 'too-large'] as const;
+export const COLLAB_DENY_REASONS = ['unauthorized', 'forbidden', 'access-changed', 'too-large', 'reset'] as const;
 export type CollabDenyReason = (typeof COLLAB_DENY_REASONS)[number];
 
 /** The one socket-level close: COLLAB_ENABLED is off. */
@@ -610,4 +613,25 @@ export interface CollabUser {
 export interface CollabCapabilitiesResponse {
   enabled: boolean;
   schemaVersion: string;
+}
+
+/** One branch's shared draft, as `GET /v1/documents/:id/drafts` reports it. */
+export interface CollabDraftInfo {
+  draftId: string;
+  branchId: string;
+  branch: string;
+  /** The revision the draft was seeded from or last published as. The `If-Match` a publish sends. */
+  baseRevisionId: string | null;
+  /** The draft differs from what was last published (or seeded). */
+  hasUnpublishedChanges: boolean;
+  /** Who wrote in it since the last publish. */
+  contributors: string[];
+  /** People with it open, as far as this API instance can see. */
+  activePeers: number;
+  updatedAt: string;
+}
+
+/** Empty while COLLAB_ENABLED is off, whatever drafts an earlier run left behind. */
+export interface ListCollabDraftsResponse {
+  drafts: CollabDraftInfo[];
 }

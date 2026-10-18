@@ -11429,6 +11429,128 @@
         ]
       }
     },
+    "/v1/documents/{id}/drafts": {
+      "get": {
+        "operationId": "CollabDraftsController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Each branch's shared draft: its base, whether it holds unpublished changes, who wrote them, who has it open",
+        "tags": [
+          "collab"
+        ]
+      }
+    },
+    "/v1/documents/{id}/drafts/{branchId}": {
+      "delete": {
+        "operationId": "CollabDraftsController_reset",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Discard a branch's shared draft: it is reseeded from the branch head, and everyone in it rejoins (reason `reset`)",
+        "tags": [
+          "collab"
+        ]
+      }
+    },
     "/v1/assistant/review": {
       "post": {
         "operationId": "AssistantController_review",
@@ -30357,6 +30479,15 @@
           "contentType": {
             "type": "string",
             "example": "text/markdown"
+          },
+          "collabDraftId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Published from this shared draft (#80): finalize rebases the draft onto the new revision. Must be the draft of `branch`."
+          },
+          "draftSnapshot": {
+            "type": "string",
+            "description": "Base64 `Y.encodeSnapshot` of the draft at the moment its content was serialized. Edits after it stay unpublished. Required with collabDraftId."
           }
         }
       },

@@ -50,6 +50,8 @@ describe('outcomeOf', () => {
     expect(outcomeOf('access-changed')).toEqual({ rejoin: true })
     expect(outcomeOf('forbidden')).toEqual({ rejoin: false, reason: 'forbidden' })
     expect(outcomeOf('too-large')).toEqual({ rejoin: false, reason: 'too-large' })
+    // The page rebuilds the draft from scratch: the handle itself must not rejoin with the old doc.
+    expect(outcomeOf('reset')).toEqual({ rejoin: false, reason: 'reset' })
     // A ticket that could not be minted arrives as the provider's own prose.
     expect(outcomeOf('Failed to get token during sendToken(): 401')).toEqual({ rejoin: false, reason: 'unauthorized' })
   })

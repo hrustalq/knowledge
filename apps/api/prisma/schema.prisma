@@ -182,6 +182,12 @@ model DocumentRevision {
   // The stale sweeper re-mirrors it from the graph and clears the stamp only
   // if it is still the one it read. Null means in step, or no BM25 layer.
   fulltextStaleAt DateTime? @map("fulltext_stale_at") @db.Timestamptz
+  // #80: published from this shared draft, at this Y snapshot (what
+  // finalize rebases the draft onto), crediting who wrote in it since the
+  // last publish. Null for every revision that did not come from a draft.
+  collabDraftId   String?   @map("collab_draft_id") @db.Uuid
+  collabSnapshot  Bytes?    @map("collab_snapshot")
+  coAuthorIds     Json?     @map("co_author_ids")
 
   document Document         @relation(fields: [documentId], references: [id])
   branch   DocumentBranch?  @relation(fields: [branchId], references: [id])
@@ -203,26 +209,29 @@ model DocumentRevision {
 /// unique pair is what makes the seed single across API instances. No FK on
 /// workspace_id or user ids (house rule).
 model CollabDraft {
-  id                   String    @id @default(uuid()) @db.Uuid
-  workspaceId          String    @map("workspace_id") @db.Uuid
-  documentId           String    @map("document_id") @db.Uuid
-  branchId             String    @map("branch_id") @db.Uuid
+  id                String    @id @default(uuid()) @db.Uuid
+  workspaceId       String    @map("workspace_id") @db.Uuid
+  documentId        String    @map("document_id") @db.Uuid
+  branchId          String    @map("branch_id") @db.Uuid
   /// Revision the draft was seeded from or last rebased onto; null for a branch with no head.
-  baseRevisionId       String?   @map("base_revision_id") @db.Uuid
+  baseRevisionId    String?   @map("base_revision_id") @db.Uuid
   /// Y.encodeStateAsUpdate of the whole doc. Hot state; checkpoints go to MinIO.
-  state                Bytes
-  stateBytes           Int       @map("state_bytes")
-  /// Y state vector at the last publish: "unpublished changes" = the doc's differs.
-  publishedStateVector Bytes?    @map("published_state_vector")
+  state             Bytes
+  stateBytes        Int       @map("state_bytes")
+  /// Y.encodeSnapshot of the state as last stored (state vector + delete set).
+  snapshot          Bytes?
+  /// The snapshot that was last published, or seeded: "unpublished changes" = `snapshot` differs.
+  /// A snapshot, not a state vector — a state vector does not move on a deletion.
+  publishedSnapshot Bytes?    @map("published_snapshot")
   /// `SCHEMA_VERSION` of @knowledge/editor-schema the state was written with.
-  schemaVersion        String    @map("schema_version")
+  schemaVersion     String    @map("schema_version")
   /// Distinct user ids that wrote since the last publish (co-author credit).
-  contributors         Json      @default("[]")
-  lastEditedBy         String?   @map("last_edited_by") @db.Uuid
-  lastCheckpointAt     DateTime? @map("last_checkpoint_at") @db.Timestamptz
-  resetAt              DateTime? @map("reset_at") @db.Timestamptz
-  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  contributors      Json      @default("[]")
+  lastEditedBy      String?   @map("last_edited_by") @db.Uuid
+  lastCheckpointAt  DateTime? @map("last_checkpoint_at") @db.Timestamptz
+  resetAt           DateTime? @map("reset_at") @db.Timestamptz
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   document Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
   branch   DocumentBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)

@@ -5,10 +5,11 @@ import type { IncomingMessage } from 'node:http';
 import type { Subscription } from 'rxjs';
 import type { WebSocket } from 'ws';
 import * as Y from 'yjs';
-import { Hocuspocus, type beforeHandleAwarenessPayload, type onAuthenticatePayload } from '@hocuspocus/server';
+import { Hocuspocus, type Document as DraftDocument, type beforeHandleAwarenessPayload, type onAuthenticatePayload } from '@hocuspocus/server';
 import { Redis } from '@hocuspocus/extension-redis';
 import {
   COLLAB_DISABLED_CLOSE_CODE,
+  collabDocName,
   parseCollabDocName,
   type CollabDenyReason,
   type CollabUser,
@@ -16,9 +17,10 @@ import {
 import { TokenAuthService } from '../auth/token-auth.service.js';
 import type { Principal } from '../auth/principal.js';
 import type { Env } from '../config/env.js';
+import { EventsPublisher } from '../events/events.publisher.js';
 import { EventsSubscriber } from '../events/events.subscriber.js';
 import { PermissionService } from '../permissions/permission.service.js';
-import { CollabDraftTooLargeError, CollabDraftsService } from './collab-drafts.service.js';
+import { CollabDraftTooLargeError, CollabDraftsService, snapshotOf, type LoadedDraft } from './collab-drafts.service.js';
 
 /** What a document connection carries once `onAuthenticate` accepted it. */
 interface CollabContext {
@@ -69,6 +71,10 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   /** Workspaces waiting for a re-check, or every one. Coalesced: one sweep runs at a time. */
   private pending: Set<string> | 'all' | null = null;
   private sweeping = false;
+  /** Which row (and which reset of it) each loaded doc came from: a store is refused against any other. */
+  private readonly loaded = new WeakMap<Y.Doc, Omit<LoadedDraft, 'state'>>();
+  /** Docs closed out by a reset or a refused store, until they unload: never served to a rejoining peer. */
+  private readonly stale = new WeakSet<Y.Doc>();
 
   constructor(
     config: ConfigService<Env, true>,
@@ -76,6 +82,7 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     private readonly permissions: PermissionService,
     private readonly drafts: CollabDraftsService,
     private readonly events: EventsSubscriber,
+    private readonly publisher: EventsPublisher,
   ) {
     this.reauthMs = config.get('COLLAB_REAUTH_INTERVAL_SECONDS', { infer: true }) * 1000;
     if (!config.get('COLLAB_ENABLED', { infer: true })) {
@@ -104,21 +111,33 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       onLoadDocument: async ({ documentName, document }) => {
         // onAuthenticate has already proven the name parses and the pair exists.
         const { workspaceId, documentId, branchId } = parseCollabDocName(documentName)!;
-        Y.applyUpdate(document, await this.drafts.load(workspaceId, documentId, branchId));
+        const { state, ...row } = await this.drafts.load(workspaceId, documentId, branchId);
+        Y.applyUpdate(document, state);
+        this.loaded.set(document, row);
       },
       // Runs only on the instance an edit arrived at: updates relayed over
       // Redis skip the store hooks, so N instances do not write N times.
       onStoreDocument: async ({ documentName, document, lastContext }) => {
-        const { documentId, branchId } = parseCollabDocName(documentName)!;
+        const row = this.loaded.get(document);
+        if (!row) return;
         try {
-          await this.drafts.store(documentId, branchId, Y.encodeStateAsUpdate(document), lastContext?.principal.userId);
+          const stored = await this.drafts.store(row, {
+            state: Y.encodeStateAsUpdate(document),
+            snapshot: snapshotOf(document),
+            userId: lastContext?.principal.userId,
+          });
+          // Reset or dropped since this doc loaded: whatever it holds is not the draft any more.
+          if (!stored) this.closeDraft(document, 'reset');
         } catch (e) {
           if (!(e instanceof CollabDraftTooLargeError)) throw e;
           // The last stored state stays; the edits since are lost with the peers.
           this.logger.warn(`Draft ${documentName} is over COLLAB_MAX_DOC_BYTES; closing its peers`);
-          for (const connection of document.getConnections()) connection.close(closing('too-large'));
+          this.closeDraft(document, 'too-large');
         }
       },
+      // Who has a draft open changed: the "N editing" badges re-ask.
+      connected: async ({ documentName }) => this.announce(documentName),
+      onDisconnect: async ({ documentName }) => this.announce(documentName),
     });
   }
 
@@ -142,6 +161,12 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     // acl.changed names only its workspace (it leaks nothing), which is all a re-check needs.
     this.eventsSub = this.events.all().subscribe((event) => {
       if (event.type === 'acl.changed' && event.workspaceId) this.recheck(event.workspaceId);
+      // A discard on any instance reaches every instance's peers this way:
+      // Hocuspocus's Redis relay carries updates, not closes.
+      if (event.type === 'draft.reset' && event.documentId && event.subjectId) {
+        const document = this.hocuspocus?.documents.get(collabDocName(event.workspaceId, event.documentId, event.subjectId));
+        if (document) this.closeDraft(document, 'reset');
+      }
     });
   }
 
@@ -165,6 +190,22 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     socket.on('close', (code: number, reason: Buffer) =>
       client.handleClose({ code, reason: reason.toString() } as CloseEvent),
     );
+  }
+
+  /**
+   * Distinct people with a branch's draft open, as this instance sees them:
+   * its own peers plus the awareness relayed from other instances that have
+   * the doc loaded too.
+   */
+  peersOf(workspaceId: string, documentId: string, branchId: string): number {
+    const document = this.hocuspocus?.documents.get(collabDocName(workspaceId, documentId, branchId));
+    if (!document) return 0;
+    const people = new Set<string>();
+    for (const state of document.awareness.getStates().values()) {
+      const userId = (state as { user?: { userId?: unknown } }).user?.userId;
+      if (typeof userId === 'string') people.add(userId);
+    }
+    return people.size;
   }
 
   handleDisconnect(socket: WebSocket): void {
@@ -203,7 +244,23 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const access = await this.accessTo(principal, workspaceId, name.documentId);
     if (access === 'none') throw deny('forbidden');
     connectionConfig.readOnly = access === 'read';
+    await this.settled(documentName);
     return { principal, workspaceId, documentId: name.documentId };
+  }
+
+  /**
+   * A peer closed by a reset rejoins at once, and the doc it was closed out
+   * of may still be storing (refused) on its way out. Admission waits for it
+   * to unload, so the rejoin loads the reseeded row instead of the old doc.
+   */
+  private async settled(documentName: string): Promise<void> {
+    // ponytail: polls for up to 2 s; a hook on Hocuspocus's own unload would replace it.
+    for (let i = 0; i < 100; i++) {
+      const document = this.hocuspocus!.documents.get(documentName);
+      if (!document || !this.stale.has(document)) return;
+      await this.hocuspocus!.unloadDocument(document);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
   }
 
   /** What the page's permissions let the principal do with it now (feature 48). */
@@ -231,6 +288,23 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     for (const state of states.values()) {
       state.user = { ...(typeof state.user === 'object' && state.user !== null ? state.user : {}), ...user };
     }
+  }
+
+  /**
+   * Close every peer of one draft with `reason`, then drop this instance's
+   * copy, so a peer that rejoins at once loads the row rather than the doc
+   * it was just closed out of.
+   */
+  private closeDraft(document: DraftDocument, reason: CollabDenyReason): void {
+    if (reason === 'reset') this.stale.add(document);
+    for (const connection of document.getConnections()) connection.close(closing(reason));
+    void this.hocuspocus?.unloadDocument(document);
+  }
+
+  private announce(documentName: string): void {
+    const name = parseCollabDocName(documentName);
+    if (!name) return;
+    void this.publisher.publish({ type: 'draft.changed', workspaceId: name.workspaceId, documentId: name.documentId, subjectId: name.branchId });
   }
 
   /** Queue a re-check of one workspace's connections, or of all of them. */

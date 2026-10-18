@@ -32,7 +32,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { onKeyStroke, useStorage } from '@vueuse/core'
-import { History, LayoutTemplate, MoreHorizontal, Route, Settings2, Sparkles, X } from 'lucide-vue-next'
+import { GitCompareArrows, History, LayoutTemplate, MoreHorizontal, Route, Settings2, Sparkles, X } from 'lucide-vue-next'
 import {
   AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
@@ -44,13 +44,15 @@ import {
   type DocumentCategory,
   type DocumentContentResponse,
   type DocumentDetailResponse,
+  type BranchInfo,
   type FinalizeRevisionResponse,
   type ListBranchesResponse,
+  type ListCollabDraftsResponse,
   type RenderTemplateResponse,
   type RevisionInfo,
 } from '@knowledge/contracts'
 import { SCHEMA_VERSION, editorSchema, parseMarkdown } from '@knowledge/editor-schema'
-import { ApiError, apiFetch, getWorkspaceId } from '@/lib/api'
+import { ApiError, apiFetch, apiFetchText, getWorkspaceId } from '@/lib/api'
 import { errorMessage } from '@/api/errors'
 import { presignedPut } from '@/lib/presigned-put'
 import { labelFor } from '@/lib/labels'
@@ -74,6 +76,7 @@ import {
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useTemplatesStore } from '@/stores/templates'
+import { useEventsStore } from '@/stores/events'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -160,6 +163,14 @@ const template = ref<TemplateProvenance | null>(null)
  */
 const otherFrontmatter = ref<Record<string, unknown>>({})
 const headRevisionId = ref<string | null>(null)
+/**
+ * `?branch=<name>` (#80): edit that branch rather than the default one — a
+ * proposed change several people shape before it becomes a merge request.
+ * Read once; an unknown name falls back to the default branch.
+ */
+const requestedBranch = typeof route.query.branch === 'string' ? route.query.branch : null
+/** The branch being edited, once loaded. Null on a new page. */
+const branch = ref<BranchInfo | null>(null)
 
 /**
  * `/create?parent=&project=&template=` (issue #69): where a new page goes and
@@ -376,19 +387,40 @@ const localCopy = ref<WorkingCopy | null>(null)
 const COLLAB_JOIN_TIMEOUT_MS = 10_000
 
 /**
- * Join the default branch's shared draft and hold the editor until it is here
- * to show. Anything short of that — no branch, a refusal, a socket that never
- * opens — leaves the page as it always was: single-user, working copy and all.
+ * The published page as the editor would write it: what "unpublished" is
+ * measured against in a shared draft. The editor itself only ever holds the draft.
  */
-async function startCollab(detail: DocumentDetailResponse, caps: CollabCapabilitiesResponse) {
+function publishedFields(page: DocumentDetailResponse['document'], content: DocumentContentResponse): PageFields {
+  const fm = readFrontmatter(content.frontmatter)
+  return {
+    title: page.title,
+    body: docToMarkdown(parseMarkdown(content.markdown, document), editorSchema),
+    category: page.category,
+    parentId: page.parentId ?? '',
+    projectId: page.projectId,
+    relations: fm.relations,
+    tags: fm.tags,
+    message: '',
+    template: null,
+  }
+}
+
+/**
+ * Join the branch's shared draft and hold the editor until it is here to
+ * show. Anything short of that — a refusal, a socket that never opens — leaves
+ * the page as it always was: single-user, working copy and all.
+ */
+async function startCollab(
+  detail: DocumentDetailResponse,
+  content: DocumentContentResponse,
+  on: BranchInfo,
+  caps: CollabCapabilitiesResponse,
+) {
   const doc = detail.document
-  const { branches } = await apiFetch<ListBranchesResponse>(`/v1/documents/${doc.documentId}/branches`)
-  const branch = branches.find((b) => b.name === doc.defaultBranch)
-  if (!branch) return
   // Loaded only here: a deployment that does not co-edit never fetches Yjs.
   const { createCollab, bindPageFields, META_FIELD } = await import('@/components/editor/use-collab')
   const handle = createCollab({
-    name: collabDocName(doc.workspaceId, doc.documentId, branch.branchId),
+    name: collabDocName(doc.workspaceId, doc.documentId, on.branchId),
     schemaMatches: caps.schemaVersion === SCHEMA_VERSION,
   })
   const ready = await Promise.race([
@@ -400,13 +432,7 @@ async function startCollab(detail: DocumentDetailResponse, caps: CollabCapabilit
     toast.info(t('editor.collab.unavailable'))
     return
   }
-  // The published page as the editor would write it: what "unpublished" is
-  // measured against. The editor itself only ever holds the draft.
-  baseFields.value = {
-    ...currentFields(),
-    body: docToMarkdown(parseMarkdown(body.value, document), editorSchema),
-    message: '',
-  }
+  baseFields.value = publishedFields(doc, content)
   collab.value = handle
   const bind = () => {
     if (collab.value !== handle) return
@@ -425,6 +451,83 @@ onBeforeUnmount(() => {
   unbindFields?.()
   collab.value?.destroy()
 })
+
+/**
+ * The branch was published past the draft by another path — MCP, a merge, a
+ * connector — so publishing it as it stands would silently undo that change.
+ * Holds the head it moved to; the review then compares the draft against it.
+ */
+const headMoved = ref<string | null>(null)
+
+/**
+ * Bring the baseline level with the branch head after someone published. From
+ * this draft (its base is the head): nothing more to say — the chip clears.
+ * From elsewhere: the head-moved notice, with the review showing what changed.
+ */
+async function followHead() {
+  if (!collab.value || !editId.value || !branch.value) return
+  const id = editId.value
+  const [{ branches }, { drafts }, detail] = await Promise.all([
+    apiFetch<ListBranchesResponse>(`/v1/documents/${id}/branches`),
+    apiFetch<ListCollabDraftsResponse>(`/v1/documents/${id}/drafts`),
+    apiFetch<DocumentDetailResponse>(`/v1/documents/${id}`),
+  ])
+  const head = branches.find((b) => b.branchId === branch.value?.branchId)?.headRevisionId ?? null
+  const draft = drafts.find((d) => d.branchId === branch.value?.branchId)
+  if (!head || !draft || head === headRevisionId.value) return
+  const content = await apiFetch<DocumentContentResponse>(`/v1/documents/${id}/content?revision=${head}`)
+  baseFields.value = publishedFields(detail.document, content)
+  otherFrontmatter.value = readFrontmatter(content.frontmatter).other
+  headRevisionId.value = head
+  headMoved.value = draft.baseRevisionId === head ? null : head
+}
+
+const events = useEventsStore()
+watch(
+  () => events.lastEvent,
+  (e) => {
+    if (e?.type === 'revision.finalized' && e.documentId === editId.value) void followHead().catch(() => {})
+  },
+)
+
+/** Throw the shared draft away for everyone, back to the branch head. Every peer — this tab too — rejoins. */
+const discardOpen = ref(false)
+/** From the review: one modal at a time, or the question opens underneath the diff. */
+function askDiscard() {
+  reviewOpen.value = false
+  discardOpen.value = true
+}
+async function discardDraft() {
+  discardOpen.value = false
+  reviewOpen.value = false
+  if (!editId.value || !branch.value) return
+  try {
+    await apiFetchText(`/v1/documents/${editId.value}/drafts/${branch.value.branchId}`, { method: 'DELETE' })
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  }
+}
+
+/**
+ * Someone discarded the draft (`reset`): this tab's Y.Doc and this device's
+ * copy are the old draft, and merging either into the reseeded one would
+ * show the page twice. Drop both and open the page again from the start.
+ */
+watch(
+  () => collab.value?.status.reason,
+  async (reason) => {
+    const handle = collab.value
+    if (reason !== 'reset' || !handle) return
+    loading.value = true
+    unbindFields?.()
+    unbindFields = null
+    collab.value = null
+    headMoved.value = null
+    await handle.forget()
+    toast.info(t('editor.collab.reset'))
+    await loadPage()
+  },
+)
 
 function offerLocalCopy() {
   const stored = readWorkingCopy(storageKey.value)
@@ -735,40 +838,57 @@ onMounted(async () => {
       if (!projectId.value) projectId.value = projects.activeId ?? ''
     })
   }
-  if (!editId.value) return
+  if (editId.value) await loadPage()
+})
+
+/** Load the page being edited — again after a reset — and join its draft when the deployment co-edits. */
+async function loadPage() {
+  const id = editId.value
+  if (!id) return
   loading.value = true
   try {
-    const [detail, content, caps] = await Promise.all([
-      apiFetch<DocumentDetailResponse>(`/v1/documents/${editId.value}`),
-      apiFetch<DocumentContentResponse>(`/v1/documents/${editId.value}/content`),
+    const [detail, defaultContent, caps, { branches }] = await Promise.all([
+      apiFetch<DocumentDetailResponse>(`/v1/documents/${id}`),
+      apiFetch<DocumentContentResponse>(`/v1/documents/${id}/content`),
       // Unknown means off: the page opens single-user, as it always has.
       apiFetch<CollabCapabilitiesResponse>('/v1/collab/capabilities').catch(() => null),
+      apiFetch<ListBranchesResponse>(`/v1/documents/${id}/branches`),
     ])
     // An archived page is read-only until unarchived (docs/features/39);
     // the API would refuse the publish, so refuse the editing first.
     if (detail.document.archivedAt) {
       toast.info(t('verification.archived.editorBlocked'))
-      await router.replace(`/documents/${editId.value}`)
+      await router.replace(`/documents/${id}`)
       return
     }
+    const byName = (name: string | null) => branches.find((b) => b.name === name)
+    if (requestedBranch && !byName(requestedBranch)) toast.error(t('editor.branchNotFound', { name: requestedBranch }))
+    branch.value = byName(requestedBranch) ?? byName(detail.document.defaultBranch) ?? null
+    const head = branch.value?.headRevisionId ?? detail.document.headRevisionId
+    const content =
+      head && head !== defaultContent.revisionId
+        ? await apiFetch<DocumentContentResponse>(`/v1/documents/${id}/content?revision=${head}`)
+        : defaultContent
     title.value = detail.document.title
     category.value = detail.document.category
     parentId.value = detail.document.parentId ?? ''
     projectId.value = detail.document.projectId
-    headRevisionId.value = detail.document.headRevisionId
+    headRevisionId.value = head
     body.value = content.markdown
     const fm = readFrontmatter(content.frontmatter)
     otherFrontmatter.value = fm.other
     relationRows.value = fm.relations
     tags.value = fm.tags
-    if (caps?.enabled) await startCollab(detail, caps).catch(() => toast.info(t('editor.collab.unavailable')))
+    if (caps?.enabled && branch.value) {
+      await startCollab(detail, content, branch.value, caps).catch(() => toast.info(t('editor.collab.unavailable')))
+    }
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
     // Mounts the editor, whose `ready` captures the published baseline.
     loading.value = false
   }
-})
+}
 
 /**
  * Provenance for `POST /v1/documents`. `provenanceOnly`, because the body goes
@@ -862,7 +982,7 @@ async function publishRevision(
   )
 }
 
-async function save() {
+async function save(onTop = false) {
   // Publishing would drop them silently — the serializer skips suggestions — so
   // they are decided first, where the author can see what they are deciding.
   if (aiPending.value.count > 0) {
@@ -882,8 +1002,10 @@ async function save() {
     return
   }
   busy.value = true
+  // Read before a shared draft's seal clears it, and put back if the publish fails.
+  const sentMessage = message.value
   try {
-    const text = pageSource(markdown)
+    let text = pageSource(markdown)
     if (!isEdit.value) {
       const res = await apiFetch<CreateDocumentResponse>('/v1/documents', {
         method: 'POST',
@@ -902,6 +1024,27 @@ async function save() {
       toast.success(t('editor.documentCreated'))
       await router.push(`/documents/${res.documentId}`)
       return
+    }
+
+    // A shared draft is published as of one snapshot (#80): finalize rebases
+    // the draft onto it, and what peers typed after it stays unpublished. The
+    // revision builds on the draft's base, not on the head this tab loaded:
+    // a peer may have published since. "Publish on top" builds on the head
+    // that moved instead, once the author has seen the difference.
+    let draftFields = {}
+    let ifMatch = headRevisionId.value
+    if (collab.value && branch.value) {
+      const { drafts } = await apiFetch<ListCollabDraftsResponse>(`/v1/documents/${editId.value}/drafts`)
+      const draft = drafts.find((d) => d.branchId === branch.value?.branchId)
+      if (draft) {
+        ifMatch = onTop && headMoved.value ? headMoved.value : draft.baseRevisionId
+        draftFields = { collabDraftId: draft.draftId, draftSnapshot: collab.value.seal() }
+        // Read again in the same tick as the seal: a peer's edit that landed
+        // while the draft was fetched must be in the revision it is marked as.
+        text = pageSource(editorRef.value?.flush() ?? markdown)
+        // Sealing cleared it for everyone; this tab's field follows.
+        message.value = ''
+      }
     }
 
     // Edit: metadata via PATCH, then a new revision with If-Match (plan.md §7).
@@ -923,10 +1066,12 @@ async function save() {
       (
         await apiFetch<RevisionInfo>(`/v1/documents/${editId.value}/revisions`, {
           method: 'POST',
-          headers: headRevisionId.value ? { 'If-Match': headRevisionId.value } : {},
+          headers: ifMatch ? { 'If-Match': ifMatch } : {},
           body: JSON.stringify({
-            message: message.value || 'Edited in web editor',
+            ...(branch.value ? { branch: branch.value.name } : {}),
+            message: sentMessage || 'Edited in web editor',
             contentType: 'text/markdown',
+            ...draftFields,
           }),
         })
       ).revisionId
@@ -938,8 +1083,10 @@ async function save() {
     // Was a prefix match on the message text, which breaks the moment that
     // message is translated and could never distinguish a 413 from anything
     // else. Branch on the envelope instead.
+    if (collab.value && !message.value) message.value = sentMessage
     if (e instanceof ApiError && e.status === 409) {
-      toast.error(t('editor.headMoved'))
+      if (collab.value) await followHead().catch(() => {})
+      if (!headMoved.value) toast.error(t('editor.headMoved'))
     } else {
       toast.error(errorMessage(e, t))
     }
@@ -1115,7 +1262,7 @@ onBeforeUnmount(() => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" :disabled="busy || loading || (collab !== null && !collab.status.writable)" @click="save">
+          <Button size="sm" :disabled="busy || loading || (collab !== null && !collab.status.writable)" @click="save()">
             {{ busy ? t('common.saving') : isEdit ? t('editor.publish') : t('editor.createAndIndex') }}
           </Button>
         </div>
@@ -1161,6 +1308,22 @@ onBeforeUnmount(() => {
                 @click="applyLocalCopy"
               >
                 {{ t('editor.collab.localCopy.apply') }}
+              </Button>
+            </div>
+
+            <!-- Published past the draft by another path: say so before a publish would undo it. -->
+            <div v-if="headMoved" class="kn-stale-copy" role="status">
+              <GitCompareArrows class="size-4 shrink-0" aria-hidden="true" />
+              <div class="min-w-0 flex-1">
+                <p class="font-medium">{{ t('editor.collab.headMoved.title') }}</p>
+                <p class="text-muted-foreground">{{ t('editor.collab.headMoved.body') }}</p>
+              </div>
+              <Button size="sm" variant="ghost" :disabled="!collab?.status.writable" @click="discardOpen = true">
+                {{ t('editor.collab.discard.action') }}
+              </Button>
+              <Button size="sm" variant="ghost" @click="openReview">{{ t('editor.collab.headMoved.review') }}</Button>
+              <Button size="sm" variant="outline" :disabled="busy || !collab?.status.writable" @click="save(true)">
+                {{ t('editor.collab.headMoved.publishOnTop') }}
               </Button>
             </div>
 
@@ -1251,6 +1414,27 @@ onBeforeUnmount(() => {
     </AlertDialog>
 
     <!-- What publishing would change, before it does. -->
+    <AlertDialog v-model:open="discardOpen">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ t('editor.collab.discard.title') }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{
+              collab && collab.status.peers.length > 0
+                ? t('editor.collab.discard.bodyPeers', { n: collab.status.peers.length }, collab.status.peers.length)
+                : t('editor.collab.discard.body')
+            }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{{ t('editor.keepEditing') }}</AlertDialogCancel>
+          <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="discardDraft">
+            {{ t('editor.collab.discard.confirm') }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     <Dialog v-model:open="reviewOpen">
       <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
@@ -1273,9 +1457,18 @@ onBeforeUnmount(() => {
         <p v-else class="text-sm text-muted-foreground">{{ t('editor.unstaged.noSourceChanges') }}</p>
 
         <DialogFooter>
-          <!-- A shared draft is everyone's: throwing it away is phase 4's reset, not this. -->
           <Button v-if="!collab" variant="ghost" class="text-destructive" @click="discardUnstaged">
             {{ t('editor.unstaged.discardAll') }}
+          </Button>
+          <!-- A shared draft is everyone's: discarding it resets it for every peer, so it asks first. -->
+          <Button
+            v-else
+            variant="ghost"
+            class="text-destructive"
+            :disabled="!collab.status.writable"
+            @click="askDiscard"
+          >
+            {{ t('editor.collab.discard.action') }}
           </Button>
           <Button @click="reviewOpen = false">{{ t('editor.keepEditing') }}</Button>
         </DialogFooter>

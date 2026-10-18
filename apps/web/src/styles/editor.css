@@ -1553,6 +1553,20 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   font-weight: 600;
 }
 
+/* A branch's draft, told where the published page is read: one muted line under the revision meta. */
+.kn-draft-badge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+.kn-draft-badge .kn-collab-status { white-space: normal; }
+.kn-draft-badge-link { color: var(--primary); text-underline-offset: 2px; }
+.kn-draft-badge-link:hover { text-decoration: underline; }
+
 /* Another person's caret: a hairline in their hue, their name above it.
  * CollaborationCaret ships no styles; unstyled, the label is a full-width bar. */
 .kn-caret {
@@ -1589,7 +1603,12 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   font-size: 0.8rem;
   line-height: 1.35;
 }
-@media (max-width: 40rem) { .kn-stale-copy { flex-wrap: wrap; } }
+/* Narrow: the message takes its own row beside the icon and the actions wrap
+   under it — otherwise the first button squeezes the text into a column. */
+@media (max-width: 40rem) {
+  .kn-stale-copy { flex-wrap: wrap; }
+  .kn-stale-copy > .flex-1 { flex-basis: calc(100% - 1.75rem); }
+}
 
 .kn-unstaged-fields {
   display: grid;

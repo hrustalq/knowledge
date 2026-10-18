@@ -26,6 +26,7 @@ import {
   type UrlTicketResponse,
 } from '@knowledge/contracts'
 import { BODY_FIELD } from '@knowledge/editor-schema'
+import { META_FIELD, seedPageMeta } from '@knowledge/editor-schema/page-fields'
 import { apiFetch, getToken } from '@/lib/api'
 import { avatarColor, avatarColorDeep } from '@/lib/avatar'
 import { wsBase } from '@/api/live'
@@ -74,11 +75,21 @@ export interface CollabHandle {
   ready: Promise<boolean>
   /** The editor's half: the body binding and the carets. Built once, at mount. */
   extensions(): AnyExtension[]
+  /**
+   * The moment a publish reads the draft: clears the revision message for
+   * everyone (it belongs to the revision, not the page) and returns the
+   * base64 Y snapshot the content is read at. Synchronous, so nothing lands
+   * between the snapshot and the serialization that follows it.
+   */
+  seal(): string
   destroy(): void
+  /** Destroy, and drop this device's copy too: after a reset it would merge the old draft back in. */
+  forget(): Promise<void>
 }
 
 /** What a reason asks of this tab: rejoin with a fresh ticket to learn the new scope, or stop. */
 export function outcomeOf(reason: string): { rejoin: true } | { rejoin: false; reason: CollabStopReason } {
+  // `reset` stops this handle too: rejoining needs a new Y.Doc, which only the page can build.
   if (reason === 'access-changed') return { rejoin: true }
   // Anything else — including a ticket that could not be minted — means this
   // tab cannot vouch for itself any more.
@@ -159,12 +170,29 @@ export function createCollab(options: { name: string; schemaMatches: boolean }):
         }),
       }),
     ],
+    seal() {
+      const message = doc.getMap<unknown>(META_FIELD).get('message')
+      if (message instanceof Y.Text) setText(message, '')
+      return toBase64(Y.encodeSnapshot(Y.snapshot(doc)))
+    },
     destroy() {
       provider.destroy()
       void local.destroy()
       doc.destroy()
     },
+    async forget() {
+      provider.destroy()
+      await local.clearData()
+      doc.destroy()
+    },
   }
+}
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = ''
+  // Chunked: spreading a large array into one call overflows the stack.
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(binary)
 }
 
 /** The part of the provider `followProvider` drives — a fake one fits in a spec. */
@@ -282,15 +310,14 @@ export function mapIndex(delta: Y.YTextEvent['delta'], index: number): number {
   return index
 }
 
-/** The page's own fields in the draft, beside its body. */
-export const META_FIELD = 'meta'
+export { META_FIELD }
 
 /**
  * Bind the page fields to the draft's `meta` map: free text as Y.Text (title,
  * tags, message — two people can type in one), everything else as a
- * last-writer-wins value. A field the draft does not hold yet is seeded from
- * what the editor loaded; `set` of a fresh Y.Text under a key is one map
- * write, so two tabs seeding at once keep one value rather than two copies.
+ * last-writer-wins value. A field the draft does not hold yet — a draft the
+ * server seeded before it seeded fields — is filled from what the editor
+ * loaded (`seedPageMeta`).
  * Returns the unbind.
  */
 export function bindPageFields(
@@ -299,14 +326,9 @@ export function bindPageFields(
 ): () => void {
   const meta = doc.getMap<unknown>(META_FIELD)
   const json = (value: unknown) => JSON.stringify(value ?? null)
-  doc.transact(() => {
-    for (const [key, field] of Object.entries(fields.texts)) {
-      if (!(meta.get(key) instanceof Y.Text)) meta.set(key, new Y.Text(field.value))
-    }
-    for (const [key, field] of Object.entries(fields.values)) {
-      if (!meta.has(key)) meta.set(key, JSON.parse(json(field.value)))
-    }
-  })
+  const valuesOf = (refs: Record<string, Ref<unknown>>) =>
+    Object.fromEntries(Object.entries(refs).map(([key, field]) => [key, field.value]))
+  seedPageMeta(doc, { texts: valuesOf(fields.texts) as Record<string, string>, values: valuesOf(fields.values) })
 
   const stops: (() => void)[] = []
   /**

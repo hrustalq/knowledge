@@ -247,7 +247,11 @@
       "reauth": {
         "sso": "Это пространство требует единого входа. Войдите через вашу организацию, чтобы продолжить.",
         "session": "Это пространство просит время от времени входить заново. Войдите, чтобы продолжить."
-      }
+      },
+      "ldapTitle": "Вход через {name}",
+      "ldapHint": "Введите имя пользователя и пароль из каталога вашей организации.",
+      "username": "Имя пользователя",
+      "back": "Назад"
     }
   },
   "documents": {
@@ -5414,7 +5418,7 @@
     },
     "providers": {
       "title": "Провайдеры удостоверений",
-      "hint": "Вход через OpenID Connect или SAML 2.0 вашей организации. Новые провайдеры создаются отключёнными.",
+      "hint": "Вход через OpenID Connect, SAML 2.0 или, если он включён, LDAP-каталог вашей организации. Новые провайдеры создаются отключёнными.",
       "disabled": "Единый вход на этом сервере не включён. Оператор включает его переменной AUTH_SSO_ENABLED=true (и AUTH_MODE=api-key).",
       "empty": "Провайдеров удостоверений пока нет.",
       "add": "Добавить провайдер",
@@ -5481,7 +5485,8 @@
       "protocol": "Протокол",
       "kinds": {
         "oidc": "OpenID Connect",
-        "saml": "SAML 2.0"
+        "saml": "SAML 2.0",
+        "ldap": "LDAP / Active Directory"
       },
       "formHintSaml": "После сохранения передайте провайдеру URL метаданных SP из списка или его entity ID и ACS URL.",
       "idpEntityId": "Entity ID провайдера",
@@ -5500,7 +5505,22 @@
       "acsUrl": "ACS URL",
       "copyEndpoint": "Скопировать: {label}",
       "testOkSaml": "Настройки в порядке. Entity ID провайдера: {issuer}",
-      "testFailedSaml": "Проблема в настройках: {error}"
+      "testFailedSaml": "Проблема в настройках: {error}",
+      "formHintLdap": "Пользователи входят с именем и паролем из каталога. После сохранения нажмите «Проверить», чтобы убедиться, что сервисная учётная запись может искать в базовом DN.",
+      "ldapUrl": "URL каталога",
+      "ldapUrlHint": "ldaps://хост:636 или ldap://хост:389 с StartTLS.",
+      "startTls": "Использовать StartTLS",
+      "bindDn": "DN сервисной учётной записи",
+      "bindDnHint": "Учётная запись, от имени которой ищутся пользователи. Оставьте пустым для анонимного поиска.",
+      "bindPassword": "Пароль сервисной учётной записи",
+      "baseDn": "Базовый DN",
+      "userFilter": "Фильтр пользователя",
+      "userFilterHint": "Напишите {placeholder} там, где должно стоять введённое имя. Пустое поле ищет по uid, mail, sAMAccountName или userPrincipalName.",
+      "attributeMapHintLdap": "Какие атрибуты записи содержат данные человека. Пустое поле означает mail, displayName (или cn) и memberOf.",
+      "groupsAttributeHintLdap": "Сопоставление групп сравнивает полный DN группы, например cn=editors,ou=groups,dc=corp,dc=example.",
+      "testOkLdap": "Подключение и поиск в базовом DN выполнены: {issuer}",
+      "testFailedLdap": "Проверка каталога не прошла: {error}",
+      "backchannelLogoutUri": "URI обратного выхода (back-channel logout)"
     },
     "groupMapping": {
       "title": "Сопоставление групп",

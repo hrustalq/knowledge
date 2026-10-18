@@ -450,3 +450,103 @@ describe('helpers', () => {
     for (const bad of ['localhost', 'a b.example', 'https://corp.example', '']) expect(normalizeDomain(bad)).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------- back-channel logout (phase 7)
+
+describe('OIDC back-channel logout', () => {
+  const EVENT = { 'http://schemas.openid.net/event/backchannel-logout': {} };
+
+  /** A logout token as the OP would post it; `over` replaces or (with undefined) removes claims. */
+  async function logoutToken(over: Row = {}, opts: { key?: CryptoKey; audience?: string; iat?: number } = {}) {
+    const claims: Row = { events: EVENT, sid: 'idp-sess-1', sub: 'kc-1', jti: randomUUID(), ...over };
+    for (const k of Object.keys(claims)) if (claims[k] === undefined) delete claims[k];
+    return new SignJWT(claims)
+      .setProtectedHeader({ alg: 'RS256', kid: op.kid })
+      .setIssuer(op.issuer)
+      .setAudience(opts.audience ?? 'knowledge')
+      .setIssuedAt(opts.iat ?? Math.floor(Date.now() / 1000))
+      .sign(opts.key ?? op.privateKey);
+  }
+
+  /** A provider, a linked person, and sessions across two IdP sessions, another person and another provider. */
+  function setup() {
+    const h = harness();
+    const p = h.provider();
+    const other = h.provider({ name: 'Other' });
+    h.db.users.push({ id: 'u-ada', email: 'ada@corp.example' }, { id: 'u-bob', email: 'bob@corp.example' });
+    h.db.identities.push({ id: randomUUID(), providerId: p.id, subject: 'kc-1', userId: 'u-ada' });
+    const session = (id: string, over: Row) => h.db.sessions.push({ id, providerId: p.id, userId: 'u-ada', idpSessionId: null, revokedAt: null, ...over });
+    session('ada-1', { idpSessionId: 'idp-sess-1' });
+    session('ada-2', { idpSessionId: 'idp-sess-2' });
+    session('bob-1', { userId: 'u-bob', idpSessionId: 'idp-sess-9' });
+    session('ada-other', { providerId: other.id, idpSessionId: 'idp-sess-1' });
+    const revoked = () => h.db.sessions.filter((s) => s.revokedAt).map((s) => s.id).sort();
+    return { h, p, revoked };
+  }
+
+  it('a sid revokes the sessions that IdP session opened, through this provider only', async () => {
+    const { h, p, revoked } = setup();
+    expect(await h.sso.backchannelLogout(p.id, await logoutToken(), meta)).toBe(true);
+    expect(revoked()).toEqual(['ada-1']);
+    const entry = (h.audit.record.mock.calls as unknown as Row[][]).map((c) => c[0]).find((e) => e.action === 'auth.session_revoked');
+    expect(entry).toMatchObject({ ok: true, target: 'u-ada', params: { via: 'backchannel', by: 'sid', sessionsRevoked: 1 } });
+  });
+
+  it('a sub alone revokes every session of that person through this provider', async () => {
+    const { h, p, revoked } = setup();
+    expect(await h.sso.backchannelLogout(p.id, await logoutToken({ sid: undefined }), meta)).toBe(true);
+    expect(revoked()).toEqual(['ada-1', 'ada-2']);
+  });
+
+  it('a sub nobody is linked to, with no sid, ends nothing — and is still accepted', async () => {
+    const { h, p, revoked } = setup();
+    expect(await h.sso.backchannelLogout(p.id, await logoutToken({ sid: undefined, sub: 'stranger' }), meta)).toBe(true);
+    expect(revoked()).toEqual([]);
+  });
+
+  it('a token is spent once by its jti', async () => {
+    const { h, p } = setup();
+    const token = await logoutToken({ jti: 'jti-1' });
+    expect(await h.sso.backchannelLogout(p.id, token, meta)).toBe(true);
+    expect(await h.sso.backchannelLogout(p.id, token, meta)).toBe(false);
+  });
+
+  it.each([
+    ['another audience', {}, { audience: 'someone-else' }],
+    ['a nonce (an id_token replayed as a logout token)', { nonce: 'n' }, {}],
+    ['no logout event', { events: undefined }, {}],
+    ['a different event', { events: { 'urn:other': {} } }, {}],
+    ['neither sid nor sub', { sid: undefined, sub: undefined }, {}],
+    ['an old iat', {}, { iat: Math.floor(Date.now() / 1000) - 3600 }],
+  ])('refuses %s, revoking nothing', async (_label, over, opts) => {
+    const { h, p, revoked } = setup();
+    expect(await h.sso.backchannelLogout(p.id, await logoutToken(over, opts), meta)).toBe(false);
+    expect(revoked()).toEqual([]);
+    const entry = (h.audit.record.mock.calls as unknown as Row[][]).map((c) => c[0]).find((e) => e.action === 'auth.session_revoked');
+    expect(entry).toMatchObject({ ok: false, params: { via: 'backchannel' } });
+  });
+
+  it('refuses a token signed by a key the provider does not publish', async () => {
+    const { h, p, revoked } = setup();
+    const { privateKey } = await generateKeyPair('RS256');
+    expect(await h.sso.backchannelLogout(p.id, await logoutToken({}, { key: privateKey as CryptoKey }), meta)).toBe(false);
+    expect(revoked()).toEqual([]);
+  });
+
+  it('answers false for an OAuth 2 preset, a disabled provider, an unknown id and an empty body', async () => {
+    const { h, p } = setup();
+    const yandex = h.provider({ preset: 'yandex' });
+    const off = h.provider({ enabled: false });
+    const token = await logoutToken();
+    expect(await h.sso.backchannelLogout(yandex.id, token, meta)).toBe(false);
+    expect(await h.sso.backchannelLogout(off.id, token, meta)).toBe(false);
+    expect(await h.sso.backchannelLogout(randomUUID(), token, meta)).toBe(false);
+    expect(await h.sso.backchannelLogout(p.id, '', meta)).toBe(false);
+  });
+
+  it('the view names the URI to register, and none for an OAuth 2 preset', () => {
+    const h = harness();
+    expect(h.oidc.backchannelLogoutUri({ id: 'p1', preset: 'keycloak' })).toBe('http://api.test/v1/auth/oidc/p1/backchannel-logout');
+    expect(h.oidc.backchannelLogoutUri({ id: 'p1', preset: 'yandex' })).toBeNull();
+  });
+});

@@ -11,7 +11,7 @@ import { t } from '../i18n/t.js';
 import { AuditService } from './audit.service.js';
 import type { Principal } from './principal.js';
 import { breakGlassEmails } from './password-policy.js';
-import { LIVE_IDP_KINDS } from './sso/live-kinds.js';
+import { liveIdpKinds } from './sso/live-kinds.js';
 
 /** How long a workspace's policy is trusted in-process. Writes in this process invalidate at once. */
 const POLICY_TTL_MS = 30_000;
@@ -265,7 +265,7 @@ export class AuthPolicyService {
   /** Enabled, sign-in-capable providers a workspace's sessions may come from. */
   async providersFor(workspaceId: string): Promise<{ id: string; name: string }[]> {
     return this.prisma.identityProvider.findMany({
-      where: { enabled: true, kind: { in: LIVE_IDP_KINDS }, OR: [{ workspaceId }, { platformWide: true }] },
+      where: { enabled: true, kind: { in: liveIdpKinds(this.config) }, OR: [{ workspaceId }, { platformWide: true }] },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
       select: { id: true, name: true },
     });

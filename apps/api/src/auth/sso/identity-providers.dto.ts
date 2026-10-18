@@ -27,11 +27,11 @@ import {
 import { vmsg } from '../../common/validation.js';
 
 /**
- * The editable fields of an identity provider (#75). The OIDC and SAML
+ * The editable fields of an identity provider (#75). The OIDC, SAML and LDAP
  * settings are flat here and stored as `identity_providers.config`; each kind
- * ignores the other's. The OIDC client secret is write-only — sent to set it,
- * `''` to clear it, absent to keep it. A SAML provider's SP key is made on
- * create and is not editable.
+ * ignores the others'. The OIDC client secret and the LDAP bind password are
+ * write-only — sent to set, `''` to clear, absent to keep. A SAML provider's
+ * SP key is made on create and is not editable.
  */
 class IdentityProviderFieldsDto {
   @ApiPropertyOptional({ enum: IDP_PRESETS, description: 'IdP quirks to apply. Defaults to generic.' })
@@ -103,17 +103,60 @@ class IdentityProviderFieldsDto {
   @IsBoolean()
   allowIdpInitiated?: boolean;
 
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'SAML: attribute holding the email; null tries the usual names' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'SAML / LDAP: attribute holding the email; null tries the usual names (SAML) or reads mail (LDAP)',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(300, { message: vmsg('maxLength') })
   emailAttribute?: string | null;
 
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'SAML: attribute holding the display name; null tries the usual names' })
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'SAML / LDAP: attribute holding the display name; null tries the usual names' })
   @IsOptional()
   @IsString()
   @MaxLength(300, { message: vmsg('maxLength') })
   nameAttribute?: string | null;
+
+  @ApiPropertyOptional({ description: 'LDAP: ldaps://host[:port], or ldap://host[:port] with startTls' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, { message: vmsg('maxLength') })
+  ldapUrl?: string;
+
+  @ApiPropertyOptional({ description: 'LDAP: upgrade an ldap:// connection with StartTLS. Ignored for ldaps://' })
+  @IsOptional()
+  @IsBoolean()
+  startTls?: boolean;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'LDAP: the service account that searches; null searches anonymously' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  bindDn?: string | null;
+
+  @ApiPropertyOptional({ description: "Write-only. LDAP: the service account's password. A value sets it, '' clears it, absent keeps it." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1024, { message: vmsg('maxLength') })
+  bindPassword?: string;
+
+  @ApiPropertyOptional({ description: 'LDAP: where the person search starts, e.g. ou=people,dc=corp,dc=example' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  baseDn?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'LDAP: search filter with {username} where the typed value goes (escaped); null uses the default',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  userFilter?: string | null;
 
   @ApiPropertyOptional({ description: 'Create an account on first sign-in (needs the address in allowedDomains)' })
   @IsOptional()
@@ -136,7 +179,7 @@ class IdentityProviderFieldsDto {
   @ApiPropertyOptional({
     type: String,
     nullable: true,
-    description: 'OIDC claim (null uses the preset default) or SAML attribute (null = no groups) holding group names',
+    description: 'OIDC claim (null uses the preset default), SAML attribute (null = no groups) or LDAP attribute (null = memberOf) holding group names',
   })
   @IsOptional()
   @IsString()
@@ -157,7 +200,7 @@ class IdentityProviderFieldsDto {
 }
 
 export class CreateIdentityProviderDto extends IdentityProviderFieldsDto {
-  @ApiProperty({ enum: IDP_KINDS, description: 'oidc or saml; ldap is refused until it ships' })
+  @ApiProperty({ enum: IDP_KINDS, description: 'oidc, saml, or ldap (only under AUTH_LDAP_ENABLED)' })
   @IsIn(IDP_KINDS)
   kind!: IdpKind;
 
@@ -181,6 +224,20 @@ export class SsoDiscoverDto {
   @ApiProperty({ example: 'you@corp.example' })
   @IsEmail()
   email!: string;
+}
+
+export class LdapLoginDto {
+  @ApiProperty({ description: 'What the directory knows the person by: uid, sAMAccountName, userPrincipalName or email, per the provider filter' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(256, { message: vmsg('maxLength') })
+  username!: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1024, { message: vmsg('maxLength') })
+  password!: string;
 }
 
 export class SsoExchangeDto {

@@ -24,7 +24,9 @@ import type { Principal } from '../principal.js';
 import type { CreateIdentityProviderDto, UpdateIdentityProviderDto } from './identity-providers.dto.js';
 import { OIDC_PRESETS, presetOf } from './oidc-presets.js';
 import { oidcConfigOf, OidcService } from './oidc.service.js';
-import { LIVE_IDP_KINDS } from './live-kinds.js';
+import { liveIdpKinds } from './live-kinds.js';
+import { ldapConfigOf, ldapUrlProblem, userFilterValid } from './ldap-profile.js';
+import { LdapService } from './ldap.service.js';
 import { generateSpKeyPair, parseCertificates } from './saml-cert.js';
 import { samlConfigOf } from './saml-profile.js';
 import { SamlService } from './saml.service.js';
@@ -36,13 +38,23 @@ const ISSUER_KEYS = {
   unresolved: 'error.sso.issuerUnresolved',
   private: 'error.sso.issuerPrivate',
 };
+/** The directory host is checked as an https origin: the scheme was judged already, the address is what is left. */
+const LDAP_HOST_KEYS = {
+  invalid: 'error.sso.ldapUrlInvalid',
+  notHttps: 'error.sso.ldapUrlInvalid',
+  unresolved: 'error.sso.ldapHostUnresolved',
+  private: 'error.sso.ldapHostPrivate',
+};
 
 /** The editable fields an audit row may name — never a value, and never the secret's. */
 const AUDITED_FIELDS = [
   'name', 'preset', 'enabled', 'showOnLogin', 'platformWide', 'issuer', 'clientId', 'scopes', 'jitEnabled',
   'defaultRole', 'allowedDomains', 'groupsClaim', 'groupSyncMode', 'sessionTtlHours',
   'idpEntityId', 'ssoUrl', 'idpCert', 'allowIdpInitiated', 'emailAttribute', 'nameAttribute',
+  'ldapUrl', 'startTls', 'bindDn', 'baseDn', 'userFilter',
 ] as const;
+/** Write-only fields: an audit row says they changed, never to what. */
+const SECRET_FIELDS = ['clientSecret', 'bindPassword'] as const;
 
 /** `corp.example`, `@Corp.Example`, `bücher.example` → one lower-case punycode form, or null when it is no domain. */
 export function normalizeDomain(raw: string): string | null {
@@ -54,7 +66,8 @@ export function normalizeDomain(raw: string): string | null {
  * A workspace's identity providers (#75). The client secret goes through
  * secret-box and never comes back out — the view says `hasSecret` only. A
  * SAML provider's SP private key is generated here on create, into the same
- * column, and never leaves the API either; its certificate is public.
+ * column, and never leaves the API either; its certificate is public. An LDAP
+ * provider's service-account password is that column's third use.
  * Child ids are always re-checked against the route's workspace, so another
  * workspace's provider id is a 404 here, not a 403 that confirms it exists.
  */
@@ -62,17 +75,20 @@ export function normalizeDomain(raw: string): string | null {
 export class IdentityProvidersService {
   private readonly key: Buffer | null;
   private readonly allowPrivate: boolean;
+  private readonly allowInsecureLdap: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
-    config: ConfigService<Env, true>,
+    private readonly config: ConfigService<Env, true>,
     private readonly oidc: OidcService,
     private readonly audit: AuditService,
     private readonly policy: AuthPolicyService,
     private readonly saml: SamlService,
+    private readonly ldap: LdapService,
   ) {
     this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
     this.allowPrivate = config.get('AUTH_SSO_ALLOW_PRIVATE_URLS', { infer: true });
+    this.allowInsecureLdap = config.get('AUTH_LDAP_ALLOW_INSECURE', { infer: true });
   }
 
   async list(workspaceId: string): Promise<ListIdentityProvidersResponse> {
@@ -80,11 +96,11 @@ export class IdentityProvidersService {
       where: { workspaceId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
-    return { providers: rows.map((r) => this.view(r)), secretsWritable: this.key !== null };
+    return { providers: rows.map((r) => this.view(r)), secretsWritable: this.key !== null, kinds: liveIdpKinds(this.config) };
   }
 
   async create(workspaceId: string, dto: CreateIdentityProviderDto, principal: Principal): Promise<IdentityProviderView> {
-    if (!LIVE_IDP_KINDS.includes(dto.kind)) throw new BadRequestException(t('error.sso.kindNotSupported', { kind: dto.kind }));
+    if (!liveIdpKinds(this.config).includes(dto.kind)) throw new BadRequestException(t('error.sso.kindNotSupported', { kind: dto.kind }));
     const fields = await this.fields(dto.kind, dto, principal, null);
     const row = await this.prisma.identityProvider.create({
       data: { workspaceId, kind: dto.kind, name: dto.name.trim(), ...fields, ...(dto.kind === 'saml' ? this.spKeyPair(fields) : {}) },
@@ -128,7 +144,8 @@ export class IdentityProvidersService {
 
   async test(workspaceId: string, providerId: string): Promise<TestIdentityProviderResponse> {
     const provider = await this.owned(workspaceId, providerId);
-    return provider.kind === 'saml' ? this.saml.test(provider) : this.oidc.test(provider);
+    if (provider.kind === 'saml') return this.saml.test(provider);
+    return provider.kind === 'ldap' ? this.ldap.test(provider) : this.oidc.test(provider);
   }
 
   private async owned(workspaceId: string, providerId: string): Promise<IdentityProvider> {
@@ -160,7 +177,11 @@ export class IdentityProvidersService {
     }
 
     return {
-      ...(kind === 'saml' ? this.samlFields(dto, existing) : await this.oidcFields(dto, existing)),
+      ...(kind === 'saml'
+        ? this.samlFields(dto, existing)
+        : kind === 'ldap'
+          ? await this.ldapFields(dto, existing)
+          : await this.oidcFields(dto, existing)),
       ...(dto.enabled !== undefined ? { enabled: dto.enabled } : {}),
       ...(dto.showOnLogin !== undefined ? { showOnLogin: dto.showOnLogin } : {}),
       ...(dto.platformWide !== undefined ? { platformWide: dto.platformWide } : {}),
@@ -187,23 +208,59 @@ export class IdentityProvidersService {
     }
     if (!clientId) throw new BadRequestException(t('error.sso.clientIdRequired'));
 
-    let secretCipher: string | null | undefined;
-    if (dto.clientSecret !== undefined) {
-      if (dto.clientSecret === '') secretCipher = null;
-      else {
-        try {
-          secretCipher = encryptSecret(dto.clientSecret, this.key);
-        } catch (e) {
-          if (e instanceof MissingEncryptionKeyError) throw new BadRequestException(t('error.sso.secretKeyMissing'));
-          throw e;
-        }
-      }
-    }
-
     return {
       preset,
       config: { issuer: OIDC_PRESETS[preset].issuer ?? issuer, clientId, scopes },
-      ...(secretCipher !== undefined ? { secretCipher } : {}),
+      ...this.secret(dto.clientSecret),
+    };
+  }
+
+  /** A write-only secret: a value is stored encrypted, `''` clears it, absent keeps it. */
+  private secret(value: string | undefined): Pick<ProviderColumns, 'secretCipher'> {
+    if (value === undefined) return {};
+    if (value === '') return { secretCipher: null };
+    try {
+      return { secretCipher: encryptSecret(value, this.key) };
+    } catch (e) {
+      if (e instanceof MissingEncryptionKeyError) throw new BadRequestException(t('error.sso.secretKeyMissing'));
+      throw e;
+    }
+  }
+
+  /**
+   * The LDAP half. The URL must be `ldaps://`, or `ldap://` with StartTLS,
+   * unless AUTH_LDAP_ALLOW_INSECURE says this is a lab — checked here so an
+   * admin reads why in the form, and again on every sign-in, so turning the
+   * flag off stops a clear-text provider at once. The service-account
+   * password is `bindPassword`; a stray `clientSecret` is ignored.
+   */
+  private async ldapFields(dto: UpdateIdentityProviderDto, existing: IdentityProvider | null): Promise<ProviderColumns> {
+    const current = ldapConfigOf(existing ?? { config: {} });
+    const url = (dto.ldapUrl ?? current.url).trim().replace(/\/+$/, '');
+    const secure = url.toLowerCase().startsWith('ldaps:');
+    const startTls = !secure && (dto.startTls ?? current.startTls);
+    const problem = ldapUrlProblem({ url, startTls }, this.allowInsecureLdap);
+    if (problem) throw new BadRequestException(t(problem === 'insecure' ? 'error.sso.ldapInsecure' : 'error.sso.ldapUrlInvalid'));
+    await assertSafeExternalUrl(`https://${new URL(url).host}`, this.allowPrivate, LDAP_HOST_KEYS);
+
+    const optional = (sent: string | null | undefined, kept: string | null) => (sent === undefined ? kept : sent?.trim() || null);
+    const baseDn = (dto.baseDn ?? current.baseDn).trim();
+    if (!baseDn) throw new BadRequestException(t('error.sso.baseDnRequired'));
+    const userFilter = optional(dto.userFilter, current.userFilter);
+    if (userFilter && !userFilterValid(userFilter)) throw new BadRequestException(t('error.sso.userFilterInvalid', { username: '{username}' }));
+
+    return {
+      preset: 'generic',
+      config: {
+        url,
+        startTls,
+        bindDn: optional(dto.bindDn, current.bindDn),
+        baseDn,
+        userFilter,
+        emailAttribute: optional(dto.emailAttribute, current.emailAttribute),
+        nameAttribute: optional(dto.nameAttribute, current.nameAttribute),
+      },
+      ...this.secret(dto.bindPassword),
     };
   }
 
@@ -285,6 +342,7 @@ export class IdentityProvidersService {
       platformWide: r.platformWide,
       config: oidcConfigOf(r),
       saml: r.kind === 'saml' ? this.samlView(r) : null,
+      ldap: r.kind === 'ldap' ? ldapConfigOf(r) : null,
       hasSecret: r.secretCipher !== null,
       jitEnabled: r.jitEnabled,
       defaultRole: (WORKSPACE_ROLES as readonly string[]).includes(r.defaultRole ?? '') ? (r.defaultRole as WorkspaceRole) : null,
@@ -292,7 +350,8 @@ export class IdentityProvidersService {
       groupsClaim: r.groupsClaim,
       groupSyncMode: (GROUP_SYNC_MODES as readonly string[]).includes(r.groupSyncMode) ? (r.groupSyncMode as GroupSyncMode) : 'additive',
       sessionTtlHours: r.sessionTtlHours,
-      redirectUri: r.kind === 'saml' ? this.saml.acsUrl(r.id) : this.oidc.redirectUri(r.id),
+      redirectUri: r.kind === 'saml' ? this.saml.acsUrl(r.id) : r.kind === 'ldap' ? '' : this.oidc.redirectUri(r.id),
+      backchannelLogoutUri: r.kind === 'oidc' ? this.oidc.backchannelLogoutUri(r) : null,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     };
@@ -307,8 +366,7 @@ export class IdentityProvidersService {
 type ProviderColumns = Omit<Prisma.IdentityProviderUncheckedCreateInput, 'workspaceId' | 'kind' | 'name'>;
 
 
-/** Which fields a body set, by name — the secret only as "the secret changed", never its value. */
+/** Which fields a body set, by name — a secret only as "the secret changed", never its value. */
 function changedFields(dto: UpdateIdentityProviderDto): string[] {
-  const set = AUDITED_FIELDS.filter((f) => (dto as Record<string, unknown>)[f] !== undefined) as string[];
-  return dto.clientSecret !== undefined ? [...set, 'clientSecret'] : set;
+  return [...AUDITED_FIELDS, ...SECRET_FIELDS].filter((f) => (dto as Record<string, unknown>)[f] !== undefined);
 }

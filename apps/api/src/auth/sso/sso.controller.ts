@@ -1,12 +1,12 @@
 import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import type { SsoDiscoverResponse, SsoExchangeResponse, SsoProvidersResponse } from '@knowledge/contracts';
+import type { AuthSessionResponse, SsoDiscoverResponse, SsoExchangeResponse, SsoProvidersResponse } from '@knowledge/contracts';
 import { Public } from '../access.decorator.js';
 import { AuthRateLimit, AuthRateLimitGuard } from '../auth-rate-limit.guard.js';
 import { requestMeta } from '../../common/client-ip.js';
 import { t } from '../../i18n/t.js';
-import { SsoDiscoverDto, SsoExchangeDto } from './identity-providers.dto.js';
+import { LdapLoginDto, SsoDiscoverDto, SsoExchangeDto } from './identity-providers.dto.js';
 import { SsoEnabledGuard } from './sso-enabled.guard.js';
 import { SsoFlowService } from './sso-flow.service.js';
 
@@ -92,6 +92,39 @@ export class SsoController {
     @Res() res: Response,
   ): Promise<void> {
     res.redirect(303, await this.sso.samlAcs(providerId, body ?? {}, requestMeta(req)));
+  }
+
+  /**
+   * OIDC Back-Channel Logout 1.0: the IdP posts `logout_token` here when a
+   * session ends there. 200 when accepted, 400 `invalid_request` otherwise;
+   * never cached, per §2.8. Authenticated by the token's signature alone.
+   */
+  @Public()
+  @Post('oidc/:providerId/backchannel-logout')
+  @ApiExcludeEndpoint()
+  async backchannelLogout(
+    @Param('providerId') providerId: string,
+    @Body() body: Record<string, unknown>,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const token = typeof body?.logout_token === 'string' ? body.logout_token : '';
+    const ok = await this.sso.backchannelLogout(providerId, token, requestMeta(req));
+    res.setHeader('Cache-Control', 'no-store');
+    if (ok) res.status(200).end();
+    else res.status(400).json({ error: 'invalid_request' });
+  }
+
+  @Public()
+  @HttpCode(200)
+  @Post('ldap/:providerId/login')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit('ldap')
+  @ApiOperation({
+    summary: 'Sign in with a directory username and password (AUTH_LDAP_ENABLED). Wrong username and wrong password answer the same 401',
+  })
+  ldapLogin(@Param('providerId') providerId: string, @Body() dto: LdapLoginDto, @Req() req: Request): Promise<AuthSessionResponse> {
+    return this.sso.ldapLogin(providerId, dto.username, dto.password, requestMeta(req));
   }
 
   /** Our SP metadata, which is also our entity ID: public by nature, it holds only our certificate. */

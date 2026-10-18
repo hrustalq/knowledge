@@ -17,6 +17,8 @@ const BUCKETS = {
   login: { perIp: 30, perEmail: 10, failOpen: false },
   discover: { perIp: 60, perEmail: null, failOpen: true },
   exchange: { perIp: 30, perEmail: null, failOpen: false },
+  /** An LDAP password guess; "per email" is per typed username here. */
+  ldap: { perIp: 30, perEmail: 10, failOpen: false },
 } as const;
 export type AuthRateBucket = keyof typeof BUCKETS;
 
@@ -40,7 +42,8 @@ export class AuthRateLimitGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest();
 
     const checks = [this.limiter.hit(`auth:${bucket}:ip:${clientIp(req)}`, budget.perIp, WINDOW_MS, budget.failOpen)];
-    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase().slice(0, 320) : '';
+    const named = req.body?.email ?? req.body?.username;
+    const email = typeof named === 'string' ? named.trim().toLowerCase().slice(0, 320) : '';
     if (budget.perEmail && email) {
       checks.push(this.limiter.hit(`auth:${bucket}:email:${email}`, budget.perEmail, WINDOW_MS, budget.failOpen));
     }

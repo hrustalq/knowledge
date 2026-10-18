@@ -247,7 +247,11 @@
       "reauth": {
         "sso": "This workspace requires single sign-on. Sign in through your organization to continue.",
         "session": "This workspace asks you to sign in again after a while. Sign in to continue."
-      }
+      },
+      "ldapTitle": "Sign in with {name}",
+      "ldapHint": "Use the username and password of your organization’s directory.",
+      "username": "Username",
+      "back": "Back"
     }
   },
   "documents": {
@@ -5414,7 +5418,7 @@
     },
     "providers": {
       "title": "Identity providers",
-      "hint": "Sign people in with your organization’s OpenID Connect or SAML 2.0 provider. New providers start disabled.",
+      "hint": "Sign people in with your organization’s OpenID Connect, SAML 2.0 or, where enabled, LDAP directory. New providers start disabled.",
       "disabled": "Single sign-on is not enabled on this instance. An operator turns it on with AUTH_SSO_ENABLED=true (and AUTH_MODE=api-key).",
       "empty": "No identity providers yet.",
       "add": "Add provider",
@@ -5481,7 +5485,8 @@
       "protocol": "Protocol",
       "kinds": {
         "oidc": "OpenID Connect",
-        "saml": "SAML 2.0"
+        "saml": "SAML 2.0",
+        "ldap": "LDAP / Active Directory"
       },
       "formHintSaml": "After saving, give the identity provider the SP metadata URL shown in the list, or its entity ID and ACS URL.",
       "idpEntityId": "IdP entity ID",
@@ -5500,7 +5505,22 @@
       "acsUrl": "ACS URL",
       "copyEndpoint": "Copy {label}",
       "testOkSaml": "Configuration is valid. IdP entity ID {issuer}",
-      "testFailedSaml": "The configuration has a problem: {error}"
+      "testFailedSaml": "The configuration has a problem: {error}",
+      "formHintLdap": "People sign in with their directory username and password. After saving, use Test to check that the service account can search the base DN.",
+      "ldapUrl": "Directory URL",
+      "ldapUrlHint": "ldaps://host:636, or ldap://host:389 with StartTLS.",
+      "startTls": "Use StartTLS",
+      "bindDn": "Service account DN",
+      "bindDnHint": "The account that searches for people. Leave empty to search anonymously.",
+      "bindPassword": "Service account password",
+      "baseDn": "Base DN",
+      "userFilter": "User filter",
+      "userFilterHint": "Write {placeholder} where the typed username goes. Leave empty to match uid, mail, sAMAccountName or userPrincipalName.",
+      "attributeMapHintLdap": "Which entry attributes hold the person’s details. Leave a field empty for mail, displayName (or cn) and memberOf.",
+      "groupsAttributeHintLdap": "Group mappings match the full group DN, for example cn=editors,ou=groups,dc=corp,dc=example.",
+      "testOkLdap": "Bound and searched the base DN at {issuer}",
+      "testFailedLdap": "The directory test failed: {error}",
+      "backchannelLogoutUri": "Back-channel logout URI"
     },
     "groupMapping": {
       "title": "Group mapping",

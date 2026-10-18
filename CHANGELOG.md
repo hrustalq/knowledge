@@ -379,6 +379,39 @@ in the pull request that introduces them — see
   are read only from a named attribute. A transient NameID is refused. JIT,
   allowed domains, group mapping and enforced SSO work as for OpenID
   Connect. Sessions report `authMethod: 'saml'`. (#75)
+- Sign in with an LDAP or Active Directory account. Where the instance
+  allows it, a workspace admin can add a provider of kind **LDAP / Active
+  Directory** under Settings → Security → Providers, with the directory URL,
+  the base DN, an optional service account (its password is write-only, like
+  a client secret) and an optional user filter. Its button on `/login` opens
+  a username and password form instead of redirecting; the API also takes
+  `POST /v1/auth/ldap/:providerId/login` with `{ username, password }`. The
+  API binds as the service account, finds exactly one entry whose `uid`,
+  `mail`, `sAMAccountName` or `userPrincipalName` is what was typed (the
+  value is escaped, so filter syntax cannot widen the search), then binds as
+  that entry with the typed password. A wrong username, a wrong password, an
+  empty password, two matching entries and a disabled account all get the
+  same 401, `Invalid username or password`, and the audit row records which
+  it was. An unreachable directory is a 503. The account is identified by
+  `entryUUID` or AD's `objectGUID`, never the DN, so renaming or moving
+  someone keeps their account. Email, name and groups come from `mail`,
+  `displayName` (or `cn`) and `memberOf` unless the attribute map names
+  others; group mappings match the full group DN. JIT, allowed domains,
+  group mapping and enforced SSO work as for the other kinds. Sessions
+  report `authMethod: 'ldap'`. Sign-in attempts are rate-limited per IP and
+  per username. (#75)
+- OpenID Connect back-channel logout. When a person signs out at the
+  identity provider, or an admin ends their session there, the provider can
+  now tell us: register
+  `<API_PUBLIC_URL>/v1/auth/oidc/<provider id>/backchannel-logout` (shown in
+  the Providers tab) as the client's back-channel logout URL. The logout
+  token must be signed by a key in the provider's JWKS, be issued by it for
+  our client, be under 10 minutes old, carry the logout event and no
+  `nonce`, and each token is accepted once. A token with a `sid` ends the
+  sessions that IdP session opened; one with only a `sub` ends every session
+  that person opened through that provider. Each logout is recorded as
+  `auth.session_revoked`, and so is each refused token. The Yandex preset
+  has no back-channel logout. (#75)
 
 ### Changed
 
@@ -542,6 +575,24 @@ in the pull request that introduces them — see
   `https` unless `AUTH_SSO_ALLOW_PRIVATE_URLS` is set. The API never fetches
   it, so SAML needs no outbound network. Rolling back to an image without
   SAML leaves SAML providers in place but unusable. (#75)
+- LDAP sign-in is off unless both `AUTH_SSO_ENABLED=true` and
+  `AUTH_LDAP_ENABLED=true`. Turning `AUTH_LDAP_ENABLED` off again takes LDAP
+  providers off the login page and refuses their sign-ins at once, and
+  workspaces that enforce SSO stop counting them. A directory must be reached
+  over `ldaps://`, or `ldap://` with StartTLS; plain `ldap://` is refused,
+  when the provider is saved and at every sign-in, unless
+  `AUTH_LDAP_ALLOW_INSECURE=true`, which sends passwords in clear text and
+  is meant for a lab. A directory on a private address, which is the usual
+  case, needs `AUTH_SSO_ALLOW_PRIVATE_URLS=true`. The directory's TLS
+  certificate is checked against the system CAs; for an internal CA, point
+  `NODE_EXTRA_CA_CERTS` at it in the API container. Storing a service
+  account password needs `SETTINGS_ENCRYPTION_KEY`. New variables:
+  `AUTH_LDAP_ENABLED` (`false`) and `AUTH_LDAP_ALLOW_INSECURE` (`false`).
+  New dependency: `ldapts`. No migration. (#75)
+- Back-channel logout needs the API to reach the provider's JWKS URL, as
+  sign-in already does. It adds no migration and no variable. Rolling back
+  to an image without it makes the IdP's logout calls fail (404), and those
+  sessions then run to their normal expiry. (#75)
 
 ## [0.26.0] — 2026-10-16
 

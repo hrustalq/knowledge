@@ -365,6 +365,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/ldap/{providerId}/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign in with a directory username and password (AUTH_LDAP_ENABLED). Wrong username and wrong password answer the same 401 */
+        post: operations["SsoController_ldapLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{id}/identity-providers": {
         parameters: {
             query?: never;
@@ -5974,6 +5991,11 @@ export interface components {
             /** @description The single-use code from the /auth/sso/complete fragment */
             code: string;
         };
+        LdapLoginDto: {
+            /** @description What the directory knows the person by: uid, sAMAccountName, userPrincipalName or email, per the provider filter */
+            username: string;
+            password: string;
+        };
         CreateIdentityProviderDto: {
             /**
              * @description IdP quirks to apply. Defaults to generic.
@@ -6002,10 +6024,22 @@ export interface components {
             idpCert?: string;
             /** @description SAML: accept responses no AuthnRequest of ours asked for (the IdP's app portal). Defaults to false. */
             allowIdpInitiated?: boolean;
-            /** @description SAML: attribute holding the email; null tries the usual names */
+            /** @description SAML / LDAP: attribute holding the email; null tries the usual names (SAML) or reads mail (LDAP) */
             emailAttribute?: string | null;
-            /** @description SAML: attribute holding the display name; null tries the usual names */
+            /** @description SAML / LDAP: attribute holding the display name; null tries the usual names */
             nameAttribute?: string | null;
+            /** @description LDAP: ldaps://host[:port], or ldap://host[:port] with startTls */
+            ldapUrl?: string;
+            /** @description LDAP: upgrade an ldap:// connection with StartTLS. Ignored for ldaps:// */
+            startTls?: boolean;
+            /** @description LDAP: the service account that searches; null searches anonymously */
+            bindDn?: string | null;
+            /** @description Write-only. LDAP: the service account's password. A value sets it, '' clears it, absent keeps it. */
+            bindPassword?: string;
+            /** @description LDAP: where the person search starts, e.g. ou=people,dc=corp,dc=example */
+            baseDn?: string;
+            /** @description LDAP: search filter with {username} where the typed value goes (escaped); null uses the default */
+            userFilter?: string | null;
             /** @description Create an account on first sign-in (needs the address in allowedDomains) */
             jitEnabled?: boolean;
             /**
@@ -6015,14 +6049,14 @@ export interface components {
             defaultRole?: "guest" | "viewer" | "editor" | "admin" | null;
             /** @description Email domains this provider may assert, e.g. corp.example */
             allowedDomains?: string[];
-            /** @description OIDC claim (null uses the preset default) or SAML attribute (null = no groups) holding group names */
+            /** @description OIDC claim (null uses the preset default), SAML attribute (null = no groups) or LDAP attribute (null = memberOf) holding group names */
             groupsClaim?: string | null;
             /** @enum {string} */
             groupSyncMode?: "additive" | "authoritative";
             /** @description Session lifetime for this provider; null = AUTH_SESSION_TTL_HOURS */
             sessionTtlHours?: number | null;
             /**
-             * @description oidc or saml; ldap is refused until it ships
+             * @description oidc, saml, or ldap (only under AUTH_LDAP_ENABLED)
              * @enum {string}
              */
             kind: "oidc" | "saml" | "ldap";
@@ -6057,10 +6091,22 @@ export interface components {
             idpCert?: string;
             /** @description SAML: accept responses no AuthnRequest of ours asked for (the IdP's app portal). Defaults to false. */
             allowIdpInitiated?: boolean;
-            /** @description SAML: attribute holding the email; null tries the usual names */
+            /** @description SAML / LDAP: attribute holding the email; null tries the usual names (SAML) or reads mail (LDAP) */
             emailAttribute?: string | null;
-            /** @description SAML: attribute holding the display name; null tries the usual names */
+            /** @description SAML / LDAP: attribute holding the display name; null tries the usual names */
             nameAttribute?: string | null;
+            /** @description LDAP: ldaps://host[:port], or ldap://host[:port] with startTls */
+            ldapUrl?: string;
+            /** @description LDAP: upgrade an ldap:// connection with StartTLS. Ignored for ldaps:// */
+            startTls?: boolean;
+            /** @description LDAP: the service account that searches; null searches anonymously */
+            bindDn?: string | null;
+            /** @description Write-only. LDAP: the service account's password. A value sets it, '' clears it, absent keeps it. */
+            bindPassword?: string;
+            /** @description LDAP: where the person search starts, e.g. ou=people,dc=corp,dc=example */
+            baseDn?: string;
+            /** @description LDAP: search filter with {username} where the typed value goes (escaped); null uses the default */
+            userFilter?: string | null;
             /** @description Create an account on first sign-in (needs the address in allowedDomains) */
             jitEnabled?: boolean;
             /**
@@ -6070,7 +6116,7 @@ export interface components {
             defaultRole?: "guest" | "viewer" | "editor" | "admin" | null;
             /** @description Email domains this provider may assert, e.g. corp.example */
             allowedDomains?: string[];
-            /** @description OIDC claim (null uses the preset default) or SAML attribute (null = no groups) holding group names */
+            /** @description OIDC claim (null uses the preset default), SAML attribute (null = no groups) or LDAP attribute (null = memberOf) holding group names */
             groupsClaim?: string | null;
             /** @enum {string} */
             groupSyncMode?: "additive" | "authoritative";
@@ -9014,6 +9060,50 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SsoExchangeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SsoController_ldapLogin: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LdapLoginDto"];
             };
         };
         responses: {

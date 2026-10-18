@@ -102,7 +102,7 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 // mark one `platformWide` so a single-tenant install offers it on every login.
 // ---------------------------------------------------------------------------
 
-/** `identity_providers.kind`. Only `oidc` signs anyone in yet; SAML and LDAP follow. */
+/** `identity_providers.kind`. LDAP is offered only under AUTH_LDAP_ENABLED. */
 export const IDP_KINDS = ['oidc', 'saml', 'ldap'] as const;
 export type IdpKind = (typeof IDP_KINDS)[number];
 
@@ -308,6 +308,37 @@ export interface SamlProviderConfig {
   nameAttribute: string | null;
 }
 
+/**
+ * The search an LDAP sign-in runs when the provider names none: a person
+ * whose uid, mail, sAMAccountName or userPrincipalName is what they typed.
+ * `{username}` is replaced by the typed value, escaped per RFC 4515.
+ */
+export const LDAP_DEFAULT_USER_FILTER =
+  '(&(objectClass=person)(|(uid={username})(mail={username})(sAMAccountName={username})(userPrincipalName={username})))';
+
+/**
+ * The non-secret half of an LDAP / Active Directory provider (#75 phase 7).
+ * The service account's password is the provider's secret (write-only, like
+ * an OIDC client secret); the groups attribute is its `groupsClaim`, which
+ * defaults to `memberOf`.
+ */
+export interface LdapProviderConfig {
+  /** `ldaps://host[:port]`, or `ldap://` with `startTls`. */
+  url: string;
+  /** Upgrade an `ldap://` connection with StartTLS before anything is sent. */
+  startTls: boolean;
+  /** The service account that searches for the person; null searches anonymously. */
+  bindDn: string | null;
+  /** Where the search starts, e.g. `ou=people,dc=corp,dc=example`. */
+  baseDn: string;
+  /** Null uses LDAP_DEFAULT_USER_FILTER. Must contain `{username}`. */
+  userFilter: string | null;
+  /** Attribute holding the address; null is `mail`. */
+  emailAttribute: string | null;
+  /** Attribute holding the display name; null tries displayName, then cn. */
+  nameAttribute: string | null;
+}
+
 export interface SamlProviderView extends SamlProviderConfig {
   /** Our entity ID, which is also the URL the SP metadata is served at. */
   entityId: string;
@@ -326,6 +357,8 @@ export interface IdentityProviderView {
   config: OidcProviderConfig;
   /** SAML settings and our SP endpoints; null for OIDC. */
   saml: SamlProviderView | null;
+  /** LDAP settings; null for the other kinds. */
+  ldap: LdapProviderConfig | null;
   /** A client secret is stored. The secret itself never leaves the API. */
   hasSecret: boolean;
   jitEnabled: boolean;
@@ -335,8 +368,10 @@ export interface IdentityProviderView {
   groupsClaim: string | null;
   groupSyncMode: GroupSyncMode;
   sessionTtlHours: number | null;
-  /** What to register at the IdP: the OIDC redirect URI, or the SAML ACS URL. */
+  /** What to register at the IdP: the OIDC redirect URI, or the SAML ACS URL. Empty for LDAP. */
   redirectUri: string;
+  /** OIDC back-channel logout URI to register at the IdP; null for kinds and presets without one. */
+  backchannelLogoutUri: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -346,6 +381,8 @@ export interface ListIdentityProvidersResponse {
   providers: IdentityProviderView[];
   /** SETTINGS_ENCRYPTION_KEY is set: a client secret can be saved. */
   secretsWritable: boolean;
+  /** The kinds a new provider may have on this instance (LDAP only under AUTH_LDAP_ENABLED). */
+  kinds: IdpKind[];
 }
 
 // POST /v1/workspaces/:id/identity-providers/:providerId/test

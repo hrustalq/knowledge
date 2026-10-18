@@ -10,6 +10,7 @@ import { identityFromSamlProfile } from '../src/auth/sso/saml-profile.js';
 import { IdentityProvidersService } from '../src/auth/sso/identity-providers.service.js';
 import { OidcService } from '../src/auth/sso/oidc.service.js';
 import { SamlService } from '../src/auth/sso/saml.service.js';
+import { LdapService } from '../src/auth/sso/ldap.service.js';
 import { noAuthPolicy } from './auth-policy-fakes.js';
 import { API, fakeConfig, ssoHarness, WS, type Row } from './sso-fakes.js';
 
@@ -271,7 +272,7 @@ describe('SAML provider setup', () => {
     const cfg = fakeConfig({ SETTINGS_ENCRYPTION_KEY: ENC_KEY, AUTH_SSO_ALLOW_PRIVATE_URLS: false });
     const saml = new SamlService(cfg as never);
     const audit = { record: vi.fn(async () => undefined) };
-    const svc = new IdentityProvidersService(prisma as never, cfg as never, new OidcService(cfg as never), audit as never, noAuthPolicy as never, saml);
+    const svc = new IdentityProvidersService(prisma as never, cfg as never, new OidcService(cfg as never), audit as never, noAuthPolicy as never, saml, new LdapService(cfg as never));
     return { svc, saml, rows };
   }
   const admin = { userId: 'u1', isAdmin: false } as never;

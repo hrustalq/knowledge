@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { AuthFlowService } from '../src/auth/auth-flow.service.js';
 import { OidcService } from '../src/auth/sso/oidc.service.js';
 import { SamlService } from '../src/auth/sso/saml.service.js';
+import { LdapService } from '../src/auth/sso/ldap.service.js';
 import { SsoFlowService } from '../src/auth/sso/sso-flow.service.js';
 import { SsoLoginService } from '../src/auth/sso/sso-login.service.js';
 import { RoleSyncService } from '../src/auth/sso/role-sync.service.js';
@@ -28,6 +29,8 @@ export function fakeConfig(over: Record<string, unknown> = {}) {
     AUTH_PASSWORD_LOGIN_ENABLED: true,
     AUTH_BREAK_GLASS_EMAILS: '',
     AUTH_SESSION_TTL_HOURS: 720,
+    AUTH_LDAP_ENABLED: false,
+    AUTH_LDAP_ALLOW_INSECURE: false,
     NODE_ENV: 'test',
     ...over,
   };
@@ -44,6 +47,7 @@ export function fakePrisma() {
     identities: [] as Row[],
     users: [] as Row[],
     members: [] as Row[],
+    sessions: [] as Row[],
   };
   const match = (row: Row, where: Row) =>
     Object.entries(where).every(([k, v]) => {
@@ -101,6 +105,13 @@ export function fakePrisma() {
         return user;
       }),
     },
+    session: {
+      updateMany: vi.fn(async ({ where, data }: Row) => {
+        const rows = db.sessions.filter((r) => match(r, where));
+        rows.forEach((r) => Object.assign(r, data));
+        return { count: rows.length };
+      }),
+    },
     workspaceMember: {
       createMany: vi.fn(async ({ data }: Row) => {
         for (const m of data as Row[]) {
@@ -128,7 +139,8 @@ export function ssoHarness(config = fakeConfig(), defaults: Row = {}) {
   const login = new SsoLoginService(prisma as never, audit as never, new RoleSyncService(prisma as never, audit as never));
   const flow = new AuthFlowService(prisma as never, config as never, sessions as never, {} as never, audit as never, noAuthPolicy);
   const saml = new SamlService(config as never);
-  const sso = new SsoFlowService(prisma as never, config as never, oidc, login, flow, audit as never, noAuthPolicy, saml);
+  const ldap = new LdapService(config as never);
+  const sso = new SsoFlowService(prisma as never, config as never, oidc, login, flow, audit as never, noAuthPolicy, saml, ldap);
 
   const provider = (over: Row = {}) => {
     const row = {
@@ -156,6 +168,6 @@ export function ssoHarness(config = fakeConfig(), defaults: Row = {}) {
     return row;
   };
   const failures = () => (audit.record.mock.calls as unknown as Row[][]).map((c) => c[0]).filter((e) => e.action === 'auth.login_failed');
-  return { sso, oidc, saml, prisma, db, audit, sessions, provider, failures };
+  return { sso, oidc, saml, ldap, prisma, db, audit, sessions, provider, failures };
 }
 

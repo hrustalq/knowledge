@@ -1,10 +1,20 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type IdentityProvider } from '@prisma/client';
 import * as client from 'openid-client';
 import {
   authMethodOf,
+  type AuthSessionResponse,
   IDP_KINDS,
   type IdpKind,
   type SsoDiscoverResponse,
@@ -25,10 +35,13 @@ import { AuthPolicyService } from '../auth-policy.service.js';
 import { OIDC_PRESETS, presetOf } from './oidc-presets.js';
 import { OidcService } from './oidc.service.js';
 import { SsoLoginService } from './sso-login.service.js';
-import { LIVE_IDP_KINDS } from './live-kinds.js';
+import { liveIdpKinds } from './live-kinds.js';
 import type { ExternalIdentity } from './oidc-claims.js';
 import { SamlService, type SamlExpected } from './saml.service.js';
 import { identityFromSamlProfile, samlConfigOf } from './saml-profile.js';
+import { LDAP_DEFAULT_GROUPS_ATTRIBUTE, LdapService } from './ldap.service.js';
+import { identityFromLdapEntry, ldapConfigOf } from './ldap-profile.js';
+import { LOGOUT_TOKEN_MAX_AGE_SEC } from './oidc.service.js';
 
 /** The fragment code's lifetime: long enough for one page load, short enough to be useless later. */
 const EXCHANGE_TTL_MS = 60_000;
@@ -75,6 +88,7 @@ export class SsoFlowService {
     private readonly audit: AuditService,
     private readonly policy: AuthPolicyService,
     private readonly saml: SamlService,
+    private readonly ldap: LdapService,
   ) {
     this.web = config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
     this.stateTtlMs = config.get('AUTH_SSO_STATE_TTL_SEC', { infer: true }) * 1000;
@@ -86,7 +100,7 @@ export class SsoFlowService {
       where: {
         enabled: true,
         showOnLogin: true,
-        kind: { in: LIVE_IDP_KINDS },
+        kind: { in: liveIdpKinds(this.config) },
         OR: [{ platformWide: true }, ...(workspaceId && isUuid(workspaceId) ? [{ workspaceId }] : [])],
       },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
@@ -114,7 +128,7 @@ export class SsoFlowService {
     const rows = await this.prisma.identityProvider.findMany({
       where: {
         enabled: true,
-        kind: { in: LIVE_IDP_KINDS },
+        kind: { in: liveIdpKinds(this.config) },
         OR: [
           { allowedDomains: { has: domain } },
           ...(enforced
@@ -296,6 +310,128 @@ export class SsoFlowService {
     const claims = identityFromSamlProfile(assertion.profile, { emailAttribute, nameAttribute, groupsAttribute: provider.groupsClaim });
     if (!claims.ok) return this.fail(provider, claims.error, claims.reason, back, meta);
     return this.signIn(provider, claims.identity, solicited ? row.id : null, back, meta);
+  }
+
+  /**
+   * LDAP sign-in (#75 phase 7). No redirect leg: the web posts the typed
+   * credentials here and gets the session back, so there is no transaction row
+   * and no fragment code. Wrong username and wrong password are one answer;
+   * so is a disabled account, as for a password login. Only an unreachable
+   * directory and a sign-in the account may not make say more.
+   */
+  async ldapLogin(providerId: string, username: string, password: string, meta: RequestMeta): Promise<AuthSessionResponse> {
+    const provider = liveIdpKinds(this.config).includes('ldap') ? await this.liveProvider(providerId, 'ldap') : null;
+    if (!provider) throw new NotFoundException(t('error.sso.providerNotFound'));
+    const who = username.trim().slice(0, 100);
+
+    const result = await this.ldap.authenticate(provider, username, password);
+    if (!result.ok) {
+      const unavailable = result.failure === 'unavailable';
+      this.fail(provider, unavailable ? 'provider-error' : 'failed', `${result.failure} (${who}): ${result.detail}`, DEFAULT_RETURN, meta);
+      if (unavailable) throw new ServiceUnavailableException(t('error.sso.ldapUnavailable'));
+      throw new UnauthorizedException(t('error.sso.ldapInvalidCredentials'));
+    }
+    const claims = identityFromLdapEntry(result.entry, ldapConfigOf(provider), provider.groupsClaim ?? LDAP_DEFAULT_GROUPS_ATTRIBUTE);
+    if (!claims.ok) {
+      this.fail(provider, claims.error, `${claims.reason} (${who})`, DEFAULT_RETURN, meta);
+      throw this.ldapRefusal(claims.error);
+    }
+    const outcome = await this.login.resolve(provider, claims.identity);
+    if (!outcome.ok) {
+      this.fail(provider, outcome.error, `${outcome.reason} (${who})`, DEFAULT_RETURN, meta, outcome.userId);
+      if (outcome.error === 'account-disabled') throw new UnauthorizedException(t('error.sso.ldapInvalidCredentials'));
+      throw this.ldapRefusal(outcome.error);
+    }
+    return this.flow.issueSession(outcome.user, meta, {
+      authMethod: 'ldap',
+      providerId: provider.id,
+      ttlHours: provider.sessionTtlHours,
+      workspaceId: provider.workspaceId,
+      via: 'sso',
+    });
+  }
+
+  /** The person is who they said, but may not sign in here: the same categories /login?error= shows. */
+  private ldapRefusal(error: SsoLoginError): ForbiddenException {
+    return new ForbiddenException({ statusCode: HttpStatus.FORBIDDEN, message: t('error.sso.ldapRefused'), loginError: error });
+  }
+
+  /**
+   * OIDC back-channel logout (#75 phase 7): the IdP ended a session and says
+   * so server to server. A verified token revokes our sessions that IdP
+   * session opened (`sid`), or every session of that person through this
+   * provider (`sub` alone). Each token is spent once by its `jti`.
+   *
+   * Answers whether the token was accepted; a token that names no session we
+   * hold is still accepted — the IdP did its part, and saying otherwise would
+   * tell a caller which sessions exist.
+   */
+  async backchannelLogout(providerId: string, token: string, meta: RequestMeta): Promise<boolean> {
+    const provider = await this.liveProvider(providerId, 'oidc');
+    if (!provider || !token) return false;
+    const refuse = (reason: string): false => {
+      void this.audit.record({
+        workspaceId: provider.workspaceId,
+        actor: 'idp',
+        action: 'auth.session_revoked',
+        params: { via: 'backchannel', providerId: provider.id },
+        ok: false,
+        error: reason.slice(0, 500),
+        ip: meta.ip,
+      });
+      return false;
+    };
+
+    let claims;
+    try {
+      claims = await this.oidc.logoutClaims(provider, token);
+    } catch (e) {
+      return refuse((e as Error).message);
+    }
+    if (claims.jti) {
+      try {
+        await this.prisma.ssoAuthRequest.create({
+          data: {
+            providerId: provider.id,
+            stateHash: sha256(`logout-jti:${provider.id}:${claims.jti}`),
+            returnTo: DEFAULT_RETURN,
+            consumedAt: new Date(),
+            // Past this the token is refused for its age anyway, then the sweeper purges the marker.
+            expiresAt: new Date(Date.now() + (LOGOUT_TOKEN_MAX_AGE_SEC + 120) * 1000),
+          },
+        });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return refuse('logout token replayed');
+        throw e;
+      }
+    }
+
+    const identity = claims.sub
+      ? await this.prisma.userIdentity.findUnique({ where: { providerId_subject: { providerId: provider.id, subject: claims.sub } } })
+      : null;
+    // Never an unnarrowed revoke: a `sub` we have not linked, with no `sid`, ends nothing.
+    const { count } =
+      claims.sid || identity
+        ? await this.prisma.session.updateMany({
+            where: {
+              providerId: provider.id,
+              revokedAt: null,
+              ...(claims.sid ? { idpSessionId: claims.sid } : {}),
+              ...(identity ? { userId: identity.userId } : {}),
+            },
+            data: { revokedAt: new Date() },
+          })
+        : { count: 0 };
+    void this.audit.record({
+      workspaceId: provider.workspaceId,
+      actor: 'idp',
+      action: 'auth.session_revoked',
+      params: { via: 'backchannel', providerId: provider.id, by: claims.sid ? 'sid' : 'sub', sessionsRevoked: count },
+      ok: true,
+      ip: meta.ip,
+      target: identity?.userId ?? null,
+    });
+    return true;
   }
 
   /** The SP metadata of a SAML provider, enabled or not — an admin needs it before switching it on. */

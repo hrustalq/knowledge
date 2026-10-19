@@ -389,6 +389,8 @@ export const envSchema = z.object({
    * random key, so unique readers restart with the process (warned at boot).
    */
   ANALYTICS_READER_SECRET: z.string().default(''),
+  /** Per-view cap on a web view's active read time, in ms: a tab left open all day reads as half an hour. */
+  ANALYTICS_READ_TIME_CAP_MS: z.coerce.number().int().positive().default(1_800_000),
   /** Knowledge issues one principal (per API key when present) may file per 24 h; past it a report is 429. */
   KNOWLEDGE_ISSUE_DAILY_LIMIT: z.coerce.number().int().positive().default(50),
   /**

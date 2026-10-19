@@ -29989,6 +29989,140 @@
           "mcp"
         ]
       }
+    },
+    "/v1/documents/{id}/views": {
+      "post": {
+        "operationId": "AnalyticsController_view",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordPageViewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Record that the caller opened this page (the web beacon). Idempotent on viewId",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/views/{viewId}/heartbeat": {
+      "post": {
+        "operationId": "AnalyticsController_heartbeat",
+        "parameters": [
+          {
+            "name": "viewId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageViewHeartbeatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Fold a view's active read time into it. Monotonic and capped; a view the caller did not open is unchanged",
+        "tags": [
+          "analytics"
+        ]
+      }
     }
   },
   "info": {
@@ -35870,6 +36004,56 @@
             "description": "Defaults to the question"
           }
         }
+      },
+      "RecordPageViewDto": {
+        "type": "object",
+        "properties": {
+          "viewId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The page's own id for this view; a replay is a no-op"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The revision shown"
+          },
+          "searchId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The search this page was opened from (`searchId` of the search response)"
+          },
+          "searchRank": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "1-based rank of the clicked result"
+          },
+          "noTrack": {
+            "type": "boolean",
+            "description": "The browser asked not to be tracked (Global Privacy Control): counted, never tied to a reader"
+          }
+        },
+        "required": [
+          "viewId"
+        ]
+      },
+      "PageViewHeartbeatDto": {
+        "type": "object",
+        "properties": {
+          "activeMs": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Active read time of the view so far, in ms — the total, not a delta"
+          },
+          "noTrack": {
+            "type": "boolean",
+            "description": "As on the view: must match it, or the heartbeat changes nothing"
+          }
+        },
+        "required": [
+          "activeMs"
+        ]
       },
       "ApiErrorResponse": {
         "type": "object",

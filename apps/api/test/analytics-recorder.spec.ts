@@ -16,6 +16,7 @@ function recorder(opts: { env?: Record<string, unknown>; settings?: { analyticsE
   const env: Record<string, unknown> = {
     ANALYTICS_ENABLED: true,
     ANALYTICS_READER_SECRET: 'secret',
+    ANALYTICS_READ_TIME_CAP_MS: 1_800_000,
     SETTINGS_ENCRYPTION_KEY: '',
     ...opts.env,
   };
@@ -23,7 +24,12 @@ function recorder(opts: { env?: Record<string, unknown>; settings?: { analyticsE
     workspaceSettings: { findUnique: vi.fn(async () => opts.settings ?? null) },
     document: { findUnique: vi.fn(async () => ({ workspaceId: WS, projectId: 'p-1' })) },
     searchQuery: { create: vi.fn(async () => ({})) },
-    pageView: { create: vi.fn(async () => ({})) },
+    pageView: {
+      create: vi.fn(async () => ({})),
+      createMany: vi.fn(async () => ({ count: 1 })),
+      findUnique: vi.fn(async (): Promise<{ workspaceId: string } | null> => ({ workspaceId: WS })),
+    },
+    $executeRaw: vi.fn(async () => 1),
     mcpToolCall: { create: vi.fn(async () => ({})) },
   };
   const config = { get: (k: string) => env[k] };
@@ -145,5 +151,37 @@ describe('AnalyticsRecorder', () => {
       rec.search({ principal: key }, { workspaceId: WS, query: 'q', mode: 'hybrid', projectIds: [], resultDocIds: [], durationMs: 1 }),
     ).not.toThrow();
     await flush();
+  });
+
+  it('opens a web view from the beacon on the page\'s own id, with the search it came from', async () => {
+    const { rec, prisma } = recorder();
+    const viewId = '44444444-4444-4444-8444-444444444444';
+    await rec.webView({ principal: session }, DOC, { viewId, revisionId: 'rev-1', searchId: 's-1', searchRank: 3 });
+    expect(prisma.pageView.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          id: viewId,
+          workspaceId: WS,
+          projectId: 'p-1',
+          channel: 'web',
+          searchId: 's-1',
+          searchRank: 3,
+          readerKey: rec.readerKey({ principal: session }, WS),
+        }),
+      ],
+      skipDuplicates: true,
+    });
+  });
+
+  it('matches a heartbeat to the caller\'s own reader key, with the cap, and skips a missing view', async () => {
+    const { rec, prisma } = recorder({ env: { ANALYTICS_READ_TIME_CAP_MS: 60_000 } });
+    await rec.heartbeat({ principal: session }, 'v-1', 15_400.6);
+    const [strings, ...values] = prisma.$executeRaw.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
+    expect(strings.join('?')).toContain('reader_key IS NOT DISTINCT FROM');
+    expect(values).toEqual([15_401, 60_000, 'v-1', rec.readerKey({ principal: session }, WS)]);
+
+    prisma.pageView.findUnique.mockResolvedValueOnce(null);
+    await rec.heartbeat({ principal: session }, 'v-gone', 1);
+    expect(prisma.$executeRaw).toHaveBeenCalledOnce();
   });
 });

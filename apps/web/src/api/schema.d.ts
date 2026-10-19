@@ -6128,6 +6128,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{id}/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record that the caller opened this page (the web beacon). Idempotent on viewId */
+        post: operations["AnalyticsController_view"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/views/{viewId}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fold a view's active read time into it. Monotonic and capped; a view the caller did not open is unchanged */
+        post: operations["AnalyticsController_heartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -8364,6 +8398,33 @@ export interface components {
             projectId?: string;
             /** @description Defaults to the question */
             title?: string;
+        };
+        RecordPageViewDto: {
+            /**
+             * Format: uuid
+             * @description The page's own id for this view; a replay is a no-op
+             */
+            viewId: string;
+            /**
+             * Format: uuid
+             * @description The revision shown
+             */
+            revisionId?: string;
+            /**
+             * Format: uuid
+             * @description The search this page was opened from (`searchId` of the search response)
+             */
+            searchId?: string;
+            /** @description 1-based rank of the clicked result */
+            searchRank?: number;
+            /** @description The browser asked not to be tracked (Global Privacy Control): counted, never tied to a reader */
+            noTrack?: boolean;
+        };
+        PageViewHeartbeatDto: {
+            /** @description Active read time of the view so far, in ms — the total, not a delta */
+            activeMs: number;
+            /** @description As on the view: must match it, or the heartbeat changes nothing */
+            noTrack?: boolean;
         };
         ApiErrorResponse: {
             /**
@@ -27974,6 +28035,94 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_view: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordPageViewDto"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_heartbeat: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                viewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageViewHeartbeatDto"];
+            };
+        };
+        responses: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };

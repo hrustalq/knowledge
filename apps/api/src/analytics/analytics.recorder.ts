@@ -39,6 +39,14 @@ export interface RecordedToolCall {
   durationMs: number;
 }
 
+export interface RecordedWebView {
+  viewId: string;
+  revisionId?: string | null;
+  /** The search result this view was opened from, and its 1-based rank. */
+  searchId?: string | null;
+  searchRank?: number | null;
+}
+
 /** A request's privacy signals, for the callers that have one. */
 export function noTrackOf(headers: Record<string, string | string[] | undefined>): boolean {
   return headers['dnt'] === '1' || headers['sec-gpc'] === '1';
@@ -76,9 +84,9 @@ const SETTINGS_TTL_MS = 60_000;
  * method swallows its own failure, so a broken analytics write never fails the
  * search, read or tool call it describes.
  *
- * Web page views are not recorded here: they come from the page's own beacon,
- * because `GET /:id/content` is also hit by SSR and prefetch, and counting
- * those would count a page nobody looked at.
+ * Web page views are not recorded by `view()`: they come from the page's own
+ * beacon (`webView`, `heartbeat`), because `GET /:id/content` is also hit by
+ * SSR and prefetch, and counting those would count a page nobody looked at.
  */
 @Injectable()
 export class AnalyticsRecorder {
@@ -188,6 +196,59 @@ export class AnalyticsRecorder {
           apiKeyId: caller.principal.apiKey?.id ?? null,
         },
       });
+    });
+  }
+
+  /**
+   * Open a web view from the page's beacon. `viewId` is the page's own, so a
+   * replayed beacon is a no-op. The route has already checked the caller may
+   * open the page.
+   */
+  webView(caller: AnalyticsCaller, documentId: string, v: RecordedWebView): Promise<void> {
+    if (!this.config.get('ANALYTICS_ENABLED', { infer: true })) return Promise.resolve();
+    return this.guard('web view', async () => {
+      const doc = await this.prisma.document.findUnique({
+        where: { id: documentId },
+        select: { workspaceId: true, projectId: true },
+      });
+      if (!doc || !(await this.enabled(doc.workspaceId))) return;
+      await this.prisma.pageView.createMany({
+        data: [
+          {
+            id: v.viewId,
+            workspaceId: doc.workspaceId,
+            projectId: doc.projectId,
+            documentId,
+            revisionId: v.revisionId ?? null,
+            channel: channelFor(caller),
+            readerKey: this.readerKey(caller, doc.workspaceId),
+            apiKeyId: caller.principal.apiKey?.id ?? null,
+            searchId: v.searchId ?? null,
+            searchRank: v.searchRank ?? null,
+          },
+        ],
+        skipDuplicates: true,
+      });
+    });
+  }
+
+  /**
+   * Fold a view's active read time into its row: one guarded statement, so
+   * time only grows, never past the cap, and only on a row this reader opened
+   * — a heartbeat naming someone else's view changes nothing.
+   */
+  heartbeat(caller: AnalyticsCaller, viewId: string, activeMs: number): Promise<void> {
+    if (!this.config.get('ANALYTICS_ENABLED', { infer: true })) return Promise.resolve();
+    return this.guard('heartbeat', async () => {
+      // The reader key is per workspace, so the row's workspace is read first.
+      const row = await this.prisma.pageView.findUnique({ where: { id: viewId }, select: { workspaceId: true } });
+      if (!row) return;
+      const cap = this.config.get('ANALYTICS_READ_TIME_CAP_MS', { infer: true });
+      const reader = this.readerKey(caller, row.workspaceId);
+      await this.prisma.$executeRaw`
+        UPDATE page_views
+        SET active_ms = LEAST(GREATEST(active_ms, ${Math.round(activeMs)}), ${cap}), last_seen_at = now()
+        WHERE id = ${viewId}::uuid AND channel = 'web' AND reader_key IS NOT DISTINCT FROM ${reader}::text`;
     });
   }
 

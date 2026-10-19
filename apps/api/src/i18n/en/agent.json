@@ -253,5 +253,15 @@
     "linksTitle": "\"{title}\" has broken links",
     "lowDetail": "The page scores below the quality threshold.",
     "summary": "Scored {pages}, averaging {average}/100: {calls} judged by the model, {reused} unchanged since their last score."
+  },
+  "arbiter": "Arbiter",
+  "arbiterDesc": "Finds passages in two pages that contradict each other and records them as conflicts to resolve.",
+  "arbitration": {
+    "stubEmbeddings": "The stub embedding provider cannot tell which passages are about the same thing; no pages were compared.",
+    "nothingChanged": "No page changed since the last check.",
+    "noPairs": "No passages were close enough to compare.",
+    "budgetSpent": "The AI budget ran out after {judged} comparisons.",
+    "findingTitle": "“{a}” and “{b}” disagree",
+    "summary": "Compared {judged} pairs of passages; {found} new contradictions."
   }
 }

@@ -35,5 +35,6 @@
   "group": "group id",
   "accessRequest": "access request id",
   "capture": "capture id",
-  "releaseTag": "release tag id"
+  "releaseTag": "release tag id",
+  "conflict": "conflict id"
 }

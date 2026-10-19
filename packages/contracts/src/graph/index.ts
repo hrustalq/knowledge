@@ -310,3 +310,52 @@ export interface GraphTimelineResponse {
   /** Days with at least one change, oldest first: the density sparkline. */
   days: GraphTimelineDay[];
 }
+
+// ---------------------------------------------------------------------------
+// Knowledge conflicts (#81)
+
+/** What disagrees with what: two pages. Doc↔code arrives with the sentinel. */
+export const CONFLICT_KINDS = ['doc-doc'] as const;
+export type ConflictKind = (typeof CONFLICT_KINDS)[number];
+
+/**
+ * `open` until a person acts or the text goes away: `resolved` (fixed, or not
+ * a conflict after all with a note), `dismissed` (wrong; stays dismissed when
+ * re-detected), `superseded` (a side's page changed, so the quoted text is no
+ * longer current — reopened if the new text still conflicts).
+ */
+export const CONFLICT_STATUSES = ['open', 'resolved', 'dismissed', 'superseded'] as const;
+export type ConflictStatus = (typeof CONFLICT_STATUSES)[number];
+
+/** One side of a conflict: the page, the revision the quote was read from, and the quote. */
+export interface ConflictSide {
+  documentId: string;
+  title: string;
+  revisionId: string;
+  chunkId: string | null;
+  quote: string;
+}
+
+/** A contradiction between two pages (#81). A proposal, never a change. */
+export interface KnowledgeConflictDto {
+  id: string;
+  workspaceId: string;
+  kind: ConflictKind;
+  status: ConflictStatus;
+  a: ConflictSide;
+  b: ConflictSide;
+  explanation: string;
+  confidence: number;
+  /** The arbiter run that found it, and the merge request a fix was proposed as. */
+  agentRunId: string | null;
+  mergeRequestId: string | null;
+  detectedAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolution: string | null;
+}
+
+// GET /v1/conflicts?workspaceId=&status=&kind=&documentId=
+export interface ListConflictsResponse {
+  conflicts: KnowledgeConflictDto[];
+}

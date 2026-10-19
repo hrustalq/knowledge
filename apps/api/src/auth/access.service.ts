@@ -427,6 +427,12 @@ export class AccessService {
     return row.workspaceId;
   }
 
+  async workspaceOfConflict(conflictId: string): Promise<string> {
+    const row = await this.prisma.knowledgeConflict.findUnique({ where: { id: conflictId }, select: { workspaceId: true } });
+    if (!row) throw new NotFoundException(t('error.conflict.notFound', { id: conflictId }));
+    return row.workspaceId;
+  }
+
   async workspaceOfGroup(groupId: string): Promise<string> {
     const group = await this.prisma.userGroup.findUnique({ where: { id: groupId }, select: { workspaceId: true } });
     if (!group) throw new NotFoundException(t('error.group.notFound', { id: groupId }));

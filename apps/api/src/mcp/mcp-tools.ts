@@ -73,6 +73,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_suggest_draft_edit',
   // Names an instant the graph can be read as of (#81).
   'knowledge_create_release_tag',
+  // Resolves or dismisses a contradiction between pages (#81).
+  'knowledge_resolve_conflict',
 ]);
 
 /**

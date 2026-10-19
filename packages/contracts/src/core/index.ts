@@ -390,6 +390,7 @@ export const KNOWN_EVENT_TYPES = [
   'agent.trigger.fired',
   // Agent-session captures (issue #73): `subjectId` is the capture. Proposed
   // when its merge request opened; approved/rejected from the inbox.
+  'conflict.updated',
   'capture.proposed',
   'capture.approved',
   'capture.rejected',

@@ -271,6 +271,16 @@ export type I18nTranslations = {
             "lowDetail": string;
             "summary": string;
         };
+        "arbiter": string;
+        "arbiterDesc": string;
+        "arbitration": {
+            "stubEmbeddings": string;
+            "nothingChanged": string;
+            "noPairs": string;
+            "budgetSpent": string;
+            "findingTitle": string;
+            "summary": string;
+        };
     };
     "assistant": {
         "disabled": string;
@@ -1204,6 +1214,11 @@ export type I18nTranslations = {
             "notFound": string;
             "duplicate": string;
         };
+        "conflict": {
+            "notFound": string;
+            "notOpen": string;
+            "alreadyProposed": string;
+        };
     };
     "import": {
         "stage": {
@@ -1442,6 +1457,7 @@ export type I18nTranslations = {
         "accessRequest": string;
         "capture": string;
         "releaseTag": string;
+        "conflict": string;
     };
     "validation": {
         "isDefined": string;

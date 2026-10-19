@@ -1117,6 +1117,8 @@ export type AiUsageOperation =
   | 'lint'
   /** Scoring a page's clarity, completeness and style for the quality auditor (#74). */
   | 'audit'
+  /** Judging whether two passages contradict each other, one call per pair (#81). */
+  | 'contradiction'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
@@ -1273,6 +1275,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'linter',
   /** Scores every page's quality and reports the worst ones (#74). */
   'auditor',
+  /** Finds passages in two pages that contradict each other (#81). */
+  'arbiter',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -1427,7 +1431,7 @@ export const AGENT_WEBHOOK_HEADERS = {
 export const AGENT_RUN_MAX_DOCUMENTS = 20;
 
 /** The agents whose executors honour {@link AgentRunInput.documentIds}. */
-export const PAGE_SCOPED_AGENT_KEYS = ['curator', 'reviewer', 'glossarist'] as const;
+export const PAGE_SCOPED_AGENT_KEYS = ['curator', 'reviewer', 'glossarist', 'arbiter'] as const;
 
 export function isPageScopedAgent(key: string): boolean {
   return (PAGE_SCOPED_AGENT_KEYS as readonly string[]).includes(key);
@@ -2189,6 +2193,11 @@ export interface AgentFinding {
    */
   dismissedAt?: string | null;
   dismissedBy?: string | null;
+  /**
+   * The persisted conflict this finding reported (#81). The arbiter writes the
+   * conflict row as it finds it; the finding is the run's view of the same thing.
+   */
+  conflictId?: string;
   /** The proposed learning written with the dismissal ("Remember why"), if any. */
   learningId?: string | null;
   /**

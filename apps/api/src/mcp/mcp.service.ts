@@ -79,7 +79,8 @@ import { QualityService } from '../quality/quality.service.js';
 import { withAsOf } from '../graph/temporal.js';
 import { ReleaseTagsService } from '../temporal/release-tags.service.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
-import { RELEASE_TAG_NAME_PATTERN } from '@knowledge/contracts';
+import { ConflictsService } from '../conflicts/conflicts.service.js';
+import { CONFLICT_STATUSES, RELEASE_TAG_NAME_PATTERN } from '@knowledge/contracts';
 
 /**
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
@@ -200,6 +201,7 @@ export class McpService {
     private readonly quality: QualityService,
     private readonly temporal: TemporalResolverService,
     private readonly releaseTags: ReleaseTagsService,
+    private readonly conflicts: ConflictsService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -1430,6 +1432,49 @@ export class McpService {
       async ({ workspaceId, name, projectId, at, note }) => {
         await guard.ws(workspaceId, 'editor');
         return this.json(await this.releaseTags.create({ workspaceId, name, projectId, at, note }, principal.userId));
+      },
+    );
+
+    // Contradictions between pages (#81): the twins of GET /v1/conflicts and
+    // POST /v1/conflicts/:id/resolve|dismiss. Both under the caller's scope.
+    server.registerTool(
+      'knowledge_list_conflicts',
+      {
+        description:
+          'Contradictions the arbiter found between pages: both pages, the passage each one says, and why they ' +
+          'disagree. Only conflicts whose pages you may open. Newest first.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          status: z.enum(CONFLICT_STATUSES).optional().describe('Only this status; every status when omitted'),
+          documentId: z.string().uuid().optional().describe('Only conflicts with this page on either side'),
+        },
+      },
+      async ({ workspaceId, status, documentId }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json({ conflicts: await this.conflicts.list(await guard.scope(workspaceId), { status, documentId }) });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_resolve_conflict',
+      {
+        description:
+          'Close an open contradiction: "resolve" when it is fixed or explained (say how in note), "dismiss" when ' +
+          'it is not a contradiction — a dismissed one stays dismissed when found again.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          conflictId: z.string().uuid(),
+          action: z.enum(['resolve', 'dismiss']),
+          note: z.string().max(1000).optional(),
+        },
+      },
+      async ({ workspaceId, conflictId, action, note }) => {
+        await guard.ws(workspaceId, 'editor');
+        if ((await this.conflicts.workspaceOf(conflictId)) !== workspaceId) {
+          throw new Error(`Conflict ${conflictId} not found in workspace ${workspaceId}`);
+        }
+        const status = action === 'resolve' ? 'resolved' : 'dismissed';
+        return this.json(await this.conflicts.close(await guard.scope(workspaceId), conflictId, status, principal.userId, note));
       },
     );
 

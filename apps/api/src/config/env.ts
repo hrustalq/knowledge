@@ -426,6 +426,16 @@ export const envSchema = z.object({
   QUALITY_FINDING_THRESHOLD: z.coerce.number().int().min(0).max(100).default(50),
 
   /**
+   * The arbiter (#81, phase 5): the chunk cosine two passages from different
+   * pages must clear to be judged at all (pages that share an entity get 0.1
+   * of slack), the confidence below which the judge's "contradicts" is
+   * dropped, and the most pairs one run judges — one model call each.
+   */
+  CONTRADICTION_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.82),
+  CONTRADICTION_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.7),
+  CONTRADICTION_MAX_PAIRS_PER_RUN: z.coerce.number().int().positive().default(20),
+
+  /**
    * Feature 12 AI settings: AES-256-GCM key (base64, 32 bytes) for provider
    * credentials stored in ai_settings/ai_plugins. Empty disables secret WRITES
    * (everything else keeps working) rather than failing boot — same fail-soft

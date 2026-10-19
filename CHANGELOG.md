@@ -163,6 +163,23 @@ in the pull request that introduces them — see
   - **Releases.** Settings → Releases lists the release tags. Editors add one
     for now or any instant, for the whole workspace or one project; admins
     delete them.
+- Contradictions between pages (#81, phase 5, API and MCP). A new
+  background agent, the **arbiter**, compares passages from different pages
+  that are close in meaning (pages that share an entity are held to a lower
+  bar), asks the model whether they disagree, and keeps the answer only when
+  both quoted sentences really are in the passages. Each one becomes a
+  conflict: `GET /v1/conflicts` and `GET /v1/conflicts/:id` (viewer; only
+  conflicts whose pages you may both open), `POST …/resolve` and
+  `POST …/dismiss` (editor, with an optional note), and `POST …/propose`
+  (editor), which opens one merge request fixing the first page — a second
+  press is a 409 `already-proposed`. A dismissed conflict stays dismissed when
+  found again; when one side's page changes, its open conflicts become
+  `superseded`, and reopen if the new text still disagrees. Run the arbiter
+  from Settings → AI, on a schedule, or on `page.indexed` to check every page
+  as it is indexed; nothing runs until one of these is set up. Each judgement
+  is one model call, recorded as `contradiction` in AI usage. MCP:
+  `knowledge_list_conflicts` and `knowledge_resolve_conflict` (a write,
+  hidden from read-only keys). The conflicts UI follows in the next phase.
 
 ### Changed
 
@@ -187,6 +204,11 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261115100000_knowledge_conflicts` adds the
+  `knowledge_conflicts` table and nothing else; it survives a code rollback.
+  New env vars, all with defaults: `CONTRADICTION_MIN_SIMILARITY` (`0.82`),
+  `CONTRADICTION_MIN_CONFIDENCE` (`0.7`) and `CONTRADICTION_MAX_PAIRS_PER_RUN`
+  (`20`). The arbiter does not run on `EMBEDDINGS_PROVIDER=stub`.
 - With OpenSearch (`FULLTEXT_PROVIDER=opensearch`), the index gains
   `validFrom`, `validTo` and `lineage` fields on its first write after the
   deploy; no reindex is needed. `make graph-live-backfill` now stamps the

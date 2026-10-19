@@ -5249,6 +5249,16 @@
       ]
     },
     {
+      "name": "knowledge_get_page_insights",
+      "description": "chat bots) and agent (API keys, MCP, background runs), unique readers, median read time, the last human view and a daily series. Counts only, never who read it. collectingSince is null before the first view.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        }
+      ]
+    },
+    {
       "name": "knowledge_get_page_quality",
       "description": "s newest quality score from the auditor agent: overall 0–100 and six dimensions (clarity, \" + + +",
       "inputs": [
@@ -5568,6 +5578,20 @@
         },
         {
           "name": "branch",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_search_gaps",
+      "description": "Coverage gaps: queries searched over the last `days` (default 30) that found nothing (zeroResult), and web searches that found pages nobody opened (noClick), grouped by query with counts. Admin only. The query text was typed by readers and comes back wrapped as untrusted data; it is null once retention redacted it, and queryHash still groups it. Use it to find pages worth writing.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "days",
           "optional": true
         }
       ]

@@ -283,6 +283,25 @@ audit row carries `aclBypass: true`.
 caller's `AccessScope`, exactly as the REST route it mirrors does; guests may
 use `knowledge_search`.
 
+## Recording searches
+
+Each search is measured twice, for two readers. `emitBacktest` writes a
+`search.executed` line to the per-service JSONL stream at every exit: the
+query, the timings of each leg and the ranked chunk ids. That is what `make
+backtest` replays to measure recall, and it records every search, the backtest's
+own replays included.
+
+When the caller passes an analytics context (REST, MCP, the assistant's tools,
+agent and workflow runs), `AnalyticsRecorder.search` also writes one
+`search_queries` row in PostgreSQL ([feature 58](../features/58-usage-analytics.md)):
+the channel, the result count, the top documents and a `searchId` the response
+carries for click-through. That row is product data. It is workspace-scoped,
+read by the `/analytics` dashboard and `knowledge_list_search_gaps`, kept only
+for the workspace's retention, and its query text is redacted after
+`ANALYTICS_QUERY_TEXT_DAYS`. A search with no context (the backtest replaying,
+the PR-drift candidate search) writes the JSONL line and no row. The write is
+fire-and-forget and never fails the search.
+
 ## Communities
 
 The atlas agent ([feature 57](../features/57-temporal-graph.md)) groups pages

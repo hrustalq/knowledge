@@ -21,7 +21,7 @@
  */
 import { computed, onMounted, onServerPrefetch, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { Archive, FileText, List, ListTree, Loader2, Network, Plus, SlidersHorizontal, Upload, X } from 'lucide-vue-next'
 import { formatDate } from '@/lib/format'
@@ -29,7 +29,8 @@ import { labelFor } from '@/lib/labels'
 import { useAuthStore } from '@/stores/auth'
 import { EMPTY_FILTERS, useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
-import { statusDot, statusVariant } from '@/lib/api'
+import { apiFetch, getProjectId, getWorkspaceId, statusDot, statusVariant } from '@/lib/api'
+import type { WorkspaceGraphResponse } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -40,6 +41,7 @@ import { toast } from 'vue-sonner'
 import DocumentFacets from '@/components/knowledge/DocumentFacets.vue'
 import GraphCanvas from '@/components/graph/GraphCanvas.vue'
 import { toGraphNodes } from '@/components/graph/graph-model'
+import { useGraphTime } from '@/components/graph/use-graph-time'
 import { needsAttention, verificationDotClass } from '@/components/verification/verification-ui'
 
 const { t } = useI18n()
@@ -51,6 +53,7 @@ const store = useDocumentsStore()
 provideTreeDnd((message: string) => toast.error(message))
 const projects = useProjectsStore()
 const router = useRouter()
+const route = useRoute()
 
 type View = 'graph' | 'tree' | 'list'
 const VIEW_KEY = 'kn_docs_view'
@@ -107,6 +110,9 @@ onMounted(() => {
   } catch {
     /* private mode */
   }
+  // An `?asOf=` link is about the graph, so it opens there (#81).
+  if (graphTime.param.value) view.value = 'graph'
+  if (view.value === 'graph') void graphTime.loadTimeline()
   if (!store.treeLoaded) void store.fetchTree()
   if (!store.loaded) void store.fetchList({ reset: true })
   if (!projects.loaded) void projects.fetchList().catch(() => undefined)
@@ -126,8 +132,36 @@ watch(
   { immediate: true },
 )
 
-const graphNodes = computed(() => toGraphNodes(store.graph?.nodes ?? []))
-const graphEdges = computed(() => store.graph?.edges ?? [])
+/**
+ * #81: the graph at a point in time. "Now" is the store's graph, kept live by
+ * the event bus; a past point is its own read, never cached in the store.
+ */
+const graphTime = useGraphTime({
+  now: () => (store.graph ? { nodes: toGraphNodes(store.graph.nodes), edges: store.graph.edges } : null),
+  fetchAt: async (asOf) => {
+    const projectId = getProjectId()
+    const res = await apiFetch<WorkspaceGraphResponse>(
+      `/v1/documents/graph?workspaceId=${getWorkspaceId()}${projectId ? `&projectId=${projectId}` : ''}&asOf=${encodeURIComponent(asOf)}`,
+    )
+    return { pair: { nodes: toGraphNodes(res.nodes), edges: res.edges }, resolvedAsOf: res.resolvedAsOf }
+  },
+  scopeQuery: () => {
+    const projectId = getProjectId()
+    return `workspaceId=${getWorkspaceId()}${projectId ? `&projectId=${projectId}` : ''}`
+  },
+  initial: typeof route.query.asOf === 'string' ? route.query.asOf : null,
+})
+watch(
+  [view, () => projects.activeId],
+  ([v], [, prevProject]) => {
+    if (v !== 'graph') return
+    void graphTime.loadTimeline()
+    if (prevProject !== undefined && prevProject !== projects.activeId) graphTime.refresh()
+  },
+)
+
+const graphNodes = computed(() => graphTime.display.value?.nodes ?? [])
+const graphEdges = computed(() => graphTime.display.value?.edges ?? [])
 const hasEntities = computed(() => graphNodes.value.some((n) => n.kind === 'entity'))
 
 const isEmpty = computed(() => store.treeLoaded && store.tree.length === 0)
@@ -273,6 +307,7 @@ watch(virtualRows, (rows) => {
             :edges="graphEdges"
             :truncated="store.graph.truncated"
             :show-entity-controls="hasEntities"
+            :time="graphTime"
             storage-key="kn_graph_opts_workspace"
             @open="(id) => router.push(`/documents/${id}`)"
           />

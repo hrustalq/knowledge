@@ -161,7 +161,8 @@
     "captures": "Captures",
     "newApiSpec": "API spec",
     "apiReference": "API reference",
-    "security": "Security"
+    "security": "Security",
+    "releases": "Releases"
   },
   "role": {
     "guest": "Guest",
@@ -288,7 +289,9 @@
     "provenance": "{extractor} · confidence {confidence}",
     "fromTemplate": "From template: {name} v{version}",
     "fromTemplateUnnamed": "From a template, v{version}",
-    "moreActions": "More actions"
+    "moreActions": "More actions",
+    "asOfBanner": "As of {date}",
+    "asOfBannerTag": "As of {tag}, {date}"
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -306,7 +309,8 @@
     "exportsHint": "Files you exported",
     "chatBotsHint": "Answer questions in Telegram, citing your pages.",
     "apiReferenceHint": "Try-it proxy for spec pages",
-    "securityHint": "Sign-in and the audit trail"
+    "securityHint": "Sign-in and the audit trail",
+    "releasesHint": "Named points in time"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -1641,7 +1645,21 @@
     "countLinks": "{n} link | {n} links",
     "truncated": "showing the first 4000 links",
     "lightboxHint": "Drag to pan, scroll to zoom, press Escape to close.",
-    "keyboardHelp": "Arrow keys pan, plus and minus zoom, 0 fits the view, Escape clears the selection."
+    "keyboardHelp": "Arrow keys pan, plus and minus zoom, 0 fits the view, Escape clears the selection.",
+    "time": {
+      "title": "Time",
+      "now": "Now",
+      "asOf": "As of {date}",
+      "asOfTag": "{tag} · {date}",
+      "reset": "Now",
+      "label": "Point in time",
+      "tagTick": "Release {tag}, {date}",
+      "changesSince": "Show changes since",
+      "legendEnded": "Ended since",
+      "legendAdded": "Added since",
+      "pickPoint": "Pick a point on the timeline to compare it with now.",
+      "nowHint": "Now — drag left to read the past"
+    }
   },
   "revisions": {
     "allBranches": "all branches",
@@ -2553,7 +2571,15 @@
     "openAsPage": "Open as page",
     "filtersClearedForWorkspace": "Project and tag filters were cleared for the new workspace.",
     "failedCheckConnection": "{error} — check your connection and try again.",
-    "via": "via {path}"
+    "via": "via {path}",
+    "asOf": {
+      "label": "As of",
+      "clear": "Clear",
+      "pickDate": "Search as of this date",
+      "pickTag": "Release tag",
+      "hint": "Searches the text each page held then.",
+      "superseded": "Superseded {date}"
+    }
   },
   "import": {
     "project": "Project",
@@ -5740,5 +5766,30 @@
       "revokeConfirm": "Revoke “{name}”? The identity provider gets 401 from its next request.",
       "revoked": "Token revoked"
     }
+  },
+  "releaseTags": {
+    "title": "Releases",
+    "subtitle": "Name a point in time — a release, an audit — so the graph and search can show what the knowledge base said then.",
+    "name": "Name",
+    "nameHelp": "Letters, digits and . _ - /",
+    "badName": "Use letters, digits and . _ - / only, up to 64.",
+    "duplicate": "A release named {name} already exists.",
+    "at": "Point in time",
+    "atHelp": "Leave empty for now.",
+    "note": "Note",
+    "notePlaceholder": "What this release is",
+    "scope": "Shown in",
+    "wholeWorkspace": "Whole workspace",
+    "create": "Add release",
+    "creating": "Adding…",
+    "created": "Release {name} added",
+    "emptyTitle": "No releases yet",
+    "empty": "Add one to read the graph and search as they stood at that point.",
+    "delete": "Delete {name}",
+    "deleteTitle": "Delete release {name}?",
+    "deleteBody": "Only the name goes. What the knowledge base said at that point stays, and can still be read by date.",
+    "deleteConfirm": "Delete",
+    "deleted": "Release {name} deleted",
+    "namePlaceholder": "v2.3"
   }
 }

@@ -145,6 +145,24 @@ in the pull request that introduces them — see
   today's. Each result of an `asOf` search carries `validFrom` and `validTo`;
   a `validTo` means that text has since been superseded. Filters, page
   permissions and the trust re-rank work as they do now.
+- Time in the app (#81, phase 4):
+  - **Graph timeline.** The pages graph and the maximized page graph have a
+    timeline along their bottom edge. Drag it, use the arrow keys (a day),
+    Page Up/Down (a week) or Home/End, or click a release tag's tick, and the
+    graph redraws as the knowledge base stood then. Faint bars over the
+    timeline show how much changed when.
+  - **Changes since.** In the graph panel's new **Time** section, "Show changes
+    since" overlays the difference against now: relations that have since
+    ended draw as a dotted trace, and relations added since draw in green.
+  - **Links.** `?asOf=` on `/documents` opens the graph at that point.
+  - **Search.** The search filters have an **As of** section (a date or a
+    release tag). A result whose text has since been replaced carries a dated
+    "Superseded" badge and opens the page as it read then.
+  - **Pages.** A page opened with `?asOf=` is read-only, with a note naming
+    the date, the tag and the revision.
+  - **Releases.** Settings → Releases lists the release tags. Editors add one
+    for now or any instant, for the whole workspace or one project; admins
+    delete them.
 
 ### Changed
 

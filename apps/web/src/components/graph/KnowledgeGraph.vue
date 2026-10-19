@@ -35,7 +35,7 @@ import {
   forceY,
   type Simulation,
 } from 'd3-force'
-import { DEFAULT_OPTIONS, project, radiusOf, type GraphEdgeInput, type GraphNodeInput, type GraphOptions } from './graph-model'
+import { DEFAULT_OPTIONS, project, radiusOf, type EdgeChange, type GraphEdgeInput, type GraphNodeInput, type GraphOptions } from './graph-model'
 import { entityColor, isOperationType, mix, readPalette, rgba, type GraphPalette } from './graph-theme'
 
 const props = withDefaults(
@@ -66,7 +66,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 type SimNode = GraphNodeInput & { x: number; y: number; vx: number; vy: number; fx?: number | null; fy?: number | null; r: number }
-type SimEdge = { source: SimNode; target: SimNode; type: string; extractor: string; inferred: boolean }
+type SimEdge = { source: SimNode; target: SimNode; type: string; extractor: string; inferred: boolean; change?: EdgeChange }
 
 const uid = `kn-graph-${Math.random().toString(36).slice(2, 8)}`
 
@@ -215,7 +215,7 @@ function build() {
     const source = byId.get(e.from)
     const target = byId.get(e.to)
     if (!source || !target) continue
-    simEdges.push({ source, target, type: e.type, extractor: e.extractor, inferred: e.extractor === 'inferred' })
+    simEdges.push({ source, target, type: e.type, extractor: e.extractor, inferred: e.extractor === 'inferred', change: e.change })
     if (!adjacency.has(e.from)) adjacency.set(e.from, new Set())
     if (!adjacency.has(e.to)) adjacency.set(e.to, new Set())
     adjacency.get(e.from)!.add(e.to)
@@ -410,11 +410,17 @@ function draw() {
       const a = isLit ? 0.55 + focusMix * 0.25 : 0.2 * strength(e.source.id) * strength(e.target.id)
       if (a < 0.012) continue
       ctx.globalAlpha = 1
-      ctx.strokeStyle = isLit ? rgba(p.primary, a) : rgba(p.foreground, a)
-      ctx.lineWidth = (isLit ? 1.5 : 1) * Math.min(Math.max(k, 0.6), 1.4)
+      // #81 compare: a relation that has since ended recedes to a dotted
+      // trace; one added since is drawn in the tip hue, a touch heavier. The
+      // dot is not the inferred dash — provenance and time stay two encodings.
+      const ended = e.change === 'ended'
+      const added = e.change === 'added'
+      ctx.strokeStyle = added ? rgba(p.added, Math.max(a, 0.6)) : isLit ? rgba(p.primary, ended ? a * 0.6 : a) : rgba(p.foreground, ended ? Math.max(a, 0.32) : a)
+      ctx.lineWidth = (isLit || added ? 1.5 : 1) * Math.min(Math.max(k, 0.6), 1.4)
       // Provenance survives the redesign: a dashed link is a claim the model
       // made, a solid one is a claim a person wrote down.
-      ctx.setLineDash(e.inferred ? [2.5 * k, 3 * k] : [])
+      ctx.setLineDash(ended ? [0.6 * k, 3.2 * k] : e.inferred ? [2.5 * k, 3 * k] : [])
+      ctx.lineCap = ended ? 'round' : 'butt'
       ctx.beginPath()
       ctx.moveTo(toScreenX(e.source.x), toScreenY(e.source.y))
       ctx.lineTo(toScreenX(e.target.x), toScreenY(e.target.y))
@@ -422,6 +428,7 @@ function draw() {
     }
   }
   ctx.setLineDash([])
+  ctx.lineCap = 'butt'
 
   /* ---- nodes */
   const labels: { n: SimNode; x: number; y: number; a: number; rank: number }[] = []

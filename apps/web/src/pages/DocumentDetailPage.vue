@@ -13,7 +13,7 @@
  * is what you would edit, and any passage in it can be commented on.
  */
 import { useI18n } from 'vue-i18n'
-import { formatDateTime } from '@/lib/format'
+import { formatDate, formatDateTime } from '@/lib/format'
 import { errorMessage, isRestrictedRefusal } from '@/api/errors'
 import { labelFor } from '@/lib/labels'
 import { hasWorkingCopy } from '@/lib/working-copy'
@@ -49,6 +49,7 @@ import type {
   ComponentDeclarationView,
   DocumentConnectorResponse,
   DocumentContentResponse,
+  ResolvedAsOf,
   DocumentDetailResponse,
   ListActivityResponse,
   ListKnowledgeIssuesResponse,
@@ -295,14 +296,29 @@ function onAccessSaved() {
   void store.invalidate()
 }
 
+/**
+ * #81: `?asOf=` (a date, `tag:` or `rev:`) asks for the page as it read then.
+ * The API picks the default-branch revision current at that point; from there
+ * it is the ordinary read-only revision view. An explicit `?revision=` wins.
+ */
+const asOfParam = computed(() => (route.query.revision ? null : ((route.query.asOf as string | undefined) ?? null)))
+const asOfRevision = ref<string | null>(null)
+const asOfResolved = ref<ResolvedAsOf | null>(null)
+
 async function loadContent() {
   contentError.value = null
   content.value = null
   try {
-    const rev = route.query.revision ? `?revision=${route.query.revision as string}` : ''
+    const rev = route.query.revision
+      ? `?revision=${route.query.revision as string}`
+      : asOfParam.value
+        ? `?asOf=${encodeURIComponent(asOfParam.value)}`
+        : ''
     content.value = await apiFetch<DocumentContentResponse>(
       `/v1/documents/${documentId.value}/content${rev}`,
     )
+    asOfRevision.value = asOfParam.value ? content.value.revisionId : null
+    asOfResolved.value = asOfParam.value ? (content.value.resolvedAsOf ?? null) : null
   } catch (e) {
     contentError.value = (e as Error).message
   }
@@ -557,7 +573,7 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
 
 /* ------------------------------------------------------------- lifecycle */
 
-const viewingRevision = computed(() => (route.query.revision as string | undefined) ?? null)
+const viewingRevision = computed(() => (route.query.revision as string | undefined) ?? asOfRevision.value)
 // An API spec (#78) renders as a reference rather than a page, and is edited as text.
 const isSpec = computed(() => !!detail.value?.document.kind && detail.value.document.kind !== 'page')
 // One state for the rail's operation index and the main column's operation.
@@ -575,7 +591,7 @@ onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
 
-watch(() => route.query.revision, () => void loadContent())
+watch([() => route.query.revision, () => route.query.asOf], () => void loadContent())
 
 // Route reuse: navigating to a different document keeps this component alive.
 watch(documentId, () => {
@@ -865,7 +881,20 @@ watch(
 
       <!-- Main column: what this is, what it says, what was said about it -->
       <section class="space-y-2">
-        <p v-if="viewingRevision" class="text-xs text-muted-foreground">
+        <!-- #81: as of a point — the date, the tag when it was one, and the
+             revision that was the page then. A note, not an alert: the page is
+             fine, the reader asked for its past. -->
+        <p v-if="asOfResolved && viewingRevision" class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+          <History class="size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            {{ asOfResolved.kind === 'tag'
+              ? t('documents.asOfBannerTag', { date: formatDate(asOfResolved.at), tag: asOfResolved.ref.slice(4) })
+              : t('documents.asOfBanner', { date: formatDate(asOfResolved.at) }) }}
+          </span>
+          <span class="font-mono">({{ viewingRevision.slice(0, 8) }})</span>
+          <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
+        </p>
+        <p v-else-if="viewingRevision" class="text-xs text-muted-foreground">
           {{ t('documents.viewingRevision', { id: viewingRevision.slice(0, 8) }) }}
           <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
         </p>

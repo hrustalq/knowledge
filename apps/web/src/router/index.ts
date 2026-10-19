@@ -167,6 +167,8 @@ export function createRouter() {
           // auth.canAdminWorkspace and the API enforces admin.
           { path: 'api', component: () => import('@/pages/ApiSettingsPage.vue') },
           { path: 'exports', component: () => import('@/pages/ExportsPage.vue') },
+          // Release tags (#81): open to every role to read, like the timeline they mark.
+          { path: 'releases', component: () => import('@/pages/ReleasesSettingsPage.vue') },
           // Workflows: like AI settings, deliberately not meta.platformAdmin —
           // this is workspace administration, so the page gates on
           // auth.canAdminWorkspace and the API enforces the admin role.

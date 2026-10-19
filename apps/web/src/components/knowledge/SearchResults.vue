@@ -6,9 +6,10 @@
 // app and by plain href in the reader, which has no router.
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { SearchX } from 'lucide-vue-next'
+import { History, SearchX } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatDate, formatDateTime } from '@/lib/format'
 import VerificationBadge from '@/components/verification/VerificationBadge.vue'
 import type { SearchFailure, SearchHit, SearchView } from './use-search'
 
@@ -97,6 +98,17 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
                   :state="r.trust"
                   size="xs"
                 />
+                <!-- #81: on an as-of search, text the page has since replaced.
+                     Outline and muted: it is a date, not a warning. -->
+                <Badge
+                  v-if="r.supersededAt"
+                  variant="outline"
+                  class="shrink-0 gap-1 text-[10px] font-normal text-muted-foreground"
+                  :title="formatDateTime(r.supersededAt)"
+                >
+                  <History class="size-3" aria-hidden="true" />
+                  {{ t('search.asOf.superseded', { date: formatDate(r.supersededAt) }) }}
+                </Badge>
               </span>
               <!-- Scores round to 0 under the stub embedding provider; a column
                    of zeroes reads as broken, so show one only when it says something. -->

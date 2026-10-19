@@ -63,6 +63,7 @@ export const AUDIT_ACTIONS = [
   'ai-readable.llms-full',
   'api.try',
   'feedback.export',
+  'analytics.export',
   'merge-request.lint-override',
   'auth.login',
   'auth.login_failed',

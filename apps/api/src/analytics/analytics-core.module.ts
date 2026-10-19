@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { AnalyticsQueryService } from './analytics-query.service.js';
 import { AnalyticsRecorder } from './analytics.recorder.js';
+import { AnalyticsSettingsService } from './analytics-settings.service.js';
 
 /**
  * Usage & search analytics (#79), controller-free so the API, the MCP stdio
@@ -11,7 +12,7 @@ import { AnalyticsRecorder } from './analytics.recorder.js';
  */
 @Module({
   imports: [PrismaModule],
-  providers: [AnalyticsRecorder, AnalyticsQueryService],
-  exports: [AnalyticsRecorder, AnalyticsQueryService],
+  providers: [AnalyticsRecorder, AnalyticsQueryService, AnalyticsSettingsService],
+  exports: [AnalyticsRecorder, AnalyticsQueryService, AnalyticsSettingsService],
 })
 export class AnalyticsCoreModule {}

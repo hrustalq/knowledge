@@ -1,7 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
-import { ANALYTICS_MAX_DAYS, ANALYTICS_TRAFFIC_FILTERS, type AnalyticsTrafficFilter } from '@knowledge/contracts';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsUUID, Max, Min, ValidateIf } from 'class-validator';
+import {
+  ANALYTICS_MAX_DAYS,
+  ANALYTICS_REPORTS,
+  ANALYTICS_TRAFFIC_FILTERS,
+  type AnalyticsReport,
+  type AnalyticsTrafficFilter,
+} from '@knowledge/contracts';
+
+const NULLABLE = <T extends object>(field: keyof T) => ValidateIf((o: T) => o[field] !== null);
 
 export class RecordPageViewDto {
   @ApiProperty({ format: 'uuid', description: "The page's own id for this view; a replay is a no-op" })
@@ -57,4 +65,48 @@ export class ProjectAnalyticsQueryDto {
   @IsOptional()
   @IsIn(ANALYTICS_TRAFFIC_FILTERS)
   traffic?: AnalyticsTrafficFilter;
+}
+
+export class AnalyticsWorkspaceQueryDto extends ProjectAnalyticsQueryDto {
+  // Field name must stay `workspaceId`: @Access('admin', 'query') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+}
+
+export class AnalyticsExportQueryDto extends AnalyticsWorkspaceQueryDto {
+  @ApiProperty({ enum: ANALYTICS_REPORTS, description: 'Which dashboard table' })
+  @IsIn(ANALYTICS_REPORTS)
+  report!: AnalyticsReport;
+}
+
+export class AnalyticsSettingsQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+}
+
+export class UpdateAnalyticsSettingsDto {
+  // Field name must stay `workspaceId`: @Access('admin', 'body') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ type: Boolean, nullable: true, description: 'Record usage here; null inherits ANALYTICS_ENABLED, which true cannot exceed' })
+  @NULLABLE<UpdateAnalyticsSettingsDto>('enabled')
+  @IsBoolean()
+  enabled!: boolean | null;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    minimum: 1,
+    maximum: 3650,
+    description: 'Days rows are kept; null inherits ANALYTICS_RETENTION_DAYS, and a longer value is clamped to it',
+  })
+  @NULLABLE<UpdateAnalyticsSettingsDto>('retentionDays')
+  @IsInt()
+  @Min(1)
+  @Max(3650)
+  retentionDays!: number | null;
 }

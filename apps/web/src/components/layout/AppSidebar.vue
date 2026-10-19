@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   BookmarkPlus,
+  ChartColumn,
   GitPullRequestArrow,
   HeartPulse,
   House,
@@ -16,12 +17,14 @@ import {
   Workflow,
 } from 'lucide-vue-next'
 import type { ScopeCreated } from '@/lib/scopes'
+import { useAuthStore } from '@/stores/auth'
 import ScopeSwitcher from './ScopeSwitcher.vue'
 import SidebarPanes from './SidebarPanes.vue'
 import SidebarResizeHandle from './SidebarResizeHandle.vue'
 import SwitcherCreateDialog from './SwitcherCreateDialog.vue'
 
 const { t } = useI18n()
+const auth = useAuthStore()
 
 const route = useRoute()
 const router = useRouter()
@@ -54,6 +57,9 @@ const links = computed<NavLink[]>(() => [
   // The trust loop's review surface (docs/features/40): beside merge requests
   // and workflows, which are the other two places a page is acted on in bulk.
   { to: '/knowledge-health', label: t('nav.knowledgeHealth'), icon: HeartPulse },
+  // Usage analytics (#79): beside health, which reads its unread/dead signals.
+  // Admins only — it carries what people searched for.
+  ...(auth.canAdminWorkspace ? [{ to: '/analytics', label: t('nav.analytics'), icon: ChartColumn }] : []),
   // What agents proposed from their sessions (issue #73): page captures are
   // decided on merge requests, but terms and stranded captures only here.
   { to: '/captures', label: t('nav.captures'), icon: BookmarkPlus },

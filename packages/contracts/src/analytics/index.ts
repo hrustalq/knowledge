@@ -103,12 +103,18 @@ export interface AnalyticsQuietPage {
   lastHumanViewAt: string | null;
 }
 
-// GET /v1/projects/:id/analytics?days=&traffic=
-export interface ProjectAnalyticsResponse extends AnalyticsViewTotals {
-  projectId: string;
+/** The window and filter a rollup answered for. */
+export interface AnalyticsWindow {
+  /** ISO window bounds. */
   from: string;
   to: string;
   traffic: AnalyticsTrafficFilter;
+  /** The workspace's first recorded view: before it, "no views" means "not counted". */
+  collectingSince: string | null;
+}
+
+/** The three page lists a curator acts on. */
+export interface AnalyticsPageLists {
   topPages: AnalyticsPageRow[];
   /** Pages with no web view since collection began, oldest first. */
   neverRead: AnalyticsQuietPage[];
@@ -118,5 +124,129 @@ export interface ProjectAnalyticsResponse extends AnalyticsViewTotals {
    */
   dead: AnalyticsQuietPage[];
   deadAfterDays: number;
-  collectingSince: string | null;
+}
+
+// GET /v1/projects/:id/analytics?days=&traffic=
+export interface ProjectAnalyticsResponse extends AnalyticsViewTotals, AnalyticsPageLists, AnalyticsWindow {
+  projectId: string;
+}
+
+// GET /v1/analytics/overview?workspaceId=&days=&traffic=
+export interface AnalyticsOverviewResponse extends AnalyticsViewTotals, AnalyticsWindow {
+  workspaceId: string;
+  /** Whether recording is on for the workspace now (env ceiling and its setting). */
+  recording: boolean;
+  /** Searches, a reader's repeats of one query within 10 s counted once. */
+  searches: number;
+  zeroResultSearches: number;
+  /** Web searches followed by a result click ÷ web searches that found something; null with none. */
+  clickThrough: number | null;
+  /** Questions asked of the in-app assistant; null when the traffic filter leaves out `assisted`. */
+  assistantQuestions: number | null;
+  /** MCP tool calls; null when the traffic filter leaves out `agent`. */
+  mcpCalls: number | null;
+}
+
+// GET /v1/analytics/pages?workspaceId=&days=&traffic=
+export interface AnalyticsPagesResponse extends AnalyticsPageLists, AnalyticsWindow {
+  workspaceId: string;
+}
+
+/** One query, grouped by its hash so it survives retention redacting the text. */
+export interface AnalyticsQueryRow {
+  queryHash: string;
+  /** The newest text on record; null once retention has redacted every copy. */
+  queryText: string | null;
+  searches: number;
+  zeroResults: number;
+  /** Over web searches that found something — nothing else can be clicked. Null with none. */
+  clickThrough: number | null;
+  meanClickedRank: number | null;
+  lastSearchedAt: string;
+}
+
+// GET /v1/analytics/search?workspaceId=&days=&traffic=
+export interface AnalyticsSearchResponse extends AnalyticsWindow {
+  workspaceId: string;
+  top: AnalyticsQueryRow[];
+  zeroResult: AnalyticsQueryRow[];
+  /** Web searches that returned results nobody opened. */
+  noClick: AnalyticsQueryRow[];
+}
+
+export interface AnalyticsToolRow {
+  tool: string;
+  calls: number;
+  errors: number;
+  medianMs: number | null;
+}
+
+/** What one API key did. Name and prefix only — never the key. */
+export interface AnalyticsKeyRow {
+  apiKeyId: string;
+  /** Null when the key has since been deleted. */
+  name: string | null;
+  prefix: string | null;
+  mcpCalls: number;
+  views: number;
+  searches: number;
+}
+
+export interface AnalyticsOperationRow {
+  operation: string;
+  calls: number;
+}
+
+// GET /v1/analytics/agents?workspaceId=&days=
+export interface AnalyticsAgentsResponse {
+  workspaceId: string;
+  from: string;
+  to: string;
+  tools: AnalyticsToolRow[];
+  keys: AnalyticsKeyRow[];
+  assistantQuestions: number;
+  /** Questions per UTC day; days without any are absent. */
+  questionSeries: Array<{ date: string; count: number }>;
+  /** Model calls by `ai_usage.operation`. */
+  operations: AnalyticsOperationRow[];
+}
+
+/** The tables the dashboard can download: `GET /v1/analytics/export.csv?report=`. */
+export const ANALYTICS_REPORTS = [
+  'pages-top',
+  'pages-never-read',
+  'pages-dead',
+  'search-top',
+  'search-zero-result',
+  'search-no-click',
+  'agents-tools',
+  'agents-keys',
+  'agents-operations',
+] as const;
+export type AnalyticsReport = (typeof ANALYTICS_REPORTS)[number];
+
+export interface AnalyticsSettingsValues {
+  enabled: boolean;
+  retentionDays: number;
+}
+
+// GET /v1/analytics/settings?workspaceId=
+export interface AnalyticsSettingsResponse {
+  workspaceId: string;
+  /** The workspace's own values; null inherits the ceiling. */
+  requested: { enabled: boolean | null; retentionDays: number | null };
+  /** The deployment's env: a workspace may turn recording off and keep rows for less, never more. */
+  ceiling: AnalyticsSettingsValues;
+  effective: AnalyticsSettingsValues;
+  /** After this many days a search keeps its hash and loses its text. */
+  queryTextDays: number;
+  /** The unread / dead window: a retention shorter than it means those lists never match. */
+  deadPageDays: number;
+}
+
+// PUT /v1/analytics/settings
+export interface UpdateAnalyticsSettingsRequest {
+  workspaceId: string;
+  enabled: boolean | null;
+  retentionDays: number | null;
 }

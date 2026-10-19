@@ -397,6 +397,10 @@ export const envSchema = z.object({
    * project analytics).
    */
   ANALYTICS_DEAD_PAGE_DAYS: z.coerce.number().int().positive().default(90),
+  /** Days analytics rows are kept. A ceiling: a workspace may keep them for less, never more. */
+  ANALYTICS_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
+  /** After this many days a recorded search loses its text and keeps its hash, so grouping still works. */
+  ANALYTICS_QUERY_TEXT_DAYS: z.coerce.number().int().positive().default(90),
   /** Knowledge issues one principal (per API key when present) may file per 24 h; past it a report is 429. */
   KNOWLEDGE_ISSUE_DAILY_LIMIT: z.coerce.number().int().positive().default(50),
   /**

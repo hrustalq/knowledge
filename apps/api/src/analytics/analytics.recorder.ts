@@ -140,6 +140,11 @@ export class AnalyticsRecorder {
     return enabled;
   }
 
+  /** Drop the cached setting, after this process changed it. */
+  forget(workspaceId: string): void {
+    this.enabledCache.delete(workspaceId);
+  }
+
   /**
    * Record one search and return its id, or null when nothing was recorded.
    * The id is minted before the write so the response need not wait for it.

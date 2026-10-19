@@ -66,7 +66,6 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
       if (!res.ok) {
         const body = await res.text();
         if (!body.includes('resource_already_exists_exception')) {
-          this.ready = undefined; // retry on next call
           throw new Error(`OpenSearch index create failed (${res.status}): ${body.slice(0, 300)}`);
         }
         const mapped = await fetch(`${this.baseUrl}/${this.index}/_mapping`, {
@@ -75,11 +74,14 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
           body: JSON.stringify({ properties: { ...ACL_PROPERTIES, ...VALIDITY_PROPERTIES } }),
         });
         if (!mapped.ok) {
-          this.ready = undefined;
           throw new Error(`OpenSearch mapping update failed (${mapped.status}): ${(await mapped.text()).slice(0, 300)}`);
         }
       }
-    })();
+    })().catch((err: unknown) => {
+      // Any failure, an HTTP error or a thrown fetch, leaves nothing cached: the next call retries (#330).
+      this.ready = undefined;
+      throw err;
+    });
     return this.ready;
   }
 

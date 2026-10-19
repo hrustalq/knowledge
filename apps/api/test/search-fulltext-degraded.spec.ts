@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SearchService } from '../src/search/search.service.js';
 import { StaleSweeper } from '../src/ingestion/stale.sweeper.js';
+import { OpenSearchFulltextProvider } from '../src/fulltext/opensearch.provider.js';
+import { UNFILTERED } from '../src/common/document-acl.js';
 import { systemScope } from '../src/permissions/access-scope.js';
 
 /**
@@ -205,5 +207,24 @@ describe('StaleSweeper.repairFulltext (#173)', () => {
     const { svc, prisma } = sweeper({ enabled: false });
     expect(await svc.repairFulltext()).toBe(0);
     expect(prisma.documentRevision.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('OpenSearch provider after a network error (#330)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('retries the index setup instead of caching the failure', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockImplementation(async () => new Response(JSON.stringify({ hits: { hits: [] } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const os = new OpenSearchFulltextProvider('http://os:9200', 'chunks');
+
+    await expect(os.search(WS, 'q', 10, UNFILTERED)).rejects.toThrow('fetch failed');
+    await expect(os.search(WS, 'q', 10, UNFILTERED)).resolves.toEqual([]);
+
+    const puts = fetchMock.mock.calls.filter(([url, init]) => url === 'http://os:9200/chunks' && init?.method === 'PUT');
+    expect(puts).toHaveLength(2);
   });
 });

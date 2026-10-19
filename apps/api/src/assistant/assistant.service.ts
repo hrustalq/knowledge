@@ -661,6 +661,7 @@ export class AssistantService {
           thread,
           turn,
           projectId,
+          channel: 'chat',
           ...(input.audience ? { audience: input.audience } : {}),
         }),
     );
@@ -924,6 +925,8 @@ export class AssistantService {
       projectId?: string;
       /** Chat turns only: who reads the answer besides the asker (#76). */
       audience?: Audience;
+      /** Chat turns only: filed as `chat` in the analytics log (#79). */
+      channel?: 'chat';
     },
   ): Promise<{ content: string; ok: boolean }> {
     const { thread, turn } = ctx;
@@ -978,6 +981,7 @@ export class AssistantService {
       cite: (source) => turn.labels.label(source),
       ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
       ...(ctx.audience ? { audience: ctx.audience } : {}),
+      ...(ctx.channel ? { channel: ctx.channel } : {}),
     });
     if (!result.ok) turn.toolErrors++;
     for (const source of result.sources) {
@@ -1334,6 +1338,7 @@ export class AssistantService {
         expandGraph: { depth: 1 },
       },
       await this.permissions.scopeFor(principal, dto.workspaceId),
+      { principal, channel: 'assistant' },
     );
     return { results: res.results, related: res.related };
   }

@@ -23,6 +23,7 @@ import { tagFilterKey } from '../common/relations.js';
 import type { TemporalPoint } from '../graph/temporal.js';
 import { loadRevisionStamps } from '../graph/revision-stamps.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
+import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
 import type { SearchDto } from './search.dto.js';
 
 /** Reciprocal-rank-fusion constant (standard k=60). */
@@ -44,6 +45,7 @@ export class SearchService {
     private readonly permissions: PermissionService,
     private readonly config: ConfigService<Env, true>,
     private readonly temporal: TemporalResolverService,
+    private readonly analytics: AnalyticsRecorder,
   ) {}
 
   /**
@@ -51,8 +53,11 @@ export class SearchService {
    * one the caller may open. The stores apply the scope's page list as a
    * predicate where they can; the PG join below applies the predicate itself
    * and is the one that decides.
+   *
+   * `caller` files the search in the analytics log (#79) and puts its id on
+   * the response. Absent for a search nobody asked — the backtest replaying.
    */
-  async search(dto: SearchDto, scope: AccessScope): Promise<SearchResponse> {
+  async search(dto: SearchDto, scope: AccessScope, caller?: AnalyticsCaller): Promise<SearchResponse> {
     const mode = dto.mode ?? 'hybrid';
     const k = dto.limit ?? 20;
     // Feature 02: with any metadata filter (category, project or tag),
@@ -148,7 +153,7 @@ export class SearchService {
      * nothing" is a data point the September backtest was built to count, and a
      * harness that only sees successful searches overstates recall.
      */
-    const record = (out: SearchResult[]): void => {
+    const record = (out: SearchResult[]): { searchId?: string } => {
       const trace = currentTrace();
       emitBacktest({
         ...(trace ?? { traceId: 'unscoped', source: 'cli' as const }),
@@ -172,15 +177,23 @@ export class SearchService {
         ...(at ? { asOf: dto.asOf ?? 'now' } : {}),
         results: out.map((r) => ({ documentId: r.documentId, chunkId: r.chunkId, score: r.score })),
       });
+      const searchId =
+        caller &&
+        this.analytics.search(caller, {
+          workspaceId: dto.workspaceId,
+          query: dto.query,
+          mode,
+          projectIds: dto.filters?.projectIds ?? [],
+          resultDocIds: [...new Set(out.map((r) => r.documentId))],
+          durationMs: since(startedAt),
+        });
+      return searchId ? { searchId } : {};
     };
 
     // Absent unless a leg was skipped, so a healthy response is unchanged.
     const health = () => ({ ...(degraded.length ? { degraded } : {}), ...(at ? { resolvedAsOf: at.resolved } : {}) });
 
-    if (hits.length === 0) {
-      record([]);
-      return { results: [], ...health() };
-    }
+    if (hits.length === 0) return { results: [], ...health(), ...record([]) };
 
     // Join PG for authoritative titles (three-store separation: PG owns
     // metadata), for everything the trust re-rank reads — the stamp, the flag,
@@ -256,7 +269,7 @@ export class SearchService {
     }));
     if (at) await this.attachValidity(results);
 
-    record(results);
+    const recorded = record(results);
 
     // Phase 4 hybrid mode: vectors find evidence, the graph expands it
     // (plan.md §12.7). Walk relation edges out from the hit documents.
@@ -270,9 +283,9 @@ export class SearchService {
         includeArchived,
         at,
       );
-      return { results, related, ...health() };
+      return { results, related, ...health(), ...recorded };
     }
-    return { results, ...health() };
+    return { results, ...health(), ...recorded };
   }
 
   /**

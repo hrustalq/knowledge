@@ -81,6 +81,7 @@ import { ReleaseTagsService } from '../temporal/release-tags.service.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
+import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
 import { CONFLICT_STATUSES, RELEASE_TAG_NAME_PATTERN } from '@knowledge/contracts';
 
 /**
@@ -155,6 +156,8 @@ export const MCP_SERVER_VERSION = '0.27.0';
  */
 export interface McpExtras {
   drafts?: McpDraftTools;
+  /** The HTTP request sent `DNT: 1` or `Sec-GPC: 1` (#79). */
+  noTrack?: boolean;
 }
 
 @Injectable()
@@ -204,6 +207,7 @@ export class McpService {
     private readonly releaseTags: ReleaseTagsService,
     private readonly conflicts: ConflictsService,
     private readonly communities: CommunitiesService,
+    private readonly analytics: AnalyticsRecorder,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -225,7 +229,9 @@ export class McpService {
       { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
       { instructions: MCP_INSTRUCTIONS },
     );
-    const handles = trackTools(server);
+    // Every call is filed as `mcp` traffic (#79), whoever the principal is.
+    const caller: AnalyticsCaller = { principal, channel: 'mcp', ...(extras.noTrack ? { noTrack: true } : {}) };
+    const handles = trackTools(server, (call) => void this.analytics.toolCall(caller, call));
     const guard = this.guardFor(principal);
 
     server.registerTool(
@@ -278,6 +284,7 @@ export class McpService {
             ...(Object.keys(filters).length ? { filters } : {}),
           },
           scope,
+          caller,
         );
         // One batched read for the whole hit list (docs/features/38), and the
         // trace id of this call so an agent can quote it back to
@@ -1039,7 +1046,9 @@ export class McpService {
       },
       async ({ documentId, revisionId }) => {
         await guard.doc(documentId, 'viewer');
-        return this.json(await this.documents.getDocument(documentId, revisionId));
+        const doc = await this.documents.getDocument(documentId, revisionId);
+        void this.analytics.view(caller, documentId, revisionId);
+        return this.json(doc);
       },
     );
 
@@ -1108,7 +1117,9 @@ export class McpService {
       },
       async ({ documentId, revisionId }) => {
         await guard.doc(documentId, 'viewer');
-        return this.json(await this.documents.getContent(documentId, revisionId));
+        const content = await this.documents.getContent(documentId, revisionId);
+        void this.analytics.view(caller, documentId, content.revisionId);
+        return this.json(content);
       },
     );
 
@@ -1741,6 +1752,7 @@ export class McpService {
           const id = String(documentId);
           await guard.doc(id, 'viewer');
           const result = await this.aiReadable.pageMarkdown(id, { frontmatter: false });
+          if (result.status === 200) void this.analytics.view(caller, id);
           return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: result.status === 200 ? result.body : '' }] };
         },
       );

@@ -3319,6 +3319,12 @@ model WorkspaceSettings {
   /// #75 SCIM: the role a provisioned user gets without a mapped SCIM group —
   /// a WORKSPACE_ROLES value or `none`; null is `viewer`.
   scimDefaultRole         String?  @map("scim_default_role")
+  /// #79 usage analytics: record reads, searches and MCP calls; null inherits
+  /// ANALYTICS_ENABLED, and `true` cannot turn on what the env turned off.
+  analyticsEnabled        Boolean? @map("analytics_enabled")
+  /// Days of analytics rows kept; null inherits ANALYTICS_RETENTION_DAYS, and
+  /// a value may only shorten it.
+  analyticsRetentionDays  Int?     @map("analytics_retention_days")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 
@@ -3566,4 +3572,86 @@ model KnowledgeConflict {
   @@index([aDocumentId, status])
   @@index([bDocumentId, status])
   @@map("knowledge_conflicts")
+}
+
+// ---------------------------------------------------------------------------
+// #79 usage & search analytics. Event rows only: one row per thing that
+// happened, and every dashboard number a rollup over them at read time. No FK
+// on workspace/project/document/search ids (house policy) — an event outlives
+// the page it describes, as activity_log does. Never a user id: a reader is
+// `reader_key`, an HMAC per workspace, so readers can be counted but not named.
+
+/// One page open. A web view is one row however long it stays open: the
+/// heartbeat folds read time into it rather than adding a row per tick.
+model PageView {
+  /// The web's own viewId (so a replayed beacon is a no-op), else a server uuid.
+  id          String   @id @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  /// Denormalized at write time by the recorder; a later move keeps the old one.
+  projectId   String?  @map("project_id") @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  revisionId  String?  @map("revision_id") @db.Uuid
+  /// ANALYTICS_CHANNELS
+  channel     String
+  /// HMAC(secret, workspaceId:userId); null under DNT / GPC.
+  readerKey   String?  @map("reader_key")
+  apiKeyId    String?  @map("api_key_id") @db.Uuid
+  /// Set when the view came from a search result (?sid=&rank=).
+  searchId    String?  @map("search_id") @db.Uuid
+  searchRank  Int?     @map("search_rank")
+  /// Web only; capped at ANALYTICS_READ_TIME_CAP_MS.
+  activeMs    Int      @default(0) @map("active_ms")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([documentId, createdAt])
+  @@index([searchId])
+  @@map("page_views")
+}
+
+/// One executed search, from any surface.
+model SearchQuery {
+  id           String   @id @db.Uuid
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  /// The project filter the caller applied (string[]).
+  projectIds   Json     @default("[]") @map("project_ids")
+  /// Trimmed, NFC, at most 500 chars. Nulled by retention after ANALYTICS_QUERY_TEXT_DAYS.
+  queryText    String?  @map("query_text")
+  /// sha256 of the folded text: the grouping key that survives redaction.
+  queryHash    String   @map("query_hash")
+  mode         String
+  resultCount  Int      @map("result_count")
+  /// The top 10 document ids returned, in rank order.
+  resultDocIds Json     @default("[]") @map("result_doc_ids")
+  channel      String
+  readerKey    String?  @map("reader_key")
+  apiKeyId     String?  @map("api_key_id") @db.Uuid
+  durationMs   Int      @map("duration_ms")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, queryHash, createdAt])
+  @@index([workspaceId, resultCount, createdAt])
+  @@map("search_queries")
+}
+
+/// One MCP tool invocation, HTTP or stdio.
+model McpToolCall {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Null when the tool takes no workspace (whoami) or names it some other way.
+  workspaceId String?  @map("workspace_id") @db.Uuid
+  tool        String
+  ok          Boolean
+  /// The thrown error's class name, or `tool-error` for an isError result.
+  errorCode   String?  @map("error_code")
+  readerKey   String?  @map("reader_key")
+  apiKeyId    String?  @map("api_key_id") @db.Uuid
+  durationMs  Int      @map("duration_ms")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([apiKeyId, createdAt])
+  @@map("mcp_tool_calls")
 }

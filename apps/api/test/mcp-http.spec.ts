@@ -153,6 +153,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
   const documents = {
     createDocument: vi.fn(async () => ({ documentId: 'd' })),
     getTree: vi.fn(async () => ({ nodes: [] })),
+    getContent: vi.fn(async () => ({ revisionId: 'rev-1', markdown: 'Body', frontmatter: {} })),
   };
   const config = { get: (key: string) => ({ AUTH_MODE: 'api-key', API_PUBLIC_URL: 'https://kb.example.com/api' })[key] };
   const deps = {
@@ -290,6 +291,15 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     quality: {
       forDocument: vi.fn(async (_scope: unknown, documentId: string) => ({ documentId, score: null, peers: [], stale: false, history: [], lowThreshold: 50 })),
     },
+    temporal: {},
+    releaseTags: {},
+    conflicts: {},
+    communities: {},
+    analytics: {
+      search: vi.fn(() => 'search-1'),
+      view: vi.fn(async () => undefined),
+      toolCall: vi.fn(async () => undefined),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
   return {
@@ -298,6 +308,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     documents,
     provenance: deps.provenance,
     feedback: deps.feedback,
+    analytics: deps.analytics,
     verification: deps.verification,
     templates: deps.templates,
     shareLinks: deps.shareLinks,
@@ -543,6 +554,40 @@ describe('McpService over a principal', () => {
     expect(search.search).toHaveBeenCalledOnce();
   });
 
+  it('files every tool call, and the page reads among them, as mcp traffic (#79)', async () => {
+    const { mcp, search, analytics } = service(accessWith('viewer'));
+    const key = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A });
+    const client = await connect(mcp, key, { noTrack: true });
+    const caller = { principal: key, channel: 'mcp', noTrack: true };
+
+    await client.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
+    expect(search.search).toHaveBeenCalledWith(expect.anything(), expect.anything(), caller);
+
+    await client.callTool({ name: 'knowledge_get_document_content', arguments: { documentId: DOC_A } });
+    expect(analytics.view).toHaveBeenCalledWith(caller, DOC_A, 'rev-1');
+
+    const denied = await client.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_B, query: 'x' } });
+    expect(denied.isError).toBe(true);
+
+    const calls = analytics.toolCall.mock.calls.map(([c, call]) => ({ c, ...(call as object) }));
+    expect(calls).toEqual([
+      expect.objectContaining({ c: caller, tool: 'knowledge_search', workspaceId: WS_A, ok: true, errorCode: null }),
+      expect.objectContaining({ tool: 'knowledge_get_document_content', documentId: DOC_A, ok: true }),
+      expect.objectContaining({ tool: 'knowledge_search', workspaceId: WS_B, ok: false }),
+    ]);
+    for (const [, call] of analytics.toolCall.mock.calls) expect((call as { durationMs: number }).durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('serves the call when recording it throws (#79)', async () => {
+    const { mcp, analytics } = service(accessWith('viewer'));
+    analytics.toolCall.mockImplementation(() => {
+      throw new Error('db down');
+    });
+    const client = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A }));
+    const res = await client.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
+    expect(res.isError).toBeFalsy();
+  });
+
   it('meets enforced SSO (#75): a key the workspace blocks, or a password session, never reaches the service', async () => {
     const blocked = service(accessWith('viewer', enforcingPolicy({ allowApiKeys: false }).policy));
     const viaKey = await connect(blocked.mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
@@ -566,7 +611,7 @@ describe('McpService over a principal', () => {
     const client = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
     const found = await client.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
     expect(found.isError).toBeFalsy();
-    expect(search.search).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ workspaceId: WS_A }));
+    expect(search.search).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ workspaceId: WS_A }), expect.anything());
     const tree = await client.callTool({ name: 'knowledge_list_documents', arguments: { workspaceId: WS_A } });
     expect(tree.isError).toBeFalsy();
     expect(documents.getTree).toHaveBeenCalledOnce();
@@ -947,8 +992,9 @@ describe('MCP AI-readable resources', () => {
     expect(content.mimeType).toBe('text/markdown');
 
     const res = { setHeader: vi.fn(), status: vi.fn() };
-    const rest = await new AiReadableController(world.aiReadable).markdown(
+    const rest = await new AiReadableController(world.aiReadable, { view: vi.fn(async () => undefined) } as never).markdown(
       DOC_A,
+      pinnedToA(),
       { headers: {} } as never,
       res as never,
     );

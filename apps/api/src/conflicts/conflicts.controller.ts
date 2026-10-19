@@ -68,16 +68,18 @@ export class ConflictsController {
   async propose(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ProposeAgentFindingResponse> {
     const scope = await this.scopeOf(id, principal);
     const conflict = await this.conflicts.get(scope, id);
-    const source = await this.conflicts.source(id);
     if (conflict.mergeRequestId) {
       throw new ConflictException({ statusCode: 409, message: t('error.conflict.alreadyProposed'), reason: 'already-proposed', mergeRequestId: conflict.mergeRequestId });
     }
-    if (conflict.status !== 'open' || !source.agentRunId || source.findingIndex === null) {
+    const source = await this.conflicts.source(id);
+    // The finding that reported it, found by its conflict id: a run may order
+    // its findings after recording them (the sentinel puts certain ones first).
+    const index = source.agentRunId ? await this.conflicts.findingIndexOf(source.agentRunId, id) : null;
+    if (conflict.status !== 'open' || !source.agentRunId || index === null) {
       throw new ConflictException({ statusCode: 409, message: t('error.conflict.notOpen'), reason: 'conflict-not-open', status: conflict.status });
     }
-    const proposed = await this.findings.propose(source.workspaceId, source.agentRunId, source.findingIndex, principal);
-    await this.conflicts.markProposed(source.workspaceId, id, proposed.mergeRequestId, conflict.a.documentId);
-    return proposed;
+    // AgentFindingsService links the merge request to the conflict.
+    return this.findings.propose(source.workspaceId, source.agentRunId, index, principal);
   }
 
   private async scopeOf(id: string, principal: Principal) {

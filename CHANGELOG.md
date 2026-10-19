@@ -187,6 +187,14 @@ in the pull request that introduces them — see
   contradiction**. **Contradictions** in the sidebar lists them all by status,
   each with the two passages side by side; with none open, it says how to run
   the arbiter.
+- Pages a pull request makes wrong are contradictions too (#81, phase 6).
+  When the drift check (feature 35) finds a page the change makes untrue, it
+  records a page-vs-code conflict: the page's sentence, beside the pull
+  request, the commit it judged and the files it touches. Every push to the
+  same pull request updates that one conflict rather than adding another.
+  Both kinds of conflict now close themselves: merging the merge request a
+  fix was proposed as, from the conflict, the agent runs panel or the drift
+  check's own proposal, marks it resolved.
 
 ### Changed
 

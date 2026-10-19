@@ -38,7 +38,7 @@ import { GraphService } from '../graph/graph.service.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { AssistantClient, ProviderAccountError } from '../assistant/assistant.client.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
-import { candidatePairs, readJudgement } from './contradiction.js';
+import { candidatePairs, conflictFingerprint, quoteIn, readJudgement } from './contradiction.js';
 import { AssistantReadToolsService } from '../assistant/assistant-read-tools.service.js';
 import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
@@ -1780,11 +1780,46 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
           : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
         checked += 1;
         judged.add(candidate.documentId);
+        const verdict = safeJson(raw);
         const finding = readDriftVerdict(
-          safeJson(raw),
+          verdict,
           { id: candidate.documentId, title: candidate.title, markdown: content.markdown },
           pr,
         );
+        // #81: a drifted page is a doc↔code conflict too. Its identity is the
+        // page and the pull request, so every push re-judges one row. The
+        // claim is the page's own sentence when the model quoted one that is
+        // really there, else the finding's title. Non-fatal: the finding stands.
+        if (finding) {
+          const quoted = typeof verdict?.quote === 'string' && quoteIn(content.markdown, verdict.quote) ? verdict.quote.trim() : null;
+          const conflict = await this.conflicts
+            .record({
+              workspaceId: run.workspaceId,
+              kind: 'doc-code',
+              a: { documentId: candidate.documentId, revisionId: content.revisionId, chunkId: null, quote: (quoted ?? finding.title).slice(0, 1_000) },
+              b: null,
+              codeRef: {
+                connectorId,
+                repository: connector.name,
+                pullRequestNumber: pr.number,
+                pullRequestUrl: pr.url,
+                headSha: pr.headSha,
+                paths: candidate.files.slice(0, 20),
+              },
+              fingerprint: conflictFingerprint([{ documentId: candidate.documentId, quote: `pr:${connectorId}#${pr.number}` }]),
+              refreshOpen: true,
+              explanation: finding.detail,
+              // The sentinel's verdict carries no score; a drift it reports is one it asserts.
+              confidence: 1,
+              agentRunId: run.id,
+              findingIndex: null,
+            })
+            .catch((e) => {
+              this.logger.warn(`Sentinel could not record a conflict for "${candidate.title}": ${String(e)}`);
+              return null;
+            });
+          if (conflict) finding.conflictId = conflict.id;
+        }
         // One finding per page, so one merge request: the path edit rides on
         // the corrected body when the model wrote one.
         const paths = pathFindings.get(candidate.documentId);

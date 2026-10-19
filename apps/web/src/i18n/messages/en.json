@@ -5827,6 +5827,8 @@
       "superseded": "Nothing superseded",
       "hint": "The arbiter agent compares passages across pages and lists the ones that disagree here. Run it, schedule it, or trigger it on every indexed page in",
       "hintLink": "Settings → AI → Agents"
-    }
+    },
+    "changes": "changes",
+    "morePaths": "+{n} more"
   }
 }

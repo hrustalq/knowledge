@@ -1,3 +1,4 @@
+import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
 import { forwardRef, Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { ActivityModule } from '../activity/activity.module.js';
@@ -38,6 +39,8 @@ import { AiUsageController } from './ai-usage.controller.js';
     PrismaModule,
     AiCoreModule,
     AgentCoreModule,
+    // Propose links a finding's conflict to its merge request (#81).
+    ConflictsCoreModule,
     AgentQueueModule,
     // A signed delivery fires its trigger inline (#70); controller-free.
     AgentTriggerCoreModule,

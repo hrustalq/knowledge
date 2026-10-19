@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { KnowledgeConflict } from '@prisma/client';
-import type { ConflictKind, ConflictStatus, KnowledgeConflictDto } from '@knowledge/contracts';
+import type { ConflictCodeRef, ConflictKind, ConflictStatus, KnowledgeConflictDto } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
@@ -39,37 +39,51 @@ export class ConflictsService {
    * conflict stays dismissed. Found again after it was superseded (a side's
    * page changed), the new text still disagrees, so it reopens against the new
    * revisions. One guarded statement either way.
+   *
+   * `refreshOpen` is the sentinel's (phase 6): its identity is the page and
+   * the pull request, and every push re-judges the same claim, so an open row
+   * takes the newest judgement — keeping a fix already proposed for it.
    */
   async record(input: {
     workspaceId: string;
     kind: ConflictKind;
     a: DetectedSide;
-    b: DetectedSide;
+    b: DetectedSide | null;
+    codeRef?: ConflictCodeRef | null;
+    /** Identity when it is not the two quotes (the sentinel: page + pull request). */
+    fingerprint?: string;
+    refreshOpen?: boolean;
     explanation: string;
     confidence: number;
     agentRunId: string | null;
     findingIndex: number | null;
   }): Promise<{ id: string; status: ConflictStatus; written: boolean }> {
-    const fingerprint = conflictFingerprint([input.a, input.b]);
+    const fingerprint = input.fingerprint ?? conflictFingerprint(input.b ? [input.a, input.b] : [input.a]);
+    const refreshOpen = input.refreshOpen === true;
+    const b = input.b;
+    const codeRef = input.codeRef ? JSON.stringify(input.codeRef) : null;
     const rows = await this.prisma.$queryRaw<Array<{ id: string; status: ConflictStatus }>>`
       INSERT INTO knowledge_conflicts (
         id, workspace_id, kind, status, fingerprint,
         a_document_id, a_revision_id, a_chunk_id, a_quote,
-        b_document_id, b_revision_id, b_chunk_id, b_quote,
+        b_document_id, b_revision_id, b_chunk_id, b_quote, code_ref,
         explanation, confidence, agent_run_id, finding_index)
       VALUES (
         gen_random_uuid(), ${input.workspaceId}::uuid, ${input.kind}, 'open', ${fingerprint},
         ${input.a.documentId}::uuid, ${input.a.revisionId}::uuid, ${input.a.chunkId}, ${input.a.quote},
-        ${input.b.documentId}::uuid, ${input.b.revisionId}::uuid, ${input.b.chunkId}, ${input.b.quote},
+        ${b?.documentId ?? null}::uuid, ${b?.revisionId ?? null}::uuid, ${b?.chunkId ?? null}, ${b?.quote ?? null}, ${codeRef}::jsonb,
         ${input.explanation}, ${input.confidence}, ${input.agentRunId}::uuid, ${input.findingIndex})
       ON CONFLICT (workspace_id, fingerprint) DO UPDATE SET
         status = 'open',
-        a_revision_id = EXCLUDED.a_revision_id, a_chunk_id = EXCLUDED.a_chunk_id,
+        a_revision_id = EXCLUDED.a_revision_id, a_chunk_id = EXCLUDED.a_chunk_id, a_quote = EXCLUDED.a_quote,
         b_revision_id = EXCLUDED.b_revision_id, b_chunk_id = EXCLUDED.b_chunk_id,
+        code_ref = EXCLUDED.code_ref,
         explanation = EXCLUDED.explanation, confidence = EXCLUDED.confidence,
         agent_run_id = EXCLUDED.agent_run_id, finding_index = EXCLUDED.finding_index,
-        merge_request_id = NULL, detected_at = now(), resolved_at = NULL, resolved_by = NULL, resolution = NULL
-      WHERE knowledge_conflicts.status = 'superseded'
+        -- A superseded row starts over; a refreshed open one keeps its proposed fix.
+        merge_request_id = CASE WHEN knowledge_conflicts.status = 'superseded' THEN NULL ELSE knowledge_conflicts.merge_request_id END,
+        detected_at = now(), resolved_at = NULL, resolved_by = NULL, resolution = NULL
+      WHERE knowledge_conflicts.status = 'superseded' OR (${refreshOpen} AND knowledge_conflicts.status = 'open')
       RETURNING id, status`;
     const written = rows[0];
     if (written) {
@@ -140,10 +154,34 @@ export class ConflictsService {
     return this.get(scope, id);
   }
 
-  /** The merge request a fix was proposed as. */
-  async markProposed(workspaceId: string, id: string, mergeRequestId: string, documentId: string): Promise<void> {
+  /**
+   * The merge request a fix was proposed as. Called by `AgentFindingsService`
+   * when a finding that reported a conflict is proposed — from the conflict,
+   * the runs panel or the drift sweeper alike — so all three link it.
+   */
+  async attachMergeRequest(id: string, mergeRequestId: string): Promise<void> {
+    const row = await this.prisma.knowledgeConflict.findUnique({ where: { id }, select: { workspaceId: true, aDocumentId: true } });
+    if (!row) return;
     await this.prisma.knowledgeConflict.updateMany({ where: { id, mergeRequestId: null }, data: { mergeRequestId } });
-    await this.publish(workspaceId, id, documentId);
+    await this.publish(row.workspaceId, id, row.aDocumentId);
+  }
+
+  /**
+   * A merge request merged: the open conflicts it was proposed to fix are
+   * resolved, attributed to whoever merged it. Returns how many.
+   */
+  async resolveMerged(mergeRequestId: string, actor: string | null): Promise<number> {
+    const rows = await this.prisma.knowledgeConflict.findMany({
+      where: { mergeRequestId, status: 'open' },
+      select: { id: true, workspaceId: true, aDocumentId: true },
+    });
+    if (!rows.length) return 0;
+    const { count } = await this.prisma.knowledgeConflict.updateMany({
+      where: { id: { in: rows.map((r) => r.id) }, status: 'open' },
+      data: { status: 'resolved', resolvedAt: new Date(), resolvedBy: actor },
+    });
+    for (const r of rows) await this.publish(r.workspaceId, r.id, r.aDocumentId);
+    return count;
   }
 
   /** For the guard: the workspace a conflict id belongs to. */
@@ -157,8 +195,16 @@ export class ConflictsService {
   async source(id: string) {
     return this.prisma.knowledgeConflict.findUniqueOrThrow({
       where: { id },
-      select: { workspaceId: true, agentRunId: true, findingIndex: true, mergeRequestId: true, status: true, aDocumentId: true },
+      select: { workspaceId: true, agentRunId: true, findingIndex: true },
     });
+  }
+
+  /** Where in its run's findings the finding that reported `conflictId` sits, or null. */
+  async findingIndexOf(agentRunId: string, conflictId: string): Promise<number | null> {
+    const run = await this.prisma.agentRun.findUnique({ where: { id: agentRunId }, select: { findings: true } });
+    const findings = Array.isArray(run?.findings) ? (run.findings as Array<{ conflictId?: string }>) : [];
+    const index = findings.findIndex((f) => f?.conflictId === conflictId);
+    return index >= 0 ? index : null;
   }
 
   /** Rows whose pages the caller may all open, with PG titles. PG decides (#76). */
@@ -176,13 +222,10 @@ export class ConflictsService {
       kind: r.kind as ConflictKind,
       status: r.status as ConflictStatus,
       a: { documentId: r.aDocumentId, title: title.get(r.aDocumentId)!, revisionId: r.aRevisionId, chunkId: r.aChunkId, quote: r.aQuote },
-      b: {
-        documentId: r.bDocumentId ?? '',
-        title: r.bDocumentId ? title.get(r.bDocumentId)! : '',
-        revisionId: r.bRevisionId ?? '',
-        chunkId: r.bChunkId,
-        quote: r.bQuote ?? '',
-      },
+      b: r.bDocumentId
+        ? { documentId: r.bDocumentId, title: title.get(r.bDocumentId)!, revisionId: r.bRevisionId ?? '', chunkId: r.bChunkId, quote: r.bQuote ?? '' }
+        : null,
+      codeRef: (r.codeRef as ConflictCodeRef | null) ?? null,
       explanation: r.explanation,
       confidence: r.confidence,
       agentRunId: r.agentRunId,

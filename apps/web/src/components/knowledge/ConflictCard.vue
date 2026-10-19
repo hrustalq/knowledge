@@ -17,7 +17,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { GitMerge } from 'lucide-vue-next'
+import { GitMerge, GitPullRequest } from 'lucide-vue-next'
 import type { ConflictSide, KnowledgeConflictDto, ProposeAgentFindingResponse } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { errorMessage, errorReason } from '@/api/errors'
@@ -41,12 +41,13 @@ const auth = useAuthStore()
 const queryClient = useQueryClient()
 const busy = ref<'propose' | 'resolved' | 'dismissed' | null>(null)
 
-/** In the rail, this page first; elsewhere, as found. */
-const sides = computed<[ConflictSide, ConflictSide]>(() =>
-  props.currentDocumentId && props.conflict.b.documentId === props.currentDocumentId
-    ? [props.conflict.b, props.conflict.a]
-    : [props.conflict.a, props.conflict.b],
-)
+/** In the rail, this page first; elsewhere, as found. A doc↔code conflict has one page side. */
+const sides = computed<ConflictSide[]>(() => {
+  const { a, b } = props.conflict
+  if (!b) return [a]
+  return props.currentDocumentId && b.documentId === props.currentDocumentId ? [b, a] : [a, b]
+})
+const code = computed(() => props.conflict.codeRef)
 const isOpen = computed(() => props.conflict.status === 'open')
 
 function refresh() {
@@ -107,6 +108,22 @@ async function propose() {
           {{ side.quote }}
         </blockquote>
       </figure>
+      <!-- #81 phase 6: the code side is a change, not a passage — the pull
+           request, the head the sentinel judged, and the files it touches.
+           No favicon: a reader's browser never asks a third-party host. -->
+      <figure v-if="code" class="min-w-0 space-y-1">
+        <figcaption class="truncate text-xs text-muted-foreground">
+          <a :href="code.pullRequestUrl" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline">
+            <GitPullRequest class="size-3" aria-hidden="true" />{{ code.repository }} #{{ code.pullRequestNumber }}
+          </a>
+          <span class="ml-1 font-mono">{{ code.headSha.slice(0, 7) }}</span>
+          <span class="ml-1">{{ t('conflicts.changes') }}</span>
+        </figcaption>
+        <ul class="border-l border-muted-foreground/45 pl-2.5 font-mono text-[0.75rem] leading-relaxed break-all text-foreground">
+          <li v-for="path in code.paths.slice(0, 6)" :key="path">{{ path }}</li>
+          <li v-if="code.paths.length > 6" class="font-sans text-muted-foreground">{{ t('conflicts.morePaths', { n: code.paths.length - 6 }) }}</li>
+        </ul>
+      </figure>
     </div>
 
     <p class="mt-2.5 text-xs leading-relaxed break-words text-muted-foreground">{{ conflict.explanation }}</p>
@@ -114,7 +131,7 @@ async function propose() {
     <p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
       <Badge v-if="!isOpen" variant="outline" class="text-[10px] font-normal">{{ t(`conflicts.status.${conflict.status}`) }}</Badge>
       <span :title="formatDateTime(conflict.detectedAt)">{{ t('conflicts.found', { when: formatRelative(conflict.detectedAt) }) }}</span>
-      <span>· {{ t('conflicts.confidence', { value: formatNumber(Math.round(conflict.confidence * 100)) }) }}</span>
+      <span v-if="conflict.kind === 'doc-doc'">· {{ t('conflicts.confidence', { value: formatNumber(Math.round(conflict.confidence * 100)) }) }}</span>
       <RouterLink
         v-if="conflict.mergeRequestId"
         :to="`/merge-requests/${conflict.mergeRequestId}`"

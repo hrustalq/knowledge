@@ -24165,7 +24165,7 @@ export interface operations {
                 workspaceId: string;
                 /** @description Every status when absent */
                 status?: "open" | "resolved" | "dismissed" | "superseded";
-                kind?: "doc-doc";
+                kind?: "doc-doc" | "doc-code";
                 /** @description Only conflicts with this page on either side */
                 documentId?: string;
             };

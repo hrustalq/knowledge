@@ -18,6 +18,7 @@ import { errorMessage, isRestrictedRefusal } from '@/api/errors'
 import { labelFor } from '@/lib/labels'
 import { hasWorkingCopy } from '@/lib/working-copy'
 import { readFrontmatter } from '@/lib/page-source'
+import { usePageView } from '@/lib/use-page-view'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -594,6 +595,11 @@ const isSpec = computed(() => !!detail.value?.document.kind && detail.value.docu
 // One state for the rail's operation index and the main column's operation.
 const apiRef = useApiReference(documentId, viewingRevision, isSpec)
 const canComment = computed(() => auth.canComment && !viewingRevision.value)
+// Usage analytics (#79): opening this page is one view, once it is known to be
+// readable — a refused or missing page records nothing.
+usePageView(() =>
+  detail.value ? { documentId: documentId.value, revisionId: viewingRevision.value ?? detail.value.revision.revisionId } : null,
+)
 
 onMounted(() => {
   void load()

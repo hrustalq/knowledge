@@ -220,6 +220,19 @@ in the pull request that introduces them — see
   failed analytics write never fails the request it describes. There is
   no dashboard yet (phases 3–4), and nothing is backfilled, because no
   earlier source recorded reads or who searched.
+- Page reads in the browser are counted (#79, phase 2). Opening a page in the
+  app records one view, and the time spent actually reading it is added to
+  that view: the time only grows while the tab is visible and the reader
+  has scrolled, typed or moved the pointer in the last 30 seconds. It is
+  reported every 15 seconds and once more when the tab is hidden or closed,
+  and capped at 30 minutes per view. Opening a search result records which
+  search it came from and its rank, which lets later phases measure
+  click-through; the `sid`/`rank` parameters leave the address bar once the
+  page loads. A browser that sends Do Not Track or Global Privacy Control is
+  counted with no reader. Only a page the reader may open is counted. The
+  beacon is a same-origin request using the app's own credential: no
+  cookie, nothing third-party. New routes: `POST /v1/documents/:id/views`
+  and `POST /v1/analytics/views/:viewId/heartbeat`, both `204`.
 
 ### Changed
 
@@ -253,6 +266,9 @@ in the pull request that introduces them — see
   secret is empty, the reader key is derived from `SETTINGS_ENCRYPTION_KEY`,
   which production sets. No retention runs yet (phase 4), so the tables grow
   until then.
+- New env var with a default: `ANALYTICS_READ_TIME_CAP_MS` (`1800000`), the
+  most active read time one web view can record. No migration in #79
+  phase 2.
 - New env vars for community summaries, both with defaults:
   `COMMUNITY_SUMMARIES_ENABLED` (`false`) and `COMMUNITY_MAX_PER_RUN`
   (`30`). Summaries are stored in ArcadeDB as `Community` vertices (created

@@ -33,6 +33,7 @@ import { WorkflowMaterializeModule } from './workflows/workflow-materialize.modu
 import { TemplatesModule } from './templates/templates.module.js';
 import { ComponentsModule } from './components/components.module.js';
 import { ApiSpecsModule } from './api-specs/api-specs.module.js';
+import { AnalyticsModule } from './analytics/analytics.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { McpHttpModule } from './mcp/mcp-http.module.js';
@@ -127,6 +128,9 @@ import { ChatModule } from './chat/chat.module.js';
     // MCP over Streamable HTTP at /v1/mcp (docs/features/33) — the stdio
     // server's tools, bound per request to the caller's principal.
     McpHttpModule,
+    // Usage analytics (#79): the page-view beacon. API-only; recording is
+    // AnalyticsCoreModule's, which search, MCP and the worker load.
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

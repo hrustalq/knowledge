@@ -801,6 +801,26 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/analytics/views/{viewId}/heartbeat",
+      "tag": "analytics",
+      "summary": "Fold a view's active read time into it. Monotonic and capped; a view the caller did not open is unchanged",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/views",
+      "tag": "analytics",
+      "summary": "Record that the caller opened this page (the web beacon). Idempotent on viewId",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/api-operations",
       "tag": "api-specs",

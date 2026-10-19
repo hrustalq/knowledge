@@ -556,7 +556,7 @@
     "serverUrlNotHttps": "The messenger server must use https (http is allowed only with CHAT_ALLOW_PRIVATE_URLS)",
     "serverUrlPrivate": "{address} is on a private network; set CHAT_ALLOW_PRIVATE_URLS to allow it",
     "serverHostUnresolved": "{host} could not be resolved",
-    "listenTelegramOnly": "Keeping messages for harvesting is for Telegram groups only; Time threads are read whole",
+    "listenTelegramOnly": "Keeping messages for harvesting is for Telegram groups only; Time and Mattermost threads are read whole",
     "listenNoticeFailed": "The bot could not tell the group it keeps messages, so nothing is kept: {reason}"
   },
   "group": {

@@ -558,7 +558,7 @@
     "serverUrlNotHttps": "Сервер мессенджера должен использовать https (http допустим только при CHAT_ALLOW_PRIVATE_URLS)",
     "serverUrlPrivate": "Адрес {address} находится в частной сети; разрешите его через CHAT_ALLOW_PRIVATE_URLS",
     "serverHostUnresolved": "Не удалось разрешить хост {host}",
-    "listenTelegramOnly": "Хранить сообщения для сбора можно только в группах Telegram: треды Time читаются целиком",
+    "listenTelegramOnly": "Хранить сообщения для сбора можно только в группах Telegram: треды Time и Mattermost читаются целиком",
     "listenNoticeFailed": "Бот не смог сообщить группе, что хранит сообщения, поэтому ничего не хранится: {reason}"
   },
   "group": {

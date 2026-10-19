@@ -38,6 +38,17 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Mattermost bots (#343). **Settings → Chat bots → Connect a bot** now offers
+  Mattermost beside Telegram and Time: paste a bot account's access token and
+  your Mattermost server's address. The bot does everything a Time bot does:
+  it answers mentions and direct messages in the question's thread, takes
+  👍/👎 and Save, posts a bound channel's notifications, and harvests a thread
+  on `capture` (also `remember` or `запомни`) or 📌 (`pushpin`). Commands are
+  plain words, because Mattermost's client keeps a leading `/` for its own
+  slash commands. Time and Mattermost share one adapter, so a fix to one is a
+  fix to both. Buttons need the Mattermost server to reach `API_PUBLIC_URL`,
+  and on a private network its `AllowedUntrustedInternalConnections` must list
+  that host.
 - MCP agents can work in a page's shared draft (#316). Over the HTTP MCP
   server (`/v1/mcp`), with co-editing on, `knowledge_get_draft` reads the
   draft people are writing in the editor: the body as publishing it would

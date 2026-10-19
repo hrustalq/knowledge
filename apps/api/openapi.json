@@ -36233,7 +36233,8 @@
             "type": "string",
             "enum": [
               "telegram",
-              "time"
+              "time",
+              "mattermost"
             ]
           },
           "name": {
@@ -36243,13 +36244,13 @@
           },
           "token": {
             "type": "string",
-            "description": "The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts). Write-only — never returned."
+            "description": "The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token). Write-only — never returned."
           },
           "serverUrl": {
             "type": "string",
             "maxLength": 500,
             "example": "https://time.example.com",
-            "description": "The messenger server, for a self-hosted platform (Time) — required there, refused for Telegram"
+            "description": "The messenger server, for a self-hosted platform (Time, Mattermost) — required there, refused for Telegram"
           },
           "defaultAgentKey": {
             "type": "string",

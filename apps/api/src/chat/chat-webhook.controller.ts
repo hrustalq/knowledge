@@ -16,17 +16,17 @@ import { ChatIntegrationsService } from './chat-integrations.service.js';
  *
  * `@Public()` because the caller is a messenger, not a session. What
  * authenticates it is the adapter's check, before anything else is read: the
- * shared secret Telegram echoes on every delivery, or the signature a Time
- * button carries in its context. A failed check is a 401 that touched nothing.
+ * shared secret Telegram echoes on every delivery, or the signature a Time or
+ * Mattermost button carries in its context. A failed check is a 401 that touched nothing.
  *
  * The handler answers at once — Telegram redelivers what it thinks timed out —
  * and the work continues detached in {@link ChatAnswersService.receive}, which
  * owns its own failures. A verified delivery the bot has nothing to say to is
  * still a 200: a non-2xx would only make the platform retry it.
  *
- * The one wait: a Time button press is answered in this response (the note
+ * The one wait: a Time or Mattermost button press is answered in this response (the note
  * shown to the presser), so the adapter holds it until the core acknowledges
- * the press — `respondToAction`, bounded by the adapter. Time's messages never
+ * the press — `respondToAction`, bounded by the adapter. Their messages never
  * come here; they arrive over the bot's websocket (`ChatSocketSupervisor`).
  */
 @Controller('v1/chat')

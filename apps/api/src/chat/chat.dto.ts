@@ -44,7 +44,7 @@ export class CreateChatIntegrationDto {
   name!: string;
 
   @ApiProperty({
-    description: 'The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts). Write-only — never returned.',
+    description: 'The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token). Write-only — never returned.',
   })
   @IsString()
   @IsNotEmpty()
@@ -54,7 +54,7 @@ export class CreateChatIntegrationDto {
   @ApiPropertyOptional({
     maxLength: 500,
     example: 'https://time.example.com',
-    description: 'The messenger server, for a self-hosted platform (Time) — required there, refused for Telegram',
+    description: 'The messenger server, for a self-hosted platform (Time, Mattermost) — required there, refused for Telegram',
   })
   @IsOptional()
   @IsString()

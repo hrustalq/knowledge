@@ -328,7 +328,7 @@ async function loginWorld(opts: { admin?: boolean; allowPasswordForAdmins?: bool
   const mail = { enqueue: vi.fn(async () => undefined) };
   const policy = new AuthPolicyService(prisma as never, config as never, audit as never);
   const flow = new AuthFlowService(prisma as never, config as never, sessions as never, mail as never, audit as never, policy);
-  return { flow, audit, sessions, mail };
+  return { flow, audit, sessions, mail, prisma };
 }
 
 const refusalOf = async (p: Promise<unknown>) => {
@@ -349,9 +349,15 @@ describe('a verified, enforced domain refuses passwords', () => {
   });
 
   it('at signup, and mints no reset link', async () => {
-    const { flow, mail } = await loginWorld();
-    await refusalOf(flow.signup('new@corp.example', 'New', 'correct horse battery'));
+    const { flow, mail, prisma } = await loginWorld();
+    expect(await refusalOf(flow.signup('new@corp.example', 'New', 'correct horse battery'))).toMatchObject({
+      reason: 'ssoRequiredForDomain',
+      domain: 'corp.example',
+      providerId: ENFORCING_PROVIDER.id,
+    });
     expect(await flow.forgotPassword('ada@corp.example')).toEqual({ ok: true });
+    // Refused before the token is minted, not just before the mail is queued.
+    expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
     expect(mail.enqueue).not.toHaveBeenCalled();
   });
 

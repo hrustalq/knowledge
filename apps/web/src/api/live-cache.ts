@@ -123,6 +123,13 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
     ],
   },
   {
+    // Contradictions (#81): found by the arbiter, superseded by a new head, or
+    // closed by a person. Every list is keyed by query, so one prefix covers
+    // the /conflicts tabs and each page's rail.
+    on: 'conflict.*',
+    invalidate: () => [['/v1/conflicts']],
+  },
+  {
     // The captures inbox (issue #73): proposed from an agent session, approved
     // or rejected by a person. subjectId is the capture.
     on: 'capture.*',

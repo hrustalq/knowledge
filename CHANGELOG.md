@@ -179,7 +179,14 @@ in the pull request that introduces them — see
   as it is indexed; nothing runs until one of these is set up. Each judgement
   is one model call, recorded as `contradiction` in AI usage. MCP:
   `knowledge_list_conflicts` and `knowledge_resolve_conflict` (a write,
-  hidden from read-only keys). The conflicts UI follows in the next phase.
+  hidden from read-only keys).
+- Contradictions in the app (#81, phase 5). A page with an open
+  contradiction gets a **Contradictions** section in its side rail: what this
+  page says, what the other page says, why they disagree, and, for editors,
+  **Propose fix** (opens a merge request), **Resolve** and **Not a
+  contradiction**. **Contradictions** in the sidebar lists them all by status,
+  each with the two passages side by side; with none open, it says how to run
+  the arbiter.
 
 ### Changed
 

@@ -52,6 +52,14 @@ route it mirrors, and a new tool without a guard stands out in review because
 every other handler starts with one. stdio passes `DEV_PRINCIPAL`: local process
 access _is_ the trust there, and it keeps `make dev-mcp` behaving as before.
 
+**One exception to one tool set: the draft tools.** `knowledge_get_draft` and
+`knowledge_suggest_draft_edit` ([56](56-realtime-coediting.md#mcp-agents-in-a-draft))
+need the collab gateway, which only the API process runs. `McpController`
+passes them into `buildServer(principal, { drafts })`, and into `toolsFor` and
+`skillFor`, so the connection page and the SKILL.md list them. stdio builds
+without them and never offers them. It is an argument, not a DI token:
+`McpCoreModule` is shared with stdio and must not import collab.
+
 **A key only ever narrows.** Scope and workspace pin live on the principal
 (`principal.apiKey`) and are enforced inside `requireRole` — ahead of the
 platform-admin shortcut, or an admin's read-only key would write anyway. Because
@@ -131,6 +139,7 @@ drops it in a later release.
 | SKILL.md renderer                                      | `apps/api/src/mcp/skill.ts`                                                 |
 | HTTP transport + `/connection` + `/skill` + `/capture-kit` | `apps/api/src/mcp/mcp.controller.ts`                                    |
 | Capture kit renderers + installer                      | `apps/api/src/mcp/capture-kit.ts`                                           |
+| Draft tools (HTTP only)                                | `apps/api/src/mcp/draft-tools.ts`, `collab/collab-draft-tools.service.ts`   |
 | Module split: core / stdio / HTTP                      | `mcp-core.module.ts`, `mcp.module.ts`, `mcp-http.module.ts`                 |
 | Key narrowing                                          | `AccessService.requireKeyAllows`, `AclGuard` (read keys on unscoped routes) |
 | Key resolution + `last_used_at`                        | `apps/api/src/auth/token-auth.service.ts`                                   |

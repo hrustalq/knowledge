@@ -103,7 +103,8 @@ same `WsAdapter` and port (`apps/api/src/collab/collab.gateway.ts`). It embeds
 `@hocuspocus/extension-redis` relays updates and awareness between instances
 on its own connections, so CRDT traffic never rides the best-effort
 `knowledge:events` bus. `CollabModule` is API-only; dependency-cruiser keeps it
-out of the worker and MCP entrypoints.
+out of the worker and the stdio MCP entrypoint. The HTTP MCP module runs in the
+API and imports it for the draft tools ([below](#mcp-agents-in-a-draft)).
 
 A doc name is `collab:{workspaceId}:{documentId}:{branchId}` (`collabDocName`).
 The workspace part is never trusted: admission resolves the workspace from the
@@ -233,6 +234,48 @@ this device's copy, read-only until the server answers.
 `document.*`: everything keyed on `document.*` would fire on every editor join.
 `api/live-cache.ts` refreshes the drafts query on both. Neither raises a toast.
 
+### MCP agents in a draft
+
+An agent connected over MCP takes part in a draft the way the editor's
+assistant does (#316). Two tools exist, on the API's HTTP MCP server
+(`POST /v1/mcp`) only and only while `COLLAB_ENABLED` is on:
+
+- **`knowledge_get_draft`** (view on the page) returns the draft body **as a
+  publish would write it**. Pending suggestions are put back to what they
+  replaced (`withoutSuggestions`), in the editor's own markdown spelling, so
+  an anchor quoted from it is one the editor finds. It also returns the page
+  fields, base and head (`headMoved`), `unpublished`, `editing`, and the
+  waiting suggestions. A branch with no draft answers `draft: null`, and
+  nothing is created: a read never opens a connection. It reads the doc this
+  instance has loaded, or else the stored row.
+- **`knowledge_suggest_draft_edit`** (edit on the page, a `WRITE_TOOLS`
+  entry) takes the `edit_draft` shape, `{ op, anchor?, markdown }`, and
+  writes a **ready** suggestion. The suggested blocks go into the body, and an
+  entry goes into `suggestions` with `agent: { key: 'mcp', name: <key name> }`
+  and `requestedBy` the key's person. Every open editor shows it at once with
+  Keep and Discard. It is refused, and nothing is written, for the reasons
+  `refuseDraftEdit` refuses the assistant (checked against the text
+  `knowledge_get_draft` returns), and when the edit reaches inside a
+  suggestion still waiting for a decision. A branch with no draft gets one,
+  seeded from its head.
+
+The write goes through `CollabGateway.writeDraft`: `settled()` first, so a
+write never lands in a doc on its way out after a reset; then Hocuspocus's
+`openDirectConnection`, one `transact`, and `disconnect`. The disconnect
+stores at once, and Redis relays the update to peers on other instances. The
+connection carries no principal, so the store credits nobody. A suggestion is
+the requester's word, not their edit: whoever keeps it writes it in, and is
+credited then.
+
+`CollabDraftToolsService` lives in `collab/` beside the gateway.
+`McpController` hands it to `McpService.buildServer` as an argument, so
+`McpCoreModule`, which the stdio server shares, never imports collab. The
+stdio server has no gateway and never lists the tools. The shared pieces are
+in `@knowledge/editor-schema`, one implementation each for web and API:
+`./serialize` (the markdown serializer), `./suggestions` (anchor resolution,
+block indices, entry shapes, `withoutSuggestions`) and `./suggestion-entries`
+(the Y.Map codec).
+
 ## Routes
 
 ```
@@ -241,6 +284,8 @@ GET    /v1/documents/:id/drafts          viewer · each branch's draft: base, un
 DELETE /v1/documents/:id/drafts/:branchId editor · discard: reseed from the head, peers rejoin (reset)
 POST   /v1/documents/:id/revisions       editor · now takes optional collabDraftId + draftSnapshot
 WS     /v1/collab                         Hocuspocus; token = collabToken(kt_ ticket, generation)
+MCP    knowledge_get_draft                viewer · HTTP MCP only, COLLAB_ENABLED
+MCP    knowledge_suggest_draft_edit       editor · HTTP MCP only, COLLAB_ENABLED
 ```
 
 Revisions in API responses carry `coAuthorIds`, an empty list unless they came
@@ -381,6 +426,10 @@ It also found a failed page load that opens an empty, publishable editor
   needs a Yjs move or a "being edited" lock on the drag handle.
 - **Publish on top overwrites** whatever the other path published. The review
   diff is the only safeguard until content merge exists.
+- **An MCP read can trail a peer on another instance.** `knowledge_get_draft`
+  reads the doc only when this instance has it loaded, and otherwise the
+  stored row, which can be up to `COLLAB_STORE_MAX_DEBOUNCE_MS` behind. Its
+  `editing` is `activePeers`, with the limit below. Exact with one instance.
 - **`activePeers` is per instance.** It counts awareness on the instance that
   answers, including peers relayed from instances that have the doc loaded. It
   is exact with one instance (production); a scaled-out deployment needs a

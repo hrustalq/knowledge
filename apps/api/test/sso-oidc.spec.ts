@@ -1,18 +1,21 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'reflect-metadata';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { exportJWK, generateKeyPair, SignJWT, type JWK } from 'jose';
+import { IDP_PRESETS, type IdpPreset } from '@knowledge/contracts';
+import { decryptSecret, parseKey } from '../src/ai/secret-box.js';
 import { AuthFlowService } from '../src/auth/auth-flow.service.js';
+import { OIDC_PRESETS } from '../src/auth/sso/oidc-presets.js';
 import { identityFromClaims } from '../src/auth/sso/oidc-claims.js';
 import { SsoLoginService } from '../src/auth/sso/sso-login.service.js';
 import { RoleSyncService } from '../src/auth/sso/role-sync.service.js';
 import { normalizeDomain } from '../src/auth/sso/identity-providers.service.js';
 import { safeReturnTo } from '../src/common/safe-return-to.js';
 import { noAuthPolicy } from './auth-policy-fakes.js';
-import { fakeConfig, ssoHarness, WEB, WS, type Row } from './sso-fakes.js';
+import { fakeConfig, identityProvidersHarness, ssoHarness, WEB, WS, type Row } from './sso-fakes.js';
 
 /**
  * OIDC sign-in end to end (#75 phase 2), against an in-process OpenID provider:
@@ -548,5 +551,60 @@ describe('OIDC back-channel logout', () => {
     const h = harness();
     expect(h.oidc.backchannelLogoutUri({ id: 'p1', preset: 'keycloak' })).toBe('http://api.test/v1/auth/oidc/p1/backchannel-logout');
     expect(h.oidc.backchannelLogoutUri({ id: 'p1', preset: 'yandex' })).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------- provider setup (#296)
+
+describe('OIDC provider setup', () => {
+  const ENC_KEY = randomBytes(32).toString('base64');
+  const ISSUER = 'https://idp.example/realms/corp';
+  const SECRET = 's3cret-client-value';
+  const admin = { userId: 'u1', isAdmin: false } as never;
+  const body = (preset: IdpPreset) => ({ kind: 'oidc' as const, name: 'Corp', preset, issuer: ISSUER, clientId: 'knowledge', clientSecret: SECRET });
+  /** Every key in a JSON value, at any depth. */
+  const keysOf = (v: unknown): string[] =>
+    v && typeof v === 'object' ? Object.entries(v).flatMap(([k, inner]) => [k, ...keysOf(inner)]) : [];
+
+  it.each(IDP_PRESETS)('%s: the client secret is stored encrypted and shown only as hasSecret', async (preset) => {
+    const { svc, rows, audit } = identityProvidersHarness(fakeConfig({ SETTINGS_ENCRYPTION_KEY: ENC_KEY }));
+    const view = await svc.create(WS, body(preset), admin);
+
+    expect(view).toMatchObject({ kind: 'oidc', preset, hasSecret: true, config: { clientId: 'knowledge' } });
+    expect(decryptSecret(rows[0].secretCipher, parseKey(ENC_KEY))).toBe(SECRET);
+    const json = JSON.stringify(view);
+    expect(json).not.toContain(SECRET);
+    expect(json).not.toContain(rows[0].secretCipher);
+    expect(keysOf(view).filter((k) => /secret|cipher/i.test(k))).toEqual(['hasSecret']);
+    expect(JSON.stringify(audit.record.mock.calls)).not.toContain(SECRET);
+    // Google and Yandex are one IdP each: their issuer is fixed, whatever the body sends.
+    expect(view.config.issuer).toBe(OIDC_PRESETS[preset].issuer ?? ISSUER);
+    expect(rows[0].config.issuer).toBe(OIDC_PRESETS[preset].issuer ?? ISSUER);
+  });
+
+  it('keeps the stored secret on an update that sends none, and clears it only on an empty string', async () => {
+    const { svc, rows } = identityProvidersHarness(fakeConfig({ SETTINGS_ENCRYPTION_KEY: ENC_KEY }));
+    const view = await svc.create(WS, body('keycloak'), admin);
+    const cipher = rows[0].secretCipher;
+    expect((await svc.update(WS, view.id, { name: 'Renamed', clientId: 'knowledge-2' }, admin)).hasSecret).toBe(true);
+    expect(rows[0].secretCipher).toBe(cipher);
+    expect((await svc.update(WS, view.id, { clientSecret: '' }, admin)).hasSecret).toBe(false);
+    expect(rows[0].secretCipher).toBeNull();
+  });
+
+  it('refuses a secret without SETTINGS_ENCRYPTION_KEY, on create and on update', async () => {
+    const { svc, rows } = identityProvidersHarness(fakeConfig({ SETTINGS_ENCRYPTION_KEY: '' }));
+    expect((await svc.list(WS)).secretsWritable).toBe(false);
+    const err = await svc.create(WS, body('keycloak'), admin).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect((err as BadRequestException).message).toBe('error.sso.secretKeyMissing');
+    expect(rows).toHaveLength(0);
+
+    // Intended: a public client (PKCE, no secret) needs no key, so it saves.
+    const { clientSecret: _secret, ...publicClient } = body('keycloak');
+    const view = await svc.create(WS, publicClient, admin);
+    expect(view.hasSecret).toBe(false);
+    await expect(svc.update(WS, view.id, { clientSecret: SECRET }, admin)).rejects.toThrow('error.sso.secretKeyMissing');
+    expect(rows[0].secretCipher).toBeNull();
   });
 });

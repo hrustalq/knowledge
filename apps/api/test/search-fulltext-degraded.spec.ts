@@ -64,6 +64,8 @@ function build(fulltext: { enabled: boolean; search: (...a: unknown[]) => Promis
     policy as never,
     permissions as never,
     config as never,
+    // No asOf: every search here reads the live projection (#81).
+    { resolve: async () => undefined } as never,
   );
   const warn = vi.spyOn((svc as unknown as { logger: { warn: () => void } }).logger, 'warn').mockImplementation(() => {});
   return { svc, graph, warn };
@@ -136,6 +138,17 @@ describe('StaleSweeper.repairFulltext (#173)', () => {
         ]),
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
+      // #81: the re-mirrored revision is stamped again from PG.
+      document: {
+        findUnique: vi.fn(async () => ({
+          defaultBranch: 'main',
+          branches: [{ id: 'b-main', name: 'main' }],
+          revisions: [
+            { id: 'old', branchId: 'b-main', finalizedAt: new Date(1000) },
+            { id: 'head', branchId: 'b-main', finalizedAt: new Date(2000) },
+          ],
+        })),
+      },
     };
     const graph = {
       getRevisionChunkTexts: vi.fn(async (_ws: string, rev: string) => [
@@ -149,9 +162,17 @@ describe('StaleSweeper.repairFulltext (#173)', () => {
   }
 
   it('re-mirrors from the graph, flips the head live, and clears only the stamp it read', async () => {
-    const fulltext = { enabled: true, indexRevisionChunks: vi.fn(async () => {}), setLiveRevision: vi.fn(async () => {}) };
+    const fulltext = {
+      enabled: true,
+      indexRevisionChunks: vi.fn(async () => {}),
+      setLiveRevision: vi.fn(async () => {}),
+      stampRevisions: vi.fn(async () => {}),
+    };
     const { svc, prisma } = sweeper(fulltext);
     expect(await svc.repairFulltext()).toBe(2);
+    // Re-mirrored rows are written unstamped; each gets its own interval back (#81).
+    expect(fulltext.stampRevisions).toHaveBeenCalledWith(WS, 'd1', [{ revisionId: 'head', validFrom: 2000, validTo: null, lineage: 'default' }]);
+    expect(fulltext.stampRevisions).toHaveBeenCalledWith(WS, 'd1', [{ revisionId: 'old', validFrom: 1000, validTo: 2000, lineage: 'default' }]);
 
     expect(fulltext.indexRevisionChunks).toHaveBeenCalledWith(
       WS,

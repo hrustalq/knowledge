@@ -5544,7 +5544,7 @@
     },
     {
       "name": "knowledge_search",
-      "description": "Semantic search over the knowledge base. Every result carries document/revision/chunk citations plus provenance: revisionNumber, changedAt (freshness), authorName, verification / trust.status (verified | expired | edited | requested | outdated | flagged | unverified), trust.inactive, trust.ownerId and factClass. Ranking already favours verified pages and demotes outdated ones; still say when a page you relied on is outdated, expired or edited since verification. Archived pages are absent unless includeArchived is true. The response traceId identifies this search.",
+      "description": "Semantic search over the knowledge base. Every result carries document/revision/chunk citations plus provenance: revisionNumber, changedAt (freshness), authorName, verification / trust.status (verified | expired | edited | requested | outdated | flagged | unverified), trust.inactive, trust.ownerId and factClass. Ranking already favours verified pages and demotes outdated ones; still say when a page you relied on is outdated, expired or edited since verification. Archived pages are absent unless includeArchived is true. The response traceId identifies this search. With asOf, it searches the text each page held then, and a result whose validTo is set has since been superseded.",
       "inputs": [
         {
           "name": "workspaceId",
@@ -5568,6 +5568,14 @@
         },
         {
           "name": "includeArchived",
+          "optional": true
+        },
+        {
+          "name": "asOf",
+          "optional": true
+        },
+        {
+          "name": "knownAt",
           "optional": true
         }
       ]

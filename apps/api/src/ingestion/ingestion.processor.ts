@@ -7,7 +7,8 @@ import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
-import { revisionStamps, stampWindow } from '../graph/temporal.js';
+import { stampWindow } from '../graph/temporal.js';
+import { loadRevisionStamps } from '../graph/revision-stamps.js';
 import { EMBEDDING_PROVIDER, embeddingSignature, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { INGESTION_QUEUE } from './ingestion.constants.js';
@@ -484,18 +485,16 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
    * last stamps its predecessor closed and itself open or closed.
    */
   private async stampValidity(workspaceId: string, documentId: string, revisionId: string): Promise<void> {
-    const doc = await this.prisma.document.findUnique({
-      where: { id: documentId },
-      select: {
-        defaultBranch: true,
-        branches: { select: { id: true, name: true } },
-        revisions: { where: { finalizedAt: { not: null } }, select: { id: true, branchId: true, finalizedAt: true } },
-      },
-    });
-    if (!doc) return;
-    const defaultBranchId = doc.branches.find((b) => b.name === doc.defaultBranch)?.id ?? null;
-    const window = stampWindow(revisionStamps(doc.revisions, defaultBranchId), revisionId);
+    const window = stampWindow(await loadRevisionStamps(this.prisma, documentId), revisionId);
     await this.graph.stampRevisions(workspaceId, documentId, window);
+    // The BM25 mirror's copy is non-fatal like every other fulltext write; a
+    // re-mirror by the stale sweeper stamps the revision again.
+    try {
+      await this.fulltext.stampRevisions(workspaceId, documentId, window);
+    } catch (e) {
+      this.logger.warn(`Fulltext validity stamp failed for document ${documentId} (non-fatal): ${(e as Error).message}`);
+      await this.markFulltext(revisionId, 'stale');
+    }
   }
 
   /**

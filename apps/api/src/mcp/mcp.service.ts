@@ -233,7 +233,8 @@ export class McpService {
           'expired | edited | requested | outdated | flagged | unverified), trust.inactive, trust.ownerId and ' +
           'factClass. Ranking already favours verified pages and demotes outdated ones; still say when a page you ' +
           'relied on is outdated, expired or edited since verification. Archived pages are absent unless ' +
-          'includeArchived is true. The response traceId identifies this search.',
+          'includeArchived is true. The response traceId identifies this search. With asOf, it searches the text ' +
+          'each page held then, and a result whose validTo is set has since been superseded.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           query: z.string().min(1),
@@ -251,9 +252,11 @@ export class McpService {
               'Restrict results to documents carrying ANY of these frontmatter tags ("security" or "tag:security")',
             ),
           includeArchived: z.boolean().optional().describe('Also return archived pages (default false)'),
+          asOf: z.string().optional().describe(MCP_AS_OF),
+          knownAt: z.string().optional().describe(MCP_KNOWN_AT),
         },
       },
-      async ({ workspaceId, query, limit, projectIds, tags, includeArchived }) => {
+      async ({ workspaceId, query, limit, projectIds, tags, includeArchived, asOf, knownAt }) => {
         const scope = await guard.pages(workspaceId);
         // One merged object: separate spreads would clobber each other.
         const filters = {
@@ -266,6 +269,8 @@ export class McpService {
             workspaceId,
             query,
             limit: limit ?? 20,
+            ...(asOf ? { asOf } : {}),
+            ...(knownAt ? { knownAt } : {}),
             ...(Object.keys(filters).length ? { filters } : {}),
           },
           scope,

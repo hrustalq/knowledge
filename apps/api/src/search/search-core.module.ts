@@ -5,6 +5,7 @@ import { FulltextModule } from '../fulltext/fulltext.module.js';
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { VerificationPolicyModule } from '../verification/verification-policy.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
+import { TemporalCoreModule } from '../temporal/temporal-core.module.js';
 import { SearchService } from './search.service.js';
 
 /**
@@ -24,7 +25,7 @@ import { SearchService } from './search.service.js';
   // for the trust switch and the inactivity window (docs/features/39): both
   // leaves, both worker-safe. PermissionsCoreModule for the caller's page
   // visibility (#76), controller-free by design.
-  imports: [GraphModule, EmbeddingModule, FulltextModule, FeedbackCoreModule, VerificationPolicyModule, PermissionsCoreModule],
+  imports: [GraphModule, EmbeddingModule, FulltextModule, FeedbackCoreModule, VerificationPolicyModule, PermissionsCoreModule, TemporalCoreModule],
   providers: [SearchService],
   exports: [SearchService],
 })

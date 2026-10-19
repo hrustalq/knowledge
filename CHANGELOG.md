@@ -137,6 +137,14 @@ in the pull request that introduces them — see
   `atRevisionId` for the workspace's view of an entity then. New tools:
   `knowledge_list_release_tags` and `knowledge_create_release_tag` (a write,
   hidden from read-only keys).
+- Search as of a point in time (#81, phase 3). `POST /v1/search` and MCP
+  `knowledge_search` take `asOf` (and `knownAt`, for the graph expansion):
+  the vector leg, the BM25 leg, the tag filter and the graph expansion all
+  answer from the text and relations each page held then, so a search as of
+  release `v1` finds the paragraph v1 said and a search of now finds only
+  today's. Each result of an `asOf` search carries `validFrom` and `validTo`;
+  a `validTo` means that text has since been superseded. Filters, page
+  permissions and the trust re-rank work as they do now.
 
 ### Changed
 
@@ -161,6 +169,13 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- With OpenSearch (`FULLTEXT_PROVIDER=opensearch`), the index gains
+  `validFrom`, `validTo` and `lineage` fields on its first write after the
+  deploy; no reindex is needed. `make graph-live-backfill` now stamps the
+  BM25 mirror as well as the graph, so run it after #81 phase 3 if it was
+  already run for phase 1. Until it runs, an `asOf` search's BM25 leg finds
+  no history for older pages (the vector leg is unaffected once the graph is
+  stamped).
 - Migration `20261114100000_release_tags` adds the `release_tags` table and
   nothing else. It survives a code rollback, because the previous image never
   reads it.

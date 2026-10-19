@@ -188,6 +188,7 @@
     "notFound": "Ingestion job {id} not found"
   },
   "ai": {
+    "disabled": "The drafter agent is turned off for this workspace, so this AI assist cannot run.",
     "skillNotFound": "Skill {id} not found",
     "skillNameTaken": "A skill named \"{name}\" already exists in this workspace",
     "pluginNotFound": "Plugin {id} not found",

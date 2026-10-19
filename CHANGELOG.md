@@ -426,6 +426,11 @@ in the pull request that introduces them — see
   used to show the raw key `error.ai.disabled`. CI now fails when an API
   message exists in only one language, when its `{placeholders}` differ
   between them, or when the code names a message key neither one has.
+- A page's Insights widget now counts the visit you are making (#336). It was
+  read before the page recorded your view and never read again, so it showed
+  one view fewer than the API held, and the same was true of unique readers
+  and the last time a person opened the page. The widget is now read again
+  once your view is recorded. Read time still catches up on the next load.
 
 ### Operations
 

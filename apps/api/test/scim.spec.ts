@@ -532,6 +532,67 @@ describe('SCIM Groups', () => {
   });
 });
 
+describe('SCIM role sync safety (#75 criterion 8)', () => {
+  const blockedRows = () => (audit.record.mock.calls as unknown as Row[][]).map((c) => c[0]).filter((e) => e.action === 'role_sync.blocked_last_admin');
+
+  /** A SCIM group with a provider-less mapping to `role`, and Ada provisioned into it. */
+  async function mappedGroup(role: string): Promise<{ ada: string; group: string }> {
+    const ada = await createAda();
+    const res = await entra.post('/Groups', { displayName: `Knowledge ${role}s` });
+    const group = res.body.id as string;
+    db.tables.idpGroupMapping.push({ id: randomUUID(), workspaceId: WS_A, providerId: null, externalGroup: group, role, trustedOperator: false });
+    await entra.patch(`/Groups/${group}`, { Operations: [{ op: 'Add', path: 'members', value: [{ value: ada }] }] });
+    return { ada, group };
+  }
+
+  describe('the sole admin, provisioned through an admin mapping, is never demoted or removed', () => {
+    it.each([
+      ['removed from the group', (ada: string, group: string) => entra.patch(`/Groups/${group}`, { Operations: [{ op: 'remove', path: `members[value eq "${ada}"]` }] })],
+      ['the group deleted', (_ada: string, group: string) => entra.delete(`/Groups/${group}`)],
+      ['deactivated', (ada: string) => entra.patch(`/Users/${ada}`, ENTRA_DISABLE)],
+    ])('%s: the role stays and one blocked_last_admin row is written', async (_label, act) => {
+      const { ada, group } = await mappedGroup('admin');
+      expect(member(WS_A, ada)).toMatchObject({ role: 'admin', source: 'scim' });
+      expect(db.tables.workspaceMember.filter((m) => m.workspaceId === WS_A && m.role === 'admin')).toHaveLength(1);
+      expect(blockedRows()).toHaveLength(0);
+
+      expect((await act(ada, group)).status).toBeLessThan(300);
+      expect(member(WS_A, ada)).toMatchObject({ role: 'admin', source: 'scim' });
+      expect(blockedRows()).toEqual([
+        expect.objectContaining({ workspaceId: WS_A, target: ada, ok: false, error: 'last-admin', params: expect.objectContaining({ via: 'scim' }) }),
+      ]);
+    });
+  });
+
+  describe('a manual membership is immune to SCIM group changes', () => {
+    async function manualInMappedGroup() {
+      const { ada, group } = await mappedGroup('admin');
+      // A second admin, so nothing below is the last-admin rule at work.
+      db.tables.workspaceMember.push({ workspaceId: WS_A, userId: randomUUID(), role: 'admin', trustedOperator: false, source: 'manual', createdAt: new Date() });
+      await entra.patch(`/Groups/${group}`, { Operations: [{ op: 'remove', path: `members[value eq "${ada}"]` }] });
+      // An admin takes the row over by hand.
+      Object.assign(member(WS_A, ada)!, { role: 'editor', source: 'manual' });
+      return { ada, group };
+    }
+
+    it('group PATCH add and remove leave role and source unchanged', async () => {
+      const { ada, group } = await manualInMappedGroup();
+      await entra.patch(`/Groups/${group}`, { Operations: [{ op: 'Add', path: 'members', value: [{ value: ada }] }] });
+      expect(db.tables.scimGroupMember.some((m) => m.groupId === group && m.userId === ada)).toBe(true);
+      expect(member(WS_A, ada)).toMatchObject({ role: 'editor', source: 'manual' });
+      await entra.patch(`/Groups/${group}`, { Operations: [{ op: 'remove', path: `members[value eq "${ada}"]` }] });
+      expect(member(WS_A, ada)).toMatchObject({ role: 'editor', source: 'manual' });
+    });
+
+    it('group DELETE leaves role and source unchanged', async () => {
+      const { ada, group } = await manualInMappedGroup();
+      await entra.patch(`/Groups/${group}`, { Operations: [{ op: 'Add', path: 'members', value: [{ value: ada }] }] });
+      expect((await entra.delete(`/Groups/${group}`)).status).toBe(204);
+      expect(member(WS_A, ada)).toMatchObject({ role: 'editor', source: 'manual' });
+    });
+  });
+});
+
 describe('SCIM tokens and isolation', () => {
   it("never shows or changes another workspace's users", async () => {
     const ada = await createAda();

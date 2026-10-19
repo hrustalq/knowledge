@@ -41,7 +41,7 @@ describe('analytics rollups (e2e, #79)', () => {
     if (!process.env.DATABASE_URL) process.loadEnvFile('.env');
     prisma = new PrismaService();
     await prisma.$connect();
-    svc = new AnalyticsQueryService(prisma, { get: () => 90 } as never);
+    svc = new AnalyticsQueryService(prisma, { get: () => 90 } as never, { enabled: async () => true } as never);
     scope = { ...systemScope(WS), bypass: false, role: 'editor', denied: new Set([RESTRICTION]) };
 
     await prisma.project.createMany({

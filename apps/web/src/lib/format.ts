@@ -60,6 +60,11 @@ export function formatNumber(value: number, locale?: Locale): string {
   return new Intl.NumberFormat(tag(locale)).format(value)
 }
 
+/** A 0–1 ratio as a percentage, at most one decimal: 0.1666 → "16.7%". */
+export function formatPercent(ratio: number, locale?: Locale): string {
+  return new Intl.NumberFormat(tag(locale), { style: 'percent', maximumFractionDigits: 1 }).format(ratio)
+}
+
 /**
  * Relative time, via Intl.RelativeTimeFormat so Russian gets its own plural
  * forms ("2 минуты назад" / "5 минут назад") without a hand-written table.

@@ -86,6 +86,7 @@
     "mergeRequests": "Merge requests",
     "workflows": "Workflows",
     "knowledgeHealth": "Knowledge health",
+    "analytics": "Analytics",
     "assistant": "Assistant",
     "settings": "Settings",
     "activity": "Activity",
@@ -5502,6 +5503,7 @@
         "ai-readable_llms-full": "Full-text export for AI read",
         "api_try": "API console request",
         "feedback_export": "Answer feedback exported",
+        "analytics_export": "Usage analytics exported",
         "merge-request_lint-override": "Style lint overridden on merge",
         "auth_login": "Signed in",
         "auth_login_failed": "Sign-in failed",
@@ -5874,6 +5876,112 @@
       "none": "None.",
       "createdAgo": "created {when}"
     },
-    "viewsCount": "{n} view | {n} views"
+    "viewsCount": "{n} view | {n} views",
+    "title": "Analytics",
+    "subtitle": "How the workspace is read and searched: by people, by the assistant for them, and by agents.",
+    "adminOnly": "Usage analytics is for workspace admins: it shows what people searched for.",
+    "tabs": {
+      "overview": "Overview",
+      "pages": "Pages",
+      "search": "Search",
+      "agents": "Agents",
+      "settings": "Settings"
+    },
+    "trafficFilter": "Traffic",
+    "trafficAll": "All",
+    "recordingOff": "Recording is off for this workspace. The numbers below stop at the moment it was turned off.",
+    "readersCount": "{n} reader | {n} readers",
+    "searchesCount": "{n} search | {n} searches",
+    "export": "Export CSV",
+    "exportOf": "Export {name} as CSV",
+    "metrics": {
+      "views": {
+        "label": "Views",
+        "hint": "Page opens in the range, from every channel the filter keeps"
+      },
+      "uniqueReaders": {
+        "label": "Readers",
+        "hint": "Distinct readers. Browsers that send Do Not Track or Global Privacy Control count as views only"
+      },
+      "medianRead": {
+        "label": "Median read",
+        "hint": "Active reading time of a page opened in the app"
+      },
+      "searches": {
+        "label": "Searches",
+        "hint": "A reader repeating one query within 10 seconds counts once"
+      },
+      "zeroResult": {
+        "label": "Found nothing",
+        "hint": "Share of searches that returned no results"
+      },
+      "clickThrough": {
+        "label": "Click-through",
+        "hint": "Share of searches in the app that found something and were followed by opening a result"
+      },
+      "assistantQuestions": {
+        "label": "Assistant questions",
+        "hint": "Questions people asked the in-app assistant"
+      },
+      "mcpCalls": {
+        "label": "MCP calls",
+        "hint": "Tool calls agents made over MCP"
+      }
+    },
+    "pages": {
+      "deadPending": "Not judged yet."
+    },
+    "search": {
+      "top": "Top queries",
+      "topHint": "Click-through and the mean rank of the opened result count searches in the app only.",
+      "zeroResult": "Found nothing",
+      "zeroResultHint": "Queries that returned no results: pages that may be missing.",
+      "noClick": "Searched, never opened",
+      "noClickHint": "Searches in the app whose results nobody opened.",
+      "none": "No searches in this range.",
+      "noneZero": "Every search found something.",
+      "redacted": "Text removed by retention · {hash}",
+      "ctr": "{value} clicked",
+      "rank": "rank {n}"
+    },
+    "agents": {
+      "tools": "MCP tools",
+      "keys": "API keys",
+      "keysHint": "MCP calls, page reads and searches per key. Shown by name and prefix only.",
+      "noKeys": "No API key was used in this range.",
+      "noCalls": "No calls in this range.",
+      "deletedKey": "Deleted key · {id}",
+      "callsCount": "{n} call | {n} calls",
+      "errorsCount": "{n} error | {n} errors",
+      "assistant": "In-app assistant",
+      "questionsCount": "{n} question | {n} questions",
+      "questionsChartLabel": "Questions asked of the assistant per day over {n} days",
+      "questionsPoint": "{date}: {n} questions",
+      "noQuestions": "Nobody asked the assistant anything in this range.",
+      "operations": "Model calls",
+      "operationsHint": "Every AI call in the workspace, by what it was for."
+    },
+    "settings": {
+      "title": "Recording and retention",
+      "intro": "The deployment sets a ceiling: a workspace can turn recording off and keep rows for less time, never more.",
+      "applies": "Applies:",
+      "on": "On",
+      "off": "Off",
+      "inherit": "Default ({value})",
+      "offByDeployment": "(off for the whole deployment)",
+      "days": "{n} day | {n} days",
+      "ceiling": "Deployment ceiling: {value}",
+      "saved": "Analytics settings saved",
+      "recording": {
+        "label": "Record usage",
+        "hint": "Page views, searches and MCP calls. Off, nothing new is recorded; existing rows stay until retention removes them."
+      },
+      "retention": {
+        "label": "Keep rows for",
+        "hint": "Older rows are deleted every hour. A search keeps its text for {text}, then only its hash.",
+        "belowDead": "Shorter than the {n}-day dead-page window: the unread and dead lists will never match a page.",
+        "clamped": "Longer than the deployment allows: {n} days will apply."
+      }
+    }
   }
 }

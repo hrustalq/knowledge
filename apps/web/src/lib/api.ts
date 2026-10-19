@@ -417,6 +417,16 @@ export async function apiFetchBlob(path: string, init?: RequestInit): Promise<{ 
   return { blob: await res.blob(), filename: match?.[1] ?? null }
 }
 
+/** Hand bytes to the browser as a download: an object URL clicked through a detached link. */
+export function saveFile(blob: Blob, filename: string): void {
+  const href = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = href
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(href)
+}
+
 /** The one request path — headers, credential, and the error envelope — both readers share. */
 async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
   const token = getToken()

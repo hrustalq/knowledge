@@ -10,6 +10,7 @@ import { MailWorkerModule } from './mail/mail-worker.module.js';
 import { PublishingWorkerModule } from './publishing/publishing-worker.module.js';
 import { ExportWorkerModule } from './export/export-worker.module.js';
 import { AclWorkerModule } from './permissions/acl-worker.module.js';
+import { AnalyticsWorkerModule } from './analytics/analytics-worker.module.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AclWorkerModule } from './permissions/acl-worker.module.js';
     PublishingWorkerModule,
     ExportWorkerModule,
     AclWorkerModule,
+    AnalyticsWorkerModule,
   ],
 })
 export class WorkerModule {}

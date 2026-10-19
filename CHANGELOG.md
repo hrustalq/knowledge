@@ -248,6 +248,32 @@ in the pull request that introduces them — see
   dead. Every count is limited to pages the viewer may open. New routes:
   `GET /v1/documents/:id/insights` (viewer) and
   `GET /v1/projects/:id/analytics?days=&traffic=` (editor).
+- A workspace **Analytics** page for admins (#79, phase 4), at `/analytics`
+  beside Knowledge health. **Overview** shows views, readers, median read
+  time, searches, the share that found nothing, click-through, assistant
+  questions and MCP calls, plus views per day split into people, assistant
+  and agents. **Pages** lists the most read, never opened and dead pages
+  across the workspace. **Search** lists top queries, queries that found
+  nothing, and searches whose results nobody opened. **Agents** lists MCP
+  calls by tool, what each API key did (by name and prefix only), the
+  assistant's questions per day and model calls by purpose. Every view takes
+  a range (7, 30 or 90 days), and every tab except Agents also takes a
+  traffic filter (all, people, assistant, agents). A reader who repeats one
+  query within 10 seconds, such as by toggling a filter, counts as one
+  search. Click-through counts only searches in the app that found
+  something. Every list has **Export CSV**: the whole table, up to 5,000
+  rows, in RFC 4180 CSV. A cell that starts with `=`, `+`, `-` or `@` gets a
+  leading `'` so a spreadsheet cannot run it as a formula. Each export is
+  written to the audit log as `analytics.export`. The **Settings** tab turns
+  recording off for the workspace or shortens how long rows are kept. It
+  shows each value as requested, the deployment ceiling, and the value that
+  applies. New admin routes: `GET /v1/analytics/overview`, `/pages`,
+  `/search`, `/agents`, `/export.csv?report=`, and `GET`/`PUT
+  /v1/analytics/settings`.
+- Analytics rows are now deleted when they age out (#79, phase 4). The worker
+  sweeps every hour and deletes page views, searches and MCP calls older than
+  the workspace's retention (default 180 days). After 90 days a search loses
+  its text but keeps its hash, so it still groups with the same query.
 
 ### Changed
 
@@ -286,6 +312,13 @@ in the pull request that introduces them — see
   phase 2.
 - New env var with a default: `ANALYTICS_DEAD_PAGE_DAYS` (`90`), the window
   behind the unread and dead page lists. No migration in #79 phase 3.
+- New env vars with defaults (#79 phase 4): `ANALYTICS_RETENTION_DAYS`
+  (`180`), a ceiling on how long analytics rows are kept, which a workspace
+  may only shorten; and `ANALYTICS_QUERY_TEXT_DAYS` (`90`), after which a
+  recorded search keeps its hash and loses its text. No migration. The
+  worker's first sweep runs at boot, so the first deploy deletes any
+  analytics rows already older than 180 days. Nothing that old exists yet,
+  because recording began in phase 1.
 - New env vars for community summaries, both with defaults:
   `COMMUNITY_SUMMARIES_ENABLED` (`false`) and `COMMUNITY_MAX_PER_RUN`
   (`30`). Summaries are stored in ArcadeDB as `Community` vertices (created

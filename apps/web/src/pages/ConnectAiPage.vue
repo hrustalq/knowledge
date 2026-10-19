@@ -40,7 +40,7 @@ import type {
   ProjectSummary,
 } from '@knowledge/contracts'
 import { API_KEY_SCOPES, CAPTURE_KIT_CLIENTS } from '@knowledge/contracts'
-import { ApiError, apiFetch, apiFetchText, getProjectId, getWorkspaceId } from '@/lib/api'
+import { ApiError, apiFetch, apiFetchText, getProjectId, getWorkspaceId, saveFile } from '@/lib/api'
 import { formatDate, formatRelative } from '@/lib/format'
 import {
   KEY_ENV,
@@ -255,12 +255,7 @@ async function refreshSkill(asKey: string) {
 
 function downloadSkill() {
   if (!skill.value) return
-  const href = URL.createObjectURL(new Blob([skill.value], { type: 'text/markdown' }))
-  const a = document.createElement('a')
-  a.href = href
-  a.download = 'SKILL.md'
-  a.click()
-  URL.revokeObjectURL(href)
+  saveFile(new Blob([skill.value], { type: 'text/markdown' }), 'SKILL.md')
 }
 
 /* ---------------------------------------------------- step 4: capture kit */

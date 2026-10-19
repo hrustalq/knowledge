@@ -29992,6 +29992,561 @@
         ]
       }
     },
+    "/v1/analytics/overview": {
+      "get": {
+        "operationId": "AnalyticsController_overview",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Days back from now. Omitted: 30",
+            "schema": {
+              "minimum": 1,
+              "maximum": 366,
+              "type": "number"
+            }
+          },
+          {
+            "name": "traffic",
+            "required": false,
+            "in": "query",
+            "description": "Count one traffic class only. Omitted: all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "human",
+                "assisted",
+                "agent"
+              ]
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace's headline usage: views by traffic class, searches, click-through, assistant and MCP volume",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/pages": {
+      "get": {
+        "operationId": "AnalyticsController_pages",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Days back from now. Omitted: 30",
+            "schema": {
+              "minimum": 1,
+              "maximum": 366,
+              "type": "number"
+            }
+          },
+          {
+            "name": "traffic",
+            "required": false,
+            "in": "query",
+            "description": "Count one traffic class only. Omitted: all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "human",
+                "assisted",
+                "agent"
+              ]
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace's most read, never read and dead pages",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/search": {
+      "get": {
+        "operationId": "AnalyticsController_search",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Days back from now. Omitted: 30",
+            "schema": {
+              "minimum": 1,
+              "maximum": 366,
+              "type": "number"
+            }
+          },
+          {
+            "name": "traffic",
+            "required": false,
+            "in": "query",
+            "description": "Count one traffic class only. Omitted: all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "human",
+                "assisted",
+                "agent"
+              ]
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Top queries, queries that found nothing, and web searches whose results nobody opened",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/agents": {
+      "get": {
+        "operationId": "AnalyticsController_agents",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Days back from now. Omitted: 30",
+            "schema": {
+              "minimum": 1,
+              "maximum": 366,
+              "type": "number"
+            }
+          },
+          {
+            "name": "traffic",
+            "required": false,
+            "in": "query",
+            "description": "Count one traffic class only. Omitted: all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "human",
+                "assisted",
+                "agent"
+              ]
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "MCP calls by tool and by API key, and the in-app assistant's questions and model calls",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/export.csv": {
+      "get": {
+        "operationId": "AnalyticsController_export",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Days back from now. Omitted: 30",
+            "schema": {
+              "minimum": 1,
+              "maximum": 366,
+              "type": "number"
+            }
+          },
+          {
+            "name": "traffic",
+            "required": false,
+            "in": "query",
+            "description": "Count one traffic class only. Omitted: all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "human",
+                "assisted",
+                "agent"
+              ]
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "report",
+            "required": true,
+            "in": "query",
+            "description": "Which dashboard table",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pages-top",
+                "pages-never-read",
+                "pages-dead",
+                "search-top",
+                "search-zero-result",
+                "search-no-click",
+                "agents-tools",
+                "agents-keys",
+                "agents-operations"
+              ]
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One dashboard table as RFC 4180 CSV (formula cells defused); audited",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/settings": {
+      "get": {
+        "operationId": "AnalyticsController_getSettings",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace's analytics settings: what it asks for, the deployment's ceiling, and what applies",
+        "tags": [
+          "analytics"
+        ]
+      },
+      "put": {
+        "operationId": "AnalyticsController_setSettings",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAnalyticsSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set recording and retention for the workspace; null inherits the env, which is a ceiling",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
     "/v1/documents/{id}/insights": {
       "get": {
         "operationId": "AnalyticsController_insights",
@@ -36146,6 +36701,32 @@
             "description": "Defaults to the question"
           }
         }
+      },
+      "UpdateAnalyticsSettingsDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "enabled": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Record usage here; null inherits ANALYTICS_ENABLED, which true cannot exceed"
+          },
+          "retentionDays": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 3650,
+            "description": "Days rows are kept; null inherits ANALYTICS_RETENTION_DAYS, and a longer value is clamped to it"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "enabled",
+          "retentionDays"
+        ]
       },
       "RecordPageViewDto": {
         "type": "object",

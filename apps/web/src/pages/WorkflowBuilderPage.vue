@@ -407,7 +407,7 @@ function applyProposal(proposal: { graph: WorkflowGraph; name: string | null; de
             @click="chatOpen = !chatOpen"
           >
             <Sparkles class="size-3.5" />
-            <span class="hidden sm:inline">{{ t('workflow.askArchitect') }}</span>
+            <span class="sr-only sm:not-sr-only">{{ t('workflow.askArchitect') }}</span>
           </Button>
 
           <!-- Configure carries a label rather than an icon alone: the drawer
@@ -415,7 +415,7 @@ function applyProposal(proposal: { graph: WorkflowGraph; name: string | null; de
                and an unlabelled panel glyph does not say that. -->
           <Button variant="outline" size="sm" class="gap-1.5" @click="inspectorOpen = true">
             <PanelRight class="size-3.5" />
-            <span class="hidden sm:inline">{{ t('workflow.configure') }}</span>
+            <span class="sr-only sm:not-sr-only">{{ t('workflow.configure') }}</span>
           </Button>
 
           <!-- Deleting the workflow belongs here rather than in the drawer:

@@ -409,6 +409,14 @@ in the pull request that introduces them — see
   hear the visible text first, then what the control is for. The "more ways to
   start a page" chevron next to `+` in the sidebar is now 24 px wide instead of
   14 px, so it is easier to hit.
+- On a phone, screen readers now name the buttons that show only an icon
+  (#354). Below the `sm` width, the Graph / Tree / List tabs, Upload, New page,
+  Show archived and Filters on `/documents` hid their label from assistive
+  technology along with the screen, so they were announced as "tab, selected"
+  or "link". The same applied to New chat in the assistant, the editor's AI
+  button, Ask on a published site, the filter rail toggle on merge requests,
+  and Ask the architect and Configure in the workflow builder. The label is
+  still hidden on screen but is now read aloud. Nothing looks different.
 
 ### Operations
 

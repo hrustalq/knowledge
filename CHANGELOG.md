@@ -367,6 +367,14 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- An MCP tool call refused with structured reasons now carries them (#300).
+  Under enforced SSO, an agent's tool error said only "requires single
+  sign-on": it never got `reason: 'ssoRequired'` or the providers to sign in
+  through, which REST puts in `details`. A refused tool call now returns the
+  message as before, followed by a second text block
+  `{ statusCode, message, details }` with the same `details` REST sends. This
+  applies to every refusal that carries extras, such as a page permission's
+  `canRequestAccess`; errors without extras are unchanged.
 - BM25 search and indexing recover by themselves once OpenSearch is reachable
   again (#330). A worker or API that first reached OpenSearch while it was
   down or still starting (connection refused, DNS, a dropped connection) kept

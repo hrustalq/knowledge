@@ -112,7 +112,9 @@ whatever the mode:
 calls `AuthPolicyService` after a key's narrowing. The web app, REST, MCP tool
 calls and WebSocket subscriptions therefore all meet the same rule. A session
 satisfies an enforcing workspace only if one of its providers, or a
-platform-wide one, opened it. The refusal is 403 with `details.reason`:
+platform-wide one, opened it. The refusal is 403 with `details.reason`. A
+refused MCP tool call returns the message and then a second text block,
+`{ statusCode, message, details }`, with the same `details`:
 
 | `reason`         | When                                                                            | The web app                                                        |
 | ---------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------ |

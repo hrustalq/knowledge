@@ -367,6 +367,14 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- BM25 search and indexing recover by themselves once OpenSearch is reachable
+  again (#330). A worker or API that first reached OpenSearch while it was
+  down or still starting (connection refused, DNS, a dropped connection) kept
+  failing every BM25 call with `fetch failed` until it was restarted: the
+  worker wrote nothing to the keyword index and the stale sweep's backlog only
+  grew, and search stayed `degraded: ['fulltext']`. The next call now retries
+  the setup, so after an OpenSearch restart the sweep re-mirrors the stale
+  revisions and search logs its recovery.
 - The editor no longer opens a page it failed to load (#314). If any request
   for an existing page failed (the connection dropped mid-load, a 5xx, a
   timeout), the editor used to open with an empty title and body and Publish

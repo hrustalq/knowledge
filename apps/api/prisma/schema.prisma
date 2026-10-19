@@ -3506,3 +3506,23 @@ model SsoAuthRequest {
   @@index([expiresAt])
   @@map("sso_auth_requests")
 }
+
+/// A named instant in a workspace (#81): "v2.3", "Q3 audit". Not a git tag —
+/// a point on the graph's valid-time axis that `asOf=tag:<name>` resolves to.
+model ReleaseTag {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// No FK, house policy.
+  workspaceId String   @map("workspace_id") @db.Uuid
+  /// null = the whole workspace; set = shown in that project's views only.
+  projectId   String?  @map("project_id") @db.Uuid
+  name        String
+  at          DateTime @db.Timestamptz
+  note        String?
+  /// users.id, or the dev principal's zeros. No FK, house policy.
+  createdBy   String   @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, at])
+  @@map("release_tags")
+}

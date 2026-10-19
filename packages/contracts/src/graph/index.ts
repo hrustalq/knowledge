@@ -185,6 +185,8 @@ export interface EntitySummary {
 
 // GET /v1/entities?workspaceId=
 export interface ListEntitiesResponse {
+  /** Present when read as of a point in time (#81). */
+  resolvedAsOf?: ResolvedAsOf;
   entities: EntitySummary[];
 }
 
@@ -201,6 +203,8 @@ export interface EntityRelationEdge {
 
 // GET /v1/entities/:key/neighbors (plan.md §9 knowledge.find_relations)
 export interface EntityNeighborsResponse {
+  /** Present when read as of a point in time (#81). */
+  resolvedAsOf?: ResolvedAsOf;
   entity: EntityRef;
   /** Edges touching the entity (depth 1). */
   edges: EntityRelationEdge[];
@@ -221,6 +225,8 @@ export interface ImpactedNode {
   path: ImpactPathStep[];
 }
 export interface ImpactAnalysisResponse {
+  /** Present when read as of a point in time (#81). */
+  resolvedAsOf?: ResolvedAsOf;
   entity: EntityRef;
   direction: 'dependents' | 'dependencies';
   impactedEntities: ImpactedNode[];
@@ -230,6 +236,8 @@ export interface ImpactAnalysisResponse {
 
 // GET /v1/entities/trace?workspaceId&from&to (plan.md §9 knowledge.trace_relation)
 export interface TraceRelationResponse {
+  /** Present when read as of a point in time (#81). */
+  resolvedAsOf?: ResolvedAsOf;
   from: string;
   to: string;
   /** Alternating entity/document steps, or null when no path exists. */
@@ -239,3 +247,66 @@ export interface TraceRelationResponse {
 
 // ---------------------------------------------------------------------------
 // Phase 5 — governance & scale: auth/ACLs, audited operator queries,
+
+// ---------------------------------------------------------------------------
+// Bi-temporal graph (#81)
+
+/**
+ * How an `asOf` was given: an ISO date, `rev:<uuid>` (that revision's
+ * finalize time), `tag:<name>` (a release tag's instant), or `now` — only
+ * `knownAt` was given, so the valid-time point is the present.
+ */
+export const AS_OF_KINDS = ['date', 'revision', 'tag', 'now'] as const;
+export type AsOfKind = (typeof AS_OF_KINDS)[number];
+
+/** What an `asOf`/`knownAt` pair resolved to — echoed so a UI shows what applied. */
+export interface ResolvedAsOf {
+  kind: AsOfKind;
+  /** The value as given (`2026-05-01`, `rev:…`, `tag:v2.3`), or `now`. */
+  ref: string;
+  /** The valid-time instant the read used, ISO. A future date clamps to now. */
+  at: string;
+  /** The system-time instant (what was believed then), ISO; null = now. */
+  knownAt: string | null;
+}
+
+/** A release tag's name: letters, digits and `. _ - /`, at most 64. */
+export const RELEASE_TAG_NAME_PATTERN = '^[A-Za-z0-9._\\-/]{1,64}$';
+
+/** A named instant on the valid-time axis ("v2.3", "Q3 audit"). Not a git tag. */
+export interface ReleaseTagDto {
+  id: string;
+  workspaceId: string;
+  /** null = the whole workspace. */
+  projectId: string | null;
+  name: string;
+  at: string;
+  note: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+// GET /v1/release-tags?workspaceId=&projectId=
+export interface ListReleaseTagsResponse {
+  tags: ReleaseTagDto[];
+}
+
+/** One day of fact changes: how many facts became valid, and how many stopped. */
+export interface GraphTimelineDay {
+  /** YYYY-MM-DD, UTC. */
+  day: string;
+  opened: number;
+  closed: number;
+}
+
+// GET /v1/graph/timeline?workspaceId=&projectId=&from=&to=
+export interface GraphTimelineResponse {
+  workspaceId: string;
+  projectId: string | null;
+  from: string;
+  to: string;
+  /** Tags in the window, oldest first: the labelled ticks of the slider. */
+  tags: ReleaseTagDto[];
+  /** Days with at least one change, oldest first: the density sparkline. */
+  days: GraphTimelineDay[];
+}

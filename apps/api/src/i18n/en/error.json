@@ -703,5 +703,16 @@
     "tokenLimit": "This workspace already has {max} active SCIM tokens — revoke one before creating another.",
     "tokenNotFound": "SCIM token not found",
     "mappingGroup": "Choose a group the workspace's SCIM client has provisioned"
+  },
+  "temporal": {
+    "badAsOf": "asOf must be an ISO date, rev:<revisionId> or tag:<name>; got {value}",
+    "revisionNotFound": "Revision {id} not found in this workspace",
+    "revisionNotFinalized": "Revision {id} is a draft and has no point in time yet",
+    "unknownTag": "Release tag {name} not found in this workspace",
+    "badWindow": "from and to must be ISO dates with from before to"
+  },
+  "releaseTag": {
+    "notFound": "Release tag {id} not found",
+    "duplicate": "A release tag named {name} already exists in this workspace"
   }
 }

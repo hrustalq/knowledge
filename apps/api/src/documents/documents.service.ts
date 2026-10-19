@@ -33,6 +33,7 @@ import { toRevisionInfo } from './revision-info.js';
 import { normalizeRelationTarget, tagFilterKey } from '../common/relations.js';
 import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
+import type { TemporalPoint } from '../graph/temporal.js';
 import { IngestionProducer } from '../ingestion/ingestion.producer.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
@@ -949,6 +950,29 @@ export class DocumentsService {
   }
 
   /** Feature 01 (docs/features/01): full raw content of a revision. */
+  /** The page's workspace, for resolving an `asOf` before the read (#81). */
+  async workspaceOf(documentId: string): Promise<string> {
+    return (await this.getDocumentOrThrow(documentId)).workspaceId;
+  }
+
+  /**
+   * The default-branch revision that was the page's content at `at` (#81): the
+   * newest one finalized by then. A legacy revision with no branch id is on
+   * the default branch. 404 when the page had no content yet.
+   */
+  async revisionAsOf(documentId: string, at: TemporalPoint): Promise<string> {
+    const document = await this.prisma.document.findUnique({ where: { id: documentId }, include: { branches: true } });
+    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
+    const branchId = document.branches.find((b) => b.name === document.defaultBranch)?.id ?? null;
+    const revision = await this.prisma.documentRevision.findFirst({
+      where: { documentId, finalizedAt: { lte: new Date(at.at) }, OR: [{ branchId }, { branchId: null }] },
+      orderBy: { finalizedAt: 'desc' },
+      select: { id: true },
+    });
+    if (!revision) throw new NotFoundException(t('error.document.noReadableRevision', { id: documentId }));
+    return revision.id;
+  }
+
   async getContent(documentId: string, revisionId?: string): Promise<DocumentContentResponse> {
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
@@ -1486,7 +1510,7 @@ export class DocumentsService {
    * those documents still reach: an entity whose every mention lives in
    * another project is not part of this project's vocabulary.
    */
-  async getWorkspaceGraph(scope: AccessScope, projectId?: string): Promise<WorkspaceGraphResponse> {
+  async getWorkspaceGraph(scope: AccessScope, projectId?: string, at?: TemporalPoint): Promise<WorkspaceGraphResponse> {
     const { workspaceId } = scope;
     // Pages the caller may not open are not nodes, so their edges go (below,
     // `inScope`) and with them every entity only they mention (#76).
@@ -1508,7 +1532,7 @@ export class DocumentsService {
 
     // `inScope` is the authority (it is PG under the same predicate); the
     // graph filter only keeps hidden pages' edges off the wire (#76).
-    const g = await this.graph.getWorkspaceRelationGraph(workspaceId, await this.permissions.documentFilterFor(scope));
+    const g = await this.graph.getWorkspaceRelationGraph(workspaceId, await this.permissions.documentFilterFor(scope), at);
 
     // The renderer draws every edge each frame; past this the canvas stops
     // being readable long before it stops being fast, so the cap is a
@@ -1559,14 +1583,14 @@ export class DocumentsService {
    * knowledge graph. depth = entity hops (one entity hop = two BFS hops over
    * the bipartite doc→entity graph, same convention as Phase 4 traversal).
    */
-  async getDocumentGraph(documentId: string, depth: number, scope: AccessScope): Promise<DocumentGraphResponse> {
+  async getDocumentGraph(documentId: string, depth: number, scope: AccessScope, at?: TemporalPoint): Promise<DocumentGraphResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     const d = Math.min(Math.max(Math.floor(depth) || 1, 1), 3);
 
     // Walk only what the caller may open: an edge from a page they cannot see
     // would otherwise both reveal the page and carry the walk on through it
     // to entities only it mentions. GraphService drops both (#76).
-    const g = await this.graph.getWorkspaceRelationGraph(document.workspaceId, await this.permissions.documentFilterFor(scope));
+    const g = await this.graph.getWorkspaceRelationGraph(document.workspaceId, await this.permissions.documentFilterFor(scope), at);
     const adj = buildAdjacency(g.edges);
     const hits = bfs(adj, docNode(documentId), d * 2);
 

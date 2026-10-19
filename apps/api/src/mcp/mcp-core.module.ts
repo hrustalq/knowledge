@@ -28,6 +28,7 @@ import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { ComponentDraftsModule } from '../components/component-drafts.module.js';
 import { StyleLintModule } from '../assistant/style-lint.module.js';
 import { QualityCoreModule } from '../quality/quality-core.module.js';
+import { TemporalCoreModule } from '../temporal/temporal-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -92,6 +93,8 @@ import { McpService } from './mcp.service.js';
     // knowledge_lint_draft / knowledge_get_page_quality (#74). Controller-free and read-only.
     StyleLintModule,
     QualityCoreModule,
+    // asOf resolution and release tags (#81). Controller-free.
+    TemporalCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

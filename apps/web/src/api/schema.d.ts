@@ -4852,6 +4852,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/release-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Release tags of the workspace, oldest first */
+        get: operations["ReleaseTagsController_list"];
+        put?: never;
+        /** Name an instant (now, or `at`) so the graph can be read as of it. 409 on a duplicate name */
+        post: operations["ReleaseTagsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/release-tags/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a release tag. What the graph said at that instant is unaffected */
+        delete: operations["ReleaseTagsController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/graph/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Markers for the graph time slider: release tags and per-day fact changes in a window */
+        get: operations["ReleaseTagsController_timeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/shares": {
         parameters: {
             query?: never;
@@ -6609,6 +6661,10 @@ export interface components {
             direction: "dependents" | "dependencies";
             /** @default 3 */
             maxDepth: number;
+            /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+            asOf?: string;
+            /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+            knownAt?: string;
         };
         CreateAttachmentDto: {
             /** @example architecture.png */
@@ -7864,6 +7920,26 @@ export interface components {
             emptyMaxChars?: number | null;
             /** @description Multiply search scores by the page's verification state */
             trustRanking?: boolean | null;
+        };
+        CreateReleaseTagDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description Only this project’s views; the whole workspace when absent
+             */
+            projectId?: string;
+            /**
+             * @description Unique in the workspace
+             * @example v2.3
+             */
+            name: string;
+            /**
+             * Format: date-time
+             * @description The instant the tag names; now when absent
+             */
+            at?: string;
+            note?: string;
         };
         CreateShareLinkDto: {
             /** @description Also share every page under this one. Omitted reads as false */
@@ -11701,6 +11777,10 @@ export interface operations {
                 workspaceId: string;
                 /** @description Restrict the graph to one project */
                 projectId?: string;
+                /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+                asOf?: string;
+                /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+                knownAt?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -11874,6 +11954,10 @@ export interface operations {
                 revision?: string;
                 /** @description With Accept: text/markdown, 1 to include the YAML block */
                 frontmatter?: string;
+                /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+                asOf?: string;
+                /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+                knownAt?: string;
             };
             header?: {
                 /** @description text/markdown (ranked above application/json) answers with the same body as GET :id/markdown (issue #68) */
@@ -12038,6 +12122,10 @@ export interface operations {
         parameters: {
             query?: {
                 depth?: string;
+                /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+                asOf?: string;
+                /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+                knownAt?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -14290,6 +14378,10 @@ export interface operations {
                 q?: string;
                 /** @description Max entities to return (1-200) */
                 limit?: string;
+                /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+                asOf?: string;
+                /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+                knownAt?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -14457,6 +14549,10 @@ export interface operations {
                 from: string;
                 to: string;
                 maxDepth?: string;
+                /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+                asOf?: string;
+                /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+                knownAt?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -14500,6 +14596,10 @@ export interface operations {
                 depth?: string;
                 /** @description Comma-separated relation types */
                 types?: string;
+                /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+                asOf?: string;
+                /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+                knownAt?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -23766,6 +23866,176 @@ export interface operations {
             path: {
                 id: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ReleaseTagsController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Workspace-wide tags plus this project’s; every tag when absent */
+                projectId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ReleaseTagsController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReleaseTagDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ReleaseTagsController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ReleaseTagsController_timeline: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Workspace-wide tags plus this project’s; every tag when absent */
+                projectId?: string;
+                /** @description Window start; 90 days before `to` when absent */
+                from?: string;
+                /** @description Window end; now when absent */
+                to?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;

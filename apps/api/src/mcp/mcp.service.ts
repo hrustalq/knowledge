@@ -61,7 +61,7 @@ import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
-import { CAPTURE_TOOLS, MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
+import { CAPTURE_TOOLS, MCP_AS_OF, MCP_INSTRUCTIONS, MCP_KNOWN_AT, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderSkill, type McpWhoami } from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
@@ -76,6 +76,10 @@ import { API_CHANGE_RULE_IDS, API_SPEC_SYNTAXES, CODE_SAMPLE_LANGS, isApiSpecKin
 import { ComponentDraftsService } from '../components/component-drafts.service.js';
 import { StyleLintService } from '../assistant/style-lint.service.js';
 import { QualityService } from '../quality/quality.service.js';
+import { withAsOf } from '../graph/temporal.js';
+import { ReleaseTagsService } from '../temporal/release-tags.service.js';
+import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
+import { RELEASE_TAG_NAME_PATTERN } from '@knowledge/contracts';
 
 /**
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
@@ -194,6 +198,8 @@ export class McpService {
     private readonly apiDiffs: ApiSpecDiffService,
     private readonly styleLint: StyleLintService,
     private readonly quality: QualityService,
+    private readonly temporal: TemporalResolverService,
+    private readonly releaseTags: ReleaseTagsService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -635,11 +641,14 @@ export class McpService {
         inputSchema: {
           workspaceId: z.string().uuid(),
           projectId: z.string().uuid().optional().describe('Restrict the graph to one project'),
+          asOf: z.string().optional().describe(MCP_AS_OF),
+          knownAt: z.string().optional().describe(MCP_KNOWN_AT),
         },
       },
-      async ({ workspaceId, projectId }) => {
+      async ({ workspaceId, projectId, asOf, knownAt }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.documents.getWorkspaceGraph(await guard.scope(workspaceId), projectId));
+        const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+        return this.json(withAsOf(await this.documents.getWorkspaceGraph(await guard.scope(workspaceId), projectId, at), at));
       },
     );
 
@@ -793,13 +802,15 @@ export class McpService {
           entity: z.string().min(1).describe('Entity key, e.g. "service:identity"'),
           relationship: z.string().optional().describe('Filter to one relation type, e.g. DEPENDS_ON'),
           depth: z.number().int().min(1).max(3).optional(),
+          asOf: z.string().optional().describe(MCP_AS_OF),
+          knownAt: z.string().optional().describe(MCP_KNOWN_AT),
         },
       },
-      async ({ workspaceId, entity, relationship, depth }) => {
+      async ({ workspaceId, entity, relationship, depth, asOf, knownAt }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(
-            await this.entities.neighbors(await guard.scope(workspaceId), entity, depth ?? 1, relationship ? [relationship] : undefined),
-          );
+        const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+        const scope = await guard.scope(workspaceId);
+        return this.json(withAsOf(await this.entities.neighbors(scope, entity, depth ?? 1, relationship ? [relationship] : undefined, at), at));
       },
     );
 
@@ -813,11 +824,15 @@ export class McpService {
           entityId: z.string().min(1).describe('Entity key, e.g. "service:identity"'),
           direction: z.enum(['dependents', 'dependencies']).optional(),
           maxDepth: z.number().int().min(1).max(5).optional(),
+          asOf: z.string().optional().describe(MCP_AS_OF),
+          knownAt: z.string().optional().describe(MCP_KNOWN_AT),
         },
       },
-      async ({ workspaceId, entityId, direction, maxDepth }) => {
+      async ({ workspaceId, entityId, direction, maxDepth, asOf, knownAt }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.entities.impactAnalysis(await guard.scope(workspaceId), entityId, direction ?? 'dependents', maxDepth ?? 3));
+        const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+        const scope = await guard.scope(workspaceId);
+        return this.json(withAsOf(await this.entities.impactAnalysis(scope, entityId, direction ?? 'dependents', maxDepth ?? 3, at), at));
       },
     );
 
@@ -993,11 +1008,14 @@ export class McpService {
           fromEntityId: z.string().min(1),
           toEntityId: z.string().min(1),
           maxDepth: z.number().int().min(1).max(6).optional(),
+          asOf: z.string().optional().describe(MCP_AS_OF),
+          knownAt: z.string().optional().describe(MCP_KNOWN_AT),
         },
       },
-      async ({ workspaceId, fromEntityId, toEntityId, maxDepth }) => {
+      async ({ workspaceId, fromEntityId, toEntityId, maxDepth, asOf, knownAt }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.entities.trace(await guard.scope(workspaceId), fromEntityId, toEntityId, maxDepth ?? 4));
+        const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+        return this.json(withAsOf(await this.entities.trace(await guard.scope(workspaceId), fromEntityId, toEntityId, maxDepth ?? 4, at), at));
       },
     );
 
@@ -1374,20 +1392,70 @@ export class McpService {
       },
     );
 
+    // Release tags (#81): the twins of GET / POST /v1/release-tags.
+    server.registerTool(
+      'knowledge_list_release_tags',
+      {
+        description:
+          'Release tags of a workspace: named instants ("v2.3", "Q3 audit") that asOf=tag:<name> reads the graph as of. Oldest first.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          projectId: z.string().uuid().optional().describe('Workspace-wide tags plus this project\u2019s'),
+        },
+      },
+      async ({ workspaceId, projectId }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json({ tags: await this.releaseTags.list(workspaceId, projectId) });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_create_release_tag',
+      {
+        description:
+          'Name an instant (now, or `at`) so the graph can later be read as of it with asOf=tag:<name>. Names are unique per workspace.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          name: z.string().regex(new RegExp(RELEASE_TAG_NAME_PATTERN)).describe('Letters, digits and . _ - /, at most 64'),
+          projectId: z.string().uuid().optional().describe('Only this project\u2019s views; the whole workspace when absent'),
+          at: z.string().datetime({ offset: true }).optional().describe('ISO instant; now when absent'),
+          note: z.string().max(500).optional(),
+        },
+      },
+      async ({ workspaceId, name, projectId, at, note }) => {
+        await guard.ws(workspaceId, 'editor');
+        return this.json(await this.releaseTags.create({ workspaceId, name, projectId, at, note }, principal.userId));
+      },
+    );
+
     server.registerTool(
       'knowledge_get_historical_context',
       {
         description:
           'What the knowledge base stated about an entity at a given revision (plan.md §11 historical queries): ' +
-          'the fact snapshot at that point in the revision DAG, plus the entity\u2019s current neighborhood for contrast.',
+          'the fact snapshot at that point in the revision DAG, plus the entity\u2019s current neighborhood for contrast. ' +
+          'Give asOf instead of atRevisionId for the whole workspace\u2019s view of the entity at a date or release tag.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           entityId: z.string().min(1).describe('Entity key, e.g. "service:identity"'),
-          atRevisionId: z.string().uuid(),
+          atRevisionId: z.string().uuid().optional().describe('One page revision; give this or asOf'),
+          asOf: z.string().optional().describe(MCP_AS_OF),
+          knownAt: z.string().optional().describe(MCP_KNOWN_AT),
         },
       },
-      async ({ workspaceId, entityId, atRevisionId }) => {
+      async ({ workspaceId, entityId, atRevisionId, asOf, knownAt }) => {
         await guard.ws(workspaceId, 'viewer');
+        if (!atRevisionId) {
+          // #81: the entity's neighbourhood across every page, as of a point.
+          const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+          if (!at) throw new Error('Give atRevisionId or asOf');
+          const scope = await guard.scope(workspaceId);
+          const [then, now] = await Promise.all([
+            this.entities.neighbors(scope, entityId, 1, undefined, at).catch(() => null),
+            this.entities.neighbors(scope, entityId, 1).catch(() => null),
+          ]);
+          return this.json({ entityId, resolvedAsOf: at.resolved, neighborhoodAsOf: then, currentNeighborhood: now });
+        }
         const revision = await this.prisma.documentRevision.findUnique({
           where: { id: atRevisionId },
           include: { document: true },

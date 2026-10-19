@@ -5236,6 +5236,24 @@
             }
           },
           {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "knownAt",
+            "required": false,
+            "in": "query",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -5507,6 +5525,24 @@
             }
           },
           {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "knownAt",
+            "required": false,
+            "in": "query",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept",
             "in": "header",
             "description": "text/markdown (ranked above application/json) answers with the same body as GET :id/markdown (issue #68)",
@@ -5747,6 +5783,24 @@
             "name": "depth",
             "required": false,
             "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "knownAt",
+            "required": false,
+            "in": "query",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
             "schema": {
               "type": "string"
             }
@@ -9378,6 +9432,24 @@
             }
           },
           {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "knownAt",
+            "required": false,
+            "in": "query",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -9638,6 +9710,24 @@
             }
           },
           {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "knownAt",
+            "required": false,
+            "in": "query",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -9715,6 +9805,24 @@
             "required": false,
             "in": "query",
             "description": "Comma-separated relation types",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "knownAt",
+            "required": false,
+            "in": "query",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
             "schema": {
               "type": "string"
             }
@@ -23968,6 +24076,276 @@
         ]
       }
     },
+    "/v1/release-tags": {
+      "get": {
+        "operationId": "ReleaseTagsController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Workspace-wide tags plus this project’s; every tag when absent",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Release tags of the workspace, oldest first",
+        "tags": [
+          "graph"
+        ]
+      },
+      "post": {
+        "operationId": "ReleaseTagsController_create",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReleaseTagDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Name an instant (now, or `at`) so the graph can be read as of it. 409 on a duplicate name",
+        "tags": [
+          "graph"
+        ]
+      }
+    },
+    "/v1/release-tags/{id}": {
+      "delete": {
+        "operationId": "ReleaseTagsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a release tag. What the graph said at that instant is unaffected",
+        "tags": [
+          "graph"
+        ]
+      }
+    },
+    "/v1/graph/timeline": {
+      "get": {
+        "operationId": "ReleaseTagsController_timeline",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Workspace-wide tags plus this project’s; every tag when absent",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Window start; 90 days before `to` when absent",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Window end; now when absent",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Markers for the graph time slider: release tags and per-day fact changes in a window",
+        "tags": [
+          "graph"
+        ]
+      }
+    },
     "/v1/documents/{id}/shares": {
       "get": {
         "operationId": "ShareLinksController_list",
@@ -30840,6 +31218,14 @@
             "default": 3,
             "minimum": 1,
             "maximum": 5
+          },
+          "asOf": {
+            "type": "string",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph."
+          },
+          "knownAt": {
+            "type": "string",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now."
           }
         },
         "required": [
@@ -34146,6 +34532,39 @@
             "description": "Multiply search scores by the page's verification state"
           }
         }
+      },
+      "CreateReleaseTagDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Only this project’s views; the whole workspace when absent"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._\\-/]{1,64}$",
+            "example": "v2.3",
+            "description": "Unique in the workspace"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The instant the tag names; now when absent"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "workspaceId",
+          "name"
+        ]
       },
       "CreateShareLinkDto": {
         "type": "object",

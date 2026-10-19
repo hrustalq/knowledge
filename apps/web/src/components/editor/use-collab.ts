@@ -33,13 +33,17 @@ import { META_FIELD, seedPageMeta } from '@knowledge/editor-schema/page-fields'
 import { apiFetch, getToken } from '@/lib/api'
 import { avatarColor, avatarColorDeep } from '@/lib/avatar'
 import { wsBase } from '@/api/live'
-import type { SharedSuggestion, SuggestionStore } from './extensions/ai-suggestions'
+import { SUGGESTIONS_FIELD } from '@knowledge/editor-schema/suggestions'
+import {
+  readSuggestionEntries,
+  removeSuggestionEntries,
+  writeSuggestionEntry,
+} from '@knowledge/editor-schema/suggestion-entries'
+import type { SuggestionStore } from './extensions/ai-suggestions'
 
 /** Beside this device's copy, outside the Y.Doc: which seeding of the draft it came from (`collabToken`). */
 const GENERATION_KEY = 'generation'
 
-/** The assistant's pending suggestions, one Y.Map each (`suggestionStore`). */
-export const SUGGESTIONS_FIELD = 'suggestions'
 
 /** Where this tab stands with the draft. */
 export type CollabState =
@@ -248,59 +252,21 @@ export function suggestionStore(
   me: SuggestionStore['me'],
 ): SuggestionStore {
   const map = doc.getMap<Y.Map<unknown>>(SUGGESTIONS_FIELD)
-  const body = doc.getXmlFragment(BODY_FIELD)
-  const indexOf = (json: unknown) => {
-    const at = json ? Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(json), doc) : null
-    return at?.type === body ? at.index : null
-  }
-  const put = (entry: Y.Map<unknown>, key: string, value: unknown) => {
-    if (JSON.stringify(entry.get(key)) !== JSON.stringify(value)) entry.set(key, value)
-  }
   return {
     me,
     read() {
       const writers = awareness.getStates()
-      const out: SharedSuggestion[] = []
-      map.forEach((entry, id) => {
-        const fromIndex = indexOf(entry.get('from'))
-        const toIndex = indexOf(entry.get('to'))
-        if (fromIndex === null || toIndex === null) return
-        const clientId = entry.get('clientId') as number
-        out.push({
-          id,
-          fromIndex,
-          toIndex,
-          original: entry.get('original'),
-          originalText: (entry.get('originalText') as string) ?? '',
-          state: entry.get('state') === 'streaming' ? 'streaming' : 'ready',
-          agent: (entry.get('agent') as SharedSuggestion['agent']) ?? null,
-          requestedBy: (entry.get('requestedBy') as SharedSuggestion['requestedBy']) ?? null,
-          mine: clientId === doc.clientID,
-          live: writers.has(clientId),
-        })
-      })
-      return out
+      return readSuggestionEntries(doc).map(({ clientId, ...entry }) => ({
+        ...entry,
+        mine: clientId === doc.clientID,
+        live: writers.has(clientId),
+      }))
     },
     write(item) {
-      doc.transact(() => {
-        let entry = map.get(item.id)
-        if (!entry) {
-          entry = new Y.Map()
-          map.set(item.id, entry)
-          // Written once: what the suggestion replaced does not change while it streams.
-          entry.set('original', item.original)
-          entry.set('originalText', item.originalText)
-          entry.set('agent', item.agent)
-          entry.set('requestedBy', me)
-          entry.set('clientId', doc.clientID)
-        }
-        put(entry, 'from', Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(body, item.fromIndex, 0)))
-        put(entry, 'to', Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(body, item.toIndex, -1)))
-        put(entry, 'state', item.state)
-      })
+      writeSuggestionEntry(doc, item, me)
     },
     remove(ids) {
-      doc.transact(() => ids.forEach((id) => map.delete(id)))
+      removeSuggestionEntries(doc, ids)
     },
     subscribe(run) {
       const onList = (_events: unknown, tr: Y.Transaction) => {

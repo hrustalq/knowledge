@@ -31,15 +31,20 @@
  */
 import { Extension } from '@tiptap/core'
 import type { Editor } from '@tiptap/core'
-import { DOMParser as PMDOMParser, Fragment, Slice, type Node as PMNode, type Schema } from '@tiptap/pm/model'
+import { Slice, type Node as PMNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state'
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import type { AssistantDraftEdit } from '@knowledge/contracts'
-import { draftEditNeedsAnchor } from '@knowledge/contracts'
-import { markdownToHtml } from '@/lib/markdown/render'
-import { normalizeQuote } from '@/lib/anchor-match'
+import {
+  blockIndex,
+  blockStart,
+  markdownToFragment,
+  normalizeQuote,
+  targetRange,
+  type SuggestionCredit,
+  type SuggestionEntry,
+} from '@knowledge/editor-schema/suggestions'
 import { REVEAL_MS, type RevealRun } from '@/lib/stream-reveal'
-import { projectDoc } from './comment-anchors'
 
 /** Text offsets into the suggestion's own text — its text nodes, concatenated. */
 type FreshRun = RevealRun
@@ -53,12 +58,6 @@ function textLength(doc: PMNode, from: number, to: number): number {
     return false
   })
   return length
-}
-
-/** Who a suggestion is credited to. `requestedBy` exists only in a shared draft — alone, it is always you. */
-export interface SuggestionCredit {
-  agent: AssistantDraftEdit['agent'] | null
-  requestedBy: { userId: string; name: string } | null
 }
 
 export interface AiSuggestion extends SuggestionCredit {
@@ -82,14 +81,7 @@ export interface AiSuggestion extends SuggestionCredit {
  * indices: a suggestion always spans whole blocks, and an index is what a
  * Y relative position resolves to without the editor's position mapping.
  */
-export interface SharedSuggestion extends SuggestionCredit {
-  id: string
-  fromIndex: number
-  toIndex: number
-  /** `Slice.toJSON()` of what it replaced. */
-  original: unknown
-  originalText: string
-  state: 'streaming' | 'ready'
+export interface SharedSuggestion extends Omit<SuggestionEntry, 'clientId'> {
   mine: boolean
   /** Its writer is still connected; a streaming suggestion whose writer left is finished. */
   live: boolean
@@ -159,79 +151,6 @@ function inertDocument(): Document {
   return inert
 }
 
-function markdownToFragment(markdown: string, schema: Schema): Fragment {
-  if (!markdown.trim()) return Fragment.empty
-  const container = inertDocument().createElement('div')
-  container.innerHTML = markdownToHtml(markdown)
-  return PMDOMParser.fromSchema(schema).parse(container).content
-}
-
-function markdownToText(markdown: string): string {
-  const container = inertDocument().createElement('div')
-  container.innerHTML = markdownToHtml(markdown)
-  return normalizeQuote(container.textContent ?? '')
-}
-
-/* ------------------------------------------------------------- anchors */
-
-/** Start and end of the top-level block holding `pos`. */
-function topBlock(doc: PMNode, pos: number): { from: number; to: number } {
-  const $pos = doc.resolve(Math.min(Math.max(pos, 0), doc.content.size))
-  if ($pos.depth === 0) {
-    const node = doc.childAfter($pos.pos)
-    return { from: node.offset, to: node.offset + (node.node?.nodeSize ?? 0) }
-  }
-  return { from: $pos.before(1), to: $pos.after(1) }
-}
-
-/**
- * The top-level blocks an anchor quote falls in, or null.
- *
- * The model quotes *markdown*; the document holds rendered text. Rendering the
- * quote and searching the same whitespace-folded projection comment anchors
- * use makes `**Owner:** billing` find "Owner: billing". A quote that no longer
- * matches whole — a mention or an embed renders differently — falls back to
- * its opening words and its closing words, which is still enough to name the
- * blocks.
- */
-export function resolveAnchorBlocks(doc: PMNode, anchor: string): { from: number; to: number } | null {
-  const quote = markdownToText(anchor)
-  if (!quote) return null
-  const projection = projectDoc(doc)
-  const text = projection.text
-  const find = (needle: string, from = 0) => (needle ? text.indexOf(needle, from) : -1)
-
-  let start = find(quote)
-  let end = start >= 0 ? start + quote.length - 1 : -1
-  if (start < 0) {
-    const head = quote.slice(0, 40)
-    const tail = quote.slice(-40)
-    start = find(head)
-    if (start < 0) return null
-    const tailAt = find(tail, start)
-    end = tailAt >= 0 ? tailAt + tail.length - 1 : start + head.length - 1
-  }
-  const from = projection.positions[start]
-  const to = projection.positions[end]
-  if (from === undefined || to === undefined) return null
-  return { from: topBlock(doc, from).from, to: topBlock(doc, to).to }
-}
-
-/** Where a new edit goes, before any of it has been written. */
-function targetRange(doc: PMNode, edit: AssistantDraftEdit): { from: number; to: number } {
-  const end = doc.content.size
-  if (edit.op === 'rewrite') return { from: 0, to: end }
-  if (!draftEditNeedsAnchor(edit.op) || !edit.anchor) return { from: end, to: end }
-  const blocks = resolveAnchorBlocks(doc, edit.anchor)
-  // The server already checked this quote against the markdown, so a miss
-  // here is a rendering difference, not a bad edit. The page's end is a
-  // visible, discardable place to put it — dropping it would lose the work.
-  if (!blocks) return { from: end, to: end }
-  if (edit.op === 'insert_after') return { from: blocks.to, to: blocks.to }
-  if (edit.op === 'insert_before') return { from: blocks.from, to: blocks.from }
-  return blocks
-}
-
 /* ------------------------------------------------------------- applying */
 
 /**
@@ -241,7 +160,7 @@ function targetRange(doc: PMNode, edit: AssistantDraftEdit): { from: number; to:
  */
 function writeSuggestion(tr: Transaction, item: AiSuggestion, markdown: string): AiSuggestion {
   const schema = tr.doc.type.schema
-  const next = markdownToFragment(markdown, schema)
+  const next = markdownToFragment(markdown, schema, inertDocument())
   const current = tr.doc.slice(item.from, item.to).content
 
   let offset = 0
@@ -278,7 +197,7 @@ function upsert(state: EditorState, edit: AssistantDraftEdit, shared: Suggestion
 
   let item = known
   if (!item) {
-    const range = targetRange(state.doc, edit)
+    const range = targetRange(state.doc, edit, inertDocument())
     const original = state.doc.slice(range.from, range.to)
     item = {
       id: edit.id,
@@ -322,26 +241,6 @@ export function pendingSuggestions(state: EditorState): AiSuggestion[] {
 }
 
 /* ------------------------------------------------------------- sharing */
-
-/** Top-level blocks before `pos`, a position inside a block rounding out to the whole block. */
-function blockIndex(doc: PMNode, pos: number, round: 'down' | 'up'): number {
-  let index = 0
-  let at = 0
-  while (index < doc.childCount) {
-    const end = at + doc.child(index).nodeSize
-    if (round === 'down' ? end > pos : at >= pos) break
-    at = end
-    index += 1
-  }
-  return index
-}
-
-/** Where the block at `index` starts — the end of the document past the last one. */
-function blockStart(doc: PMNode, index: number): number {
-  let at = 0
-  for (let i = 0; i < Math.min(index, doc.childCount); i++) at += doc.child(i).nodeSize
-  return at
-}
 
 function toShared(doc: PMNode, item: AiSuggestion): Parameters<SuggestionStore['write']>[0] {
   return {

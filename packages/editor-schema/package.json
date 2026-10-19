@@ -7,7 +7,10 @@
     ".": "./src/index.ts",
     "./nodes": "./src/nodes.ts",
     "./markdown": "./src/markdown.ts",
-    "./page-fields": "./src/page-fields.ts"
+    "./page-fields": "./src/page-fields.ts",
+    "./serialize": "./src/serialize.ts",
+    "./suggestions": "./src/suggestions.ts",
+    "./suggestion-entries": "./src/suggestion-entries.ts"
   },
   "scripts": {
     "lint": "echo editor-schema: no lint",
@@ -26,10 +29,12 @@
     "@tiptap/starter-kit": "^3.31.3",
     "lowlight": "^3.3.0",
     "marked": "^18.0.11",
+    "turndown": "^7.2.4",
     "yjs": "13.6.33"
   },
   "devDependencies": {
     "@knowledge/tsconfig": "workspace:*",
+    "@types/turndown": "^5.0.6",
     "typescript": "^5.7.0"
   }
 }

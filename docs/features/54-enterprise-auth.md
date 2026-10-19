@@ -161,7 +161,10 @@ through that provider.
   reader's language. A `?reauth=sso|session` query keeps a signed-in person on
   the page to sign in again.
 - **`/sso/complete`** (`SsoCompletePage.vue`): reads the code from the fragment,
-  exchanges it, and lands on `returnTo` (only a path on this app).
+  exchanges it, and lands on `returnTo` (only a path on this app). A refused
+  code (unknown, expired or spent) answers 400 with `loginError:
+  'exchange-invalid'` and an `auth.login_failed` row, and the page goes to
+  `/login?error=exchange-invalid`.
 - **Settings → Security** (workspace admins), one tab each: **Providers**
   (protocol, preset, the redirect, ACS, metadata and back-channel URLs to copy,
   **Test**), **Group mapping**, **Policy** (what was asked beside what applies,
@@ -297,7 +300,12 @@ it only picks a login button.
   - `scim-filter.spec.ts` in `src/scim/`.
 - Web: `lib/sso.spec.ts` covers the fragment-only exchange code, the
   `?reauth=` redirect, `returnTo` confinement, and that every callback error has
-  an en and ru message.
+  an en and ru message; it also pins `completeSso` (the `/sso/complete`
+  sequence): the fragment is wiped before the exchange, no code means no
+  exchange, a foreign `returnTo` lands on `/documents`, and a refused code goes
+  to `/login?error=`. `lib/reauth.spec.ts` (jsdom) pins `redirectForReauth`:
+  one navigation per page load, none from `/login` or `/auth/*`, none for a
+  non-re-auth 403, and its wiring from `apiFetch`.
 - Live, per phase: Keycloak 26 for OIDC, SAML and back-channel logout
   (`make infra-up-keycloak`), lldap for LDAP, and SCIM driven with curl. The
   phase handoffs on #75 record the recipes.

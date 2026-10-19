@@ -39,6 +39,7 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import { AssistantClient, ProviderAccountError } from '../assistant/assistant.client.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { candidatePairs, conflictFingerprint, quoteIn, readJudgement } from './contradiction.js';
+import { graphFingerprint, groupCommunities, louvain, pagePairs } from './communities.js';
 import { AssistantReadToolsService } from '../assistant/assistant-read-tools.service.js';
 import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
@@ -166,6 +167,7 @@ export const RUNNABLE_AGENTS = new Set([
   'digest',
   'auditor',
   'arbiter',
+  'atlas',
 ]);
 
 /** A page id the model named is checked against the database only if it could be one. */
@@ -350,6 +352,8 @@ export class AgentExecutor {
         return this.audit(run, agent, principal, report);
       case 'arbiter':
         return this.arbitrate(run, agent, principal, report);
+      case 'atlas':
+        return this.chart(run, agent, principal, report);
       // Deliberately not in RUNNABLE_AGENTS (docs/features/35): that set offers
       // the Run button and feeds the schedule sweeper, and a sentinel run with
       // neither a pull request nor a report has nothing to check. Only
@@ -521,6 +525,89 @@ export class AgentExecutor {
       summary: t('agent.arbitration.summary', { judged, found: findings.length }),
       findings,
     };
+  }
+
+  /**
+   * The atlas (#81, phase 7): communities of pages for global questions. The
+   * grouping is deterministic — Louvain over the page-to-page projection of
+   * the live graph, as the run's audience may see it — and skipped outright
+   * when the projection's fingerprint is the one the stored communities were
+   * built from. The model summarises each community from its pages' titles
+   * and opening excerpts; each summary is embedded so a question can find it.
+   * Written whole at the end, so a failed run leaves the last good set.
+   */
+  private async chart(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    if (!this.config.get('COMMUNITY_SUMMARIES_ENABLED', { infer: true })) {
+      return { summary: t('agent.charting.disabled'), findings: [] };
+    }
+    await report({ stage: 'scanning', progress: 0.05 });
+    const scope = await this.runScope(run, principal);
+    const acl = await this.permissions.documentFilterFor(scope);
+    const graph = await this.graph.getWorkspaceRelationGraph(run.workspaceId, acl);
+    const pairs = pagePairs(graph.edges);
+    const fingerprint = graphFingerprint(pairs);
+    if ((await this.graph.communityFingerprint(run.workspaceId)) === fingerprint) {
+      return { summary: t('agent.charting.unchanged'), findings: [] };
+    }
+    const groups = groupCommunities(louvain(pairs), 2).slice(0, this.config.get('COMMUNITY_MAX_PER_RUN', { infer: true }));
+    if (groups.length === 0) return { summary: t('agent.charting.noCommunities'), findings: [] };
+
+    // Titles from PG under the run's scope (#76); an opening excerpt per page
+    // from its live chunks — the first chunk is the page's own introduction.
+    const memberIds = [...new Set(groups.flat())];
+    const docs = await this.prisma.document.findMany({
+      where: { id: { in: memberIds }, workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
+      select: { id: true, title: true },
+    });
+    const titleOf = new Map(docs.map((d) => [d.id, d.title]));
+    const opening = new Map<string, { idx: number; text: string }>();
+    for (const c of await this.graph.liveChunks(run.workspaceId, acl)) {
+      const held = opening.get(c.documentId);
+      if (!held || c.idx < held.idx) opening.set(c.documentId, { idx: c.idx, text: c.text });
+    }
+
+    const call = { config: agent.config, userId: run.createdBy, operation: 'community' as const, locale: run.locale as Locale };
+    const system = agent.instructions + (await this.guidance(run, agent));
+    const built: Array<{ communityId: string; title: string; summary: string; members: string[]; embedding: number[] }> = [];
+    let partial = false;
+    for (const [i, members] of groups.entries()) {
+      const pages = members.filter((m) => titleOf.has(m));
+      if (pages.length < 2) continue;
+      await report({ stage: 'summarising', progress: 0.1 + (0.85 * i) / groups.length });
+      const listing = pages
+        .slice(0, 25)
+        .map((id) => `## ${titleOf.get(id)}\n${wrapUntrusted((opening.get(id)?.text ?? '').slice(0, 600), 'atlas', 'page')}`)
+        .join('\n\n');
+      try {
+        const raw = await this.client.chat(call, [{ role: 'system', content: system }, { role: 'user', content: listing }], { json: true });
+        const parsed = safeJson(raw);
+        const title = typeof parsed?.title === 'string' ? parsed.title.trim().slice(0, 120) : '';
+        const summary = typeof parsed?.summary === 'string' ? parsed.summary.trim().slice(0, 2_000) : '';
+        if (!title || !summary) continue;
+        built.push({ communityId: members[0]!, title, summary, members: pages, embedding: await this.embedding.embed(`${title}\n${summary}`) });
+      } catch (error) {
+        if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+          await report({ warning: t('agent.charting.budgetSpent', { done: built.length }) });
+          partial = true;
+          break;
+        }
+        if (error instanceof ProviderAccountError) {
+          await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+          partial = true;
+          break;
+        }
+        this.logger.warn(`Atlas could not summarise one community: ${String(error)}`);
+      }
+    }
+    if (built.length === 0) return { summary: t('agent.charting.noneWritten'), findings: [] };
+    // A partial set is stored but not fingerprinted, so the next run finishes it.
+    await this.graph.replaceCommunities(run.workspaceId, built, partial ? '' : fingerprint);
+    return { summary: t('agent.charting.summary', { n: built.length, pages: built.reduce((s, c) => s + c.members.length, 0) }), findings: [] };
   }
 
   private async curate(

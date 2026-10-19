@@ -1119,6 +1119,8 @@ export type AiUsageOperation =
   | 'audit'
   /** Judging whether two passages contradict each other, one call per pair (#81). */
   | 'contradiction'
+  /** Summarising one community of pages for global questions (#81). */
+  | 'community'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
@@ -1277,6 +1279,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'auditor',
   /** Finds passages in two pages that contradict each other (#81). */
   'arbiter',
+  /** Groups pages into communities and summarises each, for global questions (#81). */
+  'atlas',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 

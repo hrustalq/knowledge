@@ -2951,6 +2951,16 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/graph/communities",
+      "tag": "graph",
+      "summary": "Communities of related pages with their summaries, closest to a question first",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/graph/query",
       "tag": "graph",
@@ -5184,6 +5194,24 @@
         },
         {
           "name": "knownAt",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_global_overview",
+      "description": "For a broad question across the whole knowledge base (\"what are our main risks?\"): the communities of related pages closest to it, each with an agent-written summary and its pages. Read the pages before relying on a detail; cite pages, not summaries. Empty until the atlas agent has built communities.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "question",
+          "optional": false
+        },
+        {
+          "name": "limit",
           "optional": true
         }
       ]

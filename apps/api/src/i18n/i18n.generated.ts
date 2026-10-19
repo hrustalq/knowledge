@@ -281,6 +281,16 @@ export type I18nTranslations = {
             "findingTitle": string;
             "summary": string;
         };
+        "atlas": string;
+        "atlasDesc": string;
+        "charting": {
+            "disabled": string;
+            "unchanged": string;
+            "noCommunities": string;
+            "noneWritten": string;
+            "budgetSpent": string;
+            "summary": string;
+        };
     };
     "assistant": {
         "disabled": string;

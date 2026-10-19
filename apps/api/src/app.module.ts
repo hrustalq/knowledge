@@ -42,6 +42,7 @@ import { VerificationModule } from './verification/verification.module.js';
 import { QualityModule } from './quality/quality.module.js';
 import { TemporalModule } from './temporal/temporal.module.js';
 import { ConflictsModule } from './conflicts/conflicts.module.js';
+import { CommunitiesModule } from './communities/communities.module.js';
 import { PublishingModule } from './publishing/publishing.module.js';
 import { PublicModule } from './public/public.module.js';
 import { ExportModule } from './export/export.module.js';
@@ -107,6 +108,9 @@ import { ChatModule } from './chat/chat.module.js';
     // Contradictions between pages (#81, phase 5). API-only: the controller;
     // the worker's arbiter and MCP load ConflictsCoreModule.
     ConflictsModule,
+    // Community summaries for global questions (#81, phase 7). API-only: the
+    // controller; the assistant and MCP load CommunitiesCoreModule.
+    CommunitiesModule,
     // Share links (docs/features/43, issue #77). API-only: the management
     // routes, and the anonymous /v1/public reader with its rate limiter.
     PublishingModule,

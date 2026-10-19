@@ -17,6 +17,8 @@ export interface GraphNodeInput {
   degree?: number
   /** Entity hops from a root, when the source was a neighbourhood query. */
   distance?: number
+  /** Documents only: the community the atlas put the page in (#81). */
+  community?: string
 }
 
 /**
@@ -48,6 +50,8 @@ export interface GraphOptions {
   linkDistance: number
   /** Zoom past which every label is drawn. Below it, only the loud ones. */
   labelZoom: number
+  /** #81: fill pages by their community instead of the one structural ink. */
+  colorByCommunity: boolean
 }
 
 export const DEFAULT_OPTIONS: GraphOptions = {
@@ -58,6 +62,7 @@ export const DEFAULT_OPTIONS: GraphOptions = {
   repel: 1,
   linkDistance: 1,
   labelZoom: 0.62,
+  colorByCommunity: false,
 }
 
 /**
@@ -175,6 +180,7 @@ export function toGraphNodes(nodes: WorkspaceGraphNode[]): GraphNodeInput[] {
     entityType: n.entityType,
     status: n.status ?? null,
     degree: n.degree,
+    ...(n.community ? { community: n.community } : {}),
   }))
 }
 

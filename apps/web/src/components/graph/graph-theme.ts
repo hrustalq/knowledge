@@ -24,6 +24,8 @@ export interface GraphPalette {
   border: Rgb
   /** #81: a relation added since the point the graph shows — the tip hue, never a signal color. */
   added: Rgb
+  /** #81: community fills, from the diagram ramp. */
+  community: Rgb[]
   /** Entity hues, keyed by the `entityType` the extractor emitted. */
   entity: Record<string, Rgb>
   entityFallback: Rgb
@@ -147,6 +149,7 @@ export function readPalette(host: HTMLElement): GraphPalette {
     '--border',
     '--kn-draw-ink',
     '--kn-panel-tip',
+    ...COMMUNITY_VARS,
   ]
   const entityVars = [...new Set(Object.values(ENTITY_VARS))]
   const v = readVars(host, [...base, ...entityVars])
@@ -164,6 +167,7 @@ export function readPalette(host: HTMLElement): GraphPalette {
     primaryInk: v['--primary-foreground'] ?? FALLBACK,
     border: v['--border'] ?? FALLBACK,
     added: v['--kn-panel-tip'] ?? FALLBACK,
+    community: COMMUNITY_VARS.map((name) => v[name] ?? FALLBACK),
     entity,
     entityFallback: v['--kn-draw-ink'] ?? FALLBACK,
     status: {
@@ -173,6 +177,21 @@ export function readPalette(host: HTMLElement): GraphPalette {
       draft: v['--muted-foreground'] ?? FALLBACK,
     },
   }
+}
+
+/**
+ * The diagram ramp as community fills (#81), minus amber and red: a page node
+ * already carries the lifecycle's amber and red on its rim, and a red page
+ * would read as a failed one. Four hues for any number of communities — two
+ * that share one are still told apart by where they sit.
+ */
+const COMMUNITY_VARS = ['--kn-draw-blue', '--kn-draw-violet', '--kn-draw-green', '--kn-draw-ink']
+
+/** A community's fill: the same community, the same hue, on every render. */
+export function communityColor(palette: GraphPalette, community: string): Rgb {
+  let h = 0
+  for (let i = 0; i < community.length; i++) h = (h * 31 + community.charCodeAt(i)) >>> 0
+  return palette.community[h % palette.community.length] ?? palette.primary
 }
 
 export const rgba = (c: Rgb, a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`

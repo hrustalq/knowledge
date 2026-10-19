@@ -195,6 +195,18 @@ in the pull request that introduces them — see
   Both kinds of conflict now close themselves: merging the merge request a
   fix was proposed as, from the conflict, the agent runs panel or the drift
   check's own proposal, marks it resolved.
+- Broad questions across the whole knowledge base (#81, phase 7), off by
+  default. With `COMMUNITY_SUMMARIES_ENABLED=true`, a new background agent,
+  the **atlas**, groups pages that name the same things into communities and
+  summarises what each one covers. Run it from Settings → AI or on a
+  schedule; a run where the graph has not changed rebuilds nothing. The
+  Ask assistant gains a `global_overview` tool that finds the communities
+  closest to a broad question ("what are our main risks?") and cites their
+  pages; MCP gains `knowledge_global_overview`, and
+  `GET /v1/graph/communities` lists them. A community with a page you may
+  not open is withheld whole. The pages graph can colour pages by community
+  (**Colour pages by community** in its Filters). Each summary is one model
+  call, recorded as `community` in AI usage.
 
 ### Changed
 
@@ -219,6 +231,10 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- New env vars for community summaries, both with defaults:
+  `COMMUNITY_SUMMARIES_ENABLED` (`false`) and `COMMUNITY_MAX_PER_RUN`
+  (`30`). Summaries are stored in ArcadeDB as `Community` vertices (created
+  on worker boot); no migration.
 - Migration `20261115100000_knowledge_conflicts` adds the
   `knowledge_conflicts` table and nothing else; it survives a code rollback.
   New env vars, all with defaults: `CONTRADICTION_MIN_SIMILARITY` (`0.82`),

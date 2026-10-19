@@ -48,6 +48,7 @@ import { prefersMarkdown, wantsFrontmatter } from '../ai-readable/render.js';
 import { withAsOf } from '../graph/temporal.js';
 import { ApiAsOfQuery } from '../temporal/temporal.dto.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
+import { CommunitiesService } from '../communities/communities.service.js';
 
 /** A query-string boolean: `1`, `true` and `yes` are on; anything else, including absence, is off. */
 function flag(value?: string): boolean {
@@ -77,6 +78,7 @@ export class DocumentsController {
     private readonly aiReadable: AiReadableService,
     private readonly permissions: PermissionService,
     private readonly temporal: TemporalResolverService,
+    private readonly communities: CommunitiesService,
   ) {}
 
   @Post()
@@ -169,7 +171,14 @@ export class DocumentsController {
   ) {
     const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
     const scope = await this.permissions.scopeFor(principal, workspaceId);
-    return withAsOf(await this.documents.getWorkspaceGraph(scope, projectId || undefined, at), at);
+    const graph = await this.documents.getWorkspaceGraph(scope, projectId || undefined, at);
+    // #81 phase 7: each page's community, for colouring — the current graph's
+    // grouping, so not on an as-of read.
+    if (!at) {
+      const community = await this.communities.membership(scope);
+      if (community.size) for (const n of graph.nodes) if (n.kind === 'document' && community.has(n.id)) n.community = community.get(n.id);
+    }
+    return withAsOf(graph, at);
   }
 
   @Get(':id')

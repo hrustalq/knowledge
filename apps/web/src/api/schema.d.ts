@@ -4989,6 +4989,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/graph/communities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Communities of related pages with their summaries, closest to a question first */
+        get: operations["CommunitiesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/shares": {
         parameters: {
             query?: never;
@@ -24342,6 +24359,52 @@ export interface operations {
             path: {
                 id: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CommunitiesController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Workspace-wide tags plus this project’s; every tag when absent */
+                projectId?: string;
+                /** @description A broad question; communities closest to it first. Largest first when absent */
+                q?: string;
+                /** @description 10 when absent */
+                limit?: number;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;

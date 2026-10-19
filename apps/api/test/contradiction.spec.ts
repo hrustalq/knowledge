@@ -149,6 +149,50 @@ describe('ConflictsService', () => {
     expect(prisma.knowledgeConflict.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'c1', status: 'open' } }))
   })
 
+  it('a doc↔code record refreshes an open row and keeps its proposed fix (#81 phase 6)', async () => {
+    const { svc, prisma } = service({ raw: [{ id: 'c1', status: 'open' }] })
+    const out = await svc.record({
+      workspaceId: WS,
+      kind: 'doc-code',
+      a: { documentId: 'da', revisionId: 'ra', chunkId: null, quote: 'Popovers keep focus.' },
+      b: null,
+      codeRef: { connectorId: 'cn', repository: 'app', pullRequestNumber: 7, pullRequestUrl: 'https://x/pr/7', headSha: 'abc', paths: ['p.ts'] },
+      fingerprint: 'page+pr',
+      refreshOpen: true,
+      explanation: 'e',
+      confidence: 1,
+      agentRunId: 'run-2',
+      findingIndex: null,
+    })
+    expect(out).toEqual({ id: 'c1', status: 'open', written: true })
+    const [strings, ...values] = prisma.$queryRaw.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]]
+    const sql = strings.join('?')
+    expect(sql).toContain("knowledge_conflicts.status = 'superseded' OR (? AND knowledge_conflicts.status = 'open')")
+    expect(sql).toContain("CASE WHEN knowledge_conflicts.status = 'superseded' THEN NULL ELSE knowledge_conflicts.merge_request_id END")
+    expect(values).toContain('page+pr')
+    expect(values).toContain(true)
+  })
+
+  it('a merge resolves the open conflicts it was proposed to fix, and only those', async () => {
+    const { svc, prisma, events } = service({ rows: [row({ id: 'c1', mergeRequestId: 'mr-1' })], updated: 1 })
+    expect(await svc.resolveMerged('mr-1', 'merger')).toBe(1)
+    expect(prisma.knowledgeConflict.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { mergeRequestId: 'mr-1', status: 'open' } }))
+    expect(prisma.knowledgeConflict.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['c1'] }, status: 'open' },
+      data: expect.objectContaining({ status: 'resolved', resolvedBy: 'merger' }),
+    })
+    expect(events.publish).toHaveBeenCalledWith(expect.objectContaining({ type: 'conflict.updated', subjectId: 'c1' }))
+  })
+
+  it('finds the finding that reported a conflict by its id, wherever the run put it', async () => {
+    const { svc, prisma } = service({})
+    ;(prisma as unknown as { agentRun: unknown }).agentRun = {
+      findUnique: vi.fn(async () => ({ findings: [{ title: 'path fix' }, { title: 'drift', conflictId: 'c9' }] })),
+    }
+    expect(await svc.findingIndexOf('run', 'c9')).toBe(1)
+    expect(await svc.findingIndexOf('run', 'nope')).toBeNull()
+  })
+
   it('a new head supersedes only open conflicts quoting an older revision of that page', async () => {
     const { svc, prisma } = service({ updated: 2 })
     expect(await svc.supersedeStale(WS, 'da', 'ra2')).toBe(2)

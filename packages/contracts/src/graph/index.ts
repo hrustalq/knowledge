@@ -314,8 +314,8 @@ export interface GraphTimelineResponse {
 // ---------------------------------------------------------------------------
 // Knowledge conflicts (#81)
 
-/** What disagrees with what: two pages. Doc↔code arrives with the sentinel. */
-export const CONFLICT_KINDS = ['doc-doc'] as const;
+/** What disagrees with what: two pages (the arbiter), or a page and a code change (the sentinel). */
+export const CONFLICT_KINDS = ['doc-doc', 'doc-code'] as const;
 export type ConflictKind = (typeof CONFLICT_KINDS)[number];
 
 /**
@@ -336,14 +336,27 @@ export interface ConflictSide {
   quote: string;
 }
 
-/** A contradiction between two pages (#81). A proposal, never a change. */
+/** The code side of a doc↔code conflict: the pull request the sentinel judged. */
+export interface ConflictCodeRef {
+  connectorId: string;
+  repository: string;
+  pullRequestNumber: number;
+  pullRequestUrl: string;
+  headSha: string;
+  /** Files the change touches, as the sentinel saw them; may be capped. */
+  paths: string[];
+}
+
+/** A contradiction between two pages, or a page and code (#81). A proposal, never a change. */
 export interface KnowledgeConflictDto {
   id: string;
   workspaceId: string;
   kind: ConflictKind;
   status: ConflictStatus;
   a: ConflictSide;
-  b: ConflictSide;
+  /** The other page; null on a doc↔code conflict, which has `codeRef` instead. */
+  b: ConflictSide | null;
+  codeRef: ConflictCodeRef | null;
   explanation: string;
   confidence: number;
   /** The arbiter run that found it, and the merge request a fix was proposed as. */

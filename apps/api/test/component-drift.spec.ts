@@ -247,6 +247,7 @@ describe('the sentinel with component ties', () => {
       ? JSON.stringify({ drifted: true, severity: 'warning', title: 'Focus', detail: 'Says focus is lost.', markdown: null })
       : JSON.stringify({ drifted: false, severity: 'info', title: '', detail: '', markdown: null });
     const client = { chat: vi.fn(async () => verdict), runWithTools: vi.fn() };
+    const conflicts = { record: vi.fn(async () => ({ id: 'conflict-1', status: 'open', written: true })) };
     const executor = new AgentExecutor(
       prisma as never,
       {} as never,
@@ -270,6 +271,9 @@ describe('the sentinel with component ties', () => {
       componentUsages as never,
       {} as never,
       { forPullRequest: async () => null } as never,
+      {} as never,
+      // #81: a drifted page is recorded as a doc↔code conflict.
+      conflicts as never,
     );
     const run = {
       id: 'run-1',
@@ -287,7 +291,7 @@ describe('the sentinel with component ties', () => {
       // No tool loop: one plain call per page, which is what the spy counts.
       missing: ['tools'],
     };
-    return { executor, run, agent, client };
+    return { executor, run, agent, client, conflicts };
   }
 
   it('judges the declaring page first, then usage pages up to the cap, and lists the rest unjudged', async () => {
@@ -306,12 +310,15 @@ describe('the sentinel with component ties', () => {
   });
 
   it('turns a removed declared file into a path fix, folded into the verdict on that page', async () => {
-    const { executor, run, agent } = sentinel({ removed: true, drifted: true });
+    const { executor, run, agent, conflicts } = sentinel({ removed: true, drifted: true });
     const result = await executor.run(run, agent as never, { userId: 'u-owner' } as never, async () => undefined);
     const onDecl = result.findings.filter((f) => f.documentIds[0] === 'decl');
     expect(onDecl).toHaveLength(1);
     expect(onDecl[0].componentPaths).toEqual([{ from: POPOVER, to: null }]);
     expect(onDecl[0].detail).toContain('Says focus is lost.');
+    // #81: the verdict on the page is a doc↔code conflict, keyed by page + pull request.
+    expect(onDecl[0].conflictId).toBe('conflict-1');
+    expect(conflicts.record).toHaveBeenCalledWith(expect.objectContaining({ kind: 'doc-code', b: null, refreshOpen: true, findingIndex: null }));
   });
 
   it('still reports the path fix when no model is configured', async () => {

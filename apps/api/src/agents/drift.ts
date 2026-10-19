@@ -203,12 +203,13 @@ export function searchQueryFor(pr: AgentRunPullRequest, files: PullRequestFile[]
 
 export const DRIFT_OUTPUT_CONTRACT =
   'Respond ONLY with a json object of the shape {"drifted": boolean, "severity": "info"|"warning"|"error", ' +
-  '"title": string, "detail": string, "markdown": string|null}. ' +
+  '"title": string, "detail": string, "quote": string, "markdown": string|null}. ' +
   '"drifted" is true only when the change makes a specific statement on the page wrong, or leaves out ' +
   'something the page promises to cover — a renamed option, a changed default, a removed step, a new rule. ' +
   'A change the page never talks about is not drift, and neither is a page that is merely incomplete in ways ' +
   'the change does not touch. "title" names what drifted in a few words; "detail" quotes or paraphrases the ' +
-  'statement and says which file in the change contradicts it, in at most three sentences. ' +
+  'statement and says which file in the change contradicts it, in at most three sentences. "quote" is that ' +
+  'statement copied character for character from the page (empty when the drift is something left out). ' +
   '"markdown" is the COMPLETE corrected page body without frontmatter: every statement the change does not ' +
   'affect kept exactly as it is, only the drifted ones corrected, and nothing the diff does not support ' +
   'added. Use null when the diff does not tell you enough to write the correction. When "drifted" is false, ' +

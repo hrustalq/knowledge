@@ -1,3 +1,4 @@
+import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
 import { Module } from '@nestjs/common';
 import { TemporalCoreModule } from '../temporal/temporal-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
@@ -41,6 +42,8 @@ import { LintCoreModule } from './lint/lint-core.module.js';
     DocumentsCoreModule,
     // `asOf` on the graph and content routes (#81). Controller-free.
     TemporalCoreModule,
+    // A merge resolves the conflicts it was proposed to fix (#81).
+    ConflictsCoreModule,
     ActivityModule,
     StorageModule,
     GraphModule,

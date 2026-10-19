@@ -24381,7 +24381,8 @@
             "schema": {
               "type": "string",
               "enum": [
-                "doc-doc"
+                "doc-doc",
+                "doc-code"
               ]
             }
           },

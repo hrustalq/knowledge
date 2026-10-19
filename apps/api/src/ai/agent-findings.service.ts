@@ -26,6 +26,7 @@ import { AiUsageService } from './ai-usage.service.js';
 import { AgentLearningsService } from './agent-learnings.service.js';
 import { VerificationService } from '../verification/verification.service.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
+import { ConflictsService } from '../conflicts/conflicts.service.js';
 import type { Principal } from '../auth/principal.js';
 
 /** How much of a cited page the drafter is shown. The workflow executor's cap. */
@@ -63,6 +64,7 @@ export class AgentFindingsService {
     private readonly verification: VerificationService,
     private readonly learnings: AgentLearningsService,
     private readonly glossary: GlossaryService,
+    private readonly conflicts: ConflictsService,
   ) {}
 
   /**
@@ -216,6 +218,13 @@ export class AgentFindingsService {
         provenance: 'agent',
         onCreated: (id) => this.writeBack(runId, index, id),
       });
+      // #81: a finding that reported a conflict links the conflict to its fix,
+      // so merging the fix resolves it. Non-fatal: the proposal stands.
+      if (finding.conflictId) {
+        await this.conflicts
+          .attachMergeRequest(finding.conflictId, mergeRequestId)
+          .catch((e) => this.logger.warn(`Could not link conflict ${finding.conflictId}: ${(e as Error).message}`));
+      }
 
       return { mergeRequestId, documentId, documentTitle: document.title, branch, title };
     } catch (error) {

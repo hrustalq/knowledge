@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import 'reflect-metadata';
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Test } from '@nestjs/testing';
 import { I18nJsonLoader, I18nModule } from 'nestjs-i18n';
@@ -10,8 +9,8 @@ import { noAuthPolicy } from './auth-policy-fakes.js';
 
 /**
  * Mailer (docs/features/41). What is pinned:
- * - both catalogues carry the same keys with the same placeholders, and every
- *   template renders a translated subject and its link in both languages;
+ * - every template renders a translated subject and its link in both
+ *   languages (key parity lives in i18n-catalogues.spec.ts);
  * - one email per inbox row: the processor claims `emailed_at` with a guarded
  *   update, skips unverified / opted-out / disabled recipients, and releases
  *   the claim when the send fails so a retry can claim it again;
@@ -51,22 +50,6 @@ const config = (overrides: Record<string, unknown> = {}) => ({
       NODE_ENV: 'test',
       ...overrides,
     })[k],
-});
-
-describe('mail catalogues', () => {
-  const leaves = (node: unknown, prefix = ''): [string, string][] =>
-    typeof node === 'string'
-      ? [[prefix, node]]
-      : Object.entries(node as Record<string, unknown>).flatMap(([k, v]) => leaves(v, prefix ? `${prefix}.${k}` : k));
-  const read = (lang: string) => new Map(leaves(JSON.parse(readFileSync(join(SRC, `i18n/${lang}/mail.json`), 'utf8'))));
-  const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
-
-  it('en and ru carry the same keys and placeholders', () => {
-    const en = read('en');
-    const ru = read('ru');
-    expect([...ru.keys()].sort()).toEqual([...en.keys()].sort());
-    for (const [key, english] of en) expect(placeholders(ru.get(key)!), key).toEqual(placeholders(english));
-  });
 });
 
 describe('mail templates', () => {

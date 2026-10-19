@@ -244,8 +244,17 @@ describe('redactUrl', () => {
     expect(redactUrl('/x?access_token=a&api_key=b')).toBe('/x?access_token=[REDACTED]&api_key=[REDACTED]');
   });
 
+  it('masks the OAuth callback code and state (#297)', () => {
+    expect(redactUrl('/v1/auth/oidc/p1/callback?code=idp-code&state=s1')).toBe('/v1/auth/oidc/p1/callback?code=[REDACTED]&state=[REDACTED]');
+    expect(redactUrl('/v1/github/setup?installation_id=7&setup_action=install&state=s&code=c')).toBe(
+      '/v1/github/setup?installation_id=7&setup_action=install&state=[REDACTED]&code=[REDACTED]',
+    );
+    expect(redactUrl('/x?STATE=a#frag')).toBe('/x?STATE=[REDACTED]#frag');
+  });
+
   it('leaves look-alike keys and token-free URLs alone', () => {
     expect(redactUrl('/x?mytoken=a&tokenized=b')).toBe('/x?mytoken=a&tokenized=b');
+    expect(redactUrl('/x?error_code=a&statement=b&zipcode=c')).toBe('/x?error_code=a&statement=b&zipcode=c');
     expect(redactUrl('/v1/documents/d1')).toBe('/v1/documents/d1');
     expect(redactUrl(undefined)).toBeUndefined();
   });

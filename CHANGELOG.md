@@ -35,6 +35,11 @@ in the pull request that introduces them — see
   session token. Those `<img>` and `<object>` requests now authenticate with the
   app's own session cookie, so the token can no longer end up in a proxy log,
   browser history or a pasted image link. (#102)
+- Access logs and every log line written while a request is handled now show
+  `?code=` and `?state=` as `[REDACTED]`, as they already did `?token=`. The
+  SSO and GitHub App callbacks no longer put the identity provider's
+  authorization code and state in a log, and neither do share-site and chat
+  link codes. (#297)
 
 ### Added
 

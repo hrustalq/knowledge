@@ -9,7 +9,7 @@
  * affordance is paid for out of the title, and a truncated title costs more
  * than a hidden control.
  */
-import { ref } from 'vue'
+import { defineAsyncComponent, ref, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Download, FilePlus2, LayoutTemplate, Lock, LockOpen, MoreHorizontal, MoveRight } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
@@ -23,9 +23,24 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useDocumentsStore } from '@/stores/documents'
 import { useTemplatesStore } from '@/stores/templates'
-import PageAccessDialog from '@/components/access/PageAccessDialog.vue'
-import MoveToDialog from './MoveToDialog.vue'
-import ExportDialog from './ExportDialog.vue'
+
+/**
+ * Every row used to carry all three dialogs, mounted closed, and with them their
+ * pickers, checkboxes and radio groups in the shell's first load (#279). Each
+ * now loads and mounts on its first open, and stays so closing still animates.
+ */
+const PageAccessDialog = defineAsyncComponent(() => import('@/components/access/PageAccessDialog.vue'))
+const MoveToDialog = defineAsyncComponent(() => import('./MoveToDialog.vue'))
+const ExportDialog = defineAsyncComponent(() => import('./ExportDialog.vue'))
+
+/** True from the first time `open` is set. */
+function openedOnce(open: Ref<boolean>): Ref<boolean> {
+  const seen = ref(false)
+  watch(open, (v) => {
+    if (v) seen.value = true
+  })
+  return seen
+}
 
 /**
  * Two roots (the menu and its dialog), so an inherited `class` has nowhere to
@@ -51,6 +66,9 @@ const { t } = useI18n()
 const dialogOpen = ref(false)
 const exportOpen = ref(false)
 const accessOpen = ref(false)
+const moveMounted = openedOnce(dialogOpen)
+const exportMounted = openedOnce(exportOpen)
+const accessMounted = openedOnce(accessOpen)
 const templates = useTemplatesStore()
 const documents = useDocumentsStore()
 </script>
@@ -103,14 +121,16 @@ const documents = useDocumentsStore()
   </DropdownMenu>
 
   <MoveToDialog
+    v-if="moveMounted"
     v-model:open="dialogOpen"
     :document-id="documentId"
     :title="title"
     @failed="(message: string) => toast.error(message)"
   />
-  <ExportDialog v-model:open="exportOpen" :target="{ kind: 'document', documentId, title }" subtree />
+  <ExportDialog v-if="exportMounted" v-model:open="exportOpen" :target="{ kind: 'document', documentId, title }" subtree />
   <!-- A saved restriction redraws the locks on this branch and every one below it. -->
   <PageAccessDialog
+    v-if="accessMounted"
     v-model:open="accessOpen"
     resource-type="document"
     :resource-id="documentId"

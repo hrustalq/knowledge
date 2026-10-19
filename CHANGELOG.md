@@ -364,6 +364,15 @@ in the pull request that introduces them — see
   re-index of the same revision that no longer infers a fact retracts it the
   same way, with `retractedBy: 'extractor'`. Deleting a page still erases its
   graph.
+- The pages landing loads faster on a cold visit. The server now renders
+  the rail's project roster, the active project's name and the first level of
+  the page tree, so they no longer wait for the app's JavaScript.
+  `/v1/projects`, `/v1/workspaces` and `/v1/documents/tree` are requested once
+  per page load instead of once per component that wanted them. The shell
+  preloads 50 scripts instead of 103: the search sheet, the create dialog and
+  the page row's Move, Export and Access dialogs load when first opened. The
+  heading fonts no longer block the first paint, and the graph spreads its
+  opening layout over frames instead of one long task. (#279)
 
 ### Fixed
 

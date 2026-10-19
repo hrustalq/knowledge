@@ -1,5 +1,5 @@
 import { SSO_LOGIN_ERRORS, type IdpKind, type SsoLoginError } from '@knowledge/contracts'
-import { apiUrl } from '@/lib/api'
+import { ApiError, apiUrl } from '@/lib/api'
 
 /**
  * SSO sign-in helpers (#75), kept out of the pages so they can be tested.
@@ -29,6 +29,44 @@ export function ssoErrorOf(raw: unknown): SsoLoginError | null {
 /** A return path from the query string, if it stays on this app. */
 export function ownPath(raw: unknown, fallback = '/documents'): string {
   return typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') ? raw : fallback
+}
+
+export interface CompleteSsoSteps {
+  /** `window.location.hash`, where the callback put the code. */
+  hash: string
+  /** `window.location.pathname` — the address the fragment is wiped down to. */
+  pathname: string
+  /** `history.replaceState` with the URL to show: the wipe also drops the code from history. */
+  replaceUrl: (url: string) => void
+  /** Trade the code for a session; answers the path the sign-in started from. */
+  exchange: (code: string) => Promise<string>
+  /** `router.replace`. */
+  navigate: (path: string) => Promise<unknown>
+}
+
+/**
+ * The /auth/sso/complete sequence, store-free so it can be tested without
+ * mounting the page (#293). The code leaves the address bar **before** the
+ * network call, so neither a slow exchange nor a failed one leaves it in
+ * history. Success follows `returnTo` only while it stays on this app; a
+ * refused code goes to `/login?error=` with the category the API named, like
+ * every other SSO failure (#291). No code at all navigates nowhere — the page
+ * shows its own card.
+ */
+export async function completeSso(steps: CompleteSsoSteps): Promise<'done' | 'failed' | 'no-code'> {
+  const code = fragmentCode(steps.hash)
+  steps.replaceUrl(steps.pathname)
+  if (!code) return 'no-code'
+  let returnTo: string
+  try {
+    returnTo = await steps.exchange(code)
+  } catch (e) {
+    const error = (e instanceof ApiError ? ssoErrorOf(e.details?.loginError) : null) ?? 'failed'
+    await steps.navigate(`/login?error=${error}`)
+    return 'failed'
+  }
+  await steps.navigate(ownPath(returnTo))
+  return 'done'
 }
 
 /** `?reauth=` on /login, set by a workspace's sign-in policy (#75 phase 4). Anything else reads as none. */

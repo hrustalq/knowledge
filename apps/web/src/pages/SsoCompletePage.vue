@@ -6,12 +6,14 @@
  * fragment. The fragment never reaches a server, so this runs after hydration
  * only: read the code, wipe it from the address bar (and so from history),
  * trade it for a session in a POST body, and go where the sign-in started.
+ * A refused code goes to /login?error= like every other SSO failure (#291).
  */
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { fragmentCode, ownPath } from '@/lib/sso'
+import { ApiError } from '@/lib/api'
+import { fragmentCode, ownPath, ssoErrorOf } from '@/lib/sso'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 
@@ -28,12 +30,17 @@ onMounted(async () => {
     failed.value = true
     return
   }
+  let returnTo: string
   try {
-    const returnTo = await auth.exchangeSsoCode(code)
-    await router.replace(ownPath(returnTo))
-  } catch {
-    failed.value = true
+    returnTo = await auth.exchangeSsoCode(code)
+  } catch (e) {
+    // A refused code (unknown, expired, already spent) ends on /login with the
+    // category the API names, like every other SSO failure.
+    const error = (e instanceof ApiError ? ssoErrorOf(e.details?.loginError) : null) ?? 'failed'
+    await router.replace(`/login?error=${error}`)
+    return
   }
+  await router.replace(ownPath(returnTo))
 })
 </script>
 

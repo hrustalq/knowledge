@@ -161,7 +161,10 @@ through that provider.
   reader's language. A `?reauth=sso|session` query keeps a signed-in person on
   the page to sign in again.
 - **`/sso/complete`** (`SsoCompletePage.vue`): reads the code from the fragment,
-  exchanges it, and lands on `returnTo` (only a path on this app).
+  exchanges it, and lands on `returnTo` (only a path on this app). A refused
+  code (unknown, expired or spent) answers 400 with `loginError:
+  'exchange-invalid'` and an `auth.login_failed` row, and the page goes to
+  `/login?error=exchange-invalid`.
 - **Settings → Security** (workspace admins), one tab each: **Providers**
   (protocol, preset, the redirect, ACS, metadata and back-channel URLs to copy,
   **Test**), **Group mapping**, **Policy** (what was asked beside what applies,

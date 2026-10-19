@@ -22,6 +22,8 @@ export interface GraphPalette {
   primary: Rgb
   primaryInk: Rgb
   border: Rgb
+  /** #81: a relation added since the point the graph shows — the tip hue, never a signal color. */
+  added: Rgb
   /** Entity hues, keyed by the `entityType` the extractor emitted. */
   entity: Record<string, Rgb>
   entityFallback: Rgb
@@ -144,6 +146,7 @@ export function readPalette(host: HTMLElement): GraphPalette {
     '--primary-foreground',
     '--border',
     '--kn-draw-ink',
+    '--kn-panel-tip',
   ]
   const entityVars = [...new Set(Object.values(ENTITY_VARS))]
   const v = readVars(host, [...base, ...entityVars])
@@ -160,6 +163,7 @@ export function readPalette(host: HTMLElement): GraphPalette {
     primary: v['--primary'] ?? FALLBACK,
     primaryInk: v['--primary-foreground'] ?? FALLBACK,
     border: v['--border'] ?? FALLBACK,
+    added: v['--kn-panel-tip'] ?? FALLBACK,
     entity,
     entityFallback: v['--kn-draw-ink'] ?? FALLBACK,
     status: {

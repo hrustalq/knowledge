@@ -17,6 +17,8 @@ import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { operationHref } from '@/components/api-reference/use-operation'
 import KnowledgeGraph from './KnowledgeGraph.vue'
 import GraphControls from './GraphControls.vue'
+import GraphTimeSlider from './GraphTimeSlider.vue'
+import type { GraphTime } from './use-graph-time'
 import { DEFAULT_OPTIONS, type GraphEdgeInput, type GraphNodeInput, type GraphOptions } from './graph-model'
 
 const props = withDefaults(
@@ -29,8 +31,10 @@ const props = withDefaults(
     truncated?: boolean
     showEntityControls?: boolean
     storageKey?: string
+    /** #81: when given, the canvas carries the time strip and the panel's Time section. */
+    time?: GraphTime | null
   }>(),
-  { rootId: null, truncated: false, showEntityControls: true, storageKey: '' },
+  { rootId: null, truncated: false, showEntityControls: true, storageKey: '', time: null },
 )
 
 const emit = defineEmits<{ open: [id: string] }>()
@@ -111,17 +115,20 @@ const summary = computed(() =>
           :counts="stats.counts"
           :orphans="stats.orphans"
           :show-entity-controls="showEntityControls"
+          :time="time"
           class="max-h-full overflow-y-auto"
         />
         <div class="pointer-events-auto"><slot name="actions" /></div>
       </div>
 
-      <div class="pointer-events-none absolute inset-x-3 bottom-3 flex items-end justify-between gap-3">
-        <p class="rounded-md bg-background/70 px-1.5 py-0.5 text-xs text-muted-foreground backdrop-blur-sm">
+      <div class="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col gap-1.5">
+        <p class="self-start rounded-md bg-background/70 px-1.5 py-0.5 text-xs text-muted-foreground backdrop-blur-sm">
           {{ summary }}
           <span v-if="truncated" class="text-amber-600 dark:text-amber-500"> · {{ t('graph.truncated') }}</span>
         </p>
-        <div class="pointer-events-auto flex overflow-hidden rounded-lg border bg-card/90 shadow-xs backdrop-blur-md">
+        <div class="flex items-end gap-3" :class="time ? '' : 'justify-end'">
+        <GraphTimeSlider v-if="time" :time="time" />
+        <div class="pointer-events-auto flex shrink-0 overflow-hidden rounded-lg border bg-card/90 shadow-xs backdrop-blur-md">
           <button class="kn-graph-btn" :title="t('graph.zoomOut')" :aria-label="t('graph.zoomOut')" @click="graph?.zoomBy(0.75)">
             <Minus class="size-4" />
           </button>
@@ -131,6 +138,7 @@ const summary = computed(() =>
           <button class="kn-graph-btn" :title="t('graph.zoomIn')" :aria-label="t('graph.zoomIn')" @click="graph?.zoomBy(1.333)">
             <Plus class="size-4" />
           </button>
+        </div>
         </div>
       </div>
     </div>

@@ -51,6 +51,7 @@ watch(
       if (s.expand !== undefined) search.expand.value = s.expand
       if (s.depth) search.depth.value = s.depth
       if (s.limit) search.limit.value = s.limit
+      if (s.asOf !== undefined) search.asOf.value = s.asOf
       clearedNotice.value = seed.clearedFilters
       ui.seed = null
       if (search.query.value.trim()) void search.run()

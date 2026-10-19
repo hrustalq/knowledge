@@ -19,7 +19,21 @@ export interface GraphNodeInput {
   distance?: number
 }
 
-export type GraphEdgeInput = Pick<DocumentGraphEdge, 'from' | 'to' | 'type' | 'extractor' | 'confidence'>
+/**
+ * How an edge differs from now when the graph shows a past point with its
+ * changes (#81): `ended` was true then and is not now, `added` is true now and
+ * was not then. Absent on an edge that holds at both points.
+ */
+export type EdgeChange = 'ended' | 'added'
+
+export type GraphEdgeInput = Pick<DocumentGraphEdge, 'from' | 'to' | 'type' | 'extractor' | 'confidence'> & {
+  change?: EdgeChange
+}
+
+export interface GraphPair {
+  nodes: GraphNodeInput[]
+  edges: GraphEdgeInput[]
+}
 
 export interface GraphOptions {
   /** Off collapses the bipartite graph into page-to-page links via shared entities. */
@@ -162,4 +176,30 @@ export function toGraphNodes(nodes: WorkspaceGraphNode[]): GraphNodeInput[] {
     status: n.status ?? null,
     degree: n.degree,
   }))
+}
+
+/**
+ * The graph at a past point, overlaid with what changed since (#81): every
+ * edge of `past`, those `now` no longer has marked `ended`, plus every edge
+ * only `now` has, marked `added` — with the nodes it needs. An edge is its
+ * (from, type, to); provenance changing under the same claim is not a change.
+ */
+export function diffSince(past: GraphPair, now: GraphPair): GraphPair {
+  const key = (e: GraphEdgeInput) => `${e.from}\u0000${e.type}\u0000${e.to}`
+  const pastKeys = new Set(past.edges.map(key))
+  const nowKeys = new Set(now.edges.map(key))
+  const edges: GraphEdgeInput[] = [
+    ...past.edges.map((e) => (nowKeys.has(key(e)) ? e : { ...e, change: 'ended' as const })),
+    ...now.edges.filter((e) => !pastKeys.has(key(e))).map((e) => ({ ...e, change: 'added' as const })),
+  ]
+  const nodes = new Map(past.nodes.map((n) => [n.id, n]))
+  const nowById = new Map(now.nodes.map((n) => [n.id, n]))
+  for (const e of edges) {
+    if (e.change !== 'added') continue
+    for (const id of [e.from, e.to]) {
+      const n = nowById.get(id)
+      if (n && !nodes.has(id)) nodes.set(id, n)
+    }
+  }
+  return { nodes: [...nodes.values()], edges }
 }

@@ -16,6 +16,7 @@ import {
   LayoutTemplate,
   LockKeyhole,
   MessagesSquare,
+  Milestone,
   Plug,
   ShieldCheck,
   Sparkles,
@@ -41,6 +42,8 @@ const links = computed<SettingsLink[]>(() => [
   { to: '/settings/projects', label: t('nav.projects'), icon: FolderKanban, hint: t('settings.projectsHint') },
   { to: '/settings/glossary', label: t('nav.glossary'), icon: BookMarked, hint: t('settings.glossaryHint') },
   { to: '/settings/templates', label: t('nav.templates'), icon: LayoutTemplate, hint: t('settings.templatesHint') },
+  // Named points on the knowledge base's timeline (#81): every role reads them.
+  { to: '/settings/releases', label: t('nav.releases'), icon: Milestone, hint: t('settings.releasesHint') },
 
   { to: '/settings/publishing', label: t('nav.publishing'), icon: Globe, hint: t('settings.publishingHint') },
   { to: '/settings/api', label: t('nav.apiReference'), icon: Braces, hint: t('settings.apiReferenceHint') },

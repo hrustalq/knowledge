@@ -13,6 +13,7 @@ export function searchRequestOf(state: SearchSnapshot): SearchRequest {
     query: state.query,
     mode: state.mode,
     limit: state.limit,
+    ...(state.asOf ? { asOf: state.asOf } : {}),
     ...(state.expand && state.mode === 'hybrid' ? { expandGraph: { depth: state.depth } } : {}),
     ...(hasFilters
       ? {
@@ -27,16 +28,19 @@ export function searchRequestOf(state: SearchSnapshot): SearchRequest {
 }
 
 export function searchViewOf(res: SearchResponse): SearchView {
+  // An `asOf` hit opens the page as it read then (#81), not as it reads now.
+  const at = res.resolvedAsOf ? `?asOf=${encodeURIComponent(res.resolvedAsOf.ref === 'now' ? res.resolvedAsOf.at : res.resolvedAsOf.ref)}` : ''
   return {
     results: res.results.map((r) => ({
       key: r.chunkId,
       title: r.title,
-      to: `/documents/${r.documentId}`,
+      to: `/documents/${r.documentId}${at}`,
       // Chunk snippets are cut mid-sentence.
       snippet: [{ text: `${r.snippet}…`, hit: false }],
       score: r.score,
       trust: r.trust?.status,
       badges: (r.entities ?? []).map((e) => ({ key: e.key, label: e.name })),
+      ...(r.validTo ? { supersededAt: r.validTo } : {}),
     })),
     related: (res.related ?? []).map((r) => ({
       key: r.documentId,

@@ -38,6 +38,14 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Chat harvests now mask Russian identity numbers before any model reads a
+  thread, as they already masked emails, phones and cards. An INN (10 or 12
+  digits) and a SNILS (`112-233-445 95` or eleven digits) are masked as
+  `[INN_n]` and `[SNILS_n]` only when their check digits pass, so an order
+  id or a date is left alone. A passport, which has no checksum, is masked as
+  `[PASSPORT_n]` after `паспорт`, `серия` or `passport` in any common
+  spacing, or with no such word only in its printed `45 09 123456` form.
+  Buffered Telegram messages are masked the same way on write. (#342)
 - MCP agents can work in a page's shared draft (#316). Over the HTTP MCP
   server (`/v1/mcp`), with co-editing on, `knowledge_get_draft` reads the
   draft people are writing in the editor: the body as publishing it would

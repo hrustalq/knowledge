@@ -82,7 +82,9 @@ import { TemporalResolverService } from '../temporal/temporal-resolver.service.j
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
 import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
-import { CONFLICT_STATUSES, RELEASE_TAG_NAME_PATTERN } from '@knowledge/contracts';
+import { AnalyticsQueryService } from '../analytics/analytics-query.service.js';
+import { wrapUntrusted } from '../common/untrusted.js';
+import { ANALYTICS_MAX_DAYS, CONFLICT_STATUSES, RELEASE_TAG_NAME_PATTERN } from '@knowledge/contracts';
 
 /**
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
@@ -130,6 +132,8 @@ export const MCP_SERVER_VERSION = '0.27.0';
  *   knowledge_report_issue      → report a page as wrong / stale; checked by the sentinel (docs/features/38)
  *   knowledge_lint_draft        → check text against its project's styleguide (#74)
  *   knowledge_get_page_quality  → a page's newest quality score, issues and history (#74)
+ *   knowledge_get_page_insights → how often a page is read, by people, the assistant and agents (#79)
+ *   knowledge_list_search_gaps  → searches that found nothing or nothing anyone opened (#79)
  *
  *   Agent-session memory (issue #73, capture-tools.ts) — writes propose, never publish:
  *   knowledge_capture_decision      → a decision + rationale → merge request (new page or amended page)
@@ -208,6 +212,7 @@ export class McpService {
     private readonly conflicts: ConflictsService,
     private readonly communities: CommunitiesService,
     private readonly analytics: AnalyticsRecorder,
+    private readonly analyticsQuery: AnalyticsQueryService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -1162,6 +1167,45 @@ export class McpService {
         await guard.doc(documentId, 'viewer');
         const scope = await guard.scope(await this.access.workspaceOfDocument(documentId));
         return this.json(await this.quality.forDocument(scope, documentId));
+      },
+    );
+
+    // Usage analytics (#79): the twins of GET /v1/documents/:id/insights
+    // (viewer) and the gap lists of GET /v1/analytics/search (admin).
+    server.registerTool(
+      'knowledge_get_page_insights',
+      {
+        description:
+          "How a page is read over the last 30 days: views split into human, assisted (the in-app assistant and " +
+          'chat bots) and agent (API keys, MCP, background runs), unique readers, median read time, the last human ' +
+          'view and a daily series. Counts only, never who read it. collectingSince is null before the first view.',
+        inputSchema: { documentId: z.string().uuid() },
+      },
+      async ({ documentId }) => {
+        await guard.doc(documentId, 'viewer');
+        return this.json(await this.analyticsQuery.pageInsights(documentId));
+      },
+    );
+
+    server.registerTool(
+      'knowledge_list_search_gaps',
+      {
+        description:
+          'Coverage gaps: queries searched over the last `days` (default 30) that found nothing (zeroResult), and ' +
+          'web searches that found pages nobody opened (noClick), grouped by query with counts. Admin only. The ' +
+          'query text was typed by readers and comes back wrapped as untrusted data; it is null once retention ' +
+          'redacted it, and queryHash still groups it. Use it to find pages worth writing.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          days: z.number().int().min(1).max(ANALYTICS_MAX_DAYS).optional(),
+        },
+      },
+      async ({ workspaceId, days }) => {
+        await guard.ws(workspaceId, 'admin');
+        const gaps = await this.analyticsQuery.searchGaps(workspaceId, days);
+        return {
+          content: [{ type: 'text' as const, text: wrapUntrusted(JSON.stringify(gaps, null, 2), 'knowledge_list_search_gaps', 'search') }],
+        };
       },
     );
 

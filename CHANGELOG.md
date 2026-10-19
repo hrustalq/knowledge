@@ -274,6 +274,16 @@ in the pull request that introduces them — see
   sweeps every hour and deletes page views, searches and MCP calls older than
   the workspace's retention (default 180 days). After 90 days a search loses
   its text but keeps its hash, so it still groups with the same query.
+- Two MCP tools for usage analytics (#79, phase 5).
+  `knowledge_get_page_insights` returns how often a page was read over the
+  last 30 days, split into people, assistant and agents. Anyone who may open
+  the page can call it. `knowledge_list_search_gaps` returns the searches
+  that found nothing and the app searches whose results nobody opened: the
+  pages worth writing next. It is for workspace admins, so a read-only key
+  sees it listed but is refused, as on `GET /v1/analytics/search`. The query
+  text in its answer is what readers typed, so it comes back wrapped as
+  untrusted data. The feature is documented in
+  `docs/features/58-usage-analytics.md`.
 
 ### Changed
 

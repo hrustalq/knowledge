@@ -170,6 +170,20 @@ export class AnalyticsQueryService {
     return { workspaceId, ...w, top, zeroResult, noClick };
   }
 
+  /**
+   * Coverage gaps for agents (`knowledge_list_search_gaps`): what found nothing
+   * and what found results nobody opened, over every channel. The query text is
+   * typed by readers — the MCP tool hands it back wrapped untrusted.
+   */
+  async searchGaps(workspaceId: string, days = ANALYTICS_DEFAULT_DAYS): Promise<Omit<AnalyticsSearchResponse, 'top'>> {
+    const w = await this.window(workspaceId, days, 'all');
+    const from = new Date(w.from);
+    const [zeroResult, noClick] = await Promise.all(
+      (['zero', 'no-click'] as const).map((kind) => this.queryGroups(workspaceId, from, 'all', kind, DASHBOARD_LIMIT)),
+    );
+    return { workspaceId, ...w, zeroResult, noClick };
+  }
+
   /** MCP calls by tool and by key, and the assistant's volume. Not filtered by traffic: each list is one class already. */
   async agents(workspaceId: string, days = ANALYTICS_DEFAULT_DAYS): Promise<AnalyticsAgentsResponse> {
     const to = new Date();

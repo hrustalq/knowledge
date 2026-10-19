@@ -110,6 +110,17 @@ in the pull request that introduces them — see
   It stays off by default (`COLLAB_ENABLED=false`) and is on in the hosted
   deployment, after a dogfood pass on the dev stack.
 
+### Fixed
+
+- The editor no longer opens a page it failed to load (#314). If any request
+  for an existing page failed (the connection dropped mid-load, a 5xx, a
+  timeout), the editor used to open with an empty title and body and Publish
+  enabled, and publishing finalized an empty revision over the page; text
+  typed into it was kept as a working copy. It now shows the error with a
+  Retry button and a link to the page, Publish stays unavailable and nothing
+  is stored on the device until the page loads. Retry joins the shared draft
+  when co-editing is on.
+
 ### Operations
 
 - Migration `20261112100000_collab_drafts` adds the `collab_drafts` table and

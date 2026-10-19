@@ -308,24 +308,40 @@ sees a handful of concurrent editors.
 
 ## Rollout
 
-`COLLAB_ENABLED` stays `false` in this release. Flipping the default (or
-setting it in the `production` environment) is a separate change after a
-dogfood pass on the dev stack:
+`COLLAB_ENABLED` defaults to `false`, so a self-hosted install opts in. The
+hosted deployment turns it on in its `production` environment, which
+`.env.production.example` requires. The dogfood pass below ran on 2026-10-19
+on the dev stack, with two people (an admin and an editor in separate browser
+contexts) under `AUTH_MODE=api-key`:
 
-- [ ] Two people (or two browsers) on one page: typing, the title and tags,
+- [x] Two people (or two browsers) on one page: typing, the title and tags,
   carets with names, faces in the header.
-- [ ] One asks the assistant; the other sees the credit, "writing for …", and
+- [x] One asks the assistant; the other sees the credit, "writing for …", and
   can keep or discard.
-- [ ] Publish from one; the other's chip clears; later edits stay unpublished;
+- [x] Publish from one; the other's chip clears; later edits stay unpublished;
   the revision shows both as co-authors.
-- [ ] Publish the same page through MCP; the editor shows the head-moved
+- [x] Publish the same page through MCP; the editor shows the head-moved
   notice; Publish on top and Discard both work.
-- [ ] Take one browser offline, edit, reconnect: the edit arrives once.
-- [ ] Take one browser offline, discard the draft from the other, reconnect:
+- [x] Take one browser offline, edit, reconnect: the edit arrives once.
+- [x] Take one browser offline, discard the draft from the other, reconnect:
   the offline tab reopens the reset page, and the old text does not come back.
-- [ ] A viewer joins read-only; demoting an editor turns their tab read-only
+- [x] A viewer joins read-only; demoting an editor turns their tab read-only
   within `COLLAB_REAUTH_INTERVAL_SECONDS`.
-- [ ] A merge request whose source branch has a draft shows the warning.
+- [x] A merge request whose source branch has a draft shows the warning.
+
+Every item behaved as specified. The pass found four problems, fixed in #313:
+
+- Discarding a draft stored the published page as a working copy, which
+  `?branch=` then offered back for everyone. The working copy now waits for the
+  page to load, and a non-default branch has a slot of its own.
+- With the assistant open, a peer's face covered the "Unpublished changes"
+  chip. The chips fold by the editor column's width now, not the window's.
+- The status said "Live" for 30 s after the browser went offline. The
+  browser's `offline` and `online` events now close and reopen the socket.
+- The draft's review dialog was titled "Unstaged changes".
+
+It also found a failed page load that opens an empty, publishable editor
+(#314). That predates co-editing.
 
 ## Departures from the plan in #80
 

@@ -36383,6 +36383,10 @@
               "en",
               "ru"
             ]
+          },
+          "listening": {
+            "type": "boolean",
+            "description": "Keep this group’s messages, masked, for harvesting (#82). Telegram only; turning it on posts a notice in the group, turning it off deletes what is kept."
           }
         }
       },

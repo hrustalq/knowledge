@@ -1,0 +1,370 @@
+# 59 — Chat harvest: a Telegram or Time thread, proposed as reviewed captures
+
+Issue [#82](https://github.com/hrustalq/knowledge/issues/82), shipped as five
+PRs (#344–#347 and the one carrying this document). Before it, the only way
+from a chat into the knowledge base was 💾 Save under a bot's own answer
+([feature 47](47-chat-bots.md)). Save had its own path with no dedupe and no
+inbox, and it could only keep what the bot said, never what the people in the
+thread worked out.
+
+Now a linked editor can ask the bot to **harvest** a thread. The platform
+masks it, the `harvester` agent proposes what the thread settled, and the API
+checks each proposal and writes the survivors as agent-memory captures
+([feature 50](50-agent-memory.md)) in that person's name. They are reviewed
+like any other capture. Chat itself is never indexed and never searchable.
+
+## What
+
+- **Ask for a harvest**, as a linked person with the `editor` role in the
+  bound workspace:
+
+  | trigger | Time | Telegram |
+  | --- | --- | --- |
+  | a command | `capture` (or `remember`, `запомни`) inside a thread, mentioning the bot in a channel | `/capture` as a reply to the first message of the thread |
+  | a private chat | — | forward the bot the messages, then `/capture` |
+  | a reaction | 📌 on any message of a thread | ✍ on a kept message, where the bot is a group admin |
+
+- **What it reads:**
+  - **Time:** the whole thread, fetched by root. A command reads up to the
+    command; a reaction reads all of it.
+  - **Telegram group:** the replied-to message, then what the group (or
+    forum topic) said from there up to the command, from the listening
+    buffer.
+  - **Telegram private chat:** exactly the messages forwarded within
+    `HARVEST_FORWARD_WINDOW_SEC`.
+
+  At most `HARVEST_MAX_MESSAGES`: the first message and the newest replies.
+- **What it proposes:** decisions, gotchas, conventions, how-tos, glossary
+  terms and answered questions, at most eight per harvest. Each becomes a
+  capture with a server-set **origin**: platform, chat title, a link to the
+  thread where the platform has one, and the time span of the messages.
+- **What the chat sees:** counts and an inbox link ("Proposed 3 captures for
+  review. 1 was already in the knowledge base and was skipped."), or "Nothing
+  in this thread looked worth keeping." Never a title.
+- **Keeping messages (Telegram).** A workspace admin can let a bound group
+  keep its messages, masked, for `CHAT_LISTEN_TTL_DAYS` (*Keep messages for
+  /capture* in Settings → Chat bots). `/forget` deletes a member's own.
+- **💾 Save** on a bot answer moved onto the same capture path (phase 1).
+
+## The rules
+
+### Who may ask, and when nobody is answered
+
+`ChatAnswersService.harvest()` is the one entry for all three triggers. It
+checks before reading anything:
+
+1. **Linked?** An unlinked person gets the usual link-your-account reply.
+2. **Editor?** `AccessService.principalFor` builds the person's principal
+   outside a request, then `requireRole(…, 'editor')`. A viewer is told no.
+3. **`HARVEST_ENABLED`?** Off, a command gets a notice.
+
+A **reaction** is not addressed to the bot the way a command is. From anyone
+but a linked editor it passes in silence: no reply, no read, no `ai_usage`
+row. A refusal to a reaction would be the bot talking to people who were not
+talking to it, and a busy channel's ordinary 📌 would get answers.
+
+`HarvestService.harvest()` then refuses, each with a chat reply, when:
+
+- the thread is empty;
+- captures are switched off for the workspace (`captureSettings`);
+- the person has started `HARVEST_RATE_PER_HOUR` harvests in the last hour,
+  counted from their `harvest` AI usage rows, before any model call;
+- the `harvester` agent is switched off;
+- the workspace's AI budget would refuse the call (`assertWithinBudget`).
+
+`CaptureService.capture` checks the editor role again before writing, and its
+own capture rate limits still apply per proposal.
+
+### Where a thread comes from
+
+The adapter seam (`chat-adapter.types.ts`) has two optional members:
+
+- `fetchThread(ctx, chatId, messageId, beforeMessageId, max)`: Time only.
+  `GET /posts/:id/thread` returns the whole thread from any post in it.
+  Bots', system and empty posts are left out. `beforeMessageId` is the command;
+  a reaction passes null. The thread link is the root's permalink, which needs
+  the channel's team. A direct channel has no team, so no link, and a link that
+  cannot be built is left out rather than failing the harvest.
+- `messageUrl(chatId, messageId)`: Telegram's `t.me/c/…` link for a
+  supergroup. A basic group and a private chat have none.
+
+Telegram has no thread to fetch, so `ChatBufferService` reads one instead:
+
+- **Group** (`groupThread`): the replied-to message M as Telegram delivered
+  it, then the buffer's rows for this chat and topic from M's time up to the
+  command. With listening off it is M alone, and the reply says so. If M is
+  older than what the buffer holds, the reply says the read is partial.
+- **Private chat** (`forwards`): every forward within the window, oldest
+  first, under its original author and time. A successful harvest consumes
+  them, so the next `/capture` starts from nothing. The first forward of a
+  batch gets one reply saying how to finish; the rest are kept quietly.
+
+A Time command said at the top of a channel is its own thread, and the bot
+says there is nothing above it to read.
+
+### Reactions
+
+Both adapters set `ChatInbound.harvestReaction` and leave `text` empty, because
+neither platform says what the message was.
+
+- **Time** watches `reaction_added` for `pushpin` on the websocket.
+  `data.reaction` is a JSON string, as in Mattermost's `sendReactionEvent`. The
+  supervisor claims `<bot>:<post>:pin:<user>`, apart from the post itself: the
+  same person pinning again within the claim's hour is the same request.
+- **Telegram** has no 📌: Bot API `ReactionTypeEmoji` allows a fixed list,
+  and it is not on it. ✍ ("write this down") is. Pinning a message was
+  rejected as the trigger, because it notifies the group and every rules pin
+  would start a harvest. The webhook now asks for `message_reaction`, which
+  Telegram delivers only where the bot is a group admin. Only a reaction just
+  added counts, not one still there while another changes. An anonymous admin
+  has no user to link and is ignored.
+
+  The reaction carries no text, so `ChatBufferService.asReplyTo` turns it
+  into the `/capture` that would have replied to M, from the kept row. A
+  message the buffer does not hold (keeping off, M older than the buffer, or
+  never seen) gets `chat.harvest.reactionNotKept`, and nothing is harvested.
+
+### Masking
+
+`harvest-mask.ts` is a regex masker, run before any model reads a thread:
+
+| placeholder | matches |
+| --- | --- |
+| `[SECRET_n]` | the credential shapes `findSecret` knows (`SECRET_PATTERNS`), first, since a token can contain a card or phone shape |
+| `[EMAIL_n]` | email addresses, case-folded for numbering |
+| `[CARD_n]` | 13–19 digits, spaces or dashes allowed, that pass Luhn |
+| `[PHONE_n]` | three-three-two-two shapes with an optional `+code` or `8`, so a date or time never fits |
+
+One masker numbers a value once, so the same address is the same placeholder
+everywhere it is used:
+
+- a Time thread is masked whole, so placeholders are stable across one harvest;
+- a buffered Telegram row is masked on write with a fresh masker, so they are
+  numbered per message. The raw text never reaches the database.
+
+The masker keeps no value past the call. Authors become `Person 1`,
+`Person 2` in order of first appearance: the model needs to tell speakers
+apart, never who they are. There is no named-entity detection, and
+`findSecret` stays the backstop on every capture.
+
+### The harvester
+
+A built-in agent (`built-in-agents.ts`): purpose `review`, `requires: ['json']`,
+surfaces `background`, **no tools**. It can be switched off or tuned in
+Settings → AI agents like any other.
+
+Everything it may use is handed to it in one prompt:
+
+- the masked thread, wrapped `wrapUntrusted(…, 'harvest', 'chat')`;
+- the pages an answer may cite. `pagesFor` runs one hybrid search over the
+  first 2 000 characters of the masked thread **under the asker's own
+  scope**, and labels up to eight distinct pages `P1…P8` (title and a
+  300-character snippet), wrapped untrusted. The model sees labels, never ids.
+
+Its instructions forbid stating anything the thread does not say, allow an
+empty list as a good answer, and say placeholders stay as they are. The
+caller appends the cap (eight), which it owns as `MAX_PROPOSALS`.
+
+### Validation happens here, not in the prompt
+
+`planCaptures` turns the model's JSON into capture requests and drops, and
+counts, anything that is not grounded:
+
+- an unknown kind, a missing field, or anything past the eighth;
+- a **glossary** term that does not appear word for word in the masked thread
+  (`countOccurrences`, the glossary's own matcher). An alias that does not
+  appear is dropped from the term;
+- an **answer** whose `pages` name no label the search handed out. A label
+  the turn did not issue cites nothing, so an answer with no search (search
+  failed, nothing found) is always dropped.
+
+Each survivor goes to `CaptureService.capture(req, principal, { origin })`.
+A proposal the capture path refuses (a credential shape, too long, the
+capture rate, a page gone since the search) counts as dropped. It is one
+proposal, not the harvest. A `duplicate` result counts as a duplicate.
+
+### Origin is the server's
+
+`CaptureOrigin` (`@knowledge/contracts`) is `{ platform, chatTitle, threadUrl?,
+from, to }`, built from the chat delivery. No request DTO accepts it, and the
+model never sees it, so unlike `CaptureSession` it is a fact rather than a
+report. `CaptureSession.client` gained `'chat'`.
+
+The origin is shown:
+
+- in the Captures inbox row (`CaptureOriginParts.vue`);
+- in the merge request description (`capture.mergeRequest.introChat`) and its
+  provenance strip (`MrProvenance.vue`);
+- in a new or amended page's frontmatter, appended under `sources:`
+  (`withOriginSource`).
+
+### The reply carries counts only
+
+The placeholder ("Reading the thread for what it settled…") is replaced by `harvestSummary`: how
+many were proposed, how many were duplicates, a note when the thread was cut
+to the cap, and the buffer's note on a partial read. The inbox button appears
+only when something was proposed or matched. It never names a capture or a
+matched page, because the group may include people who cannot open them.
+`dropped` is never mentioned in the chat.
+
+### Spend
+
+Each harvest is one model call, booked as `AiUsageOperation 'harvest'`
+against the asker. The rate limit counts those rows, so the limit and the bill
+cannot disagree.
+
+### The listening buffer
+
+`chat_buffered_messages` holds masked text only, keyed by bot, binding, chat,
+topic and message (unique per chat and message, so a redelivery is a no-op).
+A DM forward has no binding.
+
+- **Turning it on** (`PATCH /v1/chat/bindings/:id { listening: true }`,
+  workspace admin, Telegram only) posts the notice in the group first. If the
+  bot cannot post it, the switch fails and nothing is kept, because a group
+  that was never told is a group being recorded.
+- **Kept:** people's messages that are not commands, while
+  `HARVEST_ENABLED` is on. Commands and the bot's own messages are not kept.
+  The group is still answered as usual.
+- **Never read** by search, the assistant, MCP or ingestion. A harvest is the
+  only reader, and a spec asserts no other code touches the table.
+- **Dropped:**
+  - on the chat-answer sweeper's one-minute tick, past `CHAT_LISTEN_TTL_DAYS`
+    for a group and past `HARVEST_FORWARD_WINDOW_SEC` for a DM's forwards;
+  - at once when listening is turned off;
+  - with the binding (FK cascade) when the group is unbound, and with the bot;
+  - per author on `/forget`, which needs no link and no role. In a private
+    chat it also drops that person's forwards.
+
+Keeping needs the bot to see group messages: privacy mode off in @BotFather,
+or the bot made a group admin. ✍ needs admin either way.
+
+### Save is a capture too
+
+Phase 1 moved 💾 Save onto `CaptureService`
+([feature 47](47-chat-bots.md#saving-a-conversation)):
+
+- *As a page draft* is an `answer` capture citing the pages the answer cited,
+  the same as the assistant pane's "Save to knowledge base". An answer that
+  cites no page can no longer be saved.
+- *As a glossary term* is a `glossary` capture in the inbox.
+
+Both carry an origin. `chat_captures` rows were copied into
+`knowledge_captures` with their status and the table was dropped, so there is
+one save path, one dedupe and one inbox.
+
+## Decisions
+
+- **Chat is harvested, never indexed.** Searching chat is #339, blocked on the
+  vector index #304.
+- **Proposals go through agent memory.** No new `ConnectorRunItem` kinds and
+  no capture runs; feature-26 run items stay pages-only.
+- **Sources are the existing chat-bot platforms.** No new connector kinds.
+- **Triggers are explicit:** a command, a forward or a reaction. The
+  automatic sweep is #340.
+- **Telegram threads come from an opt-in, admin-enabled buffer** with a short
+  TTL, masked on write. Telegram's privacy mode means a bot otherwise sees
+  only what is addressed to it.
+- **Attribution goes to the person who asked**: the feature-47 rule, the
+  linked person, never a bot principal.
+- **The harvest runs API-side**, in the webhook's or socket's continuation,
+  because a capture is attributed to a person and the API is where a
+  principal exists.
+- **Telegram uses ✍, not 📌**, and not pinning (see Reactions).
+- **Only a linked editor's reaction does anything.**
+- **An answer must cite a page** found under the asker's scope, or it is
+  dropped.
+- **Masking is regex only.** RU identity numbers are #342.
+- **The chat reply carries counts and a link only.**
+- **Decisions live here**, not in ADRs.
+
+## Surface
+
+### Chat
+
+| | Time | Telegram |
+| --- | --- | --- |
+| harvest | `capture` / `remember` / `запомни` in a thread; 📌 | `/capture` as a reply, or after forwards in a DM; ✍ |
+| forget | — | `/forget` |
+| help | `help` lists `capture` and 📌 | `/help` lists `/capture`, ✍ and `/forget` |
+
+### REST
+
+| route | role | |
+| --- | --- | --- |
+| `GET /v1/chat/integrations/:id/bindings` | admin | now `{ bindings, listenTtlDays }`; each binding has `listening` |
+| `PATCH /v1/chat/bindings/:id` | admin | `listening` joins the body; Telegram only, 400 otherwise or when the notice fails |
+
+Captures are read and decided through the existing `/v1/captures` routes;
+`CaptureInfo` has `origin`.
+
+### Web
+
+- `chat-bots/ChatBindingTable.vue`: the *Keep messages for /capture* switch on
+  a Telegram group. It waits on the API, since turning it on waits on the
+  group notice. The setup hint says ✍ needs the bot to be an admin.
+- `captures/CaptureOriginParts.vue`: the origin in `CaptureRow.vue` and
+  `MrProvenance.vue`.
+
+## Operations
+
+- Migrations:
+  - `20261117100000_chat_captures_into_agent_memory` adds
+    `knowledge_captures.origin`, copies `chat_captures` across and **drops
+    it**. Not reversible under expand/contract: after a rollback to v0.27.x,
+    💾 Save fails until this release is rolled forward again.
+  - `20261118100000_chat_listening_buffer` adds
+    `chat_channel_bindings.listening` and `chat_buffered_messages`. Additive.
+    After a final rollback, drop the table by hand.
+- Env vars, all with defaults:
+
+  | var | default | |
+  | --- | --- | --- |
+  | `HARVEST_ENABLED` | `true` | `false`: commands get a notice, reactions nothing, nothing is kept |
+  | `HARVEST_MAX_MESSAGES` | `200` | the first message and the newest replies |
+  | `HARVEST_RATE_PER_HOUR` | `10` | per person, from `harvest` usage rows |
+  | `HARVEST_FORWARD_WINDOW_SEC` | `120` | a DM's forwards that make the thread |
+  | `CHAT_LISTEN_TTL_DAYS` | `7` | how long a listening group's messages are kept |
+
+  `CHAT_CAPTURE_TIMEOUT_SECONDS` is no longer read.
+- **Telegram bots need their webhook registered again** to receive ✍: press
+  **Test** on each bot in Settings → Chat bots after deploying.
+- Production cannot reach `api.telegram.org` until `TELEGRAM_API_BASE_URL`
+  points at a proxy, so Time is the first platform that can be checked there.
+
+## Deliberate deferrals
+
+- No automatic harvest (#340), no chat search (#339), no new sources (Slack,
+  Teams and the rest #341, Mattermost #343, Google Drive #338).
+- No RU passport, SNILS or INN masking (#342), no named-entity detection, no
+  reversible masking.
+- The harvest runs in the delivery's continuation, with no sweeper of its own.
+  A deploy mid-harvest leaves the reading placeholder in the chat; the
+  proposals already written stand.
+- The forward window is per chat, not per batch: two quick batches in one
+  private chat are one thread.
+
+## Verification
+
+- Unit (`apps/api/test/`):
+  - `chat-harvest.spec.ts`: the masker (each kind, stable numbering, dates
+    and non-Luhn numbers left alone, local phone shapes); `planCaptures`
+    dropping an ungrounded term or an uncited answer; `HarvestService` with a
+    capturing fake model (the prompt holds no fixture value, captures are
+    written as the asker with the server origin, the rate limit is refused
+    before any model call); the reply is counts only, never a title.
+  - `chat-buffer.spec.ts`: masking on write, the three reads, truncation,
+    TTL and window, `/forget`, the listening switch (notice first, nothing
+    kept when it fails, purge on off, Time refused), ✍ as a reply, and that
+    no search, assistant or MCP code reads the table.
+  - `chat-inbound.spec.ts`: the triggers end to end through
+    `ChatAnswersService`: linked editor, unlinked, viewer, top of a channel,
+    group and DM `/capture`, forwards, `/forget`, 📌 and ✍, and silence for
+    anyone else's reaction.
+  - `chat-time.spec.ts`, `chat-telegram.spec.ts`: parsing the commands, a
+    reaction and the thread fetch against fixture shapes.
+  - `chat-capture.spec.ts`, `capture-templates.spec.ts`: Save as a capture,
+    and the origin in the description and in `sources:`.
+- **Not verified against a live server.** Telegram parsing is pinned to the
+  Bot API documentation, and Time's to Mattermost's `/api/v4` and websocket
+  events. #343 adds a docker Mattermost for a live check.

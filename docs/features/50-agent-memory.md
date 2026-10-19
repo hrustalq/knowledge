@@ -38,6 +38,13 @@ revision DAG and graph as the pages people write, not in a separate store.
   `clientVersion`, `sessionId`, `repo`, `branch`, `commit`, at most 20 `files`
   (paths only) and `startedAt`. Every field is the agent's own report. The
   server infers none of it and **never receives a transcript**.
+- **A chat capture also carries an `origin`** (#82, `CaptureOrigin`):
+  platform, chat title, thread link where there is one, and the time span of
+  the messages. Its `session.client` is `chat`. Unlike the session it is set by
+  the server from the chat delivery, through the third argument of
+  `CaptureService.capture`; no request body and no model can supply it. The
+  inbox row and the merge request show it, and a page gets it under
+  `sources:` in its frontmatter.
 - **A capture key.** API keys have a third scope, `capture` ("Read & propose").
   It reads like a read-only key and can propose captures, but cannot write a
   page, merge, approve, sync, ingest or start a workflow. It can be pinned to
@@ -59,6 +66,11 @@ revision DAG and graph as the pages people write, not in a separate store.
   shows the agent, repository, branch and session it came from.
 - **Save to knowledge base** on an assistant reply that cites a page of this
   base. The reply is proposed as an `answer` capture.
+- **From chat** (#82). 💾 Save under a chat bot's answer is the same `answer`
+  capture, or a `glossary` one ([47](47-chat-bots.md#saving-a-conversation)).
+  A **harvest** has the `harvester` agent propose captures from a Telegram or
+  Time thread a linked editor asked about, checked server-side before each is
+  written ([59](59-chat-harvest.md)). Both are written as that person.
 - **Settings → AI → Agent memory** (`/settings/ai/capture`): the switch, both
   rate limits, both dedupe thresholds and the parent page for new captured
   pages.
@@ -185,8 +197,8 @@ row, not a revision, so there is nothing to merge. It waits `staged` with
 outcome `glossary` until an editor approves it. Approval creates the
 `GlossaryTerm` with `source: 'captured'` as the approver, and the capture then
 reads `merged`. This is the one deliberate exception to "always a merge
-request". The other option, a term created switched off in the glossary as
-chat capture does, was considered and not chosen: the inbox keeps every
+request". The other option, a term created switched off in the glossary, as
+chat Save did before #82, was considered and not chosen: the inbox keeps every
 capture decision in one list. Page and relation captures cannot be decided in
 the inbox. Approve answers 409 `capture-not-approvable`, and reject answers
 409 `capture-use-merge-request` with `details.mergeRequestId`, so the merge
@@ -323,6 +335,7 @@ line names the pin.
 | Key scope                                                | `AccessService.requireKeyAllows`, `apiKeyScopeOf` (contracts)                                      |
 | Hidden head-less pages                                   | `apps/api/src/common/listed-page.ts`, `documents/draft-merge-request.ts`                           |
 | Inbox                                                    | `apps/web/src/pages/CapturesPage.vue`, `components/captures/`                                      |
+| Chat Save and harvest (#82)                              | `apps/api/src/chat/chat-captures.service.ts`, `chat/harvest.service.ts`                            |
 | Provenance strip, Save to knowledge base, settings panel | `components/merge-requests/MrProvenance.vue`, `assistant/ChatMessage.vue`, `ai/AiCapturePanel.vue` |
 | Connect AI step 4                                        | `apps/web/src/pages/ConnectAiPage.vue`, `lib/mcp-clients.ts` (`captureKit`)                        |
 
@@ -349,7 +362,7 @@ the merge request's state.
 ## Data
 
 - `knowledge_captures`: kind, stored status, outcome, title, payload,
-  `content_hash`, session, `similar` (top hits kept for the reviewer), the
+  `content_hash`, session, `origin` (chat captures only, #82), `similar` (top hits kept for the reviewer), the
   target page, merge request or term, `api_key_id`, `created_by`, `attempts`,
   `claimed_at`, and error. CHECKs on kind, status and outcome. No FK on
   workspace, project or creator (house policy).
@@ -362,6 +375,9 @@ Migrations `20261028100000_agent_captures` and
 `20261029100000_capture_pending_pages` are additive. The second backfills
 merge requests from agent findings as `agent` and from chat saves as
 `captured`, and hides chat-saved pages whose merge request has not merged.
+`20261117100000_chat_captures_into_agent_memory` (#82) adds `origin`, copies
+the old `chat_captures` rows in under their own ids and drops that table; it
+is not reversible.
 
 ## Configuration
 

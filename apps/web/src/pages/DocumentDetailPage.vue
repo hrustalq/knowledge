@@ -44,6 +44,7 @@ import {
   Share2,
   Workflow as WorkflowIcon,
   ListTree,
+  Eye,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type {
@@ -57,6 +58,7 @@ import type {
   ListKnowledgeIssuesResponse,
   ListConflictsResponse,
   DocumentQualityResponse,
+  PageInsightsResponse,
   ListDocumentRelationsResponse,
   ListDocumentThreadsResponse,
   ListMergeRequestsResponse,
@@ -102,6 +104,7 @@ import ConnectorRail from '@/components/connectors/ConnectorRail.vue'
 import ConflictsRail from '@/components/knowledge/ConflictsRail.vue'
 import KnowledgeIssuesRail from '@/components/knowledge/KnowledgeIssuesRail.vue'
 import QualityRail from '@/components/quality/QualityRail.vue'
+import PageInsightsRail from '@/components/analytics/PageInsightsRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
 import PageAiActions from '@/components/knowledge/PageAiActions.vue'
@@ -139,6 +142,8 @@ const RAIL_WIDGETS = [
   // Passages another page contradicts (#81): only while one is open.
   { id: 'conflicts', label: t('rail.conflicts'), icon: Scale, expandable: false },
   { id: 'graph', label: t('rail.graph'), icon: Share2, expandable: true },
+  // How often the page is read and by whom — people, the assistant, agents (#79).
+  { id: 'insights', label: t('rail.insights'), icon: Eye, expandable: false },
   // Where the code a component page declares is used (#236): only on a page
   // that declares one.
   { id: 'used-by', label: t('rail.usedBy'), icon: Network, expandable: false },
@@ -503,6 +508,13 @@ const qualityQuery = useQuery(
 )
 const quality = computed(() => qualityQuery.data.value as DocumentQualityResponse | undefined)
 
+// Usage analytics (#79): the collapsed row previews the view count, so the
+// page owns the query and the widget only draws.
+const insightsQuery = useQuery(
+  computed(() => apiQueryOptions('/v1/documents/{id}/insights', { path: { id: documentId.value } })),
+)
+const insights = computed(() => insightsQuery.data.value as PageInsightsResponse | undefined)
+
 // The same query the declaration notice runs, which vue-query dedupes; the
 // usages are read only once a declaration resolved to a connector.
 const declarationPreview = useQuery(
@@ -558,6 +570,7 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
           : 'none'
       : null,
     conflicts: openConflicts.value ? String(openConflicts.value) : null,
+    insights: insights.value ? t('analytics.viewsCount', { n: insights.value.views }, insights.value.views) : null,
     quality: quality.value?.score
       ? quality.value.stale
         ? t('quality.rail.previewStale', { n: quality.value.score.overall })
@@ -866,6 +879,9 @@ watch(
             <QualityRail v-if="quality?.score" :quality="quality" />
           </template>
           <template #widget-graph><GraphView :document-id="documentId" /></template>
+          <template #widget-insights>
+            <PageInsightsRail v-if="insights" :insights="insights" />
+          </template>
           <template #widget-used-by>
             <UsedByRail
               :document-id="documentId"

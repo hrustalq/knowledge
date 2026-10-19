@@ -109,3 +109,10 @@ export function formatBytes(bytes: number, locale?: Locale): string {
 export function pluralCategory(n: number, locale?: Locale): Intl.LDMLPluralRule {
   return new Intl.PluralRules(tag(locale)).select(n)
 }
+
+/** A short duration — "45 sec", "3 min", "1.5 hr" / "3 мин" — by Intl unit formatting, no hand-written units. */
+export function formatDuration(ms: number, locale?: Locale): string {
+  const [value, unit] =
+    ms < 60_000 ? [Math.round(ms / 1000), 'second'] : ms < 3_600_000 ? [Math.round(ms / 60_000), 'minute'] : [ms / 3_600_000, 'hour']
+  return new Intl.NumberFormat(tag(locale), { style: 'unit', unit, unitDisplay: 'short', maximumFractionDigits: 1 }).format(value)
+}

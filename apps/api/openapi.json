@@ -23486,6 +23486,8 @@
                 "flagged",
                 "inactive",
                 "missing-paths",
+                "unread",
+                "dead",
                 "archived"
               ]
             }
@@ -29987,6 +29989,146 @@
         "summary": "The capture kit as a POSIX shell script that installs it into the git repository it runs in",
         "tags": [
           "mcp"
+        ]
+      }
+    },
+    "/v1/documents/{id}/insights": {
+      "get": {
+        "operationId": "AnalyticsController_insights",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One page's reading over the last 30 days: views by traffic class, unique readers, median read time",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/projects/{id}/analytics": {
+      "get": {
+        "operationId": "AnalyticsController_project",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Days back from now. Omitted: 30",
+            "schema": {
+              "minimum": 1,
+              "maximum": 366,
+              "type": "number"
+            }
+          },
+          {
+            "name": "traffic",
+            "required": false,
+            "in": "query",
+            "description": "Count one traffic class only. Omitted: all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "human",
+                "assisted",
+                "agent"
+              ]
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A project's reading: totals, the most read pages, and the pages nobody reads",
+        "tags": [
+          "analytics"
         ]
       }
     },

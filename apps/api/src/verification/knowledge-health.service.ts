@@ -1,4 +1,5 @@
 import { ForbiddenException, HttpException, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import type {
   HealthBulkAction,
@@ -19,6 +20,8 @@ import { DocumentsService } from '../documents/documents.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { visibilitySql, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { listedSql } from '../common/listed-page.js';
+import { quietPageSql, readSignalsColumnsSql, readSignalsJoinSql } from '../analytics/read-signals.js';
+import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { VerificationPolicyService } from './verification-policy.service.js';
@@ -60,6 +63,7 @@ interface HealthSqlRow {
   body_chars: number | null;
   child_count: number;
   missing_paths: string[];
+  last_read_at: Date | null;
   status: SourceVerificationState;
 }
 
@@ -84,7 +88,13 @@ export class KnowledgeHealthService {
     private readonly verification: VerificationService,
     private readonly documents: DocumentsService,
     private readonly permissions: PermissionService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
+
+  /** Start of the `unread` / `dead` window: reads older than this do not keep a page alive. */
+  private readSince(now: Date): Date {
+    return new Date(now.getTime() - this.config.get('ANALYTICS_DEAD_PAGE_DAYS', { infer: true }) * 86_400_000);
+  }
 
   async list(access: AccessScope, query: HealthListQuery): Promise<KnowledgeHealthListResponse> {
     const { workspaceId } = access;
@@ -107,7 +117,7 @@ export class KnowledgeHealthService {
     const rows = await this.prisma.$queryRaw<HealthSqlRow[]>`
       WITH r AS (${this.rowsCte(access, query, settings, now)})
       SELECT r.* FROM r
-       WHERE ${healthFilterSql(query.filter, settings, now)}
+       WHERE ${healthFilterSql(query.filter, settings, now, this.readSince(now))}
        ${after}
        ${order}
        LIMIT ${limit + 1}
@@ -134,7 +144,8 @@ export class KnowledgeHealthService {
     const settings = await this.policy.effective(workspaceId);
     const now = new Date();
     const counted = HEALTH_FILTERS.map(
-      (f) => Prisma.sql`count(*) FILTER (WHERE ${healthFilterSql(f, settings, now)})::int AS ${Prisma.raw(`"${f}"`)}`,
+      (f) =>
+        Prisma.sql`count(*) FILTER (WHERE ${healthFilterSql(f, settings, now, this.readSince(now))})::int AS ${Prisma.raw(`"${f}"`)}`,
     );
     const [row] = await this.prisma.$queryRaw<Array<Record<string, number>>>`
       WITH r AS (${this.rowsCte(access, { projectId }, settings, now)})
@@ -244,6 +255,7 @@ export class KnowledgeHealthService {
              -- Only a declaration that still resolves: a connector deleted
              -- since the last pull leaves a stale list behind its null id.
              COALESCE(cd.missing_paths, '{}') AS missing_paths,
+             d.created_at, ${readSignalsColumnsSql(access.workspaceId, this.readSince(now))},
              CASE
                WHEN d.verification_flag = 'outdated' THEN 'outdated'
                WHEN EXISTS (
@@ -260,6 +272,7 @@ export class KnowledgeHealthService {
         LEFT JOIN document_branches b ON b.document_id = d.id AND b.name = d.default_branch
         LEFT JOIN document_revisions rev ON rev.id = b.head_revision_id
         LEFT JOIN component_declarations cd ON cd.document_id = d.id AND cd.connector_id IS NOT NULL
+        ${readSignalsJoinSql(access.workspaceId, 'd', this.readSince(now))}
        WHERE d.workspace_id = ${access.workspaceId}::uuid ${project} ${owner} ${q}
          -- Pages the caller may not open are not on the dashboard (#76), nor a
          -- page that is still only a merge request (#73).
@@ -281,6 +294,7 @@ export class KnowledgeHealthService {
       expiresAt: r.verification_expires_at?.toISOString() ?? null,
       lastActivityAt: r.last_activity_at.toISOString(),
       inactive: isInactive(r.last_activity_at, settings.inactiveAfterDays, now),
+      lastReadAt: r.last_read_at?.toISOString() ?? null,
       empty: r.body_chars === null ? null : r.body_chars <= settings.emptyMaxChars,
       archivedAt: r.archived_at?.toISOString() ?? null,
       childCount: r.child_count,
@@ -301,6 +315,7 @@ export function healthFilterSql(
   filter: HealthFilter | undefined,
   settings: KnowledgeHealthSettingsValues,
   now: Date,
+  readSince: Date,
 ): Prisma.Sql {
   const live = Prisma.sql`r.archived_at IS NULL`;
   const inactive =
@@ -322,6 +337,10 @@ export function healthFilterSql(
       return Prisma.sql`${live} AND (r.status IN ('expired', 'outdated') OR ${inactive})`;
     case 'missing-paths':
       return Prisma.sql`${live} AND cardinality(r.missing_paths) > 0`;
+    // The same clause the project dashboard lists (#79), from `read-signals.ts`.
+    case 'unread':
+    case 'dead':
+      return Prisma.sql`${live} AND ${quietPageSql('r', readSince, filter)}`;
     case 'expired':
     case 'edited':
     case 'outdated':

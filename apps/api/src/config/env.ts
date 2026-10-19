@@ -391,6 +391,12 @@ export const envSchema = z.object({
   ANALYTICS_READER_SECRET: z.string().default(''),
   /** Per-view cap on a web view's active read time, in ms: a tab left open all day reads as half an hour. */
   ANALYTICS_READ_TIME_CAP_MS: z.coerce.number().int().positive().default(1_800_000),
+  /**
+   * A page older than this many days that nobody opened in the app within it
+   * is `unread`; one no search returned either is `dead` (knowledge health,
+   * project analytics).
+   */
+  ANALYTICS_DEAD_PAGE_DAYS: z.coerce.number().int().positive().default(90),
   /** Knowledge issues one principal (per API key when present) may file per 24 h; past it a report is 429. */
   KNOWLEDGE_ISSUE_DAILY_LIMIT: z.coerce.number().int().positive().default(50),
   /**

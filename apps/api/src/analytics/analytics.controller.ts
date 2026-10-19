@@ -1,20 +1,25 @@
-import { Body, Controller, HttpCode, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { ApiNoContentResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { PageInsightsResponse, ProjectAnalyticsResponse } from '@knowledge/contracts';
+import { AccessService } from '../auth/access.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { Access, CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe } from '../common/validation.js';
 import { PublicRateLimiter } from '../public/public-rate-limit.js';
 import { AnalyticsRecorder, noTrackOf, type AnalyticsCaller } from './analytics.recorder.js';
-import { PageViewHeartbeatDto, RecordPageViewDto } from './analytics.dto.js';
+import { AnalyticsQueryService } from './analytics-query.service.js';
+import { PageViewHeartbeatDto, ProjectAnalyticsQueryDto, RecordPageViewDto } from './analytics.dto.js';
 
 /** Beacon hits one principal may send a minute: a heartbeat per open tab every 15 s, with room for many tabs. */
 const BEACON_PER_MIN = 120;
 
 /**
- * The web page-view beacon (#79, phase 2). Both routes answer 204 whatever
- * happened: a dropped beacon costs one row of analytics, never the reader's
- * page. Past the per-principal rate the hit is dropped, not refused.
+ * Usage analytics over HTTP (#79): the web page-view beacon and the reads of
+ * one page and one project. Both beacon routes answer 204 whatever happened: a
+ * dropped beacon costs one row of analytics, never the reader's page. Past the
+ * per-principal rate the hit is dropped, not refused.
  */
 @ApiTags('analytics')
 @Controller('v1')
@@ -22,7 +27,33 @@ export class AnalyticsController {
   constructor(
     private readonly recorder: AnalyticsRecorder,
     private readonly limiter: PublicRateLimiter,
+    private readonly query: AnalyticsQueryService,
+    private readonly permissions: PermissionService,
+    private readonly access: AccessService,
   ) {}
+
+  @Get('documents/:id/insights')
+  // Anyone who may open the page may see how often it is read: counts only,
+  // never who read it.
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: "One page's reading over the last 30 days: views by traffic class, unique readers, median read time" })
+  insights(@Param('id', ParseUuidPipe) id: string): Promise<PageInsightsResponse> {
+    return this.query.pageInsights(id);
+  }
+
+  @Get('projects/:id/analytics')
+  // Editors, like the rest of a project's curation: a viewer reads pages, an
+  // editor decides which ones nobody needs.
+  @Access('editor', 'project')
+  @ApiOperation({ summary: "A project's reading: totals, the most read pages, and the pages nobody reads" })
+  async project(
+    @Param('id', ParseUuidPipe) id: string,
+    @Query() q: ProjectAnalyticsQueryDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ProjectAnalyticsResponse> {
+    const scope = await this.permissions.scopeFor(principal, await this.access.workspaceOfProject(id));
+    return this.query.project(scope, id, q.days, q.traffic);
+  }
 
   @Post('documents/:id/views')
   @HttpCode(204)

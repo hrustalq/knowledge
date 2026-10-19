@@ -45,3 +45,78 @@ export function trafficClassFor(channel: AnalyticsChannel): TrafficClass {
 export function channelsForTrafficClass(cls: TrafficClass): AnalyticsChannel[] {
   return ANALYTICS_CHANNELS.filter((c) => CLASS_OF[c] === cls);
 }
+
+/** The `?traffic=` filter of a rollup: one class, or everything. */
+export const ANALYTICS_TRAFFIC_FILTERS = ['all', ...TRAFFIC_CLASSES] as const;
+export type AnalyticsTrafficFilter = (typeof ANALYTICS_TRAFFIC_FILTERS)[number];
+
+/** Days a rollup may span, and the span it takes when none is asked for. */
+export const ANALYTICS_MAX_DAYS = 366;
+export const ANALYTICS_DEFAULT_DAYS = 30;
+
+/** One UTC day of page views, split by traffic class. Days without views are absent. */
+export interface AnalyticsDayPoint {
+  /** `YYYY-MM-DD`, UTC. */
+  date: string;
+  human: number;
+  assisted: number;
+  agent: number;
+}
+
+/** Page-view numbers over a window. */
+export interface AnalyticsViewTotals {
+  views: number;
+  byClass: Record<TrafficClass, number>;
+  /** Distinct reader keys; views sent under DNT / GPC count as views only. */
+  uniqueReaders: number;
+  /** Median active read time of web views that read for any time at all; null with none. */
+  medianReadMs: number | null;
+  series: AnalyticsDayPoint[];
+}
+
+// GET /v1/documents/:id/insights
+export interface PageInsightsResponse extends AnalyticsViewTotals {
+  documentId: string;
+  /** ISO window bounds. */
+  from: string;
+  to: string;
+  /** The newest web view, whenever it was. */
+  lastHumanViewAt: string | null;
+  /** The workspace's first recorded view: before it, "no views" means "not counted". */
+  collectingSince: string | null;
+}
+
+/** A page in a ranked list. */
+export interface AnalyticsPageRow {
+  documentId: string;
+  title: string;
+  views: number;
+  uniqueReaders: number;
+  medianReadMs: number | null;
+}
+
+/** A page in a "not read" list. */
+export interface AnalyticsQuietPage {
+  documentId: string;
+  title: string;
+  createdAt: string;
+  lastHumanViewAt: string | null;
+}
+
+// GET /v1/projects/:id/analytics?days=&traffic=
+export interface ProjectAnalyticsResponse extends AnalyticsViewTotals {
+  projectId: string;
+  from: string;
+  to: string;
+  traffic: AnalyticsTrafficFilter;
+  topPages: AnalyticsPageRow[];
+  /** Pages with no web view since collection began, oldest first. */
+  neverRead: AnalyticsQuietPage[];
+  /**
+   * Pages older than `deadAfterDays` that nobody opened in the app and no
+   * search returned in that window. Empty until collection covers the window.
+   */
+  dead: AnalyticsQuietPage[];
+  deadAfterDays: number;
+  collectingSince: string | null;
+}

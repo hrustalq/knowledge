@@ -1,12 +1,8 @@
 <script setup lang="ts">
-// Token spend per user, with a daily bar chart.
-//
-// The chart is inline markup rather than a charting library: this repo ships
-// none, and one bar series does not justify adding one. Colours come from the
-// theme tokens so it follows light/dark like everything else.
+// Token spend per user, with a daily bar chart (DailyBars).
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
-import { formatDayMonth, formatNumber } from '@/lib/format'
+import { formatNumber } from '@/lib/format'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import type { AiBudgetInfo, AiUsageResponse, ListAiBudgetsResponse } from '@knowledge/contracts'
@@ -17,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import DailyBars from '@/components/analytics/DailyBars.vue'
 
 const { t } = useI18n()
 
@@ -66,47 +63,14 @@ function fmtCost(micros: number | null): string {
   return `$${(micros / 1_000_000).toFixed(2)}`
 }
 
-function fmtDate(iso: string): string {
-  return formatDayMonth(iso)
-}
-
 function pct(used: number, budget: number | null): number {
   if (!budget) return 0
   return Math.min(100, Math.round((used / budget) * 100))
 }
 
 // --- chart ------------------------------------------------------------------
-const CHART_H = 88
-
-/**
- * The API returns only days that actually have calls. Rendering those alone
- * made a single busy day fill the entire width as one solid block — a shape
- * that says nothing about a 30-day range. Zero-filling the requested window
- * puts every bar on a real axis, so a spike reads as a spike.
- */
-const chart = computed(() => {
-  const d = data.value
-  if (!d) return []
-  const byDate = new Map(d.series.map((p) => [p.date, p]))
-  const start = new Date(d.from)
-  const end = new Date(d.to)
-  const max = Math.max(1, ...d.series.map((p) => p.totalTokens))
-
-  const out: Array<{ date: string; totalTokens: number; calls: number; height: number }> = []
-  for (let t = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()); t <= end.getTime(); t += 86_400_000) {
-    const date = new Date(t).toISOString().slice(0, 10)
-    const point = byDate.get(date)
-    const totalTokens = point?.totalTokens ?? 0
-    out.push({
-      date,
-      totalTokens,
-      calls: point?.calls ?? 0,
-      // A day with any traffic keeps a visible sliver rather than rounding to nothing.
-      height: totalTokens === 0 ? 0 : Math.max(2, Math.round((totalTokens / max) * CHART_H)),
-    })
-  }
-  return out
-})
+const chartPoints = computed(() => (data.value?.series ?? []).map((p) => ({ date: p.date, values: [p.totalTokens], calls: p.calls })))
+const callsOn = (date: string) => chartPoints.value.find((p) => p.date === date)?.calls ?? 0
 
 const chartMax = computed(() => Math.max(...(data.value?.series ?? []).map((p) => p.totalTokens), 0))
 
@@ -208,36 +172,26 @@ function labelFor(userId: string): string {
         </dl>
 
         <!-- daily tokens -->
-        <div v-if="chart.length > 0">
+        <div>
           <div class="mb-2 flex items-baseline justify-between">
             <p class="text-muted-foreground text-xs font-medium">{{ t('ai.tokensPerDay') }}</p>
             <p class="text-muted-foreground text-xs tabular-nums">{{ t('ai.peak', { value: fmtTokens(chartMax) }) }}</p>
           </div>
-          <div
-            class="border-border/70 flex items-end gap-px border-b"
-            :style="{ height: `${CHART_H}px` }"
-            role="img"
-            :aria-label="t('ai.tokensChartLabel', { n: days, peak: fmtTokens(chartMax) })"
-          >
-            <div
-              v-for="point in chart"
-              :key="point.date"
-              class="min-w-0 flex-1 rounded-t-[2px] transition-colors"
-              :class="point.totalTokens > 0 ? 'bg-primary/60 hover:bg-primary' : 'bg-muted'"
-              :style="{ height: point.totalTokens > 0 ? `${point.height}px` : '2px' }"
-              :title="
+          <DailyBars
+            :from="data.from"
+            :to="data.to"
+            :points="chartPoints"
+            :segments="[{ class: 'bg-primary/60 hover:bg-primary' }]"
+            :label="t('ai.tokensChartLabel', { n: days, peak: fmtTokens(chartMax) })"
+            :point-title="
+              (date, [tokens]) =>
                 t('ai.chartPoint', {
-                  date: point.date,
-                  tokens: formatNumber(point.totalTokens),
-                  calls: t('count.calls', { n: point.calls }, point.calls),
+                  date,
+                  tokens: formatNumber(tokens),
+                  calls: t('count.calls', { n: callsOn(date) }, callsOn(date)),
                 })
-              "
-            />
-          </div>
-          <div class="text-muted-foreground mt-1.5 flex justify-between text-xs">
-            <span>{{ fmtDate(data.from) }}</span>
-            <span>{{ fmtDate(data.to) }}</span>
-          </div>
+            "
+          />
         </div>
 
         <!-- breakdown -->

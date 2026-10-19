@@ -104,6 +104,7 @@ await import('@knowledge/observability/express'); \
 await import('./server/ai-readable.js'); \
 await import('./server/site-files.js'); \
 await import('./server/export-render.js'); \
+await import('./server/app-host.js'); \
 console.log('type stripping OK');"
 
 EXPOSE 5173

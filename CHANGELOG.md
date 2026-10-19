@@ -375,6 +375,10 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- An SSO sign-in link that is reused, expired or unknown now shows up in
+  Settings → Security → Audit as a failed sign-in, like every other refused
+  SSO attempt, and the browser lands on the sign-in page with the localized
+  reason instead of a bare "back to login" card. (#291)
 - BM25 search and indexing recover by themselves once OpenSearch is reachable
   again (#330). A worker or API that first reached OpenSearch while it was
   down or still starting (connection refused, DNS, a dropped connection) kept

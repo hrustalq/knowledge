@@ -190,21 +190,55 @@ describe('OIDC sign-in', () => {
     expect(h.db.identities).toHaveLength(1);
   });
 
-  it('a reused exchange code is refused', async () => {
+  /** The 400 a refused exchange answers with: the page reads `loginError` and goes to /login?error=. */
+  const refusal = async (p: Promise<unknown>) => {
+    const err = await p.then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect((err as BadRequestException).getResponse()).toMatchObject({ statusCode: 400, loginError: 'exchange-invalid' });
+  };
+
+  it('a reused exchange code is refused, and audited as a failed sign-in', async () => {
     const h = harness();
     const p = h.provider();
     const code = fragmentCode(await signIn(h, p.id, person()))!;
     await h.sso.exchange(code, meta);
-    await expect(h.sso.exchange(code, meta)).rejects.toBeInstanceOf(BadRequestException);
-    await expect(h.sso.exchange('forged', meta)).rejects.toBeInstanceOf(BadRequestException);
+    expect(h.failures()).toHaveLength(0);
+
+    await refusal(h.sso.exchange(code, meta));
+    expect(h.failures()).toHaveLength(1);
+    // The spent code's hash is cleared, so the row — and its provider — is not found.
+    expect(h.failures()[0]).toMatchObject({
+      workspaceId: null,
+      actor: 'anonymous',
+      ok: false,
+      ip: meta.ip,
+      params: { providerId: null, error: 'exchange-invalid' },
+    });
+
+    await refusal(h.sso.exchange('forged', meta));
+    expect(h.failures()).toHaveLength(2);
   });
 
-  it('an expired exchange code is refused', async () => {
+  it('an expired exchange code is refused, and audited under its provider', async () => {
     const h = harness();
     const p = h.provider();
     const code = fragmentCode(await signIn(h, p.id, person()))!;
     h.db.requests[0].expiresAt = new Date(Date.now() - 1);
-    await expect(h.sso.exchange(code, meta)).rejects.toBeInstanceOf(BadRequestException);
+    await refusal(h.sso.exchange(code, meta));
+    expect(h.sessions.create).not.toHaveBeenCalled();
+    expect(h.failures()).toHaveLength(1);
+    expect(h.failures()[0]).toMatchObject({
+      workspaceId: WS,
+      actor: 'anonymous',
+      ok: false,
+      ip: meta.ip,
+      error: 'exchange code expired',
+      params: { method: 'oidc', providerId: p.id, error: 'exchange-invalid' },
+      target: h.db.users[0].id,
+    });
   });
 
   it('a replayed state fails to /login?error=invalid-state with an audit row, and redeems no second code', async () => {
@@ -239,6 +273,8 @@ describe('OIDC sign-in', () => {
     const back = authorize(await h.sso.start(p.id, '/projects/x'), person());
     h.db.requests[0].expiresAt = new Date(Date.now() - 1);
     expect(await h.sso.callback(p.id, back, meta)).toBe(`${WEB}/login?error=invalid-state&redirect=%2Fprojects%2Fx`);
+    expect(h.failures()).toHaveLength(1);
+    expect(h.failures()[0]).toMatchObject({ workspaceId: WS, ok: false, ip: meta.ip, params: { method: 'oidc', providerId: p.id, error: 'invalid-state' } });
   });
 
   it("a state from another provider's transaction fails", async () => {

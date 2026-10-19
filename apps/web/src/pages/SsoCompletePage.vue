@@ -7,13 +7,13 @@
  * only: read the code, wipe it from the address bar (and so from history),
  * trade it for a session in a POST body, and go where the sign-in started.
  * A refused code goes to /login?error= like every other SSO failure (#291).
+ * The sequence is `completeSso` (lib/sso.ts), tested without mounting (#293).
  */
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { ApiError } from '@/lib/api'
-import { fragmentCode, ownPath, ssoErrorOf } from '@/lib/sso'
+import { completeSso } from '@/lib/sso'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 
@@ -24,23 +24,14 @@ const router = useRouter()
 const failed = ref(false)
 
 onMounted(async () => {
-  const code = fragmentCode(window.location.hash)
-  history.replaceState(history.state, '', window.location.pathname)
-  if (!code) {
-    failed.value = true
-    return
-  }
-  let returnTo: string
-  try {
-    returnTo = await auth.exchangeSsoCode(code)
-  } catch (e) {
-    // A refused code (unknown, expired, already spent) ends on /login with the
-    // category the API names, like every other SSO failure.
-    const error = (e instanceof ApiError ? ssoErrorOf(e.details?.loginError) : null) ?? 'failed'
-    await router.replace(`/login?error=${error}`)
-    return
-  }
-  await router.replace(ownPath(returnTo))
+  const outcome = await completeSso({
+    hash: window.location.hash,
+    pathname: window.location.pathname,
+    replaceUrl: (url) => history.replaceState(history.state, '', url),
+    exchange: (code) => auth.exchangeSsoCode(code),
+    navigate: (path) => router.replace(path),
+  })
+  failed.value = outcome === 'no-code'
 })
 </script>
 

@@ -82,6 +82,8 @@ watch(
   { deep: true },
 )
 
+const hasCommunities = computed(() => props.nodes.some((n) => !!n.community))
+
 const summary = computed(() =>
   [
     t('graph.countNodes', { n: stats.value.nodes }, stats.value.nodes),
@@ -116,6 +118,7 @@ const summary = computed(() =>
           :orphans="stats.orphans"
           :show-entity-controls="showEntityControls"
           :time="time"
+          :has-communities="hasCommunities"
           class="max-h-full overflow-y-auto"
         />
         <div class="pointer-events-auto"><slot name="actions" /></div>

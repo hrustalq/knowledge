@@ -83,6 +83,9 @@ export const READ_TOOL_NAMES = new Set([
   // reading one changes nothing, so it batches with the other reads.
   'list_templates',
   'get_template',
+  // Community summaries for broad questions (#81). Reads the graph's
+  // communities; changes nothing.
+  'global_overview',
 ]);
 
 /**

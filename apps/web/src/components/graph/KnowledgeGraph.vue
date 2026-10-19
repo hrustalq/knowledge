@@ -36,7 +36,7 @@ import {
   type Simulation,
 } from 'd3-force'
 import { DEFAULT_OPTIONS, project, radiusOf, type EdgeChange, type GraphEdgeInput, type GraphNodeInput, type GraphOptions } from './graph-model'
-import { entityColor, isOperationType, mix, readPalette, rgba, type GraphPalette } from './graph-theme'
+import { communityColor, entityColor, isOperationType, mix, readPalette, rgba, type GraphPalette } from './graph-theme'
 
 const props = withDefaults(
   defineProps<{
@@ -442,7 +442,9 @@ function draw() {
     const isRoot = n.id === props.rootId
     const isFocus = n.id === focusId.value
     const a = strength(n.id)
-    const base = n.kind === 'document' ? p.primary : entityColor(p, n.entityType)
+    const base = n.kind === 'document'
+      ? props.options.colorByCommunity && n.community ? communityColor(p, n.community) : p.primary
+      : entityColor(p, n.entityType)
 
     // The one glow in the system, and it marks structure: the page this graph
     // is about, or the one under the pointer.
@@ -735,7 +737,7 @@ watch(
   ].join('|'),
   () => build(),
 )
-watch([() => props.options.labelZoom, () => props.query], () => wake())
+watch([() => props.options.labelZoom, () => props.options.colorByCommunity, () => props.query], () => wake())
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(raf)

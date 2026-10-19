@@ -263,5 +263,15 @@
     "budgetSpent": "The AI budget ran out after {judged} comparisons.",
     "findingTitle": "“{a}” and “{b}” disagree",
     "summary": "Compared {judged} pairs of passages; {found} new contradictions."
+  },
+  "atlas": "Atlas",
+  "atlasDesc": "Groups related pages into communities and summarises each, so broad questions can be answered across the whole knowledge base.",
+  "charting": {
+    "disabled": "Community summaries are off on this server (COMMUNITY_SUMMARIES_ENABLED).",
+    "unchanged": "The graph has not changed since the last summaries; nothing rebuilt.",
+    "noCommunities": "No group of related pages was large enough to summarise.",
+    "noneWritten": "No community could be summarised.",
+    "budgetSpent": "The AI budget ran out after {done} summaries; the next run finishes the rest.",
+    "summary": "Summarised {n} communities covering {pages} pages."
   }
 }

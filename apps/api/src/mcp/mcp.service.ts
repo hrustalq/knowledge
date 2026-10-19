@@ -80,6 +80,7 @@ import { withAsOf } from '../graph/temporal.js';
 import { ReleaseTagsService } from '../temporal/release-tags.service.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
+import { CommunitiesService } from '../communities/communities.service.js';
 import { CONFLICT_STATUSES, RELEASE_TAG_NAME_PATTERN } from '@knowledge/contracts';
 
 /**
@@ -202,6 +203,7 @@ export class McpService {
     private readonly temporal: TemporalResolverService,
     private readonly releaseTags: ReleaseTagsService,
     private readonly conflicts: ConflictsService,
+    private readonly communities: CommunitiesService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -1452,6 +1454,26 @@ export class McpService {
       async ({ workspaceId, status, documentId }) => {
         await guard.ws(workspaceId, 'viewer');
         return this.json({ conflicts: await this.conflicts.list(await guard.scope(workspaceId), { status, documentId }) });
+      },
+    );
+
+    // Broad questions (#81, phase 7): the twin of GET /v1/graph/communities.
+    server.registerTool(
+      'knowledge_global_overview',
+      {
+        description:
+          'For a broad question across the whole knowledge base ("what are our main risks?"): the communities of ' +
+          'related pages closest to it, each with an agent-written summary and its pages. Read the pages before ' +
+          'relying on a detail; cite pages, not summaries. Empty until the atlas agent has built communities.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          question: z.string().min(1).max(2000),
+          limit: z.number().int().min(1).max(20).optional(),
+        },
+      },
+      async ({ workspaceId, question, limit }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json({ communities: await this.communities.overview(await guard.scope(workspaceId), question, limit ?? 5) });
       },
     );
 

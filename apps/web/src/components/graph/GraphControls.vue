@@ -31,6 +31,8 @@ const props = defineProps<{
   showEntityControls?: boolean
   /** #81: the surface's time state; absent where the graph has no time strip. */
   time?: GraphTime | null
+  /** #81: some page carries a community, so colouring by one means something. */
+  hasCommunities?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -132,6 +134,10 @@ const inPast = computed(() => !!props.time?.point.value)
         <svg width="18" height="4" class="shrink-0 text-muted-foreground" aria-hidden="true">
           <line x1="0" y1="2" x2="18" y2="2" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2.5 3" />
         </svg>
+      </label>
+      <label v-if="hasCommunities" class="flex cursor-pointer items-center gap-2 text-xs">
+        <Checkbox :model-value="options.colorByCommunity" @update:model-value="set('colorByCommunity', !!$event)" />
+        <span class="flex-1">{{ t('graph.colorByCommunity') }}</span>
       </label>
       <p v-if="!options.showEntities" class="pt-0.5 text-[0.68rem] leading-snug text-muted-foreground">
         {{ t('graph.derivedLinksNote') }}

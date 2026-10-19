@@ -1,4 +1,5 @@
 import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
+import { CommunitiesCoreModule } from '../communities/communities-core.module.js';
 import { Module } from '@nestjs/common';
 import { TemporalCoreModule } from '../temporal/temporal-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
@@ -44,6 +45,8 @@ import { LintCoreModule } from './lint/lint-core.module.js';
     TemporalCoreModule,
     // A merge resolves the conflicts it was proposed to fix (#81).
     ConflictsCoreModule,
+    // Community colouring on the workspace graph (#81).
+    CommunitiesCoreModule,
     ActivityModule,
     StorageModule,
     GraphModule,

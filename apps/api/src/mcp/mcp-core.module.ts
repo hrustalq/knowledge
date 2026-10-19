@@ -30,6 +30,7 @@ import { StyleLintModule } from '../assistant/style-lint.module.js';
 import { QualityCoreModule } from '../quality/quality-core.module.js';
 import { TemporalCoreModule } from '../temporal/temporal-core.module.js';
 import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
+import { CommunitiesCoreModule } from '../communities/communities-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -98,6 +99,8 @@ import { McpService } from './mcp.service.js';
     TemporalCoreModule,
     // knowledge_list_conflicts / knowledge_resolve_conflict (#81). Controller-free.
     ConflictsCoreModule,
+    // knowledge_global_overview (#81). Controller-free.
+    CommunitiesCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

@@ -10,6 +10,7 @@ import { SearchService } from '../search/search.service.js';
 import { readFrontmatterRelations, readFrontmatterTags } from '../common/relations.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { TemplatesService } from '../templates/templates.service.js';
+import { CommunitiesService } from '../communities/communities.service.js';
 import { READ_TOOL_NAMES } from './assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 
@@ -56,6 +57,7 @@ export class AssistantReadToolsService {
     private readonly documents: DocumentsService,
     private readonly templates: TemplatesService,
     private readonly permissions: PermissionService,
+    private readonly communities: CommunitiesService,
   ) {}
 
   /**
@@ -119,6 +121,25 @@ export class AssistantReadToolsService {
               limit: { type: 'integer', minimum: 1, maximum: 10, description: 'Max results (default 5)' },
             },
             required: ['query'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'global_overview',
+          description:
+            'For a broad question about the whole knowledge base ("what are our main risks?", "what do we know ' +
+            'about payments?"): the communities of related pages closest to it, each with a summary of what its ' +
+            'pages cover and the pages themselves (each with a `cite` label). Summaries are written by an agent ' +
+            'from the pages — read the pages before relying on a detail. Empty when communities have not been built.',
+          parameters: {
+            type: 'object',
+            properties: {
+              question: { type: 'string', description: 'The broad question, in natural language' },
+              limit: { type: 'integer', minimum: 1, maximum: 8, description: 'Max communities (default 4)' },
+            },
+            required: ['question'],
           },
         },
       },
@@ -245,6 +266,8 @@ export class AssistantReadToolsService {
           return await this.listTemplates(args, ctx);
         case 'get_template':
           return await this.getTemplate(args, ctx);
+        case 'global_overview':
+          return await this.globalOverview(args, ctx);
         default:
           return this.fail(`Unknown tool ${name}`);
       }
@@ -347,6 +370,35 @@ export class AssistantReadToolsService {
       ok: true,
       sources,
     };
+  }
+
+  /**
+   * #81 phase 7: the communities closest to a broad question, under the
+   * caller's scope (a community with a page they may not open is withheld
+   * whole). Summaries are agent-written from page content, so they travel
+   * wrapped untrusted; each member page is a citable source.
+   */
+  private async globalOverview(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
+    const question = String(args.question ?? '').slice(0, 2_000).trim();
+    if (!question) return this.fail('question is required');
+    const limit = Math.min(Math.max(Math.floor(Number(args.limit)) || 4, 1), 8);
+    const communities = await this.communities.overview(await this.scopeOf(ctx), question, limit);
+    const sources: AssistantAskSource[] = [];
+    const seen = new Map<string, AssistantAskSource>();
+    const results = communities.map((c) => ({
+      title: c.title,
+      summary: wrapUntrusted(c.summary, 'global_overview', 'page'),
+      pages: c.documents.map((d) => {
+        let source = seen.get(d.documentId);
+        if (!source) {
+          source = { documentId: d.documentId, title: d.title, snippet: c.summary.slice(0, 300), factClass: 'inferred' };
+          seen.set(d.documentId, source);
+          sources.push(source);
+        }
+        return { documentId: d.documentId, title: d.title, ...this.citeOf(ctx, source) };
+      }),
+    }));
+    return { content: JSON.stringify({ communities: results }), ok: true, sources };
   }
 
   /**

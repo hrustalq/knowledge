@@ -270,6 +270,9 @@ Each of these, ${toolRef('knowledge_get_workspace_graph')} and ${toolRef('knowle
 \`tag:<name>\` — to answer as the knowledge base stood then: a fact a page later dropped shows, one added since does
 not. ${toolRef('knowledge_list_release_tags')} names the instants worth asking about.
 
+For a broad question across everything ("what are our main risks?"), ${toolRef('knowledge_global_overview')}
+returns the communities of related pages closest to it, each with a summary. Read and cite the pages it names.
+
 ### Repositories
 
 A codebase connector documents a repository from its code. ${toolRef('knowledge_list_connectors')} names them;

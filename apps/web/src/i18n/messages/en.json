@@ -1660,7 +1660,8 @@
       "legendAdded": "Added since",
       "pickPoint": "Pick a point on the timeline to compare it with now.",
       "nowHint": "Now — drag left to read the past"
-    }
+    },
+    "colorByCommunity": "Colour pages by community"
   },
   "revisions": {
     "allBranches": "all branches",
@@ -2237,7 +2238,8 @@
       "chat-capture": "Saved from chat",
       "component-draft": "Component draft",
       "lint": "Lint",
-      "contradiction": "Contradiction check"
+      "contradiction": "Contradiction check",
+      "community": "Community summary"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",

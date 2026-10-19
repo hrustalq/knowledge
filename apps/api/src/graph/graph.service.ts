@@ -237,6 +237,9 @@ export class GraphService {
       'CREATE VERTEX TYPE DocumentRevision IF NOT EXISTS',
       'CREATE VERTEX TYPE Chunk IF NOT EXISTS',
       'CREATE VERTEX TYPE Entity IF NOT EXISTS',
+      // #81 phase 7: a community of pages with its summary. Structural, not a
+      // relation: never in RELATION_EDGE_TYPES, never walked by traversal.
+      'CREATE VERTEX TYPE Community IF NOT EXISTS',
       'CREATE EDGE TYPE HAS_REVISION IF NOT EXISTS',
       'CREATE EDGE TYPE HAS_CHUNK IF NOT EXISTS',
       ...RELATION_EDGE_TYPES.map((t) => `CREATE EDGE TYPE ${t} IF NOT EXISTS`),
@@ -251,6 +254,8 @@ export class GraphService {
       'CREATE INDEX IF NOT EXISTS ON Chunk (chunkId) UNIQUE',
       'CREATE INDEX IF NOT EXISTS ON Chunk (workspaceId) NOTUNIQUE',
       'CREATE INDEX IF NOT EXISTS ON Entity (workspaceId, entityKey) UNIQUE',
+      'CREATE PROPERTY Community.workspaceId IF NOT EXISTS STRING',
+      'CREATE INDEX IF NOT EXISTS ON Community (workspaceId) NOTUNIQUE',
     ];
     for (const s of statements) {
       try {
@@ -1128,6 +1133,70 @@ export class GraphService {
           .map((e) => [e.entityKey, { type: e.entityType, name: e.name }]),
       ),
     };
+  }
+
+  /**
+   * Replace a workspace's communities (#81, phase 7): the summaries the atlas
+   * agent wrote, each with its member pages and its summary's embedding. Whole
+   * replace, like the code edges — a rebuild is a new answer, not an edit.
+   * `fingerprint` is the projection they were built from, so an unchanged
+   * graph can skip the next rebuild.
+   */
+  async replaceCommunities(
+    workspaceId: string,
+    communities: ReadonlyArray<{ communityId: string; title: string; summary: string; members: string[]; embedding: number[] }>,
+    fingerprint: string,
+  ): Promise<void> {
+    await this.arcade.command('sql', 'DELETE FROM Community WHERE workspaceId = :workspaceId', { workspaceId }).catch(() => {
+      /* the type may hold no rows yet */
+    });
+    const builtAt = Date.now();
+    for (const c of communities) {
+      await this.arcade.command(
+        'sql',
+        'CREATE VERTEX Community SET workspaceId = :workspaceId, communityId = :communityId, title = :title, summary = :summary, members = :members, embedding = :embedding, fingerprint = :fingerprint, builtAt = :builtAt',
+        { workspaceId, ...c, fingerprint, builtAt },
+      );
+    }
+  }
+
+  /** The fingerprint the stored communities were built from, or null when there are none. */
+  async communityFingerprint(workspaceId: string): Promise<string | null> {
+    const rows = await this.arcade
+      .query<{ fingerprint: string }>('sql', 'SELECT fingerprint FROM Community WHERE workspaceId = :workspaceId LIMIT 1', { workspaceId })
+      .catch(() => []);
+    return rows[0]?.fingerprint ?? null;
+  }
+
+  /**
+   * Communities, closest to `queryEmbedding` first (or as stored without
+   * one). Vectors stay here; callers get the score. `admit` drops a community
+   * any of whose pages the reader may not open — its summary was written from
+   * all of them (#76).
+   */
+  async communities(
+    workspaceId: string,
+    admit: (members: readonly string[]) => boolean,
+    queryEmbedding?: number[],
+  ): Promise<Array<{ communityId: string; title: string; summary: string; members: string[]; builtAt: number; score: number }>> {
+    const rows = await this.arcade
+      .query<{ communityId: string; title: string; summary: string; members: string[]; embedding: number[]; builtAt: number }>(
+        'sql',
+        'SELECT communityId, title, summary, members, embedding, builtAt FROM Community WHERE workspaceId = :workspaceId LIMIT 1000',
+        { workspaceId },
+      )
+      .catch(() => []);
+    return rows
+      .filter((r) => admit(r.members ?? []))
+      .map((r) => ({
+        communityId: r.communityId,
+        title: r.title,
+        summary: r.summary,
+        members: r.members ?? [],
+        builtAt: r.builtAt,
+        score: queryEmbedding && Array.isArray(r.embedding) && r.embedding.length === queryEmbedding.length ? cosine(queryEmbedding, r.embedding) : 0,
+      }))
+      .sort((a, b) => b.score - a.score);
   }
 
   /**

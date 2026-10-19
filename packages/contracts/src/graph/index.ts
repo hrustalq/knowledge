@@ -372,3 +372,23 @@ export interface KnowledgeConflictDto {
 export interface ListConflictsResponse {
   conflicts: KnowledgeConflictDto[];
 }
+
+// ---------------------------------------------------------------------------
+// Communities (#81, phase 7)
+
+/** One community of pages and what they are about, for global questions. */
+export interface CommunitySummaryDto {
+  communityId: string;
+  title: string;
+  /** Written by the atlas agent from the member pages; a summary, not a source. */
+  summary: string;
+  documents: Array<{ documentId: string; title: string }>;
+  builtAt: string;
+  /** Closeness to the question asked, 0..1; 0 when none was. */
+  score: number;
+}
+
+// GET /v1/graph/communities?workspaceId=&q=&limit=
+export interface ListCommunitiesResponse {
+  communities: CommunitySummaryDto[];
+}

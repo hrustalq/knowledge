@@ -530,6 +530,8 @@ export interface WorkspaceGraphNode {
   status?: RevisionStatus | null;
   /** Incident edge count, after filtering. */
   degree: number;
+  /** Documents only: the community the page belongs to, when the atlas has built them (#81). */
+  community?: string;
 }
 export interface WorkspaceGraphResponse {
   workspaceId: string;

@@ -327,10 +327,14 @@ export type I18nTranslations = {
             "title": string;
             "intro": string;
             "introAssistant": string;
+            "introChat": string;
             "amends": string;
             "newPage": string;
             "similar": string;
             "rationale": string;
+        };
+        "origin": {
+            "directMessage": string;
         };
     };
     "chat": {
@@ -391,22 +395,24 @@ export type I18nTranslations = {
             "asPage": string;
             "asTerm": string;
             "forbidden": string;
-            "draftingPage": string;
+            "savingAnswer": string;
             "draftingTerm": string;
-            "pageReady": string;
-            "termReady": string;
+            "proposed": string;
+            "termQueued": string;
+            "duplicate": string;
             "openMergeRequest": string;
-            "openGlossary": string;
-            "alreadySaved": string;
-            "inProgress": string;
+            "openCaptures": string;
+            "openPage": string;
+            "noPages": string;
+            "unreadable": string;
+            "secret": string;
+            "rateLimited": string;
+            "capturesOff": string;
             "noTerm": string;
             "nothing": string;
             "noProject": string;
             "disabled": string;
             "failed": string;
-            "timeout": string;
-            "untitled": string;
-            "mrDescription": string;
         };
         "updates": {
             "kind": {

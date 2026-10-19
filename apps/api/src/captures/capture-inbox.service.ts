@@ -10,7 +10,9 @@ import {
   type BulkRejectCapturesResponse,
   type CaptureApiKey,
   type CaptureInfo,
+  type CaptureOrigin,
   type CaptureResult,
+  type CaptureSession,
   type CaptureStatus,
   type GlossaryCapturePayload,
 } from '@knowledge/contracts';
@@ -286,6 +288,8 @@ export class CaptureInboxService {
     messageId: string,
     body: { projectId?: string; title?: string },
     principal: Principal,
+    /** A chat bot's Save (#82): the chat as the session, and where in it the answer was posted. */
+    from: { session?: CaptureSession; origin?: CaptureOrigin } = {},
   ): Promise<CaptureResult> {
     const message = await this.prisma.assistantMessage.findUnique({
       where: { id: messageId },
@@ -313,9 +317,10 @@ export class CaptureInboxService {
         question: (question?.content ?? '').trim() || message.content.slice(0, 200),
         answer: stripCiteLabels(message.content),
         citedDocumentIds: cited,
-        session: { client: 'assistant', sessionId: message.thread.id },
+        session: from.session ?? { client: 'assistant', sessionId: message.thread.id },
       },
       principal,
+      from.origin ? { origin: from.origin } : {},
     );
   }
 

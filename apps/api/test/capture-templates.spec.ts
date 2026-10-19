@@ -5,9 +5,11 @@ import {
   appendCaptureSection,
   CAPTURE_HEADING_KEYS,
   capturedEntry,
+  describeOrigin,
   describeSession,
   renderCaptureBody,
   withCapturedEntry,
+  withOriginSource,
   type CaptureHeadings,
 } from '../src/captures/capture-templates.js';
 import { composeFrontmatter, parseMarkdown } from '../src/common/frontmatter.js';
@@ -117,5 +119,22 @@ describe('describeSession', () => {
       'claude-code · acme/kb@0123456789ab · (feat/x)',
     );
     expect(describeSession({ client: 'other' })).toBe('other');
+  });
+});
+
+describe('a chat origin (#82)', () => {
+  const origin = { platform: 'time', chatTitle: 'Platform', threadUrl: 'https://time.test/t/pl/p1', from: '2026-10-19T10:00:00.000Z', to: '2026-10-19T10:05:00.000Z' };
+
+  it('reads as the product, the chat and the thread link; a DM by the word it is given', () => {
+    expect(describeOrigin(origin, 'dm')).toBe('Time · Platform · https://time.test/t/pl/p1');
+    expect(describeOrigin({ ...origin, platform: 'telegram', chatTitle: null, threadUrl: undefined }, 'dm')).toBe('Telegram · dm');
+  });
+
+  it('is appended to sources: in frontmatter that round-trips, and changes nothing without one', () => {
+    const data = { title: 'Deploy', sources: 'by hand' };
+    expect(withOriginSource(data, null)).toBe(data);
+    const next = withOriginSource(data, origin);
+    expect(next.sources).toEqual(['by hand', origin]);
+    expect(parseMarkdown(composeFrontmatter('Body', next)).data.sources).toEqual(['by hand', origin]);
   });
 });

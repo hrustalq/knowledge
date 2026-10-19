@@ -1070,6 +1070,9 @@ model KnowledgeCapture {
   contentHash      String    @map("content_hash")
   /// CaptureSession: client, sessionId, repo, branch, commit, files (paths only).
   session          Json
+  /// CaptureOrigin of a chat capture (#82): platform, chat, thread link, span.
+  /// Server-set from the delivery, never from a caller or a model.
+  origin           Json?
   /// Top dedupe hits [{ documentId, title, score }], kept for the reviewer.
   similar          Json      @default("[]")
   targetDocumentId String?   @map("target_document_id") @db.Uuid
@@ -3212,7 +3215,6 @@ model ChatAnswer {
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   integration ChatIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  captures    ChatCapture[]
 
   @@unique([integrationId, externalChatId, inboundMessageId])
   @@index([status, createdAt])
@@ -3220,42 +3222,6 @@ model ChatAnswer {
   @@index([integrationId, externalChatId, replyMessageId])
   @@index([integrationId, externalChatId, threadId])
   @@map("chat_answers")
-}
-
-/// A chat conversation saved as a page draft behind a merge request, or as a
-/// proposed glossary term (issue #71, phase 2). Drafted and published in one
-/// API-side continuation, as the person who pressed Save; the pending row is
-/// the claim, and the chat sweeper fails what a restart strands.
-model ChatCapture {
-  id             String   @id @default(uuid()) @db.Uuid
-  workspaceId    String   @map("workspace_id") @db.Uuid
-  /// The answer whose Save was pressed: the conversation up to it is what is saved.
-  answerId       String   @map("answer_id") @db.Uuid
-  /// CHAT_CAPTURE_KINDS — 'page' | 'glossary-term'.
-  kind           String
-  /// CHAT_CAPTURE_STATUSES — 'pending' | 'published' | 'failed'.
-  status         String   @default("pending")
-  requestedBy    String   @map("requested_by") @db.Uuid
-  /// The bot's "Drafting…" message, edited into the result.
-  replyMessageId String?  @map("reply_message_id")
-  /// Reply language, frozen at the claim so the sweeper can still use it.
-  locale         String   @default("en")
-  /// The page title or the term, once published.
-  title          String?
-  documentId     String?  @map("document_id") @db.Uuid
-  mergeRequestId String?  @map("merge_request_id") @db.Uuid
-  glossaryTermId String?  @map("glossary_term_id") @db.Uuid
-  error          String?
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-
-  answer ChatAnswer @relation(fields: [answerId], references: [id], onDelete: Cascade)
-
-  // One page and one term per answer: a double press is one capture. A failed
-  // one is claimed again in place, by a guarded update.
-  @@unique([answerId, kind])
-  @@index([status, createdAt])
-  @@map("chat_captures")
 }
 
 /// The operations and channels of one spec revision (#78): a projection of the

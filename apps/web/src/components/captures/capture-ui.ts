@@ -9,7 +9,8 @@ import {
   Signpost,
   Waypoints,
 } from 'lucide-vue-next'
-import type { CaptureClient, CaptureInfo, CaptureKind, CaptureSession, CaptureStatus } from '@knowledge/contracts'
+import { CHAT_PLATFORM_NAMES } from '@knowledge/contracts'
+import type { CaptureClient, CaptureInfo, CaptureKind, CaptureSession, CaptureStatus, ChatPlatformKind } from '@knowledge/contracts'
 
 /**
  * The captures inbox's vocabulary (issue #73), shared by the inbox rows, the
@@ -54,9 +55,15 @@ const CLIENT_NAMES: Partial<Record<CaptureClient, string>> = {
   gemini: 'Gemini',
 }
 
-/** A client name, or the message key for the two that are words rather than products. */
+/** A client name, or the message key for the ones that are words rather than products. */
 export function clientLabel(client: string, t: (key: string) => string): string {
-  return CLIENT_NAMES[client as CaptureClient] ?? t(`captures.client.${client === 'assistant' ? 'assistant' : 'other'}`)
+  const word = client === 'assistant' || client === 'chat' ? client : 'other'
+  return CLIENT_NAMES[client as CaptureClient] ?? t(`captures.client.${word}`)
+}
+
+/** A chat platform's product name (#82). */
+export function platformName(platform: string): string {
+  return CHAT_PLATFORM_NAMES[platform as ChatPlatformKind] ?? platform
 }
 
 /** A commit as people quote one: the first seven characters. */

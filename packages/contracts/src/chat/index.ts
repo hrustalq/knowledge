@@ -13,6 +13,8 @@ import type { Locale } from '@knowledge/contracts/core';
  */
 export const CHAT_PLATFORM_KINDS = ['telegram', 'time'] as const;
 export type ChatPlatformKind = (typeof CHAT_PLATFORM_KINDS)[number];
+/** Product names, never translated. */
+export const CHAT_PLATFORM_NAMES: Record<ChatPlatformKind, string> = { telegram: 'Telegram', time: 'Time' };
 
 /**
  * Platforms each customer hosts, so a bot is saved with its server's URL
@@ -38,18 +40,12 @@ export const CHAT_ANSWER_STATUSES = ['pending', 'answered', 'failed'] as const;
 export type ChatAnswerStatus = (typeof CHAT_ANSWER_STATUSES)[number];
 
 /**
- * What a conversation can be saved as (phase 2): a page draft behind a merge
- * request, or a glossary term proposed switched off.
+ * What Save on a bot answer makes (phase 2; #82 moved both onto agent memory):
+ * an `answer` capture citing the answer's pages, or a `glossary` capture the
+ * glossarist proposes from the conversation.
  */
 export const CHAT_CAPTURE_KINDS = ['page', 'glossary-term'] as const;
 export type ChatCaptureKind = (typeof CHAT_CAPTURE_KINDS)[number];
-
-/**
- * A capture is drafted and published in one continuation, so there is no
- * "drafted" stage between the two to promise.
- */
-export const CHAT_CAPTURE_STATUSES = ['pending', 'published', 'failed'] as const;
-export type ChatCaptureStatus = (typeof CHAT_CAPTURE_STATUSES)[number];
 
 /**
  * What a bound group can be told about (phase 3). Only titles and links ever

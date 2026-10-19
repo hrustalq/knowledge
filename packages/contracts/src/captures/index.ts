@@ -31,9 +31,11 @@ export type CaptureOutcome = (typeof CAPTURE_OUTCOMES)[number];
 /**
  * The coding agent that wrote the capture, as it says. `other` rather than free
  * text, so the inbox can filter on it. `assistant` is the app's own chat pane
- * ("Save to knowledge base" on a reply), where there is no session to report.
+ * ("Save to knowledge base" on a reply), where there is no session to report;
+ * `chat` a chat bot's Save or a harvested thread (#82), which carries an
+ * {@link CaptureOrigin} instead.
  */
-export const CAPTURE_CLIENTS = ['claude-code', 'cursor', 'codex', 'gemini', 'assistant', 'other'] as const;
+export const CAPTURE_CLIENTS = ['claude-code', 'cursor', 'codex', 'gemini', 'assistant', 'chat', 'other'] as const;
 export type CaptureClient = (typeof CAPTURE_CLIENTS)[number];
 
 /** `session.files` is paths only, and at most this many. */
@@ -54,6 +56,23 @@ export interface CaptureSession {
   /** Repository paths the session touched; never their contents. */
   files?: string[];
   startedAt?: string;
+}
+
+/**
+ * The conversation a chat capture came from (#82). Set by the server from the
+ * chat delivery — never by a caller and never by a model — so, unlike
+ * {@link CaptureSession}, it is a fact rather than a report.
+ */
+export interface CaptureOrigin {
+  /** CHAT_PLATFORM_KINDS. */
+  platform: string;
+  /** The group's title; null in a direct message. */
+  chatTitle: string | null;
+  /** A link to the thread, where the platform has one. */
+  threadUrl?: string;
+  /** The span of the messages it was taken from, ISO-8601. */
+  from: string;
+  to: string;
 }
 
 /**
@@ -204,6 +223,8 @@ export interface CaptureInfo extends CaptureResult {
   /** Read alongside `kind`: a staged term has no merge request to show its definition, so the inbox shows this. */
   payload: CapturePayload;
   session: CaptureSession;
+  /** Where in a chat it came from; null for everything but `client: 'chat'`. */
+  origin: CaptureOrigin | null;
   createdBy: string;
   apiKeyId: string | null;
   /** Null for a capture written from a sign-in session, or by a key since deleted with its owner. */

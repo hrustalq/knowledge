@@ -409,6 +409,12 @@ in the pull request that introduces them — see
   hear the visible text first, then what the control is for. The "more ways to
   start a page" chevron next to `+` in the sidebar is now 24 px wide instead of
   14 px, so it is easier to hit.
+- Changing the role of a member whose membership source is missing or not one
+  of `manual`, `jit`, `group`, `scim` no longer fails with 409 "managed by
+  single sign-on (manual)" (#295). The members list already shows such a row
+  as manual, and editing it now treats it as manual too. Every row the
+  current release writes has a known source, so this only affects data
+  written some other way.
 
 ### Operations
 

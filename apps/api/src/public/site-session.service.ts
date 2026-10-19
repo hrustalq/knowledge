@@ -6,7 +6,7 @@ import { decryptSecret, parseKey } from '../ai/secret-box.js';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublicStore } from './public-store.js';
-import { readCookie } from './share-unlock.service.js';
+import { readCookie } from '../common/cookies.js';
 
 const SESSION_PREFIX = 'kn:site-session:';
 const CODE_PREFIX = 'kn:site-code:';

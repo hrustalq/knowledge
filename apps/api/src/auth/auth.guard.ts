@@ -1,6 +1,7 @@
 import { ForbiddenException, HttpStatus, Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PUBLIC_META, QUERY_TOKEN_OK_META, UNVERIFIED_OK_META } from './access.decorator.js';
+import { COOKIE_TOKEN_OK_META, PUBLIC_META, QUERY_TOKEN_OK_META, UNVERIFIED_OK_META } from './access.decorator.js';
+import { readCookie } from '../common/cookies.js';
 import { t } from '../i18n/t.js';
 import { TokenAuthService } from './token-auth.service.js';
 import { bindTrace } from '@knowledge/observability';
@@ -15,6 +16,9 @@ import { bindTrace } from '@knowledge/observability';
  * failures are AclGuard's job → 403. Resolution itself lives in
  * TokenAuthService (shared with the live WebSocket gateway).
  */
+/** The cookie the web mirrors its session token into (apps/web/src/lib/api.ts). */
+const SESSION_COOKIE = 'kn_token';
+
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -31,21 +35,26 @@ export class AuthGuard implements CanActivate {
     const header: string | undefined = req.headers['authorization'];
     const bearer = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : undefined;
     // EventSource and <img> cannot set headers, so the routes they call opt in
-    // to ?token= with @QueryTokenOk (#102). Anywhere else the query token is
-    // ignored as if absent: the request is unauthenticated, not quietly let in.
-    const queryTokenOk = this.reflector.getAllAndOverride<boolean>(QUERY_TOKEN_OK_META, [
-      ctx.getHandler(),
-      ctx.getClass(),
-    ]);
+    // to a URL ticket (@QueryTokenOk) or the web's session cookie
+    // (@CookieTokenOk) (#102). Anywhere else both are ignored as if absent:
+    // the request is unauthenticated, not quietly let in.
+    const opted = (meta: string) =>
+      this.reflector.getAllAndOverride<boolean>(meta, [ctx.getHandler(), ctx.getClass()]) === true;
     const queryToken =
-      queryTokenOk && typeof req.query?.token === 'string' && req.query.token ? req.query.token : undefined;
+      opted(QUERY_TOKEN_OK_META) && typeof req.query?.token === 'string' && req.query.token
+        ? req.query.token
+        : undefined;
+    const cookieToken = opted(COOKIE_TOKEN_OK_META) ? readCookie(req.headers.cookie, SESSION_COOKIE) : null;
 
-    // A header always wins; a query token goes through the narrower URL rules
-    // (single-use kt_ tickets, ks_ sessions; never a long-lived kn_ key).
-    req.principal =
-      !bearer && queryToken
-        ? await this.tokenAuth.resolveQueryToken(queryToken)
-        : await this.tokenAuth.resolve(bearer);
+    // A header always wins; the others go through their narrower rules
+    // (a query token is a single-use kt_ ticket, a cookie a ks_ session).
+    req.principal = bearer
+      ? await this.tokenAuth.resolve(bearer)
+      : queryToken
+        ? await this.tokenAuth.resolveTicket(queryToken)
+        : cookieToken
+          ? await this.tokenAuth.resolveSessionCookie(cookieToken)
+          : await this.tokenAuth.resolve(undefined);
     // Every record emitted downstream carries the caller, without a single
     // service having to accept a userId argument purely to log it.
     bindTrace({ userId: req.principal.userId });

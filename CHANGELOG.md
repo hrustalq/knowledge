@@ -15,6 +15,22 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Breaking
+
+- `HTTP`: a session token (`ks_…`) in `?token=` is now refused with 401, as an
+  API key already was. `?token=` takes only a single-use `kt_` ticket, and only
+  on `GET /v1/events`. The attachment, import-image and avatar redirects no
+  longer read `?token=` at all. (#102)
+  **Migration:** send `Authorization: Bearer <token>`. For the event stream,
+  trade the token for a ticket first with `POST /v1/auth/url-ticket`.
+
+### Security
+
+- Attachment, import-image and avatar URLs in the web app no longer carry your
+  session token. Those `<img>` and `<object>` requests now authenticate with the
+  app's own session cookie, so the token can no longer end up in a proxy log,
+  browser history or a pasted image link. (#102)
+
 ### Added
 
 - MCP agents can work in a page's shared draft (#316). Over the HTTP MCP
@@ -357,6 +373,11 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- The web app's images and file previews now depend on the browser calling the
+  API on the web's own origin under `/api`, which the bundled Caddy config and
+  the Vite dev proxy both do. A deployment that points `VITE_API_URL` at a
+  different origin will see every attachment and avatar fail with 401, because
+  the browser does not send the `kn_token` cookie there. (#102)
 - Migration `20261118100000_chat_listening_buffer` adds
   `chat_channel_bindings.listening` (default `false`) and the
   `chat_buffered_messages` table. It is additive and survives a code

@@ -16,7 +16,7 @@ import type {
   ImportJobResponse,
   SubmitImportResponse,
 } from '@knowledge/contracts';
-import { Access, CurrentPrincipal, QueryTokenOk } from '../auth/access.decorator.js';
+import { Access, CookieTokenOk, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { CreateImportDto, SubmitImportDto } from './dto/imports.dto.js';
 import { ImportService } from './import.service.js';
@@ -69,11 +69,11 @@ export class ImportController {
    * Images the parser lifted out of the source, served exactly like page
    * attachments are: authorize here, then redirect to a short-lived presigned
    * URL rather than streaming bytes through Node. `<img>` cannot send an
-   * Authorization header, which is why this route opts in to `?token=`.
+   * Authorization header, which is why this route opts in to the session cookie.
    */
   @Get(':id/images/:index')
   @Access('viewer', 'import')
-  @QueryTokenOk() // <img> cannot set headers
+  @CookieTokenOk() // <img> cannot set headers
   @Redirect(undefined, 302)
   @ApiExcludeEndpoint() // binary redirect; not useful in the generated client
   async image(

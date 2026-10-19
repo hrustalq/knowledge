@@ -15,7 +15,7 @@
  *   reference to a page the link reaches becomes a reader URL; anything else
  *   internal is unlinked, because nothing behind the app's login is reachable
  *   from here. Attachments go through the public attachment route, never
- *   `resolveAssetUrl` (which appends a member's credential).
+ *   `resolveAssetUrl` (whose routes authenticate a member by session cookie).
  * - Glossary linking and page-title references are off: both need the
  *   workspace's roster, which is exactly what a reader must not learn.
  *

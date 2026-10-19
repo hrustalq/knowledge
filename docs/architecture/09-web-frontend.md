@@ -208,10 +208,14 @@ the same rule, and both attach `Authorization`, `Accept-Language` and
 `resolveAssetUrl()` is the exception that proves the rule: attachment and avatar
 links are stored in markdown as bare `/v1/...` paths with no host and no
 credential, so the same document renders correctly through the dev proxy, in
-production, and in anything else reading the markdown. The environment prefix
-and a `?token=` are added at render time, because `<img>` and `<object>` cannot
-send an `Authorization` header — the same reason SSE accepts a query token
-([08-events-live.md](08-events-live.md), [06-auth-acl.md](06-auth-acl.md)).
+production, and in anything else reading the markdown. Only the environment
+prefix is added at render time. `<img>` and `<object>` cannot send an
+`Authorization` header, so those routes authenticate from the `kn_token` session
+cookie instead, never a token in the URL (#102, [06-auth-acl.md](06-auth-acl.md)).
+That holds only while the API is same-origin under `/api`; a cross-origin
+`VITE_API_URL` would 401 every attachment and avatar. The client re-writes the
+cookie from `localStorage` on every load, so its 30-day max-age cannot lapse
+under a live session.
 
 ## Language, resolved twice the same way
 

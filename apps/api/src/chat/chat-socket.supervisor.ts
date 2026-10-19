@@ -59,7 +59,8 @@ interface Connection {
 /**
  * The second inbound path (issue #71, phase 4): Time delivers a bot's messages
  * over the bot's own websocket rather than to a webhook, so the API holds one
- * open socket per enabled Time bot and hands each `posted` event to
+ * open socket per enabled Time bot and hands each `posted` event (and each
+ * 📌 `reaction_added`, #82) to
  * {@link ChatAnswersService.receive} exactly as the webhook hands a Telegram
  * update — the same claim, the same refusals, the same reaper.
  *
@@ -253,10 +254,14 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
       await this.setStatus(conn, null);
       return;
     }
-    if (frame.event !== 'posted') return;
+    if (frame.event !== 'posted' && frame.event !== 'reaction_added') return;
     const inbound = this.registry.time.parseInbound({ headers: {}, body: raw }, conn.row.botUsername);
     if (!inbound.length) return;
-    if (!(await this.claim(`${conn.row.id}:${inbound[0].messageId}`))) return;
+    // A pin is claimed apart from its post, per person: the same person pinning
+    // again within the claim's hour is the same request.
+    const [first] = inbound;
+    const key = first.harvestReaction ? `${first.messageId}:pin:${first.externalUserId}` : first.messageId;
+    if (!(await this.claim(`${conn.row.id}:${key}`))) return;
     for (const message of inbound) await this.answers.receive(conn.row, message);
   }
 

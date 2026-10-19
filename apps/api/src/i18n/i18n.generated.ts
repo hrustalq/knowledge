@@ -465,6 +465,12 @@ export type I18nTranslations = {
                 "few": string;
                 "many": string;
             };
+            "reactionNotKept": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
         };
         "forget": {
             "done": {

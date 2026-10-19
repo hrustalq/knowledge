@@ -546,3 +546,69 @@ describe('capture and fetchThread (#82)', () => {
     expect(thread.url).toBeNull();
   });
 });
+
+/** A `reaction_added` event as the websocket delivers it: the Reaction as a JSON string. */
+function reacted(reaction: Record<string, unknown>): string {
+  return JSON.stringify({
+    event: 'reaction_added',
+    data: {
+      reaction: JSON.stringify({ user_id: 'u-alice', post_id: 'p-3', emoji_name: 'pushpin', create_at: 1_760_000_000_000, channel_id: 'ch-7', ...reaction }),
+    },
+    // A channel of its own: the shared adapter remembers earlier tests' direct ones.
+    broadcast: { channel_id: 'ch-7' },
+    seq: 4,
+  });
+}
+
+describe('📌 reactions (#82, phase 4)', () => {
+  it('📌 is a harvest request on the post; any other emoji is nothing', () => {
+    const [m] = adapter.parseInbound({ headers: {}, body: reacted({}) }, BOT);
+    expect(m).toMatchObject({
+      externalUserId: 'u-alice',
+      chatId: 'ch-7',
+      isDm: false,
+      messageId: 'p-3',
+      text: '',
+      command: null,
+      harvestReaction: true,
+      at: new Date(1_760_000_000_000),
+    });
+    for (const emoji_name of ['white_check_mark', 'pushpin_2', '']) {
+      expect(adapter.parseInbound({ headers: {}, body: reacted({ emoji_name }) }, BOT)).toEqual([]);
+    }
+  });
+
+  it('reads the whole thread from a reply, linking the root', async () => {
+    safeFetch
+      .mockResolvedValueOnce(
+        json(200, {
+          posts: {
+            r: { id: 'r', user_id: 'u-alice', message: 'root', create_at: 1 },
+            x: { id: 'x', user_id: 'u-bob', root_id: 'r', message: 'reply', create_at: 2 },
+            y: { id: 'y', user_id: 'u-alice', root_id: 'r', message: 'later', create_at: 3 },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(json(200, { team_id: 't-1' }))
+      .mockResolvedValueOnce(json(200, { name: 'platform' }));
+    const thread = await adapter.fetchThread(ctx, 'ch-1', 'x', null, 200);
+    expect(thread.messages.map((m) => m.text)).toEqual(['root', 'reply', 'later']);
+    expect(thread.url).toBe('https://time.test/platform/pl/r');
+    expect(safeFetch.mock.calls[0][0]).toBe('https://time.test/api/v4/posts/x/thread');
+  });
+
+  it('the supervisor hands a pin on once per person, apart from the post itself', async () => {
+    const taken = new Set<string>();
+    const shared: ChatInboxClaims = { claim: async (key) => !taken.has(key) && !!taken.add(key) };
+    const h = supervisorHarness({ claims: shared });
+    await h.sup.sync();
+    h.sockets[0].emit('message', posted({ id: 'p-3', message: '@knowledge hi' }).body);
+    h.sockets[0].emit('message', reacted({}));
+    h.sockets[0].emit('message', reacted({}));
+    h.sockets[0].emit('message', reacted({ user_id: 'u-bob' }));
+    await flush();
+    expect(h.receive).toHaveBeenCalledTimes(3);
+    expect(h.receive).toHaveBeenCalledWith(row, expect.objectContaining({ messageId: 'p-3', harvestReaction: true, externalUserId: 'u-bob' }));
+    h.sup.onModuleDestroy();
+  });
+});

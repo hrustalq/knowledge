@@ -65,6 +65,8 @@ function harness(opts: {
   /** Telegram's adapter: no thread to fetch, message links instead. */
   telegram?: boolean;
   forwardOpens?: boolean;
+  /** The reacted-to message is not in the listening buffer. */
+  notKept?: boolean;
 } = {}) {
   const posted: ChatView[] = [];
   const edited: ChatView[] = [];
@@ -98,6 +100,10 @@ function harness(opts: {
     groupThread: vi.fn(async () => ({ thread: kept, note: 'listening is off', consumed: [] })),
     consume: vi.fn(async () => undefined),
     forget: vi.fn(async () => 3),
+    ttlDays: 7,
+    asReplyTo: vi.fn(async (_id: string, i: ChatInbound): Promise<ChatInbound | null> =>
+      opts.notKept ? null : { ...i, replyTo: { messageId: i.messageId, authorId: '7', text: '[EMAIL_1] ships it', at: new Date(), fromBot: false } },
+    ),
   };
   const claims: Array<Record<string, unknown>> = [];
   const settled: Array<Record<string, unknown>> = [];
@@ -691,6 +697,68 @@ describe('Telegram harvest (#82, phase 3)', () => {
   it('an unlinked person’s /capture reads nothing', async () => {
     const h = harness({ telegram: true, binding: group, linked: false });
     await h.svc.receive(integration, capture());
+    expect(h.buffer.groupThread).not.toHaveBeenCalled();
+    expect(h.harvester.harvest).not.toHaveBeenCalled();
+  });
+});
+
+describe('harvest reactions (#82, phase 4)', () => {
+  const group = { id: 'b-1', answerMode: 'mention', agentKey: null, projectId: 'p-1', title: 'Platform team', listening: true };
+  const timeBot = { ...(integration as object), kind: 'time' } as never;
+  const pin = (over: Partial<ChatInbound> = {}) =>
+    inbound({ isDm: false, chatId: 'ch-1', messageId: 'reply-3', text: '', harvestReaction: true, ...over });
+
+  it('📌 on Time harvests the whole thread of the reacted post, answering under it', async () => {
+    const h = harness({ binding: group });
+    await h.svc.receive(timeBot, pin());
+    expect(h.adapter.fetchThread).toHaveBeenCalledWith(expect.anything(), 'ch-1', 'reply-3', null, 200);
+    expect(h.adapter.postMessage).toHaveBeenCalledWith(expect.anything(), { chatId: 'ch-1', replyToMessageId: 'reply-3' }, expect.anything());
+    expect(h.harvester.harvest).toHaveBeenCalledWith(expect.objectContaining({ platform: 'time', projectId: 'p-1' }), DEV_PRINCIPAL);
+    expect(h.edited[0]).toMatchObject({ text: 'chat.harvest.proposed chat.harvest.duplicates' });
+  });
+
+  it('from an unlinked person or a viewer it passes in silence: no reply, no read, no harvest', async () => {
+    const unlinked = harness({ linked: false, binding: group });
+    await unlinked.svc.receive(timeBot, pin());
+    const viewer = harness({
+      binding: group,
+      role: (role) => {
+        if (role === 'editor') throw new ForbiddenException('viewer');
+      },
+    });
+    await viewer.svc.receive(timeBot, pin());
+    for (const h of [unlinked, viewer]) {
+      expect(h.posted).toEqual([]);
+      expect(h.adapter.fetchThread).not.toHaveBeenCalled();
+      expect(h.harvester.harvest).not.toHaveBeenCalled();
+    }
+  });
+
+  it('in a group nobody bound it does nothing', async () => {
+    const h = harness({ binding: null });
+    await h.svc.receive(timeBot, pin());
+    expect(h.posted).toEqual([]);
+    expect(h.harvester.harvest).not.toHaveBeenCalled();
+  });
+
+  it('✍ on Telegram reads the buffer from the reacted message as if /capture replied to it', async () => {
+    const h = harness({ telegram: true, binding: group });
+    await h.svc.receive(integration, pin({ chatId: '-1001', messageId: '11' }));
+    expect(h.buffer.asReplyTo).toHaveBeenCalledWith('int-1', expect.objectContaining({ messageId: '11' }));
+    expect(h.buffer.groupThread).toHaveBeenCalledWith(
+      'int-1',
+      group,
+      expect.objectContaining({ messageId: '11', replyTo: expect.objectContaining({ messageId: '11' }) }),
+      200,
+      'https://t.me/c/-1001/11',
+    );
+    expect(h.harvester.harvest).toHaveBeenCalledOnce();
+  });
+
+  it('✍ on a message the bot does not keep says so to the editor, and harvests nothing', async () => {
+    const h = harness({ telegram: true, binding: group, notKept: true });
+    await h.svc.receive(integration, pin({ chatId: '-1001', messageId: '11' }));
+    expect(h.posted).toEqual([{ kind: 'notice', text: 'chat.harvest.reactionNotKept' }]);
     expect(h.buffer.groupThread).not.toHaveBeenCalled();
     expect(h.harvester.harvest).not.toHaveBeenCalled();
   });

@@ -46,6 +46,7 @@ function buffer(rows: Array<{ id?: string; authorId: string; text: string; sentA
       count: vi.fn(async () => held),
       findMany: vi.fn(async () => rows),
       deleteMany: vi.fn(async () => ({ count: 2 })),
+      findFirst: vi.fn(async () => rows[0] ?? null),
     },
   };
   return { svc: new ChatBufferService(prisma as never, config as never), db: prisma.chatBufferedMessage };
@@ -201,5 +202,22 @@ describe('nothing else reads the buffer', () => {
       .sort();
     // The integrations service only deletes (listening off).
     expect(readers).toEqual(['chat/chat-buffer.service.ts', 'chat/chat-integrations.service.ts']);
+  });
+});
+
+describe('✍ as a reply (#82, phase 4)', () => {
+  it('turns the reacted message into the anchor /capture would have replied to, from the group’s kept rows', async () => {
+    const at = new Date('2026-10-19T10:00:00Z');
+    const { svc, db } = buffer([{ authorId: '7', text: 'Ship on [EMAIL_1]', sentAt: at, topicId: '77' } as never]);
+    const asked = await svc.asReplyTo('int-1', inbound({ messageId: '11', text: '', harvestReaction: true }));
+    expect(db.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { integrationId: 'int-1', externalChatId: '-1001', externalMessageId: '11', bindingId: { not: null } } }),
+    );
+    expect(asked).toMatchObject({ messageId: '11', topicId: '77', replyTo: { messageId: '11', authorId: '7', text: 'Ship on [EMAIL_1]', at, fromBot: false } });
+  });
+
+  it('is null for a message not kept', async () => {
+    const { svc } = buffer([]);
+    expect(await svc.asReplyTo('int-1', inbound({ messageId: '11' }))).toBeNull();
   });
 });

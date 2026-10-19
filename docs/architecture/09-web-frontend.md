@@ -229,6 +229,22 @@ The resolved locale is stamped into `<!--app-lang-->` and into the i18n instance
 for that render, so the SSR HTML is already in the right language instead of
 flashing English and swapping after hydration.
 
+The client reads it back from `<html lang>` before anything else, and only falls
+back to its stored choice when that attribute is missing. Storage alone is not
+enough: a visitor with no `kn_lang` cookie gets the `Accept-Language` language
+from the server, and a client hydrating in its own default instead mismatches
+every string on the page (#278). On load the client also re-writes the cookie
+from storage, the same renewal the token gets.
+
+## Shared state the server filled after drawing
+
+`window.__PINIA__` is the store as it stood at the **end** of the render, not
+when each component drew. The rail renders before the page, so when a page's
+`onServerPrefetch` loads something the rail also reads (the page tree on
+`/documents`), the server drew the rail's skeleton but the client hydrates with
+the data present, and the two disagree. The rail's tree therefore waits for
+`onMounted` (the `mounted` ref below) and adopts the rows one frame later.
+
 ## Intl wrappers, because "no locale" means "the host"
 
 `lib/format.ts` wraps every date, number, relative-time and byte-size format.

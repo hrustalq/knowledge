@@ -127,6 +127,11 @@ let clientTreeOpen: string | null = null
 let clientLocale: Locale | null = null
 if (!import.meta.env.SSR) {
   try {
+    // Hydrate in the language the server rendered (`<html lang>`, resolved
+    // kn_lang → Accept-Language → en): any other one mismatches every string
+    // on the page (#278). Storage alone misses the Accept-Language fallback.
+    const rendered = document.documentElement.lang
+    if (isLocale(rendered)) clientLocale = rendered
     clientToken = localStorage.getItem(TOKEN_KEY)
     // Renew the cookie mirror (setToken writes it with a 30-day max-age): the
     // <img> asset routes authenticate from it (#102), so it must not lapse
@@ -142,7 +147,12 @@ if (!import.meta.env.SSR) {
     clientAiPanel = localStorage.getItem(AI_PANEL_KEY)
     clientTreeOpen = localStorage.getItem(TREE_OPEN_KEY)
     const storedLocale = localStorage.getItem(LANG_KEY)
-    if (isLocale(storedLocale)) clientLocale = storedLocale
+    if (isLocale(storedLocale)) {
+      clientLocale ??= storedLocale
+      // Renew the mirror like the token's, so the server keeps rendering the
+      // stored choice instead of falling back to Accept-Language.
+      document.cookie = `${LANG_KEY}=${storedLocale}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+    }
   } catch {
     /* storage unavailable (private mode) — stay anonymous */
   }

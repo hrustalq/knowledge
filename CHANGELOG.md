@@ -384,6 +384,15 @@ in the pull request that introduces them — see
   is now plain text that keeps crawlers out of the member app and lets them
   into path-mode published sites under `/pub/`. A site's own `robots.txt` is
   unchanged.
+- The app no longer throws away its server-rendered page on load (#278). Two
+  things made the first client render differ from the server's, so the browser
+  logged a hydration mismatch and rebuilt the page: a visitor who never picked a
+  language got the page in their browser's language (Russian, say) and the app
+  then started in English; and with the page tree open in the sidebar,
+  `/documents` drew a loading skeleton on the server but the tree in the
+  browser. The app now starts in the language the server rendered, renews the
+  language cookie from your saved choice, and shows the sidebar tree one frame
+  after load.
 
 ### Operations
 

@@ -421,6 +421,11 @@ in the pull request that introduces them — see
   hear the visible text first, then what the control is for. The "more ways to
   start a page" chevron next to `+` in the sidebar is now 24 px wide instead of
   14 px, so it is easier to hit.
+- Asking AI to clean up or merge a staged connector page while the `drafter`
+  agent is turned off now says so, in English or Russian (#294). The refusal
+  used to show the raw key `error.ai.disabled`. CI now fails when an API
+  message exists in only one language, when its `{placeholders}` differ
+  between them, or when the code names a message key neither one has.
 
 ### Operations
 

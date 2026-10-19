@@ -206,6 +206,8 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfCapture(uuid(req.params?.id, 'capture'));
       case 'release-tag':
         return this.access.workspaceOfReleaseTag(uuid(req.params?.id, 'releaseTag'));
+      case 'conflict':
+        return this.access.workspaceOfConflict(uuid(req.params?.id, 'conflict'));
       case 'workspace':
         return this.access.workspaceExists(uuid(req.params?.id, 'workspace'));
       case 'document':

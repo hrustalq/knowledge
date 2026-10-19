@@ -1902,6 +1902,56 @@
     },
     {
       "method": "GET",
+      "path": "/v1/conflicts",
+      "tag": "conflicts",
+      "summary": "Contradictions the arbiter found, newest first; only those whose pages the caller may open",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conflicts/{id}",
+      "tag": "conflicts",
+      "summary": "One conflict with both quotes",
+      "role": "viewer",
+      "source": "conflict",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conflicts/{id}/dismiss",
+      "tag": "conflicts",
+      "summary": "Dismiss an open conflict as not one. It stays dismissed when found again",
+      "role": "editor",
+      "source": "conflict",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conflicts/{id}/propose",
+      "tag": "conflicts",
+      "summary": "Open a merge request that fixes the conflict on its first page. 409 when one was proposed already",
+      "role": "editor",
+      "source": "conflict",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conflicts/{id}/resolve",
+      "tag": "conflicts",
+      "summary": "Mark an open conflict resolved, with an optional note. 409 when it is no longer open",
+      "role": "editor",
+      "source": "conflict",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/code-usages",
       "tag": "connectors",
       "summary": "Where a file, directory or glob is used in one of the workspace's code connectors, the pages documenting each usage site, and the component pages covering the path. Pages the caller may not open are counted, never titled",
@@ -5255,6 +5305,24 @@
       ]
     },
     {
+      "name": "knowledge_list_conflicts",
+      "description": "Contradictions the arbiter found between pages: both pages, the passage each one says, and why they disagree. Only conflicts whose pages you may open. Newest first.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "status",
+          "optional": true
+        },
+        {
+          "name": "documentId",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_list_connectors",
       "description": "List the external systems this workspace syncs with (Confluence, Jira, Notion, markdown/git). Each entry says which direction it moves content, how many pages it has claimed, and how its last sync went.",
       "inputs": [
@@ -5538,6 +5606,28 @@
         },
         {
           "name": "message",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_resolve_conflict",
+      "description": "Close an open contradiction: \"resolve\" when it is fixed or explained (say how in note), \"dismiss\" when it is not a contradiction — a dismissed one stays dismissed when found again.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "conflictId",
+          "optional": false
+        },
+        {
+          "name": "action",
+          "optional": false
+        },
+        {
+          "name": "note",
           "optional": true
         }
       ]

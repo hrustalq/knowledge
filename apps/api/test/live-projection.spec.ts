@@ -186,6 +186,9 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       getWorkspaceRelationGraph: vi.fn(async () => ({ edges: [], documents: {}, entities: {} })),
     };
     const fulltext = { enabled: false, indexRevisionChunks: vi.fn(), setLiveRevision: vi.fn(), stampRevisions: vi.fn() };
+    const apiSpecs = {};
+    // #81: a head going live supersedes conflicts quoting its older revisions.
+    const conflicts = { supersedeStale: vi.fn(async () => 0) };
     const processor = new IngestionProcessor(
       prisma as never,
       { getObjectText: vi.fn(async () => '---\ntags: [legacy]\n---\n# T\n\nAlpha unique-token-zebra\n'), putObjectJson: vi.fn() } as never,
@@ -197,14 +200,17 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       { publish: vi.fn() } as never,
       { enqueue: vi.fn() } as never,
       { record: vi.fn(async () => false), rebuild: vi.fn() } as never,
+      apiSpecs as never,
+      conflicts as never,
     );
-    return { processor, graph, fulltext };
+    return { processor, graph, fulltext, conflicts };
   }
   const run = (p: IngestionProcessor) => p.process({ data: { ingestionJobId: 'job' } } as never);
 
   it('the default-branch head is written live and becomes the live revision', async () => {
-    const { processor, graph, fulltext } = processorFor({ revisionId: 'r2', headId: 'r2' });
+    const { processor, graph, fulltext, conflicts } = processorFor({ revisionId: 'r2', headId: 'r2' });
     await run(processor);
+    expect(conflicts.supersedeStale).toHaveBeenCalledWith(WS, DOC, 'r2');
     expect(graph.upsertRevisionChunks).toHaveBeenCalledWith(expect.objectContaining({ live: true }));
     expect(graph.replaceRevisionFrontmatterFacts).toHaveBeenCalledWith(expect.objectContaining({ live: true }));
     expect(graph.replaceRevisionInferredFacts).toHaveBeenCalledWith(expect.objectContaining({ live: true }));

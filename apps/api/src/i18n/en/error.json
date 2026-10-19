@@ -714,5 +714,10 @@
   "releaseTag": {
     "notFound": "Release tag {id} not found",
     "duplicate": "A release tag named {name} already exists in this workspace"
+  },
+  "conflict": {
+    "notFound": "Conflict {id} not found",
+    "notOpen": "This conflict is no longer open",
+    "alreadyProposed": "A fix for this conflict was already proposed"
   }
 }

@@ -2235,7 +2235,8 @@
       "public_ask": "Вопросы на сайте",
       "chat-capture": "Сохранено из чата",
       "component-draft": "Черновик компонента",
-      "lint": "Линт"
+      "lint": "Линт",
+      "contradiction": "Проверка противоречий"
     },
     "anyOutcome": "Любой",
     "failedOnly": "Только ошибки",

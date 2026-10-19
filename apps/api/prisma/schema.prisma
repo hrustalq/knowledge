@@ -3526,3 +3526,44 @@ model ReleaseTag {
   @@index([workspaceId, at])
   @@map("release_tags")
 }
+
+/// A contradiction between two pages (#81), found by the arbiter. A proposal,
+/// never a change: a person resolves, dismisses or proposes a fix for it.
+model KnowledgeConflict {
+  id             String    @id @default(uuid()) @db.Uuid
+  /// No FK, house policy.
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  /// CONFLICT_KINDS.
+  kind           String
+  /// CONFLICT_STATUSES.
+  status         String    @default("open")
+  /// sha256 over both sides' page and normalized quote, order-free: the same
+  /// disagreement found twice is one row.
+  fingerprint    String
+  aDocumentId    String    @map("a_document_id") @db.Uuid
+  aRevisionId    String    @map("a_revision_id") @db.Uuid
+  aChunkId       String?   @map("a_chunk_id")
+  aQuote         String    @map("a_quote")
+  /// Null for a conflict between a page and code (the sentinel's, a later phase).
+  bDocumentId    String?   @map("b_document_id") @db.Uuid
+  bRevisionId    String?   @map("b_revision_id") @db.Uuid
+  bChunkId       String?   @map("b_chunk_id")
+  bQuote         String?   @map("b_quote")
+  codeRef        Json?     @map("code_ref")
+  explanation    String
+  confidence     Float
+  agentRunId     String?   @map("agent_run_id") @db.Uuid
+  /// The finding on that run that reported it, so "propose a fix" reuses the finding's path.
+  findingIndex   Int?      @map("finding_index")
+  mergeRequestId String?   @map("merge_request_id") @db.Uuid
+  detectedAt     DateTime  @default(now()) @map("detected_at") @db.Timestamptz
+  resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz
+  resolvedBy     String?   @map("resolved_by") @db.Uuid
+  resolution     String?
+
+  @@unique([workspaceId, fingerprint])
+  @@index([workspaceId, status, detectedAt])
+  @@index([aDocumentId, status])
+  @@index([bDocumentId, status])
+  @@map("knowledge_conflicts")
+}

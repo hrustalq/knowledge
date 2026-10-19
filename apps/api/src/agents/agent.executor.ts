@@ -37,6 +37,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { AssistantClient, ProviderAccountError } from '../assistant/assistant.client.js';
+import { ConflictsService } from '../conflicts/conflicts.service.js';
+import { candidatePairs, readJudgement } from './contradiction.js';
 import { AssistantReadToolsService } from '../assistant/assistant-read-tools.service.js';
 import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
@@ -163,6 +165,7 @@ export const RUNNABLE_AGENTS = new Set([
   'surveyor',
   'digest',
   'auditor',
+  'arbiter',
 ]);
 
 /** A page id the model named is checked against the database only if it could be one. */
@@ -254,6 +257,7 @@ export class AgentExecutor {
     private readonly templates: TemplatesService,
     private readonly apiDrift: ApiDriftService,
     private readonly compare: CompareService,
+    private readonly conflicts: ConflictsService,
   ) {}
 
   /**
@@ -344,6 +348,8 @@ export class AgentExecutor {
         return this.digest(run, agent, principal, report);
       case 'auditor':
         return this.audit(run, agent, principal, report);
+      case 'arbiter':
+        return this.arbitrate(run, agent, principal, report);
       // Deliberately not in RUNNABLE_AGENTS (docs/features/35): that set offers
       // the Run button and feeds the schedule sweeper, and a sentinel run with
       // neither a pull request nor a report has nothing to check. Only
@@ -364,6 +370,157 @@ export class AgentExecutor {
         // if it had done something.
         throw new Error(t('error.ai.agentNoExecutor', { key: agent.key }));
     }
+  }
+
+  /**
+   * The arbiter (#81): contradictions between pages. The pairing is
+   * deterministic — passages from different pages close enough in meaning to
+   * be about the same thing (`candidatePairs`), at least one from a page that
+   * changed since the last run, or the page whose indexing triggered this one.
+   * The model judges each pair in one call; a judgement stands only if both
+   * quotes are really in their passages (`readJudgement`). Every kept one is
+   * recorded as a conflict row and mirrored as a finding, so the runs panel and
+   * the conflicts views read the same thing.
+   */
+  private async arbitrate(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    await report({ stage: 'scanning', progress: 0.05 });
+    if (this.config.get('EMBEDDINGS_PROVIDER', { infer: true }) === 'stub') {
+      // The stub hashes words: every page of one product would pair with every
+      // other on shared vocabulary. Not measured, and said.
+      return { summary: t('agent.arbitration.stubEmbeddings'), findings: [] };
+    }
+    const scope = await this.runScope(run, principal);
+    const acl = await this.permissions.documentFilterFor(scope);
+    const input = (run.input ?? {}) as AgentRunInput;
+
+    // What to re-judge: the pages the run names (a page.indexed trigger names
+    // the page), else the pages whose content changed since the last arbiter
+    // run that finished, else — the first run — every page.
+    let inScope: Set<string> | null = input.documentIds?.length ? new Set(input.documentIds.slice(0, AGENT_RUN_MAX_DOCUMENTS)) : null;
+    if (!inScope) {
+      const last = await this.prisma.agentRun.findFirst({
+        where: { workspaceId: run.workspaceId, agentKey: 'arbiter', status: 'succeeded', id: { not: run.id } },
+        orderBy: { finishedAt: 'desc' },
+        select: { finishedAt: true },
+      });
+      if (last?.finishedAt) {
+        const changed = await this.prisma.documentRevision.findMany({
+          where: { document: { workspaceId: run.workspaceId }, finalizedAt: { gt: last.finishedAt } },
+          select: { documentId: true },
+          distinct: ['documentId'],
+        });
+        inScope = new Set(changed.map((r) => r.documentId));
+        if (inScope.size === 0) return { summary: t('agent.arbitration.nothingChanged'), findings: [] };
+      }
+    }
+
+    const [chunks, relations] = await Promise.all([
+      this.graph.liveChunks(run.workspaceId, acl),
+      this.graph.getWorkspaceRelationGraph(run.workspaceId, acl),
+    ]);
+    const entitiesOf = new Map<string, Set<string>>();
+    for (const e of relations.edges) {
+      if (!entitiesOf.has(e.documentId)) entitiesOf.set(e.documentId, new Set())
+      entitiesOf.get(e.documentId)!.add(e.targetKey);
+    }
+    const sharesEntity = (a: string, b: string) => {
+      const ea = entitiesOf.get(a);
+      const eb = entitiesOf.get(b);
+      if (!ea || !eb) return false;
+      for (const k of ea) if (eb.has(k)) return true;
+      return false;
+    };
+    const pairs = candidatePairs(chunks, inScope, {
+      minSimilarity: this.config.get('CONTRADICTION_MIN_SIMILARITY', { infer: true }),
+      cap: this.config.get('CONTRADICTION_MAX_PAIRS_PER_RUN', { infer: true }),
+      sharesEntity,
+    });
+    if (pairs.length === 0) return { summary: t('agent.arbitration.noPairs'), findings: [] };
+
+    // PG has the last word on visibility (#76), and the titles.
+    const docIds = [...new Set(pairs.flatMap((p) => [p.a.documentId, p.b.documentId]))];
+    const docs = await this.prisma.document.findMany({
+      where: { id: { in: docIds }, workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
+      select: { id: true, title: true },
+    });
+    const titleOf = new Map(docs.map((d) => [d.id, d.title]));
+    const revisionOf = (chunkId: string) => chunkId.slice(0, chunkId.lastIndexOf(':'));
+
+    const minConfidence = this.config.get('CONTRADICTION_MIN_CONFIDENCE', { infer: true });
+    const call = { config: agent.config, userId: run.createdBy, operation: 'contradiction' as const, locale: run.locale as Locale };
+    const system = `${agent.instructions}` + (await this.guidance(run, agent));
+    const findings: AgentFinding[] = [];
+    let judged = 0;
+    for (const [i, pair] of pairs.entries()) {
+      const titleA = titleOf.get(pair.a.documentId);
+      const titleB = titleOf.get(pair.b.documentId);
+      if (!titleA || !titleB) continue;
+      await report({ stage: 'judging', progress: 0.1 + (0.85 * i) / pairs.length });
+      let raw: string;
+      try {
+        raw = await this.client.chat(
+          call,
+          [
+            { role: 'system', content: system },
+            {
+              role: 'user',
+              content:
+                `Passage A, from the page "${titleA}":\n${wrapUntrusted(pair.a.text, 'arbiter', 'page')}\n\n` +
+                `Passage B, from the page "${titleB}":\n${wrapUntrusted(pair.b.text, 'arbiter', 'page')}`,
+            },
+          ],
+          { json: true },
+        );
+        judged += 1;
+      } catch (error) {
+        // A budget refusal or a dead account is terminal for the run; anything
+        // else costs one pair, not the rest.
+        if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+          await report({ warning: t('agent.arbitration.budgetSpent', { judged }) });
+          break;
+        }
+        if (error instanceof ProviderAccountError) {
+          await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+          break;
+        }
+        this.logger.warn(`Arbiter judgement failed for one pair: ${String(error)}`);
+        continue;
+      }
+      const verdict = readJudgement(safeJson(raw), pair, minConfidence);
+      if (!verdict) continue;
+      const conflict = await this.conflicts.record({
+        workspaceId: run.workspaceId,
+        kind: 'doc-doc',
+        a: { documentId: pair.a.documentId, revisionId: revisionOf(pair.a.chunkId), chunkId: pair.a.chunkId, quote: verdict.aQuote },
+        b: { documentId: pair.b.documentId, revisionId: revisionOf(pair.b.chunkId), chunkId: pair.b.chunkId, quote: verdict.bQuote },
+        explanation: verdict.explanation,
+        confidence: verdict.confidence,
+        agentRunId: run.id,
+        findingIndex: findings.length,
+      });
+      // Found again while open, resolved or dismissed: the row stands as it
+      // was and this run has nothing new to say. New or reopened: a finding.
+      if (!conflict.written) continue;
+      findings.push({
+        kind: 'contradiction',
+        severity: 'warning',
+        title: t('agent.arbitration.findingTitle', { a: titleA, b: titleB }),
+        detail: `${verdict.explanation}\n\n> ${verdict.aQuote}\n\n> ${verdict.bQuote}`,
+        documentIds: [pair.a.documentId, pair.b.documentId],
+        documentTitles: [titleA, titleB],
+        conflictId: conflict.id,
+      });
+      if (findings.length >= MAX_FINDINGS) break;
+    }
+    return {
+      summary: t('agent.arbitration.summary', { judged, found: findings.length }),
+      findings,
+    };
   }
 
   private async curate(

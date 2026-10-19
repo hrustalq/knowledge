@@ -41,6 +41,7 @@ import { FeedbackModule } from './feedback/feedback.module.js';
 import { VerificationModule } from './verification/verification.module.js';
 import { QualityModule } from './quality/quality.module.js';
 import { TemporalModule } from './temporal/temporal.module.js';
+import { ConflictsModule } from './conflicts/conflicts.module.js';
 import { PublishingModule } from './publishing/publishing.module.js';
 import { PublicModule } from './public/public.module.js';
 import { ExportModule } from './export/export.module.js';
@@ -103,6 +104,9 @@ import { ChatModule } from './chat/chat.module.js';
     // Release tags and the graph timeline (#81, phase 2). API-only: the
     // controller; MCP loads TemporalCoreModule.
     TemporalModule,
+    // Contradictions between pages (#81, phase 5). API-only: the controller;
+    // the worker's arbiter and MCP load ConflictsCoreModule.
+    ConflictsModule,
     // Share links (docs/features/43, issue #77). API-only: the management
     // routes, and the anonymous /v1/public reader with its rate limiter.
     PublishingModule,

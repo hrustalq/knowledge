@@ -2235,7 +2235,8 @@
       "public_ask": "Site Ask",
       "chat-capture": "Saved from chat",
       "component-draft": "Component draft",
-      "lint": "Lint"
+      "lint": "Lint",
+      "contradiction": "Contradiction check"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",

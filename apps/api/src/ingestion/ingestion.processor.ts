@@ -9,6 +9,7 @@ import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { stampWindow } from '../graph/temporal.js';
 import { loadRevisionStamps } from '../graph/revision-stamps.js';
+import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { EMBEDDING_PROVIDER, embeddingSignature, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { INGESTION_QUEUE } from './ingestion.constants.js';
@@ -43,6 +44,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     private readonly producer: IngestionProducer,
     private readonly components: ComponentsService,
     private readonly apiSpecs: ApiSpecsService,
+    private readonly conflicts: ConflictsService,
   ) {
     super();
   }
@@ -468,6 +470,12 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       if (head?.status !== 'indexed') return;
     }
     await this.graph.setLiveRevision(workspaceId, documentId, headId);
+    // #81: an open conflict quoting an older revision of this page now quotes
+    // text the page no longer says. Non-fatal: a missed supersede leaves a
+    // stale conflict open until the next index, never a wrong page served.
+    await this.conflicts
+      .supersedeStale(workspaceId, documentId, headId)
+      .catch((e) => this.logger.warn(`Conflict supersede failed for document ${documentId} (non-fatal): ${(e as Error).message}`));
     try {
       await this.fulltext.setLiveRevision(workspaceId, documentId, headId);
     } catch (e) {

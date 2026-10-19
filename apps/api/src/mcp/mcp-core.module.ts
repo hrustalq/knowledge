@@ -29,6 +29,7 @@ import { ComponentDraftsModule } from '../components/component-drafts.module.js'
 import { StyleLintModule } from '../assistant/style-lint.module.js';
 import { QualityCoreModule } from '../quality/quality-core.module.js';
 import { TemporalCoreModule } from '../temporal/temporal-core.module.js';
+import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -95,6 +96,8 @@ import { McpService } from './mcp.service.js';
     QualityCoreModule,
     // asOf resolution and release tags (#81). Controller-free.
     TemporalCoreModule,
+    // knowledge_list_conflicts / knowledge_resolve_conflict (#81). Controller-free.
+    ConflictsCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

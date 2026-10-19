@@ -161,7 +161,19 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
         update: vi.fn(),
       },
       document: {
-        findUnique: vi.fn(async () => ({ defaultBranch: 'main', branches: [{ name: 'main', headRevisionId: opts.headId }] })),
+        findUnique: vi.fn(async () => ({
+          defaultBranch: 'main',
+          branches: [
+            { id: 'b-main', name: 'main', headRevisionId: opts.headId },
+            { id: 'b-x', name: 'x', headRevisionId: 'feature-x' },
+          ],
+          // #81 stamps valid time from these.
+          revisions: [
+            { id: 'r1', branchId: 'b-main', finalizedAt: new Date(1000) },
+            { id: 'r2', branchId: 'b-main', finalizedAt: new Date(2000) },
+            { id: 'feature-x', branchId: 'b-x', finalizedAt: new Date(1500) },
+          ],
+        })),
       },
       $transaction: vi.fn(async () => []),
     };
@@ -170,6 +182,7 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       replaceRevisionFrontmatterFacts: vi.fn(),
       replaceRevisionInferredFacts: vi.fn(),
       setLiveRevision: vi.fn(),
+      stampRevisions: vi.fn(),
       getWorkspaceRelationGraph: vi.fn(async () => ({ edges: [], documents: {}, entities: {} })),
     };
     const fulltext = { enabled: false, indexRevisionChunks: vi.fn(), setLiveRevision: vi.fn() };
@@ -197,6 +210,11 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
     expect(graph.replaceRevisionInferredFacts).toHaveBeenCalledWith(expect.objectContaining({ live: true }));
     expect(graph.setLiveRevision).toHaveBeenCalledWith(WS, DOC, 'r2');
     expect(fulltext.setLiveRevision).toHaveBeenCalledWith(WS, DOC, 'r2');
+    // #81: the new head opens, its predecessor closes at the head's finalize time.
+    expect(graph.stampRevisions).toHaveBeenCalledWith(WS, DOC, [
+      { revisionId: 'r1', validFrom: 1000, validTo: 2000, lineage: 'default' },
+      { revisionId: 'r2', validFrom: 2000, validTo: null, lineage: 'default' },
+    ]);
   });
 
   it('a branch revision is written but never made live', async () => {
@@ -205,6 +223,7 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
     expect(graph.upsertRevisionChunks).toHaveBeenCalledWith(expect.objectContaining({ live: false }));
     expect(graph.replaceRevisionFrontmatterFacts).toHaveBeenCalledWith(expect.objectContaining({ live: false }));
     expect(graph.setLiveRevision).not.toHaveBeenCalledWith(WS, DOC, 'feature-x');
+    expect(graph.stampRevisions).toHaveBeenCalledWith(WS, DOC, [{ revisionId: 'feature-x', validFrom: null, validTo: null, lineage: 'branch' }]);
   });
 
   it('keeps the previous revision live while the new head is still indexing', async () => {

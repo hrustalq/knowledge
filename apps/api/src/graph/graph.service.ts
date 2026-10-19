@@ -8,6 +8,7 @@ import {
 import { aclAdmits, type DocumentAclFilter } from '../common/document-acl.js';
 import { ArcadeClient } from './arcade.client.js';
 import { EntityAliasService } from './entity-alias.service.js';
+import { diffRevisionFacts, type ExistingFactRow, type Lineage, type RevisionStamp } from './temporal.js';
 import { t } from '../i18n/t.js';
 
 export interface ChunkInput {
@@ -57,6 +58,38 @@ const MEAN_BATCH = 100;
  */
 const LIVE = '(live IS NULL OR live = true)';
 
+/** An edge row's time axes (#81), in the order `EdgeTemporal` names them. */
+const TEMPORAL_COLUMNS = 'validFrom, validTo, ingestedAt, expiredAt, retractedBy, lineage';
+
+function temporalOf(r: Partial<EdgeTemporal>): EdgeTemporal {
+  return {
+    validFrom: r.validFrom ?? null,
+    validTo: r.validTo ?? null,
+    ingestedAt: r.ingestedAt ?? null,
+    expiredAt: r.expiredAt ?? null,
+    retractedBy: r.retractedBy ?? null,
+    lineage: r.lineage ?? null,
+  };
+}
+
+/**
+ * A new edge's time axes. A document-level edge (explicit, curated, code) is
+ * valid from the moment it is written. A revision-scoped one waits for
+ * `stampRevisions`, which reads its revision's times from PG.
+ */
+function freshTemporal(extractor: string): EdgeTemporal {
+  const now = Date.now();
+  const scoped = (REVISION_SCOPED_EXTRACTORS as readonly string[]).includes(extractor);
+  return {
+    validFrom: scoped ? null : now,
+    validTo: null,
+    ingestedAt: now,
+    expiredAt: null,
+    retractedBy: null,
+    lineage: scoped ? null : 'default',
+  };
+}
+
 /**
  * The page-permission predicate for a read keyed by `documentId` (#76): the
  * clause to append and its parameter, or null when the read must instead be
@@ -88,6 +121,7 @@ function usageSnippet(usages: readonly string[], max = 1000): string {
 
 /** Fact classes whose edges belong to one revision and so follow its liveness. */
 const REVISION_SCOPED_EXTRACTORS = ['frontmatter', 'inferred', 'spec'] as const;
+const SCOPED_SQL = `extractor IN [${REVISION_SCOPED_EXTRACTORS.map((e) => `'${e}'`).join(', ')}]`;
 
 /**
  * Relation edge types allowed in the graph (plan.md §6). Edge type names are
@@ -117,6 +151,28 @@ export interface FactInput {
    * curated edges are document-level and always live. Defaults to true.
    */
   live?: boolean;
+  /**
+   * The row's time axes (#81), carried over when an edge is re-keyed
+   * (`mergeEntityKey`). Omitted on a fresh write: it is ingested now, and a
+   * document-level edge is valid from now on.
+   */
+  temporal?: EdgeTemporal;
+}
+
+/**
+ * The two time axes of an edge row (#81), epoch ms. Valid time is the KB's
+ * history, stamped from PG revision times (`stampRevisions`); system time is
+ * when we wrote and stopped believing the row. Null `validFrom` is a row the
+ * backfill has not reached yet, or a branch lineage.
+ */
+export interface EdgeTemporal {
+  validFrom: number | null;
+  validTo: number | null;
+  ingestedAt: number | null;
+  expiredAt: number | null;
+  /** `extractor` (re-extraction dropped it) or `user:<id>` (a person retracted it). */
+  retractedBy: string | null;
+  lineage: Lineage | null;
 }
 
 export interface DocumentRelation {
@@ -131,6 +187,7 @@ export interface DocumentRelation {
   snippet?: string;
   /** False for edges of a retired revision; legacy rows read as live. */
   live: boolean;
+  temporal: EdgeTemporal;
 }
 
 /** A revision's facts of one revision-scoped class, replaced whole. */
@@ -462,23 +519,91 @@ export class GraphService {
     extractor: 'frontmatter' | 'spec',
     input: RevisionFactsInput,
   ): Promise<void> {
+    const facts = await this.canonicalFacts(input.workspaceId, input.facts);
+    await this.reconcileRevisionFacts(extractor, input, facts);
+  }
+
+  /**
+   * Bring one revision's edges of one extractor in line with `facts` (#81).
+   * The first index of a revision only creates. A re-index of the same
+   * revision (embedding drift, dependent reindex) keeps re-asserted facts in
+   * place, creates new ones, and EXPIRES dropped ones rather than deleting
+   * them: the page did not change, our belief did, and `knownAt` must still be
+   * able to say what we believed before. Valid time is not touched here — the
+   * processor stamps it from PG afterwards (`stampRevisions`).
+   */
+  private async reconcileRevisionFacts(
+    extractor: 'frontmatter' | 'spec' | 'inferred',
+    input: RevisionFactsInput,
+    facts: FactInput[],
+  ): Promise<void> {
     const { workspaceId, documentId, revisionId, title, live } = input;
-    const facts = await this.canonicalFacts(workspaceId, input.facts);
+    const scope = 'workspaceId = :workspaceId AND documentId = :documentId AND revisionId = :revisionId AND extractor = :extractor';
+    const existing: ExistingFactRow[] = [];
     for (const type of RELATION_EDGE_TYPES) {
-      await this.arcade
-        .command('sql', `DELETE FROM ${type} WHERE documentId = :documentId AND revisionId = :revisionId AND extractor = :extractor`, {
+      const rows = await this.arcade
+        .query<{ targetKey: string; expiredAt?: number | null }>('sql', `SELECT targetKey, expiredAt FROM ${type} WHERE ${scope}`, {
+          workspaceId,
           documentId,
           revisionId,
           extractor,
         })
-        .catch(() => {
+        .catch(() => []);
+      for (const r of rows) existing.push({ type, targetKey: r.targetKey, expiredAt: r.expiredAt ?? null });
+    }
+    const { keep, expire, create } = diffRevisionFacts(existing, facts);
+    const now = Date.now();
+
+    for (const row of expire) {
+      await this.arcade.command(
+        'sql',
+        `UPDATE ${row.type} SET expiredAt = :now, retractedBy = 'extractor', live = false WHERE ${scope} AND targetKey = :targetKey AND expiredAt IS NULL`,
+        { workspaceId, documentId, revisionId, extractor, targetKey: row.targetKey, now },
+      );
+    }
+    for (const fact of keep) {
+      await this.arcade.command(
+        'sql',
+        `UPDATE ${fact.type} SET confidence = :confidence, sourceChunkId = :sourceChunkId, snippet = :snippet, live = :live WHERE ${scope} AND targetKey = :targetKey AND expiredAt IS NULL`,
+        {
+          workspaceId,
+          documentId,
+          revisionId,
+          extractor,
+          targetKey: fact.target.key,
+          confidence: fact.confidence,
+          sourceChunkId: fact.sourceChunkId ?? null,
+          snippet: fact.snippet ?? null,
+          live,
+        },
+      );
+    }
+    if (create.length === 0) return;
+    await this.upsertDocumentVertex(workspaceId, documentId, title);
+    for (const fact of create) {
+      await this.createRelationEdge(workspaceId, documentId, revisionId, { ...fact, live });
+    }
+  }
+
+  /**
+   * Write the valid-time stamps (#81) onto each revision's chunks and
+   * revision-scoped edges. The stamps come from `revisionStamps` over the PG
+   * revision list, so this is idempotent and order-free: the processor
+   * rewrites the window around the revision it just indexed, the backfill
+   * rewrites them all. Document-level edges (explicit, curated, code) carry
+   * their own valid time from the moment they were written.
+   */
+  async stampRevisions(workspaceId: string, documentId: string, stamps: readonly RevisionStamp[]): Promise<void> {
+    const scope = 'workspaceId = :workspaceId AND documentId = :documentId AND revisionId = :revisionId';
+    const set = 'SET validFrom = :validFrom, validTo = :validTo, lineage = :lineage';
+    for (const stamp of stamps) {
+      const params = { workspaceId, documentId, ...stamp };
+      await this.arcade.command('sql', `UPDATE Chunk ${set} WHERE ${scope}`, params);
+      for (const type of RELATION_EDGE_TYPES) {
+        await this.arcade.command('sql', `UPDATE ${type} ${set} WHERE ${scope} AND ${SCOPED_SQL}`, params).catch(() => {
           /* edge type may hold no rows yet */
         });
-    }
-    if (facts.length === 0) return;
-    await this.upsertDocumentVertex(workspaceId, documentId, title);
-    for (const fact of facts) {
-      await this.createRelationEdge(workspaceId, documentId, revisionId, { ...fact, live });
+      }
     }
   }
 
@@ -504,12 +629,12 @@ export class GraphService {
     // string, so the raise below matches nothing and the lower matches all.
     const params = { workspaceId, documentId, revisionId: liveRevisionId ?? '' };
     const scope = 'workspaceId = :workspaceId AND documentId = :documentId';
-    const scoped = `extractor IN [${REVISION_SCOPED_EXTRACTORS.map((e) => `'${e}'`).join(', ')}]`;
 
     await this.arcade.command('sql', `UPDATE Chunk SET live = true WHERE ${scope} AND revisionId = :revisionId`, params);
     for (const type of RELATION_EDGE_TYPES) {
       await this.arcade
-        .command('sql', `UPDATE ${type} SET live = true WHERE ${scope} AND ${scoped} AND revisionId = :revisionId`, params)
+        // An expired row (#81) is history even on the live revision.
+        .command('sql', `UPDATE ${type} SET live = true WHERE ${scope} AND ${SCOPED_SQL} AND revisionId = :revisionId AND expiredAt IS NULL`, params)
         .catch(() => {
           /* edge type may hold no rows yet */
         });
@@ -518,7 +643,7 @@ export class GraphService {
     await this.arcade.command('sql', `UPDATE Chunk SET live = false WHERE ${scope} AND revisionId <> :revisionId`, params);
     for (const type of RELATION_EDGE_TYPES) {
       await this.arcade
-        .command('sql', `UPDATE ${type} SET live = false WHERE ${scope} AND ${scoped} AND revisionId <> :revisionId`, params)
+        .command('sql', `UPDATE ${type} SET live = false WHERE ${scope} AND ${SCOPED_SQL} AND revisionId <> :revisionId`, params)
         .catch(() => {
           /* edge type may hold no rows yet */
         });
@@ -575,13 +700,18 @@ export class GraphService {
     return facts.length;
   }
 
-  /** Explicit relations from the REST payload; re-posting the same relation replaces it. */
+  /**
+   * Explicit relations from the REST payload; re-posting the same relation
+   * replaces it — the previous row is retracted (#81), not deleted.
+   * `actor` is the users.id the retraction is attributed to.
+   */
   async addExplicitRelations(input: {
     workspaceId: string;
     documentId: string;
     revisionId: string | null;
     title: string;
     facts: FactInput[];
+    actor?: string;
   }): Promise<void> {
     const { workspaceId, documentId, revisionId, title } = input;
     const facts = await this.canonicalFacts(workspaceId, input.facts);
@@ -589,16 +719,46 @@ export class GraphService {
     await this.upsertDocumentVertex(workspaceId, documentId, title);
     for (const fact of facts) {
       this.assertEdgeType(fact.type);
-      await this.arcade
-        .command('sql', `DELETE FROM ${fact.type} WHERE documentId = :documentId AND targetKey = :targetKey AND extractor = 'explicit'`, {
-          documentId,
-          targetKey: fact.target.key,
-        })
-        .catch(() => {
-          /* no previous edge */
-        });
+      await this.retract(workspaceId, documentId, fact.type, fact.target.key, ['explicit'], input.actor);
       await this.createRelationEdge(workspaceId, documentId, revisionId, fact);
     }
+  }
+
+  /**
+   * Retract a document's open edges of `(type, targetKey)` (#81): expired and
+   * out of the live projection, attributed to the person, but kept so the
+   * facts timeline and `knownAt` can still show them. A document-level edge
+   * also stops being valid now — the page's owner withdrew the claim. A
+   * revision-scoped edge keeps its PG-stamped valid time: the revision still
+   * said it, we just no longer believe it.
+   */
+  private async retract(
+    workspaceId: string,
+    documentId: string,
+    type: string,
+    targetKey: string,
+    extractors: readonly string[] | null,
+    actor: string | undefined,
+  ): Promise<void> {
+    const params = {
+      workspaceId,
+      documentId,
+      targetKey,
+      now: Date.now(),
+      retractedBy: actor ? `user:${actor}` : 'user',
+      ...(extractors ? { extractors: [...extractors] } : {}),
+    };
+    const where = `workspaceId = :workspaceId AND documentId = :documentId AND targetKey = :targetKey AND expiredAt IS NULL${extractors ? ' AND extractor IN :extractors' : ''}`;
+    await this.arcade
+      .command('sql', `UPDATE ${type} SET validTo = :now WHERE ${where} AND NOT (${SCOPED_SQL})`, params)
+      .catch(() => {
+        /* edge type may hold no rows yet */
+      });
+    await this.arcade
+      .command('sql', `UPDATE ${type} SET expiredAt = :now, retractedBy = :retractedBy, live = false WHERE ${where}`, params)
+      .catch(() => {
+        /* edge type may hold no rows yet */
+      });
   }
 
   /**
@@ -611,19 +771,25 @@ export class GraphService {
   async getDocumentRelations(
     workspaceId: string,
     documentId: string,
-    opts: { liveOnly?: boolean } = {},
+    opts: { liveOnly?: boolean; includeExpired?: boolean } = {},
   ): Promise<DocumentRelation[]> {
     const out: DocumentRelation[] = [];
     const liveClause = opts.liveOnly ? ` AND ${LIVE}` : '';
     for (const type of RELATION_EDGE_TYPES) {
       const rows = await this.arcade
-        .query<{ targetKey: string; revisionId: string | null; extractor: string; confidence: number; sourceChunkId?: string | null; snippet?: string | null; live?: boolean | null }>(
+        .query<{ targetKey: string; revisionId: string | null; extractor: string; confidence: number; sourceChunkId?: string | null; snippet?: string | null; live?: boolean | null } & Partial<EdgeTemporal>>(
           'sql',
-          `SELECT targetKey, revisionId, extractor, confidence, sourceChunkId, snippet, live FROM ${type} WHERE workspaceId = :workspaceId AND documentId = :documentId${liveClause}`,
+          `SELECT targetKey, revisionId, extractor, confidence, sourceChunkId, snippet, live, ${TEMPORAL_COLUMNS} FROM ${type} WHERE workspaceId = :workspaceId AND documentId = :documentId${liveClause}`,
           { workspaceId, documentId },
         )
         .catch(() => []);
-      for (const r of rows) out.push({ type, targetKey: r.targetKey, entityType: '', name: '', revisionId: r.revisionId ?? null, extractor: r.extractor, confidence: r.confidence, sourceChunkId: r.sourceChunkId ?? undefined, snippet: r.snippet ?? undefined, live: r.live !== false });
+      for (const r of rows) {
+        const temporal = temporalOf(r);
+        // Expired rows (#81) are what we stopped believing: only the facts
+        // timeline asks for them.
+        if (temporal.expiredAt !== null && !opts.includeExpired) continue;
+        out.push({ type, targetKey: r.targetKey, entityType: '', name: '', revisionId: r.revisionId ?? null, extractor: r.extractor, confidence: r.confidence, sourceChunkId: r.sourceChunkId ?? undefined, snippet: r.snippet ?? undefined, live: r.live !== false, temporal });
+      }
     }
     if (out.length === 0) return out;
 
@@ -675,9 +841,9 @@ export class GraphService {
           sourceChunkId?: string | null;
           snippet?: string | null;
           live?: boolean | null;
-        }>(
+        } & Partial<EdgeTemporal>>(
           'sql',
-          `SELECT documentId, revisionId, extractor, confidence, sourceChunkId, snippet, live FROM ${type} WHERE workspaceId = :workspaceId AND targetKey = :targetKey`,
+          `SELECT documentId, revisionId, extractor, confidence, sourceChunkId, snippet, live, ${TEMPORAL_COLUMNS} FROM ${type} WHERE workspaceId = :workspaceId AND targetKey = :targetKey`,
           { workspaceId, targetKey: from },
         )
         .catch(() => []);
@@ -700,8 +866,10 @@ export class GraphService {
           confidence: r.confidence,
           ...(r.sourceChunkId ? { sourceChunkId: r.sourceChunkId } : {}),
           ...(r.snippet ? { snippet: r.snippet } : {}),
-          // A retired edge stays retired when its target is re-keyed.
+          // A retired edge stays retired, and keeps its history (#81), when
+          // its target is re-keyed.
           live: r.live !== false,
+          temporal: temporalOf(r),
         });
         moved += 1;
       }
@@ -733,13 +901,14 @@ export class GraphService {
     );
     await this.arcade.command(
       'sql',
-      `CREATE EDGE ${fact.type} FROM (SELECT FROM Document WHERE documentId = :documentId) TO (SELECT FROM Entity WHERE entityKey = :key AND workspaceId = :workspaceId) SET workspaceId = :workspaceId, documentId = :documentId, revisionId = :revisionId, live = :live, targetKey = :key, extractor = :extractor, confidence = :confidence, sourceChunkId = :sourceChunkId, snippet = :snippet`,
+      `CREATE EDGE ${fact.type} FROM (SELECT FROM Document WHERE documentId = :documentId) TO (SELECT FROM Entity WHERE entityKey = :key AND workspaceId = :workspaceId) SET workspaceId = :workspaceId, documentId = :documentId, revisionId = :revisionId, live = :live, targetKey = :key, extractor = :extractor, confidence = :confidence, sourceChunkId = :sourceChunkId, snippet = :snippet, ${TEMPORAL_COLUMNS.split(', ').map((c) => `${c} = :${c}`).join(', ')}`,
       {
         documentId,
         key: fact.target.key,
         workspaceId,
         revisionId,
         live: fact.live ?? true,
+        ...(fact.temporal ?? freshTemporal(fact.extractor)),
         extractor: fact.extractor,
         confidence: fact.confidence,
         sourceChunkId: fact.sourceChunkId ?? null,
@@ -808,32 +977,22 @@ export class GraphService {
     /** Part of the live projection (#83) — see `upsertRevisionChunks`. */
     live: boolean;
   }): Promise<void> {
-    const { workspaceId, documentId, revisionId, title, live } = input;
-    const facts = await this.canonicalFacts(workspaceId, input.facts);
-    for (const type of RELATION_EDGE_TYPES) {
-      await this.arcade
-        .command('sql', `DELETE FROM ${type} WHERE documentId = :documentId AND revisionId = :revisionId AND extractor = 'inferred'`, {
-          documentId,
-          revisionId,
-        })
-        .catch(() => {
-          /* edge type may hold no rows yet */
-        });
-    }
-    if (facts.length === 0) return;
-
+    const facts = await this.canonicalFacts(input.workspaceId, input.facts);
     const protectedPairs = new Set<string>();
-    for (const rel of await this.getDocumentRelations(workspaceId, documentId)) {
-      if (rel.extractor === 'curated' || rel.extractor === 'explicit') {
-        protectedPairs.add(`${rel.type} ${rel.targetKey}`);
+    if (facts.length > 0) {
+      // Retracted curated/explicit rows are not read (#81): a withdrawn claim
+      // protects nothing.
+      for (const rel of await this.getDocumentRelations(input.workspaceId, input.documentId)) {
+        if (rel.extractor === 'curated' || rel.extractor === 'explicit') {
+          protectedPairs.add(`${rel.type} ${rel.targetKey}`);
+        }
       }
     }
-
-    await this.upsertDocumentVertex(workspaceId, documentId, title);
-    for (const fact of facts) {
-      if (protectedPairs.has(`${fact.type} ${fact.target.key}`)) continue;
-      await this.createRelationEdge(workspaceId, documentId, revisionId, { ...fact, live });
-    }
+    await this.reconcileRevisionFacts(
+      'inferred',
+      input,
+      facts.filter((f) => !protectedPairs.has(`${f.type} ${f.target.key}`)),
+    );
   }
 
   /**
@@ -846,45 +1005,34 @@ export class GraphService {
     revisionId: string | null;
     title: string;
     fact: FactInput;
+    /** users.id the retraction of the replaced edge is attributed to (#81). */
+    actor?: string;
   }): Promise<void> {
     const { workspaceId, documentId, revisionId, title } = input;
     const [fact] = await this.canonicalFacts(workspaceId, [input.fact]);
     this.assertEdgeType(fact.type);
-    await this.arcade
-      .command(
-        'sql',
-        `DELETE FROM ${fact.type} WHERE documentId = :documentId AND targetKey = :targetKey AND extractor IN ['inferred', 'curated']`,
-        { documentId, targetKey: fact.target.key },
-      )
-      .catch(() => {
-        /* no previous edge */
-      });
+    await this.retract(workspaceId, documentId, fact.type, fact.target.key, ['inferred', 'curated'], input.actor);
     await this.upsertDocumentVertex(workspaceId, documentId, title);
     await this.createRelationEdge(workspaceId, documentId, revisionId, { ...fact, extractor: 'curated', confidence: 1 });
   }
 
-  /** Delete a document's relation edges by (type, target), optionally one fact class only. */
+  /**
+   * Retract a document's relation edges by (type, target), optionally one fact
+   * class only (#81): they leave every current view but stay in the facts
+   * timeline, attributed to `actor`. Only `deleteDocumentGraph` erases.
+   */
   async deleteRelations(
     workspaceId: string,
     documentId: string,
     type: string,
     targetKey: string,
     extractor?: string,
+    actor?: string,
   ): Promise<void> {
     this.assertEdgeType(type);
     // Fold here too: edges are stored under the canonical key, so a delete for
     // the spelling the caller happens to hold would silently match nothing.
-    const canonicalKey = normalizeEntityKey(targetKey);
-    const extra = extractor ? ' AND extractor = :extractor' : '';
-    await this.arcade
-      .command(
-        'sql',
-        `DELETE FROM ${type} WHERE workspaceId = :workspaceId AND documentId = :documentId AND targetKey = :targetKey${extra}`,
-        { workspaceId, documentId, targetKey: canonicalKey, ...(extractor ? { extractor } : {}) },
-      )
-      .catch(() => {
-        /* nothing to delete */
-      });
+    await this.retract(workspaceId, documentId, type, normalizeEntityKey(targetKey), extractor ? [extractor] : null, actor);
   }
 
   /**

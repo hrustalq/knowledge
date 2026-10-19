@@ -7,6 +7,7 @@ import { GraphModule } from '../graph/graph.module.js';
 import { GraphService } from '../graph/graph.service.js';
 import { FulltextModule } from '../fulltext/fulltext.module.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
+import { revisionStamps } from '../graph/temporal.js';
 
 /**
  * One-time reconciliation of the live projection (#83).
@@ -18,11 +19,16 @@ import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.p
  * live. This stamps them: per document, the indexed head of the default branch
  * becomes live and every other revision becomes history.
  *
+ * It also stamps valid time (#81): every finalized revision's chunks and
+ * revision-scoped edges get `validFrom`/`validTo`/`lineage` from PG, the same
+ * `revisionStamps` the processor applies after each job. Rows the processor
+ * wrote since #81 are already stamped; this reaches the ones before it.
+ *
  *   make graph-live-backfill                         every workspace
  *   make graph-live-backfill ARGS="--workspace <id>" one workspace
  *   make graph-live-backfill ARGS="--dry-run"        report only
  *
- * Idempotent: a second run rewrites the same flags. Safe alongside a running
+ * Idempotent: a second run rewrites the same flags and stamps. Safe alongside a running
  * worker — the processor reconciles the same way after every job, and both
  * converge on the current head.
  */
@@ -52,8 +58,10 @@ async function main(): Promise<void> {
       workspaceId: true,
       defaultBranch: true,
       branches: { select: { id: true, name: true, headRevisionId: true } },
+      revisions: { where: { finalizedAt: { not: null } }, select: { id: true, branchId: true, finalizedAt: true } },
     },
   });
+  let stamped = 0;
 
   let live = 0;
   let fallback = 0;
@@ -83,6 +91,10 @@ async function main(): Promise<void> {
 
     try {
       await graph.setLiveRevision(doc.workspaceId, doc.id, target);
+      // Before the BM25 write: an OpenSearch outage must not skip the graph.
+      const stamps = revisionStamps(doc.revisions, branch?.id ?? null);
+      await graph.stampRevisions(doc.workspaceId, doc.id, stamps);
+      stamped += stamps.length;
       await fulltext.setLiveRevision(doc.workspaceId, doc.id, target);
     } catch (e) {
       failed += 1;
@@ -92,7 +104,7 @@ async function main(): Promise<void> {
 
   console.log(
     `${dryRun ? '[dry run] ' : ''}${docs.length} document(s): ${live} with a live revision ` +
-      `(${fallback} via the newest indexed revision, head not yet indexed), ${none} with none, ${failed} failed.`,
+      `(${fallback} via the newest indexed revision, head not yet indexed), ${none} with none, ${stamped} revision(s) stamped, ${failed} failed.`,
   );
   await app.close();
   if (failed > 0) process.exitCode = 1;

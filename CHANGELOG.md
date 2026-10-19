@@ -109,6 +109,22 @@ in the pull request that introduces them — see
   is documented in `docs/features/56-realtime-coediting.md`, numbers included.
   It stays off by default (`COLLAB_ENABLED=false`) and is on in the hosted
   deployment, after a dogfood pass on the dev stack.
+- The graph records when each fact was true (#81, phase 1). Every chunk and
+  every frontmatter, inferred and spec relation of a page revision now carries
+  the interval its revision was the page's content: from the revision's
+  finalize time until the next default-branch revision's. Branch revisions are
+  marked as such and never valid. Nothing reads these intervals yet; the "as
+  of" queries in the next phases do.
+
+### Changed
+
+- Deleting a relation, re-posting an explicit one or curating over an inferred
+  one no longer erases the old edge (#81). It is retracted: gone from every
+  current view as before, but listed in `GET /v1/documents/:id/facts/timeline`
+  with `status: 'retracted'`, `retractedAt` and `retractedBy` (`user:<id>`). A
+  re-index of the same revision that no longer infers a fact retracts it the
+  same way, with `retractedBy: 'extractor'`. Deleting a page still erases its
+  graph.
 
 ### Fixed
 
@@ -123,6 +139,12 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Run `make graph-live-backfill` once after deploying #81 phase 1. It now also
+  stamps valid time on the chunks and relations written before this release;
+  without it, the "as of" reads of later phases find no history for those
+  pages. It is idempotent and safe beside a running worker, and current views
+  do not depend on it. Note the target runs `nest build` first, so on a dev
+  machine it restarts a running `make dev`. No migration.
 - Migration `20261112100000_collab_drafts` adds the `collab_drafts` table and
   nothing else. It survives a code rollback, because the previous image never
   reads it. New env vars, all with defaults and none required:

@@ -3,6 +3,7 @@ import express from 'express'
 import { configureBacktest, createRootLogger, envLogLevel } from '@knowledge/observability'
 import { traceMiddleware } from '@knowledge/observability/express'
 import { aiReadableMiddleware } from './server/ai-readable.js'
+import { appHostMiddleware } from './server/app-host.js'
 import { createRenderCache, renderCacheKey } from './server/render-cache.js'
 import { createSiteHostResolver, siteFilesMiddleware } from './server/site-files.js'
 import { siteWidgetRoute } from './server/site-widget.js'
@@ -126,6 +127,10 @@ app.use(async (req, res, next) => {
   next()
 })
 
+// The app host's security headers and robots.txt (issue #277). A site's host
+// and the public paths keep whatever their own handlers set.
+app.use(appHostMiddleware(PUBLIC_PATH))
+
 // A site's embeddable Ask widget script (issue #77 phase 3): `/widget.js` on
 // its host or `/pub/<slug>/widget.js`, before the reader takes it for a page.
 app.use(siteWidgetRoute())
@@ -159,7 +164,11 @@ if (!isProduction) {
   const compression = (await import('compression')).default
   const sirv = (await import('sirv')).default
   app.use(compression())
-  app.use(base, sirv('./dist/client', { extensions: [] }))
+  // Vite content-hashes everything under assets/, so a changed file is a new
+  // URL: those are cached for a year. The rest (favicon, the HTML shells) keep
+  // their names across releases and are revalidated on every use (#277).
+  app.use(`${base}assets`, sirv('./dist/client/assets', { maxAge: 31536000, immutable: true }))
+  app.use(base, sirv('./dist/client', { extensions: [], maxAge: 0, etag: true }))
 }
 
 const SUPPORTED_LOCALES = ['en', 'ru']
@@ -339,7 +348,9 @@ app.use('*all', async (req, res) => {
       .replace(`<!--app-head-->`, rendered.head ?? '')
       .replace(`<!--app-html-->`, rendered.html ?? '')
 
-    res.status(200).set({ 'Content-Type': 'text/html' }).send(html)
+    // One member's render, behind their cookie: never a shared cache's, and
+    // never reused without asking.
+    res.status(200).set({ 'Content-Type': 'text/html', 'Cache-Control': 'private, no-cache' }).send(html)
   } catch (e) {
     vite?.ssrFixStacktrace(e)
     // The stack goes to the log, never to the client. This used to send the

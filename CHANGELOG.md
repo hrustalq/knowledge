@@ -26,6 +26,11 @@ in the pull request that introduces them — see
 
 ### Security
 
+- The app's own pages now send `Strict-Transport-Security`,
+  `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and
+  `Cross-Origin-Opener-Policy: same-origin` (#277). Share links and published
+  sites keep the headers their renders set, so a site's Ask widget stays
+  embeddable where its `frame-ancestors` allows.
 - Attachment, import-image and avatar URLs in the web app no longer carry your
   session token. Those `<img>` and `<object>` requests now authenticate with the
   app's own session cookie, so the token can no longer end up in a proxy log,
@@ -370,8 +375,20 @@ in the pull request that introduces them — see
   Retry button and a link to the page, Publish stays unavailable and nothing
   is stored on the device until the page loads. Retry joins the shared draft
   when co-editing is on.
+- Returning to the app no longer re-downloads its scripts and styles (#277).
+  The content-hashed files under `/assets/` were sent with no `Cache-Control`,
+  so the edge's 4-hour default applied; they are now cached for a year as
+  `immutable`. The HTML shells and the favicon are revalidated on every use,
+  and a member's rendered page is `private, no-cache`.
+- `/robots.txt` on the app's own host returned the app's HTML page (#277). It
+  is now plain text that keeps crawlers out of the member app and lets them
+  into path-mode published sites under `/pub/`. A site's own `robots.txt` is
+  unchanged.
 
 ### Operations
+
+- After deploying #277, purge the Cloudflare cache once: asset URLs already
+  cached at the edge keep the 4-hour lifetime they were stored with until then.
 
 - The web app's images and file previews now depend on the browser calling the
   API on the web's own origin under `/api`, which the bundled Caddy config and

@@ -29,7 +29,7 @@
 // and "Save as template" goes the other way.
 import { useI18n } from 'vue-i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { onKeyStroke, useStorage } from '@vueuse/core'
 import { GitCompareArrows, History, LayoutTemplate, MoreHorizontal, Route, Settings2, Sparkles, X } from 'lucide-vue-next'
@@ -83,6 +83,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageState } from '@/components/layout/page'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import {
   Sheet,
@@ -219,6 +220,12 @@ const busy = ref(false)
  * first mount for the published baseline.
  */
 const loading = ref(isEdit.value)
+/**
+ * Why the page being edited did not load (#314). While set, the editor is not
+ * mounted, nothing is stored as a working copy and Publish is refused: the
+ * fields are empty, and publishing them would finalize a blank page over the head.
+ */
+const loadError = ref<unknown>(null)
 const settingsOpen = ref(false)
 const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
 
@@ -562,7 +569,7 @@ const workingCopy = useWorkingCopy({
   // per-browser one restored into it would be a second seed. Loading suspends
   // it too: reopening after a reset lays the new head over the last session's
   // baseline, and storing that would offer the published page back as edits.
-  key: () => (collab.value || loading.value ? null : storageKey.value),
+  key: () => (collab.value || loading.value || loadError.value ? null : storageKey.value),
   fields: currentFields,
   base: () => {
     const base = baseFields.value
@@ -853,6 +860,7 @@ async function loadPage() {
   const id = editId.value
   if (!id) return
   loading.value = true
+  loadError.value = null
   try {
     const [detail, defaultContent, caps, { branches }] = await Promise.all([
       apiFetch<DocumentDetailResponse>(`/v1/documents/${id}`),
@@ -891,7 +899,7 @@ async function loadPage() {
       await startCollab(detail, content, branch.value, caps).catch(() => toast.info(t('editor.collab.unavailable')))
     }
   } catch (e) {
-    toast.error((e as Error).message)
+    loadError.value = e
   } finally {
     // Mounts the editor, whose `ready` captures the published baseline.
     loading.value = false
@@ -991,6 +999,7 @@ async function publishRevision(
 }
 
 async function save(onTop = false) {
+  if (loadError.value) return
   // Publishing would drop them silently — the serializer skips suggestions — so
   // they are decided first, where the author can see what they are deciding.
   if (aiPending.value.count > 0) {
@@ -1204,7 +1213,8 @@ onBeforeUnmount(() => {
     <div class="kn-page-column">
       <header class="kn-page-head">
         <div class="kn-page-crumb">
-          <strong>{{ projectName }}</strong>
+          <!-- Before a load the project is the sidebar's, not the page's. -->
+          <strong v-if="!loadError">{{ projectName }}</strong>
           <span class="kn-page-state">{{ isEdit ? t('editor.editing') : t('editor.newPage') }}</span>
           <span v-if="!isEdit && template" class="kn-page-state">
             {{ templateName ? t('editor.fromTemplate', { name: templateName }) : t('editor.fromATemplate') }}
@@ -1270,7 +1280,11 @@ onBeforeUnmount(() => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" :disabled="busy || loading || (collab !== null && !collab.status.writable)" @click="save()">
+          <Button
+            size="sm"
+            :disabled="busy || loading || loadError !== null || (collab !== null && !collab.status.writable)"
+            @click="save()"
+          >
             {{ busy ? t('common.saving') : isEdit ? t('editor.publish') : t('editor.createAndIndex') }}
           </Button>
         </div>
@@ -1283,6 +1297,23 @@ onBeforeUnmount(() => {
             <Skeleton class="h-4 w-full" />
             <Skeleton class="h-4 w-5/6" />
             <Skeleton class="h-64 w-full" />
+          </div>
+
+          <div v-else-if="loadError" class="p-8">
+            <PageState
+              state="error"
+              :title="t('editor.loadFailed.title')"
+              :description="t('editor.loadFailed.body', { reason: errorMessage(loadError, t) })"
+            >
+              <template #actions>
+                <div class="flex flex-wrap justify-center gap-2">
+                  <Button size="sm" variant="outline" @click="loadPage()">{{ t('common.retry') }}</Button>
+                  <Button size="sm" variant="ghost" as-child>
+                    <RouterLink :to="`/documents/${editId}`">{{ t('editor.loadFailed.openPage') }}</RouterLink>
+                  </Button>
+                </div>
+              </template>
+            </PageState>
           </div>
 
           <template v-else>

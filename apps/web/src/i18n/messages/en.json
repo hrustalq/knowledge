@@ -3236,7 +3236,12 @@
         "open": "Open the draft"
       }
     },
-    "branchNotFound": "This page has no branch {name}, so you are editing its default branch."
+    "branchNotFound": "This page has no branch {name}, so you are editing its default branch.",
+    "loadFailed": {
+      "title": "This page did not load, so it cannot be edited yet",
+      "openPage": "Open the page",
+      "body": "{reason} — nothing was saved. Check your connection and retry, or open the page to read it."
+    }
   },
   "toolbar": {
     "formatting": "Formatting",

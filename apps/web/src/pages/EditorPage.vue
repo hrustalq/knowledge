@@ -173,6 +173,8 @@ const headRevisionId = ref<string | null>(null)
 const requestedBranch = typeof route.query.branch === 'string' ? route.query.branch : null
 /** The branch being edited, once loaded. Null on a new page. */
 const branch = ref<BranchInfo | null>(null)
+/** `branch`'s name when it is not the page's default: its working copy has a slot of its own. */
+const branchSlot = ref<string | null>(null)
 
 /**
  * `/create?parent=&project=&template=` (issue #69): where a new page goes and
@@ -375,7 +377,7 @@ function applyFields(fields: PageFields) {
  */
 const baseFields = ref<PageFields | null>(null)
 
-const storageKey = computed(() => workingCopyKey(getWorkspaceId(), editId.value))
+const storageKey = computed(() => workingCopyKey(getWorkspaceId(), editId.value, branchSlot.value))
 
 /* ------------------------------------------------------ shared draft */
 
@@ -557,8 +559,10 @@ function discardLocalCopy() {
 
 const workingCopy = useWorkingCopy({
   // A shared draft keeps its own copy on this device (IndexedDB); a second,
-  // per-browser one restored into it would be a second seed.
-  key: () => (collab.value ? null : storageKey.value),
+  // per-browser one restored into it would be a second seed. Loading suspends
+  // it too: reopening after a reset lays the new head over the last session's
+  // baseline, and storing that would offer the published page back as edits.
+  key: () => (collab.value || loading.value ? null : storageKey.value),
   fields: currentFields,
   base: () => {
     const base = baseFields.value
@@ -867,6 +871,7 @@ async function loadPage() {
     const byName = (name: string | null) => branches.find((b) => b.name === name)
     if (requestedBranch && !byName(requestedBranch)) toast.error(t('editor.branchNotFound', { name: requestedBranch }))
     branch.value = byName(requestedBranch) ?? byName(detail.document.defaultBranch) ?? null
+    branchSlot.value = branch.value && branch.value.name !== detail.document.defaultBranch ? branch.value.name : null
     const head = branch.value?.headRevisionId ?? detail.document.headRevisionId
     const content =
       head && head !== defaultContent.revisionId
@@ -1441,7 +1446,8 @@ onBeforeUnmount(() => {
     <Dialog v-model:open="reviewOpen">
       <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>{{ t('editor.unstaged.reviewTitle') }}</DialogTitle>
+          <!-- Named like the chip that opened it: a shared draft is unpublished, not unstaged in this browser. -->
+          <DialogTitle>{{ t(collab ? 'editor.collab.unpublished.label' : 'editor.unstaged.reviewTitle') }}</DialogTitle>
           <DialogDescription>{{ t('editor.unstaged.reviewDesc') }}</DialogDescription>
         </DialogHeader>
 

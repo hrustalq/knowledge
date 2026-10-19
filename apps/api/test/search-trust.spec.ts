@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TRUST_WEIGHTS } from '@knowledge/contracts';
 import { SearchService } from '../src/search/search.service.js';
 import { systemScope } from '../src/permissions/access-scope.js';
+import { DEV_PRINCIPAL } from '../src/auth/principal.js';
 
 /**
  * The trust re-rank (docs/features/39): archived pages drop, a page's state
@@ -57,6 +58,7 @@ function hit(documentId: string, score: number) {
 const ADMIN = systemScope(WS);
 
 function build(docs: Row[], hits: ReturnType<typeof hit>[], trustRanking = true) {
+  const analytics = { search: vi.fn(() => 'search-1') };
   const prisma = {
     document: {
       findMany: vi.fn(async ({ where }: { where: { id: { in: string[] }; archivedAt?: unknown } }) =>
@@ -88,8 +90,9 @@ function build(docs: Row[], hits: ReturnType<typeof hit>[], trustRanking = true)
     config as never,
     // No asOf: every search here reads the live projection (#81).
     { resolve: async () => undefined } as never,
+    analytics as never,
   );
-  return { svc, graph, prisma };
+  return { svc, graph, prisma, analytics };
 }
 
 const verified = row('verified', { verifiedAt: new Date(NOW - day), verifiedRevisionId: 'head', verificationExpiresAt: new Date(NOW + 30 * day) });
@@ -159,5 +162,28 @@ describe('SearchService trust re-rank', () => {
     const { svc } = build([plain, archived], [hit('archived', 0.9), hit('plain', 0.6)], false);
     const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic' }, ADMIN);
     expect(res.results.map((r) => r.documentId)).toEqual(['plain']);
+  });
+});
+
+describe('SearchService analytics (#79)', () => {
+  it('files a search that names its caller, with the pages it returned, and hands back its id', async () => {
+    const { svc, analytics } = build([verified, plain], [hit('plain', 0.5), hit('verified', 0.5)]);
+    const caller = { principal: DEV_PRINCIPAL, channel: 'mcp' as const };
+    const res = await svc.search({ workspaceId: WS, query: 'billing', mode: 'semantic' }, ADMIN, caller);
+    expect(res.searchId).toBe('search-1');
+    expect(analytics.search).toHaveBeenCalledWith(
+      caller,
+      expect.objectContaining({ workspaceId: WS, query: 'billing', mode: 'semantic', projectIds: [], resultDocIds: ['verified', 'plain'] }),
+    );
+  });
+
+  it('files an empty search too, and nothing for a search with no caller', async () => {
+    const { svc, analytics } = build([], []);
+    const caller = { principal: DEV_PRINCIPAL };
+    expect((await svc.search({ workspaceId: WS, query: 'nothing' }, ADMIN, caller)).searchId).toBe('search-1');
+    expect(analytics.search).toHaveBeenLastCalledWith(caller, expect.objectContaining({ resultDocIds: [] }));
+    analytics.search.mockClear();
+    expect((await svc.search({ workspaceId: WS, query: 'nothing' }, ADMIN)).searchId).toBeUndefined();
+    expect(analytics.search).not.toHaveBeenCalled();
   });
 });

@@ -49,6 +49,7 @@ import { withAsOf } from '../graph/temporal.js';
 import { ApiAsOfQuery } from '../temporal/temporal.dto.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
+import { AnalyticsRecorder, noTrackOf } from '../analytics/analytics.recorder.js';
 
 /** A query-string boolean: `1`, `true` and `yes` are on; anything else, including absence, is off. */
 function flag(value?: string): boolean {
@@ -79,6 +80,7 @@ export class DocumentsController {
     private readonly permissions: PermissionService,
     private readonly temporal: TemporalResolverService,
     private readonly communities: CommunitiesService,
+    private readonly analytics: AnalyticsRecorder,
   ) {}
 
   @Post()
@@ -232,6 +234,7 @@ export class DocumentsController {
   })
   async content(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
     @Query('revision') revision?: string,
@@ -249,15 +252,21 @@ export class DocumentsController {
     const ifNoneMatch = req.headers['if-none-match'];
     // The representation depends on Accept either way, so both branches say so.
     res.setHeader('Vary', 'Accept');
+    // A key's read is a view (#79); a session's is dropped by the recorder —
+    // SSR and prefetch call this too, so the web counts its own on the page.
+    const caller = { principal, noTrack: noTrackOf(req.headers) };
     if (this.aiReadable.enabled() && prefersMarkdown(accept)) {
       const result = await this.aiReadable.pageMarkdown(id, {
         revisionId: revision || undefined,
         frontmatter: wantsFrontmatter(frontmatter),
         ifNoneMatch,
       });
+      if (result.status === 200) void this.analytics.view(caller, id, revision || null);
       return sendPageMarkdown(res, result);
     }
-    return withAsOf(await this.documents.getContent(id, revision), at);
+    const content = await this.documents.getContent(id, revision);
+    void this.analytics.view(caller, id, content.revisionId);
+    return withAsOf(content, at);
   }
 
   @Get(':id/connectors')

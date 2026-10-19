@@ -42,6 +42,8 @@ function readTools(visible: () => boolean) {
     documents as never,
     {} as never,
     permissions as never,
+    {} as never,
+    { view: vi.fn(async () => undefined) } as never,
   );
   return { tools, permissions, documents };
 }

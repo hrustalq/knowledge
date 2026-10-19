@@ -31,6 +31,7 @@ import { QualityCoreModule } from '../quality/quality-core.module.js';
 import { TemporalCoreModule } from '../temporal/temporal-core.module.js';
 import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
 import { CommunitiesCoreModule } from '../communities/communities-core.module.js';
+import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -43,6 +44,8 @@ import { McpService } from './mcp.service.js';
   imports: [
     PrismaModule,
     AuthCoreModule,
+    // Every tool call, and the page reads among them, is recorded (#79).
+    AnalyticsCoreModule,
     // Page-level checks behind guard.doc/mr/project and scoped tree/graph tools (#76).
     PermissionsCoreModule,
     GraphModule,

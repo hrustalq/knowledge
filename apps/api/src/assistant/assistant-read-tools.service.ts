@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import type { AssistantAskSource, DocumentTreeNode } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
+import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
@@ -58,6 +59,7 @@ export class AssistantReadToolsService {
     private readonly templates: TemplatesService,
     private readonly permissions: PermissionService,
     private readonly communities: CommunitiesService,
+    private readonly analytics: AnalyticsRecorder,
   ) {}
 
   /**
@@ -69,6 +71,11 @@ export class AssistantReadToolsService {
   private async scopeOf(ctx: AssistantToolContext): Promise<AccessScope> {
     const scope = await this.permissions.scopeFor(ctx.principal, ctx.workspaceId);
     return ctx.audience ? this.permissions.audienceScope(scope, ctx.audience) : scope;
+  }
+
+  /** The turn as the analytics log files it (#79). */
+  private callerOf(ctx: AssistantToolContext): AnalyticsCaller {
+    return { principal: ctx.principal, channel: ctx.channel ?? 'assistant' };
   }
 
   definitions(): ChatCompletionFunctionTool[] {
@@ -304,6 +311,7 @@ export class AssistantReadToolsService {
         ...(ctx.projectId ? { filters: { projectIds: [ctx.projectId] } } : { expandGraph: { depth: 1 } }),
       },
       scope,
+      this.callerOf(ctx),
     );
     // Where each hit lives, not just what it is called. Two pages both called
     // "Overview" in different sections were indistinguishable to the model,
@@ -454,6 +462,7 @@ export class AssistantReadToolsService {
     await this.permissions.auditBypassRead(ctx.principal, scope, { type: 'document', id: documentId });
     try {
       const content = await this.documents.getContent(documentId);
+      void this.analytics.view(this.callerOf(ctx), documentId, content.revisionId);
       const trails = await this.documents.breadcrumbsFor(scope, [documentId]);
       const source: AssistantAskSource = { documentId, title: doc.title, revisionId: content.revisionId, factClass: 'explicit' };
       return {

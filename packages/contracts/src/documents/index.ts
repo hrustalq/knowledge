@@ -169,6 +169,12 @@ export interface SearchResponse {
   degraded?: SearchDegradedLeg[];
   /** Present on an `asOf` search (#81). */
   resolvedAsOf?: ResolvedAsOf;
+  /**
+   * This search's row in the analytics log (#79), present when analytics is
+   * on. The web carries it to the page a result opens (`?sid=&rank=`),
+   * which is what counts a click.
+   */
+  searchId?: string;
 }
 /** A document discovered by graph expansion, with the connecting evidence. */
 export interface RelatedDocumentResult {

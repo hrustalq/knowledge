@@ -7,6 +7,7 @@ import { CAPTURE_KIT_CLIENTS, type CaptureKitResponse, type McpConnectionInfo } 
 import { CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { MCP_SERVER_NAME } from './mcp-tools.js';
+import { noTrackOf } from '../analytics/analytics.recorder.js';
 import { CollabDraftToolsService } from '../collab/collab-draft-tools.service.js';
 import { MCP_SERVER_VERSION, McpService, type McpExtras } from './mcp.service.js';
 
@@ -49,7 +50,7 @@ export class McpController {
     summary: 'MCP Streamable HTTP endpoint (JSON-RPC). Point an MCP client here with a Bearer API key',
   })
   async handle(@CurrentPrincipal() principal: Principal, @Req() req: Request, @Res() res: Response): Promise<void> {
-    const { server } = this.mcp.buildServer(principal, this.extras);
+    const { server } = this.mcp.buildServer(principal, { ...this.extras, noTrack: noTrackOf(req.headers) });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => {
       void transport.close();

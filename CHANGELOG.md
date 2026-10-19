@@ -207,6 +207,19 @@ in the pull request that introduces them — see
   not open is withheld whole. The pages graph can colour pages by community
   (**Colour pages by community** in its Filters). Each summary is one model
   call, recorded as `community` in AI usage.
+- Usage analytics starts recording (#79, phase 1). Every search, MCP tool
+  call, and page read by an API key, MCP, the in-app assistant, a chat bot
+  or an agent now leaves a row in PostgreSQL (`search_queries`,
+  `mcp_tool_calls`, `page_views`). Each row is filed under the channel it
+  came from, so later phases can split human, assisted and agent traffic.
+  `POST /v1/search` and MCP `knowledge_search` return a `searchId`. A
+  person reading in the browser is not counted yet; that is phase 2's page
+  beacon. Readers are never stored by name: each one is an HMAC that is
+  per workspace, so readers can be counted but not identified. A request
+  sent with `DNT: 1` or `Sec-GPC: 1` is counted with no reader at all. A
+  failed analytics write never fails the request it describes. There is
+  no dashboard yet (phases 3–4), and nothing is backfilled, because no
+  earlier source recorded reads or who searched.
 
 ### Changed
 
@@ -231,6 +244,15 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261116100000_usage_analytics` adds the `page_views`,
+  `search_queries` and `mcp_tool_calls` tables and two nullable
+  `workspace_settings` columns (`analytics_enabled`,
+  `analytics_retention_days`). It is additive and survives a code
+  rollback. New env vars, both with defaults: `ANALYTICS_ENABLED` (`true`;
+  `false` records nothing) and `ANALYTICS_READER_SECRET` (empty). When the
+  secret is empty, the reader key is derived from `SETTINGS_ENCRYPTION_KEY`,
+  which production sets. No retention runs yet (phase 4), so the tables grow
+  until then.
 - New env vars for community summaries, both with defaults:
   `COMMUNITY_SUMMARIES_ENABLED` (`false`) and `COMMUNITY_MAX_PER_RUN`
   (`30`). Summaries are stored in ArcadeDB as `Community` vertices (created

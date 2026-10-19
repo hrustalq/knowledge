@@ -1,6 +1,7 @@
 import type { McpServer, RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpToolSummary } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
+import type { RecordedToolCall } from '../analytics/analytics.recorder.js';
 
 /** The key every generated client config files this server under. */
 export const MCP_SERVER_NAME = 'knowledge';
@@ -95,20 +96,60 @@ export const CAPTURE_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Keep a handle on every tool registered from here on.
+ * Keep a handle on every tool registered from here on, and time every call
+ * through `onCall` (#79).
  *
  * Wraps the instance rather than each call site, because `server.registerTool(
- * 'name', {` is a shape `generate-docs-reference.mjs` reads the source for.
+ * 'name', {` is a shape `generate-docs-reference.mjs` reads the source for —
+ * and so a tool added later is counted without knowing it is.
  */
-export function trackTools(server: McpServer): Map<string, RegisteredTool> {
+export function trackTools(
+  server: McpServer,
+  onCall: (call: RecordedToolCall) => void = () => {},
+): Map<string, RegisteredTool> {
   const handles = new Map<string, RegisteredTool>();
   const register = server.registerTool.bind(server) as (...args: unknown[]) => RegisteredTool;
   server.registerTool = ((name: string, ...rest: unknown[]) => {
+    const cb = rest.at(-1);
+    if (typeof cb === 'function') rest[rest.length - 1] = timed(name, cb as ToolCallback, onCall);
     const handle = register(name, ...rest);
     handles.set(name, handle);
     return handle;
   }) as McpServer['registerTool'];
   return handles;
+}
+
+type ToolCallback = (args: unknown, extra: unknown) => Promise<unknown>;
+
+function timed(tool: string, cb: ToolCallback, onCall: (call: RecordedToolCall) => void): ToolCallback {
+  return async (args, extra) => {
+    const startedAt = performance.now();
+    const a = (args ?? {}) as Record<string, unknown>;
+    // Counting a call must never be why it failed.
+    const finish = (ok: boolean, errorCode: string | null) => {
+      try {
+        onCall({
+          tool,
+          workspaceId: typeof a.workspaceId === 'string' ? a.workspaceId : null,
+          documentId: typeof a.documentId === 'string' ? a.documentId : null,
+          ok,
+          errorCode,
+          durationMs: performance.now() - startedAt,
+        });
+      } catch {
+        // swallowed: the recorder is fire-and-forget
+      }
+    };
+    try {
+      const result = await cb(args, extra);
+      const isError = (result as { isError?: boolean } | null)?.isError === true;
+      finish(!isError, isError ? 'tool-error' : null);
+      return result;
+    } catch (e) {
+      finish(false, e instanceof Error ? e.constructor.name : 'unknown');
+      throw e;
+    }
+  };
 }
 
 /**

@@ -377,6 +377,18 @@ export const envSchema = z.object({
    * question text is user content and must not live forever.
    */
   ANSWER_FEEDBACK_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
+  /**
+   * Usage & search analytics (#79): page views, searches and MCP tool calls as
+   * rows in PostgreSQL. A ceiling — a workspace may turn it off, never on past
+   * this. Off, nothing is recorded and every request behaves as before.
+   */
+  ANALYTICS_ENABLED: boolish(true),
+  /**
+   * HMAC key for `reader_key`, which counts readers without naming them.
+   * Empty: derived from SETTINGS_ENCRYPTION_KEY; both empty, a per-process
+   * random key, so unique readers restart with the process (warned at boot).
+   */
+  ANALYTICS_READER_SECRET: z.string().default(''),
   /** Knowledge issues one principal (per API key when present) may file per 24 h; past it a report is 429. */
   KNOWLEDGE_ISSUE_DAILY_LIMIT: z.coerce.number().int().positive().default(50),
   /**

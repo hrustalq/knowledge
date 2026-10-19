@@ -318,7 +318,7 @@ export class AgentExecutor {
 
   /** The tool context every agent loop runs with: the owner, clamped like {@link runScope}. */
   private toolCtx(run: AgentRun, principal: Principal) {
-    return { principal, workspaceId: run.workspaceId, audience: WORKSPACE_AUDIENCE };
+    return { principal, workspaceId: run.workspaceId, audience: WORKSPACE_AUDIENCE, channel: 'agent' as const };
   }
 
   /**
@@ -2239,6 +2239,8 @@ ${page.markdown}`, files);
     // A page outside the connector's destination — a hand-written design doc —
     // is the one most likely to drift and least likely to be tied above. One
     // search, few hits; a failure costs the weakest tie, never the run.
+    // Not filed in the analytics log (#79): a query built from a PR's files is
+    // nobody's question, like a backtest replay.
     try {
       const res = await this.search.search(
         {

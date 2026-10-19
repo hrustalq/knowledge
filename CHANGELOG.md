@@ -409,6 +409,12 @@ in the pull request that introduces them — see
   hear the visible text first, then what the control is for. The "more ways to
   start a page" chevron next to `+` in the sidebar is now 24 px wide instead of
   14 px, so it is easier to hit.
+- Initials on generated avatars and on project and workspace monograms are
+  readable on every colour (#355). Yellow, green and cyan tiles put white
+  letters at as little as 2.3:1 contrast, below the 4.5:1 WCAG asks for. Those
+  tiles are now a deeper shade of the same hue, so a person, project or
+  workspace keeps its colour; tiles that were already dark enough, such as blues
+  and purples, are unchanged.
 
 ### Operations
 

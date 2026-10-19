@@ -426,7 +426,7 @@ in the pull request that introduces them — see
 
 ### Operations
 
-- Migration `20261119100000_chat_auto_harvest` adds the nullable
+- Migration `20261120100000_chat_auto_harvest` adds the nullable
   `chat_channel_bindings.auto_harvest_by` and `auto_harvest_at` columns and
   the `chat_harvest_marks` table (#340). It is additive and survives a code
   rollback; after a final rollback, drop the table and the two columns by

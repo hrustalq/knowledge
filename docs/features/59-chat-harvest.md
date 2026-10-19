@@ -393,7 +393,7 @@ Captures are read and decided through the existing `/v1/captures` routes;
   - `20261118100000_chat_listening_buffer` adds
     `chat_channel_bindings.listening` and `chat_buffered_messages`. Additive.
     After a final rollback, drop the table by hand.
-  - `20261119100000_chat_auto_harvest` (#340) adds the nullable
+  - `20261120100000_chat_auto_harvest` (#340) adds the nullable
     `chat_channel_bindings.auto_harvest_by` / `auto_harvest_at` and
     `chat_harvest_marks`. Additive. After a final rollback, drop them by hand.
 - Env vars, all with defaults:

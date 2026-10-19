@@ -335,15 +335,15 @@ export class DocumentsController {
   @Post(':id/relations')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Attach explicit relations (graph edges with provenance)' })
-  addRelations(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddRelationsDto) {
-    return this.documents.addRelations(id, dto.relations);
+  addRelations(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddRelationsDto, @CurrentPrincipal() principal: Principal) {
+    return this.documents.addRelations(id, dto.relations, principal.userId);
   }
 
   @Post(':id/relations/curate')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Curate a relation: user-confirmed, confidence 1, protected from re-extraction (plan.md §5)' })
-  curateRelation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CurateRelationDto) {
-    return this.documents.curateRelation(id, dto.relation);
+  curateRelation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CurateRelationDto, @CurrentPrincipal() principal: Principal) {
+    return this.documents.curateRelation(id, dto.relation, principal.userId);
   }
 
   @Post(':id/relations/propose')
@@ -370,10 +370,11 @@ export class DocumentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Query('type') type: string,
     @Query('targetKey') targetKey: string,
+    @CurrentPrincipal() principal: Principal,
     @Query('extractor') extractor?: string,
   ) {
     if (!type || !targetKey) throw new BadRequestException(t('error.relations.missingParams'));
-    return this.documents.deleteRelation(id, type, targetKey, extractor);
+    return this.documents.deleteRelation(id, type, targetKey, extractor, principal.userId);
   }
 
   @Get(':id/relations')

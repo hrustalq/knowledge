@@ -82,7 +82,9 @@ export class HistoryService {
       );
     }
 
-    const rels = await this.graph.getDocumentRelations(document.workspaceId, documentId);
+    // Expired rows (#81) included: the timeline is where a retraction shows.
+    const all = await this.graph.getDocumentRelations(document.workspaceId, documentId, { includeExpired: true });
+    const rels = all.filter((r) => r.temporal.expiredAt === null);
     const entries: FactTimelineEntry[] = [];
 
     const chain = branch.headRevisionId
@@ -126,6 +128,8 @@ export class HistoryService {
         introducedAt: introduced.finalizedAt?.toISOString() ?? null,
         removedInRevisionId: removedIn?.id ?? null,
         removedAt: removedIn?.finalizedAt?.toISOString() ?? null,
+        retractedAt: null,
+        retractedBy: null,
       });
     }
 
@@ -141,6 +145,28 @@ export class HistoryService {
         introducedAt: anchor?.finalizedAt?.toISOString() ?? null,
         removedInRevisionId: null,
         removedAt: null,
+        retractedAt: null,
+        retractedBy: null,
+      });
+    }
+
+    // Retracted facts (#81) — by a person, or dropped by re-extraction of a
+    // revision on this branch's chain. Each retraction is its own entry.
+    for (const r of all) {
+      if (r.temporal.expiredAt === null) continue;
+      if (r.revisionId && (r.extractor === 'frontmatter' || r.extractor === 'inferred') && !chainIds.has(r.revisionId)) continue;
+      const anchor = r.revisionId ? byId.get(r.revisionId) : undefined;
+      entries.push({
+        type: r.type,
+        targetKey: r.targetKey,
+        extractor: r.extractor,
+        status: 'retracted',
+        introducedInRevisionId: anchor?.id ?? null,
+        introducedAt: anchor?.finalizedAt?.toISOString() ?? null,
+        removedInRevisionId: null,
+        removedAt: null,
+        retractedAt: new Date(r.temporal.expiredAt).toISOString(),
+        retractedBy: r.temporal.retractedBy,
       });
     }
 

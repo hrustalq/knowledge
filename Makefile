@@ -133,7 +133,7 @@ collab-load: ## Shared-draft load test against running APIs (#80). ARGS="--docs 
 	$(API) exec node test/collab-load.ts $(ARGS)
 
 .PHONY: graph-live-backfill
-graph-live-backfill: ## One-time (#83): stamp each page's live revision in ArcadeDB/OpenSearch. ARGS="--workspace <id>" | "--dry-run"
+graph-live-backfill: ## One-time (#83, #81): stamp each page's live revision and valid time in ArcadeDB/OpenSearch. ARGS="--workspace <id>" | "--dry-run"
 	$(API) run build
 	$(API) exec node dist/scripts/graph-live-backfill.main.js $(ARGS)
 

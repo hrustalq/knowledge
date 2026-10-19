@@ -864,7 +864,7 @@ export class DocumentsService {
     };
   }
 
-  async addRelations(documentId: string, relations: RelationInputDto[]): Promise<ListDocumentRelationsResponse> {
+  async addRelations(documentId: string, relations: RelationInputDto[], actor?: string): Promise<ListDocumentRelationsResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     const branch = await this.prisma.documentBranch.findUnique({
       where: { documentId_name: { documentId, name: document.defaultBranch } },
@@ -875,6 +875,7 @@ export class DocumentsService {
       revisionId: branch?.headRevisionId ?? null,
       title: document.title,
       facts: this.toFacts(relations),
+      actor,
     });
     return this.listRelations(documentId);
   }
@@ -905,7 +906,7 @@ export class DocumentsService {
    * Curate a relation (plan.md §5 "curated" class): user-confirmed, confidence
    * 1, protected from automatic re-extraction overwrites.
    */
-  async curateRelation(documentId: string, relation: RelationInputDto): Promise<ListDocumentRelationsResponse> {
+  async curateRelation(documentId: string, relation: RelationInputDto, actor?: string): Promise<ListDocumentRelationsResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     const branch = await this.prisma.documentBranch.findUnique({
       where: { documentId_name: { documentId, name: document.defaultBranch } },
@@ -917,6 +918,7 @@ export class DocumentsService {
       revisionId: branch?.headRevisionId ?? null,
       title: document.title,
       fact: { ...fact, extractor: 'curated', confidence: 1 },
+      actor,
     });
     await this.activity.record({
       workspaceId: document.workspaceId,
@@ -933,9 +935,10 @@ export class DocumentsService {
     type: string,
     targetKey: string,
     extractor?: string,
+    actor?: string,
   ): Promise<ListDocumentRelationsResponse> {
     const document = await this.getDocumentOrThrow(documentId);
-    await this.graph.deleteRelations(document.workspaceId, documentId, type, targetKey, extractor);
+    await this.graph.deleteRelations(document.workspaceId, documentId, type, targetKey, extractor, actor);
     await this.activity.record({
       workspaceId: document.workspaceId,
       action: 'relations.deleted',

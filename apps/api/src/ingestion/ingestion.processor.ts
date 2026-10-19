@@ -7,6 +7,7 @@ import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
+import { revisionStamps, stampWindow } from '../graph/temporal.js';
 import { EMBEDDING_PROVIDER, embeddingSignature, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { INGESTION_QUEUE } from './ingestion.constants.js';
@@ -345,6 +346,11 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       await this.reconcileLive(revision.document.workspaceId, revision.documentId, revision.id);
       mark('live');
 
+      // 9a. #81: stamp valid time on this revision and its default-branch
+      //     neighbours, from PG. Inside the try for the same reason as 9.
+      await this.stampValidity(revision.document.workspaceId, revision.documentId, revision.id);
+      mark('validity');
+
       await this.prisma.$transaction([
         this.prisma.ingestionJob.update({
           where: { id: ingestionJobId },
@@ -469,6 +475,27 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       );
       await this.markFulltext(headId, 'stale');
     }
+  }
+
+  /**
+   * Rewrite the valid-time stamps around `revisionId` (#81). The interval is
+   * read from PG every time — `revisionStamps` over the page's finalized
+   * revisions — so an out-of-order finish still converges: whichever job runs
+   * last stamps its predecessor closed and itself open or closed.
+   */
+  private async stampValidity(workspaceId: string, documentId: string, revisionId: string): Promise<void> {
+    const doc = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: {
+        defaultBranch: true,
+        branches: { select: { id: true, name: true } },
+        revisions: { where: { finalizedAt: { not: null } }, select: { id: true, branchId: true, finalizedAt: true } },
+      },
+    });
+    if (!doc) return;
+    const defaultBranchId = doc.branches.find((b) => b.name === doc.defaultBranch)?.id ?? null;
+    const window = stampWindow(revisionStamps(doc.revisions, defaultBranchId), revisionId);
+    await this.graph.stampRevisions(workspaceId, documentId, window);
   }
 
   /**

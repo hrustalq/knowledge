@@ -581,12 +581,21 @@ export interface FactTimelineEntry {
   type: string;
   targetKey: string;
   extractor: FactExtractor | string;
-  status: 'active' | 'removed';
+  /**
+   * `removed`: a later revision stopped asserting it. `retracted` (#81): a
+   * person withdrew it, or a re-extraction of the same revision dropped it —
+   * the page did not change, the belief did.
+   */
+  status: 'active' | 'removed' | 'retracted';
   introducedInRevisionId: string | null;
   introducedAt: string | null;
   /** First later revision that asserted facts without this one (removed-facts audit). */
   removedInRevisionId: string | null;
   removedAt: string | null;
+  /** When the fact was retracted (#81); null unless `status` is `retracted`. */
+  retractedAt: string | null;
+  /** `user:<id>` or `extractor`; null unless `status` is `retracted`. */
+  retractedBy: string | null;
 }
 
 // GET /v1/documents/:id/facts/timeline?branch=

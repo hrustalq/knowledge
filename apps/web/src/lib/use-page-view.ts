@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { apiFetch } from '@/lib/api'
+import { apiFetchText } from '@/lib/api'
 import { createPageViewTracker, searchClickOf, TICK_MS, type PageViewTarget } from '@/lib/page-view'
 
 const INPUTS = ['scroll', 'wheel', 'keydown', 'pointerdown', 'pointermove'] as const
@@ -10,9 +10,13 @@ const INPUTS = ['scroll', 'wheel', 'keydown', 'pointerdown', 'pointermove'] as c
  * its active read time. A search result link's `?sid=&rank=` is taken once
  * and stripped from the address. Client-only — nothing runs during SSR, and
  * the beacon is same-origin with the app's own credential: no cookie, no
- * third party.
+ * third party. `onOpened` runs once the open beacon was accepted (not for a
+ * heartbeat or a failed beacon), so a count read after it includes this view.
  */
-export function usePageView(page: () => Omit<PageViewTarget, 'searchId' | 'searchRank'> | null) {
+export function usePageView(
+  page: () => Omit<PageViewTarget, 'searchId' | 'searchRank'> | null,
+  onOpened?: (documentId: string) => void,
+) {
   const route = useRoute()
   const router = useRouter()
   let cleanup: (() => void) | null = null
@@ -20,9 +24,10 @@ export function usePageView(page: () => Omit<PageViewTarget, 'searchId' | 'searc
   onMounted(() => {
     const nav = navigator as Navigator & { globalPrivacyControl?: boolean }
     const tracker = createPageViewTracker({
-      // keepalive: the last beat is sent as the tab closes.
-      send: (path, body) =>
-        void apiFetch(path, { method: 'POST', body: JSON.stringify(body), keepalive: true }).catch(() => {}),
+      // keepalive: the last beat is sent as the tab closes. The beacon answers
+      // 204, which apiFetch's JSON parse would turn into a rejection.
+      send: (path, body) => apiFetchText(path, { method: 'POST', body: JSON.stringify(body), keepalive: true }),
+      opened: onOpened,
       visible: () => document.visibilityState === 'visible',
       now: Date.now,
       newId: () => crypto.randomUUID(),

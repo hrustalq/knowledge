@@ -38,6 +38,14 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Chat harvests now mask Russian identity numbers before any model reads a
+  thread, as they already masked emails, phones and cards. An INN (10 or 12
+  digits) and a SNILS (`112-233-445 95` or eleven digits) are masked as
+  `[INN_n]` and `[SNILS_n]` only when their check digits pass, so an order
+  id or a date is left alone. A passport, which has no checksum, is masked as
+  `[PASSPORT_n]` after `паспорт`, `серия` or `passport` in any common
+  spacing, or with no such word only in its printed `45 09 123456` form.
+  Buffered Telegram messages are masked the same way on write. (#342)
 - A platform admin can see and sign out anyone's sessions from **Access →
   Accounts → Sessions**: each live sign-in with its method and identity
   provider, IP, browser and last use, one at a time or all at once. API keys
@@ -374,6 +382,10 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- An SSO sign-in link that is reused, expired or unknown now shows up in
+  Settings → Security → Audit as a failed sign-in, like every other refused
+  SSO attempt, and the browser lands on the sign-in page with the localized
+  reason instead of a bare "back to login" card. (#291)
 - BM25 search and indexing recover by themselves once OpenSearch is reachable
   again (#330). A worker or API that first reached OpenSearch while it was
   down or still starting (connection refused, DNS, a dropped connection) kept
@@ -416,6 +428,16 @@ in the pull request that introduces them — see
   hear the visible text first, then what the control is for. The "more ways to
   start a page" chevron next to `+` in the sidebar is now 24 px wide instead of
   14 px, so it is easier to hit.
+- Asking AI to clean up or merge a staged connector page while the `drafter`
+  agent is turned off now says so, in English or Russian (#294). The refusal
+  used to show the raw key `error.ai.disabled`. CI now fails when an API
+  message exists in only one language, when its `{placeholders}` differ
+  between them, or when the code names a message key neither one has.
+- A page's Insights widget now counts the visit you are making (#336). It was
+  read before the page recorded your view and never read again, so it showed
+  one view fewer than the API held, and the same was true of unique readers
+  and the last time a person opened the page. The widget is now read again
+  once your view is recorded. Read time still catches up on the next load.
 
 ### Operations
 

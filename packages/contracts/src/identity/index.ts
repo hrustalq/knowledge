@@ -443,6 +443,8 @@ export const SSO_LOGIN_ERRORS = [
   'domain-not-allowed',
   'jit-disabled',
   'account-disabled',
+  /** The fragment code was unknown, expired or already spent (POST /v1/auth/sso/exchange). */
+  'exchange-invalid',
   'failed',
 ] as const;
 export type SsoLoginError = (typeof SSO_LOGIN_ERRORS)[number];

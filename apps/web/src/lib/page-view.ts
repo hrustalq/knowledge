@@ -11,14 +11,22 @@ export interface PageViewTarget {
 }
 
 export interface PageViewDeps {
-  /** Fire-and-forget POST. */
-  send(path: string, body: Record<string, unknown>): void
+  /** POST; settles once the API answered, and rejects on a refusal or a network failure. */
+  send(path: string, body: Record<string, unknown>): Promise<unknown>
+  /**
+   * The open beacon for `documentId` was accepted — the view is now a row, so a
+   * count read after this includes it (#336). Never called for a heartbeat or a
+   * failed beacon.
+   */
+  opened?(documentId: string): void
   visible(): boolean
   now(): number
   newId(): string
   /** DNT / Global Privacy Control: counted, never tied to a reader. */
   noTrack: boolean
 }
+
+const noop = () => {}
 
 export const TICK_MS = 1_000
 /** How often a reading tab reports its time. */
@@ -42,7 +50,7 @@ export function createPageViewTracker(deps: PageViewDeps) {
   function flush() {
     if (!view || active <= sent) return
     sent = active
-    deps.send(`/v1/analytics/views/${view.id}/heartbeat`, { activeMs: active, ...privacy })
+    deps.send(`/v1/analytics/views/${view.id}/heartbeat`, { activeMs: active, ...privacy }).catch(noop)
   }
 
   function close() {
@@ -54,16 +62,19 @@ export function createPageViewTracker(deps: PageViewDeps) {
   function open(t: PageViewTarget) {
     if (view?.documentId === t.documentId) return
     close()
-    view = { id: deps.newId(), documentId: t.documentId }
+    const { documentId } = t
+    view = { id: deps.newId(), documentId }
     active = sent = sinceBeat = 0
     lastInput = deps.now()
-    deps.send(`/v1/documents/${t.documentId}/views`, {
-      viewId: view.id,
-      ...(t.revisionId ? { revisionId: t.revisionId } : {}),
-      ...(t.searchId ? { searchId: t.searchId } : {}),
-      ...(t.searchRank ? { searchRank: t.searchRank } : {}),
-      ...privacy,
-    })
+    deps
+      .send(`/v1/documents/${documentId}/views`, {
+        viewId: view.id,
+        ...(t.revisionId ? { revisionId: t.revisionId } : {}),
+        ...(t.searchId ? { searchId: t.searchId } : {}),
+        ...(t.searchRank ? { searchRank: t.searchRank } : {}),
+        ...privacy,
+      })
+      .then(() => deps.opened?.(documentId), noop)
   }
 
   function tick() {

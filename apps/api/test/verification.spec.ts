@@ -120,11 +120,16 @@ describe('vocabularies the feature joins', () => {
   });
 
   it('has a SQL clause for every health filter', () => {
-    for (const f of HEALTH_FILTERS) expect(healthFilterSql(f, settings, NOW).sql, f).toContain('r.');
-    expect(healthFilterSql(undefined, settings, NOW).sql).toContain('archived_at IS NULL');
-    expect(healthFilterSql('archived', settings, NOW).sql).toContain('IS NOT NULL');
+    const since = new Date(NOW.getTime() - 90 * 86_400_000);
+    for (const f of HEALTH_FILTERS) expect(healthFilterSql(f, settings, NOW, since).sql, f).toContain('r.');
+    expect(healthFilterSql(undefined, settings, NOW, since).sql).toContain('archived_at IS NULL');
+    expect(healthFilterSql('archived', settings, NOW, since).sql).toContain('IS NOT NULL');
     // Inactivity off: the clause can never match.
-    expect(healthFilterSql('inactive', { ...settings, inactiveAfterDays: 0 }, NOW).sql).toContain('false');
+    expect(healthFilterSql('inactive', { ...settings, inactiveAfterDays: 0 }, NOW, since).sql).toContain('false');
+    // Read filters (#79): unread is gated on coverage; dead is unread and never surfaced by search.
+    expect(healthFilterSql('unread', settings, NOW, since).sql).toContain('r.reads_covered');
+    expect(healthFilterSql('unread', settings, NOW, since).sql).not.toContain('surfaced');
+    expect(healthFilterSql('dead', settings, NOW, since).sql).toContain('NOT r.surfaced');
   });
 });
 
@@ -319,6 +324,7 @@ describe('KnowledgeHealthService.bulk', () => {
       verification as never,
       documents as never,
       permissions as never,
+      { get: () => 90 } as never,
     );
     return { svc, verification, documents };
   }

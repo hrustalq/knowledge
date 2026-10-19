@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { ANALYTICS_MAX_DAYS, ANALYTICS_TRAFFIC_FILTERS, type AnalyticsTrafficFilter } from '@knowledge/contracts';
 
 export class RecordPageViewDto {
   @ApiProperty({ format: 'uuid', description: "The page's own id for this view; a replay is a no-op" })
@@ -40,4 +42,19 @@ export class PageViewHeartbeatDto {
   @IsOptional()
   @IsBoolean()
   noTrack?: boolean;
+}
+
+export class ProjectAnalyticsQueryDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: ANALYTICS_MAX_DAYS, description: 'Days back from now. Omitted: 30' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(ANALYTICS_MAX_DAYS)
+  days?: number;
+
+  @ApiPropertyOptional({ enum: ANALYTICS_TRAFFIC_FILTERS, description: 'Count one traffic class only. Omitted: all' })
+  @IsOptional()
+  @IsIn(ANALYTICS_TRAFFIC_FILTERS)
+  traffic?: AnalyticsTrafficFilter;
 }

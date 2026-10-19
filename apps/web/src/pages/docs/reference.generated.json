@@ -811,12 +811,32 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/documents/{id}/insights",
+      "tag": "analytics",
+      "summary": "One page's reading over the last 30 days: views by traffic class, unique readers, median read time",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/documents/{id}/views",
       "tag": "analytics",
       "summary": "Record that the caller opened this page (the web beacon). Idempotent on viewId",
       "role": "viewer",
       "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/analytics",
+      "tag": "analytics",
+      "summary": "A project's reading: totals, the most read pages, and the pages nobody reads",
+      "role": "editor",
+      "source": "project",
       "public": false,
       "platformAdmin": false
     },

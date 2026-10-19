@@ -2731,7 +2731,8 @@
     "site": "Site",
     "usedBy": "Used by",
     "quality": "Quality",
-    "conflicts": "Contradictions"
+    "conflicts": "Contradictions",
+    "insights": "Insights"
   },
   "knowledgeIssue": {
     "report": "Report a problem",
@@ -4186,6 +4187,8 @@
       "flagged": "Reported",
       "inactive": "Inactive",
       "missing-paths": "Missing code",
+      "unread": "Unread",
+      "dead": "Dead",
       "archived": "Archived"
     },
     "presetHint": {
@@ -4200,6 +4203,8 @@
       "flagged": "A reader or an agent reported a problem",
       "inactive": "No edit, comment or check for the inactivity window",
       "missing-paths": "A component page declares a path no file matches at the indexed head",
+      "unread": "Older than the read window, and nobody opened it in the app during it",
+      "dead": "Unread, and no search returned it either: a candidate to archive",
       "archived": "Put away; hidden from lists, search and the assistant"
     },
     "search": "Search by title…",
@@ -4217,7 +4222,8 @@
       "status": "State",
       "owner": "Owner",
       "verified": "Verified",
-      "activity": "Last activity"
+      "activity": "Last activity",
+      "read": "Last read"
     },
     "selectAll": "Select every loaded page",
     "selectRow": "Select “{title}”",
@@ -4226,6 +4232,7 @@
     "openPage": "Open page",
     "emptyChip": "Empty",
     "missingPathsChip": "{n} missing path | {n} missing paths",
+    "neverRead": "No reads",
     "emptyHint": "The body is under the workspace's empty-page threshold",
     "children": "{n} page under it | {n} pages under it",
     "verifiedBy": "{who}, {when}",
@@ -5832,5 +5839,41 @@
     },
     "changes": "changes",
     "morePaths": "+{n} more"
+  },
+  "analytics": {
+    "traffic": {
+      "human": "People",
+      "assisted": "Assistant",
+      "agent": "Agents"
+    },
+    "trafficHint": {
+      "human": "Opened in the app",
+      "assisted": "Read by the in-app assistant or a chat bot for a person",
+      "agent": "Read through an API key, MCP or a background agent"
+    },
+    "views": "Views",
+    "viewsWord": "view | views",
+    "uniqueReaders": "Readers",
+    "medianRead": "Median read",
+    "lastHumanView": "Last opened in the app",
+    "last30": "Last 30 days",
+    "viewsChartLabel": "Views per day over {n} days, by who read: people, assistant, agents",
+    "chartPoint": "{date}: {human} people, {assisted} assistant, {agent} agents",
+    "collectingSince": "Counting since {when}",
+    "notCollecting": "No reads recorded yet in this workspace.",
+    "project": {
+      "title": "Reading",
+      "range": "Range",
+      "days": "{n} days",
+      "topPages": "Most read",
+      "neverRead": "Never opened in the app",
+      "dead": "Dead pages",
+      "deadHint": "Older than {n} days, unopened in the app and returned by no search in that time.",
+      "deadNotYet": "Shows once reads have been counted for {n} days.",
+      "noViews": "No views in this range.",
+      "none": "None.",
+      "createdAgo": "created {when}"
+    },
+    "viewsCount": "{n} view | {n} views"
   }
 }

@@ -233,6 +233,21 @@ in the pull request that introduces them — see
   beacon is a same-origin request using the app's own credential: no
   cookie, nothing third-party. New routes: `POST /v1/documents/:id/views`
   and `POST /v1/analytics/views/:viewId/heartbeat`, both `204`.
+- See how pages are read (#79, phase 3). A page's rail has an **Insights**
+  widget: views over the last 30 days split into people, the assistant
+  (in-app or a chat bot) and agents (API keys, MCP, background runs), plus
+  unique readers, median read time and when someone last opened it in the
+  app. Anyone who may open the page sees it; it shows counts, never who.
+  For editors, a project's overview page gains a **Reading** section: the
+  same numbers over 7, 30 or 90 days, the most read pages, pages nobody has
+  opened in the app, and dead pages, meaning pages older than 90 days that
+  nobody opened and no search returned in that time. Knowledge health gains
+  a **Last read** column and two filters, **Unread** and **Dead**, which list
+  the same pages. Neither filter lists anything until reads have been
+  counted for the whole 90 days, so a fresh install does not call every page
+  dead. Every count is limited to pages the viewer may open. New routes:
+  `GET /v1/documents/:id/insights` (viewer) and
+  `GET /v1/projects/:id/analytics?days=&traffic=` (editor).
 
 ### Changed
 
@@ -269,6 +284,8 @@ in the pull request that introduces them — see
 - New env var with a default: `ANALYTICS_READ_TIME_CAP_MS` (`1800000`), the
   most active read time one web view can record. No migration in #79
   phase 2.
+- New env var with a default: `ANALYTICS_DEAD_PAGE_DAYS` (`90`), the window
+  behind the unread and dead page lists. No migration in #79 phase 3.
 - New env vars for community summaries, both with defaults:
   `COMMUNITY_SUMMARIES_ENABLED` (`false`) and `COMMUNITY_MAX_PER_RUN`
   (`30`). Summaries are stored in ArcadeDB as `Community` vertices (created

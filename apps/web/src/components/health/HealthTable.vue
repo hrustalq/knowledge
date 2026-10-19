@@ -116,6 +116,7 @@ function expiryLine(row: KnowledgeHealthRow): string | null {
           <TableHead>{{ t('health.column.owner') }}</TableHead>
           <TableHead>{{ t('health.column.verified') }}</TableHead>
           <TableHead>{{ t('health.column.activity') }}</TableHead>
+          <TableHead>{{ t('health.column.read') }}</TableHead>
           <TableHead class="w-10"><span class="sr-only">{{ t('health.preview') }}</span></TableHead>
         </TableRow>
       </TableHeader>
@@ -194,6 +195,15 @@ function expiryLine(row: KnowledgeHealthRow): string | null {
 
           <TableCell class="align-top text-xs whitespace-nowrap" :title="formatDateTime(row.lastActivityAt)">
             {{ relativeTime(row.lastActivityAt) }}
+          </TableCell>
+
+          <!-- The newest web view on record (#79): edits say a page is kept, reads say it is needed. -->
+          <TableCell
+            class="align-top text-xs whitespace-nowrap"
+            :class="row.lastReadAt ? '' : 'text-muted-foreground'"
+            :title="row.lastReadAt ? formatDateTime(row.lastReadAt) : undefined"
+          >
+            {{ row.lastReadAt ? relativeTime(row.lastReadAt) : t('health.neverRead') }}
           </TableCell>
 
           <TableCell class="align-top">

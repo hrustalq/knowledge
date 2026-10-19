@@ -342,6 +342,20 @@ in the pull request that introduces them — see
   the bot says nothing to anyone else, so a busy channel's ordinary 📌 never
   gets a reply. The bot answers under the message with counts and an inbox
   link, the same as for `capture`.
+- A Telegram group that keeps its messages can be harvested automatically
+  (#340). A workspace admin turns on *Harvest quiet threads automatically* on
+  the group in Settings → Chat bots, and the bot tells the group first; if it
+  cannot, the switch stays off. From then on, a thread (the group, or one
+  forum topic) is harvested once it has `HARVEST_AUTO_MIN_MESSAGES` new kept
+  messages and nothing new for `HARVEST_AUTO_QUIET_MINUTES`, and again only
+  after something new is said in it. Nothing said before the switch went on
+  is read. The captures are proposed in the name of the admin who turned it
+  on, whose admin role is checked again on every harvest. Nothing is posted
+  in the group: that admin gets an inbox notification with the counts, and
+  the captures wait in the Captures inbox. Each harvest is one `harvest`
+  model call, counted against that admin's `HARVEST_RATE_PER_HOUR`, and at
+  most `HARVEST_AUTO_MAX_PER_TICK` run per group per minute. Turning keeping
+  off turns this off too. Off by default on every group.
 
 ### Changed
 
@@ -412,6 +426,17 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261119100000_chat_auto_harvest` adds the nullable
+  `chat_channel_bindings.auto_harvest_by` and `auto_harvest_at` columns and
+  the `chat_harvest_marks` table (#340). It is additive and survives a code
+  rollback; after a final rollback, drop the table and the two columns by
+  hand. Four env vars, each with a default, so nothing needs setting:
+  `HARVEST_AUTO_ENABLED` (`true`; `false` stops every automatic harvest
+  whatever a group's switch says, and the settings page says so),
+  `HARVEST_AUTO_MIN_MESSAGES` (`8`), `HARVEST_AUTO_QUIET_MINUTES` (`60`) and
+  `HARVEST_AUTO_MAX_PER_TICK` (`1` harvest per group per minute; `0` stops
+  the sweeper). The sweeper runs in the API, beside the chat answer sweeper,
+  only while `CHAT_ENABLED` and `HARVEST_ENABLED` are on.
 - After deploying #277, purge the Cloudflare cache once: asset URLs already
   cached at the edge keep the 4-hour lifetime they were stored with until then.
 

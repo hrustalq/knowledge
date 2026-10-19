@@ -177,6 +177,15 @@ export class UpdateChatBindingDto {
   @IsOptional()
   @IsBoolean()
   listening?: boolean;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description:
+      'Harvest this group’s quiet threads automatically (#340), as the admin who turns it on — never anyone named in the body. Needs listening; turning listening off turns this off too.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  autoHarvest?: boolean;
 }
 
 export class ChatLinkCodeDto {

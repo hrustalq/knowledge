@@ -5796,7 +5796,7 @@ export interface paths {
         delete: operations["ChatSettingsController_removeBinding"];
         options?: never;
         head?: never;
-        /** Change a group’s project, agent, answer mode or language */
+        /** Change a group’s project, agent, answer mode, language, listening or automatic harvest */
         patch: operations["ChatSettingsController_updateBinding"];
         trace?: never;
     };
@@ -8436,6 +8436,8 @@ export interface components {
             locale?: "en" | "ru" | null;
             /** @description Keep this group’s messages, masked, for harvesting (#82). Telegram only; turning it on posts a notice in the group, turning it off deletes what is kept. */
             listening?: boolean;
+            /** @description Harvest this group’s quiet threads automatically (#340), as the admin who turns it on — never anyone named in the body. Needs listening; turning listening off turns this off too. */
+            autoHarvest?: boolean;
         };
         CreateChatSubscriptionDto: {
             /**

@@ -1804,7 +1804,7 @@
       "method": "PATCH",
       "path": "/v1/chat/bindings/{id}",
       "tag": "chat",
-      "summary": "Change a group’s project, agent, answer mode or language",
+      "summary": "Change a group’s project, agent, answer mode, language, listening or automatic harvest",
       "role": "admin",
       "source": "chat-binding",
       "public": false,

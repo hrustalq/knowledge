@@ -176,14 +176,32 @@ export interface ChatBindingEntry {
   subscriptionCount: number;
   /** Messages here are kept, masked, so a thread can be harvested (#82). Telegram only. */
   listening: boolean;
+  /**
+   * Automatic harvest (#340): the workspace admin who turned it on, whose name
+   * its captures carry; null = off. Needs `listening`. Who it runs as is never
+   * a request field — enabling makes the caller the owner.
+   */
+  autoHarvestBy: string | null;
+  autoHarvestAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** The server's side of the automatic harvest (#340): the ceiling and the thresholds every binding gets. */
+export interface ChatAutoHarvestLimits {
+  /** False while HARVEST_AUTO_ENABLED, HARVEST_ENABLED or CHAT_ENABLED is off: a binding's switch then does nothing. */
+  available: boolean;
+  /** HARVEST_AUTO_MIN_MESSAGES */
+  minMessages: number;
+  /** HARVEST_AUTO_QUIET_MINUTES */
+  quietMinutes: number;
 }
 
 export interface ChatBindingsResponse {
   bindings: ChatBindingEntry[];
   /** CHAT_LISTEN_TTL_DAYS: how long a listening group's messages are kept. */
   listenTtlDays: number;
+  autoHarvest: ChatAutoHarvestLimits;
 }
 
 /**

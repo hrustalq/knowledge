@@ -132,6 +132,10 @@
     "on": {
       "one": "From now on I keep this group's messages for {count} day, with emails, phone numbers, card numbers and secrets masked, so workspace editors can ask me to /capture a thread for the knowledge base. Nothing kept is searchable. /forget deletes yours.",
       "other": "From now on I keep this group's messages for {count} days, with emails, phone numbers, card numbers and secrets masked, so workspace editors can ask me to /capture a thread for the knowledge base. Nothing kept is searchable. /forget deletes yours."
+    },
+    "autoOn": {
+      "one": "From now on, once a thread here has been quiet for {count} minute, I read what I kept of it and propose what it settled for review in the knowledge base. Nothing is posted here and nothing kept is searchable. /forget deletes yours.",
+      "other": "From now on, once a thread here has been quiet for {count} minutes, I read what I kept of it and propose what it settled for review in the knowledge base. Nothing is posted here and nothing kept is searchable. /forget deletes yours."
     }
   }
 }

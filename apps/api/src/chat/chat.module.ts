@@ -9,6 +9,8 @@ import { DocumentsModule } from '../documents/documents.module.js';
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { GraphModule } from '../graph/graph.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
+import { SearchCoreModule } from '../search/search-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
 import { ChatAnswerSweeper } from './chat-answer.sweeper.js';
@@ -22,6 +24,7 @@ import { ChatSocketSupervisor } from './chat-socket.supervisor.js';
 import { ChatSubscriptionSweeper } from './chat-subscription.sweeper.js';
 import { ChatSubscriptionsService } from './chat-subscriptions.service.js';
 import { ChatWebhookController } from './chat-webhook.controller.js';
+import { HarvestService } from './harvest.service.js';
 
 /**
  * Chat bots (issue #71). API-only, and a single module rather than the
@@ -34,6 +37,8 @@ import { ChatWebhookController } from './chat-webhook.controller.js';
  * ChatSubscriptionSweeper: the token and the adapters are already here, and a
  * post to a group is attributed to nobody. Time's websockets (phase 4) are
  * held here by ChatSocketSupervisor, which feeds the same answer path.
+ * Harvesting a thread into captures (#82) is HarvestService: API-side for the
+ * same reason Save is, and fed by the same dispatch.
  */
 @Module({
   imports: [
@@ -47,6 +52,8 @@ import { ChatWebhookController } from './chat-webhook.controller.js';
     FeedbackCoreModule,
     GlossaryCoreModule,
     GraphModule,
+    PermissionsCoreModule,
+    SearchCoreModule,
     StorageModule,
   ],
   controllers: [ChatWebhookController, ChatSettingsController, ChatLinkController],
@@ -60,6 +67,7 @@ import { ChatWebhookController } from './chat-webhook.controller.js';
     ChatSubscriptionsService,
     ChatSubscriptionSweeper,
     ChatSocketSupervisor,
+    HarvestService,
   ],
 })
 export class ChatModule {}

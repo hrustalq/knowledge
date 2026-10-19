@@ -2240,7 +2240,8 @@
       "component-draft": "Черновик компонента",
       "lint": "Линт",
       "contradiction": "Проверка противоречий",
-      "community": "Сводка сообщества"
+      "community": "Сводка сообщества",
+      "harvest": "Сбор из чата"
     },
     "anyOutcome": "Любой",
     "failedOnly": "Только ошибки",

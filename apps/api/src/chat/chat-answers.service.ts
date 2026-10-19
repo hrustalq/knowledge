@@ -20,18 +20,20 @@ import { CITE_MARKER_RE } from '../assistant/citations.js';
 import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 import { t, withLocale } from '../i18n/t.js';
 import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
-import type {
-  ChatActionButton,
-  ChatAdapter,
-  ChatAdapterContext,
-  ChatInbound,
-  ChatMessageRef,
-  ChatView,
+import {
+  ChatPlatformError,
+  type ChatActionButton,
+  type ChatAdapter,
+  type ChatAdapterContext,
+  type ChatInbound,
+  type ChatMessageRef,
+  type ChatView,
 } from './adapters/chat-adapter.types.js';
 import { decodeChatAction, encodeChatAction } from './chat-actions.js';
 import { ChatCapturesService } from './chat-captures.service.js';
 import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
+import { HarvestRefused, HarvestService, type HarvestOutcome } from './harvest.service.js';
 import { WORKSPACE_AUDIENCE } from '../permissions/access-scope.js';
 
 /** A DM picks up where it left off within this window; after it, a new conversation. */
@@ -85,6 +87,8 @@ export class ChatAnswersService {
   private readonly maxSources: number;
   private readonly ratePerMinute: number;
   private readonly timeoutMs: number;
+  private readonly harvestEnabled: boolean;
+  private readonly harvestMax: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -96,12 +100,15 @@ export class ChatAnswersService {
     private readonly identities: ChatIdentityService,
     private readonly feedback: AnswerFeedbackService,
     private readonly captures: ChatCapturesService,
+    private readonly harvester: HarvestService,
     config: ConfigService<Env, true>,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true }).replace(/\/$/, '');
     this.maxSources = config.get('CHAT_MAX_SOURCES', { infer: true });
     this.ratePerMinute = config.get('CHAT_RATE_LIMIT_PER_USER_PER_MINUTE', { infer: true });
     this.timeoutMs = config.get('CHAT_ANSWER_TIMEOUT_SECONDS', { infer: true }) * 1000;
+    this.harvestEnabled = config.get('HARVEST_ENABLED', { infer: true });
+    this.harvestMax = config.get('HARVEST_MAX_MESSAGES', { infer: true });
   }
 
   /**
@@ -173,6 +180,8 @@ export class ChatAnswersService {
         case 'bind':
         case 'unbind':
           return this.bindCommand(d, userId, command.name);
+        case 'capture':
+          return this.harvest(d, userId, locale);
         case 'ask':
           // `/ask question` is a question, in any chat — what a group member
           // types when mentioning feels odd.
@@ -552,6 +561,61 @@ export class ChatAnswersService {
     await d.adapter.editMessage(d.ctx, { chatId: d.inbound.chatId, messageId: d.inbound.messageId }, d.adapter.render(view));
   }
 
+  /**
+   * `capture` in a thread (#82): the thread, harvested into captures as the
+   * person who asked — a linked editor, checked here and again by
+   * `CaptureService`. The placeholder becomes counts and an inbox link, never
+   * a capture's or a page's title: the group may hold people who cannot open
+   * them. A refusal is said in the same place.
+   */
+  private async harvest(d: Delivery, userId: string | null, locale: Locale): Promise<void> {
+    const { inbound, integration } = d;
+    if (!userId) return this.askToLink(d);
+    let principal: Principal;
+    try {
+      principal = await this.access.principalFor(userId, locale);
+      await this.access.requireRole(principal, integration.workspaceId, 'editor');
+    } catch {
+      return this.notice(d, t('chat.harvest.forbidden', { workspace: d.workspaceName }));
+    }
+    if (!this.harvestEnabled) return this.notice(d, t('chat.harvest.off'));
+    if (!d.adapter.fetchThread) return this.notice(d, t('chat.harvest.unsupported'));
+    // Said at the top of a channel, the command is its own thread: there is nothing above it to read.
+    const root = inbound.threadId;
+    if (!root || root === inbound.messageId) return this.notice(d, t('chat.harvest.notInThread'));
+
+    let placeholder: ChatMessageRef;
+    try {
+      placeholder = await this.post(d, { kind: 'notice', text: t('chat.harvest.reading') });
+    } catch (err) {
+      this.logger.warn({ msg: 'chat harvest placeholder not delivered', integrationId: integration.id, error: String(err) });
+      return;
+    }
+    let view: ChatView;
+    try {
+      const thread = await d.adapter.fetchThread(d.ctx, inbound.chatId, root, inbound.messageId, this.harvestMax);
+      const outcome = await this.harvester.harvest(
+        {
+          workspaceId: integration.workspaceId,
+          projectId: d.binding?.projectId ?? null,
+          platform: integration.kind as ChatPlatformKind,
+          chatTitle: inbound.isDm ? null : (d.binding?.title ?? inbound.chatTitle),
+          thread,
+        },
+        principal,
+      );
+      view = {
+        kind: 'notice',
+        text: harvestSummary(outcome, thread.truncated ? this.harvestMax - 1 : null),
+        ...(outcome.proposed + outcome.duplicates ? { button: { label: t('chat.capture.openCaptures'), url: `${this.webBaseUrl}/captures` } } : {}),
+      };
+    } catch (err) {
+      this.logger.warn({ msg: 'chat harvest failed', integrationId: integration.id, error: String(err) });
+      view = { kind: 'notice', text: t(harvestRefusalKey(err), { workspace: d.workspaceName }) };
+    }
+    await this.show(d, placeholder, view).catch(() => undefined);
+  }
+
   /** Link instruction. A code only ever goes into a private chat; a group gets "message me". */
   private async askToLink(d: Delivery): Promise<void> {
     const { inbound, integration, adapter } = d;
@@ -644,6 +708,24 @@ export class ChatAnswersService {
     }
     return closed;
   }
+}
+
+/** What a harvest proposed, as counts only. `readReplies` is set when the thread was cut to the cap. */
+export function harvestSummary(outcome: HarvestOutcome, readReplies: number | null): string {
+  const parts = [
+    outcome.proposed ? t('chat.harvest.proposed', { count: outcome.proposed }) : null,
+    outcome.duplicates ? t('chat.harvest.duplicates', { count: outcome.duplicates }) : null,
+    outcome.proposed + outcome.duplicates ? null : t('chat.harvest.nothing'),
+    readReplies !== null ? t('chat.harvest.truncated', { count: readReplies }) : null,
+  ];
+  return parts.filter(Boolean).join(' ');
+}
+
+function harvestRefusalKey(err: unknown): string {
+  if (err instanceof HarvestRefused) return err.key;
+  if (err instanceof ChatPlatformError) return 'chat.harvest.unreadable';
+  if (err instanceof HttpException && err.getStatus() === HttpStatus.TOO_MANY_REQUESTS) return 'chat.answer.budget';
+  return 'chat.harvest.failed';
 }
 
 /** 👍 👎 and Save under an answer. The votes are emoji only: they read the same in every language. */

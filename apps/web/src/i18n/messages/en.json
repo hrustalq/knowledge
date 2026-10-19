@@ -2240,7 +2240,8 @@
       "component-draft": "Component draft",
       "lint": "Lint",
       "contradiction": "Contradiction check",
-      "community": "Community summary"
+      "community": "Community summary",
+      "harvest": "Chat harvest"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",

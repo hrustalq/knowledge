@@ -135,6 +135,22 @@ export interface ChatUpdatesView {
 
 export type ChatView = ChatAnswerView | ChatNoticeView | ChatUpdatesView;
 
+/** One message of a thread read for a harvest (#82): who wrote it, as the platform's opaque id. */
+export interface ChatThreadMessage {
+  authorId: string;
+  text: string;
+  at: Date;
+}
+
+/** A thread as a harvest reads it: people's messages only, oldest first. */
+export interface ChatThread {
+  messages: ChatThreadMessage[];
+  /** A link to the thread, where the platform has one. */
+  url: string | null;
+  /** Messages left out to stay within the cap. */
+  truncated: boolean;
+}
+
 /** What a call to the platform needs; built per call from the integration row. */
 export interface ChatAdapterContext {
   token: string;
@@ -201,6 +217,14 @@ export interface ChatAdapter {
    * where messages arrive over the bot's websocket instead (Time).
    */
   registerWebhook(ctx: ChatAdapterContext, url: string, secret: string): Promise<void>;
+  /**
+   * The thread rooted at `rootId`, up to (not including) `beforeMessageId` —
+   * the command that asked for it — and at most `max` messages: the root and
+   * the newest replies. Bots' and system messages are left out. Absent on a
+   * platform with no thread to fetch (Telegram, whose threads #82 phase 3
+   * reads from a listening buffer instead).
+   */
+  fetchThread?(ctx: ChatAdapterContext, chatId: string, rootId: string, beforeMessageId: string, max: number): Promise<ChatThread>;
   /** A link that opens a private chat with the bot, or null if the platform has none. */
   directLink(botUsername: string | null, payload?: string): string | null;
 }

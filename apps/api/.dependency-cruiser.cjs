@@ -105,7 +105,9 @@ module.exports = {
         'CollabModule holds the /v1/collab gateway and its Hocuspocus instance (#80). In the ' +
         'worker it would open Redis connections nobody uses; in the MCP server, started once per ' +
         'agent client, every process would store drafts racing the API. A worker or MCP path that ' +
-        'needs drafts gets a controller- and gateway-free core module instead.',
+        'needs drafts gets a controller- and gateway-free core module instead. The HTTP MCP ' +
+        '(mcp-http.module.ts) runs in the API process and does import it, for the draft tools (#316); ' +
+        'McpService knows them only as an argument, so McpCoreModule stays collab-free.',
       severity: 'error',
       from: { path: '^src/(worker|mcp/mcp)\\.module\\.ts$' },
       to: { path: '^src/collab/collab\\.module\\.ts$', reachable: true },

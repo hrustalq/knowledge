@@ -88,6 +88,7 @@
     "needsFinalized": "Ревизия {id} — {status}; ветку можно создать только от финализированной ревизии"
   },
   "collab": {
+    "branchNotFound": "У документа {documentId} нет ветки {branch}",
     "draftMismatch": "Черновик {draftId} не является общим черновиком ветки {branch} документа {documentId}",
     "draftNotFound": "У ветки {branchId} документа {documentId} нет общего черновика",
     "snapshotInvalid": "draftSnapshot не является снимком Y"

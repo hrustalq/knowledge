@@ -11,7 +11,8 @@
  * to the first suggested block and the end to the last, so a block a peer adds
  * just outside the range stays outside it and a discard never takes their text.
  */
-import { DOMParser as PMDOMParser, Fragment, type Node as PMNode, type Schema } from '@tiptap/pm/model';
+import { DOMParser as PMDOMParser, Fragment, Slice, type Node as PMNode, type Schema } from '@tiptap/pm/model';
+import { Transform } from '@tiptap/pm/transform';
 import { draftEditNeedsAnchor, type AssistantDraftEdit } from '@knowledge/contracts';
 import { markdownToHtml } from '@knowledge/editor-schema/markdown';
 
@@ -201,4 +202,24 @@ export interface SuggestionEntry extends SuggestionCredit {
   state: 'streaming' | 'ready';
   /** The Y client that wrote it: while that client is connected, a streaming entry is still being written. */
   clientId: number;
+}
+
+/**
+ * `doc` with every entry's blocks put back to what they replaced — the page as
+ * a publish writes it, for a reader that holds the entries rather than the
+ * editor's plugin state. An entry from a build with another schema is left as
+ * it reads, as the editor leaves it.
+ */
+export function withoutSuggestions(doc: PMNode, entries: Pick<SuggestionEntry, 'fromIndex' | 'toIndex' | 'original'>[]): PMNode {
+  const tr = new Transform(doc);
+  for (const entry of [...entries].sort((a, b) => b.fromIndex - a.fromIndex)) {
+    let original: Slice;
+    try {
+      original = Slice.fromJSON(doc.type.schema, entry.original);
+    } catch {
+      continue;
+    }
+    tr.replace(blockStart(tr.doc, entry.fromIndex), blockStart(tr.doc, entry.toIndex), original);
+  }
+  return tr.doc;
 }

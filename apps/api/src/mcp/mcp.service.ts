@@ -65,6 +65,7 @@ import { CAPTURE_TOOLS, MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackToo
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderSkill, type McpWhoami } from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
+import { registerDraftTools, type McpDraftTools } from './draft-tools.js';
 import { CaptureService } from '../captures/capture.service.js';
 import { MAX_USAGE_LIMIT } from '../components/component-match.js';
 import { COMPONENT_DRAFT_MAX_PATHS } from '@knowledge/contracts';
@@ -142,6 +143,14 @@ export const MCP_SERVER_VERSION = '0.27.0';
  *                              scope and workspace pin. A read-only key is not
  *                              even offered the write tools.
  */
+/**
+ * Tools only the API process can serve, passed in by its HTTP controller.
+ * The stdio server builds without them (issue #316): it has no collab gateway.
+ */
+export interface McpExtras {
+  drafts?: McpDraftTools;
+}
+
 @Injectable()
 export class McpService {
   constructor(
@@ -192,8 +201,8 @@ export class McpService {
   }
 
   /** What `principal` would be offered — the connection page's list and the skill's catalogue. */
-  toolsFor(principal: Principal): McpToolSummary[] {
-    return this.buildServer(principal).tools;
+  toolsFor(principal: Principal, extras: McpExtras = {}): McpToolSummary[] {
+    return this.buildServer(principal, extras).tools;
   }
 
   /**
@@ -201,7 +210,7 @@ export class McpService {
    * HTTP request (registration is a map insert per tool), which is what lets
    * the HTTP transport stay stateless: no session to pin a principal to.
    */
-  buildServer(principal: Principal): { server: McpServer; tools: McpToolSummary[] } {
+  buildServer(principal: Principal, extras: McpExtras = {}): { server: McpServer; tools: McpToolSummary[] } {
     const server = new McpServer(
       { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
       { instructions: MCP_INSTRUCTIONS },
@@ -1559,7 +1568,7 @@ export class McpService {
         description: 'How to use this knowledge base well: the workspaces you can reach, the tools, and the flows.',
         mimeType: 'text/markdown',
       },
-      async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'text/markdown', text: await this.skillFor(principal) }] }),
+      async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'text/markdown', text: await this.skillFor(principal, undefined, extras) }] }),
     );
     server.registerPrompt(
       'guide',
@@ -1568,7 +1577,7 @@ export class McpService {
         description: 'Load the knowledge-platform skill into the conversation before working with this knowledge base.',
       },
       async () => ({
-        messages: [{ role: 'user', content: { type: 'text', text: await this.skillFor(principal) } }],
+        messages: [{ role: 'user', content: { type: 'text', text: await this.skillFor(principal, undefined, extras) } }],
       }),
     );
 
@@ -1635,11 +1644,15 @@ export class McpService {
       json: (value) => this.json(value),
     });
 
+    if (extras.drafts?.enabled) {
+      registerDraftTools(server, { drafts: extras.drafts, principal, guard, json: (value) => this.json(value) });
+    }
+
     return { server, tools: settleTools(handles, principal) };
   }
 
   /** The SKILL.md for `principal` — see skill.ts. `url` overrides the endpoint it names. */
-  async skillFor(principal: Principal, url?: string): Promise<string> {
+  async skillFor(principal: Principal, url?: string, extras: McpExtras = {}): Promise<string> {
     return renderSkill({
       url: url ?? this.publicUrl(),
       serverName: MCP_SERVER_NAME,
@@ -1647,7 +1660,7 @@ export class McpService {
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
       webUrl: this.webUrl(),
       whoami: await this.whoami(principal),
-      tools: this.toolsFor(principal),
+      tools: this.toolsFor(principal, extras),
     });
   }
 

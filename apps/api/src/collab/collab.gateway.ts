@@ -130,7 +130,8 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
           const stored = await this.drafts.store(row, {
             state,
             snapshot: snapshotOf(document),
-            userId: lastContext?.principal.userId,
+            // A server write (`writeDraft`) carries no principal: it credits nobody.
+            userId: lastContext?.principal?.userId,
           });
           // Reset or dropped since this doc loaded: whatever it holds is not the draft any more.
           if (!stored) {
@@ -235,6 +236,39 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       if (typeof userId === 'string') people.add(userId);
     }
     return people.size;
+  }
+
+  /**
+   * The draft as this instance holds it, when a peer has it open here — the
+   * live state, ahead of the stored row by up to COLLAB_STORE_MAX_DEBOUNCE_MS.
+   */
+  loadedDraft(workspaceId: string, documentId: string, branchId: string): Y.Doc | null {
+    return this.hocuspocus?.documents.get(collabDocName(workspaceId, documentId, branchId)) ?? null;
+  }
+
+  /**
+   * Change a draft from the server (the MCP draft tools, #316): `run` sees
+   * the draft as every peer does, and what it writes reaches them at once —
+   * over Redis on other instances — and is stored on the way out. Waits out a
+   * reset the way a joining peer does, so it never writes into a doc on its
+   * way out. Callers check access first: no `onAuthenticate` runs here.
+   */
+  async writeDraft<T>(workspaceId: string, documentId: string, branchId: string, run: (doc: Y.Doc) => T): Promise<T> {
+    const name = collabDocName(workspaceId, documentId, branchId);
+    await this.settled(name);
+    // No principal: the store credits nobody. A suggestion is the requester's
+    // word, not their edit; whoever keeps it is the one who wrote it in.
+    const connection = await this.hocuspocus!.openDirectConnection(name, { workspaceId, documentId } as CollabContext);
+    let result!: T;
+    try {
+      await connection.transact((doc) => {
+        result = run(doc);
+      });
+    } finally {
+      await connection.disconnect();
+    }
+    this.announce(name);
+    return result;
   }
 
   handleDisconnect(socket: WebSocket): void {

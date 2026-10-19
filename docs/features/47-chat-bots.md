@@ -8,7 +8,10 @@ page draft or a glossary term (phase 2). A bound group can be told when pages
 are published or updated and merge requests opened or merged (phase 3). Time,
 T-Bank's self-hosted corporate messenger, is the second platform (phase 4): the
 same answers, linking, feedback, saving and notifications, heard over the bot's
-own websocket instead of a webhook (see **Time specifics**).
+own websocket instead of a webhook (see **Time specifics**). Since #82 a
+linked editor can also ask the bot to **harvest** a thread of people's
+messages into reviewed captures; that is its own document,
+[59 — Chat harvest](59-chat-harvest.md).
 
 ## Who an answer runs as
 
@@ -230,6 +233,11 @@ the question to the answer).
   is a `duplicate` row, and the capture sweeper re-drives a staged row a
   restart stranded.
 
+Save keeps what the bot said. Keeping what the people in a thread settled is
+the **harvest** (`capture`, `/capture`, 📌 on Time, ✍ on Telegram), which
+writes the same captures through the same path:
+[59 — Chat harvest](59-chat-harvest.md).
+
 ## Channel notifications
 
 Each bound group can carry notification rules (`chat_subscriptions`): what to
@@ -294,7 +302,9 @@ field is the search sheet's (`lib/tag-options.ts`).
 - **Inbound:** `verifyInbound`, `parseInbound` → `ChatInbound` (a message,
   or a button press in `action`). `inbound` says whether messages come to the
   webhook (Telegram) or over the bot's websocket (Time). `threadId` is set on a
-  platform with real threads.
+  platform with real threads. For a harvest (#82) an inbound also carries `at`,
+  `replyTo` (the message it replies to, raw, never stored), `forwardedFrom`,
+  `topicId`, and `harvestReaction` when it is a reaction rather than a message.
 - **Press replies:** `acknowledge`, plus the optional `respondToAction` for a
   platform that answers a press in the HTTP response (Time) rather than with a
   call of its own (Telegram's `answerCallbackQuery`).
@@ -302,6 +312,9 @@ field is the search sheet's (`lib/tag-options.ts`).
   `editMessage`, `acknowledge`. Buttons are rows of link buttons and action
   buttons; an action's data must fit `limits.maxActionBytes`.
 - **Admin:** `identify` (Telegram `getMe`), `registerWebhook`, `directLink`.
+- **Harvest (optional, #82):** `fetchThread` (Time: a whole thread by any post
+  in it) and `messageUrl` (Telegram: a supergroup message's `t.me/c/…` link).
+  Telegram has no `fetchThread`; its threads come from `ChatBufferService`.
 
 The core decides *what* to say and the adapter decides *how* it looks and
 travels. `ChatAdapterRegistry` is keyed by `ChatPlatformKind`, so a kind added
@@ -318,7 +331,7 @@ How each platform maps, and what a later one must:
 | ------------------ | ---------------------------------------------- | ------------------------------------------------------ | --------------------------- |
 | inbound            | webhook                                        | websocket `GET /api/v4/websocket`, `posted` events     | Mattermost: as Time; VK Teams: long poll `events/get` |
 | `verifyInbound`    | `secret_token` header, SHA-256 + constant time | HMAC over the button's data in `integration.context`   | Mattermost: as Time         |
-| `parseInbound`     | `message`, reply chain, `@bot` mention         | `posted`: `@bot` in the text, `channel_type: 'D'`      | posted event / message      |
+| `parseInbound`     | `message`, reply chain, `@bot` mention, `message_reaction` (✍) | `posted`: `@bot` in the text, `channel_type: 'D'`; `reaction_added` (📌) | posted event / message      |
 | button presses     | `callback_query` / `answerCallbackQuery`       | POST to `integration.url`; note as `ephemeral_text` in the response (`respondToAction`) | interactive post action     |
 | threads            | reply to the bot's message                     | `root_id` (`threadId`)                                 | `root_id` / reply           |
 | `render`           | HTML subset + inline keyboard                  | markdown + one attachment of `actions` per button row  | markdown / inline keyboard  |
@@ -380,11 +393,14 @@ The web pages are `/settings/chat` (`ChatSettingsPage.vue` +
 | `/unlink`   | DM      | disconnect this account                                    |
 | `/bind`     | group   | answer here (linked workspace admin)                       |
 | `/unbind`   | group   | stop answering here (linked workspace admin)               |
+| `/capture`  | any     | harvest a thread: in a group as a reply to its first message, in a DM after forwarding it (linked editor; [59](59-chat-harvest.md)) |
+| `/forget`   | any     | delete the messages of yours the bot keeps for harvesting  |
 
 `/cmd@OtherBot` in a group is somebody else's command and is dropped.
 
 On Time the commands are the same words **without the slash** — `help`, `new`,
-`unlink`, `bind`, `unbind` — sent as a whole message (in a channel, after
+`unlink`, `bind`, `unbind`, and `capture` (also `remember` or `запомни`, said
+inside the thread) — sent as a whole message (in a channel, after
 mentioning the bot): Time's client takes every leading `/` as its own slash
 command and never posts it. `/ask` is not needed there, a mention is the
 question. The help text is per platform (`chat.help` / `chat.helpTime`).
@@ -394,12 +410,14 @@ question. The help text is per platform (`chat.help` / `chat.helpTime`).
 - **Privacy mode** (the default) shows a bot only the messages that mention
   it, reply to it, or are commands. That is exactly what it answers, and none
   of what it would otherwise read. It is also why Save works from the bot's
-  own Q&A turns only.
+  own Q&A turns only. A group that keeps messages for a harvest (#82) needs
+  privacy mode off, or the bot made a group admin.
 - **Threads.** Groups have no threads, only reply chains, hence
   `replyToBotMessageId`.
-- **Webhook only.** `allowed_updates: ['message', 'callback_query']`,
-  `drop_pending_updates`. A bot registered before the feedback buttons
-  existed is re-registered by **Test** or by saving its token again.
+- **Webhook only.** `allowed_updates: ['message', 'callback_query',
+  'message_reaction']`, `drop_pending_updates`. Telegram sends reactions only
+  where the bot is a group admin. A bot registered before the feedback buttons
+  or ✍ (#82) existed is re-registered by **Test** or by saving its token again.
   Long polling for installs without a public URL is a follow-up.
 - **Reaching Telegram.** `TELEGRAM_API_BASE_URL` points the outbound calls at
   a self-hosted Bot API server or a proxy. It is operator configuration, not a
@@ -419,7 +437,7 @@ not a live Time server** — the first real connection is the check.
 - **Hearing: a websocket, not a webhook.** `ChatSocketSupervisor` (API-side,
   only while `CHAT_ENABLED`) holds one socket per enabled Time bot,
   authenticated with the `Authorization` header, and hands each `posted`
-  event to `ChatAnswersService.receive`.
+  event, and each 📌 `reaction_added` (#82), to `ChatAnswersService.receive`.
   - Every `CHAT_SOCKET_SYNC_MS` it compares the sockets with the enabled bots:
     a bot saved, switched off, given a new token or moved is picked up.
   - A dropped socket reconnects with backoff (1 s → 60 s), reset by the
@@ -429,7 +447,8 @@ not a live Time server** — the first real connection is the check.
   - **Every replica holds every socket**, and Time sends each of them every
     message. The post id is claimed in Redis (`SET NX`, 1 h) before anything
     is done, so a help or link reply goes out once, not once per replica; an
-    answer is single through its `chat_answers` row besides. With Redis down
+    answer is single through its `chat_answers` row besides. A 📌 is claimed
+    as `<post>:pin:<user>`, apart from its post. With Redis down
     the claim is skipped rather than the bot going silent.
   - **No catch-up.** Time documents none, so a message sent while no socket
     is open is not answered.
@@ -469,20 +488,24 @@ not a live Time server** — the first real connection is the check.
 | `CHAT_ALLOW_PRIVATE_URLS`             | `false`                    | allow a Time server on a private/loopback address                   |
 | `CHAT_SOCKET_SYNC_MS`                 | `15000`                    | how often open Time sockets are compared with the enabled bots      |
 
+The harvest's `HARVEST_*` and `CHAT_LISTEN_TTL_DAYS` are in
+[59](59-chat-harvest.md#operations).
+
 ## Data
 
-All seven tables are new (`chat_captures` was folded into `knowledge_captures` by #82). None of them has an FK on `workspace_id`, `user_id` or
+All eight tables are new (`chat_captures` was folded into `knowledge_captures` by #82). None of them has an FK on `workspace_id`, `user_id` or
 `created_by`, per house policy. The per-bot rows cascade with
 `chat_integrations`.
 
 | Table                   | Holds                                                                         |
 | ----------------------- | ----------------------------------------------------------------------------- |
 | `chat_integrations`     | bot: kind, name, server (Time; `''` otherwise), token envelope + hint, inbound secret hash, username, webhook / socket error, default agent, locale |
-| `chat_channel_bindings` | group → project / agent / answer mode / locale                                |
+| `chat_channel_bindings` | group → project / agent / answer mode / locale / `listening` (#82)           |
 | `chat_identities`       | messenger account → person, unique per bot                                    |
 | `chat_link_codes`       | hashed one-time codes, with the private chat to confirm in                    |
 | `chat_conversations`    | chat + asker → `assistant_threads` row                                        |
 | `chat_answers`          | the claim: status, placeholder message id, platform thread (Time), assistant message id, frozen locale |
+| `chat_buffered_messages` | masked messages a harvest may read: a listening group's, or a DM's forwards (#82; cascades with the bot and the binding) |
 | `chat_subscriptions`    | a group's notification rule: project, folded tags, kinds, timing, cursor, next digest, last send / refusal (cascades with the binding) |
 
 `chat_answers.assistantMessageId` is what 👍/👎 key on. Votes go into

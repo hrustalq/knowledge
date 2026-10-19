@@ -8434,6 +8434,8 @@ export interface components {
             answerMode?: "mention" | "all" | "off";
             /** @enum {string|null} */
             locale?: "en" | "ru" | null;
+            /** @description Keep this group’s messages, masked, for harvesting (#82). Telegram only; turning it on posts a notice in the group, turning it off deletes what is kept. */
+            listening?: boolean;
         };
         CreateChatSubscriptionDto: {
             /**

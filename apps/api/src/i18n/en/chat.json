@@ -1,5 +1,5 @@
 {
-  "help": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a group, mention me or reply to one of my answers.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\n/new — start a new conversation\n/unlink — disconnect your account\n/bind — answer in this group (workspace admins)\n/unbind — stop answering in this group (workspace admins)\n/help — this message",
+  "help": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a group, mention me or reply to one of my answers.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\n/new — start a new conversation\n/unlink — disconnect your account\n/capture — as a reply to the first message of a thread: propose what it settled for the knowledge base (editors). In a private chat, forward me the messages first.\n/forget — delete the messages of yours I keep for that\n/bind — answer in this group (workspace admins)\n/unbind — stop answering in this group (workspace admins)\n/help — this message",
   "helpTime": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a channel, mention me — I answer in the message's thread, and anything else said in that thread is a follow-up.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\nSend one of these words on its own (in a channel, after mentioning me):\nnew — start a new conversation\nunlink — disconnect your account\nbind — answer in this channel (workspace admins)\nunbind — stop answering in this channel (workspace admins)\ncapture — propose what this thread settled for the knowledge base, said inside the thread (editors)\nhelp — this message",
   "link": {
     "required": "Link your account first: open the link below while signed in to {workspace}. It works once and expires in {minutes} minutes.",
@@ -89,7 +89,6 @@
   "harvest": {
     "forbidden": "Only an editor of {workspace} with a linked account can ask me to remember a thread.",
     "off": "Harvesting threads into the knowledge base is switched off on this server.",
-    "unsupported": "I cannot read threads on this platform yet.",
     "notInThread": "Send capture as a reply inside the thread you want me to remember.",
     "reading": "Reading the thread for what it settled…",
     "empty": "There is nothing in this thread for me to read.",
@@ -108,6 +107,27 @@
     "truncated": {
       "one": "I read the first message and the newest {count} reply.",
       "other": "I read the first message and the newest {count} replies."
+    },
+    "replyFirst": "Send /capture as a reply to the first message of the thread you want me to remember.",
+    "forwardFirst": "Forward me the messages you want me to remember, then send /capture.",
+    "forwardHeld": "Got it. Forward the rest of the thread, then send /capture within a couple of minutes.",
+    "listeningOff": "I only read the message you replied to: I do not keep this group's messages. A workspace admin can turn that on in the bot's settings.",
+    "beforeBuffer": {
+      "one": "The message you replied to is older than what I keep (I keep messages for {count} day, and only since keeping was turned on), so I read it and what I kept after it.",
+      "other": "The message you replied to is older than what I keep (I keep messages for {count} days, and only since keeping was turned on), so I read it and what I kept after it."
+    }
+  },
+  "forget": {
+    "done": {
+      "one": "Deleted {count} message of yours I was keeping.",
+      "other": "Deleted {count} messages of yours I was keeping."
+    },
+    "nothing": "I am not keeping any messages of yours."
+  },
+  "listen": {
+    "on": {
+      "one": "From now on I keep this group's messages for {count} day, with emails, phone numbers, card numbers and secrets masked, so workspace editors can ask me to /capture a thread for the knowledge base. Nothing kept is searchable. /forget deletes yours.",
+      "other": "From now on I keep this group's messages for {count} days, with emails, phone numbers, card numbers and secrets masked, so workspace editors can ask me to /capture a thread for the knowledge base. Nothing kept is searchable. /forget deletes yours."
     }
   }
 }

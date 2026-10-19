@@ -172,6 +172,11 @@ export class UpdateChatBindingDto {
   @ValidateIf((o: UpdateChatBindingDto) => o.locale !== undefined && o.locale !== null)
   @IsIn([...SUPPORTED_LOCALES])
   locale?: Locale | null;
+
+  @ApiPropertyOptional({ type: Boolean, description: 'Keep this group’s messages, masked, for harvesting (#82). Telegram only; turning it on posts a notice in the group, turning it off deletes what is kept.' })
+  @IsOptional()
+  @IsBoolean()
+  listening?: boolean;
 }
 
 export class ChatLinkCodeDto {

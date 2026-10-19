@@ -81,8 +81,8 @@ export class ChatSettingsController {
   @Get('integrations/:id/bindings')
   @Access('admin', 'chat-integration')
   @ApiOperation({ summary: 'The groups this bot answers in' })
-  async bindings(@Param('id', ParseUUIDPipe) id: string): Promise<ChatBindingsResponse> {
-    return { bindings: await this.integrations.listBindings(id) };
+  bindings(@Param('id', ParseUUIDPipe) id: string): Promise<ChatBindingsResponse> {
+    return this.integrations.listBindings(id);
   }
 
   @Post('integrations/:id/bindings')

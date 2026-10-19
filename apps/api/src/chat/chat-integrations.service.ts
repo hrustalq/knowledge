@@ -12,6 +12,7 @@ import { Prisma, type ChatChannelBinding, type ChatIntegration } from '@prisma/c
 import {
   chatPlatformNeedsServer,
   type ChatBindingEntry,
+  type ChatBindingsResponse,
   type ChatIntegrationSummary,
   type ChatIntegrationTestResponse,
   type ChatIntegrationsResponse,
@@ -53,6 +54,7 @@ export class ChatIntegrationsService {
   private readonly apiPublicUrl: string;
   private readonly enabled: boolean;
   private readonly allowPrivateUrls: boolean;
+  private readonly listenTtlDays: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -64,6 +66,7 @@ export class ChatIntegrationsService {
     this.apiPublicUrl = config.get('API_PUBLIC_URL', { infer: true }).replace(/\/$/, '');
     this.enabled = config.get('CHAT_ENABLED', { infer: true });
     this.allowPrivateUrls = config.get('CHAT_ALLOW_PRIVATE_URLS', { infer: true });
+    this.listenTtlDays = config.get('CHAT_LISTEN_TTL_DAYS', { infer: true });
   }
 
   async list(workspaceId: string): Promise<ChatIntegrationsResponse> {
@@ -312,13 +315,13 @@ export class ChatIntegrationsService {
   // Bindings: which groups the bot answers in, and how.
   // -------------------------------------------------------------------------
 
-  async listBindings(integrationId: string): Promise<ChatBindingEntry[]> {
+  async listBindings(integrationId: string): Promise<ChatBindingsResponse> {
     const rows = await this.prisma.chatChannelBinding.findMany({
       where: { integrationId },
       orderBy: { createdAt: 'asc' },
       include: SUBSCRIPTION_COUNT,
     });
-    return rows.map(toBindingEntry);
+    return { bindings: rows.map(toBindingEntry), listenTtlDays: this.listenTtlDays };
   }
 
   async requireBinding(id: string): Promise<ChatChannelBinding> {
@@ -367,6 +370,7 @@ export class ChatIntegrationsService {
   async updateBinding(id: string, dto: UpdateChatBindingDto): Promise<ChatBindingEntry> {
     const row = await this.requireBinding(id);
     await this.assertBindingRefs(row.workspaceId, dto);
+    if (dto.listening !== undefined && dto.listening !== row.listening) await this.switchListening(row, dto.listening);
     const next = await this.prisma.chatChannelBinding.update({
       where: { id },
       data: {
@@ -375,10 +379,36 @@ export class ChatIntegrationsService {
         ...(dto.agentKey !== undefined ? { agentKey: dto.agentKey } : {}),
         ...(dto.answerMode !== undefined ? { answerMode: dto.answerMode } : {}),
         ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
+        ...(dto.listening !== undefined ? { listening: dto.listening } : {}),
       },
       include: SUBSCRIPTION_COUNT,
     });
     return toBindingEntry(next);
+  }
+
+  /**
+   * Listening (#82): Telegram only, since Time's threads are fetched whole.
+   * On, the group is told first — if the bot cannot say so, nothing is kept,
+   * because a group that was never told is a group being recorded. Off, what
+   * was kept goes at once, not at the TTL.
+   */
+  private async switchListening(row: ChatChannelBinding, on: boolean): Promise<void> {
+    const integration = await this.require(row.integrationId);
+    if (integration.kind !== 'telegram') throw new BadRequestException(t('error.chat.listenTelegramOnly'));
+    if (!on) {
+      await this.prisma.chatBufferedMessage.deleteMany({ where: { bindingId: row.id } });
+      return;
+    }
+    const ctx = this.context(integration);
+    if (!ctx) throw new BadRequestException(t('error.chat.listenNoticeFailed', { reason: t('error.chat.tokenRequired') }));
+    const adapter = this.registry.get(integration.kind);
+    const locale = (row.locale ?? integration.locale) as Locale;
+    const text = t('chat.listen.on', { count: this.listenTtlDays }, locale);
+    try {
+      await adapter.postMessage(ctx, { chatId: row.externalChatId }, adapter.render({ kind: 'notice', text }));
+    } catch (err) {
+      throw new BadRequestException(t('error.chat.listenNoticeFailed', { reason: err instanceof ChatPlatformError ? err.message : 'unreachable' }));
+    }
   }
 
   async removeBinding(id: string): Promise<void> {
@@ -439,6 +469,7 @@ function toBindingEntry(row: ChatChannelBinding & { _count: { subscriptions: num
     answerMode: row.answerMode as ChatAnswerMode,
     locale: (row.locale as Locale | null) ?? null,
     subscriptionCount: row._count.subscriptions,
+    listening: row.listening,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

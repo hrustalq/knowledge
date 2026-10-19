@@ -298,8 +298,20 @@ in the pull request that introduces them — see
   a link to the Captures inbox, never a title. A viewer or an unlinked person
   is refused before the thread is read. Each harvest is booked as AI usage
   `harvest` against the asker, and one person may start
-  `HARVEST_RATE_PER_HOUR` of them an hour. Telegram answers `capture` with
-  "not available here yet" until phase 3.
+  `HARVEST_RATE_PER_HOUR` of them an hour.
+- Ask a Telegram bot to remember a thread (#82, phase 3). In a group, an
+  editor with a linked account sends `/capture` as a reply to the first
+  message of the thread. In a private chat, they forward the bot the
+  messages and then send `/capture`; the bot holds forwards for a couple of
+  minutes instead of answering them. A workspace admin can let a group keep
+  its messages for harvesting (*Keep messages for /capture* on the group in
+  Settings → Chat bots). The bot first posts a notice in the group, and
+  keeps nothing if it cannot. Kept messages are masked before they are
+  stored, are never searchable, and are deleted after `CHAT_LISTEN_TTL_DAYS`,
+  when keeping is turned off or the group unbound, and per person on
+  `/forget`. Without keeping, `/capture` reads only the message it replies
+  to, and the reply says so; it also says when that message is older than
+  what is kept. `/capture` and `/forget` are in the Telegram `/help`.
 
 ### Changed
 
@@ -336,6 +348,14 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261118100000_chat_listening_buffer` adds
+  `chat_channel_bindings.listening` (default `false`) and the
+  `chat_buffered_messages` table. It is additive and survives a code
+  rollback; after a final rollback, drop `chat_buffered_messages` by hand,
+  since nothing else deletes its rows. Two env vars, both with defaults:
+  `HARVEST_FORWARD_WINDOW_SEC` (`120`) and `CHAT_LISTEN_TTL_DAYS` (`7`).
+  Keeping messages needs the bot's privacy mode off in @BotFather
+  (`/setprivacy`), or the bot made a group admin.
 - Harvest adds three env vars, each with a default, so nothing needs setting:
   `HARVEST_ENABLED` (`true`; `false` answers `capture` with a notice),
   `HARVEST_MAX_MESSAGES` (`200`: the root and the newest replies) and

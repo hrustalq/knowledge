@@ -30,6 +30,7 @@ import {
   type ChatView,
 } from './adapters/chat-adapter.types.js';
 import { decodeChatAction, encodeChatAction } from './chat-actions.js';
+import { ChatBufferService, type BufferedThread } from './chat-buffer.service.js';
 import { ChatCapturesService } from './chat-captures.service.js';
 import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
@@ -101,6 +102,7 @@ export class ChatAnswersService {
     private readonly feedback: AnswerFeedbackService,
     private readonly captures: ChatCapturesService,
     private readonly harvester: HarvestService,
+    private readonly buffer: ChatBufferService,
     config: ConfigService<Env, true>,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true }).replace(/\/$/, '');
@@ -157,6 +159,22 @@ export class ChatAnswersService {
     // one way in, and it checks who is asking.
     if (!inbound.isDm && !d.binding && command?.name !== 'bind') return;
 
+    // Kept for a harvest (#82): a DM's forwards wait for `/capture` instead of
+    // being answered; a listening group's messages are kept and then handled
+    // as usual. Masked on the way in, either way.
+    if (this.harvestEnabled && !command && inbound.text) {
+      if (inbound.isDm && inbound.forwardedFrom) {
+        // The first of a batch is told how to finish; the rest are kept quietly.
+        if (await this.buffer.holdForward(integration.id, inbound)) await this.notice(d, t('chat.harvest.forwardHeld'));
+        return;
+      }
+      if (d.binding?.listening) {
+        await this.buffer.holdGroupMessage(integration.id, d.binding, inbound).catch((err: unknown) => {
+          this.logger.warn({ msg: 'chat message not kept', integrationId: integration.id, error: String(err) });
+        });
+      }
+    }
+
     if (command) {
       switch (command.name) {
         case 'start':
@@ -182,6 +200,11 @@ export class ChatAnswersService {
           return this.bindCommand(d, userId, command.name);
         case 'capture':
           return this.harvest(d, userId, locale);
+        case 'forget': {
+          // Anyone's right over their own messages: no link, no role.
+          const removed = await this.buffer.forget(integration.id, inbound);
+          return this.notice(d, removed ? t('chat.forget.done', { count: removed }) : t('chat.forget.nothing'));
+        }
         case 'ask':
           // `/ask question` is a question, in any chat — what a group member
           // types when mentioning feels odd.
@@ -562,14 +585,16 @@ export class ChatAnswersService {
   }
 
   /**
-   * `capture` in a thread (#82): the thread, harvested into captures as the
-   * person who asked — a linked editor, checked here and again by
-   * `CaptureService`. The placeholder becomes counts and an inbox link, never
-   * a capture's or a page's title: the group may hold people who cannot open
-   * them. A refusal is said in the same place.
+   * `capture` (#82): a thread, harvested into captures as the person who
+   * asked — a linked editor, checked here and again by `CaptureService`. Time
+   * fetches the thread the command was sent in; Telegram reads the group's
+   * buffer from the message the command replies to, or in a private chat what
+   * was just forwarded. The placeholder becomes counts and an inbox link,
+   * never a capture's or a page's title: the group may hold people who cannot
+   * open them. A refusal is said in the same place.
    */
   private async harvest(d: Delivery, userId: string | null, locale: Locale): Promise<void> {
-    const { inbound, integration } = d;
+    const { inbound, integration, adapter } = d;
     if (!userId) return this.askToLink(d);
     let principal: Principal;
     try {
@@ -579,10 +604,25 @@ export class ChatAnswersService {
       return this.notice(d, t('chat.harvest.forbidden', { workspace: d.workspaceName }));
     }
     if (!this.harvestEnabled) return this.notice(d, t('chat.harvest.off'));
-    if (!d.adapter.fetchThread) return this.notice(d, t('chat.harvest.unsupported'));
-    // Said at the top of a channel, the command is its own thread: there is nothing above it to read.
-    const root = inbound.threadId;
-    if (!root || root === inbound.messageId) return this.notice(d, t('chat.harvest.notInThread'));
+
+    let read: () => Promise<BufferedThread>;
+    if (adapter.fetchThread) {
+      // Said at the top of a channel, the command is its own thread: there is nothing above it to read.
+      const root = inbound.threadId;
+      if (!root || root === inbound.messageId) return this.notice(d, t('chat.harvest.notInThread'));
+      read = async () => ({
+        thread: await adapter.fetchThread!(d.ctx, inbound.chatId, root, inbound.messageId, this.harvestMax),
+        note: null,
+        consumed: [],
+      });
+    } else if (inbound.isDm) {
+      read = () => this.buffer.forwards(integration.id, inbound.chatId, this.harvestMax);
+    } else {
+      const m = inbound.replyTo;
+      if (!m) return this.notice(d, t('chat.harvest.replyFirst'));
+      const url = adapter.messageUrl?.(inbound.chatId, m.messageId) ?? null;
+      read = () => this.buffer.groupThread(integration.id, d.binding!, inbound, this.harvestMax, url);
+    }
 
     let placeholder: ChatMessageRef;
     try {
@@ -593,7 +633,7 @@ export class ChatAnswersService {
     }
     let view: ChatView;
     try {
-      const thread = await d.adapter.fetchThread(d.ctx, inbound.chatId, root, inbound.messageId, this.harvestMax);
+      const { thread, note, consumed } = await read();
       const outcome = await this.harvester.harvest(
         {
           workspaceId: integration.workspaceId,
@@ -604,9 +644,10 @@ export class ChatAnswersService {
         },
         principal,
       );
+      await this.buffer.consume(consumed);
       view = {
         kind: 'notice',
-        text: harvestSummary(outcome, thread.truncated ? this.harvestMax - 1 : null),
+        text: harvestSummary(outcome, thread.truncated ? this.harvestMax - 1 : null, note),
         ...(outcome.proposed + outcome.duplicates ? { button: { label: t('chat.capture.openCaptures'), url: `${this.webBaseUrl}/captures` } } : {}),
       };
     } catch (err) {
@@ -710,13 +751,17 @@ export class ChatAnswersService {
   }
 }
 
-/** What a harvest proposed, as counts only. `readReplies` is set when the thread was cut to the cap. */
-export function harvestSummary(outcome: HarvestOutcome, readReplies: number | null): string {
+/**
+ * What a harvest proposed, as counts only. `readReplies` is set when the
+ * thread was cut to the cap; `note` says how a partial thread was read.
+ */
+export function harvestSummary(outcome: HarvestOutcome, readReplies: number | null, note: string | null = null): string {
   const parts = [
     outcome.proposed ? t('chat.harvest.proposed', { count: outcome.proposed }) : null,
     outcome.duplicates ? t('chat.harvest.duplicates', { count: outcome.duplicates }) : null,
     outcome.proposed + outcome.duplicates ? null : t('chat.harvest.nothing'),
     readReplies !== null ? t('chat.harvest.truncated', { count: readReplies }) : null,
+    note,
   ];
   return parts.filter(Boolean).join(' ');
 }

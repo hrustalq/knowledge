@@ -174,12 +174,16 @@ export interface ChatBindingEntry {
   locale: Locale | null;
   /** Notification rules on this group (phase 3). */
   subscriptionCount: number;
+  /** Messages here are kept, masked, so a thread can be harvested (#82). Telegram only. */
+  listening: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface ChatBindingsResponse {
   bindings: ChatBindingEntry[];
+  /** CHAT_LISTEN_TTL_DAYS: how long a listening group's messages are kept. */
+  listenTtlDays: number;
 }
 
 /**

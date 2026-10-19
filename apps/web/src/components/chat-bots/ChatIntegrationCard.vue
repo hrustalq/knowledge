@@ -170,7 +170,7 @@ async function unlink(identityId: string) {
         </button>
       </div>
 
-      <ChatBindingTable v-if="tab === 'groups'" :integration-id="bot.id" @changed="emit('changed')" />
+      <ChatBindingTable v-if="tab === 'groups'" :integration-id="bot.id" :kind="bot.kind" @changed="emit('changed')" />
 
       <template v-else>
         <p class="text-xs text-muted-foreground">{{ t('chatBots.people.hint') }}</p>

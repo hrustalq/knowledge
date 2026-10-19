@@ -75,7 +75,7 @@ describe('parseInbound — button presses', () => {
 
 describe('parseInbound', () => {
   it('normalises a private message', () => {
-    const [m] = adapter.parseInbound(update({ message_id: 7, from, chat: dm, text: 'How do we deploy?' }), BOT);
+    const [m] = adapter.parseInbound(update({ message_id: 7, date: 1_760_000_000, from, chat: dm, text: 'How do we deploy?' }), BOT);
     expect(m).toEqual({
       externalUserId: '42',
       externalUserName: '@alice',
@@ -89,6 +89,10 @@ describe('parseInbound', () => {
       threadId: null,
       command: null,
       action: null,
+      at: new Date(1_760_000_000_000),
+      replyTo: null,
+      forwardedFrom: null,
+      topicId: null,
     });
   });
 
@@ -115,6 +119,40 @@ describe('parseInbound', () => {
     const [own] = adapter.parseInbound(update({ message_id: 1, from, chat: group, text: '/ask@kn_bot what is X' }), BOT);
     expect(own.command).toEqual({ name: 'ask', args: 'what is X' });
     expect(adapter.parseInbound(update({ message_id: 2, from, chat: group, text: '/help@other_bot' }), BOT)).toEqual([]);
+  });
+
+  it('keeps the message a reply quotes, whoever wrote it, raw (#82)', () => {
+    const [m] = adapter.parseInbound(
+      update({
+        message_id: 20,
+        date: 1_760_000_100,
+        from,
+        chat: group,
+        text: '/capture',
+        reply_to_message: { message_id: 11, date: 1_760_000_000, from: { id: 7, first_name: 'Bob' }, text: 'Mail bob@example.com' },
+      }),
+      BOT,
+    );
+    expect(m).toMatchObject({
+      command: { name: 'capture', args: '' },
+      replyToBotMessageId: null,
+      replyTo: { messageId: '11', authorId: '7', text: 'Mail bob@example.com', at: new Date(1_760_000_000_000), fromBot: false },
+    });
+  });
+
+  it('names a forward’s original author and time, and a forum topic (#82)', () => {
+    const fwd = (origin: Record<string, unknown>) =>
+      adapter.parseInbound(update({ message_id: 3, date: 1_760_000_500, from, chat: dm, text: 'we ship on Tuesdays', forward_origin: { date: 1_760_000_000, ...origin } }), BOT)[0]!;
+    expect(fwd({ type: 'user', sender_user: { id: 9 } }).forwardedFrom).toEqual({ authorId: '9', at: new Date(1_760_000_000_000) });
+    expect(fwd({ type: 'hidden_user', sender_user_name: 'Carol' }).forwardedFrom?.authorId).toBe('name:Carol');
+    expect(fwd({ type: 'channel', chat: { id: -100555 } }).forwardedFrom?.authorId).toBe('-100555');
+    const [topic] = adapter.parseInbound(update({ message_id: 4, date: 1, from, chat: group, text: 'hi', is_topic_message: true, message_thread_id: 77 }), BOT);
+    expect(topic.topicId).toBe('77');
+  });
+
+  it('links a supergroup message, and nothing else', () => {
+    expect(adapter.messageUrl('-1001234', '55')).toBe('https://t.me/c/1234/55');
+    expect(adapter.messageUrl('-4321', '55')).toBeNull();
   });
 
   it('drops bots, edits, empty messages and garbage', () => {

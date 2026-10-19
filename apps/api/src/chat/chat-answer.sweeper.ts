@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { ChatAnswersService } from './chat-answers.service.js';
+import { ChatBufferService } from './chat-buffer.service.js';
 
 /** A stranded placeholder is rare and already late; a minute more is nothing. */
 const SWEEP_INTERVAL_MS = 60_000;
@@ -15,7 +16,8 @@ const SWEEP_INTERVAL_MS = 60_000;
  * is worse than an error.
  *
  * API-side and interval-driven, because there is no cron here; off entirely
- * while CHAT_ENABLED is, since nothing can be pending then.
+ * while CHAT_ENABLED is, since nothing can be pending then. The same tick
+ * drops kept chat messages past their keep (#82).
  */
 @Injectable()
 export class ChatAnswerSweeper implements OnModuleInit, OnModuleDestroy {
@@ -25,6 +27,7 @@ export class ChatAnswerSweeper implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly answers: ChatAnswersService,
+    private readonly buffer: ChatBufferService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -44,6 +47,7 @@ export class ChatAnswerSweeper implements OnModuleInit, OnModuleDestroy {
     try {
       const closed = await this.answers.reapStale();
       if (closed > 0) this.logger.warn(`timed out ${closed} unanswered chat questions`);
+      await this.buffer.purgeExpired();
     } catch (e: unknown) {
       this.logger.warn(`chat answer sweep failed: ${String(e)}`);
     } finally {

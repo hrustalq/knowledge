@@ -15,6 +15,7 @@ import { StorageModule } from '../storage/storage.module.js';
 import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
 import { ChatAnswerSweeper } from './chat-answer.sweeper.js';
 import { ChatAnswersService } from './chat-answers.service.js';
+import { ChatBufferService } from './chat-buffer.service.js';
 import { ChatCapturesService } from './chat-captures.service.js';
 import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
@@ -38,7 +39,8 @@ import { HarvestService } from './harvest.service.js';
  * post to a group is attributed to nobody. Time's websockets (phase 4) are
  * held here by ChatSocketSupervisor, which feeds the same answer path.
  * Harvesting a thread into captures (#82) is HarvestService: API-side for the
- * same reason Save is, and fed by the same dispatch.
+ * same reason Save is, and fed by the same dispatch; Telegram's threads come
+ * from ChatBufferService, which keeps a listening group's messages masked.
  */
 @Module({
   imports: [
@@ -62,6 +64,7 @@ import { HarvestService } from './harvest.service.js';
     ChatIntegrationsService,
     ChatIdentityService,
     ChatAnswersService,
+    ChatBufferService,
     ChatCapturesService,
     ChatAnswerSweeper,
     ChatSubscriptionsService,

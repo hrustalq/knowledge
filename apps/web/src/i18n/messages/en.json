@@ -4837,7 +4837,10 @@
       "none": "No groups yet. Private chats need no setup.",
       "chatIdPlaceholder": "-1001234567890",
       "titlePlaceholder": "Name (optional)",
-      "add": "Add group"
+      "add": "Add group",
+      "listen": "Keep messages for /capture",
+      "listenHint": "Kept for {days}, with emails, phone numbers, card numbers and secrets masked, so editors can harvest a thread into captures. Never searchable. Needs privacy mode off in {'@'}BotFather, or the bot as a group admin. Turning this on posts a notice in the group; turning it off deletes what is kept.",
+      "listenDays": "{days} day | {days} day | {days} days"
     },
     "card": {
       "off": "Off",

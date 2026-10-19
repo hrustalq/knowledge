@@ -430,7 +430,6 @@ export type I18nTranslations = {
         "harvest": {
             "forbidden": string;
             "off": string;
-            "unsupported": string;
             "notInThread": string;
             "reading": string;
             "empty": string;
@@ -451,6 +450,33 @@ export type I18nTranslations = {
                 "many": string;
             };
             "truncated": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "replyFirst": string;
+            "forwardFirst": string;
+            "forwardHeld": string;
+            "listeningOff": string;
+            "beforeBuffer": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+        };
+        "forget": {
+            "done": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "nothing": string;
+        };
+        "listen": {
+            "on": {
                 "one": string;
                 "other": string;
                 "few": string;
@@ -1103,6 +1129,8 @@ export type I18nTranslations = {
             "serverUrlNotHttps": string;
             "serverUrlPrivate": string;
             "serverHostUnresolved": string;
+            "listenTelegramOnly": string;
+            "listenNoticeFailed": string;
         };
         "group": {
             "notFound": string;

@@ -869,6 +869,10 @@ export const envSchema = z.object({
   HARVEST_MAX_MESSAGES: z.coerce.number().int().min(2).default(200),
   /** Harvests one person may start in an hour, counted from their `harvest` AI usage rows. */
   HARVEST_RATE_PER_HOUR: z.coerce.number().int().min(0).default(10),
+  /** Telegram: messages forwarded to the bot this many seconds before `/capture` are the thread. */
+  HARVEST_FORWARD_WINDOW_SEC: z.coerce.number().int().min(10).default(120),
+  /** Days a listening Telegram group's messages are kept, masked, for a harvest to read. */
+  CHAT_LISTEN_TTL_DAYS: z.coerce.number().int().min(1).default(7),
 
   /**
    * Interface + API language (docs/features/18). Also the fallback whenever a

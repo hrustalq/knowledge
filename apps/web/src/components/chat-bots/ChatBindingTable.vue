@@ -4,6 +4,10 @@
  * agent, answer mode and language. Every change saves as it is made — there is
  * no form to forget to submit. A group is usually added from inside it, with
  * /bind; typing its id here is the fallback.
+ *
+ * A Telegram group can also keep its messages for a harvest (#82): the API
+ * posts a notice in the group before it keeps anything, so the toggle waits
+ * for that round trip and shows the refusal if the bot cannot speak there.
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -21,13 +25,14 @@ import { apiQueryOptions } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import AgentSelect from './AgentSelect.vue'
 import ChatSubscriptionEditor from './ChatSubscriptionEditor.vue'
 
-const props = defineProps<{ integrationId: string }>()
+const props = defineProps<{ integrationId: string; kind: string }>()
 const emit = defineEmits<{ changed: [] }>()
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -39,6 +44,7 @@ onMounted(() => {
 const options = computed(() => apiQueryOptions('/v1/chat/integrations/{id}/bindings', { path: { id: props.integrationId } }))
 const query = useQuery(options)
 const bindings = computed(() => (query.data.value as ChatBindingsResponse | undefined)?.bindings ?? [])
+const ttlDays = computed(() => (query.data.value as ChatBindingsResponse | undefined)?.listenTtlDays ?? 7)
 
 /** Which bindings have their notification rules open. */
 const open = reactive<Record<string, boolean>>({})
@@ -55,6 +61,19 @@ async function patch(b: ChatBindingEntry, body: Record<string, unknown>) {
     void queryClient.invalidateQueries({ queryKey: options.value.queryKey })
   } catch (e) {
     toast.error(errorMessage(e, t))
+  }
+}
+
+/** Bindings whose listening switch is waiting on the API (and, turning on, on the group notice). */
+const switching = reactive<Record<string, boolean>>({})
+async function setListening(b: ChatBindingEntry, on: boolean) {
+  switching[b.id] = true
+  try {
+    await patch(b, { listening: on })
+  } finally {
+    switching[b.id] = false
+    // A refusal (the bot could not tell the group) must put the box back to what the server holds.
+    refresh()
   }
 }
 
@@ -158,6 +177,23 @@ async function add() {
             </Select>
           </div>
         </div>
+        <label
+          v-if="kind === 'telegram'"
+          class="mt-3 flex max-w-[46rem] cursor-pointer items-start gap-2.5 has-[:disabled]:cursor-progress"
+        >
+          <Checkbox
+            class="mt-0.5"
+            :model-value="b.listening"
+            :disabled="!!switching[b.id]"
+            @update:model-value="(v) => setListening(b, v === true)"
+          />
+          <span class="min-w-0">
+            <span class="block text-sm">{{ t('chatBots.bindings.listen') }}</span>
+            <span class="block text-xs text-muted-foreground">
+              {{ t('chatBots.bindings.listenHint', { days: t('chatBots.bindings.listenDays', { days: ttlDays }, ttlDays) }) }}
+            </span>
+          </span>
+        </label>
         <button
           type="button"
           class="mt-2.5 inline-flex items-center gap-1.5 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"

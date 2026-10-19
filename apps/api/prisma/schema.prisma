@@ -3054,6 +3054,7 @@ model ChatIntegration {
   linkCodes     ChatLinkCode[]
   answers       ChatAnswer[]
   conversations ChatConversation[]
+  buffered      ChatBufferedMessage[]
 
   @@unique([workspaceId, name])
   // One bot account serves one workspace: deliveries carry no workspace, so a
@@ -3077,15 +3078,54 @@ model ChatChannelBinding {
   /// CHAT_ANSWER_MODES — 'mention' | 'all' | 'off'.
   answerMode     String   @default("mention") @map("answer_mode")
   locale         String?
+  /// Keep this group's messages, masked, so a thread can be harvested (#82).
+  /// Telegram only; a workspace admin turns it on, and the group is told.
+  listening      Boolean  @default(false)
   createdBy      String?  @map("created_by") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  integration   ChatIntegration    @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  integration   ChatIntegration       @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   subscriptions ChatSubscription[]
+  buffered      ChatBufferedMessage[]
 
   @@unique([integrationId, externalChatId])
   @@map("chat_channel_bindings")
+}
+
+/// A message kept so a thread can be harvested (#82): a listening group's
+/// discussion, or what a person forwarded to the bot in a private chat.
+/// Masked before it is written — raw text never reaches this table — and
+/// never searched or indexed. A group's rows go after CHAT_LISTEN_TTL_DAYS,
+/// with the binding (cascade), when listening is turned off, or per author
+/// on /forget; a DM's forwards after HARVEST_FORWARD_WINDOW_SEC or once
+/// harvested.
+model ChatBufferedMessage {
+  id                String   @id @default(uuid()) @db.Uuid
+  integrationId     String   @map("integration_id") @db.Uuid
+  /// The listening group; null for a forward in a private chat.
+  bindingId         String?  @map("binding_id") @db.Uuid
+  externalChatId    String   @map("external_chat_id")
+  /// A Telegram forum topic; null outside one.
+  topicId           String?  @map("topic_id")
+  externalMessageId String   @map("external_message_id")
+  /// The platform's opaque id for who wrote it: what /forget matches, and how
+  /// a harvest tells speakers apart. A forward keeps its original author.
+  authorId          String   @map("author_id")
+  /// Masked, placeholders numbered per message.
+  text              String
+  /// When it was written — for a forward, the original's time.
+  sentAt            DateTime @map("sent_at") @db.Timestamptz
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  integration ChatIntegration     @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  binding     ChatChannelBinding? @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, externalChatId, externalMessageId])
+  @@index([integrationId, externalChatId, topicId, sentAt])
+  @@index([authorId])
+  @@index([createdAt])
+  @@map("chat_buffered_messages")
 }
 
 /// A bound group told about pages and merge requests (issue #71, phase 3).

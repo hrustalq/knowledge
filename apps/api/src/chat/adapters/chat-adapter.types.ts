@@ -58,6 +58,28 @@ export interface ChatInbound {
    * untouched, and only for buttons this bot sent.
    */
   action: { id: string; data: string } | null;
+  /** When the message was sent; absent where the platform did not say. */
+  at?: Date;
+  /**
+   * The message this one replies to, whoever wrote it, as the platform
+   * delivered it — where a Telegram `/capture` starts reading (#82). The text
+   * is raw: never stored, only handed to a harvest, which masks it.
+   */
+  replyTo?: ChatQuotedMessage | null;
+  /** Forwarded into the chat: the original's author and time (#82). */
+  forwardedFrom?: { authorId: string; at: Date } | null;
+  /** A Telegram forum topic the message is in; null outside one. */
+  topicId?: string | null;
+}
+
+/** A message another one quotes by replying to it. */
+export interface ChatQuotedMessage {
+  messageId: string;
+  authorId: string;
+  /** Empty for a message with no text (a topic's opening, a photo with no caption). */
+  text: string;
+  at: Date;
+  fromBot: boolean;
 }
 
 /** Where a message goes. */
@@ -221,10 +243,12 @@ export interface ChatAdapter {
    * The thread rooted at `rootId`, up to (not including) `beforeMessageId` —
    * the command that asked for it — and at most `max` messages: the root and
    * the newest replies. Bots' and system messages are left out. Absent on a
-   * platform with no thread to fetch (Telegram, whose threads #82 phase 3
-   * reads from a listening buffer instead).
+   * platform with no thread to fetch (Telegram, whose threads are read from
+   * the listening buffer or a DM's forwards instead — `ChatBufferService`).
    */
   fetchThread?(ctx: ChatAdapterContext, chatId: string, rootId: string, beforeMessageId: string, max: number): Promise<ChatThread>;
+  /** A link to one message, where the platform has one for this chat; the origin of a harvest from the buffer. */
+  messageUrl?(chatId: string, messageId: string): string | null;
   /** A link that opens a private chat with the bot, or null if the platform has none. */
   directLink(botUsername: string | null, payload?: string): string | null;
 }

@@ -239,6 +239,18 @@ export class TelegramAdapter implements ChatAdapter {
         threadId: null,
         command,
         action: null,
+        ...(msg.date ? { at: new Date(msg.date * 1000) } : {}),
+        replyTo: replyTo
+          ? {
+              messageId: String(replyTo.message_id),
+              authorId: replyTo.from ? String(replyTo.from.id) : '',
+              text: (replyTo.text ?? replyTo.caption ?? '').trim(),
+              at: new Date(replyTo.date * 1000),
+              fromBot: !!replyTo.from?.is_bot,
+            }
+          : null,
+        forwardedFrom: msg.forward_origin ? { authorId: forwardAuthor(msg.forward_origin), at: new Date(msg.forward_origin.date * 1000) } : null,
+        topicId: msg.is_topic_message && msg.message_thread_id ? String(msg.message_thread_id) : null,
       },
     ];
   }
@@ -341,6 +353,14 @@ export class TelegramAdapter implements ChatAdapter {
     });
   }
 
+  /**
+   * A supergroup's message as `t.me/c/…`, which opens for its members. A basic
+   * group or a private chat has no message links.
+   */
+  messageUrl(chatId: string, messageId: string): string | null {
+    return chatId.startsWith('-100') ? `https://t.me/c/${chatId.slice(4)}/${messageId}` : null;
+  }
+
   directLink(botUsername: string | null, payload?: string): string | null {
     if (!botUsername) return null;
     return `https://t.me/${botUsername}${payload ? `?start=${encodeURIComponent(payload)}` : ''}`;
@@ -400,6 +420,13 @@ function displayName(user: TelegramUser): string | null {
   return user.username ? `@${user.username}` : [user.first_name, user.last_name].filter(Boolean).join(' ') || null;
 }
 
+/** Who a forward came from, as an opaque id: the user, the chat, or the name a hidden user goes by. */
+function forwardAuthor(origin: TelegramForwardOrigin): string {
+  if (origin.sender_user) return String(origin.sender_user.id);
+  if (origin.sender_chat ?? origin.chat) return String((origin.sender_chat ?? origin.chat)!.id);
+  return `name:${origin.sender_user_name ?? ''}`;
+}
+
 /** Rows of buttons as Telegram's inline keyboard; nothing at all when there are none. */
 function keyboard(rows: ChatButton[][]): Record<string, unknown> {
   if (!rows.length) return {};
@@ -422,11 +449,27 @@ interface TelegramUser {
 
 interface TelegramMessage {
   message_id: number;
+  /** Unix seconds. */
+  date: number;
   from?: TelegramUser;
   chat?: { id: number; type: 'private' | 'group' | 'supergroup' | 'channel'; title?: string };
   text?: string;
   caption?: string;
-  reply_to_message?: { message_id: number; from?: TelegramUser };
+  /** In a forum, a topic's message replies to the topic's opening unless it replies to something else. */
+  reply_to_message?: { message_id: number; date: number; from?: TelegramUser; text?: string; caption?: string };
+  forward_origin?: TelegramForwardOrigin;
+  is_topic_message?: boolean;
+  message_thread_id?: number;
+}
+
+/** MessageOrigin: `user`, `hidden_user`, `chat` or `channel`. */
+interface TelegramForwardOrigin {
+  type: string;
+  date: number;
+  sender_user?: TelegramUser;
+  sender_user_name?: string;
+  sender_chat?: { id: number };
+  chat?: { id: number };
 }
 
 interface TelegramCallbackQuery {

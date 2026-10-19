@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
 import type { CaptureResult } from '@knowledge/contracts';
-import { createMasker, luhn } from '../src/chat/harvest-mask.js';
+import { createMasker, inn, luhn, snils } from '../src/chat/harvest-mask.js';
 import { HarvestRefused, HarvestService, maskedTranscript, planCaptures } from '../src/chat/harvest.service.js';
 import { harvestSummary } from '../src/chat/chat-answers.service.js';
 import type { ChatThread } from '../src/chat/adapters/chat-adapter.types.js';
@@ -48,6 +48,53 @@ describe('the masker', () => {
 
   it('masks local phone shapes', () => {
     expect(createMasker()('8 (999) 123 45 67 or (555) 123-4567')).toBe('[PHONE_1] or [PHONE_2]');
+  });
+
+  describe('RU identity numbers (#342)', () => {
+    // Real-shaped values that pass their checksums.
+    const INN10 = '7707083893';
+    const INN12 = '500100732259';
+    const SNILS = '112-233-445 95';
+
+    it('checks INN and SNILS digits', () => {
+      expect(inn(INN10)).toBe(true);
+      expect(inn(INN12)).toBe(true);
+      expect(inn('7707083894')).toBe(false);
+      expect(inn('500100732258')).toBe(false);
+      expect(inn('77070838')).toBe(false);
+      expect(snils('11223344595')).toBe(true);
+      expect(snils('11223344596')).toBe(false);
+    });
+
+    it('masks INN (10 and 12 digits) and SNILS in its written and bare forms, numbered by digits', () => {
+      const mask = createMasker();
+      expect(mask(`ИНН ${INN10}, ИНН ИП ${INN12}, СНИЛС ${SNILS}`)).toBe('ИНН [INN_1], ИНН ИП [INN_2], СНИЛС [SNILS_1]');
+      expect(mask('снилс 112 233 445 95 или 11223344595')).toBe('снилс [SNILS_1] или [SNILS_1]');
+    });
+
+    it('masks a passport after a context word in any common spacing, or bare only in the printed 2-2-6 form', () => {
+      const mask = createMasker();
+      expect(mask('Паспорт: серия 45 09 номер 123456')).toBe('Паспорт: серия [PASSPORT_1]');
+      expect(mask('паспорт 4509 123456; серия 4509 № 123456')).toBe('паспорт [PASSPORT_1]; серия [PASSPORT_1]');
+      expect(mask('passport no. 4509123456')).toBe('passport no. [PASSPORT_1]');
+      expect(mask('вот 12 34 567890 ок')).toBe('вот [PASSPORT_2] ок');
+    });
+
+    it('leaves order ids, dates, a bare 4+6 number and 12 digits failing the checksum alone', () => {
+      const text =
+        'Order #48213 (ORD-2026-0001) shipped 19.10.2026 at 14:30; ref 4509 123456; batch 123456789012, заказ №202610191234.';
+      expect(createMasker()(text)).toBe(text);
+    });
+
+    it('keeps phones phones: separators never read as an identity, and a bare number failing a checksum stays a phone', () => {
+      const mask = createMasker();
+      expect(mask('+7 999 123-45-67, 8 (999) 123 45 67, 89991234567')).toBe('[PHONE_1], [PHONE_2], [PHONE_2]');
+      // Ten digits failing the INN check: still a phone shape, never an INN.
+      expect(inn('1234567890')).toBe(false);
+      expect(mask('1234567890')).toBe('[PHONE_3]');
+      // And a card is a card: no INN or passport inside its digits.
+      expect(mask(`${CARD} / 4111111111111111`)).toBe('[CARD_1] / [CARD_1]');
+    });
   });
 
   it('the transcript names people by order of appearance and keeps placeholders stable across messages', () => {

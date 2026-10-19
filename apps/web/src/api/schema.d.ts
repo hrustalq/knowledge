@@ -6721,6 +6721,10 @@ export interface components {
             mode: "hybrid" | "semantic" | "keyword";
             /** @default 20 */
             limit: number;
+            /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+            asOf?: string;
+            /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+            knownAt?: string;
             expandGraph?: components["schemas"]["ExpandGraphDto"];
             filters?: components["schemas"]["SearchFiltersDto"];
         };

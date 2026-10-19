@@ -31419,6 +31419,14 @@
             "minimum": 1,
             "maximum": 100
           },
+          "asOf": {
+            "type": "string",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph."
+          },
+          "knownAt": {
+            "type": "string",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now."
+          },
           "expandGraph": {
             "$ref": "#/components/schemas/ExpandGraphDto"
           },

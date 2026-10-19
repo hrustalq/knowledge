@@ -266,7 +266,7 @@ Entities are keyed \`type:name\` — \`service:identity\`, \`db:orders\`.
 - ${toolRef('knowledge_impact_analysis')} — what breaks if it changes (\`direction: "dependents"\`), or what it relies on.
 - ${toolRef('knowledge_trace_relation')} — the shortest path between two entities, with the pages that assert each hop.
 
-Each of these, and ${toolRef('knowledge_get_workspace_graph')}, takes \`asOf\` — an ISO date, \`rev:<revisionId>\` or
+Each of these, ${toolRef('knowledge_get_workspace_graph')} and ${toolRef('knowledge_search')}, take \`asOf\` — an ISO date, \`rev:<revisionId>\` or
 \`tag:<name>\` — to answer as the knowledge base stood then: a fact a page later dropped shows, one added since does
 not. ${toolRef('knowledge_list_release_tags')} names the instants worth asking about.
 

@@ -185,7 +185,7 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       stampRevisions: vi.fn(),
       getWorkspaceRelationGraph: vi.fn(async () => ({ edges: [], documents: {}, entities: {} })),
     };
-    const fulltext = { enabled: false, indexRevisionChunks: vi.fn(), setLiveRevision: vi.fn() };
+    const fulltext = { enabled: false, indexRevisionChunks: vi.fn(), setLiveRevision: vi.fn(), stampRevisions: vi.fn() };
     const processor = new IngestionProcessor(
       prisma as never,
       { getObjectText: vi.fn(async () => '---\ntags: [legacy]\n---\n# T\n\nAlpha unique-token-zebra\n'), putObjectJson: vi.fn() } as never,
@@ -215,6 +215,8 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       { revisionId: 'r1', validFrom: 1000, validTo: 2000, lineage: 'default' },
       { revisionId: 'r2', validFrom: 2000, validTo: null, lineage: 'default' },
     ]);
+    // The BM25 mirror gets the same window (#81, phase 3).
+    expect(fulltext.stampRevisions).toHaveBeenCalledWith(WS, DOC, graph.stampRevisions.mock.calls[0][2]);
   });
 
   it('a branch revision is written but never made live', async () => {

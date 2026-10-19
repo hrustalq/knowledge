@@ -100,6 +100,10 @@ export interface SearchRequest {
   /** 'hybrid' fuses vector + BM25 (when a fulltext provider is configured); 'keyword' is BM25-only. */
   mode?: 'hybrid' | 'semantic' | 'keyword';
   limit?: number;
+  /** Search the text as it stood then (#81): an ISO date, `rev:<id>` or `tag:<name>`. */
+  asOf?: string;
+  /** What was believed at this ISO date (#81); only the graph expansion reads it. */
+  knownAt?: string;
   /**
    * Phase 4 hybrid expansion: walk relation edges out from the vector hits.
    * depth = entity hops (default 1, max 3); relationTypes filters edge types.
@@ -143,6 +147,13 @@ export interface SearchResult {
   headingPath?: string[];
   /** Entities related to the result's document (present when expandGraph is used). */
   entities?: EntityRef[];
+  /**
+   * When the matched text was the page's content (#81), ISO; present on an
+   * `asOf` search. A `validTo` means the page has since changed: the text is
+   * superseded.
+   */
+  validFrom?: string | null;
+  validTo?: string | null;
 }
 /** A retrieval leg a search skipped because its store failed or timed out (#173). */
 export type SearchDegradedLeg = 'fulltext';
@@ -156,6 +167,8 @@ export interface SearchResponse {
    * results are vector-only.
    */
   degraded?: SearchDegradedLeg[];
+  /** Present on an `asOf` search (#81). */
+  resolvedAsOf?: ResolvedAsOf;
 }
 /** A document discovered by graph expansion, with the connecting evidence. */
 export interface RelatedDocumentResult {

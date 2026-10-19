@@ -86,6 +86,8 @@ function build(docs: Row[], hits: ReturnType<typeof hit>[], trustRanking = true)
     policy as never,
     permissions as never,
     config as never,
+    // No asOf: every search here reads the live projection (#81).
+    { resolve: async () => undefined } as never,
   );
   return { svc, graph, prisma };
 }
@@ -119,7 +121,7 @@ describe('SearchService trust re-rank', () => {
     const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic', limit: 2 }, ADMIN);
     // At least 2k candidates were asked for so the demoted hits could be displaced:
     // the archived top hit drops, the outdated one sinks under the verified one.
-    expect(graph.searchChunks).toHaveBeenCalledWith(WS, expect.any(Array), 4, { kind: 'all' });
+    expect(graph.searchChunks).toHaveBeenCalledWith(WS, expect.any(Array), 4, { kind: 'all' }, undefined);
     expect(res.results.map((r) => r.documentId)).toEqual(['inactive', 'verified']);
     expect(res.results[0]!.trust).toMatchObject({ status: 'unverified', inactive: true });
     expect(res.results[0]!.score).toBeCloseTo(0.7 * TRUST_WEIGHTS.inactive, 4);
@@ -146,7 +148,7 @@ describe('SearchService trust re-rank', () => {
       false,
     );
     const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic', limit: 3 }, ADMIN);
-    expect(graph.searchChunks).toHaveBeenCalledWith(WS, expect.any(Array), 3, { kind: 'all' });
+    expect(graph.searchChunks).toHaveBeenCalledWith(WS, expect.any(Array), 3, { kind: 'all' }, undefined);
     expect(res.results.map((r) => r.documentId)).toEqual(['outdated', 'expired', 'plain']);
     expect(res.results.map((r) => r.score)).toEqual([0.8, 0.7, 0.6]);
     // The status still travels with the hit; only the weight is off.

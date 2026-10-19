@@ -22,6 +22,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { vmsg } from '../common/validation.js';
+import { AS_OF_DESCRIPTION, KNOWN_AT_DESCRIPTION } from '../temporal/temporal.dto.js';
 
 export class ExpandGraphDto {
   @ApiPropertyOptional({ default: 1, minimum: 1, maximum: 3, description: 'Entity hops from the vector hits' })
@@ -101,6 +102,16 @@ export class SearchDto {
   @Min(1, { message: vmsg('min') })
   @Max(100, { message: vmsg('max') })
   limit?: number;
+
+  @ApiPropertyOptional({ description: AS_OF_DESCRIPTION })
+  @IsOptional()
+  @IsString()
+  asOf?: string;
+
+  @ApiPropertyOptional({ description: KNOWN_AT_DESCRIPTION })
+  @IsOptional()
+  @IsString()
+  knownAt?: string;
 
   /** Phase 4 hybrid expansion: walk relation edges out from the vector hits. */
   @ApiPropertyOptional({ type: ExpandGraphDto })

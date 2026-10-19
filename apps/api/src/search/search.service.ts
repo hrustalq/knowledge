@@ -20,6 +20,9 @@ import { FULLTEXT_PROVIDER, type FulltextHit, type FulltextProvider } from '../f
 import { ProvenanceService } from '../feedback/provenance.service.js';
 import { VerificationPolicyService } from '../verification/verification-policy.service.js';
 import { tagFilterKey } from '../common/relations.js';
+import type { TemporalPoint } from '../graph/temporal.js';
+import { loadRevisionStamps } from '../graph/revision-stamps.js';
+import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import type { SearchDto } from './search.dto.js';
 
 /** Reciprocal-rank-fusion constant (standard k=60). */
@@ -40,6 +43,7 @@ export class SearchService {
     private readonly policy: VerificationPolicyService,
     private readonly permissions: PermissionService,
     private readonly config: ConfigService<Env, true>,
+    private readonly temporal: TemporalResolverService,
   ) {}
 
   /**
@@ -68,9 +72,12 @@ export class SearchService {
     // something to be displaced by; when it is off, fetchK is exactly what it
     // was before #66, because RRF over a longer candidate list is a different
     // ranking and "off" promises the old one.
-    const [settings, acl] = await Promise.all([
+    // #81: `asOf` searches the text each page held then, under the same
+    // filters; the trust re-rank and the PG join still read the page as it is.
+    const [settings, acl, at] = await Promise.all([
       this.policy.effective(dto.workspaceId),
       this.permissions.documentFilterFor(scope),
+      this.temporal.resolve(dto.workspaceId, dto.asOf, dto.knownAt),
     ]);
     const trustOn = settings.trustRanking;
     const filtered = categories || projectIds || tagKeys || states;
@@ -104,7 +111,7 @@ export class SearchService {
     // The query embedding is computed once and reused by a refill round.
     let embedding: Promise<number[]> | null = null;
     const vectorLeg = (n: number) =>
-      (embedding ??= this.embeddings.embed(dto.query)).then((e) => this.graph.searchChunks(dto.workspaceId, e, n, acl));
+      (embedding ??= this.embeddings.embed(dto.query)).then((e) => this.graph.searchChunks(dto.workspaceId, e, n, acl, at));
     /**
      * Both legs, concurrently. The vector index is authoritative and the BM25
      * one optional (docs/architecture/04), so a failed or slow BM25 leg is
@@ -114,7 +121,7 @@ export class SearchService {
     const legs = async (n: number): Promise<[[ChunkHit[], number], [FulltextHit[], number]]> => {
       const [vector, [text, textMs]] = await Promise.all([
         timed(() => (useVector ? vectorLeg(n) : Promise.resolve([] as ChunkHit[]))),
-        timed(() => (useText ? this.fulltextLeg(dto.workspaceId, dto.query, n, acl) : Promise.resolve([]))),
+        timed(() => (useText ? this.fulltextLeg(dto.workspaceId, dto.query, n, acl, at) : Promise.resolve([]))),
       ]);
       if (text) return [vector, [text, textMs]];
       useText = false;
@@ -127,7 +134,7 @@ export class SearchService {
     const [[[vectorHitsFirst, vectorMs], [textHitsFirst, fulltextMs]], [taggedDocs, tagsMs]] = await Promise.all([
       legs(fetchK),
       // Overlaps the embedding round-trip rather than serializing after it.
-      timed(() => (tagKeys ? this.graph.getDocumentIdsByTags(dto.workspaceId, tagKeys, acl) : Promise.resolve(null))),
+      timed(() => (tagKeys ? this.graph.getDocumentIdsByTags(dto.workspaceId, tagKeys, acl, at) : Promise.resolve(null))),
     ]);
     let vectorHits = vectorHitsFirst;
     let textHits = textHitsFirst;
@@ -162,12 +169,13 @@ export class SearchService {
         trustApplied: trustOn,
         ...(acl.kind !== 'all' ? { aclFiltered } : {}),
         ...(degraded.length ? { degraded } : {}),
+        ...(at ? { asOf: dto.asOf ?? 'now' } : {}),
         results: out.map((r) => ({ documentId: r.documentId, chunkId: r.chunkId, score: r.score })),
       });
     };
 
     // Absent unless a leg was skipped, so a healthy response is unchanged.
-    const health = () => (degraded.length ? { degraded } : {});
+    const health = () => ({ ...(degraded.length ? { degraded } : {}), ...(at ? { resolvedAsOf: at.resolved } : {}) });
 
     if (hits.length === 0) {
       record([]);
@@ -246,6 +254,7 @@ export class SearchService {
       headingPath: h.headingPath ?? [],
       ...(trust ? { trust } : {}),
     }));
+    if (at) await this.attachValidity(results);
 
     record(results);
 
@@ -259,6 +268,7 @@ export class SearchService {
         Math.min(dto.expandGraph.depth ?? 1, 3),
         dto.expandGraph.relationTypes,
         includeArchived,
+        at,
       );
       return { results, related, ...health() };
     }
@@ -278,12 +288,13 @@ export class SearchService {
     query: string,
     k: number,
     acl: DocumentAclFilter,
+    at?: TemporalPoint,
   ): Promise<FulltextHit[] | null> {
     const ms = this.config.get('FULLTEXT_TIMEOUT_MS', { infer: true });
     let timer: NodeJS.Timeout | undefined;
     try {
       const hits = await Promise.race([
-        this.fulltext.search(workspaceId, query, k, acl),
+        this.fulltext.search(workspaceId, query, k, acl, at),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new Error(`no answer within ${ms} ms`)), ms);
         }),
@@ -305,6 +316,24 @@ export class SearchService {
       return null;
     } finally {
       clearTimeout(timer);
+    }
+  }
+
+  /**
+   * When each hit's text was its page's content (#81), from the same PG
+   * stamps the graph carries. One read per page in the results, so at most k.
+   */
+  private async attachValidity(results: SearchResult[]): Promise<void> {
+    const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());
+    const byRevision = new Map(
+      (await Promise.all([...new Set(results.map((r) => r.documentId))].map((id) => loadRevisionStamps(this.prisma, id))))
+        .flat()
+        .map((s) => [s.revisionId, s]),
+    );
+    for (const r of results) {
+      const stamp = byRevision.get(r.revisionId);
+      r.validFrom = iso(stamp?.validFrom ?? null);
+      r.validTo = iso(stamp?.validTo ?? null);
     }
   }
 
@@ -365,11 +394,12 @@ export class SearchService {
     depth: number,
     relationTypes?: string[],
     includeArchived = false,
+    at?: TemporalPoint,
   ): Promise<RelatedDocumentResult[]> {
     // The graph comes back without the caller's hidden pages and without the
     // entities only those pages mention (#76), so the walk cannot pass
     // through one and an attached entity list cannot name what it introduced.
-    const g = await this.graph.getWorkspaceRelationGraph(scope.workspaceId, acl);
+    const g = await this.graph.getWorkspaceRelationGraph(scope.workspaceId, acl, at);
     const allowed = relationTypes?.length ? new Set(relationTypes) : null;
     const edges = allowed ? g.edges.filter((e) => allowed.has(e.type)) : g.edges;
 

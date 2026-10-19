@@ -150,6 +150,8 @@ export interface SearchExecutedEvent extends BacktestEventBase {
   aclFiltered?: number;
   /** Legs that failed or timed out (#173), so a vector-only answer is not scored as a hybrid one. */
   degraded?: string[];
+  /** The `asOf` a search was run at (#81), as given; absent for a search of now. */
+  asOf?: string;
   results: Array<{ documentId: string; chunkId?: string; score: number }>;
 }
 

@@ -129,6 +129,14 @@ export function asOfEdgeClause(point: TemporalPoint, scopedSql: string): { sql: 
   };
 }
 
+/** The as-of predicate for a chunk: the same valid-time interval; chunks carry no system time. */
+export function asOfChunkClause(point: TemporalPoint): { sql: string; params: { asOfAt: number } } {
+  return {
+    sql: "lineage = 'default' AND validFrom <= :asOfAt AND (validTo IS NULL OR validTo > :asOfAt)",
+    params: { asOfAt: point.at },
+  };
+}
+
 /** An edge row's interval, as the timeline reads it. */
 export interface FactIntervalRow {
   documentId: string;

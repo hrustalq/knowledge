@@ -96,6 +96,7 @@ async function main(): Promise<void> {
       await graph.stampRevisions(doc.workspaceId, doc.id, stamps);
       stamped += stamps.length;
       await fulltext.setLiveRevision(doc.workspaceId, doc.id, target);
+      await fulltext.stampRevisions(doc.workspaceId, doc.id, stamps);
     } catch (e) {
       failed += 1;
       console.error(`document ${doc.id}: ${(e as Error).message}`);

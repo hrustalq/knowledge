@@ -9,6 +9,7 @@ import { aclAdmits, type DocumentAclFilter } from '../common/document-acl.js';
 import { ArcadeClient } from './arcade.client.js';
 import { EntityAliasService } from './entity-alias.service.js';
 import {
+  asOfChunkClause,
   asOfEdgeClause,
   diffRevisionFacts,
   type ExistingFactRow,
@@ -1052,14 +1053,16 @@ export class GraphService {
    *
    * `acl` (#76) keeps out pages the reader may not open.
    */
-  async getDocumentIdsByTags(workspaceId: string, tagKeys: string[], acl: DocumentAclFilter): Promise<Set<string>> {
+  async getDocumentIdsByTags(workspaceId: string, tagKeys: string[], acl: DocumentAclFilter, at?: TemporalPoint): Promise<Set<string>> {
     if (tagKeys.length === 0) return new Set();
     const pushed = aclClause(acl);
+    // #81: as of a point, the pages tagged then.
+    const asOf = at ? asOfEdgeClause(at, SCOPED_SQL) : null;
     const rows = await this.arcade
       .query<{ documentId: string }>(
         'sql',
-        `SELECT documentId FROM TAGGED_WITH WHERE workspaceId = :workspaceId AND targetKey IN :keys AND ${LIVE}${pushed?.sql ?? ''} LIMIT 20000`,
-        { workspaceId, keys: tagKeys, ...pushed?.params },
+        `SELECT documentId FROM TAGGED_WITH WHERE workspaceId = :workspaceId AND targetKey IN :keys AND ${asOf?.sql ?? LIVE}${pushed?.sql ?? ''} LIMIT 20000`,
+        { workspaceId, keys: tagKeys, ...pushed?.params, ...asOf?.params },
       )
       // ArcadeDB throws when the edge type holds no rows yet; "no tag edges"
       // must mean "no matches", not a 500.
@@ -1159,8 +1162,10 @@ export class GraphService {
    * query when the list is short enough, so the scan cap counts only what
    * they may see, otherwise before ranking.
    */
-  async searchChunks(workspaceId: string, queryEmbedding: number[], k: number, acl: DocumentAclFilter): Promise<ChunkHit[]> {
+  async searchChunks(workspaceId: string, queryEmbedding: number[], k: number, acl: DocumentAclFilter, at?: TemporalPoint): Promise<ChunkHit[]> {
     const pushed = aclClause(acl);
+    // #81: as of a point, the chunks that were each page's content then.
+    const asOf = at ? asOfChunkClause(at) : null;
     const rows = await this.arcade.query<{
       chunkId: string;
       documentId: string;
@@ -1170,8 +1175,8 @@ export class GraphService {
       embedding: number[];
     }>(
       'sql',
-      `SELECT chunkId, documentId, revisionId, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId AND ${LIVE}${pushed?.sql ?? ''} LIMIT ${CHUNK_SCAN_LIMIT}`,
-      { workspaceId, ...pushed?.params },
+      `SELECT chunkId, documentId, revisionId, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId AND ${asOf?.sql ?? LIVE}${pushed?.sql ?? ''} LIMIT ${CHUNK_SCAN_LIMIT}`,
+      { workspaceId, ...pushed?.params, ...asOf?.params },
     );
 
     // Ranking is exhaustive-scan, so hitting the cap does not degrade results

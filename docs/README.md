@@ -80,6 +80,7 @@ Features 01–17 come from the original list in [`../features.md`](../features.m
 | 53  | Doc quality (styleguide per workspace/project, `linter` agent, merge request lint threads, `block` lint gate with admin override, `auditor` quality scores, Quality tab and rail, glossary from content) | [features/53-doc-quality.md](features/53-doc-quality.md)           | ✅ #74                      |
 | 54  | Enterprise auth (OIDC, SAML and LDAP sign-in, JIT, group → role mapping, enforced SSO and verified domains, SCIM 2.0 provisioning, session list, back-channel logout, workspace audit log) | [features/54-enterprise-auth.md](features/54-enterprise-auth.md)   | ✅ #75                      |
 | 56  | Real-time co-editing of drafts (Yjs + Hocuspocus, shared draft per branch, carets and presence, publish → ordinary revision, discard, branch drafts, shared assistant suggestions, offline copies) — behind `COLLAB_ENABLED` | [features/56-realtime-coediting.md](features/56-realtime-coediting.md) | ✅ #80 (flag off) |
+| 57  | Temporal graph (valid and system time on every fact, `asOf` by date, revision or release tag across graph, entities, content, search and MCP; release tags; graph timeline and changes-since; contradictions from the arbiter and the sentinel; community summaries for broad questions) | [features/57-temporal-graph.md](features/57-temporal-graph.md) | ✅ #81 |
 
 Open work against the agents feature is tracked in
 [features/20-agents-todo.md](features/20-agents-todo.md).

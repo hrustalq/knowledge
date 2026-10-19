@@ -13,11 +13,16 @@ import { PrismaService } from '../prisma/prisma.service.js';
 export { BODY_FIELD };
 
 /**
- * One document for every seed. jsdom runs no scripts and loads no resources by
- * default, so parsing a page's HTML here never executes or fetches anything;
- * the elements are only ever created, never attached.
+ * One document for every seed and every draft the MCP tools read or write.
+ * jsdom runs no scripts and loads no resources by default, so parsing a
+ * page's HTML here never executes or fetches anything; the elements are only
+ * ever created, never attached.
  */
-let seedDom: Document | undefined;
+let dom: Document | undefined;
+export function serverDocument(): Document {
+  dom ??= new JSDOM('').window.document;
+  return dom;
+}
 
 /** A Y snapshot (state vector + delete set), encoded — what "unpublished" compares. */
 export function snapshotOf(doc: Y.Doc): Uint8Array<ArrayBuffer> {
@@ -38,8 +43,7 @@ export function sameSnapshot(a: Uint8Array, b: Uint8Array): boolean {
  * A, doc 56), with the page's fields beside the body when they are known.
  */
 export function seedState(markdown: string, meta?: PageMeta): { state: Uint8Array<ArrayBuffer>; snapshot: Uint8Array<ArrayBuffer> } {
-  seedDom ??= new JSDOM('').window.document;
-  const doc = prosemirrorToYDoc(parseMarkdown(markdown, seedDom), BODY_FIELD);
+  const doc = prosemirrorToYDoc(parseMarkdown(markdown, serverDocument()), BODY_FIELD);
   if (meta) seedPageMeta(doc, meta);
   // Copied into a plain ArrayBuffer, which is what Prisma's Bytes takes.
   return { state: new Uint8Array(Y.encodeStateAsUpdate(doc)), snapshot: snapshotOf(doc) };

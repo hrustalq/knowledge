@@ -9,7 +9,7 @@ import { AccessService } from '../src/auth/access.service.js';
 import { AclGuard } from '../src/auth/acl.guard.js';
 import { READ_KEY_OK_META, type AccessSpec } from '../src/auth/access.decorator.js';
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
-import { McpService } from '../src/mcp/mcp.service.js';
+import { McpService, type McpExtras } from '../src/mcp/mcp.service.js';
 import { CAPTURE_TOOLS, WRITE_TOOLS, settleTools } from '../src/mcp/mcp-tools.js';
 import { renderSkill } from '../src/mcp/skill.js';
 import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
@@ -57,6 +57,7 @@ function accessWith(role: 'guest' | 'viewer' | 'editor' | 'admin' | null, policy
     },
     workspace: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({ id: where.id })) },
     connector: { findUnique: vi.fn(async () => ({ workspaceId: WS_A })) },
+    document: { findUnique: vi.fn(async () => ({ workspaceId: WS_A })) },
   };
   return new AccessService(prisma as never, policy);
 }
@@ -312,8 +313,17 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
   };
 }
 
-async function connect(mcp: McpService, principal: Principal) {
-  const { server } = mcp.buildServer(principal);
+/** What the HTTP controller passes for the draft tools (#316). */
+function fakeDrafts(enabled = true) {
+  return {
+    enabled,
+    read: vi.fn(async () => null),
+    suggest: vi.fn(async () => ({ suggestionId: 's-1', branch: 'main' })),
+  };
+}
+
+async function connect(mcp: McpService, principal: Principal, extras: McpExtras = {}) {
+  const { server } = mcp.buildServer(principal, extras);
   const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);
   const client = new Client({ name: 'test', version: '0.0.0' });
@@ -324,7 +334,7 @@ async function connect(mcp: McpService, principal: Principal) {
 describe('McpService over a principal', () => {
   it('names only tools that exist in WRITE_TOOLS and CAPTURE_TOOLS', () => {
     const { mcp } = service(accessWith('admin'));
-    const names = new Set(mcp.toolsFor(DEV_PRINCIPAL).map((t) => t.name));
+    const names = new Set(mcp.toolsFor(DEV_PRINCIPAL, { drafts: fakeDrafts() }).map((t) => t.name));
     for (const name of WRITE_TOOLS) expect(names, name).toContain(name);
     for (const name of CAPTURE_TOOLS) expect(names, name).toContain(name);
   });
@@ -336,9 +346,10 @@ describe('McpService over a principal', () => {
     expect(tools.find((t) => t.name === 'knowledge_search')?.annotations?.readOnlyHint).toBe(true);
     expect(tools.find((t) => t.name === 'knowledge_create_document')?.annotations?.readOnlyHint).toBe(false);
 
-    const reader = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
+    const reader = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }), { drafts: fakeDrafts() });
     const offered = (await reader.listTools()).tools.map((t) => t.name);
     expect(offered).toContain('knowledge_search');
+    expect(offered).toContain('knowledge_get_draft');
     for (const name of WRITE_TOOLS) expect(offered).not.toContain(name);
     // Spelled out for #236: drafting a component queues a model run that ends in a merge request.
     expect(offered).not.toContain('knowledge_document_component');
@@ -482,6 +493,42 @@ describe('McpService over a principal', () => {
       { workspaceId: WS_A, projectId: project, title: 'Use Postgres', template: { ref: 'builtin:adr', version: undefined, values: { number: '1' } } },
       expect.any(String),
     );
+  });
+
+  it('offers the draft tools only where a collab gateway is, with co-editing on (#316)', () => {
+    const { mcp } = service(accessWith('editor'));
+    const names = (extras: McpExtras) => mcp.toolsFor(DEV_PRINCIPAL, extras).map((t) => t.name);
+    // The stdio server builds with no extras.
+    expect(names({})).not.toContain('knowledge_get_draft');
+    expect(names({ drafts: fakeDrafts(false) })).not.toContain('knowledge_suggest_draft_edit');
+    expect(names({ drafts: fakeDrafts() })).toEqual(expect.arrayContaining(['knowledge_get_draft', 'knowledge_suggest_draft_edit']));
+  });
+
+  it('asks for the page before the draft is read or written (#316)', async () => {
+    const doc = '44444444-4444-4444-8444-444444444444';
+    const drafts = fakeDrafts();
+    const viewer = await connect(service(accessWith('viewer')).mcp, keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }), { drafts });
+    expect((await viewer.callTool({ name: 'knowledge_get_draft', arguments: { documentId: doc } })).isError).toBeFalsy();
+    expect(drafts.read).toHaveBeenCalledWith(doc, undefined);
+    const refused = await viewer.callTool({
+      name: 'knowledge_suggest_draft_edit',
+      arguments: { documentId: doc, op: 'append', markdown: 'More.' },
+    });
+    expect(refused.isError).toBe(true);
+    expect(drafts.suggest).not.toHaveBeenCalled();
+
+    const editorKey = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });
+    const editor = await connect(service(accessWith('editor')).mcp, editorKey, { drafts });
+    const res = await editor.callTool({
+      name: 'knowledge_suggest_draft_edit',
+      arguments: { documentId: doc, branch: 'feature', op: 'replace', anchor: 'Old.', markdown: 'New.' },
+    });
+    expect(res.isError).toBeFalsy();
+    expect(drafts.suggest).toHaveBeenCalledWith(editorKey, doc, 'feature', { op: 'replace', anchor: 'Old.', markdown: 'New.' });
+
+    const outsider = await connect(service(accessWith(null)).mcp, editorKey, { drafts });
+    expect((await outsider.callTool({ name: 'knowledge_get_draft', arguments: { documentId: doc } })).isError).toBe(true);
+    expect(drafts.read).toHaveBeenCalledOnce();
   });
 
   it('checks the workspace before the service runs', async () => {

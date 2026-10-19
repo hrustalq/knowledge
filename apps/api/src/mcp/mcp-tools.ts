@@ -62,6 +62,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_propose_agent_learning',
   // Queues a model run that opens a merge request with a drafted component page (#236).
   'knowledge_document_component',
+  // Writes a suggestion into a page's shared draft (#316). HTTP only, with COLLAB_ENABLED.
+  'knowledge_suggest_draft_edit',
 ]);
 
 /**

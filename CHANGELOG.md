@@ -17,6 +17,20 @@ in the pull request that introduces them — see
 
 ### Added
 
+- MCP agents can work in a page's shared draft (#316). Over the HTTP MCP
+  server (`/v1/mcp`), with co-editing on, `knowledge_get_draft` reads the
+  draft people are writing in the editor: the body as publishing it would
+  write it, the page fields, whether it differs from the published page or
+  the page was published another way since, who has it open, and the
+  suggestions waiting for a decision. `knowledge_suggest_draft_edit` leaves
+  an edit in it, in the editor assistant's shape (`replace`, `insert_after`,
+  `insert_before`, `append` or `rewrite` against a quoted anchor), as a
+  shared suggestion: everyone with the page open sees it at once, credited to
+  the API key for its person, and any editor keeps or discards it. Reading
+  never creates a draft; suggesting into a branch without one starts it from
+  the head. Viewer and editor on the page respectively, checked on every
+  call; a read-only key is not offered the suggestion tool. The stdio MCP
+  server does not offer either tool.
 - The server side of real-time co-editing (#80, phase 1), off by default. With
   `COLLAB_ENABLED=true`, a `/v1/collab` WebSocket serves one shared Yjs draft
   per document branch. The draft is seeded once from the branch head, stored in

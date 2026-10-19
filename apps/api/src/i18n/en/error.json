@@ -88,6 +88,7 @@
     "needsFinalized": "Revision {id} is {status} — branches must start from a finalized revision"
   },
   "collab": {
+    "branchNotFound": "Document {documentId} has no branch named {branch}",
     "draftMismatch": "Draft {draftId} is not the shared draft of branch {branch} on document {documentId}",
     "draftNotFound": "Branch {branchId} of document {documentId} has no shared draft",
     "snapshotInvalid": "draftSnapshot is not a Y snapshot"

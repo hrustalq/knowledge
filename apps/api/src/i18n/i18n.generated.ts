@@ -575,6 +575,7 @@ export type I18nTranslations = {
             "needsFinalized": string;
         };
         "collab": {
+            "branchNotFound": string;
             "draftMismatch": string;
             "draftNotFound": string;
             "snapshotInvalid": string;

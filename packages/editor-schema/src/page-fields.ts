@@ -82,3 +82,19 @@ export function seedPageMeta(
     }
   });
 }
+
+/** The page fields a draft holds now: what `seedPageMeta` wrote, as peers have edited it since. */
+export function readPageMeta(doc: Y.Doc): PageMeta {
+  const meta = doc.getMap<unknown>(META_FIELD);
+  const text = (key: string) => meta.get(key)?.toString() ?? '';
+  const value = <T>(key: string, fallback: T) => (meta.get(key) as T | undefined) ?? fallback;
+  return {
+    texts: { title: text('title'), tags: text('tags'), message: text('message') },
+    values: {
+      category: value('category', ''),
+      parentId: value('parentId', ''),
+      projectId: value('projectId', ''),
+      relations: value<RelationRow[]>('relations', []),
+    },
+  };
+}

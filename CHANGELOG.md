@@ -401,6 +401,14 @@ in the pull request that introduces them — see
   browser. The app now starts in the language the server rendered, renews the
   language cookie from your saved choice, and shows the sidebar tree one frame
   after load.
+- Voice control can now operate the workspace switcher, the sidebar's back
+  button, the account menu and the notification bell by what they show (#280).
+  Each one announced a generic name ("Workspaces", "Account menu",
+  "Notifications") instead of the workspace, project or person on screen, or
+  the unread count, so saying "click RTech OMS" did nothing. Screen readers now
+  hear the visible text first, then what the control is for. The "more ways to
+  start a page" chevron next to `+` in the sidebar is now 24 px wide instead of
+  14 px, so it is easier to hit.
 
 ### Operations
 

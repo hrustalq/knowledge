@@ -138,7 +138,7 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
       <button
         type="button"
         class="group/back hover:bg-sidebar-accent -ml-3.5 flex h-6 min-w-0 items-center gap-0.5 rounded-md pr-1.5 transition-colors"
-        :aria-label="t('nav.backToProjects')"
+        :aria-label="`${title}, ${t('nav.backToProjects')}`"
         :title="t('nav.backToProjects')"
         @click="$emit('back')"
       >
@@ -175,7 +175,7 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
             <DropdownMenuTrigger as-child>
               <button
                 type="button"
-                class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid h-6 w-3.5 place-items-center rounded-r transition-colors"
+                class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid size-6 place-items-center rounded-r transition-colors"
                 :aria-label="t('nav.newPageOptions')"
                 :title="t('nav.newPageOptions')"
               >

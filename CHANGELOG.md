@@ -93,8 +93,8 @@ in the pull request that introduces them — see
   stored or refused. `make backtest ARGS=--report` summarizes these events,
   and `make collab-load` load-tests running API instances. Real-time co-editing
   is documented in `docs/features/56-realtime-coediting.md`, numbers included.
-  It stays off by default (`COLLAB_ENABLED=false`); turning it on is a
-  separate change after a dogfood pass.
+  It stays off by default (`COLLAB_ENABLED=false`) and is on in the hosted
+  deployment, after a dogfood pass on the dev stack.
 
 ### Operations
 
@@ -118,6 +118,14 @@ in the pull request that introduces them — see
   every interval, and the newest `KEEP` versions are kept. A draft with
   nothing unpublished and untouched for the retention period is dropped and
   reseeds the next time it is opened.
+- The hosted deployment turns co-editing on: `.env.production.example` now
+  lists `COLLAB_ENABLED=true`, so the deploy refuses to run until the GitHub
+  `production` environment carries it
+  (`gh variable set COLLAB_ENABLED --env production --body true`). The socket
+  is `/api/v1/collab` on the existing `/api` route, so Caddy and the edge
+  Worker need no change. To turn it off again, set the variable to `false` and
+  redeploy: open editors fall back to single-user, and drafts stay in
+  `collab_drafts` until they are reopened or expire.
 
 - Production embeds with bge-m3 (1024-d) served by Ollama.app on the host,
   not the hash stub (#257). The `production` environment carries

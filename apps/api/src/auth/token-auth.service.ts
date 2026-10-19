@@ -50,29 +50,27 @@ export class TokenAuthService {
   }
 
   /**
-   * A credential that arrived in `?token=` on a `@QueryTokenOk` route (#102).
-   * A URL outlives the request that carried it (access logs, history,
-   * `Referer`), so it may hold only what is cheap to leak:
-   * - a `kt_` ticket: single-use, ~60 s, redeemed here and gone;
-   * - a `ks_` session token, which the web still puts on `<img>` URLs until
-   *   asset tickets land (phase 2b).
-   * A `kn_` API key is refused: it lives until revoked, and every client that
-   * holds one can send a header, or mint a ticket with it first.
+   * The web's `kn_token` cookie on a `@CookieTokenOk` asset redirect (#102
+   * phase 2b). The web only ever stores a `ks_` session there; anything else
+   * is refused rather than resolved as an API key.
    */
-  async resolveQueryToken(token: string): Promise<Principal> {
+  async resolveSessionCookie(token: string): Promise<Principal> {
     if (this.config.get('AUTH_MODE') !== 'api-key') return DEV_PRINCIPAL;
-    if (UrlTicketsService.isTicket(token)) return this.resolveTicket(token);
-    if (token.startsWith('ks_')) return this.resolveSession(token);
-    throw new UnauthorizedException(t('error.auth.apiKeyInUrl'));
+    if (!token.startsWith('ks_')) throw new UnauthorizedException(t('error.auth.invalidSession'));
+    return this.resolveSession(token);
   }
 
   /**
-   * A `kt_` ticket and nothing else: what the `/v1/collab` socket accepts
-   * (#80), so no credential that outlives a minute ever crosses it.
+   * A `kt_` ticket and nothing else: what `?token=` on a `@QueryTokenOk` route
+   * and the `/v1/collab` socket accept (#102, #80). A URL outlives the request
+   * that carried it (access logs, history, `Referer`), so a `ks_` session or a
+   * `kn_` key there is refused: every client that holds one can send a header,
+   * or mint a ticket with it first.
    */
   async resolveTicket(token: string | undefined): Promise<Principal> {
     if (this.config.get('AUTH_MODE') !== 'api-key') return DEV_PRINCIPAL;
-    const principal = token && UrlTicketsService.isTicket(token) ? await this.tickets.redeem(token) : null;
+    if (token && !UrlTicketsService.isTicket(token)) throw new UnauthorizedException(t('error.auth.credentialInUrl'));
+    const principal = token ? await this.tickets.redeem(token) : null;
     if (!principal) throw new UnauthorizedException(t('error.auth.invalidUrlTicket'));
     return principal;
   }

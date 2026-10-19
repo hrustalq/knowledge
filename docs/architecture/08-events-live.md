@@ -79,11 +79,11 @@ below), and merges in a 30-second `{ type: 'ping' }` heartbeat so proxies do not
 close an idle connection.
 
 `EventSource` cannot set headers, so the route is marked `@QueryTokenOk()` and
-`AuthGuard` accepts `?token=` on it — the same accommodation `<img>` tags need
-for attachments. No other HTTP route reads a query token (#102). The token is a
-single-use `kt_` ticket from `POST /v1/auth/url-ticket` (a `kn_` key in a URL is
-refused), so `stores/events.ts` reconnects by hand with a fresh ticket rather
-than relying on `EventSource`'s own retry.
+`AuthGuard` accepts `?token=` on it. No other HTTP route reads a query token
+(#102; `<img>` asset routes read the session cookie instead). The token is a
+single-use `kt_` ticket from `POST /v1/auth/url-ticket` (a `kn_` key or `ks_`
+session in a URL is refused), so `stores/events.ts` reconnects by hand with a
+fresh ticket rather than relying on `EventSource`'s own retry.
 
 Two ordering rules inside the subscriber are load-bearing and were both bugs
 first. The `message` listener is registered **before** the subscribe and outside

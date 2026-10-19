@@ -3,22 +3,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { PublicStore } from './public-store.js';
+import { readCookie } from '../common/cookies.js';
 
 const KEY_PREFIX = 'kn:share-unlock:';
 
 /** The cookie that carries one browser's unlock of one link. */
 export function unlockCookieName(shareId: string): string {
   return `kn_share_${shareId}`;
-}
-
-/** Minimal cookie read; the API installs no cookie parser. */
-export function readCookie(header: string | undefined, name: string): string | null {
-  if (!header) return null;
-  for (const part of header.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq > 0 && part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1).trim());
-  }
-  return null;
 }
 
 /**

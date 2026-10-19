@@ -536,6 +536,9 @@ importers:
       marked:
         specifier: ^18.0.11
         version: 18.0.11
+      turndown:
+        specifier: ^7.2.4
+        version: 7.2.4
       yjs:
         specifier: 13.6.33
         version: 13.6.33
@@ -543,6 +546,9 @@ importers:
       '@knowledge/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      '@types/turndown':
+        specifier: ^5.0.6
+        version: 5.0.6
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

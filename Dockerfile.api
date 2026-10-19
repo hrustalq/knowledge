@@ -132,6 +132,12 @@ await import('@knowledge/observability'); \
 await import('@knowledge/observability/express'); \
 await import('@knowledge/workflow'); \
 await import('@knowledge/editor-schema'); \
+await import('@knowledge/editor-schema/nodes'); \
+await import('@knowledge/editor-schema/markdown'); \
+await import('@knowledge/editor-schema/page-fields'); \
+await import('@knowledge/editor-schema/serialize'); \
+await import('@knowledge/editor-schema/suggestions'); \
+await import('@knowledge/editor-schema/suggestion-entries'); \
 console.log('type stripping OK');"
 
 EXPOSE 3000

@@ -161,6 +161,19 @@ export function createCollab(options: {
 
   followProvider(provider, status, { synced: markSynced, stopped: () => settle(false) })
 
+  // The browser knows it is offline at once; the socket only after 30 s of
+  // silence, saying "Live" all the while. Close it, and rejoin when back.
+  const goOffline = () => provider.disconnect()
+  const goOnline = () => {
+    if (status.state !== 'stopped') void provider.connect()
+  }
+  window.addEventListener('offline', goOffline)
+  window.addEventListener('online', goOnline)
+  const unlisten = () => {
+    window.removeEventListener('offline', goOffline)
+    window.removeEventListener('online', goOnline)
+  }
+
   const awareness = provider.awareness!
   awareness.on('change', () => {
     const people = new Map<string, CollabPeer>()
@@ -204,11 +217,13 @@ export function createCollab(options: {
       return toBase64(Y.encodeSnapshot(Y.snapshot(doc)))
     },
     destroy() {
+      unlisten()
       provider.destroy()
       void local.destroy()
       doc.destroy()
     },
     async forget() {
+      unlisten()
       provider.destroy()
       await local.clearData()
       doc.destroy()

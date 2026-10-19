@@ -49,6 +49,11 @@ describe('working copy storage', () => {
     expect(workingCopyKey('ws', null)).toBe('kn:unstaged:v1:ws:new')
   })
 
+  it('gives a non-default branch its own slot and leaves the default one where it was', () => {
+    expect(workingCopyKey('ws', 'doc', null)).toBe('kn:unstaged:v1:ws:doc')
+    expect(workingCopyKey('ws', 'doc', 'feature')).toBe('kn:unstaged:v1:ws:doc@feature')
+  })
+
   it('writes, reads back and removes', () => {
     const key = workingCopyKey('ws', 'doc')
     expect(writeWorkingCopy(key, copy())).toBe(true)

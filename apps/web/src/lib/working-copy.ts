@@ -8,7 +8,8 @@
  * written here as they are made and are waiting when the page is next opened.
  *
  * Keyed per workspace and page, with one slot per workspace for the page not
- * created yet. `localStorage`, not IndexedDB: a page is tens of kilobytes of
+ * created yet. A branch other than the page's default has a slot of its own:
+ * edits made against one branch's head are not a draft of another. `localStorage`, not IndexedDB: a page is tens of kilobytes of
  * markdown, the write has to be synchronous to survive `pagehide`, and every
  * access is guarded because private modes and full quotas throw.
  */
@@ -27,8 +28,9 @@ export interface WorkingCopy extends PageFields {
 
 const PREFIX = 'kn:unstaged:v1:'
 
-export function workingCopyKey(workspaceId: string, documentId: string | null): string {
-  return `${PREFIX}${workspaceId}:${documentId ?? 'new'}`
+/** `branch` is null for the page's default branch, which keeps the original slot. */
+export function workingCopyKey(workspaceId: string, documentId: string | null, branch: string | null = null): string {
+  return `${PREFIX}${workspaceId}:${documentId ?? 'new'}${branch ? `@${branch}` : ''}`
 }
 
 function storage(): Storage | null {

@@ -70,6 +70,12 @@ export interface ChatInbound {
   forwardedFrom?: { authorId: string; at: Date } | null;
   /** A Telegram forum topic the message is in; null outside one. */
   topicId?: string | null;
+  /**
+   * Not a message but the harvest reaction (#82) — 📌 on Time, ✍ on Telegram,
+   * which has no 📌 — just added by this person to message `messageId`. `text`
+   * is empty: neither platform says what the message was.
+   */
+  harvestReaction?: boolean;
 }
 
 /** A message another one quotes by replying to it. */
@@ -240,13 +246,20 @@ export interface ChatAdapter {
    */
   registerWebhook(ctx: ChatAdapterContext, url: string, secret: string): Promise<void>;
   /**
-   * The thread rooted at `rootId`, up to (not including) `beforeMessageId` —
-   * the command that asked for it — and at most `max` messages: the root and
-   * the newest replies. Bots' and system messages are left out. Absent on a
-   * platform with no thread to fetch (Telegram, whose threads are read from
-   * the listening buffer or a DM's forwards instead — `ChatBufferService`).
+   * The thread `messageId` is in, up to (not including) `beforeMessageId` —
+   * the command that asked for it; all of it for a reaction (null) — and at
+   * most `max` messages: the root and the newest replies. Bots' and system
+   * messages are left out. Absent on a platform with no thread to fetch
+   * (Telegram, whose threads are read from the listening buffer or a DM's
+   * forwards instead — `ChatBufferService`).
    */
-  fetchThread?(ctx: ChatAdapterContext, chatId: string, rootId: string, beforeMessageId: string, max: number): Promise<ChatThread>;
+  fetchThread?(
+    ctx: ChatAdapterContext,
+    chatId: string,
+    messageId: string,
+    beforeMessageId: string | null,
+    max: number,
+  ): Promise<ChatThread>;
   /** A link to one message, where the platform has one for this chat; the origin of a harvest from the buffer. */
   messageUrl?(chatId: string, messageId: string): string | null;
   /** A link that opens a private chat with the bot, or null if the platform has none. */

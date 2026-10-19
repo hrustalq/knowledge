@@ -35,7 +35,8 @@ export interface BufferedThread {
 export class ChatBufferService {
   private readonly ttlMs: number;
   private readonly windowMs: number;
-  private readonly ttlDays: number;
+  /** CHAT_LISTEN_TTL_DAYS, which the replies quote. */
+  readonly ttlDays: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -143,6 +144,24 @@ export class ChatBufferService {
       thread: { messages: [...head, ...replies], url, truncated },
       note: held ? null : t('chat.harvest.beforeBuffer', { count: this.ttlDays }),
       consumed: [],
+    };
+  }
+
+  /**
+   * ✍ on message M (#82, phase 4) as the `/capture` that replies to M: the
+   * reaction carries no text, so M must still be kept. Null when it is not —
+   * listening off, M older than the buffer, or M a message the bot never saw.
+   */
+  async asReplyTo(integrationId: string, inbound: ChatInbound): Promise<ChatInbound | null> {
+    const m = await this.prisma.chatBufferedMessage.findFirst({
+      where: { integrationId, externalChatId: inbound.chatId, externalMessageId: inbound.messageId, bindingId: { not: null } },
+      select: { authorId: true, text: true, sentAt: true, topicId: true },
+    });
+    if (!m) return null;
+    return {
+      ...inbound,
+      topicId: m.topicId,
+      replyTo: { messageId: inbound.messageId, authorId: m.authorId, text: m.text, at: m.sentAt, fromBot: false },
     };
   }
 

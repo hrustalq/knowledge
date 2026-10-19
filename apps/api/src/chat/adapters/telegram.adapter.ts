@@ -203,6 +203,7 @@ export class TelegramAdapter implements ChatAdapter {
       return [];
     }
     if (update.callback_query) return this.parseCallback(update.callback_query);
+    if (update.message_reaction) return parseReaction(update.message_reaction);
     const msg = update.message;
     if (!msg?.from || msg.from.is_bot || !msg.chat) return [];
     const original = (msg.text ?? msg.caption ?? '').trim();
@@ -346,9 +347,10 @@ export class TelegramAdapter implements ChatAdapter {
     await this.call(ctx, 'setWebhook', {
       url,
       secret_token: secret,
-      // Only what the bot acts on: a question, and a press of its own
-      // buttons. Joins, edits and reactions would be deliveries to verify and drop.
-      allowed_updates: ['message', 'callback_query'],
+      // Only what the bot acts on: a question, a press of its own buttons, and
+      // a reaction — which Telegram sends only where the bot is a group admin.
+      // Joins and edits would be deliveries to verify and drop.
+      allowed_updates: ['message', 'callback_query', 'message_reaction'],
       drop_pending_updates: true,
     });
   }
@@ -420,6 +422,40 @@ function displayName(user: TelegramUser): string | null {
   return user.username ? `@${user.username}` : [user.first_name, user.last_name].filter(Boolean).join(' ') || null;
 }
 
+/**
+ * ✍ just added to a group's message by a person (#82). Telegram's reactions
+ * have no 📌, and ✍ reads as "write this down". The reaction carries no text,
+ * so the message is read from the listening buffer. Anonymous admins have no
+ * one to link; a private chat has nothing kept to read.
+ */
+const HARVEST_REACTION = '✍';
+
+function parseReaction(r: TelegramMessageReaction): ChatInbound[] {
+  if (!r.user || r.user.is_bot || !r.chat || r.chat.type === 'private') return [];
+  const writes = (list: TelegramReactionType[] | undefined) =>
+    !!list?.some((x) => x.type === 'emoji' && x.emoji?.replace(/️/g, '') === HARVEST_REACTION);
+  // Added now, not merely still there while another reaction changes.
+  if (!writes(r.new_reaction) || writes(r.old_reaction)) return [];
+  return [
+    {
+      externalUserId: String(r.user.id),
+      externalUserName: displayName(r.user),
+      chatId: String(r.chat.id),
+      chatTitle: r.chat.title ?? null,
+      isDm: false,
+      messageId: String(r.message_id),
+      text: '',
+      mentioned: false,
+      replyToBotMessageId: null,
+      threadId: null,
+      command: null,
+      action: null,
+      at: new Date(r.date * 1000),
+      harvestReaction: true,
+    },
+  ];
+}
+
 /** Who a forward came from, as an opaque id: the user, the chat, or the name a hidden user goes by. */
 function forwardAuthor(origin: TelegramForwardOrigin): string {
   if (origin.sender_user) return String(origin.sender_user.id);
@@ -480,8 +516,26 @@ interface TelegramCallbackQuery {
   data?: string;
 }
 
+/** ReactionType: `emoji`, `custom_emoji` or `paid`. */
+interface TelegramReactionType {
+  type: string;
+  emoji?: string;
+}
+
+/** MessageReactionUpdated. `user` is absent for an anonymous admin, who acts as `actor_chat`. */
+interface TelegramMessageReaction {
+  chat?: TelegramMessage['chat'];
+  message_id: number;
+  user?: TelegramUser;
+  /** Unix seconds. */
+  date: number;
+  old_reaction?: TelegramReactionType[];
+  new_reaction?: TelegramReactionType[];
+}
+
 interface TelegramUpdate {
   update_id?: number;
   message?: TelegramMessage;
   callback_query?: TelegramCallbackQuery;
+  message_reaction?: TelegramMessageReaction;
 }

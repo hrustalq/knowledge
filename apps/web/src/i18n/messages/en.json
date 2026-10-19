@@ -4839,7 +4839,7 @@
       "titlePlaceholder": "Name (optional)",
       "add": "Add group",
       "listen": "Keep messages for /capture",
-      "listenHint": "Kept for {days}, with emails, phone numbers, card numbers and secrets masked, so editors can harvest a thread into captures. Never searchable. Needs privacy mode off in {'@'}BotFather, or the bot as a group admin. Turning this on posts a notice in the group; turning it off deletes what is kept.",
+      "listenHint": "Kept for {days}, with emails, phone numbers, card numbers and secrets masked, so editors can harvest a thread into captures: reply /capture to its first message, or react ✍ to it. Never searchable. Needs privacy mode off in {'@'}BotFather or the bot as a group admin; ✍ works only with the bot as admin. Turning this on posts a notice in the group; turning it off deletes what is kept.",
       "listenDays": "{days} day | {days} day | {days} days"
     },
     "card": {

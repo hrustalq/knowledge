@@ -73,6 +73,42 @@ describe('parseInbound — button presses', () => {
   });
 });
 
+function reaction(r: Record<string, unknown>): { headers: Record<string, string>; body: string } {
+  return { headers: {}, body: JSON.stringify({ update_id: 3, message_reaction: { chat: group, message_id: 11, user: from, date: 1_760_000_000, ...r } }) };
+}
+const write = (emoji = '✍') => [{ type: 'emoji', emoji }];
+
+describe('parseInbound — harvest reactions (#82)', () => {
+  it('✍ just added by a person is a harvest request on that message, with no text', () => {
+    const [m] = adapter.parseInbound(reaction({ old_reaction: [], new_reaction: write() }), BOT);
+    expect(m).toMatchObject({
+      externalUserId: '42',
+      chatId: '-1001',
+      isDm: false,
+      messageId: '11',
+      text: '',
+      command: null,
+      action: null,
+      harvestReaction: true,
+      at: new Date(1_760_000_000 * 1000),
+    });
+    // Clients may send it with the emoji variation selector.
+    expect(adapter.parseInbound(reaction({ new_reaction: write('✍️') }), BOT)).toHaveLength(1);
+  });
+
+  it('ignores ✍ already there, any other reaction, a removal, an anonymous admin, a bot and a private chat', () => {
+    const none = [
+      reaction({ old_reaction: write(), new_reaction: [...write(), { type: 'emoji', emoji: '👍' }] }),
+      reaction({ new_reaction: [{ type: 'emoji', emoji: '👍' }] }),
+      reaction({ old_reaction: write(), new_reaction: [] }),
+      reaction({ user: undefined, actor_chat: group, new_reaction: write() }),
+      reaction({ user: { ...from, is_bot: true }, new_reaction: write() }),
+      reaction({ chat: dm, new_reaction: write() }),
+    ];
+    for (const r of none) expect(adapter.parseInbound(r, BOT)).toEqual([]);
+  });
+});
+
 describe('parseInbound', () => {
   it('normalises a private message', () => {
     const [m] = adapter.parseInbound(update({ message_id: 7, date: 1_760_000_000, from, chat: dm, text: 'How do we deploy?' }), BOT);
@@ -289,11 +325,11 @@ describe('Bot API calls', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ callback_query_id: 'cb-1', text: 'Thanks' });
   });
 
-  it('registers the webhook for questions and button presses', async () => {
+  it('registers the webhook for questions, button presses and reactions', async () => {
     const fetchMock = stubFetch({ status: 200, body: { ok: true, result: true } });
     await adapter.registerWebhook({ token: 'T', botUsername: BOT, serverUrl: null, actionUrl: '' }, 'https://kn.test/hook', 's');
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
-      allowed_updates: ['message', 'callback_query'],
+      allowed_updates: ['message', 'callback_query', 'message_reaction'],
     });
   });
 

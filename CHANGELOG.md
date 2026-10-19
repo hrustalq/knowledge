@@ -312,6 +312,15 @@ in the pull request that introduces them — see
   `/forget`. Without keeping, `/capture` reads only the message it replies
   to, and the reply says so; it also says when that message is older than
   what is kept. `/capture` and `/forget` are in the Telegram `/help`.
+- React to a message to have the bot remember its thread (#82, phase 4).
+  In Time, 📌 on any message of a thread harvests the whole thread. In
+  Telegram, which has no 📌 reaction, ✍ on a kept message works like
+  `/capture` sent as a reply to it. Telegram delivers reactions only to a bot
+  that is a group admin, and the reaction does not include the message, so ✍
+  needs keeping turned on. Only a linked editor's reaction does anything;
+  the bot says nothing to anyone else, so a busy channel's ordinary 📌 never
+  gets a reply. The bot answers under the message with counts and an inbox
+  link, the same as for `capture`.
 
 ### Changed
 
@@ -356,6 +365,10 @@ in the pull request that introduces them — see
   `HARVEST_FORWARD_WINDOW_SEC` (`120`) and `CHAT_LISTEN_TTL_DAYS` (`7`).
   Keeping messages needs the bot's privacy mode off in @BotFather
   (`/setprivacy`), or the bot made a group admin.
+- Telegram bots receive ✍ only after their webhook is registered again,
+  now that it also asks for `message_reaction`. After deploying, press
+  **Test** on each Telegram bot in Settings → Chat bots, which registers the
+  webhook again. Time needs nothing. No migration, no new env var.
 - Harvest adds three env vars, each with a default, so nothing needs setting:
   `HARVEST_ENABLED` (`true`; `false` answers `capture` with a notice),
   `HARVEST_MAX_MESSAGES` (`200`: the root and the newest replies) and

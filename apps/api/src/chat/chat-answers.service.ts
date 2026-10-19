@@ -158,6 +158,9 @@ export class ChatAnswersService {
     // silence, so a stray bot cannot be made to talk anywhere. `/bind` is the
     // one way in, and it checks who is asking.
     if (!inbound.isDm && !d.binding && command?.name !== 'bind') return;
+    // A reaction is not addressed to the bot the way a command is: from anyone
+    // but a linked editor it is just a reaction, and passes in silence.
+    if (inbound.harvestReaction) return userId ? this.harvest(d, userId, locale) : undefined;
 
     // Kept for a harvest (#82): a DM's forwards wait for `/capture` instead of
     // being answered; a listening group's messages are kept and then handled
@@ -592,36 +595,46 @@ export class ChatAnswersService {
    * was just forwarded. The placeholder becomes counts and an inbox link,
    * never a capture's or a page's title: the group may hold people who cannot
    * open them. A refusal is said in the same place.
+   *
+   * A harvest reaction (📌 on Time, ✍ on Telegram) is the same request about
+   * the message it was put on, except that nobody but a linked editor is
+   * answered at all: a refusal to a reaction would be the bot talking to
+   * people who were not talking to it.
    */
   private async harvest(d: Delivery, userId: string | null, locale: Locale): Promise<void> {
     const { inbound, integration, adapter } = d;
+    const reaction = !!inbound.harvestReaction;
     if (!userId) return this.askToLink(d);
     let principal: Principal;
     try {
       principal = await this.access.principalFor(userId, locale);
       await this.access.requireRole(principal, integration.workspaceId, 'editor');
     } catch {
-      return this.notice(d, t('chat.harvest.forbidden', { workspace: d.workspaceName }));
+      return reaction ? undefined : this.notice(d, t('chat.harvest.forbidden', { workspace: d.workspaceName }));
     }
-    if (!this.harvestEnabled) return this.notice(d, t('chat.harvest.off'));
+    if (!this.harvestEnabled) return reaction ? undefined : this.notice(d, t('chat.harvest.off'));
 
     let read: () => Promise<BufferedThread>;
     if (adapter.fetchThread) {
-      // Said at the top of a channel, the command is its own thread: there is nothing above it to read.
-      const root = inbound.threadId;
-      if (!root || root === inbound.messageId) return this.notice(d, t('chat.harvest.notInThread'));
+      // A reaction reads the whole thread of the post it is on. A command said
+      // at the top of a channel is its own thread: there is nothing above it to read.
+      const from = reaction ? inbound.messageId : inbound.threadId;
+      if (!from || (!reaction && from === inbound.messageId)) return this.notice(d, t('chat.harvest.notInThread'));
+      const before = reaction ? null : inbound.messageId;
       read = async () => ({
-        thread: await adapter.fetchThread!(d.ctx, inbound.chatId, root, inbound.messageId, this.harvestMax),
+        thread: await adapter.fetchThread!(d.ctx, inbound.chatId, from, before, this.harvestMax),
         note: null,
         consumed: [],
       });
     } else if (inbound.isDm) {
       read = () => this.buffer.forwards(integration.id, inbound.chatId, this.harvestMax);
     } else {
-      const m = inbound.replyTo;
+      const asked = reaction ? await this.buffer.asReplyTo(integration.id, inbound) : inbound;
+      if (!asked) return this.notice(d, t('chat.harvest.reactionNotKept', { count: this.buffer.ttlDays }));
+      const m = asked.replyTo;
       if (!m) return this.notice(d, t('chat.harvest.replyFirst'));
       const url = adapter.messageUrl?.(inbound.chatId, m.messageId) ?? null;
-      read = () => this.buffer.groupThread(integration.id, d.binding!, inbound, this.harvestMax, url);
+      read = () => this.buffer.groupThread(integration.id, d.binding!, asked, this.harvestMax, url);
     }
 
     let placeholder: ChatMessageRef;

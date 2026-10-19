@@ -36,6 +36,8 @@ const ACK_WAIT_MS = 5_000;
 const COMMAND_RE = /^\/?(start|help|new|unlink|bind|unbind|capture|remember|запомни)$/i;
 /** Asking the bot to remember a thread is `capture` (#82), in either language. */
 const CAPTURE_WORDS = new Set(['capture', 'remember', 'запомни']);
+/** The reaction that asks for a harvest (#82): 📌, by its Mattermost name. */
+const HARVEST_EMOJI = 'pushpin';
 /** A direct channel's name is the two user ids joined by `__`; a press carries the name, not the type. */
 const DM_CHANNEL_NAME_RE = /^[a-z0-9]+__[a-z0-9]+$/;
 /** Direct channels seen, so a reply there stays out of a thread. Bounded: forgotten ones only thread. */
@@ -194,7 +196,39 @@ export class TimeAdapter implements ChatAdapter {
     if (!body) return [];
     if (body.context) return this.parsePress(body);
     if (body.event === 'posted') return this.parsePosted(body, botUsername);
+    if (body.event === 'reaction_added') return this.parseReaction(body);
     return [];
+  }
+
+  /**
+   * 📌 (`pushpin`) added to a post (#82): harvest the thread it is in. The
+   * event carries the post's id and no text, which `fetchThread` reads anyway.
+   * Whether the channel is a direct one is known only if the bot has seen it.
+   */
+  private parseReaction(event: TimeEvent): ChatInbound[] {
+    const r = parseJson<{ user_id?: string; post_id?: string; channel_id?: string; emoji_name?: string; create_at?: number }>(
+      event.data?.reaction,
+    );
+    const chatId = r?.channel_id;
+    if (r?.emoji_name !== HARVEST_EMOJI || !r.user_id || !r.post_id || !chatId) return [];
+    return [
+      {
+        externalUserId: r.user_id,
+        externalUserName: null,
+        chatId,
+        chatTitle: null,
+        isDm: this.dmChannels.has(chatId),
+        messageId: r.post_id,
+        text: '',
+        mentioned: false,
+        replyToBotMessageId: null,
+        threadId: null,
+        command: null,
+        action: null,
+        ...(r.create_at ? { at: new Date(r.create_at) } : {}),
+        harvestReaction: true,
+      },
+    ];
   }
 
   private parsePosted(event: TimeEvent, botUsername: string | null): ChatInbound[] {
@@ -336,18 +370,26 @@ export class TimeAdapter implements ChatAdapter {
   }
 
   /**
-   * `GET /posts/:root/thread` — the whole thread in one call — trimmed to what
-   * people wrote before the command. The link is the thread's permalink, which
-   * needs the team's name: one call for the channel's team, one for the team.
-   * A link that cannot be built is left out rather than failing the harvest.
+   * `GET /posts/:id/thread` — the whole thread in one call, from any post in
+   * it — trimmed to what people wrote before the command (a reaction has none,
+   * and reads it all). The link is the root's permalink, which needs the
+   * team's name: one call for the channel's team, one for the team. A link
+   * that cannot be built is left out rather than failing the harvest.
    */
-  async fetchThread(ctx: ChatAdapterContext, chatId: string, rootId: string, beforeMessageId: string, max: number): Promise<ChatThread> {
+  async fetchThread(
+    ctx: ChatAdapterContext,
+    chatId: string,
+    messageId: string,
+    beforeMessageId: string | null,
+    max: number,
+  ): Promise<ChatThread> {
     const thread = await this.call<{ posts?: Record<string, TimePost & { create_at?: number }> }>(
       ctx,
       'GET',
-      `/posts/${encodeURIComponent(rootId)}/thread`,
+      `/posts/${encodeURIComponent(messageId)}/thread`,
     );
     const posts = Object.values(thread.posts ?? {});
+    const rootId = posts.find((p) => p.id === messageId)?.root_id || messageId;
     const cutoff = posts.find((p) => p.id === beforeMessageId)?.create_at ?? Infinity;
     const people = posts
       .filter((p) => p.id !== beforeMessageId && (p.create_at ?? 0) < cutoff)
@@ -470,6 +512,8 @@ interface TimeEvent {
   event?: string;
   data?: {
     post?: string;
+    /** `reaction_added`: the Reaction as a JSON string — user, post, channel, emoji name. */
+    reaction?: string;
     /** `D` direct, `G` group direct, `O` public, `P` private. */
     channel_type?: string;
     channel_display_name?: string;

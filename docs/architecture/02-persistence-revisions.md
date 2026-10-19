@@ -149,7 +149,8 @@ POST   /v1/documents/:id/branches         fork
 GET    /v1/documents/:id/compare          direct | merge-base, ?structural= ?semantic=
 GET    /v1/documents/:id/content          full markdown + frontmatter
 GET    /v1/documents/:id/facts            ?at=<rev> — snapshot via newest asserting ancestor
-GET    /v1/documents/:id/facts/timeline   introduced / removed revisions
+GET    /v1/documents/:id/facts/timeline   introduced / removed / retracted (#81)
+GET    /v1/documents/:id/content?asOf=    the default-branch revision current at a point (#81)
 GET    /v1/documents/:id/drafts           each branch's shared draft (feature 56)
 DELETE /v1/documents/:id/drafts/:branchId discard: reseed from the head
 ```
@@ -161,4 +162,7 @@ DELETE /v1/documents/:id/drafts/:branchId discard: reseed from the head
 - The diff cache grows without bound. Nothing prunes `revision_diffs`, which is
   acceptable precisely because entries can never be wrong, but it is not free.
 - History queries read the revision-scoped fact set kept by every indexed
-  revision, so a revision that never indexed has no facts to snapshot.
+  revision, so a revision that never indexed has no facts to snapshot. Those
+  rows now also carry the interval they were true and, when withdrawn, when
+  and by whom (#81). A retracted fact stays readable in the timeline and
+  through `knownAt` ([feature 57](../features/57-temporal-graph.md)).

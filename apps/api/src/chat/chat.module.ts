@@ -4,6 +4,7 @@ import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AssistantModule } from '../assistant/assistant.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
+import { CapturesModule } from '../captures/captures.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
@@ -27,9 +28,8 @@ import { ChatWebhookController } from './chat-webhook.controller.js';
  * Core/Queue/Worker quartet, because nothing here runs in the worker: an
  * answer is the pane's assistant turn, whose tool service is API-only, so it
  * runs here on a detached continuation (the feature-21 shape) with the
- * reaper as its crash recovery. Saving a conversation (phase 2) runs the same
- * way: the draft is one completion and publishing needs the API-only merge
- * request service, so nothing here is staged for the worker. Channel
+ * reaper as its crash recovery. Saving an answer (phase 2) is an agent-memory
+ * capture (#82), so it is CapturesModule's path, sweeper included. Channel
  * notifications (phase 3) are delivered from here too, by
  * ChatSubscriptionSweeper: the token and the adapters are already here, and a
  * post to a group is attributed to nobody. Time's websockets (phase 4) are
@@ -42,6 +42,7 @@ import { ChatWebhookController } from './chat-webhook.controller.js';
     AiCoreModule,
     AssistantModule,
     AssistantClientModule,
+    CapturesModule,
     DocumentsModule,
     FeedbackCoreModule,
     GlossaryCoreModule,

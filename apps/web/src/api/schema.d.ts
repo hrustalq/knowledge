@@ -8471,7 +8471,7 @@ export interface components {
         };
         CaptureSessionDto: {
             /** @enum {string} */
-            client: "claude-code" | "cursor" | "codex" | "gemini" | "assistant" | "other";
+            client: "claude-code" | "cursor" | "codex" | "gemini" | "assistant" | "chat" | "other";
             clientVersion?: string;
             sessionId?: string;
             /** @description owner/name or the remote URL */

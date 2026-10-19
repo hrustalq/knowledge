@@ -36504,6 +36504,7 @@
               "codex",
               "gemini",
               "assistant",
+              "chat",
               "other"
             ]
           },

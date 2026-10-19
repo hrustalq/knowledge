@@ -200,45 +200,35 @@ The vote row carries a third button, **💾 Save…**. It opens a menu — *As a
 page draft*, *As a glossary term*, back — for a linked **editor** only: anyone
 else is refused on the press and the menu never opens.
 
-- **What is saved.** The conversation the answer belongs to, up to that
-  answer, and **only the turns the bot posted in that chat** — read from
-  `chat_answers`, not from the whole assistant thread, because the asker may
-  have carried the thread on privately in `/assistant`. At most the newest 20
-  turns. Citations become `[title](/documents/:id)` links, which the drafter
-  keeps. The transcript reaches the model inside `wrapUntrusted(…, 'chat')`.
-  Telegram's privacy mode means these are the only messages the bot ever saw,
-  so this is also all it could save.
+Since #82 both are **agent-memory captures** (doc 50): one save path, one
+dedupe, one inbox. `ChatCapturesService` builds the request and hands it to
+`CapturesModule`; the capture carries `session.client: 'chat'` and a
+server-set `origin` (platform, chat title — null in a DM — and the span from
+the question to the answer).
+
 - **As whom.** The presser, through `principalFor`, with `editor` checked at
-  the press and again after the draft is in and before anything is written.
-- **Where it runs.** API-side, on the press's continuation — the answer
-  shape, not the worker: the draft is one completion and publishing needs the
-  API-only `MergeRequestsService`. `ChatModule` stays a single module.
-- **Page.** The `drafter` agent (operation `chat-capture`) writes `# Title` +
-  body. Then, in **one transaction**: `createDocument` with no content (main
-  has no head, so nothing is published), `openDraftMergeRequest` onto
-  `chat/<id8>-<ts>` with frontmatter `source: chat:<kind>` and
-  `generatedBy: drafter`, attributed to the presser, and the claim's guarded
-  `pending → published`. A merge request into a `main` with a null head
-  fast-forwards — `merge()` parents the merge revision on the source head only
-  (verified end to end on #71). A page goes into the group's project, or in a
-  DM the workspace's first project.
-- **Term.** `GlossaryService.suggest` over the transcript — the glossary
-  page's own pass, grounding included — and the most-used suggestion the
-  project does not define yet, created `source: 'ai'`, `enabled: false`: a
-  proposal stays switched off (and therefore unlinked) until an editor turns it
-  on in **Settings → Glossary**. Proposed and retired terms look the same
-  there; a separate state would touch feature 14 and was not worth it yet.
-- **The claim** is `chat_captures`, unique per (answer, kind): a second press
-  while drafting is told it is in progress, a press after success links what
-  was saved, and a press after a failure claims the same row again with a
-  guarded `failed → pending` and retries.
-- **The reply.** A "Drafting…" message replying to the answer, edited into
-  the result with a button to the merge request or the glossary.
-- **Crash recovery.** `ChatAnswerSweeper` also fails captures with no progress
-  for `CHAT_CAPTURE_TIMEOUT_SECONDS` (measured from `updatedAt`, since a retry
-  reuses the row) and edits "Drafting…" to say so. Because the publish commits
-  with the guarded `published` update, a sweeper that got there first rolls
-  the page and merge request back.
+  the press and again by `CaptureService` before anything is written.
+- **Page.** The answer becomes an `answer` capture through
+  `CaptureInboxService.fromAssistantMessage` — exactly the assistant pane's
+  "Save to knowledge base": the question before it, the answer with its `[S#]`
+  labels stripped, and its page sources as citations. An answer that cites no
+  page is refused. No model is called. Dedupe decides between a duplicate, an
+  amendment and a hidden new page behind a merge request with provenance
+  `captured`; the group's project is passed when there is one, otherwise the
+  first cited page's.
+- **Term.** `GlossaryService.suggest` over the conversation — **only the
+  turns the bot posted in that chat**, read from `chat_answers` (the asker may
+  have carried the thread on privately in `/assistant`), the newest 20, inside
+  `wrapUntrusted(…, 'chat')` — and the most-used suggestion the project does
+  not define yet becomes a `glossary` capture that waits in the Captures inbox.
+- **The reply.** One message replying to the answer, with a button to the
+  merge request, the page a duplicate matched, or the inbox. It never names a
+  matched page: the group may hold people who cannot open it. A refusal (no
+  cited page, a credential, the capture rate limit, captures switched off)
+  gets its own line.
+- **Double press and crash recovery** are the capture path's: a second press
+  is a `duplicate` row, and the capture sweeper re-drives a staged row a
+  restart stranded.
 
 ## Channel notifications
 
@@ -474,7 +464,6 @@ not a live Time server** — the first real connection is the check.
 | `CHAT_MAX_SOURCES`                    | `5`                        | source links per answer (0–10)                                      |
 | `CHAT_LINK_CODE_TTL_MINUTES`          | `15`                       | link code lifetime                                                  |
 | `CHAT_RATE_LIMIT_PER_USER_PER_MINUTE` | `10`                       | questions per person per minute, across bots                        |
-| `CHAT_CAPTURE_TIMEOUT_SECONDS`        | `300`                      | a save with no progress this long is failed                         |
 | `CHAT_DIGEST_TICK_MS`                 | `60000`                    | how often notification rules are checked (min 5000)                 |
 | `TELEGRAM_API_BASE_URL`               | `https://api.telegram.org` | Bot API host (self-hosted server or proxy)                          |
 | `CHAT_ALLOW_PRIVATE_URLS`             | `false`                    | allow a Time server on a private/loopback address                   |
@@ -482,7 +471,7 @@ not a live Time server** — the first real connection is the check.
 
 ## Data
 
-All eight tables are new. None of them has an FK on `workspace_id`, `user_id` or
+All seven tables are new (`chat_captures` was folded into `knowledge_captures` by #82). None of them has an FK on `workspace_id`, `user_id` or
 `created_by`, per house policy. The per-bot rows cascade with
 `chat_integrations`.
 
@@ -494,7 +483,6 @@ All eight tables are new. None of them has an FK on `workspace_id`, `user_id` or
 | `chat_link_codes`       | hashed one-time codes, with the private chat to confirm in                    |
 | `chat_conversations`    | chat + asker → `assistant_threads` row                                        |
 | `chat_answers`          | the claim: status, placeholder message id, platform thread (Time), assistant message id, frozen locale |
-| `chat_captures`         | a save: answer + kind (unique), status, requester, "Drafting…" message id, the page / merge request / term it produced |
 | `chat_subscriptions`    | a group's notification rule: project, folded tags, kinds, timing, cursor, next digest, last send / refusal (cascades with the binding) |
 
 `chat_answers.assistantMessageId` is what 👍/👎 key on. Votes go into
@@ -543,16 +531,13 @@ of their own.
 
 - `test/chat-capture.spec.ts`:
   - The transcript keeps only the turns shown in the chat, with citations as
-    page links; the draft's title comes from its first heading.
-  - A page is drafted from the wrapped transcript (`chat-capture`), created
-    empty, its body (with `source`/`generatedBy`) on a branch behind a merge
-    request attributed to the requester; a DM uses the first project.
-  - An editor demoted while drafting writes nothing; a sweeper that won
-    rolls the publish back.
-  - A double press saves once, a press after success links it, a press after
-    a failure retries.
-  - A term is the first new suggestion, created `source: 'ai'`,
-    `enabled: false`; none new is said so; the sweeper reaps once.
+    page links.
+  - A page save is the assistant's answer capture with `client: 'chat'` and
+    its origin, as the presser; a DM records no chat title.
+  - A duplicate is said so without naming the page it matched; each capture
+    refusal maps to its own reply.
+  - A term is the first new suggestion, proposed into the inbox; none new is
+    said so.
 
 - `test/chat-turn.spec.ts` (phase 0): Ask mode, tool list, project pin,
   surface.

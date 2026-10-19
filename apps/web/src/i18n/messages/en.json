@@ -4936,6 +4936,7 @@
     },
     "client": {
       "assistant": "Assistant chat",
+      "chat": "Chat bot",
       "other": "Another agent"
     },
     "outcome": {
@@ -5032,6 +5033,12 @@
       "rejectedN": "{n} captures rejected | {n} capture rejected | {n} captures rejected",
       "closedN": "{n} merge requests closed | {n} merge request closed | {n} merge requests closed",
       "skipped": "{n} were left alone. Run it again in a moment, or ask a page editor. | {n} was left alone. Run it again in a moment, or ask a page editor. | {n} were left alone. Run it again in a moment, or ask a page editor."
+    },
+    "origin": {
+      "directMessage": "Direct message",
+      "span": "Messages from {from} to {to}",
+      "thread": "thread",
+      "openThread": "Open the thread in {platform}"
     }
   },
   "component": {

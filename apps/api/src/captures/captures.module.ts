@@ -28,5 +28,7 @@ import { AssistantCaptureController, CapturesController } from './captures.contr
   ],
   controllers: [CapturesController, AssistantCaptureController],
   providers: [CaptureInboxService, CaptureSweeper],
+  // The chat bots' Save (#82) is the assistant's "Save to knowledge base", from a chat.
+  exports: [CaptureInboxService, CapturesCoreModule],
 })
 export class CapturesModule {}

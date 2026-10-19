@@ -287,6 +287,18 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- 💾 Save on a chat bot answer now goes through agent memory (#82). *As a
+  page draft* saves the answer as an `answer` capture citing the pages the
+  answer cited, the same as "Save to knowledge base" in the assistant pane.
+  It no longer has a model rewrite the conversation into a page. *As a
+  glossary term* proposes the term into the Captures inbox instead of creating
+  it switched off. Both get the usual capture dedupe, rate limits and secret
+  scan. An answer that cites no page can no longer be saved, and the bot says
+  so. A second press reports the duplicate instead of "already saved". The
+  Captures inbox and a merge request's provenance strip show where a chat
+  capture came from: the platform, the chat and the time span. A new page's
+  frontmatter records it under `sources:`. Captures written over MCP or REST
+  may now report `session.client: 'chat'`.
 - Deleting a relation, re-posting an explicit one or curating over an inferred
   one no longer erases the old edge (#81). It is retracted: gone from every
   current view as before, but listed in `GET /v1/documents/:id/facts/timeline`
@@ -308,6 +320,15 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261117100000_chat_captures_into_agent_memory` adds a nullable
+  `knowledge_captures.origin` column. It copies every `chat_captures` row into
+  `knowledge_captures` under the same id, with its status, and then **drops
+  `chat_captures`**. A row that has no project anywhere (page and term both
+  deleted, saved in a DM, workspace without projects) is not copied. **Not
+  reversible:** after a rollback to v0.27.x, 💾 Save in a chat fails until
+  this release is rolled forward again. Everything else in the previous
+  release still runs. `CHAT_CAPTURE_TIMEOUT_SECONDS` is no longer read, and
+  can be removed from the `production` environment.
 - Migration `20261116100000_usage_analytics` adds the `page_views`,
   `search_queries` and `mcp_tool_calls` tables and two nullable
   `workspace_settings` columns (`analytics_enabled`,

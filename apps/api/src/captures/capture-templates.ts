@@ -1,6 +1,8 @@
+import { CHAT_PLATFORM_NAMES } from '@knowledge/contracts';
 import type {
   AnswerCapturePayload,
   CaptureKind,
+  CaptureOrigin,
   CaptureSession,
   DecisionCapturePayload,
   NoteCapturePayload,
@@ -123,9 +125,28 @@ export function capturedEntry(id: string, kind: CaptureKind, session: CaptureSes
  * person typed something there) is kept as the first entry rather than lost.
  */
 export function withCapturedEntry(frontmatter: Record<string, unknown>, entry: CapturedEntry): Record<string, unknown> {
-  const existing = frontmatter.captured;
+  return appendEntry(frontmatter, 'captured', entry);
+}
+
+/**
+ * The frontmatter with a chat capture's origin appended to its `sources:`
+ * list (#82) — the conversation the page text came from. Unchanged when there
+ * is no origin; a `sources` that is not a list is kept as the first entry.
+ */
+export function withOriginSource(frontmatter: Record<string, unknown>, origin: CaptureOrigin | null): Record<string, unknown> {
+  return origin ? appendEntry(frontmatter, 'sources', origin) : frontmatter;
+}
+
+function appendEntry(frontmatter: Record<string, unknown>, key: string, item: unknown): Record<string, unknown> {
+  const existing = frontmatter[key];
   const list = Array.isArray(existing) ? existing : existing === undefined || existing === null ? [] : [existing];
-  return { ...frontmatter, captured: [...list, entry] };
+  return { ...frontmatter, [key]: [...list, item] };
+}
+
+/** `telegram · Team chat · <link>` — where in a chat a capture came from; `dm` names a chat with no title. */
+export function describeOrigin(origin: CaptureOrigin, dm: string): string {
+  const platform = CHAT_PLATFORM_NAMES[origin.platform as keyof typeof CHAT_PLATFORM_NAMES] ?? origin.platform;
+  return [platform, origin.chatTitle ?? dm, origin.threadUrl].filter(Boolean).join(' · ');
 }
 
 /** `client · repo@commit` — the one-line source a reviewer reads in the merge request. */

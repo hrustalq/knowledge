@@ -472,7 +472,7 @@ export class ChatAnswersService {
     const message = answer?.assistantMessageId
       ? await this.prisma.assistantMessage.findUnique({
           where: { id: answer.assistantMessageId },
-          select: { id: true, threadId: true, content: true, sources: true },
+          select: { id: true, threadId: true, content: true, sources: true, createdAt: true },
         })
       : null;
     if (!answer || !message) return ack(t('chat.feedback.gone'));
@@ -493,7 +493,7 @@ export class ChatAnswersService {
         await ack();
         return rerender('save');
       }
-      await ack(t(action.capture === 'page' ? 'chat.capture.draftingPage' : 'chat.capture.draftingTerm'));
+      await ack(t(action.capture === 'page' ? 'chat.capture.savingAnswer' : 'chat.capture.draftingTerm'));
       await rerender('vote');
       return this.captures.start({
         integration,
@@ -501,10 +501,11 @@ export class ChatAnswersService {
         ctx: d.ctx,
         answerMessage: { chatId: inbound.chatId, messageId: inbound.messageId },
         answer: { id: answer.id, conversationId: answer.conversationId, createdAt: answer.createdAt },
+        message: { id: message.id, createdAt: message.createdAt },
+        chatTitle: inbound.isDm ? null : (d.binding?.title ?? inbound.chatTitle),
         projectId: d.binding?.projectId ?? null,
         principal,
         kind: action.capture,
-        locale,
         workspaceName: d.workspaceName,
       });
     }

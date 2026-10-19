@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Collapse } from '@/components/ui/collapse'
 import UserChip from '@/components/people/UserChip.vue'
+import CaptureOriginParts from './CaptureOriginParts.vue'
 import {
   captureKindIcon,
   clientLabel,
@@ -176,9 +177,10 @@ const bodyId = computed(() => `kn-capture-${c.value.captureId}`)
           <Badge v-if="stateBadge" :variant="stateBadge.variant" class="text-xs">{{ stateBadge.label }}</Badge>
         </div>
 
-        <!-- Where it came from. Every field is the agent's own report. -->
+        <!-- Where it came from. The session is the agent's own report; a chat origin is the server's. -->
         <p class="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
           <span class="font-medium text-foreground/80">{{ clientLabel(c.session.client, t) }}</span>
+          <CaptureOriginParts v-if="c.origin" :origin="c.origin" />
           <template v-if="repo">
             <span aria-hidden="true">·</span>
             <code class="font-mono text-[0.6875rem]" :title="c.session.repo">{{ repo }}</code>

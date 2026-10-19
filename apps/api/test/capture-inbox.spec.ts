@@ -317,6 +317,7 @@ describe('saving an assistant reply', () => {
         session: { client: 'assistant', sessionId: 't-1' },
       },
       editor,
+      {},
     );
   });
 

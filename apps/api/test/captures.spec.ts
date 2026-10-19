@@ -237,6 +237,16 @@ describe('a novel capture', () => {
     expect(h.activity.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'capture.proposed', subjectId: h.captures[0].id }));
   });
 
+  it('a chat capture (#82) keeps its server-set origin on the row, in the description and in sources:', async () => {
+    const h = harness();
+    const origin = { platform: 'telegram', chatTitle: 'Platform', from: '2026-10-19T10:00:00.000Z', to: '2026-10-19T10:01:00.000Z' };
+    await h.svc.capture({ ...decision(), session: { client: 'chat' } }, principal(), { origin });
+    expect(h.captures[0]).toMatchObject({ origin });
+    const [, mr] = h.mergeRequests.create.mock.calls[0] as unknown as [string, { description: string }];
+    expect(mr.description).toMatch(/^capture\.mergeRequest\.introChat/);
+    expect(h.written()[0].data).toMatchObject({ source: 'capture:chat', sources: [origin] });
+  });
+
   it('sends the same capture again as a duplicate that opens nothing', async () => {
     const h = harness();
     const first = await h.svc.capture(decision(), principal());

@@ -462,12 +462,13 @@ describe('save buttons', () => {
   it('a choice puts the vote row back and starts the capture as the presser, in the group’s project', async () => {
     const h = harness({ answered, binding });
     await h.svc.receive(integration, pressed(`c:${ANS}:p`));
-    expect(h.acks).toEqual(['chat.capture.draftingPage']);
+    expect(h.acks).toEqual(['chat.capture.savingAnswer']);
     expect((h.edited[0] as Extract<ChatView, { kind: 'answer' }>).actions[0]).toHaveLength(3);
     expect(h.captures.start).toHaveBeenCalledWith(
       expect.objectContaining({
         answerMessage: { chatId: '-100', messageId: 'bot-1' },
         answer: { id: ANS, conversationId: 'conv-1', createdAt: answered.createdAt },
+        message: expect.objectContaining({ id: expect.any(String) }),
         projectId: 'p-1',
         principal: DEV_PRINCIPAL,
         kind: 'page',

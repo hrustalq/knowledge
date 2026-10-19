@@ -837,12 +837,6 @@ export const envSchema = z.object({
    */
   CHAT_RATE_LIMIT_PER_USER_PER_MINUTE: z.coerce.number().int().positive().default(10),
   /**
-   * A saved conversation still drafting after this long is failed, and its
-   * "Drafting…" message says so. Longer than an answer: a page is a longer
-   * completion than a reply.
-   */
-  CHAT_CAPTURE_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(300),
-  /**
    * How often subscribed groups are checked for news (phase 3). Instant
    * delivery is "within one tick"; a digest is due on the first tick past its
    * window.

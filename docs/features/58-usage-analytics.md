@@ -93,6 +93,11 @@ and flushes on `pagehide`. Both routes go through `PublicRateLimiter`
 (120/min per principal, failing open) and answer 204 even when the hit is
 dropped. `AnalyticsRecorder.view()` drops `web` on purpose.
 
+The page's Insights query starts before the beacon, so the page reads it again
+once the open beacon is accepted (`usePageView`'s `onOpened`, #336). A
+heartbeat or a failed beacon does not trigger that read, so the median read
+time catches up only on the next load.
+
 ### Click-through
 
 A result link from the app carries `?sid=<searchId>&rank=<n>`

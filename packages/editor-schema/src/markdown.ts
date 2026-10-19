@@ -4,12 +4,12 @@
  * `parseHTML` rules turn it into the document. One parser means a page can
  * never look one way when read and another way when opened for editing.
  */
-import { Marked, type Tokens } from 'marked';
+import { Marked, type Token, type Tokens, type TokensList } from 'marked';
 import { slugifyPath } from '@knowledge/contracts/publishing';
 import { pageTitleHref, type PageRefResolver } from '@knowledge/contracts';
-import { KN, escapeHtml, isPanelType } from '@knowledge/editor-schema/nodes';
+import { KN, escapeHtml, isPanelType, type PanelType } from '@knowledge/editor-schema/nodes';
 
-export type { PageRefResolver };
+export type { PageRefResolver, Token, Tokens, TokensList };
 
 export interface RenderOptions {
   /**
@@ -31,6 +31,17 @@ export interface RenderOptions {
 
 /** `> [!NOTE]` on the blockquote's first line, GitHub alert syntax. */
 const ALERT_RE = /^\s*\[!([A-Za-z]+)\]\s*\n?/;
+
+/**
+ * A GitHub alert blockquote's panel kind and its body with the marker taken
+ * off, or null for a plain quote. The renderer below and the Word export both
+ * read panels through this, so they agree on which quotes are panels.
+ */
+export function panelOf(token: Tokens.Blockquote): { kind: PanelType; body: string } | null {
+  const text = token.text ?? '';
+  const kind = ALERT_RE.exec(text)?.[1]?.toLowerCase();
+  return kind && isPanelType(kind) ? { kind, body: text.replace(ALERT_RE, '') } : null;
+}
 
 function stripAlertMarker(html: string): string {
   // The marker survives parsing as literal text at the top of the first
@@ -59,10 +70,9 @@ marked.use({
     /** GitHub alert blockquotes become panels; plain ones stay blockquotes. */
     blockquote(token: Tokens.Blockquote): string {
       const inner = this.parser.parse(token.tokens);
-      const match = ALERT_RE.exec(token.text ?? '');
-      const kind = match?.[1]?.toLowerCase();
-      if (kind && isPanelType(kind)) {
-        return `<div ${KN.panel}="${kind}">${stripAlertMarker(inner)}</div>`;
+      const panel = panelOf(token);
+      if (panel) {
+        return `<div ${KN.panel}="${panel.kind}">${stripAlertMarker(inner)}</div>`;
       }
       return `<blockquote>${inner}</blockquote>`;
     },
@@ -199,6 +209,17 @@ export function markdownToHtml(md: string, options: RenderOptions = {}): string 
   } finally {
     resolvePage = null;
   }
+}
+
+/**
+ * The same parse as `markdownToHtml`, stopped at the tokens. A writer that
+ * targets something other than HTML (the Word export, docs/features/45) walks
+ * these, so it reads a page exactly as the reader does instead of bringing a
+ * second parser that would drift from this one. Page-title references stay
+ * off, as on every surface that is not the app's own read view.
+ */
+export function markdownTokens(md: string): TokensList {
+  return marked.lexer(md ?? '');
 }
 
 /**

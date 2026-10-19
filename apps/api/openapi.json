@@ -36180,9 +36180,10 @@
             "enum": [
               "zip",
               "html",
-              "pdf"
+              "pdf",
+              "docx"
             ],
-            "description": "`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL"
+            "description": "`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL; `docx`: one Word document"
           },
           "branch": {
             "type": "string",
@@ -36207,9 +36208,10 @@
             "enum": [
               "zip",
               "html",
-              "pdf"
+              "pdf",
+              "docx"
             ],
-            "description": "`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL"
+            "description": "`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL; `docx`: one Word document"
           },
           "branch": {
             "type": "string",

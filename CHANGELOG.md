@@ -38,6 +38,16 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Word (`.docx`) export (#162). A page, a page and its subpages, or a project
+  can now be exported as one Word document from the export dialog, through
+  `POST /v1/documents/:id/exports` and `POST /v1/projects/:id/exports` with
+  `format: "docx"`, and from MCP `knowledge_export`. It needs no Gotenberg, so
+  `GET /v1/exports/capabilities` always offers it. Headings are Word heading
+  styles, so the navigation pane works. Lists, tables, code, links and the
+  export's own images are kept, and images from the web stay links. Callouts
+  and expands become shaded blocks. Each page starts on a new sheet, and an
+  export of more than one page opens with a title page and contents. Mermaid
+  diagrams stay as their source in a code block.
 - MCP agents can work in a page's shared draft (#316). Over the HTTP MCP
   server (`/v1/mcp`), with co-editing on, `knowledge_get_draft` reads the
   draft people are writing in the editor: the body as publishing it would

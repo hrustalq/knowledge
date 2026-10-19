@@ -4723,12 +4723,14 @@
     "format": {
       "zip": "Markdown (ZIP)",
       "html": "HTML site (ZIP)",
-      "pdf": "PDF"
+      "pdf": "PDF",
+      "docx": "Word (.docx)"
     },
     "formatHint": {
       "zip": "The pages as markdown with their frontmatter, attachments and a manifest — for backup or moving elsewhere.",
       "html": "A small website that opens offline: a contents page, one page per file, images included.",
-      "pdf": "One document to read or print: a page break per page, diagrams drawn."
+      "pdf": "One document to read or print: a page break per page, diagrams drawn.",
+      "docx": "One Word document to keep editing in Word, LibreOffice or Google Docs: each page on a new sheet, images included, diagrams as their source."
     },
     "scope": {
       "page": "page",

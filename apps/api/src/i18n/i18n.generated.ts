@@ -1302,6 +1302,28 @@ export type I18nTranslations = {
             "alreadyProposed": string;
         };
     };
+    "export": {
+        "docx": {
+            "contents": string;
+            "exportedOn": string;
+            "pageCount": {
+                "one": string;
+                "other": string;
+            };
+            "onThisPage": string;
+            "noHeadings": string;
+            "diagramSource": string;
+            "drawing": string;
+            "attachment": string;
+            "panel": {
+                "note": string;
+                "tip": string;
+                "important": string;
+                "warning": string;
+                "caution": string;
+            };
+        };
+    };
     "import": {
         "stage": {
             "reading-file": string;

@@ -130,7 +130,8 @@ describe('ExportService.create*', () => {
       response: { reason: 'export.formatUnavailable' },
     });
     expect(prisma.exportJob.create).not.toHaveBeenCalled();
-    expect(svc.capabilities().formats).toEqual({ zip: true, html: true, pdf: false });
+    // Word needs nothing beyond the worker, so it is always on.
+    expect(svc.capabilities().formats).toEqual({ zip: true, html: true, pdf: false, docx: true });
   });
 
   it('offers PDF once GOTENBERG_URL is set', async () => {
@@ -226,6 +227,7 @@ describe('ExportService: who sees an export', () => {
   it('names files from the title, marks an HTML bundle and never yields an empty name', () => {
     expect(exportFilename('Install Guide', 'pdf')).toBe('install-guide.pdf');
     expect(exportFilename('Install Guide', 'html')).toBe('install-guide-html.zip');
+    expect(exportFilename('Install Guide', 'docx')).toBe('install-guide.docx');
     expect(exportFilename('Руководство', 'zip')).toBe('руководство.zip');
     expect(exportFilename('???', 'zip')).toBe('export.zip');
   });
@@ -479,6 +481,23 @@ describe('ExportBuildService', () => {
     ]);
     expect(h.written[0]).toMatchObject({ key: `workspaces/${WS}/exports/job-1/install-guide.pdf`, type: 'application/pdf' });
     expect(h.row().status).toBe('completed');
+  });
+
+  it('writes a Word document in the worker, without the renderer or Gotenberg, reading only the images', async () => {
+    const h = buildHarness({ row: { format: 'docx' }, gotenberg: false });
+    await h.svc.build('job-1');
+    expect(h.row()).toMatchObject({ status: 'completed', pageCount: 2 });
+    expect(h.renderer.render).not.toHaveBeenCalled();
+    expect(h.gotenberg.htmlToPdf).not.toHaveBeenCalled();
+    expect(h.storage.getObjectBytes.mock.calls.map((c) => c[0])).toEqual(['k-img']);
+    expect(h.written[0]).toMatchObject({
+      key: `workspaces/${WS}/exports/job-1/install-guide.docx`,
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const xml = strFromU8(unzipSync(h.written[0].bytes)['word/document.xml']);
+    // Frontmatter is not content, and both pages are there in reading order.
+    expect(xml).not.toContain('tags:');
+    expect(xml.indexOf('Install body')).toBeGreaterThan(xml.indexOf('>Guide<'));
   });
 
   it('fails a PDF with formatUnavailable when Gotenberg went away after it was queued', async () => {

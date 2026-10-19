@@ -1,0 +1,22 @@
+{
+  "docx": {
+    "contents": "Contents",
+    "exportedOn": "Exported {date}",
+    "pageCount": {
+      "one": "{count} page",
+      "other": "{count} pages"
+    },
+    "onThisPage": "On this page",
+    "noHeadings": "This page has no headings",
+    "diagramSource": "Diagram (mermaid source)",
+    "drawing": "A drawing — open the page in the knowledge base to see it",
+    "attachment": "Attachment: {name}",
+    "panel": {
+      "note": "Info",
+      "tip": "Success",
+      "important": "Note",
+      "warning": "Warning",
+      "caution": "Error"
+    }
+  }
+}

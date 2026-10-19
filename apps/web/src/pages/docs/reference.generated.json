@@ -5006,7 +5006,7 @@
     },
     {
       "name": "knowledge_export",
-      "description": "Export a page, a page and its subpages, or a whole project as a file a person can download (docs/features/45): zip (markdown sources with frontmatter, attachments and manifest.json), html (an offline site, zipped) or pdf (only where the deployment has Gotenberg). Give documentId, or projectId for a whole project. Runs in the background: returns the export id — poll knowledge_get_export for the download URL.",
+      "description": "Export a page, a page and its subpages, or a whole project as a file a person can download (docs/features/45): zip (markdown sources with frontmatter, attachments and manifest.json), html (an offline site, zipped), pdf (only where the deployment has Gotenberg) or docx (one Word document). Give documentId, or projectId for a whole project. Runs in the background: returns the export id — poll knowledge_get_export for the download URL.",
       "inputs": [
         {
           "name": "workspaceId",

@@ -8,7 +8,15 @@ import {
 import { aclAdmits, type DocumentAclFilter } from '../common/document-acl.js';
 import { ArcadeClient } from './arcade.client.js';
 import { EntityAliasService } from './entity-alias.service.js';
-import { diffRevisionFacts, type ExistingFactRow, type Lineage, type RevisionStamp } from './temporal.js';
+import {
+  asOfEdgeClause,
+  diffRevisionFacts,
+  type ExistingFactRow,
+  type FactIntervalRow,
+  type Lineage,
+  type RevisionStamp,
+  type TemporalPoint,
+} from './temporal.js';
 import { t } from '../i18n/t.js';
 
 export interface ChunkInput {
@@ -1069,18 +1077,24 @@ export class GraphService {
    * must not leak the names it introduces through the graph view, entity
    * lists or search's graph expansion. With nothing hidden (`all`) the graph
    * is returned as it always was, entities without live edges included.
+   *
+   * `at` (#81) reads the graph as it stood at that point instead of the live
+   * projection: the edges whose interval covers it, under the same ACL. An
+   * entity exists at a point only through an edge valid then, so as-of keeps
+   * only mentioned entities too.
    */
-  async getWorkspaceRelationGraph(workspaceId: string, acl: DocumentAclFilter): Promise<WorkspaceRelationGraph> {
+  async getWorkspaceRelationGraph(workspaceId: string, acl: DocumentAclFilter, at?: TemporalPoint): Promise<WorkspaceRelationGraph> {
     const pushed = aclClause(acl);
     const where = `workspaceId = :workspaceId${pushed?.sql ?? ''}`;
     const params = { workspaceId, ...pushed?.params };
+    const asOf = at ? asOfEdgeClause(at, SCOPED_SQL) : null;
     const edges: WorkspaceRelationGraph['edges'] = [];
     for (const type of RELATION_EDGE_TYPES) {
       const rows = await this.arcade
         .query<{ documentId: string; targetKey: string; extractor: string; confidence: number }>(
           'sql',
-          `SELECT documentId, targetKey, extractor, confidence FROM ${type} WHERE ${where} AND ${LIVE} LIMIT 20000`,
-          params,
+          `SELECT documentId, targetKey, extractor, confidence FROM ${type} WHERE ${where} AND ${asOf?.sql ?? LIVE} LIMIT 20000`,
+          { ...params, ...asOf?.params },
         )
         .catch(() => []);
       for (const r of rows) {
@@ -1099,7 +1113,7 @@ export class GraphService {
       'SELECT entityKey, entityType, name FROM Entity WHERE workspaceId = :workspaceId LIMIT 20000',
       { workspaceId },
     );
-    const mentioned = acl.kind === 'all' ? null : new Set(edges.map((e) => e.targetKey));
+    const mentioned = acl.kind === 'all' && !at ? null : new Set(edges.map((e) => e.targetKey));
     return {
       edges,
       documents: Object.fromEntries(
@@ -1111,6 +1125,30 @@ export class GraphService {
           .map((e) => [e.entityKey, { type: e.entityType, name: e.name }]),
       ),
     };
+  }
+
+  /**
+   * Every default-lineage edge interval touching `[from, to)` (#81), for the
+   * graph timeline's day counts. Same per-type cap and ACL as the workspace
+   * graph; `factChangeDays` does the counting.
+   */
+  async factIntervals(workspaceId: string, acl: DocumentAclFilter, from: number, to: number): Promise<FactIntervalRow[]> {
+    const pushed = aclClause(acl);
+    const out: FactIntervalRow[] = [];
+    for (const type of RELATION_EDGE_TYPES) {
+      const rows = await this.arcade
+        .query<{ documentId: string; targetKey: string; validFrom?: number | null; validTo?: number | null }>(
+          'sql',
+          `SELECT documentId, targetKey, validFrom, validTo FROM ${type} WHERE workspaceId = :workspaceId${pushed?.sql ?? ''} AND lineage = 'default' AND ((validFrom >= :from AND validFrom < :to) OR (validTo >= :from AND validTo < :to)) LIMIT 20000`,
+          { workspaceId, from, to, ...pushed?.params },
+        )
+        .catch(() => []);
+      for (const r of rows) {
+        if (!aclAdmits(acl, r.documentId)) continue;
+        out.push({ documentId: r.documentId, type, targetKey: r.targetKey, validFrom: r.validFrom ?? null, validTo: r.validTo ?? null });
+      }
+    }
+    return out;
   }
 
   /**

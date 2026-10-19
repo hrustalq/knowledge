@@ -7,7 +7,7 @@ import type {
   SourceVerificationState,
 } from '@knowledge/contracts/core';
 import type { ApiSpecDiff } from '@knowledge/contracts/api/diff';
-import type { AuthorableRelationType, FactExtractor } from '@knowledge/contracts/graph';
+import type { AuthorableRelationType, FactExtractor, ResolvedAsOf } from '@knowledge/contracts/graph';
 import type { DeleteReviewCommentResponse, ReviewComment, ReviewThread, SemanticDiff, StructuralDiff } from '@knowledge/contracts/reviews';
 
 // rich editor. Two-step by design (presign → confirm), mirroring the revision
@@ -426,6 +426,8 @@ export interface DocumentContentResponse {
   contentType: string;
   frontmatter: Record<string, unknown> | null;
   markdown: string;
+  /** Present when the revision was picked by `asOf` (#81). */
+  resolvedAsOf?: ResolvedAsOf;
 }
 
 
@@ -491,6 +493,8 @@ export interface DocumentGraphResponse {
   depth: number;
   nodes: DocumentGraphNode[];
   edges: DocumentGraphEdge[];
+  /** Present when the graph was read as of a point in time (#81). */
+  resolvedAsOf?: ResolvedAsOf;
 }
 
 // GET /v1/documents/graph?workspaceId=&projectId=
@@ -522,6 +526,8 @@ export interface WorkspaceGraphResponse {
   edges: DocumentGraphEdge[];
   /** True when the workspace holds more edges than the render cap allows. */
   truncated: boolean;
+  /** Present when the graph was read as of a point in time (#81). */
+  resolvedAsOf?: ResolvedAsOf;
 }
 
 // GET /v1/activity?workspaceId=&documentId=&limit=&cursor= (feature 10)

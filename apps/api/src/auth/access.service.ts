@@ -421,6 +421,12 @@ export class AccessService {
     return row.workspaceId;
   }
 
+  async workspaceOfReleaseTag(tagId: string): Promise<string> {
+    const row = await this.prisma.releaseTag.findUnique({ where: { id: tagId }, select: { workspaceId: true } });
+    if (!row) throw new NotFoundException(t('error.releaseTag.notFound', { id: tagId }));
+    return row.workspaceId;
+  }
+
   async workspaceOfGroup(groupId: string): Promise<string> {
     const group = await this.prisma.userGroup.findUnique({ where: { id: groupId }, select: { workspaceId: true } });
     if (!group) throw new NotFoundException(t('error.group.notFound', { id: groupId }));

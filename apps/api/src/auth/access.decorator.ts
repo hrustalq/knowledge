@@ -44,6 +44,7 @@ export type WorkspaceSource =
   | 'group' // :id path param is a user group id (issue #76)
   | 'access-request' // :id path param is an access request id (issue #76, phase 5)
   | 'capture' // :id path param is a knowledge capture id (issue #73, phase 3)
+  | 'release-tag' // :id path param is a release tag id (issue #81, phase 2)
   | 'workspace'; // :id path param IS the workspace id (existence-checked)
 
 export interface AccessSpec {

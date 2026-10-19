@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { vmsg } from '../../common/validation.js';
+import { AS_OF_DESCRIPTION, KNOWN_AT_DESCRIPTION } from '../../temporal/temporal.dto.js';
 
 export class ImpactAnalysisDto {
   @ApiProperty({ format: 'uuid' })
@@ -18,6 +19,16 @@ export class ImpactAnalysisDto {
   @Min(1, { message: vmsg('min') })
   @Max(5, { message: vmsg('max') })
   maxDepth?: number;
+
+  @ApiPropertyOptional({ description: AS_OF_DESCRIPTION })
+  @IsOptional()
+  @IsString()
+  asOf?: string;
+
+  @ApiPropertyOptional({ description: KNOWN_AT_DESCRIPTION })
+  @IsOptional()
+  @IsString()
+  knownAt?: string;
 }
 
 export class CreateEntityAliasDto {

@@ -19,8 +19,15 @@ export const MCP_INSTRUCTIONS = [
   'Every search hit carries trust.status (verified | expired | edited | requested | outdated | flagged | unverified). Prefer verified pages; say so when you rely on an outdated, expired or edited one. knowledge_flag_document marks a page requested (please check) or outdated (known wrong) — verifying is a person\'s act and has no tool.',
   'To change an existing page: knowledge_create_branch → knowledge_create_revision → knowledge_create_merge_request. Do not merge your own merge request unless asked to.',
   'When the session settles something durable — a decision and why, a non-obvious gotcha, a team convention — record it with knowledge_capture_decision / knowledge_capture_note (check knowledge_find_similar first). Captures become merge requests a person reviews.',
+  'Graph tools take asOf (an ISO date, rev:<revisionId> or tag:<release tag>) to answer as the knowledge base stood then; knowledge_list_release_tags lists the tags.',
   'Read the knowledge://skill resource (or the "guide" prompt) for the full playbook.',
 ].join('\n');
+
+/** The `asOf` / `knownAt` arguments of the graph tools (#81), described once. */
+export const MCP_AS_OF =
+  'Answer as the knowledge base stood at a point: an ISO date, "rev:<revisionId>" or "tag:<release tag name>". Omit for now.';
+export const MCP_KNOWN_AT =
+  'What was believed at this ISO date: facts retracted since still show, facts written since do not. Omit for now.';
 
 /**
  * Tools that change the knowledge base. The complement is read-only, and gets
@@ -64,6 +71,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_document_component',
   // Writes a suggestion into a page's shared draft (#316). HTTP only, with COLLAB_ENABLED.
   'knowledge_suggest_draft_edit',
+  // Names an instant the graph can be read as of (#81).
+  'knowledge_create_release_tag',
 ]);
 
 /**

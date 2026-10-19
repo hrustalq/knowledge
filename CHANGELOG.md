@@ -115,6 +115,28 @@ in the pull request that introduces them — see
   finalize time until the next default-branch revision's. Branch revisions are
   marked as such and never valid. Nothing reads these intervals yet; the "as
   of" queries in the next phases do.
+- Read the graph as it stood at a point in time (#81, phase 2). `asOf` takes
+  an ISO date, `rev:<revisionId>` (that revision's finalize time) or
+  `tag:<name>` on `GET /v1/documents/graph`, `GET /v1/documents/:id/graph`,
+  `GET /v1/documents/:id/content` (the revision that was the page's content
+  then), the `/v1/entities` list, neighbours and trace routes, and impact
+  analysis. A fact a page has since dropped shows as of before the change;
+  one added later does not. `knownAt` (an ISO date) answers with what was
+  believed then, so a relation retracted since still shows. Each response
+  echoes `resolvedAsOf`. A malformed value is a 400, an unknown tag or another
+  workspace's revision a 404. Page permissions apply exactly as they do now.
+- Release tags (#81): named instants such as `v2.3` that `asOf=tag:<name>`
+  resolves to. `GET /v1/release-tags` (viewer), `POST /v1/release-tags`
+  (editor; a duplicate name is a 409) and `DELETE /v1/release-tags/:id`
+  (admin). A tag can belong to one project or the whole workspace.
+  `GET /v1/graph/timeline` returns the tags and per-day counts of facts that
+  started and stopped being true in a window, for the time slider to come.
+- MCP: `knowledge_get_workspace_graph`, `knowledge_find_relations`,
+  `knowledge_impact_analysis` and `knowledge_trace_relation` take `asOf` and
+  `knownAt`. `knowledge_get_historical_context` takes `asOf` instead of
+  `atRevisionId` for the workspace's view of an entity then. New tools:
+  `knowledge_list_release_tags` and `knowledge_create_release_tag` (a write,
+  hidden from read-only keys).
 
 ### Changed
 
@@ -139,6 +161,9 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261114100000_release_tags` adds the `release_tags` table and
+  nothing else. It survives a code rollback, because the previous image never
+  reads it.
 - Run `make graph-live-backfill` once after deploying #81 phase 1. It now also
   stamps valid time on the chunks and relations written before this release;
   without it, the "as of" reads of later phases find no history for those

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { TemporalCoreModule } from '../temporal/temporal-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { GraphModule } from '../graph/graph.module.js';
 import { IngestionModule } from '../ingestion/ingestion.module.js';
@@ -38,6 +39,8 @@ import { LintCoreModule } from './lint/lint-core.module.js';
 @Module({
   imports: [
     DocumentsCoreModule,
+    // `asOf` on the graph and content routes (#81). Controller-free.
+    TemporalCoreModule,
     ActivityModule,
     StorageModule,
     GraphModule,

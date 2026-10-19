@@ -1193,6 +1193,17 @@ export type I18nTranslations = {
             "tokenNotFound": string;
             "mappingGroup": string;
         };
+        "temporal": {
+            "badAsOf": string;
+            "revisionNotFound": string;
+            "revisionNotFinalized": string;
+            "unknownTag": string;
+            "badWindow": string;
+        };
+        "releaseTag": {
+            "notFound": string;
+            "duplicate": string;
+        };
     };
     "import": {
         "stage": {
@@ -1430,6 +1441,7 @@ export type I18nTranslations = {
         "group": string;
         "accessRequest": string;
         "capture": string;
+        "releaseTag": string;
     };
     "validation": {
         "isDefined": string;

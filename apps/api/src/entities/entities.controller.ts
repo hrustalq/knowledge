@@ -18,6 +18,9 @@ import { EntityAliasService } from '../graph/entity-alias.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { EntitiesService } from './entities.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { withAsOf } from '../graph/temporal.js';
+import { ApiAsOfQuery } from '../temporal/temporal.dto.js';
+import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { CreateEntityAliasDto, ImpactAnalysisDto } from './dto/entities.dto.js';
 import { t } from '../i18n/t.js';
 
@@ -29,6 +32,7 @@ export class EntitiesController {
     private readonly aliases: EntityAliasService,
     private readonly graph: GraphService,
     private readonly permissions: PermissionService,
+    private readonly temporal: TemporalResolverService,
   ) {}
 
   @Get()
@@ -37,19 +41,24 @@ export class EntitiesController {
   @ApiQuery({ name: 'type', required: false, description: 'Entity type, e.g. "tag"' })
   @ApiQuery({ name: 'q', required: false, description: 'Case-insensitive substring of the name' })
   @ApiQuery({ name: 'limit', required: false, description: 'Max entities to return (1-200)' })
+  @ApiAsOfQuery()
   async list(
     @CurrentPrincipal() principal: Principal,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('type') type?: string,
     @Query('q') q?: string,
     @Query('limit') limit?: string,
+    @Query('asOf') asOf?: string,
+    @Query('knownAt') knownAt?: string,
   ) {
     const n = limit ? Number(limit) : Number.NaN;
-    return this.entities.listEntities(await this.permissions.scopeFor(principal, workspaceId), {
-      type,
-      q,
-      limit: Number.isFinite(n) ? Math.min(Math.max(n, 1), 200) : undefined,
-    });
+    const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+    const res = await this.entities.listEntities(
+      await this.permissions.scopeFor(principal, workspaceId),
+      { type, q, limit: Number.isFinite(n) ? Math.min(Math.max(n, 1), 200) : undefined },
+      at,
+    );
+    return withAsOf(res, at);
   }
 
   // NB: declared before :key routes so "aliases" is not captured as a key.
@@ -106,14 +115,19 @@ export class EntitiesController {
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Shortest relation path between two entities (knowledge.trace_relation)' })
   @ApiQuery({ name: 'maxDepth', required: false })
+  @ApiAsOfQuery()
   async trace(
     @CurrentPrincipal() principal: Principal,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('maxDepth') maxDepth?: string,
+    @Query('asOf') asOf?: string,
+    @Query('knownAt') knownAt?: string,
   ) {
-    return this.entities.trace(await this.permissions.scopeFor(principal, workspaceId), from, to, maxDepth ? Number(maxDepth) : undefined);
+    const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+    const scope = await this.permissions.scopeFor(principal, workspaceId);
+    return withAsOf(await this.entities.trace(scope, from, to, maxDepth ? Number(maxDepth) : undefined, at), at);
   }
 
   @Get(':key/neighbors')
@@ -121,19 +135,25 @@ export class EntitiesController {
   @ApiOperation({ summary: 'Entity neighborhood: edges + entities within N hops (knowledge.find_relations)' })
   @ApiQuery({ name: 'depth', required: false })
   @ApiQuery({ name: 'types', required: false, description: 'Comma-separated relation types' })
+  @ApiAsOfQuery()
   async neighbors(
     @CurrentPrincipal() principal: Principal,
     @Param('key') key: string,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('depth') depth?: string,
     @Query('types') types?: string,
+    @Query('asOf') asOf?: string,
+    @Query('knownAt') knownAt?: string,
   ) {
-    return this.entities.neighbors(
+    const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+    const res = await this.entities.neighbors(
       await this.permissions.scopeFor(principal, workspaceId),
       key,
       depth ? Number(depth) : undefined,
       types ? types.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
+      at,
     );
+    return withAsOf(res, at);
   }
 
   @Post(':key/impact-analysis')
@@ -141,6 +161,8 @@ export class EntitiesController {
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'Transitive impact of changing an entity (knowledge.impact_analysis)' })
   async impact(@Param('key') key: string, @Body() dto: ImpactAnalysisDto, @CurrentPrincipal() principal: Principal) {
-    return this.entities.impactAnalysis(await this.permissions.scopeFor(principal, dto.workspaceId), key, dto.direction, dto.maxDepth);
+    const at = await this.temporal.resolve(dto.workspaceId, dto.asOf, dto.knownAt);
+    const scope = await this.permissions.scopeFor(principal, dto.workspaceId);
+    return withAsOf(await this.entities.impactAnalysis(scope, key, dto.direction, dto.maxDepth, at), at);
   }
 }

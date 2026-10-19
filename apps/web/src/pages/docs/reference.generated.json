@@ -2912,6 +2912,46 @@
     },
     {
       "method": "GET",
+      "path": "/v1/graph/timeline",
+      "tag": "graph",
+      "summary": "Markers for the graph time slider: release tags and per-day fact changes in a window",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/release-tags",
+      "tag": "graph",
+      "summary": "Release tags of the workspace, oldest first",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/release-tags",
+      "tag": "graph",
+      "summary": "Name an instant (now, or `at`) so the graph can be read as of it. 409 on a duplicate name",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/release-tags/{id}",
+      "tag": "graph",
+      "summary": "Remove a release tag. What the graph said at that instant is unaffected",
+      "role": "admin",
+      "source": "release-tag",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/groups",
       "tag": "groups",
       "summary": "The workspace's user groups, with member counts",
@@ -4683,6 +4723,32 @@
       ]
     },
     {
+      "name": "knowledge_create_release_tag",
+      "description": "Name an instant (now, or `at`) so the graph can later be read as of it with asOf=tag:<name>. Names are unique per workspace.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "name",
+          "optional": false
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        },
+        {
+          "name": "at",
+          "optional": true
+        },
+        {
+          "name": "note",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_create_revision",
       "description": "Create a new markdown revision on a branch (immutable; parented on the branch head), upload the content and finalize it for indexing. Pass baseRevisionId for optimistic concurrency: the call is rejected if the branch head has moved past it. Content without a frontmatter block keeps the branch head's frontmatter (tags, relations); include a block to replace it. For an API spec document (kind openapi or asyncapi), content is the whole spec in YAML or JSON (say which with syntax); it is validated, and refused with the validator's messages when it does not.",
       "inputs": [
@@ -4851,6 +4917,14 @@
         {
           "name": "depth",
           "optional": true
+        },
+        {
+          "name": "asOf",
+          "optional": true
+        },
+        {
+          "name": "knownAt",
+          "optional": true
         }
       ]
     },
@@ -4952,7 +5026,7 @@
     },
     {
       "name": "knowledge_get_historical_context",
-      "description": "What the knowledge base stated about an entity at a given revision (plan.md §11 historical queries): the fact snapshot at that point in the revision DAG, plus the entity\\u2019s current neighborhood for contrast.",
+      "description": "What the knowledge base stated about an entity at a given revision (plan.md §11 historical queries): the fact snapshot at that point in the revision DAG, plus the entity\\u2019s current neighborhood for contrast. Give asOf instead of atRevisionId for the whole workspace\\u2019s view of the entity at a date or release tag.",
       "inputs": [
         {
           "name": "workspaceId",
@@ -4964,7 +5038,15 @@
         },
         {
           "name": "atRevisionId",
-          "optional": false
+          "optional": true
+        },
+        {
+          "name": "asOf",
+          "optional": true
+        },
+        {
+          "name": "knownAt",
+          "optional": true
         }
       ]
     },
@@ -5045,6 +5127,14 @@
         {
           "name": "projectId",
           "optional": true
+        },
+        {
+          "name": "asOf",
+          "optional": true
+        },
+        {
+          "name": "knownAt",
+          "optional": true
         }
       ]
     },
@@ -5066,6 +5156,14 @@
         },
         {
           "name": "maxDepth",
+          "optional": true
+        },
+        {
+          "name": "asOf",
+          "optional": true
+        },
+        {
+          "name": "knownAt",
           "optional": true
         }
       ]
@@ -5237,6 +5335,20 @@
         {
           "name": "workspaceId",
           "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_release_tags",
+      "description": "Release tags of a workspace: named instants (\"v2.3\", \"Q3 audit\") that asOf=tag:<name> reads the graph as of. Oldest first.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "projectId",
+          "optional": true
         }
       ]
     },
@@ -5544,6 +5656,14 @@
         },
         {
           "name": "maxDepth",
+          "optional": true
+        },
+        {
+          "name": "asOf",
+          "optional": true
+        },
+        {
+          "name": "knownAt",
           "optional": true
         }
       ]

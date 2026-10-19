@@ -4445,6 +4445,10 @@
     "disabledAdmin": "Turn them on in Settings → Publishing.",
     "disabledAsk": "Ask a workspace admin to turn them on.",
     "includeSubtree": "Include subpages",
+    "allowDownload": "Let readers download it (ZIP, HTML or PDF)",
+    "downloadToggle": "Downloads",
+    "downloadOn": "Readers can download this link’s pages",
+    "downloadOff": "Downloads are off — files already made stop downloading now",
     "expiry": "Expires",
     "expiryPreset": {
       "1d": "In 1 day",
@@ -4708,11 +4712,11 @@
     "viewExports": "View exports",
     "download": "Download",
     "pdfUnavailable": "Not set up on this server: PDF needs a Gotenberg service (GOTENBERG_URL).",
+    "formatLabel": "Format",
     "dialog": {
       "title": "Export “{title}”",
       "titleProject": "Export the project “{title}”",
       "description": "The file is kept for {hours} hours, then deleted. Only you and the workspace admins can download it.",
-      "format": "Format",
       "includeSubtree": "Include subpages",
       "branch": "Branch",
       "branchPlaceholder": "Default branch",

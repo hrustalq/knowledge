@@ -5,6 +5,7 @@ import { AttachmentsModule } from '../attachments/attachments.module.js';
 import { AvatarsModule } from '../avatars/avatars.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { EmbeddingModule } from '../embedding/embedding.module.js';
+import { ExportCoreModule } from '../export/export-core.module.js';
 import { GraphModule } from '../graph/graph.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { PublishingCoreModule } from '../publishing/publishing-core.module.js';
@@ -41,6 +42,8 @@ import { SiteSignInController } from './site-sign-in.controller.js';
     AssistantClientModule,
     GraphModule,
     EmbeddingModule,
+    // A share link's download (#161): the same export path as a member's.
+    ExportCoreModule,
   ],
   controllers: [PublicSharesController, PublicSitesController, PublicSiteFilesController, PublicDomainsController, SiteSignInController],
   providers: [

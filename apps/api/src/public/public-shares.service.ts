@@ -1,11 +1,23 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Document, ShareLink } from '@prisma/client';
-import type { PublicSharePage, PublicShareResponse, PublicShareTreeNode } from '@knowledge/contracts';
+import type { Document, ExportJob, ShareLink } from '@prisma/client';
+import type {
+  ExportDownloadResponse,
+  ExportErrorCode,
+  ExportFormat,
+  ExportStage,
+  ExportStatus,
+  PublicShareDownloadOffer,
+  PublicShareExport,
+  PublicSharePage,
+  PublicShareResponse,
+  PublicShareTreeNode,
+} from '@knowledge/contracts';
 import { AttachmentsService } from '../attachments/attachments.service.js';
 import { verifyPassword } from '../auth/password.js';
 import type { Env } from '../config/env.js';
 import { DocumentsService, hasRealPath } from '../documents/documents.service.js';
+import { ExportService } from '../export/export.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from '../publishing/publishing-settings.service.js';
@@ -54,6 +66,8 @@ const SCOPE_SELECT = {
 @Injectable()
 export class PublicSharesService {
   private readonly unlockAttempts: number;
+  private readonly exportsPerIp: number;
+  private readonly exportsPerLink: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -62,9 +76,12 @@ export class PublicSharesService {
     private readonly attachments: AttachmentsService,
     private readonly unlocks: ShareUnlockService,
     private readonly limiter: PublicRateLimiter,
+    private readonly exports: ExportService,
     config: ConfigService<Env, true>,
   ) {
     this.unlockAttempts = config.get('PUBLIC_UNLOCK_ATTEMPTS_PER_15MIN', { infer: true });
+    this.exportsPerIp = config.get('PUBLIC_EXPORTS_PER_HOUR_PER_IP', { infer: true });
+    this.exportsPerLink = config.get('PUBLIC_EXPORTS_PER_HOUR_PER_LINK', { infer: true });
   }
 
   async view(token: string, cookieHeader: string | undefined): Promise<PublicShareResponse> {
@@ -79,6 +96,7 @@ export class PublicSharesService {
       tree: nodes,
       treeTruncated: truncated,
       expiresAt: live.share.expiresAt?.toISOString() ?? null,
+      download: live.share.allowDownload ? this.downloadOffer() : null,
     };
   }
 
@@ -112,6 +130,38 @@ export class PublicSharesService {
     if (!attachment || attachment.status !== 'ready') throw this.notFound();
     await this.inScope(live, attachment.documentId);
     return this.attachments.readUrl(attachment.documentId, attachment.id, download);
+  }
+
+  /**
+   * Export what the link shows (#161), for a reader who may read it: the link
+   * live, unlocked and with download on — anything else is the same 404 as a
+   * dead link. Counted per address and link and per link before the scope is
+   * counted or anything queued, and fail-closed: with the counter down nobody can keep Gotenberg busy.
+   */
+  async createExport(
+    token: string,
+    format: ExportFormat,
+    req: Parameters<typeof clientIp>[0] & { headers: { cookie?: string } },
+  ): Promise<PublicShareExport> {
+    const live = await this.resolveDownload(token, req.headers.cookie);
+    const hour = 60 * 60_000;
+    const allowed =
+      (await this.limiter.hit(`share-export:${clientIp(req)}:${live.share.id}`, this.exportsPerIp, hour, false)) &&
+      (await this.limiter.hit(`share-export:${live.share.id}`, this.exportsPerLink, hour, false));
+    if (!allowed) throw new RateLimitedException(t('error.share.exportRateLimited'), 60 * 60, 'share.exportRateLimited');
+    return toPublicExport(await this.exports.createForShareLink(live.share, format));
+  }
+
+  /** One of this link's exports — polled while it runs. */
+  async getExport(token: string, exportId: string, cookieHeader: string | undefined): Promise<PublicShareExport> {
+    const live = await this.resolveDownload(token, cookieHeader);
+    return toPublicExport(await this.exports.shareLinkJob(exportId, live.share));
+  }
+
+  /** A short-lived URL to the finished file; asked afresh, so a revoke or download switched off ends it at once. */
+  async exportDownload(token: string, exportId: string, cookieHeader: string | undefined): Promise<ExportDownloadResponse> {
+    const live = await this.resolveDownload(token, cookieHeader);
+    return this.exports.shareLinkDownload(exportId, live.share);
   }
 
   /**
@@ -164,6 +214,18 @@ export class PublicSharesService {
     return live;
   }
 
+  /** The link, open to this reader, with download on; download off is the same 404 as a dead link. */
+  private async resolveDownload(token: string, cookieHeader: string | undefined): Promise<LiveShare> {
+    const live = await this.resolveOpen(token, cookieHeader);
+    if (!live.share.allowDownload) throw this.notFound();
+    return live;
+  }
+
+  private downloadOffer(): PublicShareDownloadOffer {
+    const { formats, ttlHours } = this.exports.capabilities();
+    return { formats, ttlHours };
+  }
+
   /** The document, if the link reaches it. */
   private async inScope(live: LiveShare, documentId: string): Promise<ScopeDocument> {
     if (documentId === live.root.id) return live.root;
@@ -209,4 +271,20 @@ export class PublicSharesService {
       truncated: rows.length === SHARE_TREE_MAX,
     };
   }
+}
+
+/** What a reader sees of a job: no workspace, page or person id (#161). */
+export function toPublicExport(row: ExportJob): PublicShareExport {
+  const error = row.error as { code?: string; message?: string } | null;
+  return {
+    id: row.id,
+    format: row.format as ExportFormat,
+    status: row.status as ExportStatus,
+    stage: (row.stage as ExportStage | null) ?? null,
+    pageCount: row.pageCount,
+    sizeBytes: row.sizeBytes,
+    error: error ? { code: (error.code ?? 'failed') as ExportErrorCode, message: error.message ?? '' } : null,
+    createdAt: row.createdAt.toISOString(),
+    expiresAt: row.expiresAt?.toISOString() ?? null,
+  };
 }

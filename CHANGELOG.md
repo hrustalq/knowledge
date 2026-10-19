@@ -38,6 +38,22 @@ in the pull request that introduces them — see
 
 ### Added
 
+- A share link can let its readers download what it shows (#161). Tick
+  **Let readers download it** when creating the link, or flip **Downloads**
+  on an existing one in the page's Share menu; it is off by default and on no
+  existing link. The reader then gets a **Download** button that exports the
+  link's page, or the page and its subpages when the link includes them, as
+  ZIP, HTML or PDF (PDF only where Gotenberg is set up), without signing in.
+  The file contains exactly the pages the reader can open through the link,
+  never a restricted page and never more than the link's scope. A
+  password-protected link asks for its password first. Revoking the link or
+  switching downloads off stops even a finished file from downloading at
+  once. The job belongs to the link, not to a person: nobody gets an
+  inbox notification for it, and it is not in its creator's export history
+  (an admin's list on Exports still shows it). The new public routes are
+  `POST /v1/public/shares/:token/exports`, `GET …/exports/:id` and
+  `GET …/exports/:id/download`. `knowledge_share_page` takes
+  `allowDownload`.
 - MCP agents can work in a page's shared draft (#316). Over the HTTP MCP
   server (`/v1/mcp`), with co-editing on, `knowledge_get_draft` reads the
   draft people are writing in the editor: the body as publishing it would
@@ -412,6 +428,15 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261119100000_share_link_download` adds
+  `share_links.allow_download` (default `false`) and a nullable
+  `export_jobs.share_link_id` with an index. It is additive and reversible
+  under expand/contract: the previous release ignores both columns, so after
+  a rollback a reader's files show up in the link creator's Exports until
+  the export sweeper removes them. Two env vars, both with defaults:
+  `PUBLIC_EXPORTS_PER_HOUR_PER_IP` (`5` per address and link) and
+  `PUBLIC_EXPORTS_PER_HOUR_PER_LINK` (`30` per link). Both limits fail
+  closed: with Redis down, no reader can start an export. (#161)
 - After deploying #277, purge the Cloudflare cache once: asset URLs already
   cached at the edge keep the 4-hour lifetime they were stored with until then.
 

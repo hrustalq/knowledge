@@ -1,6 +1,6 @@
 {
   "help": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a group, mention me or reply to one of my answers.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\n/new — start a new conversation\n/unlink — disconnect your account\n/bind — answer in this group (workspace admins)\n/unbind — stop answering in this group (workspace admins)\n/help — this message",
-  "helpTime": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a channel, mention me — I answer in the message's thread, and anything else said in that thread is a follow-up.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\nSend one of these words on its own (in a channel, after mentioning me):\nnew — start a new conversation\nunlink — disconnect your account\nbind — answer in this channel (workspace admins)\nunbind — stop answering in this channel (workspace admins)\nhelp — this message",
+  "helpTime": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a channel, mention me — I answer in the message's thread, and anything else said in that thread is a follow-up.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\nSend one of these words on its own (in a channel, after mentioning me):\nnew — start a new conversation\nunlink — disconnect your account\nbind — answer in this channel (workspace admins)\nunbind — stop answering in this channel (workspace admins)\ncapture — propose what this thread settled for the knowledge base, said inside the thread (editors)\nhelp — this message",
   "link": {
     "required": "Link your account first: open the link below while signed in to {workspace}. It works once and expires in {minutes} minutes.",
     "button": "Link my account",
@@ -85,5 +85,29 @@
     "heading": "{count} updates in {scope}",
     "digest": "Digest for {scope}: {count} updates",
     "more": "…and {count} more"
+  },
+  "harvest": {
+    "forbidden": "Only an editor of {workspace} with a linked account can ask me to remember a thread.",
+    "off": "Harvesting threads into the knowledge base is switched off on this server.",
+    "unsupported": "I cannot read threads on this platform yet.",
+    "notInThread": "Send capture as a reply inside the thread you want me to remember.",
+    "reading": "Reading the thread for what it settled…",
+    "empty": "There is nothing in this thread for me to read.",
+    "rateLimited": "You have asked me to remember too many threads in the last hour. Try again later.",
+    "unreadable": "I could not read this thread. Try again in a moment.",
+    "failed": "Reading this thread did not work. Ask again in a moment.",
+    "nothing": "Nothing in this thread looked worth keeping.",
+    "proposed": {
+      "one": "Proposed {count} capture for review.",
+      "other": "Proposed {count} captures for review."
+    },
+    "duplicates": {
+      "one": "{count} was already in the knowledge base and was skipped.",
+      "other": "{count} were already in the knowledge base and were skipped."
+    },
+    "truncated": {
+      "one": "I read the first message and the newest {count} reply.",
+      "other": "I read the first message and the newest {count} replies."
+    }
   }
 }

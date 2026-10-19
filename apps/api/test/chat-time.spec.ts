@@ -490,3 +490,59 @@ describe('ChatSocketSupervisor', () => {
     expect(h.sockets).toHaveLength(2);
   });
 });
+
+describe('capture and fetchThread (#82)', () => {
+  it('capture, remember and запомни are one command, and only when addressed in a channel', () => {
+    for (const word of ['capture', 'Remember', 'запомни']) {
+      const [m] = adapter.parseInbound(posted({ message: `@knowledge ${word}`, root_id: 'root-1' }), BOT);
+      expect(m!.command).toEqual({ name: 'capture', args: '' });
+    }
+    const [plain] = adapter.parseInbound(posted({ message: 'capture', root_id: 'root-1' }), BOT);
+    expect(plain!.command).toBeNull();
+  });
+
+  it("reads people's messages before the command, root first, with a team permalink", async () => {
+    const post = (id: string, at: number, extra: Record<string, unknown> = {}) => ({
+      id,
+      user_id: 'u-alice',
+      message: `message ${id}`,
+      create_at: at,
+      ...extra,
+    });
+    safeFetch
+      .mockResolvedValueOnce(
+        json(200, {
+          order: [],
+          posts: {
+            r: post('r', 1),
+            b: post('b', 3, { props: { from_bot: 'true' } }),
+            j: post('j', 4, { type: 'system_join_channel' }),
+            a: post('a', 2, { user_id: 'u-bob' }),
+            cmd: post('cmd', 5),
+            late: post('late', 6),
+          },
+        }),
+      )
+      .mockResolvedValueOnce(json(200, { team_id: 't-1' }))
+      .mockResolvedValueOnce(json(200, { name: 'platform' }));
+    const thread = await adapter.fetchThread(ctx, 'ch-1', 'r', 'cmd', 200);
+    expect(thread.messages.map((m) => [m.authorId, m.text])).toEqual([
+      ['u-alice', 'message r'],
+      ['u-bob', 'message a'],
+    ]);
+    expect(thread.url).toBe('https://time.test/platform/pl/r');
+    expect(thread.truncated).toBe(false);
+    expect(safeFetch.mock.calls[0][0]).toBe('https://time.test/api/v4/posts/r/thread');
+  });
+
+  it('keeps the root and the newest replies past the cap; no link in a direct channel', async () => {
+    const posts = Object.fromEntries(
+      Array.from({ length: 6 }, (_, i) => [`p${i}`, { id: `p${i}`, user_id: 'u', message: `m${i}`, create_at: i }]),
+    );
+    safeFetch.mockResolvedValueOnce(json(200, { posts })).mockResolvedValueOnce(json(200, { team_id: '' }));
+    const thread = await adapter.fetchThread(ctx, 'dm-1', 'p0', 'none', 3);
+    expect(thread.messages.map((m) => m.text)).toEqual(['m0', 'm4', 'm5']);
+    expect(thread.truncated).toBe(true);
+    expect(thread.url).toBeNull();
+  });
+});

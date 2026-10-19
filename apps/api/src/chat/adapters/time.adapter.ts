@@ -13,6 +13,7 @@ import {
   type ChatMessageRef,
   type ChatOutMessage,
   type ChatTarget,
+  type ChatThread,
   type ChatUpdatesView,
   type ChatView,
   type RawInbound,
@@ -32,7 +33,9 @@ const CALL_TIMEOUT_MS = 15_000;
  */
 const ACK_WAIT_MS = 5_000;
 /** Commands as a whole message: Time's client takes a leading `/` as its own slash command. */
-const COMMAND_RE = /^\/?(start|help|new|unlink|bind|unbind)$/i;
+const COMMAND_RE = /^\/?(start|help|new|unlink|bind|unbind|capture|remember|запомни)$/i;
+/** Asking the bot to remember a thread is `capture` (#82), in either language. */
+const CAPTURE_WORDS = new Set(['capture', 'remember', 'запомни']);
 /** A direct channel's name is the two user ids joined by `__`; a press carries the name, not the type. */
 const DM_CHANNEL_NAME_RE = /^[a-z0-9]+__[a-z0-9]+$/;
 /** Direct channels seen, so a reply there stays out of a thread. Bounded: forgotten ones only thread. */
@@ -226,7 +229,7 @@ export class TimeAdapter implements ChatAdapter {
         mentioned,
         replyToBotMessageId: root,
         threadId: root ?? (isDm ? null : post.id),
-        command: cmd ? { name: cmd[1].toLowerCase(), args: '' } : null,
+        command: cmd ? { name: CAPTURE_WORDS.has(cmd[1].toLowerCase()) ? 'capture' : cmd[1].toLowerCase(), args: '' } : null,
         action: null,
       },
     ];
@@ -330,6 +333,45 @@ export class TimeAdapter implements ChatAdapter {
    */
   directLink(): string | null {
     return null;
+  }
+
+  /**
+   * `GET /posts/:root/thread` — the whole thread in one call — trimmed to what
+   * people wrote before the command. The link is the thread's permalink, which
+   * needs the team's name: one call for the channel's team, one for the team.
+   * A link that cannot be built is left out rather than failing the harvest.
+   */
+  async fetchThread(ctx: ChatAdapterContext, chatId: string, rootId: string, beforeMessageId: string, max: number): Promise<ChatThread> {
+    const thread = await this.call<{ posts?: Record<string, TimePost & { create_at?: number }> }>(
+      ctx,
+      'GET',
+      `/posts/${encodeURIComponent(rootId)}/thread`,
+    );
+    const posts = Object.values(thread.posts ?? {});
+    const cutoff = posts.find((p) => p.id === beforeMessageId)?.create_at ?? Infinity;
+    const people = posts
+      .filter((p) => p.id !== beforeMessageId && (p.create_at ?? 0) < cutoff)
+      .filter((p) => !p.type && p.props?.from_bot !== 'true' && p.props?.from_bot !== true && p.message?.trim() && p.user_id)
+      .sort((a, b) => (a.create_at ?? 0) - (b.create_at ?? 0));
+    const kept = people.length > max ? [people[0]!, ...people.slice(people.length - (max - 1))] : people;
+    return {
+      messages: kept.map((p) => ({ authorId: p.user_id!, text: p.message!.trim(), at: new Date(p.create_at ?? 0) })),
+      url: await this.permalink(ctx, chatId, rootId),
+      truncated: kept.length < people.length,
+    };
+  }
+
+  private async permalink(ctx: ChatAdapterContext, chatId: string, postId: string): Promise<string | null> {
+    try {
+      const channel = await this.call<{ team_id?: string }>(ctx, 'GET', `/channels/${encodeURIComponent(chatId)}`);
+      // A direct channel belongs to no team, and a permalink needs one.
+      if (!channel.team_id) return null;
+      const team = await this.call<{ name?: string }>(ctx, 'GET', `/teams/${encodeURIComponent(channel.team_id)}`);
+      if (!team.name) return null;
+      return `${ctx.serverUrl!.replace(/\/$/, '')}/${encodeURIComponent(team.name)}/pl/${encodeURIComponent(postId)}`;
+    } catch {
+      return null;
+    }
   }
 
   /** The websocket URL for a server: the API's own origin and path, over ws(s). */

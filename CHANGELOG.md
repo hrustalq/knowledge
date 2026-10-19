@@ -284,6 +284,22 @@ in the pull request that introduces them — see
   text in its answer is what readers typed, so it comes back wrapped as
   untrusted data. The feature is documented in
   `docs/features/58-usage-analytics.md`.
+- Ask a Time bot to remember a thread (#82, phase 2). An editor of the
+  workspace with a linked account sends `capture` (or `remember`, or
+  `запомни`) as a reply inside a thread, mentioning the bot in a channel. The
+  bot reads the thread up to that message, masks emails, phone numbers, card
+  numbers and credential-shaped tokens, and has the new `harvester` agent
+  propose what the thread settled: decisions, gotchas, conventions, how-tos,
+  glossary terms and answered questions. Each proposal becomes a capture in
+  the asker's name, with the usual dedupe and review, and shows where it came
+  from with a link to the thread. A glossary term is kept only if the thread
+  contains it word for word, and an answer only if it cites a page found by
+  searching the knowledge base as the asker. The bot replies with counts and
+  a link to the Captures inbox, never a title. A viewer or an unlinked person
+  is refused before the thread is read. Each harvest is booked as AI usage
+  `harvest` against the asker, and one person may start
+  `HARVEST_RATE_PER_HOUR` of them an hour. Telegram answers `capture` with
+  "not available here yet" until phase 3.
 
 ### Changed
 
@@ -320,6 +336,11 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Harvest adds three env vars, each with a default, so nothing needs setting:
+  `HARVEST_ENABLED` (`true`; `false` answers `capture` with a notice),
+  `HARVEST_MAX_MESSAGES` (`200`: the root and the newest replies) and
+  `HARVEST_RATE_PER_HOUR` (`10` per person). The `harvester` agent appears
+  under Settings → AI agents and can be switched off there. No migration.
 - Migration `20261117100000_chat_captures_into_agent_memory` adds a nullable
   `knowledge_captures.origin` column. It copies every `chat_captures` row into
   `knowledge_captures` under the same id, with its status, and then **drops

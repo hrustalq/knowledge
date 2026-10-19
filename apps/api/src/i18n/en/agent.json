@@ -266,6 +266,8 @@
   },
   "atlas": "Atlas",
   "atlasDesc": "Groups related pages into communities and summarises each, so broad questions can be answered across the whole knowledge base.",
+  "harvester": "Harvester",
+  "harvesterDesc": "Reads a chat thread somebody asked to keep and proposes what it settled as captures for review.",
   "charting": {
     "disabled": "Community summaries are off on this server (COMMUNITY_SUMMARIES_ENABLED).",
     "unchanged": "The graph has not changed since the last summaries; nothing rebuilt.",

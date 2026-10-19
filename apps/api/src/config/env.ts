@@ -860,6 +860,15 @@ export const envSchema = z.object({
    * within one tick. Reconnects after a drop do not wait for it.
    */
   CHAT_SOCKET_SYNC_MS: z.coerce.number().int().min(1_000).default(15_000),
+  /**
+   * Harvesting a chat thread into captures (#82). Off: `capture` in a chat is
+   * answered with a notice and no thread is read.
+   */
+  HARVEST_ENABLED: boolish(true),
+  /** Messages of one thread the harvester reads, at most: the root and the newest replies. */
+  HARVEST_MAX_MESSAGES: z.coerce.number().int().min(2).default(200),
+  /** Harvests one person may start in an hour, counted from their `harvest` AI usage rows. */
+  HARVEST_RATE_PER_HOUR: z.coerce.number().int().min(0).default(10),
 
   /**
    * Interface + API language (docs/features/18). Also the fallback whenever a

@@ -283,6 +283,8 @@ export type I18nTranslations = {
         };
         "atlas": string;
         "atlasDesc": string;
+        "harvester": string;
+        "harvesterDesc": string;
         "charting": {
             "disabled": string;
             "unchanged": string;
@@ -424,6 +426,36 @@ export type I18nTranslations = {
             "heading": string;
             "digest": string;
             "more": string;
+        };
+        "harvest": {
+            "forbidden": string;
+            "off": string;
+            "unsupported": string;
+            "notInThread": string;
+            "reading": string;
+            "empty": string;
+            "rateLimited": string;
+            "unreadable": string;
+            "failed": string;
+            "nothing": string;
+            "proposed": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "duplicates": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "truncated": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
         };
     };
     "connector": {

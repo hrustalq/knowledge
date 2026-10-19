@@ -1121,6 +1121,8 @@ export type AiUsageOperation =
   | 'contradiction'
   /** Summarising one community of pages for global questions (#81). */
   | 'community'
+  /** Reading a chat thread a person asked to harvest into captures (#82). */
+  | 'harvest'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
@@ -1281,6 +1283,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'arbiter',
   /** Groups pages into communities and summarises each, for global questions (#81). */
   'atlas',
+  /** Proposes captures from a chat thread a person asked to harvest (#82). */
+  'harvester',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 

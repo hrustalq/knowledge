@@ -4,7 +4,15 @@
 import { computed, ref, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { BookmarkPlus, GitPullRequestArrow, HeartPulse, House, Library, Settings, Sparkles,
+import {
+  BookmarkPlus,
+  GitPullRequestArrow,
+  HeartPulse,
+  House,
+  Library,
+  Scale,
+  Settings,
+  Sparkles,
   Workflow,
 } from 'lucide-vue-next'
 import type { ScopeCreated } from '@/lib/scopes'
@@ -49,6 +57,8 @@ const links = computed<NavLink[]>(() => [
   // What agents proposed from their sessions (issue #73): page captures are
   // decided on merge requests, but terms and stranded captures only here.
   { to: '/captures', label: t('nav.captures'), icon: BookmarkPlus },
+  // Contradictions the arbiter found between pages (#81).
+  { to: '/conflicts', label: t('nav.conflicts'), icon: Scale },
   { to: '/assistant', label: t('nav.assistant'), icon: Sparkles },
   // Projects, users, access and activity live under the settings shell.
   { to: '/settings', label: t('nav.settings'), icon: Settings },

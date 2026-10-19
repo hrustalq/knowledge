@@ -162,7 +162,8 @@
     "newApiSpec": "API spec",
     "apiReference": "API reference",
     "security": "Security",
-    "releases": "Releases"
+    "releases": "Releases",
+    "conflicts": "Contradictions"
   },
   "role": {
     "guest": "Guest",
@@ -2727,7 +2728,8 @@
     "glossary": "Glossary",
     "site": "Site",
     "usedBy": "Used by",
-    "quality": "Quality"
+    "quality": "Quality",
+    "conflicts": "Contradictions"
   },
   "knowledgeIssue": {
     "report": "Report a problem",
@@ -5792,5 +5794,39 @@
     "deleteConfirm": "Delete",
     "deleted": "Release {name} deleted",
     "namePlaceholder": "v2.3"
+  },
+  "conflicts": {
+    "title": "Contradictions",
+    "subtitle": "Passages in two pages that say different things about the same thing. Found by the arbiter; decided by people.",
+    "thisPage": "This page",
+    "says": "says",
+    "found": "Found {when}",
+    "confidence": "{value}% sure",
+    "openMergeRequest": "Fix proposed",
+    "propose": "Propose fix",
+    "proposing": "Proposing…",
+    "resolve": "Resolve",
+    "dismiss": "Not a contradiction",
+    "recentlyClosed": "Recently closed ({n})",
+    "allInWorkspace": "All contradictions in the workspace",
+    "status": {
+      "open": "Open",
+      "resolved": "Resolved",
+      "dismissed": "Dismissed",
+      "superseded": "Superseded"
+    },
+    "toast": {
+      "resolved": "Marked resolved",
+      "dismissed": "Dismissed — it stays dismissed if found again",
+      "proposed": "Fix proposed on “{title}”"
+    },
+    "empty": {
+      "open": "No open contradictions",
+      "resolved": "Nothing resolved yet",
+      "dismissed": "Nothing dismissed",
+      "superseded": "Nothing superseded",
+      "hint": "The arbiter agent compares passages across pages and lists the ones that disagree here. Run it, schedule it, or trigger it on every indexed page in",
+      "hintLink": "Settings → AI → Agents"
+    }
   }
 }

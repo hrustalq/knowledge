@@ -45,6 +45,7 @@ const STATIC: Record<string, string> = {
   '/workflows': 'nav.workflows',
   '/knowledge-health': 'nav.knowledgeHealth',
   '/captures': 'nav.captures',
+  '/conflicts': 'nav.conflicts',
   '/assistant': 'nav.assistant',
   '/notifications': 'nav.notifications',
 }

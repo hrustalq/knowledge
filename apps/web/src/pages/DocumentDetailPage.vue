@@ -39,6 +39,7 @@ import {
   Info,
   Network,
   Pencil,
+  Scale,
   Share2,
   Workflow as WorkflowIcon,
   ListTree,
@@ -53,6 +54,7 @@ import type {
   DocumentDetailResponse,
   ListActivityResponse,
   ListKnowledgeIssuesResponse,
+  ListConflictsResponse,
   DocumentQualityResponse,
   ListDocumentRelationsResponse,
   ListDocumentThreadsResponse,
@@ -96,6 +98,7 @@ import GraphLightbox from '@/components/graph/GraphLightbox.vue'
 import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
 import WorkflowRail from '@/components/workflows/WorkflowRail.vue'
 import ConnectorRail from '@/components/connectors/ConnectorRail.vue'
+import ConflictsRail from '@/components/knowledge/ConflictsRail.vue'
 import KnowledgeIssuesRail from '@/components/knowledge/KnowledgeIssuesRail.vue'
 import QualityRail from '@/components/quality/QualityRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
@@ -132,6 +135,8 @@ const RAIL_WIDGETS = [
   { id: 'issues', label: t('rail.issues'), icon: Flag, expandable: false },
   // The auditor's newest score (#74): only once the page has one.
   { id: 'quality', label: t('rail.quality'), icon: Gauge, expandable: false },
+  // Passages another page contradicts (#81): only while one is open.
+  { id: 'conflicts', label: t('rail.conflicts'), icon: Scale, expandable: false },
   { id: 'graph', label: t('rail.graph'), icon: Share2, expandable: true },
   // Where the code a component page declares is used (#236): only on a page
   // that declares one.
@@ -175,6 +180,7 @@ const visibleWidgets = computed(() =>
       (w.id !== 'frontmatter' || !!content.value?.frontmatter) &&
       (w.id !== 'used-by' || !!declaration.value) &&
       (w.id !== 'quality' || !!quality.value?.score) &&
+      (w.id !== 'conflicts' || openConflicts.value > 0) &&
       (w.id !== 'operations' || isSpec.value),
   ),
 )
@@ -473,6 +479,14 @@ const activityPreview = useQuery(
 const connectorsPreview = useQuery(
   computed(() => apiQueryOptions('/v1/documents/{id}/connectors', { path: { id: documentId.value } })),
 )
+// #81: the rail row's count, and the same cache entry ConflictsRail reads.
+const conflictsPreview = useQuery(
+  computed(() => apiQueryOptions('/v1/conflicts', { query: { workspaceId: getWorkspaceId(), documentId: documentId.value } })),
+)
+const openConflicts = computed(
+  () => ((conflictsPreview.data.value as ListConflictsResponse | undefined)?.conflicts ?? []).filter((c) => c.status === 'open').length,
+)
+
 const issuesPreview = useQuery(
   computed(() =>
     apiQueryOptions('/v1/knowledge-issues', {
@@ -542,6 +556,7 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
           ? `${mrs.length} closed`
           : 'none'
       : null,
+    conflicts: openConflicts.value ? String(openConflicts.value) : null,
     quality: quality.value?.score
       ? quality.value.stale
         ? t('quality.rail.previewStale', { n: quality.value.score.overall })
@@ -831,6 +846,9 @@ watch(
 
           <template #widget-revisions><RevisionsView :document-id="documentId" /></template>
           <template #widget-merge-requests><MergeRequestList :document-id="documentId" /></template>
+          <template #widget-conflicts>
+            <ConflictsRail :document-id="documentId" />
+          </template>
           <template #widget-issues>
             <KnowledgeIssuesRail
               :document-id="documentId"

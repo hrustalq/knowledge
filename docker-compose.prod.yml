@@ -109,7 +109,9 @@ services:
     restart: "no"
 
   arcadedb:
-    image: arcadedata/arcadedb:latest
+    # Pinned by tag and digest: the chunk vector index needs 26.10.2's
+    # filtered vector.neighbors. Full reasoning in docker-compose.yml (#304).
+    image: arcadedata/arcadedb:26.10.2@sha256:7a498ebbbb9a5f02f7d43487c13b6632f83eb7fff345968baf220ac9266fd791
     restart: unless-stopped
     environment:
       # Heap is capped on purpose: the Colima VM (10 GB) also builds images.

@@ -458,7 +458,7 @@ in the pull request that introduces them — see
   the Vite dev proxy both do. A deployment that points `VITE_API_URL` at a
   different origin will see every attachment and avatar fail with 401, because
   the browser does not send the `kn_token` cookie there. (#102)
-- Migration `20261119100000_connector_change_cursor` adds the nullable
+- Migration `20261122100000_connector_change_cursor` adds the nullable
   `connectors.change_cursor` and `connector_runs.change_cursor` (the Google
   Drive change feed's bookmark). It is additive and survives a code rollback.
   The Drive connector needs outbound HTTPS to `oauth2.googleapis.com`,

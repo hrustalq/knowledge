@@ -1,4 +1,4 @@
-# 59 — Chat harvest: a Telegram or Time thread, proposed as reviewed captures
+# 59 — Chat harvest: a Telegram, Time or Mattermost thread, proposed as reviewed captures
 
 Issue [#82](https://github.com/hrustalq/knowledge/issues/82), shipped as five
 PRs (#344–#347 and the one carrying this document). Before it, the only way
@@ -18,14 +18,14 @@ like any other capture. Chat itself is never indexed and never searchable.
 - **Ask for a harvest**, as a linked person with the `editor` role in the
   bound workspace:
 
-  | trigger | Time | Telegram |
+  | trigger | Time, Mattermost | Telegram |
   | --- | --- | --- |
   | a command | `capture` (or `remember`, `запомни`) inside a thread, mentioning the bot in a channel | `/capture` as a reply to the first message of the thread |
   | a private chat | — | forward the bot the messages, then `/capture` |
   | a reaction | 📌 on any message of a thread | ✍ on a kept message, where the bot is a group admin |
 
 - **What it reads:**
-  - **Time:** the whole thread, fetched by root. A command reads up to the
+  - **Time, Mattermost:** the whole thread, fetched by root. A command reads up to the
     command; a reaction reads all of it.
   - **Telegram group:** the replied-to message, then what the group (or
     forum topic) said from there up to the command, from the listening
@@ -83,7 +83,8 @@ own capture rate limits still apply per proposal.
 
 The adapter seam (`chat-adapter.types.ts`) has two optional members:
 
-- `fetchThread(ctx, chatId, messageId, beforeMessageId, max)`: Time only.
+- `fetchThread(ctx, chatId, messageId, beforeMessageId, max)`: Time and
+  Mattermost (one adapter, #343).
   `GET /posts/:id/thread` returns the whole thread from any post in it.
   Bots', system and empty posts are left out. `beforeMessageId` is the command;
   a reaction passes null. The thread link is the root's permalink, which needs
@@ -103,7 +104,7 @@ Telegram has no thread to fetch, so `ChatBufferService` reads one instead:
   them, so the next `/capture` starts from nothing. The first forward of a
   batch gets one reply saying how to finish; the rest are kept quietly.
 
-A Time command said at the top of a channel is its own thread, and the bot
+A Time or Mattermost command said at the top of a channel is its own thread, and the bot
 says there is nothing above it to read.
 
 ### Reactions
@@ -111,7 +112,7 @@ says there is nothing above it to read.
 Both adapters set `ChatInbound.harvestReaction` and leave `text` empty, because
 neither platform says what the message was.
 
-- **Time** watches `reaction_added` for `pushpin` on the websocket.
+- **Time and Mattermost** watch `reaction_added` for `pushpin` on the websocket.
   `data.reaction` is a JSON string, as in Mattermost's `sendReactionEvent`. The
   supervisor claims `<bot>:<post>:pin:<user>`, apart from the post itself: the
   same person pinning again within the claim's hour is the same request.
@@ -363,7 +364,7 @@ one save path, one dedupe and one inbox.
 
 ### Chat
 
-| | Time | Telegram |
+| | Time, Mattermost | Telegram |
 | --- | --- | --- |
 | harvest | `capture` / `remember` / `запомни` in a thread; 📌 | `/capture` as a reply, or after forwards in a DM; ✍ |
 | forget | — | `/forget` |
@@ -427,12 +428,13 @@ Captures are read and decided through the existing `/v1/captures` routes;
 - **Telegram bots need their webhook registered again** to receive ✍: press
   **Test** on each bot in Settings → Chat bots after deploying.
 - Production cannot reach `api.telegram.org` until `TELEGRAM_API_BASE_URL`
-  points at a proxy, so Time is the first platform that can be checked there.
+  points at a proxy, so Time or Mattermost is the first platform that can be
+  checked there.
 
 ## Deliberate deferrals
 
 - No chat search (#339), no new sources (Slack,
-  Teams and the rest #341, Mattermost #343, Google Drive #338).
+  Teams and the rest #341, Google Drive #338).
 - No named-entity detection, no reversible masking. A passport mentioned with
   its context word more than 20 characters (or a digit) away from the number
   is not masked.
@@ -468,8 +470,9 @@ Captures are read and decided through the existing `/v1/captures` routes;
     `ChatAnswersService`: linked editor, unlinked, viewer, top of a channel,
     group and DM `/capture`, forwards, `/forget`, 📌 and ✍, and silence for
     anyone else's reaction.
-  - `chat-time.spec.ts`, `chat-telegram.spec.ts`: parsing the commands, a
-    reaction and the thread fetch against fixture shapes.
+  - `chat-mattermost.spec.ts` (run for `time` and `mattermost`),
+    `chat-telegram.spec.ts`: parsing the commands, a reaction and the thread
+    fetch against fixture shapes.
   - `chat-capture.spec.ts`, `capture-templates.spec.ts`: Save as a capture,
     and the origin in the description and in `sources:`.
   - `chat-auto-harvest.spec.ts` (#340): the due predicate, the per-binding
@@ -483,6 +486,11 @@ Captures are read and decided through the existing `/v1/captures` routes;
   database with every migration applied: messages before the switch and a
   binding not opted in are left out, and a mark at the rounded-up newest
   `created_at` leaves nothing of that thread.
-- **Not verified against a live server.** Telegram parsing is pinned to the
-  Bot API documentation, and Time's to Mattermost's `/api/v4` and websocket
-  events. #343 adds a docker Mattermost for a live check.
+- **Live Mattermost, once (#343).** Against a `mattermost/mattermost-preview`
+  container: the bot's token identified, its websocket greeted, a channel
+  mention, `help`, a DM `new`, the reply in the question's thread, a signed
+  button press answered with `ephemeral_text`, an edit clearing the buttons,
+  📌 handed on and ✅ ignored, `@knowledge capture` in the thread, and
+  `fetchThread` reading people's posts with the team permalink, from the root
+  and from a reply. Telegram parsing is still pinned only to the Bot API
+  documentation, and **no live Time server has been tried**.

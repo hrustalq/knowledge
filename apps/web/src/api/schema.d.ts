@@ -8435,13 +8435,13 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            kind: "telegram" | "time";
+            kind: "telegram" | "time" | "mattermost";
             /** @example Team bot */
             name: string;
-            /** @description The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts). Write-only — never returned. */
+            /** @description The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token). Write-only — never returned. */
             token: string;
             /**
-             * @description The messenger server, for a self-hosted platform (Time) — required there, refused for Telegram
+             * @description The messenger server, for a self-hosted platform (Time, Mattermost) — required there, refused for Telegram
              * @example https://time.example.com
              */
             serverUrl?: string;

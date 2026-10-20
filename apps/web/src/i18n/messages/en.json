@@ -4790,7 +4790,7 @@
     "ceilingOff": "Chat bots are switched off on this server (CHAT_ENABLED=false). You can prepare a bot here, but nothing will be answered until an operator turns them on.",
     "empty": {
       "title": "No bots yet",
-      "body": "Connect a Telegram or Time bot, then message it privately to link your account. To let it answer in a group or channel, add it there and send /bind (in Time: mention it with the word bind)."
+      "body": "Connect a Telegram, Time or Mattermost bot, then message it privately to link your account. To let it answer in a group or channel, add it there and send /bind (in Time and Mattermost: mention it with the word bind)."
     },
     "connect": {
       "open": "Connect a bot",
@@ -4808,6 +4808,13 @@
         "step2": "Copy the token it shows once, and paste it below with your Time server address.",
         "step3": "Add the bot to a channel and mention it, or message it privately: it replies with a link that connects your account.",
         "checking": "Checking with Time…"
+      },
+      "mattermost": {
+        "description": "The token is checked with your Mattermost server and stored encrypted. It is never shown again.",
+        "step1": "In Mattermost, open Integrations → Bot Accounts and add a bot (a system admin may first need to enable bot account creation in the System Console).",
+        "step2": "Copy the access token it shows once, and paste it below with your Mattermost server address.",
+        "step3": "Add the bot to a team and a channel and mention it, or message it privately: it replies with a link that connects your account.",
+        "checking": "Checking with Mattermost…"
       }
     },
     "fields": {
@@ -4824,9 +4831,10 @@
       "chatTitle": "Chat name",
       "agentShort": "Agent",
       "platform": "Messenger",
-      "serverUrl": "Time server",
-      "serverUrlHint": "The address you open Time at. This server must be able to reach it, and it must reach API_PUBLIC_URL for buttons to work.",
-      "tokenHintTime": "From Integrations → Bot accounts. Write-only: the page only ever shows its last four characters."
+      "serverUrl": "{platform} server",
+      "serverUrlHint": "The address you open {platform} at. This server must be able to reach it, and it must reach API_PUBLIC_URL for buttons to work.",
+      "tokenHintTime": "From Integrations → Bot accounts. Write-only: the page only ever shows its last four characters.",
+      "tokenHintMattermost": "The bot account's access token, from Integrations → Bot Accounts. Write-only: the page only ever shows its last four characters."
     },
     "locale": {
       "en": "English",
@@ -4834,7 +4842,8 @@
     },
     "kind": {
       "telegram": "Telegram",
-      "time": "Time"
+      "time": "Time",
+      "mattermost": "Mattermost"
     },
     "answerMode": {
       "mention": "When mentioned",
@@ -4842,7 +4851,7 @@
       "off": "Never"
     },
     "bindings": {
-      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
+      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time and Mattermost: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
       "untitled": "Untitled chat",
       "wholeWorkspace": "Whole workspace",
       "botDefault": "Bot default",
@@ -4878,10 +4887,10 @@
       "deleteTitle": "Disconnect {name}?",
       "deleteBody": "Its groups and linked accounts are removed, and it stops answering. The conversations stay in each person's assistant history.",
       "webhookFix": "Telegram only delivers to a public HTTPS address. Point API_PUBLIC_URL at one, then press Test.",
-      "socketDown": "This server is not connected to Time, so the bot hears nothing.",
-      "socketFix": "Check that the Time server is reachable from here and that the bot token is still valid; the connection retries on its own.",
+      "socketDown": "This server is not connected to {platform}, so the bot hears nothing.",
+      "socketFix": "Check that the {platform} server is reachable from here and that the bot token is still valid; the connection retries on its own.",
       "socketOk": "Listening to {server}",
-      "testOkSocket": "{bot} is reachable. Messages arrive over the bot’s connection to Time."
+      "testOkSocket": "{bot} is reachable. Messages arrive over the bot’s connection to {platform}."
     },
     "people": {
       "hint": "Every answer runs as the linked person, with exactly their access. Unlinking stops the bot answering that account.",

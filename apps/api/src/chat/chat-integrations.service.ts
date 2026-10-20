@@ -10,6 +10,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type ChatChannelBinding, type ChatIntegration } from '@prisma/client';
 import {
+  CHAT_PLATFORM_NAMES,
   chatPlatformNeedsServer,
   type ChatAutoHarvestLimits,
   type ChatBindingEntry,
@@ -36,8 +37,6 @@ import type {
   UpdateChatBindingDto,
   UpdateChatIntegrationDto,
 } from './chat.dto.js';
-
-const PLATFORM_LABEL: Record<ChatPlatformKind, string> = { telegram: 'Telegram', time: 'Time' };
 
 /**
  * Bots and the channels they answer in (issue #71) — the admin half.
@@ -249,7 +248,7 @@ export class ChatIntegrationsService {
    */
   private async serverUrlFor(kind: ChatPlatformKind, raw: string | undefined): Promise<string> {
     const value = raw?.trim() ?? '';
-    const platform = PLATFORM_LABEL[kind];
+    const platform = CHAT_PLATFORM_NAMES[kind];
     if (!chatPlatformNeedsServer(kind)) {
       if (value) throw new BadRequestException(t('error.chat.serverUrlUnexpected', { platform }));
       return '';
@@ -273,7 +272,7 @@ export class ChatIntegrationsService {
       return username;
     } catch (err) {
       const reason = err instanceof ChatPlatformError ? err.message : String(err);
-      throw new BadRequestException(t('error.chat.tokenRejected', { platform: PLATFORM_LABEL[kind], reason }));
+      throw new BadRequestException(t('error.chat.tokenRejected', { platform: CHAT_PLATFORM_NAMES[kind], reason }));
     }
   }
 
@@ -402,7 +401,7 @@ export class ChatIntegrationsService {
   }
 
   /**
-   * Listening (#82): Telegram only, since Time's threads are fetched whole.
+   * Listening (#82): Telegram only, since Time's and Mattermost's threads are fetched whole.
    * On, the group is told first — if the bot cannot say so, nothing is kept,
    * because a group that was never told is a group being recorded. Off, what
    * was kept goes at once, not at the TTL.

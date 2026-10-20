@@ -31,6 +31,11 @@ in the pull request that introduces them — see
   `Cross-Origin-Opener-Policy: same-origin` (#277). Share links and published
   sites keep the headers their renders set, so a site's Ask widget stays
   embeddable where its `frame-ancestors` allows.
+- Access logs and every log line written while a request is handled now show
+  `?code=` and `?state=` as `[REDACTED]`, as they already did `?token=`. The
+  SSO and GitHub App callbacks no longer put the identity provider's
+  authorization code and state in a log, and neither do share-site and chat
+  link codes. (#297)
 - Attachment, import-image and avatar URLs in the web app no longer carry your
   session token. Those `<img>` and `<object>` requests now authenticate with the
   app's own session cookie, so the token can no longer end up in a proxy log,
@@ -38,22 +43,21 @@ in the pull request that introduces them — see
 
 ### Added
 
-- A share link can let its readers download what it shows (#161). Tick
-  **Let readers download it** when creating the link, or flip **Downloads**
-  on an existing one in the page's Share menu; it is off by default and on no
-  existing link. The reader then gets a **Download** button that exports the
-  link's page, or the page and its subpages when the link includes them, as
-  ZIP, HTML or PDF (PDF only where Gotenberg is set up), without signing in.
-  The file contains exactly the pages the reader can open through the link,
-  never a restricted page and never more than the link's scope. A
-  password-protected link asks for its password first. Revoking the link or
-  switching downloads off stops even a finished file from downloading at
-  once. The job belongs to the link, not to a person: nobody gets an
-  inbox notification for it, and it is not in its creator's export history
-  (an admin's list on Exports still shows it). The new public routes are
-  `POST /v1/public/shares/:token/exports`, `GET …/exports/:id` and
-  `GET …/exports/:id/download`. `knowledge_share_page` takes
-  `allowDownload`.
+- Chat harvests now mask Russian identity numbers before any model reads a
+  thread, as they already masked emails, phones and cards. An INN (10 or 12
+  digits) and a SNILS (`112-233-445 95` or eleven digits) are masked as
+  `[INN_n]` and `[SNILS_n]` only when their check digits pass, so an order
+  id or a date is left alone. A passport, which has no checksum, is masked as
+  `[PASSPORT_n]` after `паспорт`, `серия` or `passport` in any common
+  spacing, or with no such word only in its printed `45 09 123456` form.
+  Buffered Telegram messages are masked the same way on write. (#342)
+- A platform admin can see and sign out anyone's sessions from **Access →
+  Accounts → Sessions**: each live sign-in with its method and identity
+  provider, IP, browser and last use, one at a time or all at once. API keys
+  are untouched. The new `DELETE /v1/users/:id/sessions/:sessionId` revokes
+  one session (404 for a session id that is not that person's) and is audited
+  as `auth.session_revoked` by `admin`; session lists now carry
+  `providerName`. (#292)
 - MCP agents can work in a page's shared draft (#316). Over the HTTP MCP
   server (`/v1/mcp`), with co-editing on, `knowledge_get_draft` reads the
   draft people are writing in the editor: the body as publishing it would
@@ -76,6 +80,22 @@ in the pull request that introduces them — see
   to it yet; that is phase 3. The editor's node specs now live in the new
   buildless package `@knowledge/editor-schema`, so the API builds the same
   schema the editor does.
+- A share link can let its readers download what it shows (#161). Tick
+  **Let readers download it** when creating the link, or flip **Downloads**
+  on an existing one in the page's Share menu; it is off by default and on no
+  existing link. The reader then gets a **Download** button that exports the
+  link's page, or the page and its subpages when the link includes them, as
+  ZIP, HTML or PDF (PDF only where Gotenberg is set up), without signing in.
+  The file contains exactly the pages the reader can open through the link,
+  never a restricted page and never more than the link's scope. A
+  password-protected link asks for its password first. Revoking the link or
+  switching downloads off stops even a finished file from downloading at
+  once. The job belongs to the link, not to a person: nobody gets an
+  inbox notification for it, and it is not in its creator's export history
+  (an admin's list on Exports still shows it). The new public routes are
+  `POST /v1/public/shares/:token/exports`, `GET …/exports/:id` and
+  `GET …/exports/:id/download`. `knowledge_share_page` takes
+  `allowDownload`.
 - Who may co-edit a draft, checked for as long as they stay (#80, phase 2).
   Joining `/v1/collab` now takes a single-use `kt_` ticket from
   `POST /v1/auth/url-ticket`; a session token or API key is refused there. An
@@ -373,6 +393,15 @@ in the pull request that introduces them — see
   capture came from: the platform, the chat and the time span. A new page's
   frontmatter records it under `sources:`. Captures written over MCP or REST
   may now report `session.client: 'chat'`.
+- The pages landing loads faster on a cold visit. The server now renders
+  the rail's project roster, the active project's name and the first level of
+  the page tree, so they no longer wait for the app's JavaScript.
+  `/v1/projects`, `/v1/workspaces` and `/v1/documents/tree` are requested once
+  per page load instead of once per component that wanted them. The shell
+  preloads 50 scripts instead of 103: the search sheet, the create dialog and
+  the page row's Move, Export and Access dialogs load when first opened. The
+  heading fonts no longer block the first paint, and the graph spreads its
+  opening layout over frames instead of one long task. (#279)
 - Deleting a relation, re-posting an explicit one or curating over an inferred
   one no longer erases the old edge (#81). It is retracted: gone from every
   current view as before, but listed in `GET /v1/documents/:id/facts/timeline`
@@ -383,6 +412,16 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- An SSO sign-in link that is reused, expired or unknown now shows up in
+  Settings → Security → Audit as a failed sign-in, like every other refused
+  SSO attempt, and the browser lands on the sign-in page with the localized
+  reason instead of a bare "back to login" card. (#291)
+- Initials on generated avatars and on project and workspace monograms are
+  readable on every colour (#355). Yellow, green and cyan tiles put white
+  letters at as little as 2.3:1 contrast, below the 4.5:1 WCAG asks for. Those
+  tiles are now a deeper shade of the same hue, so a person, project or
+  workspace keeps its colour; tiles that were already dark enough, such as blues
+  and purples, are unchanged.
 - BM25 search and indexing recover by themselves once OpenSearch is reachable
   again (#330). A worker or API that first reached OpenSearch while it was
   down or still starting (connection refused, DNS, a dropped connection) kept
@@ -391,6 +430,14 @@ in the pull request that introduces them — see
   grew, and search stayed `degraded: ['fulltext']`. The next call now retries
   the setup, so after an OpenSearch restart the sweep re-mirrors the stale
   revisions and search logs its recovery.
+- On a phone, screen readers now name the buttons that show only an icon
+  (#354). Below the `sm` width, the Graph / Tree / List tabs, Upload, New page,
+  Show archived and Filters on `/documents` hid their label from assistive
+  technology along with the screen, so they were announced as "tab, selected"
+  or "link". The same applied to New chat in the assistant, the editor's AI
+  button, Ask on a published site, the filter rail toggle on merge requests,
+  and Ask the architect and Configure in the workflow builder. The label is
+  still hidden on screen but is now read aloud. Nothing looks different.
 - The editor no longer opens a page it failed to load (#314). If any request
   for an existing page failed (the connection dropped mid-load, a 5xx, a
   timeout), the editor used to open with an empty title and body and Publish
@@ -399,11 +446,25 @@ in the pull request that introduces them — see
   Retry button and a link to the page, Publish stays unavailable and nothing
   is stored on the device until the page loads. Retry joins the shared draft
   when co-editing is on.
+- Changing the role of a member whose membership source is missing or not one
+  of `manual`, `jit`, `group`, `scim` no longer fails with 409 "managed by
+  single sign-on (manual)" (#295). The members list already shows such a row
+  as manual, and editing it now treats it as manual too. Every row the
+  current release writes has a known source, so this only affects data
+  written some other way.
 - Returning to the app no longer re-downloads its scripts and styles (#277).
   The content-hashed files under `/assets/` were sent with no `Cache-Control`,
   so the edge's 4-hour default applied; they are now cached for a year as
   `immutable`. The HTML shells and the favicon are revalidated on every use,
   and a member's rendered page is `private, no-cache`.
+- An MCP tool call refused with structured reasons now carries them (#300).
+  Under enforced SSO, an agent's tool error said only "requires single
+  sign-on": it never got `reason: 'ssoRequired'` or the providers to sign in
+  through, which REST puts in `details`. A refused tool call now returns the
+  message as before, followed by a second text block
+  `{ statusCode, message, details }` with the same `details` REST sends. This
+  applies to every refusal that carries extras, such as a page permission's
+  `canRequestAccess`; errors without extras are unchanged.
 - `/robots.txt` on the app's own host returned the app's HTML page (#277). It
   is now plain text that keeps crawlers out of the member app and lets them
   into path-mode published sites under `/pub/`. A site's own `robots.txt` is
@@ -425,9 +486,27 @@ in the pull request that introduces them — see
   hear the visible text first, then what the control is for. The "more ways to
   start a page" chevron next to `+` in the sidebar is now 24 px wide instead of
   14 px, so it is easier to hit.
+- Asking AI to clean up or merge a staged connector page while the `drafter`
+  agent is turned off now says so, in English or Russian (#294). The refusal
+  used to show the raw key `error.ai.disabled`. CI now fails when an API
+  message exists in only one language, when its `{placeholders}` differ
+  between them, or when the code names a message key neither one has.
+- A page's Insights widget now counts the visit you are making (#336). It was
+  read before the page recorded your view and never read again, so it showed
+  one view fewer than the API held, and the same was true of unique readers
+  and the last time a person opened the page. The widget is now read again
+  once your view is recorded. Read time still catches up on the next load.
 
 ### Operations
 
+- After deploying #277, purge the Cloudflare cache once: asset URLs already
+  cached at the edge keep the 4-hour lifetime they were stored with until then.
+
+- The web app's images and file previews now depend on the browser calling the
+  API on the web's own origin under `/api`, which the bundled Caddy config and
+  the Vite dev proxy both do. A deployment that points `VITE_API_URL` at a
+  different origin will see every attachment and avatar fail with 401, because
+  the browser does not send the `kn_token` cookie there. (#102)
 - Migration `20261119100000_share_link_download` adds
   `share_links.allow_download` (default `false`) and a nullable
   `export_jobs.share_link_id` with an index. It is additive and reversible
@@ -437,14 +516,6 @@ in the pull request that introduces them — see
   `PUBLIC_EXPORTS_PER_HOUR_PER_IP` (`5` per address and link) and
   `PUBLIC_EXPORTS_PER_HOUR_PER_LINK` (`30` per link). Both limits fail
   closed: with Redis down, no reader can start an export. (#161)
-- After deploying #277, purge the Cloudflare cache once: asset URLs already
-  cached at the edge keep the 4-hour lifetime they were stored with until then.
-
-- The web app's images and file previews now depend on the browser calling the
-  API on the web's own origin under `/api`, which the bundled Caddy config and
-  the Vite dev proxy both do. A deployment that points `VITE_API_URL` at a
-  different origin will see every attachment and avatar fail with 401, because
-  the browser does not send the `kn_token` cookie there. (#102)
 - Migration `20261118100000_chat_listening_buffer` adds
   `chat_channel_bindings.listening` (default `false`) and the
   `chat_buffered_messages` table. It is additive and survives a code

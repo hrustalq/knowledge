@@ -49,12 +49,13 @@ const branch = ref('')
 const submitting = ref(false)
 
 // Reset per opening, like MoveToDialog: last time's choice is not this one's.
+// Immediate: a caller may mount this already open (TreeRowMenu, #279).
 watch(open, (isOpen) => {
   if (!isOpen) return
   format.value = 'zip'
   includeSubtree.value = !!props.subtree
   branch.value = ''
-})
+}, { immediate: true })
 
 const capsQuery = useQuery(
   computed(() => ({

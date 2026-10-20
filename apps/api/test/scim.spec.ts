@@ -12,6 +12,7 @@ import { SCIM_CONTENT_TYPE } from '../src/common/scim-error-body.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { AuditService } from '../src/auth/audit.service.js';
 import { SessionsService } from '../src/auth/sessions.service.js';
+import { GroupMappingsService } from '../src/auth/sso/group-mappings.service.js';
 import { RoleSyncService } from '../src/auth/sso/role-sync.service.js';
 import { ScimController } from '../src/scim/scim.controller.js';
 import { ScimService } from '../src/scim/scim.service.js';
@@ -232,7 +233,7 @@ function fakeDb() {
 
 const config = {
   get: (k: string) =>
-    ({ AUTH_SCIM_ENABLED: true, AUTH_MODE: 'api-key', AUTH_SCIM_MAX_PAGE: 2, API_PUBLIC_URL: 'https://kb.example' })[k],
+    ({ AUTH_SCIM_ENABLED: true, AUTH_SSO_ENABLED: false, AUTH_MODE: 'api-key', AUTH_SCIM_MAX_PAGE: 2, API_PUBLIC_URL: 'https://kb.example' })[k],
 };
 
 let app: INestApplication;
@@ -240,6 +241,7 @@ let db: ReturnType<typeof fakeDb>;
 let audit: { record: ReturnType<typeof vi.fn> };
 let sessions: { revokeAllForUser: ReturnType<typeof vi.fn> };
 let tokens: ScimTokensService;
+let mappings: GroupMappingsService;
 
 beforeEach(async () => {
   await app?.close();
@@ -258,6 +260,7 @@ beforeEach(async () => {
       ScimTokenGuard,
       RoleSyncService,
       ScimTokensService,
+      GroupMappingsService,
       { provide: PrismaService, useValue: db.prisma },
       { provide: AuditService, useValue: audit },
       { provide: SessionsService, useValue: sessions },
@@ -270,6 +273,7 @@ beforeEach(async () => {
   await nest.init();
   app = nest;
   tokens = moduleRef.get(ScimTokensService);
+  mappings = moduleRef.get(GroupMappingsService);
 });
 
 afterAll(async () => {
@@ -292,6 +296,13 @@ const okta = as(TOKEN_B);
 const actions = () => (audit.record.mock.calls as unknown as Row[][]).map((c) => c[0].action);
 const member = (ws: string, userId: string) => db.tables.workspaceMember.find((m) => m.workspaceId === ws && m.userId === userId);
 
+/** RFC 7644 §3.12 on the wire: SCIM content type and the Error schema, whatever the status. */
+function expectScimError(res: request.Response, status: number, scimType?: string): void {
+  expect(res.status).toBe(status);
+  expect(res.headers['content-type']).toContain(SCIM_CONTENT_TYPE);
+  expect(res.body).toMatchObject({ schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'], status: String(status), ...(scimType ? { scimType } : {}) });
+}
+
 // ------------------------------------------------------------- fixtures
 
 /** Entra ID's create, per its SCIM provisioning reference: UPN as userName, the mail as a work email. */
@@ -308,6 +319,11 @@ const ENTRA_CREATE = {
 const ENTRA_DISABLE = {
   schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
   Operations: [{ op: 'Replace', path: 'active', value: 'False' }],
+};
+/** The form #75 criterion 9 names verbatim: path-less, the boolean as a string. */
+const PATHLESS_FALSE = {
+  schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+  Operations: [{ op: 'replace', value: { active: 'False' } }],
 };
 /** Okta's create: login as userName, password omitted by the app's settings. */
 const OKTA_CREATE = (login: string) => ({
@@ -391,15 +407,15 @@ describe('SCIM Users', () => {
 
   it('answers a duplicate userName with 409 uniqueness', async () => {
     await createAda();
-    const res = await entra.post('/Users', ENTRA_CREATE);
-    expect(res.status).toBe(409);
-    expect(res.headers['content-type']).toContain(SCIM_CONTENT_TYPE);
-    expect(res.body).toMatchObject({ schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'], status: '409', scimType: 'uniqueness' });
+    expectScimError(await entra.post('/Users', ENTRA_CREATE), 409, 'uniqueness');
   });
 
-  it('PATCH active "False" removes the membership and revokes sessions, without disabling an unverified domain', async () => {
+  it.each([
+    ['path active, "False"', ENTRA_DISABLE],
+    ['path-less {active: "False"}', PATHLESS_FALSE],
+  ])('PATCH %s removes the membership and revokes sessions, without disabling an unverified domain', async (_label, body) => {
     const id = await createAda();
-    const res = await entra.patch(`/Users/${id}`, ENTRA_DISABLE);
+    const res = await entra.patch(`/Users/${id}`, body);
     expect(res.status).toBe(200);
     expect(res.body.active).toBe(false);
     expect(member(WS_A, id)).toBeUndefined();
@@ -454,9 +470,8 @@ describe('SCIM Users', () => {
     expect(member(WS_A, id)).toBeUndefined();
     expect(sessions.revokeAllForUser).toHaveBeenCalledWith(id);
     expect(db.tables.user).toHaveLength(1);
-    const gone = await entra.get(`/Users/${id}`);
-    expect(gone.status).toBe(404);
-    expect(gone.body).toMatchObject({ status: '404', schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'] });
+    expectScimError(await entra.get(`/Users/${id}`), 404);
+    expectScimError(await entra.get('/Groups/not-a-uuid'), 404);
     expect(actions()).toContain('scim.user_deleted');
   });
 
@@ -479,9 +494,8 @@ describe('SCIM Users', () => {
   });
 
   it('refuses an unsupported filter with 400 invalidFilter', async () => {
-    const res = await entra.get('/Users').query({ filter: 'userName sw "ada"' });
-    expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ status: '400', scimType: 'invalidFilter' });
+    expectScimError(await entra.get('/Users').query({ filter: 'userName sw "ada"' }), 400, 'invalidFilter');
+    expectScimError(await entra.post('/Groups', { displayName: '' }), 400, 'invalidValue');
   });
 });
 
@@ -518,9 +532,38 @@ describe('SCIM Groups', () => {
 
   it('answers a duplicate displayName with 409', async () => {
     await entra.post('/Groups', { displayName: 'Readers' });
-    const res = await entra.post('/Groups', { displayName: 'Readers' });
-    expect(res.status).toBe(409);
-    expect(res.body.scimType).toBe('uniqueness');
+    expectScimError(await entra.post('/Groups', { displayName: 'Readers' }), 409, 'uniqueness');
+  });
+
+  it('creating a SCIM mapping re-syncs the group at once, and deleting it lets members fall back', async () => {
+    const ada = await createAda();
+    const bob = (await entra.post('/Users', { ...ENTRA_CREATE, externalId: 'bob', userName: 'bob@corp.onmicrosoft.com', emails: [{ primary: true, value: 'bob@corp.example' }] })).body.id as string;
+    const group = (await entra.post('/Groups', { displayName: 'Knowledge Editors', members: [{ value: ada }, { value: bob }] })).body.id as string;
+    expect(member(WS_A, ada)).toMatchObject({ role: 'viewer' });
+
+    const admin = { userId: 'admin' } as never;
+    const view = await mappings.upsert(WS_A, { externalGroup: group, role: 'editor', trustedOperator: true }, admin);
+    expect(view).toMatchObject({ providerId: null, externalGroup: group, scimGroupName: 'Knowledge Editors', role: 'editor' });
+    for (const id of [ada, bob]) expect(member(WS_A, id)).toMatchObject({ role: 'editor', trustedOperator: true, source: 'scim' });
+
+    // Posting the same group again replaces its role, and re-syncs again.
+    await mappings.upsert(WS_A, { externalGroup: group, role: 'admin' }, admin);
+    expect(db.tables.idpGroupMapping).toHaveLength(1);
+    expect(member(WS_A, ada)).toMatchObject({ role: 'admin', trustedOperator: false });
+
+    // A hand-made admin, so the fall-back below is never the last admin's demotion.
+    db.tables.workspaceMember.push({ workspaceId: WS_A, userId: randomUUID(), role: 'admin', trustedOperator: false, source: 'manual', createdAt: new Date() });
+    await mappings.remove(WS_A, view.id, admin);
+    for (const id of [ada, bob]) expect(member(WS_A, id)).toMatchObject({ role: 'viewer', trustedOperator: false, source: 'scim' });
+    expect(actions()).toEqual(expect.arrayContaining(['sso.group_mapping_created', 'sso.group_mapping_deleted']));
+  });
+
+  it('a SCIM mapping must name a group this workspace provisioned', async () => {
+    const other = (await okta.post('/Groups', { displayName: 'Elsewhere' })).body.id as string;
+    for (const externalGroup of ['Knowledge Editors', other, randomUUID()]) {
+      await expect(mappings.upsert(WS_A, { externalGroup, role: 'editor' }, { userId: 'admin' } as never)).rejects.toMatchObject({ status: 400 });
+    }
+    expect(db.tables.idpGroupMapping).toHaveLength(0);
   });
 
   it('the default role decides without a mapped group, and none grants nothing', async () => {
@@ -529,6 +572,67 @@ describe('SCIM Groups', () => {
     expect(member(WS_A, ada)).toBeUndefined();
     await tokens.putSettings(WS_A, 'editor', { userId: 'admin' } as never);
     expect(member(WS_A, ada)).toMatchObject({ role: 'editor', source: 'scim' });
+  });
+});
+
+describe('SCIM role sync safety (#75 criterion 8)', () => {
+  const blockedRows = () => (audit.record.mock.calls as unknown as Row[][]).map((c) => c[0]).filter((e) => e.action === 'role_sync.blocked_last_admin');
+
+  /** A SCIM group with a provider-less mapping to `role`, and Ada provisioned into it. */
+  async function mappedGroup(role: string): Promise<{ ada: string; group: string }> {
+    const ada = await createAda();
+    const res = await entra.post('/Groups', { displayName: `Knowledge ${role}s` });
+    const group = res.body.id as string;
+    db.tables.idpGroupMapping.push({ id: randomUUID(), workspaceId: WS_A, providerId: null, externalGroup: group, role, trustedOperator: false });
+    await entra.patch(`/Groups/${group}`, { Operations: [{ op: 'Add', path: 'members', value: [{ value: ada }] }] });
+    return { ada, group };
+  }
+
+  describe('the sole admin, provisioned through an admin mapping, is never demoted or removed', () => {
+    it.each([
+      ['removed from the group', (ada: string, group: string) => entra.patch(`/Groups/${group}`, { Operations: [{ op: 'remove', path: `members[value eq "${ada}"]` }] })],
+      ['the group deleted', (_ada: string, group: string) => entra.delete(`/Groups/${group}`)],
+      ['deactivated', (ada: string) => entra.patch(`/Users/${ada}`, ENTRA_DISABLE)],
+    ])('%s: the role stays and one blocked_last_admin row is written', async (_label, act) => {
+      const { ada, group } = await mappedGroup('admin');
+      expect(member(WS_A, ada)).toMatchObject({ role: 'admin', source: 'scim' });
+      expect(db.tables.workspaceMember.filter((m) => m.workspaceId === WS_A && m.role === 'admin')).toHaveLength(1);
+      expect(blockedRows()).toHaveLength(0);
+
+      expect((await act(ada, group)).status).toBeLessThan(300);
+      expect(member(WS_A, ada)).toMatchObject({ role: 'admin', source: 'scim' });
+      expect(blockedRows()).toEqual([
+        expect.objectContaining({ workspaceId: WS_A, target: ada, ok: false, error: 'last-admin', params: expect.objectContaining({ via: 'scim' }) }),
+      ]);
+    });
+  });
+
+  describe('a manual membership is immune to SCIM group changes', () => {
+    async function manualInMappedGroup() {
+      const { ada, group } = await mappedGroup('admin');
+      // A second admin, so nothing below is the last-admin rule at work.
+      db.tables.workspaceMember.push({ workspaceId: WS_A, userId: randomUUID(), role: 'admin', trustedOperator: false, source: 'manual', createdAt: new Date() });
+      await entra.patch(`/Groups/${group}`, { Operations: [{ op: 'remove', path: `members[value eq "${ada}"]` }] });
+      // An admin takes the row over by hand.
+      Object.assign(member(WS_A, ada)!, { role: 'editor', source: 'manual' });
+      return { ada, group };
+    }
+
+    it('group PATCH add and remove leave role and source unchanged', async () => {
+      const { ada, group } = await manualInMappedGroup();
+      await entra.patch(`/Groups/${group}`, { Operations: [{ op: 'Add', path: 'members', value: [{ value: ada }] }] });
+      expect(db.tables.scimGroupMember.some((m) => m.groupId === group && m.userId === ada)).toBe(true);
+      expect(member(WS_A, ada)).toMatchObject({ role: 'editor', source: 'manual' });
+      await entra.patch(`/Groups/${group}`, { Operations: [{ op: 'remove', path: `members[value eq "${ada}"]` }] });
+      expect(member(WS_A, ada)).toMatchObject({ role: 'editor', source: 'manual' });
+    });
+
+    it('group DELETE leaves role and source unchanged', async () => {
+      const { ada, group } = await manualInMappedGroup();
+      await entra.patch(`/Groups/${group}`, { Operations: [{ op: 'Add', path: 'members', value: [{ value: ada }] }] });
+      expect((await entra.delete(`/Groups/${group}`)).status).toBe(204);
+      expect(member(WS_A, ada)).toMatchObject({ role: 'editor', source: 'manual' });
+    });
   });
 });
 
@@ -547,10 +651,7 @@ describe('SCIM tokens and isolation', () => {
     ['an unknown token', `kscim_${'d'.repeat(64)}`],
     ['a session token', 'ks_session'],
   ])('answers %s with 401 in SCIM JSON', async (_, token) => {
-    const res = await as(token).get('/Users');
-    expect(res.status).toBe(401);
-    expect(res.headers['content-type']).toContain(SCIM_CONTENT_TYPE);
-    expect(res.body).toMatchObject({ schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'], status: '401' });
+    expectScimError(await as(token).get('/Users'), 401);
   });
 
   it('serves the discovery documents', async () => {

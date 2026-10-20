@@ -40,3 +40,25 @@ export function enforcingPolicy(settings: Record<string, unknown> = {}, env: Rec
   const audit = { record: vi.fn(async () => undefined) };
   return { policy: new AuthPolicyService(prisma as never, config as never, audit as never), prisma, audit };
 }
+
+/**
+ * Like {@link enforcingPolicy}, but each workspace reads its own row: a
+ * workspace not in `byWorkspace` has no policy at all. For "that workspace
+ * only" — a setting in one workspace must never reach another.
+ */
+export function policyByWorkspace(byWorkspace: Record<string, Record<string, unknown>>) {
+  const prisma = {
+    workspaceSettings: {
+      findUnique: vi.fn(async ({ where }: { where: { workspaceId: string } }) => {
+        const row = byWorkspace[where.workspaceId];
+        return row
+          ? { ssoEnforced: true, allowApiKeys: null, allowPasswordForAdmins: null, sessionMaxAgeHours: null, updatedAt: new Date(), ...row }
+          : null;
+      }),
+    },
+    identityProvider: { findMany: vi.fn(async () => [ENFORCING_PROVIDER]) },
+  };
+  const config = { get: (k: string) => ({ AUTH_SSO_ENABLED: true, AUTH_MODE: 'api-key', AUTH_SESSION_TTL_HOURS: 720 })[k] };
+  const audit = { record: vi.fn(async () => undefined) };
+  return { policy: new AuthPolicyService(prisma as never, config as never, audit as never), prisma, audit };
+}

@@ -1,6 +1,9 @@
-import type { AssistantAskSource, AssistantSource, SourceVerificationState } from '@knowledge/contracts'
+import type { AssistantAskSource, AssistantSource } from '@knowledge/contracts'
 import { isWebSource } from '@knowledge/contracts'
 import { slugifyHeading } from '@/lib/markdown/render'
+
+// In a leaf of its own so the tree rows' dots do not pull in the markdown renderer (#279).
+export { verificationTone } from '@/lib/verification-tone'
 
 /**
  * Sentence-level citations on the read side (docs/features/38).
@@ -41,27 +44,6 @@ export function headingAnchor(headingPath?: readonly string[]): string {
 export function sourceHref(source: AssistantAskSource): string {
   const anchor = headingAnchor(source.headingPath)
   return `/documents/${source.documentId}${anchor ? `#${anchor}` : ''}`
-}
-
-/**
- * The hue a verification state takes; `none` is "nothing to say", drawn muted.
- * Warn for a stamp that no longer quite holds (edited since, expired, asked
- * to re-check); bad for a page somebody says is wrong (docs/features/39).
- */
-export function verificationTone(state: SourceVerificationState | undefined): 'ok' | 'warn' | 'bad' | 'none' {
-  switch (state) {
-    case 'verified':
-      return 'ok'
-    case 'edited':
-    case 'expired':
-    case 'requested':
-      return 'warn'
-    case 'outdated':
-    case 'flagged':
-      return 'bad'
-    default:
-      return 'none'
-  }
 }
 
 const SKIP = new Set(['PRE', 'CODE', 'A', 'BUTTON', 'SCRIPT', 'STYLE', 'TEXTAREA'])

@@ -107,9 +107,9 @@ export class UsersService {
     return this.toSummary(updated);
   }
 
-  async listSessions(userId: string): Promise<ListSessionsResponse> {
+  async listSessions(userId: string, currentSessionId?: string): Promise<ListSessionsResponse> {
     await this.assertExists(userId);
-    return { sessions: await this.sessions.listForUser(userId) };
+    return { sessions: await this.sessions.listForUser(userId, currentSessionId) };
   }
 
   /** Sign a person out everywhere (#75) without disabling them; their API keys keep working. */
@@ -126,6 +126,26 @@ export class UsersService {
       target: userId,
     });
     return { revoked };
+  }
+
+  /**
+   * Sign one of a person's sessions out (#292). The revoke is guarded by the
+   * user id in the same statement, so a session id that belongs to someone
+   * else reads as unknown rather than revoking the wrong person.
+   */
+  async revokeSession(actor: Principal, userId: string, sessionId: string, ip: string | null): Promise<void> {
+    if (!(await this.sessions.revokeOwn(userId, sessionId))) {
+      throw new NotFoundException(t('error.auth.sessionNotFound'));
+    }
+    void this.audit.record({
+      workspaceId: null,
+      actor: actor.userId,
+      action: 'auth.session_revoked',
+      params: { sessionId, by: 'admin' },
+      ok: true,
+      ip,
+      target: userId,
+    });
   }
 
   private async assertExists(userId: string): Promise<void> {

@@ -4,13 +4,8 @@ import 'reflect-metadata';
 import { BadRequestException, ForbiddenException, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { LDAP_DEFAULT_USER_FILTER } from '@knowledge/contracts';
 import { decryptSecret, parseKey } from '../src/ai/secret-box.js';
-import { IdentityProvidersService } from '../src/auth/sso/identity-providers.service.js';
 import { identityFromLdapEntry, ldapUrlProblem, userFilterFor, userFilterValid } from '../src/auth/sso/ldap-profile.js';
-import { LdapService } from '../src/auth/sso/ldap.service.js';
-import { OidcService } from '../src/auth/sso/oidc.service.js';
-import { SamlService } from '../src/auth/sso/saml.service.js';
-import { noAuthPolicy } from './auth-policy-fakes.js';
-import { fakeConfig, ssoHarness, WS, type Row } from './sso-fakes.js';
+import { fakeConfig, identityProvidersHarness, ssoHarness, WS, type Row } from './sso-fakes.js';
 
 /**
  * LDAP sign-in (#75 phase 7) against an in-memory directory standing in for
@@ -285,33 +280,8 @@ describe('LDAP sign-in', () => {
 describe('LDAP provider setup', () => {
   const ENC_KEY = randomBytes(32).toString('base64');
 
-  function providers(over: Row = {}) {
-    const rows: Row[] = [];
-    const prisma = {
-      identityProvider: {
-        create: vi.fn(async ({ data }: Row) => {
-          const row = { id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), enabled: false, showOnLogin: true, platformWide: false, jitEnabled: false, defaultRole: null, allowedDomains: [], groupsClaim: null, groupSyncMode: 'additive', sessionTtlHours: null, secretCipher: null, ...data };
-          rows.push(row);
-          return row;
-        }),
-        findFirst: vi.fn(async ({ where }: Row) => rows.find((r) => r.id === where.id && r.workspaceId === where.workspaceId) ?? null),
-        update: vi.fn(async ({ where, data }: Row) => Object.assign(rows.find((r) => r.id === where.id)!, data)),
-        findMany: vi.fn(async () => rows),
-      },
-    };
-    const cfg = fakeConfig({ SETTINGS_ENCRYPTION_KEY: ENC_KEY, AUTH_LDAP_ENABLED: true, ...over });
-    const audit = { record: vi.fn(async () => undefined) };
-    const svc = new IdentityProvidersService(
-      prisma as never,
-      cfg as never,
-      new OidcService(cfg as never),
-      audit as never,
-      noAuthPolicy as never,
-      new SamlService(cfg as never),
-      new LdapService(cfg as never),
-    );
-    return { svc, rows, audit };
-  }
+  const providers = (over: Row = {}) =>
+    identityProvidersHarness(fakeConfig({ SETTINGS_ENCRYPTION_KEY: ENC_KEY, AUTH_LDAP_ENABLED: true, ...over }));
   const admin = { userId: 'u1', isAdmin: false } as never;
   const body = { kind: 'ldap' as const, name: 'Corp directory', ldapUrl: 'ldaps://127.0.0.1:636', bindDn: SVC, bindPassword: 's3cret', baseDn: 'ou=people,dc=corp,dc=example' };
 

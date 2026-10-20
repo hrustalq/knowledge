@@ -1082,7 +1082,84 @@ describe('MCP AI-readable resources', () => {
   });
 });
 
+/** `/v1/mcp` on a real port, as `principal` — what express's json parser and AuthGuard would have done before the handler. */
+async function overHttp(mcp: McpService, principal: Principal) {
+  const controller = new McpController(mcp, { get: () => 'api-key' } as never, fakeDrafts(false) as never);
+  const http = createServer((req, res) => {
+    if (req.method !== 'POST') {
+      res.writeHead(405).end();
+      return;
+    }
+    let raw = '';
+    req.on('data', (chunk) => (raw += chunk));
+    req.on('end', () => {
+      (req as unknown as { body: unknown }).body = JSON.parse(raw);
+      void controller.handle(principal, req as never, res as never);
+    });
+  });
+  await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve));
+  const url = new URL(`http://127.0.0.1:${(http.address() as AddressInfo).port}/v1/mcp`);
+  const client = new Client({ name: 'test', version: '0.0.0' });
+  await client.connect(new StreamableHTTPClientTransport(url, { requestInit: { headers: { Authorization: 'Bearer ks_x' } } }));
+  return {
+    client,
+    close: async () => {
+      await client.close();
+      http.close();
+    },
+  };
+}
+
 describe('McpController over real HTTP', () => {
+  describe('enforced SSO (#75 criterion 11, #300)', () => {
+    const session = (extra: Partial<Principal>) =>
+      keyPrincipal(undefined as never, { mode: 'session', apiKey: undefined, sessionId: 's1', sessionCreatedAt: new Date().toISOString(), ...extra });
+    const search = { name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } };
+
+    it('a password session gets the tool error with reason ssoRequired and the providers to sign in through', async () => {
+      const enforced = service(accessWith('viewer', enforcingPolicy().policy));
+      const { client, close } = await overHttp(enforced.mcp, session({ authMethod: 'password' }));
+      try {
+        const res = await client.callTool(search);
+        expect(res.isError).toBe(true);
+        const [message, envelope] = res.content as Array<{ type: string; text: string }>;
+        expect(message.text).toMatch(/ssoRequired/);
+        expect(JSON.parse(envelope.text)).toEqual({
+          statusCode: 403,
+          message: message.text,
+          details: { reason: 'ssoRequired', workspaceId: WS_A, providers: [ENFORCING_PROVIDER] },
+        });
+        expect(enforced.search.search).not.toHaveBeenCalled();
+      } finally {
+        await close();
+      }
+    });
+
+    it("an OIDC session through the workspace's provider succeeds", async () => {
+      const enforced = service(accessWith('viewer', enforcingPolicy().policy));
+      const { client, close } = await overHttp(enforced.mcp, session({ authMethod: 'oidc', providerId: ENFORCING_PROVIDER.id }));
+      try {
+        expect((await client.callTool(search)).isError).toBeFalsy();
+        expect(enforced.search.search).toHaveBeenCalledOnce();
+      } finally {
+        await close();
+      }
+    });
+
+    it('a platform admin on a password session passes, audited once', async () => {
+      const { policy, audit } = enforcingPolicy();
+      const enforced = service(accessWith(null, policy));
+      const { client, close } = await overHttp(enforced.mcp, session({ authMethod: 'password', isAdmin: true }));
+      try {
+        expect((await client.callTool(search)).isError).toBeFalsy();
+        expect((await client.callTool(search)).isError).toBeFalsy();
+        expect((audit.record.mock.calls as unknown as Array<[{ action: string }]>).map(([e]) => e.action)).toEqual(['auth.sso_bypassed']);
+      } finally {
+        await close();
+      }
+    });
+  });
+
   it('serves the SDK HTTP client statelessly: initialize, list, call', async () => {
     const { mcp, search } = service(accessWith('viewer'));
     const config = { get: () => 'api-key' };

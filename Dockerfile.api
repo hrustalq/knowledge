@@ -144,7 +144,13 @@ console.log('type stripping OK');"
 # likely to be broken unnoticed: it is off by default, so nothing exercises it
 # on deploy. Resolve its whole import graph here (the entry itself would boot
 # the app, so its root module is imported instead), as a build failure.
-RUN node --input-type=module -e "\
+# Importing the module evaluates `ConfigModule.forRoot({ validate })`, and the
+# image has no env yet, so the required vars get placeholders on this one
+# command — nothing connects, and nothing persists into the image.
+RUN DATABASE_URL=postgresql://build@localhost/build REDIS_URL=redis://localhost:6379 \
+    S3_ENDPOINT=http://localhost:9000 S3_ACCESS_KEY=build S3_SECRET_KEY=build S3_BUCKET=build \
+    ARCADE_URL=http://localhost:2480 ARCADE_DB=build ARCADE_USER=build ARCADE_PASSWORD=build \
+    node --input-type=module -e "\
 await import('./dist/learner/learner.module.js'); \
 await import('./dist/learner/learner-derive.js'); \
 console.log('learner entry OK');"

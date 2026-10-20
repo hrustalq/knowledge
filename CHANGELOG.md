@@ -13,6 +13,17 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.29.1] — 2026-10-20
+
+### Fixed
+
+- The API image builds again (#392). The v0.29.0 tag never reached
+  production: the deploy stopped at **Build api image**. The new build-time
+  check that the learner's modules resolve imported them with no environment
+  set, so env validation refused the import. The check now gets placeholder
+  values for that one command. v0.29.0's changes ship unchanged in the next
+  version.
+
 ## [0.29.0] — 2026-10-20
 
 ### Added
@@ -4016,7 +4027,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.29.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.29.1...HEAD
+[0.29.1]: https://github.com/hrustalq/knowledge/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/hrustalq/knowledge/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/hrustalq/knowledge/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/hrustalq/knowledge/compare/v0.26.0...v0.27.0

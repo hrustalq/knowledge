@@ -3216,6 +3216,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent-outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per agent, how many findings were accepted, dismissed or are pending, and how answers were voted; optionally split by prompt hash or model. Derived on read from runs, merge requests and votes */
+        get: operations["AgentOutcomesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connectors": {
         parameters: {
             query?: never;
@@ -19165,6 +19182,54 @@ export interface operations {
             path: {
                 userId: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AgentOutcomesController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Only this agent's runs; answers are left out when set */
+                agentKey?: string;
+                /** @description Only findings and answers citing a page of this project */
+                projectId?: string;
+                /** @description Window start; 90 days back when absent */
+                since?: string;
+                /** @description none (the default) | prompt | model */
+                split?: "none" | "prompt" | "model";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;

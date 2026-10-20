@@ -4175,7 +4175,8 @@
     "tab": {
       "pages": "Pages",
       "settings": "Settings",
-      "quality": "Quality"
+      "quality": "Quality",
+      "agents": "Agents"
     },
     "presets": "Presets",
     "preset": {
@@ -4313,6 +4314,38 @@
           "label": "Trust-aware ranking",
           "hint": "Multiply search scores by each page's verification state, so verified pages rank above outdated ones"
         }
+      }
+    },
+    "agents": {
+      "title": "Agent outcomes {scope}",
+      "hint": "What became of each agent's output. A finding is accepted when its proposal merged or nobody dismissed it within {days} days, dismissed when a person dismissed it or closed its proposal. Below {n} runs a cell is a count, not a rate.",
+      "since": "since {date}",
+      "answers": "Answers (votes)",
+      "unknownAgent": "Unknown agent",
+      "unattributed": "unattributed",
+      "ofTotal": "{count} of {total}",
+      "runs": "{n} run | {n} runs",
+      "votes": "{n} vote | {n} votes",
+      "fewRuns": "too few for a rate",
+      "column": {
+        "agent": "Agent",
+        "runs": "Runs"
+      },
+      "outcome": {
+        "accepted": "Accepted",
+        "dismissed": "Dismissed",
+        "downvoted": "Downvoted",
+        "pending": "Pending"
+      },
+      "split": {
+        "label": "Split by",
+        "none": "Per agent",
+        "prompt": "By prompt",
+        "model": "By model"
+      },
+      "empty": {
+        "title": "No agent output to measure yet",
+        "body": "Outcomes appear after an agent's first finished run, or the first vote on an answer, in this window."
       }
     }
   },

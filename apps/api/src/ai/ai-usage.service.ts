@@ -12,6 +12,7 @@ import type {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiConfigService, type ResolvedAiConfig } from './ai-config.service.js';
 import { t } from '../i18n/t.js';
+import { currentAgentRun } from './agent-run-context.js';
 
 /** Token counts as reported by the provider (OpenAI-shaped `usage` block). */
 export interface AiUsageTokens {
@@ -33,6 +34,9 @@ export interface AiUsageRecordInput {
   error?: string;
   threadId?: string;
   toolCallCount?: number;
+  /** The run this call was made for (#305). Defaults to the ambient `currentAgentRun()`. */
+  agentKey?: string;
+  agentRunId?: string;
 }
 
 const LOG_PAGE_SIZE = 50;
@@ -71,6 +75,9 @@ export class AiUsageService {
 
   async record(input: AiUsageRecordInput): Promise<void> {
     const { config, tokens } = input;
+    // Read before the first await, though the store would survive one: the
+    // caller does not wait for this, and the attribution is the call's.
+    const run = currentAgentRun();
     try {
       await this.prisma.aiUsage.create({
         data: {
@@ -91,6 +98,8 @@ export class AiUsageService {
           error: input.error?.slice(0, 500) ?? null,
           threadId: input.threadId ?? null,
           toolCallCount: input.toolCallCount ?? 0,
+          agentKey: input.agentKey ?? run?.agentKey ?? null,
+          agentRunId: input.agentRunId ?? run?.agentRunId ?? null,
         },
       });
     } catch (e) {

@@ -198,9 +198,14 @@ export class AgentLearningsService {
     );
   }
 
-  /** `forPrompt` and `renderPrompt` in one call — what every prompt site wants. */
-  async promptFor(audience: LearningAudience): Promise<string> {
-    return this.renderPrompt(await this.forPrompt(audience));
+  /**
+   * `forPrompt` and `renderPrompt` in one call — what every prompt site wants.
+   * The ids are the learnings the text renders, from the same list, so a run's
+   * ledger stamp (#305) can never name a learning its prompt did not carry.
+   */
+  async promptFor(audience: LearningAudience): Promise<{ prompt: string; learningIds: string[] }> {
+    const learnings = await this.forPrompt(audience);
+    return { prompt: this.renderPrompt(learnings), learningIds: learnings.map((l) => l.id) };
   }
 
   /**

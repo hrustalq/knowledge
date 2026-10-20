@@ -232,7 +232,7 @@ describe('MentionRepliesService — a mention answered by a run', () => {
       { fire } as never,
       access as never,
       config as never,
-      { promptFor: async () => '' } as never,
+      { promptFor: async () => ({ prompt: '', learningIds: [] }) } as never,
     );
     const mention = () =>
       s.handleMention({

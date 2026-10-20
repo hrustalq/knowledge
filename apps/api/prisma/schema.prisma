@@ -1023,6 +1023,11 @@ model AnswerFeedback {
   citedDocumentIds Json     @default("[]") @map("cited_document_ids")
   /// AnswerConfidence snapshot at answer time.
   confidence       Json?
+  /// The model that wrote the answer (#305): the turn's config for an implicit
+  /// signal, the thread's or caller's latest model call for a vote. Null when
+  /// the server cannot know — an MCP agent's own model, a pre-ledger row.
+  providerId       String?  @map("provider_id") @db.Uuid
+  model            String?
   createdBy        String   @map("created_by") @db.Uuid
   apiKeyId         String?  @map("api_key_id") @db.Uuid
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -1475,6 +1480,16 @@ model AgentRun {
   /// graph store that was down. Capped by the executor.
   warnings Json?
 
+  /// The ledger (#305): what produced this run's output, stamped by the
+  /// executor at execution. Null on runs from before the ledger, which read as
+  /// unattributed. `prompt_hash` is the SHA-256 of the trusted prompt parts
+  /// only (instructions, skills, styleguide, learnings) — never page content —
+  /// and `learning_ids` are exactly the learnings that prompt rendered.
+  providerId  String?  @map("provider_id") @db.Uuid
+  model       String?
+  promptHash  String?  @map("prompt_hash")
+  learningIds String[] @map("learning_ids") @db.Uuid
+
   startedAt  DateTime? @map("started_at") @db.Timestamptz
   finishedAt DateTime? @map("finished_at") @db.Timestamptz
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -1626,6 +1641,10 @@ model AiUsage {
   error         String?
   threadId      String? @map("thread_id") @db.Uuid
   toolCallCount Int     @default(0) @map("tool_call_count")
+  /// The agent run this call was made for (#305), from the run context; null
+  /// for a call outside a background run. No FK: usage outlives its run.
+  agentKey      String? @map("agent_key")
+  agentRunId    String? @map("agent_run_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 

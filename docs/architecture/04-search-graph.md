@@ -257,6 +257,18 @@ have their fused score multiplied by `trustWeight(status, inactive)`
 inactive ×0.9), re-sorted, and only then cut to `k`. Multiplicative so the same
 factor serves RRF, cosine-only and max-normalized BM25 scores.
 
+The fusion constant and the weights are per-workspace knobs (#305): `rrfK`
+and `trustWeights` on `knowledge_health_settings`, sparse over
+`SEARCH_RRF_K` (60) and `TRUST_WEIGHTS`, and sparse per state, so overriding
+one weight keeps the other seven. `VerificationPolicyService` resolves them on
+the same read that resolves `trustRanking`, so they cost no extra query, and
+an empty row ranks byte-for-byte as before. `fuseHits` and the re-rank live in
+`search/ranking.ts`, where `rankPool` replays them over a recorded
+`SearchPool`. That is how `make tune` scores thousands of knob settings
+against one search per query
+([55](../features/55-learning-loop.md#the-tuner)). The parity case in
+`search-trust.spec.ts` keeps `rankPool` and `SearchService` in step.
+
 With the re-rank on, `fetchK` is at least `2k` so a demoted hit has something to
 be displaced by. With it off (`SEARCH_TRUST_RANKING=false`, or the workspace's
 `trustRanking` override), `fetchK` and the order are exactly the pre-feature

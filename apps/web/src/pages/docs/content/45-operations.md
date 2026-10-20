@@ -19,8 +19,10 @@ summary: The services, the environment variables that change behaviour, and what
 | ArcadeDB   | 2480        | graph and vectors                                 |
 | OpenSearch | 9200        | optional BM25 (`make infra-up-opensearch`)        |
 
-The API, the worker and the MCP server are **three entrypoints of the same application** —
-same modules, different composition. A fourth exists only to emit the OpenAPI document.
+The API, the worker, the MCP server and the learner are **four entrypoints of the same
+application** — same modules, different composition. A fifth exists only to emit the OpenAPI
+document. The learner is optional: it runs under the `learner` compose profile and does
+nothing until `LEARNER_ENABLED=true` ([Learning loop](/settings/docs/learning-loop)).
 
 ## Environment worth knowing
 

@@ -341,8 +341,8 @@ export const envSchema = z.object({
    * embeddings sit at or above LEARNER_CLUSTER_THRESHOLD raw cosine to its
    * running centroid; it qualifies at LEARNER_MIN_DISMISSALS findings from
    * LEARNER_MIN_PEOPLE distinct dismissers. The threshold was measured with
-   * `make backtest ARGS="--learner"` on bge-m3 (docs/features/49-agent-triggers.md
-   * §Derived learnings); re-run it when the embedding model changes. The same
+   * `make backtest ARGS="--learner"` on bge-m3 (docs/features/55-learning-loop.md
+   * §Calibration); re-run it when the embedding model changes. The same
    * threshold folds a drafted learning into a near-identical existing one.
    * LEARNER_MIN_RUNS runs on each side of an activation are needed before the
    * before/after check says anything.

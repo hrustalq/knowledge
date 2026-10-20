@@ -23,7 +23,7 @@ here. If a rule fits on one line and applies everywhere, it belongs there.
 
 | #   | Layer                                                        | Covers                                                                      |
 | --- | ------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| 01  | [Entrypoints & module boundaries](01-entrypoints-modules.md) | The four entrypoints, the Core/Queue/API/Worker split, buildless packages   |
+| 01  | [Entrypoints & module boundaries](01-entrypoints-modules.md) | The five entrypoints, the Core/Queue/API/Worker split, buildless packages   |
 | 02  | [Persistence & revisions](02-persistence-revisions.md)       | Branches, the immutable revision DAG, compare and diff caching              |
 | 03  | [Ingestion](03-ingestion.md)                                 | The write path, embeddings providers, deterministic relations, stale sweeps |
 | 04  | [Search & graph](04-search-graph.md)                         | Hybrid search, BM25 fusion, inference, entity traversal                     |

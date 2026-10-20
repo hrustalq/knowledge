@@ -39,11 +39,12 @@ const selected = ref<string | null>(null)
 const submitting = ref(false)
 
 /** Reset per opening: a remembered destination from last time is a trap. */
+// Immediate: a caller may mount this already open (TreeRowMenu, #279).
 watch(open, (isOpen) => {
   if (!isOpen) return
   query.value = ''
   selected.value = null
-})
+}, { immediate: true })
 
 interface Row {
   id: string

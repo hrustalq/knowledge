@@ -1,7 +1,12 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { renderToString } from 'vue/server-renderer'
+import type { Pinia } from 'pinia'
+import type { Router } from 'vue-router'
 import type { Locale } from '@knowledge/contracts'
 import { createApp } from './main'
+import { useAuthStore } from './stores/auth'
+import { useDocumentsStore } from './stores/documents'
+import { useProjectsStore } from './stores/projects'
 
 interface SsrRequestContext {
   token: string | null
@@ -25,6 +30,42 @@ interface SsrRequestContext {
 const ssrCtx = new AsyncLocalStorage<SsrRequestContext>()
 ;(globalThis as Record<string, unknown>).__KN_SSR_CTX__ = ssrCtx
 
+/**
+ * The rail is on every member route, and it reads the project roster and the
+ * tree's first level. Loaded here, before anything draws, both are in the HTML
+ * and in the state the client hydrates from, instead of arriving after
+ * `main.js` has loaded, hydrated and asked (#279). Before the render rather than
+ * in an `onServerPrefetch`: the rail renders ahead of the page, so state the
+ * page fills in would reach the client but not the rail's HTML (#278).
+ *
+ * A failure leaves the store unloaded and the client fetches as it always did;
+ * it never fails the render.
+ */
+async function prefetchShell(router: Router, pinia: Pinia, request: SsrRequestContext) {
+  const auth = useAuthStore(pinia)
+  // The same test App.vue makes between the signed-out card and the shell.
+  if (router.currentRoute.value.meta.public || !auth.authenticated || auth.verificationPending) return
+
+  const projects = useProjectsStore(pinia)
+  const documents = useDocumentsStore(pinia)
+  const scoped = request.projectId
+  // The remembered project almost always still exists, so its tree is asked
+  // for alongside the roster rather than after it.
+  const early = scoped ? documents.fetchTree().catch(() => undefined) : null
+  await projects.fetchList().catch(() => undefined)
+  await early
+  if (projects.loaded && projects.activeId !== scoped) {
+    // The roster resolved another project (the cookie's is gone, or there was
+    // none): render that one's tree, as the client would after its own fetch.
+    // entry-client adopts the resolved id, so its API calls agree.
+    request.projectId = projects.activeId
+    documents.tree = []
+    documents.treeLoaded = false
+  }
+  if (!documents.treeLoaded) await documents.fetchTree().catch(() => undefined)
+  documents.treePrefetched = documents.treeLoaded
+}
+
 export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) {
   const request: SsrRequestContext = {
     token: ctx.token ?? null,
@@ -45,6 +86,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
 
     await router.push(url)
     await router.isReady()
+    await prefetchShell(router, pinia, request)
 
     const html = await renderToString(app)
 

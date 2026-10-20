@@ -102,7 +102,10 @@ const scopeLabel = computed(() =>
     : t('documents.scopeWorkspace'),
 )
 
-onServerPrefetch(() => Promise.all([store.fetchTree(), store.fetchList({ reset: true })]))
+// The tree is usually here already: entry-server loads it for the rail (#279).
+onServerPrefetch(() =>
+  Promise.all([store.treeLoaded ? undefined : store.fetchTree(), store.fetchList({ reset: true })]),
+)
 onMounted(() => {
   try {
     const stored = localStorage.getItem(VIEW_KEY) as View | null
@@ -128,7 +131,9 @@ function setView(next: View) {
 // for it.
 watch(
   [view, () => projects.activeId],
-  () => { if (view.value === 'graph' && !store.graphLoaded) void store.fetchGraph() },
+  // Not during SSR: the render does not wait for it (the canvas is client-only),
+  // so the answer would only race the serialized state.
+  () => { if (!import.meta.env.SSR && view.value === 'graph' && !store.graphLoaded) void store.fetchGraph() },
   { immediate: true },
 )
 

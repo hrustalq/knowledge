@@ -377,6 +377,15 @@ in the pull request that introduces them — see
   capture came from: the platform, the chat and the time span. A new page's
   frontmatter records it under `sources:`. Captures written over MCP or REST
   may now report `session.client: 'chat'`.
+- The pages landing loads faster on a cold visit. The server now renders
+  the rail's project roster, the active project's name and the first level of
+  the page tree, so they no longer wait for the app's JavaScript.
+  `/v1/projects`, `/v1/workspaces` and `/v1/documents/tree` are requested once
+  per page load instead of once per component that wanted them. The shell
+  preloads 50 scripts instead of 103: the search sheet, the create dialog and
+  the page row's Move, Export and Access dialogs load when first opened. The
+  heading fonts no longer block the first paint, and the graph spreads its
+  opening layout over frames instead of one long task. (#279)
 - Deleting a relation, re-posting an explicit one or curating over an inferred
   one no longer erases the old edge (#81). It is retracted: gone from every
   current view as before, but listed in `GET /v1/documents/:id/facts/timeline`

@@ -31,6 +31,11 @@ in the pull request that introduces them — see
   `Cross-Origin-Opener-Policy: same-origin` (#277). Share links and published
   sites keep the headers their renders set, so a site's Ask widget stays
   embeddable where its `frame-ancestors` allows.
+- Access logs and every log line written while a request is handled now show
+  `?code=` and `?state=` as `[REDACTED]`, as they already did `?token=`. The
+  SSO and GitHub App callbacks no longer put the identity provider's
+  authorization code and state in a log, and neither do share-site and chat
+  link codes. (#297)
 - Attachment, import-image and avatar URLs in the web app no longer carry your
   session token. Those `<img>` and `<object>` requests now authenticate with the
   app's own session cookie, so the token can no longer end up in a proxy log,
@@ -60,6 +65,13 @@ in the pull request that introduces them — see
   `[PASSPORT_n]` after `паспорт`, `серия` or `passport` in any common
   spacing, or with no such word only in its printed `45 09 123456` form.
   Buffered Telegram messages are masked the same way on write. (#342)
+- A platform admin can see and sign out anyone's sessions from **Access →
+  Accounts → Sessions**: each live sign-in with its method and identity
+  provider, IP, browser and last use, one at a time or all at once. API keys
+  are untouched. The new `DELETE /v1/users/:id/sessions/:sessionId` revokes
+  one session (404 for a session id that is not that person's) and is audited
+  as `auth.session_revoked` by `admin`; session lists now carry
+  `providerName`. (#292)
 - MCP agents can work in a page's shared draft (#316). Over the HTTP MCP
   server (`/v1/mcp`), with co-editing on, `knowledge_get_draft` reads the
   draft people are writing in the editor: the body as publishing it would
@@ -379,6 +391,15 @@ in the pull request that introduces them — see
   capture came from: the platform, the chat and the time span. A new page's
   frontmatter records it under `sources:`. Captures written over MCP or REST
   may now report `session.client: 'chat'`.
+- The pages landing loads faster on a cold visit. The server now renders
+  the rail's project roster, the active project's name and the first level of
+  the page tree, so they no longer wait for the app's JavaScript.
+  `/v1/projects`, `/v1/workspaces` and `/v1/documents/tree` are requested once
+  per page load instead of once per component that wanted them. The shell
+  preloads 50 scripts instead of 103: the search sheet, the create dialog and
+  the page row's Move, Export and Access dialogs load when first opened. The
+  heading fonts no longer block the first paint, and the graph spreads its
+  opening layout over frames instead of one long task. (#279)
 - Deleting a relation, re-posting an explicit one or curating over an inferred
   one no longer erases the old edge (#81). It is retracted: gone from every
   current view as before, but listed in `GET /v1/documents/:id/facts/timeline`
@@ -393,6 +414,12 @@ in the pull request that introduces them — see
   Settings → Security → Audit as a failed sign-in, like every other refused
   SSO attempt, and the browser lands on the sign-in page with the localized
   reason instead of a bare "back to login" card. (#291)
+- Initials on generated avatars and on project and workspace monograms are
+  readable on every colour (#355). Yellow, green and cyan tiles put white
+  letters at as little as 2.3:1 contrast, below the 4.5:1 WCAG asks for. Those
+  tiles are now a deeper shade of the same hue, so a person, project or
+  workspace keeps its colour; tiles that were already dark enough, such as blues
+  and purples, are unchanged.
 - BM25 search and indexing recover by themselves once OpenSearch is reachable
   again (#330). A worker or API that first reached OpenSearch while it was
   down or still starting (connection refused, DNS, a dropped connection) kept
@@ -401,6 +428,14 @@ in the pull request that introduces them — see
   grew, and search stayed `degraded: ['fulltext']`. The next call now retries
   the setup, so after an OpenSearch restart the sweep re-mirrors the stale
   revisions and search logs its recovery.
+- On a phone, screen readers now name the buttons that show only an icon
+  (#354). Below the `sm` width, the Graph / Tree / List tabs, Upload, New page,
+  Show archived and Filters on `/documents` hid their label from assistive
+  technology along with the screen, so they were announced as "tab, selected"
+  or "link". The same applied to New chat in the assistant, the editor's AI
+  button, Ask on a published site, the filter rail toggle on merge requests,
+  and Ask the architect and Configure in the workflow builder. The label is
+  still hidden on screen but is now read aloud. Nothing looks different.
 - The editor no longer opens a page it failed to load (#314). If any request
   for an existing page failed (the connection dropped mid-load, a 5xx, a
   timeout), the editor used to open with an empty title and body and Publish
@@ -409,11 +444,25 @@ in the pull request that introduces them — see
   Retry button and a link to the page, Publish stays unavailable and nothing
   is stored on the device until the page loads. Retry joins the shared draft
   when co-editing is on.
+- Changing the role of a member whose membership source is missing or not one
+  of `manual`, `jit`, `group`, `scim` no longer fails with 409 "managed by
+  single sign-on (manual)" (#295). The members list already shows such a row
+  as manual, and editing it now treats it as manual too. Every row the
+  current release writes has a known source, so this only affects data
+  written some other way.
 - Returning to the app no longer re-downloads its scripts and styles (#277).
   The content-hashed files under `/assets/` were sent with no `Cache-Control`,
   so the edge's 4-hour default applied; they are now cached for a year as
   `immutable`. The HTML shells and the favicon are revalidated on every use,
   and a member's rendered page is `private, no-cache`.
+- An MCP tool call refused with structured reasons now carries them (#300).
+  Under enforced SSO, an agent's tool error said only "requires single
+  sign-on": it never got `reason: 'ssoRequired'` or the providers to sign in
+  through, which REST puts in `details`. A refused tool call now returns the
+  message as before, followed by a second text block
+  `{ statusCode, message, details }` with the same `details` REST sends. This
+  applies to every refusal that carries extras, such as a page permission's
+  `canRequestAccess`; errors without extras are unchanged.
 - `/robots.txt` on the app's own host returned the app's HTML page (#277). It
   is now plain text that keeps crawlers out of the member app and lets them
   into path-mode published sites under `/pub/`. A site's own `robots.txt` is

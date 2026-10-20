@@ -4511,6 +4511,16 @@
       "platformAdmin": true
     },
     {
+      "method": "DELETE",
+      "path": "/v1/users/{id}/sessions/{sessionId}",
+      "tag": "users",
+      "summary": "Revoke one of a user's sessions (platform admin); its token gets 401 from the next request",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
       "method": "GET",
       "path": "/v1/documents/{id}/workflow-runs",
       "tag": "workflows",

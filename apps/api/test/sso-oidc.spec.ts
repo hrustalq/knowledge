@@ -1,10 +1,15 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'reflect-metadata';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Logger, type LoggerService } from '@nestjs/common';
 import { exportJWK, generateKeyPair, SignJWT, type JWK } from 'jose';
+import { closeBacktest, configureBacktest, createRootLogger } from '@knowledge/observability';
+import { traceMiddleware } from '@knowledge/observability/express';
 import { IDP_PRESETS, type IdpPreset } from '@knowledge/contracts';
 import { decryptSecret, parseKey } from '../src/ai/secret-box.js';
 import { AuthFlowService } from '../src/auth/auth-flow.service.js';
@@ -14,6 +19,7 @@ import { SsoLoginService } from '../src/auth/sso/sso-login.service.js';
 import { RoleSyncService } from '../src/auth/sso/role-sync.service.js';
 import { normalizeDomain } from '../src/auth/sso/identity-providers.service.js';
 import { safeReturnTo } from '../src/common/safe-return-to.js';
+import { PinoNestLogger } from '../src/observability/nest-logger.js';
 import { noAuthPolicy } from './auth-policy-fakes.js';
 import { fakeConfig, identityProvidersHarness, ssoHarness, WEB, WS, type Row } from './sso-fakes.js';
 
@@ -396,6 +402,74 @@ describe('OIDC sign-in', () => {
     const p = h.provider();
     expect(await h.sso.start(p.id, '/documents')).toBe(`${WEB}/login?error=provider-error`);
     expect(h.db.requests).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------- logs (#297)
+
+describe('logs during an OIDC sign-in (#297)', () => {
+  const nest = Logger as unknown as { staticInstanceRef: LoggerService };
+  let previous: LoggerService;
+  let lines: string[];
+  let dir: string;
+
+  beforeEach(() => {
+    // The production wiring: pino root logger at the lowest level, behind the
+    // Nest bridge, so every `new Logger(X.name)` in the flow lands in `lines`.
+    lines = [];
+    previous = nest.staticInstanceRef;
+    const root = createRootLogger({ service: 'api', level: 'trace', stream: { write: (s: string) => void lines.push(s) } });
+    Logger.overrideLogger(new PinoNestLogger(root));
+    dir = mkdtempSync(join(tmpdir(), 'kn-sso-logs-'));
+    configureBacktest({ enabled: true, dir, service: 'api' });
+  });
+
+  afterEach(() => {
+    Logger.overrideLogger(previous);
+    configureBacktest({ enabled: false });
+    closeBacktest();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** One request through the access-log middleware: the handler runs in its trace scope, then the response finishes. */
+  async function request<T>(method: string, url: string, handler: () => Promise<T>): Promise<T> {
+    const onFinish: (() => void)[] = [];
+    const res = { statusCode: 302, setHeader: () => undefined, getHeader: () => undefined, on: (_e: 'finish', fn: () => void) => onFinish.push(fn) };
+    let out!: Promise<T>;
+    traceMiddleware({ method, url, headers: {} }, res, () => {
+      out = handler();
+    });
+    const value = await out;
+    onFinish.forEach((fn) => fn());
+    return value;
+  }
+
+  const accessLog = () => readdirSync(dir).map((f) => readFileSync(join(dir, f), 'utf8')).join('');
+
+  it('carry neither the IdP code, the state, the exchange code nor the ks_ token', async () => {
+    const h = harness();
+    const p = h.provider();
+    const start = await request('GET', `/v1/auth/oidc/${p.id}/start?returnTo=%2Fdocuments`, () => h.sso.start(p.id, '/documents'));
+    const back = authorize(start, person());
+    const redirect = await request('GET', `/v1/auth/oidc/${p.id}/callback?${back}`, async () => {
+      // A canary in the callback's scope: proves the capture sees a Nest
+      // Logger line at debug, with the request's route mixed in.
+      new Logger('Canary').debug('inside the callback');
+      return h.sso.callback(p.id, back, meta);
+    });
+    const exchangeCode = fragmentCode(redirect)!;
+    const res = await request('POST', '/v1/auth/sso/exchange', () => h.sso.exchange(exchangeCode, meta));
+    expect(res.token).toMatch(/^ks_/);
+
+    const canary = lines.map((l) => JSON.parse(l) as Row).find((r) => r.ctx === 'Canary');
+    expect(canary).toMatchObject({ level: 20, route: `/v1/auth/oidc/${p.id}/callback?code=[REDACTED]&state=[REDACTED]` });
+    await vi.waitFor(() => expect(accessLog().match(/"kind":"http\.request"/g)).toHaveLength(3));
+
+    const written = [...lines, accessLog()].join('\n');
+    for (const secret of [back.get('code')!, back.get('state')!, exchangeCode, res.token]) {
+      expect(written).not.toContain(secret);
+    }
+    expect(written).not.toMatch(/ks_/);
   });
 });
 

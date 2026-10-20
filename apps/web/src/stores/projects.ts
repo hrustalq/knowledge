@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { toRaw } from 'vue'
 import type { ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
 import { apiFetch, getProjectId, getWorkspaceId, setActiveProject } from '@/lib/api'
 import { useDocumentsStore } from '@/stores/documents'
@@ -6,6 +7,17 @@ import { useGlossaryStore } from '@/stores/glossary'
 import { useWorkflowsStore } from '@/stores/workflows'
 import { useTemplatesStore } from '@/stores/templates'
 import { useSidebarNavStore } from '@/stores/sidebar-nav'
+
+/**
+ * The roster request in flight, per store instance. The rail, the breadcrumbs
+ * and the page all ask on mount, in the same tick, each seeing `loaded` still
+ * false — three identical requests on every cold load (#279). Keyed by store,
+ * not module state: every concurrent SSR render has its own store. Not state,
+ * because the server serializes state into the page. `toRaw`, because in
+ * development every action runs on a fresh Proxy of the store (see
+ * stores/documents.ts).
+ */
+const listFetches = new WeakMap<object, Promise<void>>()
 
 /**
  * Workspace > Project > Document. The active project is remembered the same
@@ -28,17 +40,23 @@ export const useProjectsStore = defineStore('projects', {
     },
   },
   actions: {
-    async fetchList() {
-      const res = await apiFetch<ListProjectsResponse>(`/v1/projects?workspaceId=${getWorkspaceId()}`)
-      this.items = res.projects
-      this.loaded = true
+    fetchList(): Promise<void> {
+      const pending = listFetches.get(toRaw(this))
+      if (pending) return pending
+      const job = (async () => {
+        const res = await apiFetch<ListProjectsResponse>(`/v1/projects?workspaceId=${getWorkspaceId()}`)
+        this.items = res.projects
+        this.loaded = true
 
-      const stillExists = this.activeId && res.projects.some((p) => p.projectId === this.activeId)
-      if (!stillExists) {
-        const fallback = res.projects[0]?.projectId ?? null
-        this.activeId = fallback
-        setActiveProject(fallback)
-      }
+        const stillExists = this.activeId && res.projects.some((p) => p.projectId === this.activeId)
+        if (!stillExists) {
+          const fallback = res.projects[0]?.projectId ?? null
+          this.activeId = fallback
+          setActiveProject(fallback)
+        }
+      })().finally(() => listFetches.delete(toRaw(this)))
+      listFetches.set(toRaw(this), job)
+      return job
     },
     /**
      * Switch scope in place. Unlike a workspace switch this does *not* reload

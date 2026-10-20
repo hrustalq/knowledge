@@ -3034,7 +3034,14 @@
     "displayNamePlaceholder": "Коллега",
     "initialPassword": "Начальный пароль",
     "viaResetLink": "приглашение по почте, если пусто",
-    "creating": "Создание…"
+    "creating": "Создание…",
+    "sessions": "Сеансы",
+    "sessionsTitle": "Сеансы: {name}",
+    "sessionsDesc": "Где выполнен вход для {email}. Завершённому сеансу при следующем запросе придётся войти заново; API-ключи продолжают работать.",
+    "sessionsNone": "Действующих сеансов нет.",
+    "sessionsLoadFailed": "Не удалось загрузить сеансы",
+    "sessionsRevokeAll": "Завершить все сеансы",
+    "sessionsRevokedAll": "Завершено {n} сеансов | Завершён {n} сеанс | Завершено {n} сеанса | Завершено {n} сеансов"
   },
   "glossary": {
     "title": "Глоссарий",

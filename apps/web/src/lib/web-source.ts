@@ -1,4 +1,4 @@
-import { avatarHue } from './avatar'
+import { avatarColor } from './avatar'
 
 /**
  * Identity marks for cited websites (docs/features/25).
@@ -15,11 +15,11 @@ import { avatarHue } from './avatar'
  * it costs no network, and `docs.example.com` is the same colour everywhere it
  * appears in a thread.
  *
- * `avatarHue` is reused rather than re-implemented — it is a stable string→hue
- * hash, and a second one would eventually disagree with the first.
+ * `avatarColor` is reused rather than re-implemented — it is a stable
+ * string→colour mapping, and a second one would eventually disagree with it.
  */
 export function siteColor(site: string): string {
-  return `hsl(${avatarHue(brandLabel(site))} 55% 45%)`
+  return avatarColor(brandLabel(site))
 }
 
 /** The mark's single letter, taken from the brand rather than the subdomain. */

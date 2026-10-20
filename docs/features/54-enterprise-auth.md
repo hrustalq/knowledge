@@ -41,7 +41,8 @@ sign-on & SCIM**, `apps/web/src/pages/docs/content/46-sso-scim.md`).
   bearer token minted under **Settings → Security → Provisioning**.
 - **Sessions you can see.** **Settings → Profile** lists every live session with
   how it was opened, its IP, browser and last use, and signs any of them out. A
-  platform admin can do the same for anyone, over the API.
+  platform admin can do the same for anyone from **Access → Accounts →
+  Sessions**.
 - **A workspace audit log** under **Settings → Security → Audit**, and the
   platform's own at `GET /v1/admin/audit-logs`.
 
@@ -112,7 +113,9 @@ whatever the mode:
 calls `AuthPolicyService` after a key's narrowing. The web app, REST, MCP tool
 calls and WebSocket subscriptions therefore all meet the same rule. A session
 satisfies an enforcing workspace only if one of its providers, or a
-platform-wide one, opened it. The refusal is 403 with `details.reason`:
+platform-wide one, opened it. The refusal is 403 with `details.reason`. A
+refused MCP tool call returns the message and then a second text block,
+`{ statusCode, message, details }`, with the same `details`:
 
 | `reason`         | When                                                                            | The web app                                                        |
 | ---------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -173,8 +176,11 @@ through that provider.
   **Audit**.
 - **Access → Members** shows where a synced member's role comes from, with
   **Manage manually**.
-- **Settings → Profile → Sessions** for one's own sessions. A platform admin
-  reaches anyone's over the API only; there is no admin screen for it yet.
+- **Settings → Profile → Sessions** for one's own sessions, and **Access →
+  Accounts → Sessions** for a platform admin's view of anyone's: the same rows,
+  one session or all of them signed out, API keys untouched (#292). A session
+  id that is not that person's is a 404 — the revoke is one statement guarded
+  by their user id.
 
 ## API
 
@@ -193,7 +199,7 @@ through that provider.
 | `GET`/`PUT /v1/workspaces/:id/scim` · `POST /v1/workspaces/:id/scim-tokens` · `DELETE …/:tokenId`               | workspace admin                                         |
 | `/v1/scim/v2/ServiceProviderConfig`, `ResourceTypes`, `Schemas`, `Users`, `Groups`                              | a `kscim_` token for that workspace                     |
 | `GET /v1/me/sessions` · `DELETE /v1/me/sessions/:sessionId`                                                     | self                                                    |
-| `GET /v1/users/:id/sessions` · `POST /v1/users/:id/revoke-sessions`                                             | platform admin                                          |
+| `GET /v1/users/:id/sessions` · `DELETE …/sessions/:sessionId` · `POST /v1/users/:id/revoke-sessions`            | platform admin                                          |
 | `GET /v1/audit-logs?workspaceId=&action=&cursor=`                                                               | workspace admin                                         |
 | `GET /v1/admin/audit-logs`                                                                                      | platform admin; null-workspace (platform) events        |
 
@@ -296,7 +302,8 @@ it only picks a login button.
   - `enforced-sso.spec.ts`: the policy matrix on REST, MCP and WS, domains, and
     break-glass;
   - `role-sync.spec.ts`, `scim.spec.ts`, `sessions.service.spec.ts`,
-    `audit.service.spec.ts`;
+    `admin-sessions.spec.ts` (an admin's list/revoke-one/revoke-all, the 404,
+    the 403, a revoked token's 401), `audit.service.spec.ts`;
   - `scim-filter.spec.ts` in `src/scim/`.
 - Web: `lib/sso.spec.ts` covers the fragment-only exchange code, the
   `?reauth=` redirect, `returnTo` confinement, and that every callback error has

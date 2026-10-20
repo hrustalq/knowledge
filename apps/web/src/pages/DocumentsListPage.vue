@@ -102,7 +102,10 @@ const scopeLabel = computed(() =>
     : t('documents.scopeWorkspace'),
 )
 
-onServerPrefetch(() => Promise.all([store.fetchTree(), store.fetchList({ reset: true })]))
+// The tree is usually here already: entry-server loads it for the rail (#279).
+onServerPrefetch(() =>
+  Promise.all([store.treeLoaded ? undefined : store.fetchTree(), store.fetchList({ reset: true })]),
+)
 onMounted(() => {
   try {
     const stored = localStorage.getItem(VIEW_KEY) as View | null
@@ -128,7 +131,9 @@ function setView(next: View) {
 // for it.
 watch(
   [view, () => projects.activeId],
-  () => { if (view.value === 'graph' && !store.graphLoaded) void store.fetchGraph() },
+  // Not during SSR: the render does not wait for it (the canvas is client-only),
+  // so the answer would only race the serialized state.
+  () => { if (!import.meta.env.SSR && view.value === 'graph' && !store.graphLoaded) void store.fetchGraph() },
   { immediate: true },
 )
 
@@ -236,7 +241,7 @@ watch(virtualRows, (rows) => {
           @click="setView(v.id)"
         >
           <component :is="v.icon" class="size-3.5" />
-          <span class="hidden sm:inline">{{ t(v.label) }}</span>
+          <span class="sr-only sm:not-sr-only">{{ t(v.label) }}</span>
         </button>
       </div>
 
@@ -250,7 +255,7 @@ watch(virtualRows, (rows) => {
         @click="store.setShowArchived(!store.showArchived)"
       >
         <Archive class="size-4" />
-        <span class="hidden sm:inline">{{ t('verification.archived.showArchived') }}</span>
+        <span class="sr-only sm:not-sr-only">{{ t('verification.archived.showArchived') }}</span>
       </Button>
 
       <Button
@@ -262,7 +267,7 @@ watch(virtualRows, (rows) => {
         @click="filtersOpen = !filtersOpen"
       >
         <SlidersHorizontal class="size-4" />
-        <span class="hidden sm:inline">{{ t('graph.filters') }}</span>
+        <span class="sr-only sm:not-sr-only">{{ t('graph.filters') }}</span>
         <span
           v-if="store.activeFilterCount"
           class="grid size-4 place-items-center rounded-full bg-primary text-[0.625rem] font-semibold text-primary-foreground"
@@ -271,10 +276,10 @@ watch(virtualRows, (rows) => {
 
       <div v-if="auth.canEdit" class="flex gap-2">
         <Button variant="outline" size="sm" as-child>
-          <RouterLink to="/upload"><Upload class="size-4" /> <span class="hidden sm:inline">{{ t('documents.upload') }}</span></RouterLink>
+          <RouterLink to="/upload"><Upload class="size-4" /> <span class="sr-only sm:not-sr-only">{{ t('documents.upload') }}</span></RouterLink>
         </Button>
         <Button size="sm" as-child>
-          <RouterLink to="/create"><Plus class="size-4" /> <span class="hidden sm:inline">{{ t('documents.newPage') }}</span></RouterLink>
+          <RouterLink to="/create"><Plus class="size-4" /> <span class="sr-only sm:not-sr-only">{{ t('documents.newPage') }}</span></RouterLink>
         </Button>
       </div>
     </header>

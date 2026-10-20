@@ -13,6 +13,46 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- A workspace admin can make a bound Telegram, Time or Mattermost group
+  **searchable** (#339, phase 1 of the chat search milestone). This is the
+  `searchable` switch on `PATCH /v1/chat/bindings/:id`, and it is separate
+  from *Keep messages for /capture*.
+  - **Turning it on:** the bot first tells the group what it keeps, for how
+    long, and that `/forget` works. If the bot cannot post that notice,
+    nothing is switched on.
+  - **What is kept:** from then on, people's messages are kept with emails,
+    phone numbers, card numbers, ID numbers and secrets masked before
+    anything is written. Edits are followed on every platform, and deletions
+    on Time and Mattermost (Telegram never tells bots about deletions).
+  - **Turning it off:** what was kept is deleted at once. Unbinding the group
+    does the same, and `/forget` deletes the asker's own messages too.
+  - **Retention:** messages are kept for at most `CHAT_SEARCH_RETENTION_DAYS`.
+    A workspace can shorten that through `GET`/`PATCH
+    /v1/chat/search-settings`.
+  - **Not searchable yet:** the indexer, search, the agents' tools and the
+    web UI arrive in the next phases.
+
+### Operations
+
+- **New env vars:** `CHAT_SEARCH_ENABLED` (default `true`) and
+  `CHAT_SEARCH_RETENTION_DAYS` (default `90`). Nothing is kept until an admin
+  turns a group on.
+- **Migration:** `20261125100000_chat_search` adds `chat_messages`,
+  `chat_chunks` (with a generated `tsvector` column and a GIN index), two
+  nullable columns on `chat_channel_bindings` and one on
+  `workspace_settings`. It is additive, so a rollback needs no down
+  migration.
+- **Telegram:** a bot reports edits only after its webhook is set again.
+  Press **Test** on each Telegram bot after deploying.
+- **Retention sweep:** the chat sweeper's one-minute tick now also purges
+  kept chat (the harvest buffer and searchable groups) while
+  `CHAT_ENABLED=false`, because a retention is a promise about rows already
+  written.
+
 ## [0.29.1] — 2026-10-20
 
 ### Fixed

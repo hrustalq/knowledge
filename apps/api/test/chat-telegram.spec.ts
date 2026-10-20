@@ -325,11 +325,11 @@ describe('Bot API calls', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ callback_query_id: 'cb-1', text: 'Thanks' });
   });
 
-  it('registers the webhook for questions, button presses and reactions', async () => {
+  it('registers the webhook for questions, edits (#339), button presses and reactions', async () => {
     const fetchMock = stubFetch({ status: 200, body: { ok: true, result: true } });
     await adapter.registerWebhook({ token: 'T', botUsername: BOT, serverUrl: null, actionUrl: '' }, 'https://kn.test/hook', 's');
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
-      allowed_updates: ['message', 'callback_query', 'message_reaction'],
+      allowed_updates: ['message', 'edited_message', 'callback_query', 'message_reaction'],
     });
   });
 

@@ -28310,6 +28310,120 @@
         ]
       }
     },
+    "/v1/chat/search-settings": {
+      "get": {
+        "operationId": "ChatSettingsController_searchSettings",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Searchable chat (#339): whether it is available, and the retention asked for vs. applied",
+        "tags": [
+          "chat"
+        ]
+      },
+      "patch": {
+        "operationId": "ChatSettingsController_updateSearchSettings",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChatSearchSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Shorten how long searchable groups’ messages are kept; null inherits CHAT_SEARCH_RETENTION_DAYS",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
     "/v1/chat/integrations": {
       "get": {
         "operationId": "ChatSettingsController_list",
@@ -28786,7 +28900,7 @@
             }
           }
         },
-        "summary": "Change a group’s project, agent, answer mode, language, listening or automatic harvest",
+        "summary": "Change a group’s project, agent, answer mode, language, listening, automatic harvest or searchability",
         "tags": [
           "chat"
         ]
@@ -31133,7 +31247,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.28.0",
+    "version": "0.29.1",
     "contact": {}
   },
   "tags": [],
@@ -36623,6 +36737,25 @@
           "format"
         ]
       },
+      "UpdateChatSearchSettingsDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "retentionDays": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "description": "Days a searchable group’s messages are kept; null inherits CHAT_SEARCH_RETENTION_DAYS, and a longer value is clamped to it"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "retentionDays"
+        ]
+      },
       "CreateChatIntegrationDto": {
         "type": "object",
         "properties": {
@@ -36793,6 +36926,10 @@
           "autoHarvest": {
             "type": "boolean",
             "description": "Harvest this group’s quiet threads automatically (#340), as the admin who turns it on — never anyone named in the body. Needs listening; turning listening off turns this off too."
+          },
+          "searchable": {
+            "type": "boolean",
+            "description": "Make this group’s messages searchable (#339), as the admin who turns it on. Any platform; turning it on posts a notice in the group first (400 if it cannot), turning it off deletes what was kept."
           }
         }
       },

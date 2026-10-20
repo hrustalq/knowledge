@@ -105,6 +105,12 @@ function harness(opts: {
       opts.notKept ? null : { ...i, replyTo: { messageId: i.messageId, authorId: '7', text: '[EMAIL_1] ships it', at: new Date(), fromBot: false } },
     ),
   };
+  const messages = {
+    enabled: true,
+    keep: vi.fn(async () => undefined),
+    change: vi.fn(async () => undefined),
+    forget: vi.fn(async () => 2),
+  };
   const claims: Array<Record<string, unknown>> = [];
   const settled: Array<Record<string, unknown>> = [];
   const prisma = {
@@ -189,9 +195,10 @@ function harness(opts: {
     captures as never,
     harvester as never,
     buffer as never,
+    messages as never,
     config as never,
   );
-  return { svc, prisma, access, assistant, identities, integrations, feedback, captures, harvester, buffer, adapter, posted, edited, acks, claims, settled };
+  return { svc, prisma, access, assistant, identities, integrations, feedback, captures, harvester, buffer, messages, adapter, posted, edited, acks, claims, settled };
 }
 
 describe('an unlinked account', () => {
@@ -761,5 +768,53 @@ describe('harvest reactions (#82, phase 4)', () => {
     expect(h.posted).toEqual([{ kind: 'notice', text: 'chat.harvest.reactionNotKept' }]);
     expect(h.buffer.groupThread).not.toHaveBeenCalled();
     expect(h.harvester.harvest).not.toHaveBeenCalled();
+  });
+});
+
+describe('searchable groups (#339)', () => {
+  const group = { id: 'b-1', answerMode: 'mention', agentKey: null, projectId: 'p-1', title: 'Platform team', listening: false, searchableAt: new Date() };
+  const timeBot = { ...(integration as object), kind: 'time' } as never;
+  const said = inbound({ isDm: false, chatId: 'ch-1', messageId: 'p-30', text: 'deploys are on Tuesdays', threadId: 'p-30' });
+
+  it('keeps a person’s message on any platform, without listening, and still handles it as usual', async () => {
+    const h = harness({ binding: group });
+    await h.svc.receive(timeBot, said);
+    expect(h.messages.keep).toHaveBeenCalledWith(group, said);
+    expect(h.buffer.holdGroupMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps nothing where the binding is not searchable, or for a command', async () => {
+    const off = harness({ binding: { ...group, searchableAt: null } });
+    await off.svc.receive(timeBot, said);
+    expect(off.messages.keep).not.toHaveBeenCalled();
+    const h = harness({ binding: group });
+    await h.svc.receive(timeBot, { ...said, command: { name: 'help', args: '' } });
+    expect(h.messages.keep).not.toHaveBeenCalled();
+  });
+
+  it('an edit only updates the kept copy: never answered, and an edited command is not run', async () => {
+    const h = harness({ binding: group });
+    const edited = { ...said, mentioned: true, command: { name: 'capture', args: '' }, change: 'edited' as const };
+    await h.svc.receive(timeBot, edited);
+    expect(h.messages.change).toHaveBeenCalledWith(group, edited);
+    expect(h.messages.keep).not.toHaveBeenCalled();
+    expect(h.harvester.harvest).not.toHaveBeenCalled();
+    expect(h.assistant.runChatTurn).not.toHaveBeenCalled();
+    expect(h.posted).toEqual([]);
+  });
+
+  it('a change in an unbound chat or a DM touches nothing', async () => {
+    const h = harness({ binding: null });
+    await h.svc.receive(timeBot, { ...said, change: 'deleted' });
+    await h.svc.receive(timeBot, inbound({ change: 'edited' }));
+    expect(h.messages.change).not.toHaveBeenCalled();
+    expect(h.posted).toEqual([]);
+  });
+
+  it('/forget counts what search kept too', async () => {
+    const h = harness({ telegram: true, binding: group, linked: false });
+    await h.svc.receive(integration, inbound({ isDm: false, chatId: '-1001', command: { name: 'forget', args: '' } }));
+    expect(h.messages.forget).toHaveBeenCalledWith('int-1', '42');
+    expect(h.buffer.forget).toHaveBeenCalledOnce();
   });
 });

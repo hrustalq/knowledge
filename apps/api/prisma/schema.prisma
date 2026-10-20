@@ -3138,6 +3138,10 @@ model ChatChannelBinding {
   /// captures are attributed to. null = off. Needs `listening`.
   autoHarvestBy  String?   @map("auto_harvest_by") @db.Uuid
   autoHarvestAt  DateTime? @map("auto_harvest_at") @db.Timestamptz
+  /// Searchable chat (#339): the admin who turned it on, after the group was
+  /// told. null = off. Independent of `listening`, and on every platform.
+  searchableBy   String?   @map("searchable_by") @db.Uuid
+  searchableAt   DateTime? @map("searchable_at") @db.Timestamptz
   createdBy      String?   @map("created_by") @db.Uuid
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
@@ -3146,6 +3150,8 @@ model ChatChannelBinding {
   subscriptions ChatSubscription[]
   buffered      ChatBufferedMessage[]
   harvestMarks  ChatHarvestMark[]
+  messages      ChatMessage[]
+  chunks        ChatChunk[]
 
   @@unique([integrationId, externalChatId])
   @@map("chat_channel_bindings")
@@ -3203,6 +3209,62 @@ model ChatBufferedMessage {
   @@index([authorId])
   @@index([createdAt])
   @@map("chat_buffered_messages")
+}
+
+/// A message of a searchable binding (#339), masked on write. Not the harvest
+/// buffer above: its own consent, its own retention, and never read by a
+/// harvest. Packed into `chat_chunks` by the indexer; `chunkId` null = not yet.
+model ChatMessage {
+  id                String    @id @default(uuid()) @db.Uuid
+  workspaceId       String    @map("workspace_id") @db.Uuid
+  bindingId         String    @map("binding_id") @db.Uuid
+  /// Time/Mattermost: the thread's root post. Telegram: the forum topic, '' outside one.
+  threadKey         String    @map("thread_key")
+  externalMessageId String    @map("external_message_id")
+  /// The platform's opaque id for who wrote it — what /forget matches.
+  authorId          String    @map("author_id")
+  /// Masked, placeholders numbered per message.
+  text              String
+  sentAt            DateTime  @map("sent_at") @db.Timestamptz
+  editedAt          DateTime? @map("edited_at") @db.Timestamptz
+  chunkId           String?   @map("chunk_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  binding ChatChannelBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+  chunk   ChatChunk?         @relation(fields: [chunkId], references: [id], onDelete: SetNull)
+
+  @@unique([bindingId, externalMessageId])
+  @@index([bindingId, threadKey, sentAt])
+  @@index([chunkId])
+  @@index([authorId])
+  @@index([sentAt])
+  @@map("chat_messages")
+}
+
+/// A window of one thread's messages (#339): the unit embedded, matched and
+/// returned. Deleting one detaches its messages, which re-index on the next tick.
+model ChatChunk {
+  id           String                   @id @default(uuid()) @db.Uuid
+  workspaceId  String                   @map("workspace_id") @db.Uuid
+  bindingId    String                   @map("binding_id") @db.Uuid
+  threadKey    String                   @map("thread_key")
+  /// Masked; one "author-n: text" line per message.
+  text         String
+  firstAt      DateTime                 @map("first_at") @db.Timestamptz
+  lastAt       DateTime                 @map("last_at") @db.Timestamptz
+  messageCount Int                      @map("message_count")
+  /// to_tsvector('russian', text), generated in the migration — `russian`
+  /// stems ASCII words with english_stem too, so mixed ru/en chat matches
+  /// both. Never written by Prisma; the GIN index is raw SQL as well.
+  searchTsv    Unsupported("tsvector")? @map("search_tsv")
+  createdAt    DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+
+  binding  ChatChannelBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([bindingId, lastAt])
+  @@index([lastAt])
+  @@map("chat_chunks")
 }
 
 /// A bound group told about pages and merge requests (issue #71, phase 3).
@@ -3408,6 +3470,9 @@ model WorkspaceSettings {
   /// Days of analytics rows kept; null inherits ANALYTICS_RETENTION_DAYS, and
   /// a value may only shorten it.
   analyticsRetentionDays  Int?     @map("analytics_retention_days")
+  /// #339 searchable chat: days a message is kept; null inherits
+  /// CHAT_SEARCH_RETENTION_DAYS, and a value may only shorten it.
+  chatSearchRetentionDays Int?     @map("chat_search_retention_days")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 

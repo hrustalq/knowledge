@@ -294,7 +294,7 @@ describe('the switch', () => {
     };
     const adapter = { postMessage: vi.fn(post), render: (v: unknown) => v };
     const env: Record<string, unknown> = { API_PUBLIC_URL: 'https://api.test', CHAT_LISTEN_TTL_DAYS: 7, HARVEST_AUTO_QUIET_MINUTES: 60 };
-    const svc = new ChatIntegrationsService(prisma as never, { get: () => adapter } as never, {} as never, { get: (k: string) => env[k] } as never);
+    const svc = new ChatIntegrationsService(prisma as never, { get: () => adapter } as never, {} as never, { get: (k: string) => env[k] } as never, {} as never);
     vi.spyOn(svc, 'require').mockResolvedValue({ id: 'int-1', kind: 'telegram', locale: 'en' } as never);
     vi.spyOn(svc, 'context').mockReturnValue({ token: 'T' } as never);
     const data = () => (prisma.chatChannelBinding.update.mock.calls[0] as unknown as [{ data: Record<string, unknown> }])[0].data;
@@ -340,8 +340,9 @@ describe('the switch', () => {
 
   it('the list says what the server allows beside what each binding asks for', async () => {
     const env: Record<string, unknown> = { CHAT_ENABLED: true, HARVEST_ENABLED: true, HARVEST_AUTO_ENABLED: false, HARVEST_AUTO_MIN_MESSAGES: 8, HARVEST_AUTO_QUIET_MINUTES: 60, CHAT_LISTEN_TTL_DAYS: 7, API_PUBLIC_URL: 'x' };
-    const prisma = { chatChannelBinding: { findMany: vi.fn(async () => []) } };
-    const svc = new ChatIntegrationsService(prisma as never, {} as never, {} as never, { get: (k: string) => env[k] } as never);
+    const prisma = { chatChannelBinding: { findMany: vi.fn(async () => []) }, chatIntegration: { findUnique: vi.fn(async () => ({ id: 'int-1', workspaceId: 'ws' })) } };
+    const messages = { settings: vi.fn(async () => ({ available: true, retentionDays: { ceiling: 90, requested: null, applied: 90 } })) };
+    const svc = new ChatIntegrationsService(prisma as never, {} as never, {} as never, { get: (k: string) => env[k] } as never, messages as never);
     expect((await svc.listBindings('int-1')).autoHarvest).toEqual({ available: false, minMessages: 8, quietMinutes: 60 });
   });
 });

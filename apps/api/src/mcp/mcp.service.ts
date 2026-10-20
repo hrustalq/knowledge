@@ -21,6 +21,7 @@ import {
   WIKI_SECTIONS,
   REQUESTABLE_ACCESS_LEVELS,
   CAPTURE_KIT_CLIENTS,
+  MCP_LEARNING_TARGET,
   type CaptureKitClient,
 } from '@knowledge/contracts';
 import type { AiAgentChoice, CaptureKitResponse, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
@@ -63,7 +64,7 @@ import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
 import { CAPTURE_TOOLS, MCP_AS_OF, MCP_INSTRUCTIONS, MCP_KNOWN_AT, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
-import { renderSkill, type McpWhoami } from './skill.js';
+import { renderMcpLearnings, renderSkill, type McpLearningGroup, type McpWhoami } from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
 import { registerDraftTools, type McpDraftTools } from './draft-tools.js';
 import { CaptureService } from '../captures/capture.service.js';
@@ -90,7 +91,7 @@ import { ANALYTICS_MAX_DAYS, CONFLICT_STATUSES, RELEASE_TAG_NAME_PATTERN } from 
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.28.0';
+export const MCP_SERVER_VERSION = '0.29.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -162,6 +163,12 @@ export interface McpExtras {
   drafts?: McpDraftTools;
   /** The HTTP request sent `DNT: 1` or `Sec-GPC: 1` (#79). */
   noTrack?: boolean;
+  /**
+   * The server instructions with this caller's `mcp` learnings (#305), from
+   * `instructionsFor`. Async, so computed by the caller, and only when the
+   * request is an `initialize` — the one message that carries instructions.
+   */
+  instructions?: string;
 }
 
 @Injectable()
@@ -216,7 +223,39 @@ export class McpService {
   ) {}
 
   async serveStdio(): Promise<void> {
-    await this.buildServer(DEV_PRINCIPAL).server.connect(new StdioServerTransport());
+    // ponytail: learnings read once at startup; a learning approved later reaches a restarted stdio server.
+    const instructions = await this.instructionsFor(DEV_PRINCIPAL);
+    await this.buildServer(DEV_PRINCIPAL, { instructions }).server.connect(new StdioServerTransport());
+  }
+
+  /** MCP_INSTRUCTIONS plus the team guidance this caller is given (#305). */
+  async instructionsFor(principal: Principal): Promise<string> {
+    return MCP_INSTRUCTIONS + renderMcpLearnings(await this.learningsFor(await this.whoami(principal)), 'text');
+  }
+
+  /**
+   * The active `mcp` learnings (#305, phase 3) for every workspace the caller
+   * reaches: workspace-wide ones, and those for a project it may see — only
+   * the key's projects when the key is narrowed to some. Learnings for every
+   * agent are not included (`everyAgent: false`); the budget and the
+   * derived/manual split are the agents' (`choosePromptLearnings`).
+   */
+  private async learningsFor(whoami: McpWhoami): Promise<McpLearningGroup[]> {
+    const pin = whoami.apiKey?.projectIds ?? null;
+    const groups = await Promise.all(
+      whoami.workspaces.map(async (w) => {
+        const projects = pin ? w.projects.filter((p) => pin.includes(p.projectId)) : w.projects;
+        const names = new Map(projects.map((p) => [p.projectId, p.name]));
+        const rows = await this.learnings.forPrompt({
+          workspaceId: w.workspaceId,
+          agentKey: MCP_LEARNING_TARGET,
+          projectIds: [...names.keys()],
+          everyAgent: false,
+        });
+        return { name: w.name, items: rows.map((l) => ({ text: l.text, project: l.projectId ? (names.get(l.projectId) ?? null) : null })) };
+      }),
+    );
+    return groups.filter((g) => g.items.length > 0);
   }
 
   /** What `principal` would be offered — the connection page's list and the skill's catalogue. */
@@ -232,7 +271,7 @@ export class McpService {
   buildServer(principal: Principal, extras: McpExtras = {}): { server: McpServer; tools: McpToolSummary[] } {
     const server = new McpServer(
       { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
-      { instructions: MCP_INSTRUCTIONS },
+      { instructions: extras.instructions ?? MCP_INSTRUCTIONS },
     );
     // Every call is filed as `mcp` traffic (#79), whoever the principal is.
     const caller: AnalyticsCaller = { principal, channel: 'mcp', ...(extras.noTrack ? { noTrack: true } : {}) };
@@ -712,7 +751,11 @@ export class McpService {
         inputSchema: {
           workspaceId: z.string().uuid(),
           text: z.string().min(1).max(AGENT_LEARNING_MAX_CHARS),
-          agentKey: z.string().max(64).optional().describe('The agent it teaches; omit for every agent'),
+          agentKey: z
+            .string()
+            .max(64)
+            .optional()
+            .describe('The agent it teaches; "mcp" teaches agents connected over MCP, like you; omit for every agent of the platform'),
           projectId: z.string().uuid().optional().describe('Applies only in this project'),
         },
       },
@@ -1854,14 +1897,16 @@ export class McpService {
 
   /** The SKILL.md for `principal` — see skill.ts. `url` overrides the endpoint it names. */
   async skillFor(principal: Principal, url?: string, extras: McpExtras = {}): Promise<string> {
+    const whoami = await this.whoami(principal);
     return renderSkill({
       url: url ?? this.publicUrl(),
       serverName: MCP_SERVER_NAME,
       version: MCP_SERVER_VERSION,
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
       webUrl: this.webUrl(),
-      whoami: await this.whoami(principal),
+      whoami,
       tools: this.toolsFor(principal, extras),
+      learnings: await this.learningsFor(whoami),
     });
   }
 

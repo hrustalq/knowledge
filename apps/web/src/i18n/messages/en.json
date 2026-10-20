@@ -2257,7 +2257,8 @@
       "lint": "Lint",
       "contradiction": "Contradiction check",
       "community": "Community summary",
-      "harvest": "Chat harvest"
+      "harvest": "Chat harvest",
+      "coach": "Learner coach"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",
@@ -2414,6 +2415,7 @@
         "archived": "Nothing archived."
       },
       "everyAgent": "Every agent",
+      "mcpTarget": "Agents over MCP (Claude Code, Cursor…)",
       "everyProject": "Every project",
       "agent": "Agent",
       "project": "Applies in",
@@ -2432,9 +2434,20 @@
         "manual": "Written here",
         "document-thread": "From a page comment",
         "mr-thread": "From a review thread",
-        "finding": "From a dismissed finding"
+        "finding": "From a dismissed finding",
+        "derived": "From findings people kept dismissing"
       },
       "approvedAt": "approved {time}",
+      "derived": "Derived",
+      "derivedHint": "Drafted by the coach from findings several people dismissed. Read the evidence before approving: no agent is told it until an admin approves it.",
+      "evidence": "{n} dismissed finding | {n} dismissed findings",
+      "evidenceHidden": "+{n} not visible to you",
+      "evidenceDismissed": "dismissed {time}",
+      "archiveProposed": "Proposed for archiving: dismissals did not drop after it was approved.",
+      "archiveCounts": "Before: {beforeDismissed} of {beforeFindings} findings dismissed over {beforeRuns} runs. After: {afterDismissed} of {afterFindings} over {afterRuns} runs.",
+      "archiveProposedHint": "The learner only proposes. Archive it, or keep it active and the learner will not ask again until it is approved anew.",
+      "keep": "Keep active",
+      "kept": "Kept active. The learner will not propose archiving it again.",
       "teach": "Teach agent",
       "teachTitle": "Teach {agent}",
       "editTitle": "Edit learning",
@@ -4336,7 +4349,21 @@
         "trustRanking": {
           "label": "Trust-aware ranking",
           "hint": "Multiply search scores by each page's verification state, so verified pages rank above outdated ones"
+        },
+        "rrfK": {
+          "label": "Fusion constant (RRF k)",
+          "hint": "How strongly a top rank in one search leg outweighs agreement between both legs. Lower favours the single best match, higher favours pages both legs found"
+        },
+        "trustWeights": {
+          "label": "Trust weights",
+          "hint": "What each page state multiplies a result's score by. An empty field keeps the default; Inactive applies on top of the state",
+          "inert": "Trust-aware ranking is off, so these weights change nothing until it is turned on.",
+          "range": "Each weight is between {min} and {max}."
         }
+      },
+      "ranking": {
+        "title": "Search ranking",
+        "intro": "How search orders its results. make tune measures these against your votes and proposes values; nothing here changes unless an admin saves it."
       }
     },
     "agents": {

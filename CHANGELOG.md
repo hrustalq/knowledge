@@ -13,6 +13,140 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.29.0] — 2026-10-20
+
+### Added
+
+- Agents can now learn from findings people keep dismissing (#305). A new
+  learner process finds dismissed findings of one agent in one project that
+  are the same mistake: three or more within 30 days, dismissed by at least
+  two people. The new `coach` agent then drafts one correction from them,
+  which lands under **Settings → AI → Learnings** as a *proposed* learning
+  with a **Derived** badge and its evidence. Each finding in the evidence is
+  shown only to someone who can open every page it cites; the others appear
+  as "+N not visible to you". A later similar dismissal is added to the same
+  learning instead of creating another. Findings that cite a restricted page,
+  or a page under one, are never used. A derived learning reaches no prompt
+  until an admin approves it, and derived learnings never take more than
+  half of an agent's learning budget or push out a hand-written one. When an
+  active learning has 20 runs on each side of its approval and dismissals
+  did not drop, it is flagged as proposed for archiving with the before and
+  after counts. The admin archives it or presses **Keep active**
+  (`PATCH /v1/ai/agents/learnings/:id` with `keepActive: true`). The learner
+  never activates or archives anything itself. `make backtest
+  ARGS="--learner"` measures the clustering threshold for the configured
+  embedding model.
+- Coding agents connected over MCP (Claude Code, Cursor and others) now get
+  the team's guidance (#305). A learning can teach **Agents over MCP**. Once
+  an admin approves it, it appears in the instructions the MCP server sends
+  when a client connects, and in `knowledge://skill` under **Team guidance**.
+  A key narrowed to projects sees only those projects' learnings, plus the
+  workspace-wide ones. Learnings for every agent are not sent to MCP clients.
+  The learner also drafts MCP learnings from repeated failures: captures a
+  person rejected, captured merge requests closed unmerged, and answers built
+  from `knowledge_search` that were downvoted. A capture dropped as a
+  duplicate does not count. The key `mcp` is now reserved and cannot be used
+  for a custom agent.
+- Search ranking can be tuned per workspace, and `make tune` proposes how
+  (#305). **Knowledge health → Settings** has a new **Search ranking** group:
+  the fusion constant (RRF k, default 60) and a weight for each page state
+  that trust-aware ranking multiplies scores by. Each shows what is asked for
+  and what applies; a weight left empty keeps its default, and each weight is
+  held between 0.1 and 1.25. `make tune ARGS="--workspace <id>"` replays the
+  workspace's votes (or `--feedback <file>`) and its pages' titles through
+  search once, then tries other values in memory. It proposes a change only
+  when it raises MRR on the votes, costs known-item recall@5 at most one
+  point, and also holds on a 30% holdout. It does the same for the capture
+  dedupe and amend thresholds, never accepting more dropped new facts or more
+  wrong-page amends than today. It prints the report and the `PATCH` bodies
+  to apply, appends the report to `logs/tune-<date>.jsonl`, and writes no
+  setting. With no override, search ranks exactly as before.
+
+- The in-app docs (**Settings → Docs**) have a **Learning loop** article
+  under Administration. It covers what the Agents tab counts, how a derived
+  learning is drafted and approved, guidance for MCP agents, the search knobs
+  and `make tune`, and how to turn the learner on (#305).
+
+### Changed
+
+- Vector search now asks ArcadeDB for the nearest chunks through an HNSW index
+  (`LSM_VECTOR`) instead of downloading up to 5,000 chunk vectors and ranking
+  them in the API (#304). The workspace, the live projection and page
+  restrictions are applied inside the nearest-neighbour search, so another
+  workspace, an old revision or a hidden page can no longer take a result
+  slot, and a workspace past 5,000 chunks is no longer ranked on an arbitrary
+  subset. This covers workspace search, the assistant's and agents'
+  retrieval, capture dedupe and a published site's Ask. On a copy of the
+  local demo corpus (5,936 chunks), one read went from 71 MB and ~1.5 s p95
+  to ~18 KB and ~32 ms p95, at recall@10 0.988 against the exact ranking.
+  The capture calibration backtest and the doc-quality duplicate check now
+  read every chunk instead of stopping at 5,000.
+
+### Operations
+
+- ArcadeDB is pinned to the `26.10.2` release by tag and digest in both
+  compose files (#304), replacing `latest`. Production runs a
+  `26.11.1-SNAPSHOT` nightly, so this moves it back one minor version, to the
+  newest release. A volume written by `26.11.1-SNAPSHOT` (build of
+  2026-10-19) and one written by `26.9.1-SNAPSHOT` both opened on `26.10.2`
+  in a test, with their data and indexes intact; back up the `arcadedata`
+  volume before deploying anyway. The deploy recreates the `arcadedb`
+  container. Locally, `make infra-up` pulls the pinned image: the old
+  `26.9.1-SNAPSHOT` rejects the filtered vector query, and search then falls
+  back to the scan.
+- The worker builds the chunk vector index on its first boot after the deploy
+  (`ensureSchema`; 6,266 vectors took 1.8 s). Until then, and whenever no
+  index of the configured dimension exists, vector search falls back to the
+  old scan. Run `make graph-live-backfill` once afterwards, so that chunks
+  written before the live flag existed stop counting as live: the local demo
+  workspace had 1,745 of them. Whether production has any is not yet known.
+- Changing `EMBEDDINGS_DIM` now drops and rebuilds the index on the worker's
+  next boot. Vectors of the old length stay stored but are never ranked, and
+  the stale sweeper re-embeds their pages as before. A wrong `EMBEDDINGS_DIM`
+  now fails every indexing job with "Vector dimension does not match index
+  dimension" instead of indexing chunks that search never finds.
+- **Rollback:** the previous app version still works on `26.10.2` and ignores
+  the index, which ArcadeDB keeps up to date. Rolling the app back **and**
+  changing `EMBEDDINGS_DIM` at once is the exception: the old worker does not
+  rebuild the index, so every chunk write fails until you run
+  ``DROP INDEX `Chunk[embedding]` `` in ArcadeDB. Rolling the image back to a
+  snapshot also works: `26.11.1-SNAPSHOT` serves the index, and
+  `26.9.1-SNAPSHOT` opens it but rejects the filtered query, so search scans.
+- New process `learner` (#305): a fifth entrypoint of the API image,
+  `node dist/learner.main`, added to `docker-compose.prod.yml` under the
+  compose profile `learner`. It starts only when `COMPOSE_PROFILES` names
+  `learner`, and it works only with `LEARNER_ENABLED=true`. Otherwise it boots
+  and idles. Locally run it with `make dev-learner`. It reads Postgres, embeds
+  through `EMBEDDINGS_*` and calls the `coach` agent through the workspace's
+  provider, billed as `coach` usage. It needs no Redis, listens on no port and
+  consumes no queue.
+- New env vars, all with defaults, so nothing needs to be set to deploy:
+  - `LEARNER_ENABLED` (`false`)
+  - `LEARNER_TICK_MS` (`900000`): each workspace gets one pass a day at most
+  - `LEARNER_WINDOW_DAYS` (`30`)
+  - `LEARNER_CLUSTER_THRESHOLD` (`0.7`, calibrated on bge-m3; re-run the
+    calibration if the embedding model changes)
+  - `LEARNER_MIN_DISMISSALS` (`3`)
+  - `LEARNER_MIN_PEOPLE` (`2`)
+  - `LEARNER_MIN_RUNS` (`20`)
+
+  They are commented out in `.env.production.example`, so the deploy's
+  environment check asks for nothing new. Turning the learner on means
+  setting `LEARNER_ENABLED=true` and adding `learner` to `COMPOSE_PROFILES` in
+  the GitHub `production` environment.
+- Migration `20261123100000_derived_learnings` adds three nullable columns to
+  `agent_learnings`: `evidence`, `archive_proposed_at` and `archive_check`.
+  It also widens the `source_kind` CHECK to allow `derived`. It is additive
+  with no backfill and survives a code rollback, since the previous release
+  ignores the columns and never writes `derived`. After a rollback, derived learnings
+  still show as proposed learnings and an admin can archive them. (#305)
+- Migration `20261124100000_search_knobs` adds two nullable columns to
+  `knowledge_health_settings`: `rrf_k` and `trust_weights`. It is additive
+  with no backfill, and null means the code default. It survives a code
+  rollback: the previous release ignores the columns and ranks with its
+  constants, so a saved override stops applying until the release returns.
+  No new env vars. (#305)
+
 ## [0.28.0] — 2026-10-20
 
 ### Breaking
@@ -3882,7 +4016,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.28.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/hrustalq/knowledge/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/hrustalq/knowledge/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/hrustalq/knowledge/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/hrustalq/knowledge/compare/v0.25.0...v0.26.0

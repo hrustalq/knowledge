@@ -50,7 +50,16 @@ export class McpController {
     summary: 'MCP Streamable HTTP endpoint (JSON-RPC). Point an MCP client here with a Bearer API key',
   })
   async handle(@CurrentPrincipal() principal: Principal, @Req() req: Request, @Res() res: Response): Promise<void> {
-    const { server } = this.mcp.buildServer(principal, { ...this.extras, noTrack: noTrackOf(req.headers) });
+    // Only `initialize` carries the instructions, so only it pays for the learnings read (#305).
+    const initialize = [req.body as unknown].flat().some((m) => (m as { method?: unknown } | null)?.method === 'initialize');
+    // Guidance is advisory: a failed read falls back to the static instructions rather than refusing the client.
+    const instructions = initialize
+      ? await this.mcp.instructionsFor(principal).catch((err: unknown) => {
+          this.logger.warn({ err }, 'MCP learnings unavailable; static instructions sent');
+          return undefined;
+        })
+      : undefined;
+    const { server } = this.mcp.buildServer(principal, { ...this.extras, noTrack: noTrackOf(req.headers), instructions });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => {
       void transport.close();

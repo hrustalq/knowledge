@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TRUST_WEIGHTS } from '@knowledge/contracts';
+import { SEARCH_RRF_K, TRUST_WEIGHTS } from '@knowledge/contracts';
 import { SearchService } from '../src/search/search.service.js';
+import { rankPool, type SearchKnobs, type SearchPool } from '../src/search/ranking.js';
 import { systemScope } from '../src/permissions/access-scope.js';
 import { DEV_PRINCIPAL } from '../src/auth/principal.js';
 
@@ -57,7 +58,13 @@ function hit(documentId: string, score: number) {
 /** An admin's scope: sees everything, so these cases measure ranking alone. */
 const ADMIN = systemScope(WS);
 
-function build(docs: Row[], hits: ReturnType<typeof hit>[], trustRanking = true) {
+function build(
+  docs: Row[],
+  hits: ReturnType<typeof hit>[],
+  trustRanking = true,
+  textHits: ReturnType<typeof hit>[] = [],
+  knobs: Partial<SearchKnobs> = {},
+) {
   const analytics = { search: vi.fn(() => 'search-1') };
   const prisma = {
     document: {
@@ -72,10 +79,19 @@ function build(docs: Row[], hits: ReturnType<typeof hit>[], trustRanking = true)
     getWorkspaceRelationGraph: vi.fn(async () => ({ edges: [], entities: {}, documents: {} })),
   };
   const embeddings = { embed: vi.fn(async () => [0.1, 0.2]) };
-  const fulltext = { enabled: false, search: vi.fn(async () => []) };
+  const fulltext = { enabled: textHits.length > 0, search: vi.fn(async (_ws: string, _q: string, k: number) => textHits.slice(0, k)) };
   const provenance = { openIssueCounts: vi.fn(async () => new Map<string, number>()) };
   const policy = {
-    effective: vi.fn(async () => ({ reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40, trustRanking })),
+    effective: vi.fn(async () => ({
+      reviewIntervalDays: 90,
+      remindBeforeDays: 7,
+      inactiveAfterDays: 180,
+      emptyMaxChars: 40,
+      trustRanking,
+      rrfK: SEARCH_RRF_K,
+      trustWeights: TRUST_WEIGHTS,
+      ...knobs,
+    })),
   };
   const permissions = { documentFilterFor: vi.fn(async () => ({ kind: 'all' as const })) };
   const config = { get: vi.fn((key: string) => ({ SEARCH_ACL_OVERFETCH: 5, SEARCH_ACL_MAX_FETCH: 500 })[key]) };
@@ -185,5 +201,42 @@ describe('SearchService analytics (#79)', () => {
     analytics.search.mockClear();
     expect((await svc.search({ workspaceId: WS, query: 'nothing' }, ADMIN)).searchId).toBeUndefined();
     expect(analytics.search).not.toHaveBeenCalled();
+  });
+});
+
+describe('SearchService knobs (#305)', () => {
+  const docs = [verified, plain, expired, outdated, inactive, archived];
+  const vector = [hit('outdated', 0.9), hit('plain', 0.8), hit('archived', 0.7), hit('verified', 0.6), hit('expired', 0.5)];
+  const text = [hit('verified', 9), hit('inactive', 8), hit('expired', 7), hit('plain', 6)];
+
+  it('the pool it hands make tune re-ranks to exactly what it returned, under any knobs', async () => {
+    for (const knobs of [{}, { rrfK: 5 }, { rrfK: 200, trustWeights: { ...TRUST_WEIGHTS, verified: 0.3, outdated: 1.25 } }]) {
+      const { svc } = build(docs, vector, true, text, knobs);
+      let pool = null as SearchPool | null;
+      const res = await svc.search({ workspaceId: WS, query: 'q', limit: 3 }, ADMIN, undefined, (p) => (pool = p));
+      expect(rankPool(pool!, { rrfK: SEARCH_RRF_K, trustWeights: TRUST_WEIGHTS, ...knobs })).toEqual(res.results.map((r) => r.documentId));
+    }
+  });
+
+  it('the fusion constant and the weights come from the workspace settings', async () => {
+    const at = async (knobs: Partial<SearchKnobs>) =>
+      (await build(docs, vector, true, text, knobs).svc.search({ workspaceId: WS, query: 'q', limit: 5 }, ADMIN)).results.map((r) => r.documentId);
+    const defaults = await at({});
+    expect(await at({ rrfK: SEARCH_RRF_K, trustWeights: TRUST_WEIGHTS })).toEqual(defaults);
+    // Outdated sinks under the default weights; raising its weight lifts it.
+    expect(defaults.indexOf('outdated')).toBeGreaterThan(0);
+    const raised = await at({ trustWeights: { ...TRUST_WEIGHTS, outdated: 1.25 } });
+    expect(raised.indexOf('outdated')).toBeLessThan(defaults.indexOf('outdated'));
+
+    // Trust off, so only fusion orders: at k=60 a page third in both legs
+    // (2/63) beats one first in only one (1/61); at k=1 it no longer does.
+    const fused = async (rrfK: number) =>
+      (
+        await build(docs, [hit('plain', 0.9), hit('expired', 0.8), hit('inactive', 0.7)], false, [hit('outdated', 9), hit('verified', 8), hit('inactive', 7)], {
+          rrfK,
+        }).svc.search({ workspaceId: WS, query: 'q', limit: 3 }, ADMIN)
+      ).results[0]!.documentId;
+    expect(await fused(SEARCH_RRF_K)).toBe('inactive');
+    expect(await fused(1)).toBe('plain');
   });
 });

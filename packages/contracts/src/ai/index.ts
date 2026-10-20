@@ -1124,6 +1124,12 @@ export type AiUsageOperation =
   /** Reading a chat thread a person asked to harvest into captures (#82). */
   | 'harvest'
   /**
+   * The learner's `coach` drafting one proposed learning from a cluster of
+   * dismissed findings (#305). Billed to no person: the row's `userId` is the
+   * zeros stub, since no one asked for it.
+   */
+  | 'coach'
+  /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
    */
@@ -1285,6 +1291,11 @@ export const BUILT_IN_AGENT_KEYS = [
   'atlas',
   /** Proposes captures from a chat thread a person asked to harvest (#82). */
   'harvester',
+  /**
+   * Drafts a proposed learning from findings people kept dismissing (#305).
+   * Run only by the learner process, never from the Run button.
+   */
+  'coach',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -2095,9 +2106,77 @@ export interface ApplyAgentRecipeResponse {
 export const AGENT_LEARNING_STATUSES = ['proposed', 'active', 'archived'] as const;
 export type AgentLearningStatus = (typeof AGENT_LEARNING_STATUSES)[number];
 
-/** Where a learning came from — what its provenance link points at. */
-export const AGENT_LEARNING_SOURCES = ['document-thread', 'mr-thread', 'finding', 'manual'] as const;
+/**
+ * Where a learning came from — what its provenance link points at. `derived`
+ * is written only by the learner (#305): a correction the `coach` drafted from
+ * findings several people dismissed, always `proposed`, with `evidence`.
+ */
+export const AGENT_LEARNING_SOURCES = ['document-thread', 'mr-thread', 'finding', 'manual', 'derived'] as const;
 export type AgentLearningSource = (typeof AGENT_LEARNING_SOURCES)[number];
+
+/** The sources a person (or an MCP client) may name when writing a learning. `derived` is the learner's alone. */
+export const AGENT_LEARNING_PERSON_SOURCES = ['document-thread', 'mr-thread', 'finding', 'manual'] as const satisfies readonly AgentLearningSource[];
+export type AgentLearningPersonSource = (typeof AGENT_LEARNING_PERSON_SOURCES)[number];
+
+/**
+ * The learning target for external agents connected over MCP — Claude Code,
+ * Cursor and the rest (#305, phase 3). Not an agent: nothing runs under it, so
+ * it is not in BUILT_IN_AGENT_KEYS and the registry, the agent UI and
+ * `resolveFor` never see it. Its active learnings are rendered into the MCP
+ * server instructions and `knowledge://skill`, and never into a built-in
+ * agent's prompt. Reserved as a custom agent key.
+ */
+export const MCP_LEARNING_TARGET = 'mcp';
+
+/** Who a learning may teach: a built-in agent, or the MCP target. A custom agent is checked against its row. */
+export const LEARNING_TARGETS = [...BUILT_IN_AGENT_KEYS, MCP_LEARNING_TARGET] as const;
+
+/**
+ * One failure a derived learning was drafted from (#305): a dismissed finding
+ * (its run and its position in it), or, for the `mcp` target, an MCP agent's
+ * capture a person rejected or whose merge request was closed unmerged, or a
+ * downvote on an answer it built from `knowledge_search`.
+ */
+export type AgentLearningEvidenceRef = { runId: string; findingIndex: number } | { captureId: string } | { feedbackId: string };
+
+/** A piece of evidence the viewer may see: the finding (or capture, or answer) as it was recorded. */
+export type AgentLearningEvidenceFinding = AgentLearningEvidenceRef & {
+  agentKey: string;
+  kind: string;
+  title: string;
+  dismissedAt: string | null;
+};
+
+/**
+ * A derived learning's evidence as one viewer sees it (#305). A finding whose
+ * cited pages the viewer cannot open, or whose run is gone, is only counted in
+ * `hidden` — never titled.
+ */
+export interface AgentLearningEvidence {
+  findings: AgentLearningEvidenceFinding[];
+  hidden: number;
+}
+
+/** Runs on one side of a learning's activation, their findings and how many of those were dismissed. */
+export interface AgentLearningSideCounts {
+  runs: number;
+  findings: number;
+  dismissed: number;
+}
+
+/**
+ * The learner's before/after check of an active learning (#305), stored with
+ * the proposed-archive flag it raised. Counts only. `keptAt` records an admin
+ * keeping the learning active anyway; the learner then never flags it again
+ * until it is approved anew.
+ */
+export interface AgentLearningArchiveCheck {
+  before: AgentLearningSideCounts;
+  after: AgentLearningSideCounts;
+  checkedAt: string;
+  keptAt?: string;
+  keptBy?: string;
+}
 
 /** Longest learning a person may write. A learning is a rule, not a page. */
 export const AGENT_LEARNING_MAX_CHARS = 1_000;
@@ -2121,6 +2200,17 @@ export interface AgentLearningSummary {
   /** The run and finding a `finding` source was dismissed from. */
   runId: string | null;
   findingIndex: number | null;
+  /** How many dismissed findings back it (#305). Zero for a learning nobody derived. */
+  evidenceCount: number;
+  /**
+   * Those findings as the caller may see them. Only `GET /v1/ai/agents/learnings`
+   * resolves it; absent elsewhere.
+   */
+  evidence?: AgentLearningEvidence;
+  /** Set when the learner found no drop in dismissals since activation (#305). An admin decides. */
+  archiveProposedAt: string | null;
+  archiveCheck: AgentLearningArchiveCheck | null;
+  /** The zeros stub for a `derived` learning: no person proposed it. */
   createdBy: string;
   approvedBy: string | null;
   approvedAt: string | null;

@@ -14352,7 +14352,7 @@
             }
           }
         },
-        "summary": "Approve, edit or archive a learning. Approving or rewording an active one records the caller.",
+        "summary": "Approve, edit, archive or keep a learning. Approving or rewording an active one records the caller. Only an admin activates or archives — never the learner.",
         "tags": [
           "ai"
         ]
@@ -31133,7 +31133,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.27.0",
+    "version": "0.28.0",
     "contact": {}
   },
   "tags": [],
@@ -34072,6 +34072,10 @@
               "active",
               "archived"
             ]
+          },
+          "keepActive": {
+            "type": "boolean",
+            "description": "Keep an active learning the learner proposed archiving (#305): clears the flag, and the learner does not raise it again until the learning is approved anew."
           }
         }
       },
@@ -36085,6 +36089,51 @@
           "action"
         ]
       },
+      "TrustWeightsDto": {
+        "type": "object",
+        "properties": {
+          "verified": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 1.25
+          },
+          "unverified": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 1.25
+          },
+          "requested": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 1.25
+          },
+          "edited": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 1.25
+          },
+          "expired": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 1.25
+          },
+          "flagged": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 1.25
+          },
+          "outdated": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 1.25
+          },
+          "inactive": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 1.25
+          }
+        }
+      },
       "UpdateKnowledgeHealthSettingsDto": {
         "type": "object",
         "properties": {
@@ -36110,6 +36159,21 @@
             "type": "boolean",
             "nullable": true,
             "description": "Multiply search scores by the page's verification state"
+          },
+          "rrfK": {
+            "type": "number",
+            "nullable": true,
+            "description": "Reciprocal-rank-fusion constant; null = 60"
+          },
+          "trustWeights": {
+            "nullable": true,
+            "description": "Per-state search weights; a state left out keeps its default, null resets them all",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TrustWeightsDto"
+              }
+            ]
           }
         }
       },
@@ -36467,7 +36531,8 @@
             "enum": [
               "zip",
               "html",
-              "pdf"
+              "pdf",
+              "docx"
             ],
             "description": "`zip`: markdown + attachments; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL"
           }

@@ -109,7 +109,9 @@ services:
     restart: "no"
 
   arcadedb:
-    image: arcadedata/arcadedb:latest
+    # Pinned by tag and digest: the chunk vector index needs 26.10.2's
+    # filtered vector.neighbors. Full reasoning in docker-compose.yml (#304).
+    image: arcadedata/arcadedb:26.10.2@sha256:7a498ebbbb9a5f02f7d43487c13b6632f83eb7fff345968baf220ac9266fd791
     restart: unless-stopped
     environment:
       # Heap is capped on purpose: the Colima VM (10 GB) also builds images.
@@ -199,6 +201,26 @@ services:
       # worker.main boots six Nest modules before any processor registers.
       start_period: 60s
       retries: 3
+
+  # The learner (#305, docs/features/49 §Derived learnings), opt-in twice like
+  # gotenberg: started only when COMPOSE_PROFILES names `learner`, and working
+  # only with LEARNER_ENABLED=true in the production environment. Without the
+  # flag it idles (it does not exit, so `restart` cannot loop it). Same image as
+  # api: learner.main.ts is a fifth entrypoint of apps/api. It reads Postgres,
+  # embeds through EMBEDDINGS_* and calls the `coach` through the workspace's
+  # provider; it consumes no queue and listens on no port, so there is nothing
+  # to health-check beyond the process being up.
+  learner:
+    image: knowledge-api:${TAG:-latest}
+    command: ["node", "dist/learner.main"]
+    profiles: ["learner"]
+    restart: unless-stopped
+    init: true
+    env_file: [.env]
+    volumes:
+      - applogs:/app/logs
+    depends_on:
+      postgres: { condition: service_healthy }
 
   # PDF export (docs/features/45), opt-in: started only when COMPOSE_PROFILES
   # names it. Production sets COMPOSE_PROFILES and GOTENBERG_URL in the GitHub

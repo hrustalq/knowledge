@@ -2832,7 +2832,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Approve, edit or archive a learning. Approving or rewording an active one records the caller. */
+        /** Approve, edit, archive or keep a learning. Approving or rewording an active one records the caller. Only an admin activates or archives — never the learner. */
         patch: operations["AiController_updateAgentLearning"];
         trace?: never;
     };
@@ -7472,6 +7472,8 @@ export interface components {
             text?: string;
             /** @enum {string} */
             status?: "proposed" | "active" | "archived";
+            /** @description Keep an active learning the learner proposed archiving (#305): clears the flag, and the learner does not raise it again until the learning is approved anew. */
+            keepActive?: boolean;
         };
         ApplyAgentRecipeDto: {
             /** Format: uuid */
@@ -8256,6 +8258,16 @@ export interface components {
             /** @description verify: review interval in days (see VerifyDocumentDto) */
             intervalDays?: number | null;
         };
+        TrustWeightsDto: {
+            verified?: number;
+            unverified?: number;
+            requested?: number;
+            edited?: number;
+            expired?: number;
+            flagged?: number;
+            outdated?: number;
+            inactive?: number;
+        };
         UpdateKnowledgeHealthSettingsDto: {
             /** @description Days a stamp holds; 0 = never */
             reviewIntervalDays?: number | null;
@@ -8265,6 +8277,10 @@ export interface components {
             emptyMaxChars?: number | null;
             /** @description Multiply search scores by the page's verification state */
             trustRanking?: boolean | null;
+            /** @description Reciprocal-rank-fusion constant; null = 60 */
+            rrfK?: number | null;
+            /** @description Per-state search weights; a state left out keeps its default, null resets them all */
+            trustWeights?: components["schemas"]["TrustWeightsDto"] | null;
         };
         CreateReleaseTagDto: {
             /** Format: uuid */
@@ -8417,7 +8433,7 @@ export interface components {
              * @description `zip`: markdown + attachments; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL
              * @enum {string}
              */
-            format: "zip" | "html" | "pdf";
+            format: "zip" | "html" | "pdf" | "docx";
         };
         AskSiteDto: {
             question: string;

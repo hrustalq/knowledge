@@ -285,6 +285,8 @@ export type I18nTranslations = {
         "atlasDesc": string;
         "harvester": string;
         "harvesterDesc": string;
+        "coach": string;
+        "coachDesc": string;
         "charting": {
             "disabled": string;
             "unchanged": string;
@@ -1341,6 +1343,8 @@ export type I18nTranslations = {
             "pageCount": {
                 "one": string;
                 "other": string;
+                "few": string;
+                "many": string;
             };
             "onThisPage": string;
             "noHeadings": string;

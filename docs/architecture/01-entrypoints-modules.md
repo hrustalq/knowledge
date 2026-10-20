@@ -4,9 +4,9 @@ The rules in this document are enforced by `.dependency-cruiser.cjs` at the repo
 root and by `apps/api/.dependency-cruiser.cjs`, both of which quote it. `make deps`
 is the gate; breaking one of these is a build failure, not a review comment.
 
-## Four entrypoints, one `src` tree
+## Five entrypoints, one `src` tree
 
-**The worker is a second entrypoint of `apps/api`, not a separate app.** All four
+**The worker is a second entrypoint of `apps/api`, not a separate app.** All five
 share one dependency graph, one Prisma client and one config schema; what differs
 is which root module each composes.
 
@@ -15,10 +15,11 @@ is which root module each composes.
 | `src/main.ts`                          | `AppModule`    | HTTP: controllers, WS gateway, API-side sweepers |
 | `src/worker.main.ts`                   | `WorkerModule` | BullMQ processors, no HTTP                       |
 | `src/mcp.main.ts`                      | `McpModule`    | MCP over stdio                                   |
+| `src/learner.main.ts`                  | `LearnerModule` | The learner (#305): a timer that proposes learnings, no HTTP |
 | `src/scripts/generate-openapi.main.ts` | `AppModule`    | Schema emission — builds the app, never listens  |
 
 The worker uses `createApplicationContext(WorkerModule)`: no HTTP server is
-created at all. The fourth exists so `make api-schema` can scan route metadata
+created at all; so does the learner. The schema script exists so `make api-schema` can scan route metadata
 without touching infrastructure — it creates the Nest app **without `init()` or
 `listen()`**, though the env file is still required because `src/config/env.ts`
 validates with zod at import time. That is why **every new env var needs a
@@ -144,6 +145,6 @@ three copies of a regex can, and did.
 ## Related
 
 - [02 — Persistence & revisions](02-persistence-revisions.md)
-- [07 — Generated client & error contract](07-api-client-errors.md) — the fourth
+- [07 — Generated client & error contract](07-api-client-errors.md) — the schema
   entrypoint's output
 - [plan.md §9](../../plan.md) — the MCP tool catalogue

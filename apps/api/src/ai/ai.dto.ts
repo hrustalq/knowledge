@@ -22,7 +22,7 @@ import { MAX_DEFINITION_CHARS, MAX_TERM_CHARS } from '../glossary/glossary.dto.j
 import {
   AGENT_CAPABILITIES,
   AGENT_LEARNING_MAX_CHARS,
-  AGENT_LEARNING_SOURCES,
+  AGENT_LEARNING_PERSON_SOURCES,
   AGENT_LEARNING_STATUSES,
   AGENT_RUN_MAX_DOCUMENTS,
   AGENT_SCHEDULE_KINDS,
@@ -36,7 +36,7 @@ import {
   STYLE_RULE_TEXT_MAX,
   type StyleRuleSeverity,
   type AgentCapability,
-  type AgentLearningSource,
+  type AgentLearningPersonSource,
   type AgentLearningStatus,
   type AgentScheduleKind,
   type AgentTriggerEvent,
@@ -1180,10 +1180,11 @@ export class CreateAgentLearningDto extends AgentLearningScopeDto {
   @IsIn(['proposed', 'active'], { message: vmsg('isIn') })
   status?: 'proposed' | 'active';
 
-  @ApiPropertyOptional({ enum: AGENT_LEARNING_SOURCES, description: 'Where it came from. Absent is manual.' })
+  // `derived` is not offered: only the learner writes one (#305).
+  @ApiPropertyOptional({ enum: AGENT_LEARNING_PERSON_SOURCES, description: 'Where it came from. Absent is manual.' })
   @IsOptional()
-  @IsIn(AGENT_LEARNING_SOURCES as unknown as string[], { message: vmsg('isIn') })
-  sourceKind?: AgentLearningSource;
+  @IsIn(AGENT_LEARNING_PERSON_SOURCES as unknown as string[], { message: vmsg('isIn') })
+  sourceKind?: AgentLearningPersonSource;
 
   @ApiPropertyOptional({ format: 'uuid', description: 'The thread, for a document-thread or mr-thread source.' })
   @IsOptional()
@@ -1215,6 +1216,14 @@ export class UpdateAgentLearningDto extends AgentLearningScopeDto {
   @IsOptional()
   @IsIn(AGENT_LEARNING_STATUSES as unknown as string[], { message: vmsg('isIn') })
   status?: AgentLearningStatus;
+
+  @ApiPropertyOptional({
+    description:
+      'Keep an active learning the learner proposed archiving (#305): clears the flag, and the learner does not raise it again until the learning is approved anew.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  keepActive?: boolean;
 }
 
 /** Dismiss a finding; with `learning`, "Remember why" proposes one. */

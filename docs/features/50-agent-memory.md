@@ -432,7 +432,11 @@ measured without reindexing anything:
 or a candidate replacement before switching to it.
 
 **Run of 2026-10-16**, demo workspace (492 live pages, one project, mostly
-Russian OMS specifications), 90 cases, 47 template headings left out:
+Russian OMS specifications), 90 cases, 47 template headings left out. This
+run read the corpus through `liveChunks` while it still stopped at 5,000
+chunks. The workspace had 5,936 chunks matching the live predicate, so about
+one chunk in six was left out. Since #304 `liveChunks` reads every chunk, and
+the run has not been repeated yet:
 
 | Class (p5 / p50 / p95)  | bge-m3, 1024-d (stored) | stub, 768-d (re-embedded) |
 | ----------------------- | ----------------------- | ------------------------- |
@@ -572,6 +576,13 @@ higher stops amending there.
 To re-run after changing the embedding model, run the same command and
 compare against these tables. Run one backtest at a time, because ArcadeDB
 runs out of memory on concurrent scans.
+
+`make tune ARGS="--workspace <id>"` (#305) reads the same probes and proposes
+a workspace override for either threshold. It moves one only when the error
+sum falls on a train split and a 30 % holdout, and the costly error (a dropped
+new fact for dedupe, a false amend for amend) does not grow. It prints the
+`PATCH /v1/ai/settings` body and writes nothing. See
+[55 — Learning loop](55-learning-loop.md#make-tune).
 
 ## Verification
 

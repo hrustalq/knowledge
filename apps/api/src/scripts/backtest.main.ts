@@ -1,14 +1,30 @@
+import { Module, type INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { createWriteStream, readFileSync, readdirSync } from 'node:fs';
+import { appendFileSync, createWriteStream, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { FeedbackBacktestCase, FeedbackCaseScore, FeedbackMetrics } from '@knowledge/contracts';
+import type { FeedbackBacktestCase, FeedbackCaseScore, FeedbackMetrics, TrustWeights } from '@knowledge/contracts';
 import { scoreFeedbackCase, summarizeFeedbackScores } from '@knowledge/contracts';
 import { backtestDir } from '@knowledge/observability';
 import { AppModule } from '../app.module.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SearchService } from '../search/search.service.js';
 import type { SearchDto } from '../search/search.dto.js';
+import type { SearchPool } from '../search/ranking.js';
+import {
+  amendCost,
+  dedupeCost,
+  HOLDOUT_SHARE,
+  KNOWN_ITEM_K,
+  MAX_RECALL_DROP,
+  TUNED_WEIGHTS,
+  tuneSearch,
+  tuneThreshold,
+  type Replay,
+  type ThresholdTuning,
+} from '../search/tuning.js';
+import { VerificationPolicyService } from '../verification/verification-policy.service.js';
+import { AiConfigService } from '../ai/ai-config.service.js';
 import { systemScope, type AccessScope } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { AccessService } from '../auth/access.service.js';
@@ -31,6 +47,11 @@ import {
   type CalibrationCase,
   type CaseScores,
 } from '../captures/capture-calibration.js';
+import { BUILT_IN_CASES, caseTexts, measure, recommend, type LabelledFinding } from '../learner/learner-calibration.js';
+import { BootstrapModule } from '../config/bootstrap.module.js';
+import { PrismaModule } from '../prisma/prisma.module.js';
+import { EmbeddingModule } from '../embedding/embedding.module.js';
+import type { AgentFinding } from '@knowledge/contracts';
 
 /**
  * Retrieval and pipeline backtest.
@@ -48,6 +69,9 @@ import {
  *   EMBEDDINGS_PROVIDER=stub EMBEDDINGS_DIM=768 make backtest ARGS="--captures --reembed"
  *                                                                     the same, for a model the workspace was not indexed with
  *   make backtest ARGS="--captures --verbose"                         … and each case's scores and nearest other page
+ *   make backtest ARGS="--learner"                                    learner cluster threshold, built-in labelled findings (#305)
+ *   make backtest ARGS="--learner --workspace <id>"                   … plus that workspace's style findings, labelled by rule
+ *   make tune ARGS="--workspace <id> [--feedback f.ndjson]"           propose search knobs + capture thresholds (#305), writes nothing
  *
  * The split is not arbitrary. **Recall needs ground truth.** The generator
  * makes its own: it issues each document's own title as a query and knows which
@@ -374,40 +398,10 @@ async function replayFeedback(): Promise<void> {
   process.exit(0);
 }
 
-/**
- * Capture threshold calibration (#234): labelled probes cut from the
- * workspace's own pages (`captures/capture-calibration.ts` says which), scored
- * the way `CaptureService.similarPages` scores a capture — raw cosine, best
- * chunk per page, pages of the same project — then each class's score
- * distribution and what every candidate threshold would get wrong.
- *
- * By default the probes are embedded with the configured provider and scored
- * against the stored vectors, so the numbers are only meaningful when that
- * provider is the one the workspace was indexed with. `--reembed` embeds the
- * corpus too, with the configured provider and as ingestion would (title and
- * heading path first), so another model — the stub production runs, or a
- * candidate replacement — is measured by pointing the env at it, without
- * reindexing anything. The stale sweeper that would notice the changed model
- * runs only in the worker, so this process cannot schedule a reindex. Reads
- * only.
- */
-async function calibrateCaptures(): Promise<void> {
-  const workspaceId = option('--workspace', DEMO_WORKSPACE);
-  const limit = Number(option('--limit', '200'));
-  const reembed = flag('--reembed');
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: false, abortOnError: false });
+/** Labelled capture probes and their scores — the data both `--captures` and `--tune` read. */
+async function captureScores(app: INestApplicationContext, workspaceId: string, limit: number, reembed: boolean) {
   const prisma = app.get(PrismaService);
-  const config = app.get<ConfigService<Env, true>>(ConfigService);
   const embedder = app.get<EmbeddingProvider>(EMBEDDING_PROVIDER);
-  const provider = config.get('EMBEDDINGS_PROVIDER', { infer: true });
-  const model = [
-    provider,
-    provider === 'openai-compatible' ? config.get('EMBEDDINGS_MODEL', { infer: true }) : '',
-    `(${embedder.dimension}-d, ${reembed ? 'corpus re-embedded' : 'stored vectors'})`,
-  ]
-    .filter(Boolean)
-    .join(' ');
-
   const scope = systemScope(workspaceId);
   const pages = await prisma.document.findMany({
     where: { workspaceId, archivedAt: null, ...LISTED_PAGE, AND: [visibilityWhere(scope)] },
@@ -440,9 +434,7 @@ async function calibrateCaptures(): Promise<void> {
     if (picked) cases.push(picked);
   }
   if (cases.length === 0) {
-    console.error(`No page in workspace ${workspaceId} has a removable section and a lead paragraph — nothing to measure.`);
-    await app.close();
-    process.exit(1);
+    return { error: `No page in workspace ${workspaceId} has a removable section and a lead paragraph — nothing to measure.` } as const;
   }
 
   const texts = cases.flatMap((c) => {
@@ -452,9 +444,7 @@ async function calibrateCaptures(): Promise<void> {
   const vectors: number[][] = [];
   for (let i = 0; i < texts.length; i += 16) vectors.push(...(await embedder.embedBatch(texts.slice(i, i + 16))));
   if (chunks[0] && chunks[0].embedding.length !== vectors[0].length) {
-    console.error(`Stored vectors are ${chunks[0].embedding.length}-d, the probes ${vectors[0].length}-d: this workspace was indexed with another model.`);
-    await app.close();
-    process.exit(1);
+    return { error: `Stored vectors are ${chunks[0].embedding.length}-d, the probes ${vectors[0].length}-d: this workspace was indexed with another model.` } as const;
   }
 
   const scores: CaseScores[] = cases.map((c, i) => {
@@ -466,6 +456,49 @@ async function calibrateCaptures(): Promise<void> {
       restatement: splitScores(c, score(vectors[i * 3 + 2]), false),
     };
   });
+  return { cases, scores, pages, pageById, templated };
+}
+
+/**
+ * Capture threshold calibration (#234): labelled probes cut from the
+ * workspace's own pages (`captures/capture-calibration.ts` says which), scored
+ * the way `CaptureService.similarPages` scores a capture — raw cosine, best
+ * chunk per page, pages of the same project — then each class's score
+ * distribution and what every candidate threshold would get wrong.
+ *
+ * By default the probes are embedded with the configured provider and scored
+ * against the stored vectors, so the numbers are only meaningful when that
+ * provider is the one the workspace was indexed with. `--reembed` embeds the
+ * corpus too, with the configured provider and as ingestion would (title and
+ * heading path first), so another model — the stub production runs, or a
+ * candidate replacement — is measured by pointing the env at it, without
+ * reindexing anything. The stale sweeper that would notice the changed model
+ * runs only in the worker, so this process cannot schedule a reindex. Reads
+ * only.
+ */
+async function calibrateCaptures(): Promise<void> {
+  const workspaceId = option('--workspace', DEMO_WORKSPACE);
+  const limit = Number(option('--limit', '200'));
+  const reembed = flag('--reembed');
+  const app = await NestFactory.createApplicationContext(AppModule, { logger: false, abortOnError: false });
+  const config = app.get<ConfigService<Env, true>>(ConfigService);
+  const embedder = app.get<EmbeddingProvider>(EMBEDDING_PROVIDER);
+  const provider = config.get('EMBEDDINGS_PROVIDER', { infer: true });
+  const model = [
+    provider,
+    provider === 'openai-compatible' ? config.get('EMBEDDINGS_MODEL', { infer: true }) : '',
+    `(${embedder.dimension}-d, ${reembed ? 'corpus re-embedded' : 'stored vectors'})`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const data = await captureScores(app, workspaceId, limit, reembed);
+  if ('error' in data) {
+    console.error(data.error);
+    await app.close();
+    process.exit(1);
+  }
+  const { cases, scores, pages, pageById, templated } = data;
 
   if (flag('--verbose')) {
     console.log('');
@@ -526,7 +559,218 @@ async function calibrateCaptures(): Promise<void> {
   process.exit(0);
 }
 
-if (flag('--captures')) {
+/**
+ * `make tune` (#305, phase 4): propose the workspace's search knobs and capture
+ * thresholds from the backtest's own datasets. Each distinct query is searched
+ * once, recording its candidate pool, and every candidate knob setting
+ * re-ranks those pools in memory (`search/tuning.ts`), so the stores see one
+ * search per query — the ArcadeDB note on running backtests one at a time
+ * still applies. Reads only: it prints a report and the PATCH bodies a person
+ * may send, appends the same report to tune-<day>.jsonl beside the backtest
+ * stream, and writes no setting.
+ */
+async function tune(): Promise<void> {
+  const workspaceId = option('--workspace', DEMO_WORKSPACE);
+  const k = Number(option('--k', '10'));
+  const limit = Number(option('--limit', '120'));
+  const file = option('--feedback', '');
+  const app = await NestFactory.createApplicationContext(AppModule, { logger: false, abortOnError: false });
+  const prisma = app.get(PrismaService);
+  const search = app.get(SearchService);
+  const policy = app.get(VerificationPolicyService);
+  const scope = systemScope(workspaceId);
+
+  // Objective: the votes, from a saved export or straight from PostgreSQL.
+  const feedback: FeedbackBacktestCase[] = [];
+  if (file) feedback.push(...readCases(file).filter((c) => c.workspaceId === workspaceId));
+  else {
+    const stream = app.get(FeedbackDatasetService).cases(workspaceId, {});
+    for (let n = await stream.next(); !n.done; n = await stream.next()) feedback.push(n.value);
+  }
+  // Constraint: known-item retrieval, as --generate measures it.
+  const known: FeedbackBacktestCase[] = (
+    await prisma.document.findMany({
+      where: { workspaceId, archivedAt: null, ...LISTED_PAGE },
+      select: { id: true, title: true },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    })
+  ).map((d) => ({
+    workspaceId,
+    query: d.title,
+    surface: 'assistant',
+    rating: 'up',
+    reason: null,
+    expectedDocumentIds: [d.id],
+    rejectedDocumentIds: [],
+    createdAt: '',
+  }));
+
+  const pools = new Map<string, SearchPool | null>();
+  for (const query of new Set([...feedback, ...known].map((c) => c.query))) {
+    let pool = null as SearchPool | null;
+    await search.search({ workspaceId, query, limit: k } as SearchDto, scope, undefined, (p) => (pool = p));
+    pools.set(query, pool);
+  }
+  const replay = (cases: FeedbackBacktestCase[]): Replay[] => cases.map((c) => ({ case: c, pool: pools.get(c.query) ?? null }));
+  const [effective, override] = await Promise.all([policy.effective(workspaceId), policy.override(workspaceId)]);
+  const searchTuning = tuneSearch(replay(feedback), replay(known), { rrfK: effective.rrfK, trustWeights: effective.trustWeights }, k);
+
+  const capture = await app.get(AiConfigService).captureSettings(workspaceId);
+  const probes = await captureScores(app, workspaceId, Number(option('--capture-limit', '200')), false);
+  const keys = 'error' in probes ? [] : probes.cases.map((c) => c.documentId);
+  const dedupe = 'error' in probes ? null : tuneThreshold(probes.scores, keys, capture.dedupeThreshold.effective, dedupeCost);
+  const amend =
+    'error' in probes || !dedupe
+      ? null
+      : tuneThreshold(probes.scores, keys, capture.amendThreshold.effective, amendCost, dedupe.proposal ?? dedupe.current);
+
+  // The diff, against what applies now. trustWeights replaces the stored map,
+  // so the states already overridden ride along.
+  const healthPatch: { rrfK?: number; trustWeights?: Partial<TrustWeights> } = {};
+  const proposal = searchTuning.proposal;
+  if (proposal) {
+    if (proposal.rrfK !== effective.rrfK) healthPatch.rrfK = proposal.rrfK;
+    const changed = Object.entries(proposal.trustWeights).filter(([state, v]) => v !== effective.trustWeights[state as keyof TrustWeights]);
+    if (changed.length) healthPatch.trustWeights = { ...override.trustWeights, ...Object.fromEntries(changed) };
+  }
+  const aiPatch: { captureDedupeThreshold?: number; captureAmendThreshold?: number } = {};
+  if (dedupe?.proposal != null) aiPatch.captureDedupeThreshold = dedupe.proposal;
+  if (amend?.proposal != null) aiPatch.captureAmendThreshold = amend.proposal;
+
+  const knobs = (kn: { rrfK: number; trustWeights: TrustWeights }) =>
+    [`rrfK=${kn.rrfK}`, ...TUNED_WEIGHTS.map((s) => `${s}=${kn.trustWeights[s]}`)].join('  ');
+  const pct = (share: number) => `${(share * 100).toFixed(1).padStart(5)}%`;
+  const threshold = (label: string, t: ThresholdTuning | null) => {
+    if (!t) return console.log(`${label.padEnd(8)} skipped: ${'error' in probes ? probes.error : ''}`);
+    console.log(`${label.padEnd(8)} current ${t.current.toFixed(2)}  candidate ${t.candidate.toFixed(2)}`);
+    for (const [name, split] of [['train', t.train], ['holdout', t.holdout]] as const) {
+      console.log(
+        `  ${name.padEnd(8)} errors ${pct(split.current.sum)} → ${pct(split.candidate.sum)}   costly ${pct(split.current.guarded)} → ${pct(split.candidate.guarded)}`,
+      );
+    }
+    console.log(`  → ${t.proposal === null ? 'no proposal' : 'propose'}: ${t.reason}`);
+  };
+
+  console.log('');
+  console.log(`tune — workspace ${workspaceId}, k=${k}, holdout ${HOLDOUT_SHARE * 100}% of each set`);
+  console.log(`feedback cases       ${feedback.length}${file ? ` from ${file}` : ' from the votes'} (objective: MRR)`);
+  console.log(`known items          ${known.length} page titles (constraint: recall@${KNOWN_ITEM_K} drops ≤ ${MAX_RECALL_DROP * 100} point)`);
+  console.log(`trust ranking        ${effective.trustRanking ? 'on' : 'off — the weights cannot move a result'}`);
+  console.log('');
+  console.log(`current    ${knobs(searchTuning.current)}`);
+  console.log(`candidate  ${knobs(searchTuning.candidate)}`);
+  for (const [set, splits] of [['feedback', searchTuning.feedback], ['known items', searchTuning.knownItems]] as const) {
+    for (const [name, m] of [['train', splits.train], ['holdout', splits.holdout]] as const) {
+      console.log(metricsLine(`${set} ${name} current`, m.current));
+      console.log(metricsLine(`${set} ${name} candidate`, m.candidate));
+    }
+  }
+  console.log(`  → ${proposal ? 'propose' : 'no proposal'}: ${searchTuning.reason}`);
+  console.log('');
+  console.log('capture thresholds (costly = dropped new facts for dedupe, false amends for amend: never more than today)');
+  threshold('dedupe', dedupe);
+  threshold('amend', amend);
+  console.log('');
+
+  const patches = [
+    ...(Object.keys(healthPatch).length ? [`PATCH /v1/knowledge-health/settings?workspaceId=${workspaceId}  ${JSON.stringify(healthPatch)}`] : []),
+    ...(Object.keys(aiPatch).length ? [`PATCH /v1/ai/settings  ${JSON.stringify({ workspaceId, ...aiPatch })}`] : []),
+  ];
+  if (patches.length === 0) console.log('Nothing to propose. No setting was written.');
+  else {
+    console.log('Proposed settings — apply by hand after reading the report. Nothing was written:');
+    for (const line of patches) console.log(`  ${line}`);
+  }
+
+  const out = join(backtestDir(), `tune-${new Date().toISOString().slice(0, 10)}.jsonl`);
+  mkdirSync(backtestDir(), { recursive: true });
+  appendFileSync(
+    out,
+    `${JSON.stringify({ ts: new Date().toISOString(), workspaceId, k, feedbackCases: feedback.length, knownItems: known.length, search: searchTuning, dedupe, amend, patches: { health: healthPatch, ai: aiPatch } })}\n`,
+  );
+  console.log(`Report appended to ${out}`);
+
+  await app.close();
+  process.exit(0);
+}
+
+/** Only what the learner calibration reads: env, Postgres and the embedding provider. */
+@Module({ imports: [BootstrapModule, PrismaModule, EmbeddingModule] })
+class LearnerCalibrationModule {}
+
+/**
+ * LEARNER_CLUSTER_THRESHOLD calibration (#305): labelled findings — the
+ * built-in cases (`learner-calibration.ts`), plus, with `--workspace`, every
+ * style finding that workspace's runs recorded, labelled by its rule — are
+ * embedded with the configured provider and clustered by the learner's own
+ * `clusterFindings` at every threshold of the grid. Reads only, and needs no
+ * dismissal history: the question is how close two wordings of one mistake
+ * sit in this embedding space, which the cases answer for any model.
+ */
+async function calibrateLearner(): Promise<void> {
+  const workspaceId = option('--workspace', '');
+  const minSize = Number(option('--min-size', '3'));
+  const app = await NestFactory.createApplicationContext(LearnerCalibrationModule, { logger: false, abortOnError: false });
+  const config = app.get<ConfigService<Env, true>>(ConfigService);
+  const embedder = app.get<EmbeddingProvider>(EMBEDDING_PROVIDER);
+  const provider = config.get('EMBEDDINGS_PROVIDER', { infer: true });
+  const model = [provider, provider === 'openai-compatible' ? config.get('EMBEDDINGS_MODEL', { infer: true }) : '', `(${embedder.dimension}-d)`]
+    .filter(Boolean)
+    .join(' ');
+
+  const cases: LabelledFinding[] = [...BUILT_IN_CASES];
+  if (workspaceId) {
+    const runs = await app.get(PrismaService).agentRun.findMany({
+      where: { workspaceId, status: 'succeeded' },
+      select: { findings: true },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+    for (const run of runs) {
+      for (const f of (Array.isArray(run.findings) ? run.findings : []) as unknown as AgentFinding[]) {
+        if (f?.kind === 'style' && f.ruleId) cases.push({ label: `rule:${f.ruleId}`, kind: f.kind, title: f.title, detail: f.detail ?? '' });
+      }
+    }
+  }
+  const texts = caseTexts(cases);
+  const vectors: number[][] = [];
+  for (let i = 0; i < texts.length; i += 32) vectors.push(...(await embedder.embedBatch(texts.slice(i, i + 32))));
+  const rows = thresholdGrid(60, 96, 2).map((t) => measure(cases, vectors, t, minSize));
+  const best = recommend(rows);
+  const current = config.get('LEARNER_CLUSTER_THRESHOLD', { infer: true });
+  const pct = (share: number) => `${(share * 100).toFixed(1).padStart(5)}%`;
+
+  console.log('');
+  console.log('learner cluster threshold calibration');
+  console.log(`embeddings           ${model}`);
+  console.log(`cases                ${cases.length} (${BUILT_IN_CASES.length} built in${workspaceId ? `, ${cases.length - BUILT_IN_CASES.length} style findings from ${workspaceId}` : ''})`);
+  console.log(`labels               ${new Set(cases.map((c) => c.label)).size}, ${rows[0]?.groups ?? 0} with ${minSize}+ findings (a cluster that could qualify)`);
+  console.log('');
+  console.log('  t      pair-recall  pair-precision  mixed  absorbed  recovered');
+  for (const r of rows) {
+    const marks = `${r.threshold === best ? '  ◀' : ''}${r.threshold === current ? '  (LEARNER_CLUSTER_THRESHOLD)' : ''}`;
+    console.log(
+      `  ${r.threshold.toFixed(2)}   ${pct(r.pairRecall)}       ${pct(r.pairPrecision)}       ${String(r.mixed).padStart(3)}    ${String(r.absorbed).padStart(4)}     ${r.recovered}/${r.groups}${marks}`,
+    );
+  }
+  console.log('');
+  console.log('pair-recall     same-mistake pairs at or above t: higher clusters more of a mistake together');
+  console.log('pair-precision  pairs at or above t that are one mistake');
+  console.log('mixed           clusters holding two mistakes — a learning drafted from both. Must be 0');
+  console.log('absorbed        one-off findings swept into a cluster of the qualifying size. Must be 0');
+  console.log(`recovered       mistakes with ${minSize}+ of their findings in one cluster — a learning can be drafted`);
+  console.log(best === null ? 'No threshold avoids a mixed cluster: this model cannot separate the cases.' : `◀ the lowest threshold with nothing mixed or absorbed that recovers the most: ${best.toFixed(2)}`);
+
+  await app.close();
+  process.exit(0);
+}
+
+if (flag('--tune')) {
+  await tune();
+} else if (flag('--learner')) {
+  await calibrateLearner();
+} else if (flag('--captures')) {
   await calibrateCaptures();
 } else if (flag('--generate')) {
   await generate();

@@ -701,7 +701,9 @@ export const CURATION_DOCUMENT_ACTIONS: ReadonlySet<string> = new Set([
  * page must not beat a clearly more relevant unverified one, which bounds the
  * top factor near 1.
  */
-export const TRUST_WEIGHTS: Readonly<Record<SourceVerificationState, number>> & { readonly inactive: number } = {
+export type TrustWeights = Readonly<Record<SourceVerificationState | 'inactive', number>>;
+
+export const TRUST_WEIGHTS: TrustWeights = {
   verified: 1.15,
   unverified: 1,
   requested: 1,
@@ -713,8 +715,19 @@ export const TRUST_WEIGHTS: Readonly<Record<SourceVerificationState, number>> & 
   inactive: 0.9,
 };
 
-export function trustWeight(state: SourceVerificationState, inactive: boolean): number {
-  return TRUST_WEIGHTS[state] * (inactive ? TRUST_WEIGHTS.inactive : 1);
+/** The keys a workspace may override (#305), and the bounds the settings route holds them to. */
+export const TRUST_WEIGHT_KEYS = Object.keys(TRUST_WEIGHTS) as readonly (keyof TrustWeights)[];
+export const TRUST_WEIGHT_MIN = 0.1;
+export const TRUST_WEIGHT_MAX = 1.25;
+
+/**
+ * Reciprocal-rank-fusion constant (standard k=60). The default of the
+ * workspace's `rrfK` override, so an empty row fuses exactly as before #305.
+ */
+export const SEARCH_RRF_K = 60;
+
+export function trustWeight(state: SourceVerificationState, inactive: boolean, weights: TrustWeights = TRUST_WEIGHTS): number {
+  return weights[state] * (inactive ? weights.inactive : 1);
 }
 
 /** What a search hit says about how much to trust its page. */
@@ -825,8 +838,14 @@ export interface KnowledgeHealthSettingsValues {
   inactiveAfterDays: number;
   emptyMaxChars: number;
   trustRanking: boolean;
+  /** #305: tuned offline by `make tune`, applied by a person. */
+  rrfK: number;
+  trustWeights: TrustWeights;
 }
-export type KnowledgeHealthSettingsOverride = { [K in keyof KnowledgeHealthSettingsValues]: KnowledgeHealthSettingsValues[K] | null };
+/** Sparse: `null` inherits. `trustWeights` is sparse per state too — it names only what differs. */
+export type KnowledgeHealthSettingsOverride = {
+  [K in Exclude<keyof KnowledgeHealthSettingsValues, 'trustWeights'>]: KnowledgeHealthSettingsValues[K] | null;
+} & { trustWeights: Partial<TrustWeights> | null };
 
 // POST /v1/documents/:id/archive | /unarchive
 export interface ArchiveDocumentResponse {

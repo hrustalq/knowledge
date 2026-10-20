@@ -273,6 +273,15 @@ learning. A dismissal is only useful if the next run knows about it, so
 ten succeeded runs (at most 20) as quoted data, with an instruction not to
 report them again.
 
+## Derived learnings
+
+Learnings can also be drafted by the learner from findings people keep
+dismissing, and sent to coding agents connected over MCP (#305). Both are
+documented with the rest of the learning loop in
+[55 — Learning loop](55-learning-loop.md#derived-learnings). A derived
+learning follows every rule above: it is always `proposed`, and an admin
+activates or archives it on the same PATCH route.
+
 ## Repository guidance as skills
 
 After a successful sync of a codebase or Markdown/Git connector,
@@ -313,9 +322,9 @@ finishes while the API is down is picked up by the next sync or by **Import now*
 | `POST /v1/ai/agents/triggers/:id/rotate-secret`     | admin, `agent-trigger`    | Returns the secret once                         |
 | `POST /v1/ai/agents/triggers/:id/webhook`           | `@Public()` + HMAC        | 202 with `runId` or `skipped`                   |
 | `POST /v1/ai/agents/recipes/:recipe/apply`          | admin, body               | Disabled and ownerless                          |
-| `GET /v1/ai/agents/learnings`                       | viewer, query             |                                                 |
+| `GET /v1/ai/agents/learnings`                       | viewer, query             | Evidence filtered by the caller's scope         |
 | `POST /v1/ai/agents/learnings`                      | editor, body              | `status: "active"` re-checks admin              |
-| `PATCH /v1/ai/agents/learnings/:id`                 | admin, `agent-learning`   | Approve, reword, archive                        |
+| `PATCH /v1/ai/agents/learnings/:id`                 | admin, `agent-learning`   | Approve, reword, archive; `keepActive` (#305)   |
 | `POST /v1/ai/agents/runs/:id/findings/:index/dismiss` | editor, query           | Optional learning text                          |
 | `POST /v1/connectors/:id/guidance/import`           | admin, `connector`        |                                                 |
 | `POST /v1/ai/skills/:id/accept-upstream`            | admin, `ai-skill`         | 409 when nothing is pending                     |
@@ -342,11 +351,15 @@ Every one has a default, and the new behaviour is off or inert until asked for.
 | `AGENT_LEARNINGS_MAX`             | `20`    | Active learnings per prompt; `0` turns them off                     |
 | `REPO_GUIDANCE_IMPORT_ENABLED`    | `true`  | After-sync import; **Import now** works either way                  |
 
+The learner's `LEARNER_*` block is in
+[55 — Learning loop](55-learning-loop.md#settings).
+
 Migrations, all additive and all run cleanly by the previous image:
 `20261021100000_agent_schedule_time_of_day`, `20261022100000_agent_triggers`,
 `20261023100000_agent_trigger_webhooks`, `20261024100000_agent_learnings`,
-`20261025100000_ai_skill_repo_source`. The CHANGELOG's Operations section says
-what each one does on rollback.
+`20261025100000_ai_skill_repo_source`. The learning loop's migrations are
+listed in [55](55-learning-loop.md#operations). The CHANGELOG's Operations
+section says what each one does on rollback.
 
 ## Web
 
@@ -381,7 +394,8 @@ through `AlertDialog`.
 - **A triggered run's cost is as invisible as a scheduled one's**
   ([20-agents-todo item F](20-agents-todo.md#f-nothing-shows-a-scheduled-runs-cost--m)),
   and triggers make that more pressing.
-- Learnings are person-authored. Extracting them from threads automatically is
+- Learnings are person-authored or derived from dismissed findings
+  ([55](55-learning-loop.md)). Extracting them from threads automatically is
   deferred.
 
 ## Specs
@@ -389,7 +403,7 @@ through `AlertDialog`.
 `apps/api/test/agent-schedule.spec.ts` (contracts' `nextScheduledRun`, including
 DST in both directions), `agent-trigger.service.spec.ts`,
 `agent-webhook-mention.spec.ts`, `agent-recipes.spec.ts`,
-`agent-learnings.spec.ts` (learnings, the rendered prompt, dismiss) and
-`repo-guidance.service.spec.ts`. There is
-no contracts-level test runner, so contracts functions are tested from
-`apps/api/test`.
+`agent-learnings.spec.ts` (learnings, the rendered prompt, dismiss),
+and `repo-guidance.service.spec.ts`. The learner's specs are listed in
+[55](55-learning-loop.md#specs). There is no contracts-level test runner, so
+contracts functions are tested from `apps/api/test`.

@@ -67,6 +67,7 @@ import { AgentTriggersService } from './agent-triggers.service.js';
 import { AgentRecipesService } from './agent-recipes.service.js';
 import { AgentFindingsService } from './agent-findings.service.js';
 import { AgentLearningsService } from './agent-learnings.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { AgentRouterService } from '../agents/agent-router.service.js';
 import { AgentTiebreakService } from './agent-tiebreak.service.js';
 import {
@@ -122,6 +123,7 @@ export class AiController {
     private readonly sourcePolicies: SourcePolicyService,
     private readonly activity: ActivityService,
     private readonly access: AccessService,
+    private readonly permissions: PermissionService,
   ) {}
 
   // ---- Settings ------------------------------------------------------------
@@ -557,15 +559,24 @@ export class AiController {
   @ApiOperation({ summary: 'Learnings — corrections taught to agents — newest first' })
   async listAgentLearnings(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
     @Query('agentKey') agentKey?: string,
     @Query('status') status?: string,
   ): Promise<ListAgentLearningsResponse> {
     const known = (AGENT_LEARNING_STATUSES as readonly string[]).includes(status ?? '');
+    // A derived learning's evidence names findings, and a finding names pages:
+    // each is titled only for a viewer who may open what it cites (#305).
+    const scope = await this.permissions.scopeFor(principal, workspaceId);
     return {
-      learnings: await this.learnings.list(workspaceId, {
-        ...(agentKey ? { agentKey } : {}),
-        ...(known ? { status: status as AgentLearningStatus } : {}),
-      }),
+      learnings: await this.learnings.listForViewer(
+        workspaceId,
+        {
+          ...(agentKey ? { agentKey } : {}),
+          ...(known ? { status: status as AgentLearningStatus } : {}),
+        },
+        (ids) => this.permissions.visibleDocumentIds(scope, ids),
+        scope.denied,
+      ),
       promptLimit: this.learnings.promptLimit,
     };
   }
@@ -595,7 +606,10 @@ export class AiController {
 
   @Patch('agents/learnings/:id')
   @Access('admin', 'agent-learning')
-  @ApiOperation({ summary: 'Approve, edit or archive a learning. Approving or rewording an active one records the caller.' })
+  @ApiOperation({
+    summary:
+      'Approve, edit, archive or keep a learning. Approving or rewording an active one records the caller. Only an admin activates or archives — never the learner.',
+  })
   async updateAgentLearning(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAgentLearningDto,

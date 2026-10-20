@@ -50,7 +50,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
   }
 
   async onModuleInit() {
-    await this.graph.ensureSchema();
+    await this.graph.ensureSchema(this.embeddings.dimension);
   }
 
   /**

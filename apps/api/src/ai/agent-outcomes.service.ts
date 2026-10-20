@@ -9,11 +9,26 @@ import {
   type AgentOutcomeSource,
   type AgentOutcomeSplit,
   type AgentOutcomesResponse,
+  type AgentLearningSideCounts,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 /** The window when the caller names none. */
 const DEFAULT_SINCE_DAYS = 90;
+
+/** The learning a before/after check is about (#305). */
+export interface LearningUnderCheck {
+  id: string;
+  /** Null: a learning every agent is given, so every agent's runs count. */
+  agentKey: string | null;
+  /** When it became active — the line between the two sides. */
+  approvedAt: Date;
+}
+
+export interface LearningBeforeAfter {
+  before: AgentLearningSideCounts;
+  after: AgentLearningSideCounts;
+}
 
 export interface AgentOutcomesQuery {
   workspaceId: string;
@@ -183,5 +198,42 @@ export class AgentOutcomesService {
       minRuns: AGENT_OUTCOME_MIN_RUNS,
       groups: ordered,
     };
+  }
+  /**
+   * Did a learning help? (#305) Its agent's succeeded runs on each side of its
+   * activation: `after` is every run whose prompt carried it (`learning_ids`,
+   * stamped by the executor from what `promptFor` rendered), `before` every
+   * attributed run of the same agent created before it was approved. Runs from
+   * before the ledger have `learning_ids = NULL` and are on neither side: they
+   * are unattributed, not "without". Dismissed is `outcomeFilterSql`, the
+   * ledger's own definition, so the check and the Agents tab cannot disagree.
+   *
+   * Compared by learning ids, not prompt hash: any skill edit changes the hash
+   * and would split one side into many.
+   */
+  async beforeAfter(workspaceId: string, learning: LearningUnderCheck, now = new Date()): Promise<LearningBeforeAfter> {
+    const withIt = Prisma.sql`(r.learning_ids @> ARRAY[${learning.id}]::uuid[])`;
+    const where = Prisma.sql`r.workspace_id = ${workspaceId}::uuid AND r.status = 'succeeded' AND r.learning_ids IS NOT NULL
+      ${learning.agentKey ? Prisma.sql`AND r.agent_key = ${learning.agentKey}` : Prisma.empty}
+      AND (${withIt} OR r.created_at < ${learning.approvedAt}::timestamptz)`;
+    const [runs, findings] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ with_it: boolean; n: number }>>`
+        SELECT ${withIt} AS with_it, count(*)::int AS n FROM agent_runs r WHERE ${where} GROUP BY 1
+      `,
+      this.prisma.$queryRaw<Array<{ with_it: boolean; n: number; dismissed: number }>>`
+        SELECT ${withIt} AS with_it, count(*)::int AS n,
+               count(*) FILTER (WHERE ${outcomeFilterSql('finding', 'dismissed', now)})::int AS dismissed
+          FROM agent_runs r
+         CROSS JOIN LATERAL ${FINDINGS} AS f(finding)
+         ${FINDING_MR}
+         WHERE ${where}
+         GROUP BY 1
+      `,
+    ]);
+    const side = (w: boolean): AgentLearningSideCounts => {
+      const f = findings.find((row) => row.with_it === w);
+      return { runs: runs.find((row) => row.with_it === w)?.n ?? 0, findings: f?.n ?? 0, dismissed: f?.dismissed ?? 0 };
+    };
+    return { before: side(false), after: side(true) };
   }
 }

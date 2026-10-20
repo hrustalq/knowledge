@@ -329,6 +329,32 @@ export const envSchema = z.object({
    */
   AGENT_LEARNINGS_MAX: z.coerce.number().int().min(0).max(100).default(20),
   /**
+   * The learner (#305): a fifth process, `learner.main.ts`, that clusters the
+   * findings people kept dismissing and has the `coach` draft each recurring
+   * one as a PROPOSED learning an admin reviews, and flags active learnings
+   * that did not lower dismissals. Off by default: with it off the process
+   * idles, and nothing it writes exists. It never activates or archives.
+   *
+   * It wakes every LEARNER_TICK_MS and passes over each workspace at most once
+   * a day, never starting a pass while one is in flight. A cluster is dismissed
+   * findings of one agent in one project within LEARNER_WINDOW_DAYS whose
+   * embeddings sit at or above LEARNER_CLUSTER_THRESHOLD raw cosine to its
+   * running centroid; it qualifies at LEARNER_MIN_DISMISSALS findings from
+   * LEARNER_MIN_PEOPLE distinct dismissers. The threshold was measured with
+   * `make backtest ARGS="--learner"` on bge-m3 (docs/features/55-learning-loop.md
+   * §Calibration); re-run it when the embedding model changes. The same
+   * threshold folds a drafted learning into a near-identical existing one.
+   * LEARNER_MIN_RUNS runs on each side of an activation are needed before the
+   * before/after check says anything.
+   */
+  LEARNER_ENABLED: boolish(false),
+  LEARNER_TICK_MS: z.coerce.number().int().min(10_000).default(900_000),
+  LEARNER_WINDOW_DAYS: z.coerce.number().int().positive().default(30),
+  LEARNER_CLUSTER_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
+  LEARNER_MIN_DISMISSALS: z.coerce.number().int().min(2).default(3),
+  LEARNER_MIN_PEOPLE: z.coerce.number().int().min(1).default(2),
+  LEARNER_MIN_RUNS: z.coerce.number().int().min(1).default(20),
+  /**
    * Re-read a repository connector's AGENTS.md / CLAUDE.md / .cursorrules…
    * after each successful sync (#70). On by default: an import only ever
    * creates DISABLED skills, and an enabled one's text changes only when an

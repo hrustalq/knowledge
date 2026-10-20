@@ -1556,7 +1556,7 @@ model AgentLearning {
   /// AGENT_LEARNING_STATUSES — proposed | active | archived.
   status      String  @default("proposed")
 
-  /// AGENT_LEARNING_SOURCES — document-thread | mr-thread | finding | manual.
+  /// AGENT_LEARNING_SOURCES — document-thread | mr-thread | finding | manual | derived.
   /// Provenance only, none of it a FK: the learning outlives its thread.
   sourceKind     String  @default("manual") @map("source_kind")
   /// The thread a thread source came from.
@@ -1567,7 +1567,21 @@ model AgentLearning {
   mergeRequestId String? @map("merge_request_id") @db.Uuid
   runId          String? @map("run_id") @db.Uuid
   findingIndex   Int?    @map("finding_index")
+  /// AgentLearningEvidenceRef[] — the dismissed findings a learning rests on
+  /// (#305): the learner's cluster for a `derived` one, plus any later similar
+  /// dismissal it folded in. Null for a learning nothing was folded into.
+  evidence       Json?
 
+  /// The learner's proposed-archive flag (#305): set when an active learning
+  /// showed no drop in dismissals across enough runs on each side of its
+  /// activation. Never archives anything — an admin decides. Cleared when the
+  /// learning is approved anew.
+  archiveProposedAt DateTime? @map("archive_proposed_at") @db.Timestamptz
+  /// AgentLearningArchiveCheck — the counts behind the flag, and an admin's
+  /// "keep it" (keptAt/keptBy), after which the learner leaves it alone.
+  archiveCheck      Json?     @map("archive_check")
+
+  /// The zeros AUTHOR_ID_STUB for a `derived` learning: no person proposed it.
   createdBy  String    @map("created_by") @db.Uuid
   approvedBy String?   @map("approved_by") @db.Uuid
   approvedAt DateTime? @map("approved_at") @db.Timestamptz
@@ -2593,6 +2607,11 @@ model KnowledgeHealthSettings {
   inactiveAfterDays  Int?     @map("inactive_after_days")
   emptyMaxChars      Int?     @map("empty_max_chars")
   trustRanking       Boolean? @map("trust_ranking")
+  /// #305 tuner: the reciprocal-rank-fusion constant; null is SEARCH_RRF_K.
+  rrfK               Int?     @map("rrf_k")
+  /// #305 tuner: a sparse map over TRUST_WEIGHTS — only the states it names
+  /// differ from the code default; null inherits all of them.
+  trustWeights       Json?    @map("trust_weights")
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("knowledge_health_settings")

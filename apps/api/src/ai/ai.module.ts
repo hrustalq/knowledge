@@ -9,6 +9,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
 import { AiCoreModule } from './ai-core.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { AiPluginsService } from './ai-plugins.service.js';
 import { AiSettingsService } from './ai-settings.service.js';
 import { AiAgentsService, AgentRunsService } from './ai-agents.service.js';
@@ -23,7 +24,6 @@ import { McpClientService } from './mcp-client.service.js';
 import { AiController } from './ai.controller.js';
 import { AiUsageController } from './ai-usage.controller.js';
 import { AgentOutcomesController } from './agent-outcomes.controller.js';
-import { AgentOutcomesService } from './agent-outcomes.service.js';
 
 /**
  * AI settings (docs/features/12). API-only module — keep it out of worker and
@@ -56,10 +56,12 @@ import { AgentOutcomesService } from './agent-outcomes.service.js';
     VerificationCoreModule,
     // AgentFindingsService.addTerm writes through the one glossary writer (#74).
     GlossaryCoreModule,
+    // A learning's evidence is titled only for a viewer who may open its pages (#305).
+    PermissionsCoreModule,
     forwardRef(() => AssistantModule),
   ],
   controllers: [AiController, AiUsageController, AgentWebhookController, AgentOutcomesController],
-  providers: [AgentOutcomesService, AiAgentsService, AgentRunsService, AgentTriggersService, AgentRecipesService, AgentFindingsService, AgentTiebreakService, AiPluginsService, AiSettingsService, McpClientService],
+  providers: [AiAgentsService, AgentRunsService, AgentTriggersService, AgentRecipesService, AgentFindingsService, AgentTiebreakService, AiPluginsService, AiSettingsService, McpClientService],
   // AgentFindingsService for the drift check's publisher (docs/features/35),
   // which proposes through the very path the Propose button takes.
   exports: [AiCoreModule, AgentCoreModule, AiPluginsService, AgentTiebreakService, AgentFindingsService],

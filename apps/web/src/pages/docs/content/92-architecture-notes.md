@@ -11,8 +11,9 @@ next person does not have to.
 
 ## The API and the worker are the same app
 
-Three entrypoints share one codebase: HTTP, the worker, and MCP. A fourth exists only to
-emit the OpenAPI document — it builds the Nest app without initializing or listening, so
+Four entrypoints share one codebase: HTTP, the worker, MCP, and the learner (a timer that
+proposes learnings, with no HTTP and no queue). A fifth exists only to emit the OpenAPI
+document — it builds the Nest app without initializing or listening, so
 route metadata is scanned without touching infrastructure.
 
 This means **module composition is load-bearing**:

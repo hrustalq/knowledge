@@ -265,4 +265,51 @@ describe('publishing (e2e)', () => {
     },
     EXPORT_TIMEOUT_MS + 10_000,
   );
+
+  it(
+    'share → download (#161): off by default, the link’s subtree only, and dead the moment download is switched off',
+    async () => {
+      const created = await http().post(`/v1/documents/${parentId}/shares`).send({ includeSubtree: true }).expect(201);
+      const token = /\/s\/(kp_[^/?#]+)/.exec(created.body.url as string)?.[1];
+      expect(created.body.share.allowDownload).toBe(false);
+      expect((await http().get(`/v1/public/shares/${token}`).expect(200)).body.download).toBeNull();
+      await http().post(`/v1/public/shares/${token}/exports`).send({ format: 'zip' }).expect(404);
+
+      await http().patch(`/v1/shares/${created.body.share.id}`).send({ allowDownload: true }).expect(200);
+      const view = await http().get(`/v1/public/shares/${token}`).expect(200);
+      expect(view.body.download.formats.zip).toBe(true);
+
+      const queued = await http().post(`/v1/public/shares/${token}/exports`).send({ format: 'zip' }).expect(201);
+      const exportId = queued.body.id as string;
+      // A reader's job names no workspace, page or person.
+      expect(Object.keys(queued.body)).not.toEqual(expect.arrayContaining(['workspaceId', 'documentId', 'requestedBy']));
+
+      const deadline = Date.now() + EXPORT_TIMEOUT_MS;
+      for (;;) {
+        const job = await http().get(`/v1/public/shares/${token}/exports/${exportId}`).expect(200);
+        if (job.body.status === 'completed') break;
+        if (job.body.status === 'failed') throw new Error(`export failed: ${JSON.stringify(job.body.error)}`);
+        if (Date.now() > deadline) throw new Error(`export still ${job.body.status} after ${EXPORT_TIMEOUT_MS}ms`);
+        await new Promise((r) => setTimeout(r, 500));
+      }
+
+      const download = await http().get(`/v1/public/shares/${token}/exports/${exportId}/download`).expect(302);
+      const file = await fetch(download.headers.location as string);
+      expect(file.ok).toBe(true);
+      const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
+      const manifestPath = Object.keys(entries).find((p) => p.endsWith('/manifest.json'))!;
+      const manifest = JSON.parse(strFromU8(entries[manifestPath])) as ExportManifest;
+      expect(manifest.pages.map((p) => p.documentId).sort()).toEqual([parentId, childId].sort());
+
+      // The job belongs to the link; the creator is only its attribution.
+      const row = await prisma.exportJob.findUniqueOrThrow({ where: { id: exportId } });
+      expect(row.shareLinkId).toBe(created.body.share.id);
+
+      await http().patch(`/v1/shares/${created.body.share.id}`).send({ allowDownload: false }).expect(200);
+      await http().get(`/v1/public/shares/${token}/exports/${exportId}/download`).expect(404);
+      await http().get(`/v1/public/shares/${token}/exports/${exportId}`).expect(404);
+      await http().delete(`/v1/shares/${created.body.share.id}`).expect(200);
+    },
+    EXPORT_TIMEOUT_MS + 10_000,
+  );
 });

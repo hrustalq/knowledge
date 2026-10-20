@@ -150,6 +150,9 @@ const NOTIFIED_JOB_TYPES: readonly string[] = [
   // role. The per-item events are deliberately absent: a 500-page space would
   // otherwise be 500 inbox rows for one act.
   'connector.run.awaiting-review',
+  // An automatic harvest (#340) proposed captures as you: background work
+  // running in your name, waiting on review.
+  'chat.harvest.proposed',
 ];
 
 /**

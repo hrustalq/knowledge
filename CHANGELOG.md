@@ -90,6 +90,22 @@ in the pull request that introduces them — see
   to it yet; that is phase 3. The editor's node specs now live in the new
   buildless package `@knowledge/editor-schema`, so the API builds the same
   schema the editor does.
+- A share link can let its readers download what it shows (#161). Tick
+  **Let readers download it** when creating the link, or flip **Downloads**
+  on an existing one in the page's Share menu; it is off by default and on no
+  existing link. The reader then gets a **Download** button that exports the
+  link's page, or the page and its subpages when the link includes them, as
+  ZIP, HTML or PDF (PDF only where Gotenberg is set up), without signing in.
+  The file contains exactly the pages the reader can open through the link,
+  never a restricted page and never more than the link's scope. A
+  password-protected link asks for its password first. Revoking the link or
+  switching downloads off stops even a finished file from downloading at
+  once. The job belongs to the link, not to a person: nobody gets an
+  inbox notification for it, and it is not in its creator's export history
+  (an admin's list on Exports still shows it). The new public routes are
+  `POST /v1/public/shares/:token/exports`, `GET …/exports/:id` and
+  `GET …/exports/:id/download`. `knowledge_share_page` takes
+  `allowDownload`.
 - Who may co-edit a draft, checked for as long as they stay (#80, phase 2).
   Joining `/v1/collab` now takes a single-use `kt_` ticket from
   `POST /v1/auth/url-ticket`; a session token or API key is refused there. An
@@ -176,6 +192,20 @@ in the pull request that introduces them — see
   believed then, so a relation retracted since still shows. Each response
   echoes `resolvedAsOf`. A malformed value is a 400, an unknown tag or another
   workspace's revision a 404. Page permissions apply exactly as they do now.
+- A Telegram group that keeps its messages can be harvested automatically
+  (#340). A workspace admin turns on *Harvest quiet threads automatically* on
+  the group in Settings → Chat bots, and the bot tells the group first; if it
+  cannot, the switch stays off. From then on, a thread (the group, or one
+  forum topic) is harvested once it has `HARVEST_AUTO_MIN_MESSAGES` new kept
+  messages and nothing new for `HARVEST_AUTO_QUIET_MINUTES`, and again only
+  after something new is said in it. Nothing said before the switch went on
+  is read. The captures are proposed in the name of the admin who turned it
+  on, whose admin role is checked again on every harvest. Nothing is posted
+  in the group: that admin gets an inbox notification with the counts, and
+  the captures wait in the Captures inbox. Each harvest is one `harvest`
+  model call, counted against that admin's `HARVEST_RATE_PER_HOUR`, and at
+  most `HARVEST_AUTO_MAX_PER_TICK` run per group per minute. Turning keeping
+  off turns this off too. Off by default on every group.
 - Release tags (#81): named instants such as `v2.3` that `asOf=tag:<name>`
   resolves to. `GET /v1/release-tags` (viewer), `POST /v1/release-tags`
   (editor; a duplicate name is a 409) and `DELETE /v1/release-tags/:id`
@@ -501,6 +531,15 @@ in the pull request that introduces them — see
   the Vite dev proxy both do. A deployment that points `VITE_API_URL` at a
   different origin will see every attachment and avatar fail with 401, because
   the browser does not send the `kn_token` cookie there. (#102)
+- Migration `20261119100000_share_link_download` adds
+  `share_links.allow_download` (default `false`) and a nullable
+  `export_jobs.share_link_id` with an index. It is additive and reversible
+  under expand/contract: the previous release ignores both columns, so after
+  a rollback a reader's files show up in the link creator's Exports until
+  the export sweeper removes them. Two env vars, both with defaults:
+  `PUBLIC_EXPORTS_PER_HOUR_PER_IP` (`5` per address and link) and
+  `PUBLIC_EXPORTS_PER_HOUR_PER_LINK` (`30` per link). Both limits fail
+  closed: with Redis down, no reader can start an export. (#161)
 - Migration `20261118100000_chat_listening_buffer` adds
   `chat_channel_bindings.listening` (default `false`) and the
   `chat_buffered_messages` table. It is additive and survives a code
@@ -518,6 +557,17 @@ in the pull request that introduces them — see
   `HARVEST_MAX_MESSAGES` (`200`: the root and the newest replies) and
   `HARVEST_RATE_PER_HOUR` (`10` per person). The `harvester` agent appears
   under Settings → AI agents and can be switched off there. No migration.
+- Migration `20261120100000_chat_auto_harvest` adds the nullable
+  `chat_channel_bindings.auto_harvest_by` and `auto_harvest_at` columns and
+  the `chat_harvest_marks` table (#340). It is additive and survives a code
+  rollback; after a final rollback, drop the table and the two columns by
+  hand. Four env vars, each with a default, so nothing needs setting:
+  `HARVEST_AUTO_ENABLED` (`true`; `false` stops every automatic harvest
+  whatever a group's switch says, and the settings page says so),
+  `HARVEST_AUTO_MIN_MESSAGES` (`8`), `HARVEST_AUTO_QUIET_MINUTES` (`60`) and
+  `HARVEST_AUTO_MAX_PER_TICK` (`1` harvest per group per minute; `0` stops
+  the sweeper). The sweeper runs in the API, beside the chat answer sweeper,
+  only while `CHAT_ENABLED` and `HARVEST_ENABLED` are on.
 - Migration `20261117100000_chat_captures_into_agent_memory` adds a nullable
   `knowledge_captures.origin` column. It copies every `chat_captures` row into
   `knowledge_captures` under the same id, with its status, and then **drops

@@ -8,6 +8,11 @@
  * A Telegram group can also keep its messages for a harvest (#82): the API
  * posts a notice in the group before it keeps anything, so the toggle waits
  * for that round trip and shows the refusal if the bot cannot speak there.
+ *
+ * A listening group can also be harvested automatically (#340), as the admin
+ * who turns that on: the API tells the group first, so that switch waits too.
+ * The server's ceiling is shown beside the switch, not folded into it — a
+ * binding that asks for it on a server that has it off says both.
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -29,6 +34,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import UserChip from '@/components/people/UserChip.vue'
 import AgentSelect from './AgentSelect.vue'
 import ChatSubscriptionEditor from './ChatSubscriptionEditor.vue'
 
@@ -45,6 +51,15 @@ const options = computed(() => apiQueryOptions('/v1/chat/integrations/{id}/bindi
 const query = useQuery(options)
 const bindings = computed(() => (query.data.value as ChatBindingsResponse | undefined)?.bindings ?? [])
 const ttlDays = computed(() => (query.data.value as ChatBindingsResponse | undefined)?.listenTtlDays ?? 7)
+const auto = computed(() => (query.data.value as ChatBindingsResponse | undefined)?.autoHarvest ?? null)
+const autoHint = computed(() => {
+  const a = auto.value
+  if (!a) return ''
+  return t('chatBots.bindings.autoHarvestHint', {
+    messages: t('chatBots.bindings.autoHarvestMessages', { n: a.minMessages }, a.minMessages),
+    quiet: t('chatBots.bindings.autoHarvestQuiet', { n: a.quietMinutes }, a.quietMinutes),
+  })
+})
 
 /** Which bindings have their notification rules open. */
 const open = reactive<Record<string, boolean>>({})
@@ -67,9 +82,18 @@ async function patch(b: ChatBindingEntry, body: Record<string, unknown>) {
 /** Bindings whose listening switch is waiting on the API (and, turning on, on the group notice). */
 const switching = reactive<Record<string, boolean>>({})
 async function setListening(b: ChatBindingEntry, on: boolean) {
+  await setSwitch(b, { listening: on })
+}
+
+/** Automatic harvest: whoever turns it on is who it runs as, so the body carries only the switch. */
+async function setAutoHarvest(b: ChatBindingEntry, on: boolean) {
+  await setSwitch(b, { autoHarvest: on })
+}
+
+async function setSwitch(b: ChatBindingEntry, body: Record<string, boolean>) {
   switching[b.id] = true
   try {
-    await patch(b, { listening: on })
+    await patch(b, body)
   } finally {
     switching[b.id] = false
     // A refusal (the bot could not tell the group) must put the box back to what the server holds.
@@ -194,6 +218,29 @@ async function add() {
             </span>
           </span>
         </label>
+        <label
+          v-if="kind === 'telegram' && auto"
+          class="mt-3 flex max-w-[46rem] items-start gap-2.5"
+          :class="b.listening && (auto.available || b.autoHarvestBy) ? 'cursor-pointer has-[:disabled]:cursor-progress' : 'cursor-not-allowed'"
+        >
+          <Checkbox
+            class="mt-0.5"
+            :model-value="!!b.autoHarvestBy"
+            :disabled="!!switching[b.id] || !b.listening || (!auto.available && !b.autoHarvestBy)"
+            @update:model-value="(v) => setAutoHarvest(b, v === true)"
+          />
+          <span class="min-w-0">
+            <span class="block text-sm">{{ t('chatBots.bindings.autoHarvest') }}</span>
+            <span class="block text-xs text-muted-foreground">{{ autoHint }}</span>
+            <span v-if="!b.listening" class="mt-1 block text-xs text-muted-foreground">{{ t('chatBots.bindings.autoHarvestNeedsListening') }}</span>
+            <span v-if="!auto.available" class="mt-1 block text-xs text-amber-700 dark:text-amber-400">{{ t('chatBots.bindings.autoHarvestUnavailable') }}</span>
+          </span>
+        </label>
+        <!-- Outside the label: the chip opens a card, and a control inside a label is invalid markup. -->
+        <div v-if="kind === 'telegram' && b.autoHarvestBy" class="mt-1 flex items-center gap-1.5 pl-[1.625rem] text-xs text-muted-foreground">
+          {{ t('chatBots.bindings.autoHarvestRunsAs') }}
+          <UserChip :user-id="b.autoHarvestBy" size="sm" />
+        </div>
         <button
           type="button"
           class="mt-2.5 inline-flex items-center gap-1.5 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"

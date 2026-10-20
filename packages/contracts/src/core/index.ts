@@ -394,6 +394,10 @@ export const KNOWN_EVENT_TYPES = [
   'capture.proposed',
   'capture.approved',
   'capture.rejected',
+  // An automatic harvest (#340) proposed captures from a listening chat
+  // thread. Never published on the bus: a directed row to the admin it runs
+  // as. `title` is the group's name; metadata carries counts only.
+  'chat.harvest.proposed',
   'connector.created',
   'connector.updated',
   'connector.deleted',

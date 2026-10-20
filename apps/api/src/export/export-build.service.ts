@@ -172,7 +172,8 @@ export class ExportBuildService {
       scope: row.scope as ExportScope,
       documentId: row.documentId,
       projectId: row.projectId,
-      requester: { userId: row.requestedBy, locale: row.locale as Locale },
+      // A share link's job holds what the link shows, not what its creator can open (#161).
+      requester: row.shareLinkId ? { shareLinkId: row.shareLinkId } : { userId: row.requestedBy, locale: row.locale as Locale },
     });
     const revisions = await this.scope.revisions(
       documents.map((d) => d.id),
@@ -387,8 +388,13 @@ export class ExportBuildService {
     await this.prisma.exportJob.updateMany({ where: { id, status: 'running' }, data: { stage } }).catch(() => undefined);
   }
 
-  /** To the person who asked, and only them: who exported what is not the workspace's news. */
+  /**
+   * To the person who asked, and only them: who exported what is not the
+   * workspace's news. A share link's reader has no inbox, and the link's
+   * creator did not ask, so their job says nothing — the reader polls (#161).
+   */
   private async announce(row: ExportJob, type: 'export.completed' | 'export.failed'): Promise<void> {
+    if (row.shareLinkId) return;
     await this.events.publish({ workspaceId: row.workspaceId, userId: row.requestedBy, type, subjectId: row.id, title: row.title });
   }
 }

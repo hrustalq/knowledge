@@ -5371,6 +5371,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/shares/{token}/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export what the link shows as ZIP, HTML or PDF, when the link allows download (#161); poll the job */
+        post: operations["PublicSharesController_createExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/shares/{token}/exports/{exportId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of this link’s exports — polled while it runs */
+        get: operations["PublicSharesController_getExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/sites/resolve": {
         parameters: {
             query?: never;
@@ -5813,7 +5847,7 @@ export interface paths {
         delete: operations["ChatSettingsController_removeBinding"];
         options?: never;
         head?: never;
-        /** Change a group’s project, agent, answer mode or language */
+        /** Change a group’s project, agent, answer mode, language, listening or automatic harvest */
         patch: operations["ChatSettingsController_updateBinding"];
         trace?: never;
     };
@@ -8249,6 +8283,8 @@ export interface components {
             expiresAt?: string | null;
             /** @description Readers must enter it first */
             password?: string;
+            /** @description Let readers download an export of what the link shows (#161). Omitted reads as false */
+            allowDownload?: boolean;
         };
         UpdateShareLinkDto: {
             /** @description Also share every page under this one */
@@ -8260,6 +8296,8 @@ export interface components {
             expiresAt?: string | null;
             /** @description Omit to keep; a string sets it (ends every unlocked session); null clears it */
             password?: string | null;
+            /** @description Let readers download an export; turning it off ends downloads of finished files at once */
+            allowDownload?: boolean;
         };
         UpdatePublishingSettingsDto: {
             /** @description Allow public share links; null goes back to the default (off) */
@@ -8357,6 +8395,13 @@ export interface components {
         UnlockShareDto: {
             password: string;
         };
+        CreateShareExportDto: {
+            /**
+             * @description `zip`: markdown + attachments; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL
+             * @enum {string}
+             */
+            format: "zip" | "html" | "pdf";
+        };
         AskSiteDto: {
             question: string;
             /** @description A version slug; omitted = the default version */
@@ -8453,6 +8498,8 @@ export interface components {
             locale?: "en" | "ru" | null;
             /** @description Keep this group’s messages, masked, for harvesting (#82). Telegram only; turning it on posts a notice in the group, turning it off deletes what is kept. */
             listening?: boolean;
+            /** @description Harvest this group’s quiet threads automatically (#340), as the admin who turns it on — never anyone named in the body. Needs listening; turning listening off turns this off too. */
+            autoHarvest?: boolean;
         };
         CreateChatSubscriptionDto: {
             /**
@@ -25876,6 +25923,114 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Not a page this link reaches */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PublicSharesController_createExport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateShareExportDto"];
+            };
+        };
+        responses: {
+            /** @description The link is locked: unlock it first */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dead link, or download is off */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PDF without Gotenberg (details.reason export.formatUnavailable) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many exports from this address or link (details.reason share.exportRateLimited) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PublicSharesController_getExport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                token: string;
+                exportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dead link, download off, or not this link’s export */
             404: {
                 headers: {
                     [name: string]: unknown;

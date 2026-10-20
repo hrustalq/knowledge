@@ -21,7 +21,7 @@ export interface ResolvedChain {
 type AclDb = Pick<PrismaService, 'project' | 'document' | 'accessGrant' | 'workspaceMember' | 'userGroupMember'>;
 
 /*
- * The two page-permission reads that need nothing but the database, as plain
+ * The page-permission reads that need nothing but the database, as plain
  * functions (#76, phase 5).
  *
  * `PermissionService` delegates to them, and so does `NotificationsService`,
@@ -30,6 +30,20 @@ type AclDb = Pick<PrismaService, 'project' | 'document' | 'accessGrant' | 'works
  * through `EventsModule` — a provider either way round would close a cycle.
  * A leaf both sides import is the house way out of one.
  */
+
+/**
+ * Every restricted node in a workspace — projects and pages — the input of
+ * `clampToAudience`. `PermissionService.audienceScope` reads it, and so does
+ * the learner (#305), which has no person to start a scope from and must not
+ * load the permission module's event and mail wiring to ask.
+ */
+export async function restrictedNodeIds(db: Pick<AclDb, 'project' | 'document'>, workspaceId: string): Promise<string[]> {
+  const [docs, projects] = await Promise.all([
+    db.document.findMany({ where: { workspaceId, restricted: true }, select: { id: true } }),
+    db.project.findMany({ where: { workspaceId, restricted: true }, select: { id: true } }),
+  ]);
+  return [...projects, ...docs].map((n) => n.id);
+}
 
 /**
  * A resource's chain, project first, with every grant on it. Ancestors that

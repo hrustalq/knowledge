@@ -24,7 +24,7 @@ import {
   type Audience,
   type ChainNode,
 } from './access-scope.js';
-import { resolveChain, whoCanOpen, type AccessResource, type ResolvedChain } from './acl-read.js';
+import { resolveChain, restrictedNodeIds, whoCanOpen, type AccessResource, type ResolvedChain } from './acl-read.js';
 
 export type { AccessResource, ResolvedChain } from './acl-read.js';
 
@@ -221,9 +221,8 @@ export class PermissionService {
    * a restriction placed mid-run holds from the next one.
    */
   async audienceScope(scope: AccessScope, audience: Audience): Promise<AccessScope> {
-    const [docs, projects, destination] = await Promise.all([
-      this.prisma.document.findMany({ where: { workspaceId: scope.workspaceId, restricted: true }, select: { id: true } }),
-      this.prisma.project.findMany({ where: { workspaceId: scope.workspaceId, restricted: true }, select: { id: true } }),
+    const [restricted, destination] = await Promise.all([
+      restrictedNodeIds(this.prisma, scope.workspaceId),
       audience.kind === 'document'
         ? this.prisma.document.findUnique({
             where: { id: audience.documentId },
@@ -233,7 +232,7 @@ export class PermissionService {
     ]);
     const audienceNodes =
       destination && destination.workspaceId === scope.workspaceId ? new Set(destination.restrictedBy) : new Set<string>();
-    return clampToAudience(scope, [...projects, ...docs].map((n) => n.id), audienceNodes);
+    return clampToAudience(scope, restricted, audienceNodes);
   }
 
   /**

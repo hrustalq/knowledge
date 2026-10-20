@@ -7,11 +7,19 @@
 // needed, and approves it; from then on the agent is told it on every turn,
 // newest first, up to the server's per-prompt limit, which is shown so a long
 // active list is not mistaken for one that all applies.
+//
+// The learner (#305) adds two things an admin decides on here. A *derived*
+// learning — the coach's draft from findings several people dismissed — is
+// badged and shows its evidence, as far as the viewer may see it: the server
+// titles a finding only when the viewer can open every page it cites, and the
+// rest arrive as a bare count. And an active learning the learner found did
+// not lower dismissals carries a proposed-archive flag with the counts behind
+// it; the admin archives it or keeps it. Nothing here is decided by the server.
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { Archive, Check, GraduationCap, Pencil, Plus, RotateCcw } from 'lucide-vue-next'
+import { Archive, Check, GraduationCap, Pencil, Plus, RotateCcw, Sparkles, TriangleAlert } from 'lucide-vue-next'
 import {
   AGENT_LEARNING_STATUSES,
   type AgentLearningStatus,
@@ -53,6 +61,18 @@ const update = useApiMutation('patch', '/v1/ai/agents/learnings/{id}', {
 })
 const busy = ref<string | null>(null)
 
+async function keep(learning: AgentLearningSummary) {
+  busy.value = learning.id
+  try {
+    await update.mutateAsync({ path: { id: learning.id }, body: { keepActive: true } })
+    toast.success(t('ai.learnings.kept'))
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    busy.value = null
+  }
+}
+
 async function setStatus(learning: AgentLearningSummary, next: AgentLearningStatus) {
   busy.value = learning.id
   try {
@@ -84,7 +104,7 @@ const projectLabel = (id: string | null) =>
 function sourceLink(l: AgentLearningSummary): string | null {
   if (l.sourceKind === 'mr-thread' && l.sourceMergeRequestId) return `/merge-requests/${l.sourceMergeRequestId}`
   if (l.sourceKind === 'document-thread' && l.sourceDocumentId) return `/documents/${l.sourceDocumentId}`
-  if (l.sourceKind === 'finding') return '/settings/ai/runs'
+  if (l.sourceKind === 'finding' || l.sourceKind === 'derived') return '/settings/ai/runs'
   return null
 }
 </script>
@@ -145,6 +165,14 @@ function sourceLink(l: AgentLearningSummary): string | null {
           <div class="min-w-0 flex-1">
             <p class="text-sm leading-relaxed whitespace-pre-wrap">{{ l.text }}</p>
             <p class="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              <Badge
+                v-if="l.sourceKind === 'derived'"
+                variant="outline"
+                class="gap-1 font-normal"
+                :title="t('ai.learnings.derivedHint')"
+              >
+                <Sparkles class="size-3" aria-hidden="true" /> {{ t('ai.learnings.derived') }}
+              </Badge>
               <Badge variant="secondary" class="font-normal">{{ agentLabel(l.agentKey) }}</Badge>
               <Badge v-if="l.projectId" variant="outline" class="font-normal">{{ projectLabel(l.projectId) }}</Badge>
               <RouterLink v-if="sourceLink(l)" :to="sourceLink(l)!" class="text-primary hover:underline">
@@ -156,6 +184,58 @@ function sourceLink(l: AgentLearningSummary): string | null {
                 · {{ t('ai.learnings.approvedAt', { time: relativeTime(l.approvedAt) }) }}
               </span>
             </p>
+
+            <p v-if="l.sourceKind === 'derived' && l.status === 'proposed'" class="text-muted-foreground mt-1.5 text-xs">
+              {{ t('ai.learnings.derivedHint') }}
+            </p>
+
+            <details v-if="l.evidence && l.evidenceCount > 0" class="mt-2">
+              <summary class="text-muted-foreground cursor-pointer text-xs">
+                {{ t('ai.learnings.evidence', { n: l.evidenceCount }, l.evidenceCount) }}
+              </summary>
+              <ul class="mt-1.5 space-y-1 border-l pl-3">
+                <li
+                  v-for="f in l.evidence.findings"
+                  :key="`${f.runId}:${f.findingIndex}`"
+                  class="text-xs leading-relaxed"
+                >
+                  <span class="text-foreground/90">{{ f.title }}</span>
+                  <span class="text-muted-foreground">
+                    · {{ agentLabel(f.agentKey) }}
+                    <template v-if="f.dismissedAt">
+                      · {{ t('ai.learnings.evidenceDismissed', { time: relativeTime(f.dismissedAt) }) }}
+                    </template>
+                  </span>
+                </li>
+                <li v-if="l.evidence.hidden > 0" class="text-muted-foreground text-xs">
+                  {{ t('ai.learnings.evidenceHidden', { n: l.evidence.hidden }) }}
+                </li>
+              </ul>
+            </details>
+
+            <div
+              v-if="l.status === 'active' && l.archiveProposedAt"
+              class="mt-2 flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs"
+              role="note"
+            >
+              <TriangleAlert class="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-500" aria-hidden="true" />
+              <div class="space-y-1">
+                <p class="font-medium">{{ t('ai.learnings.archiveProposed') }}</p>
+                <p v-if="l.archiveCheck" class="text-muted-foreground tabular-nums">
+                  {{
+                    t('ai.learnings.archiveCounts', {
+                      beforeDismissed: l.archiveCheck.before.dismissed,
+                      beforeFindings: l.archiveCheck.before.findings,
+                      beforeRuns: l.archiveCheck.before.runs,
+                      afterDismissed: l.archiveCheck.after.dismissed,
+                      afterFindings: l.archiveCheck.after.findings,
+                      afterRuns: l.archiveCheck.after.runs,
+                    })
+                  }}
+                </p>
+                <p class="text-muted-foreground">{{ t('ai.learnings.archiveProposedHint') }}</p>
+              </div>
+            </div>
           </div>
 
           <div v-if="canManage" class="flex shrink-0 flex-wrap gap-1">
@@ -166,6 +246,15 @@ function sourceLink(l: AgentLearningSummary): string | null {
               @click="setStatus(l, 'active')"
             >
               <Check class="size-3.5" /> {{ t('ai.learnings.approve') }}
+            </Button>
+            <Button
+              v-if="l.status === 'active' && l.archiveProposedAt"
+              variant="outline"
+              size="sm"
+              :disabled="busy !== null"
+              @click="keep(l)"
+            >
+              <Check class="size-3.5" /> {{ t('ai.learnings.keep') }}
             </Button>
             <Button v-if="l.status !== 'archived'" variant="outline" size="sm" @click="openEdit(l)">
               <Pencil class="size-3.5" /> {{ t('common.edit') }}

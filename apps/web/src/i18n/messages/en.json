@@ -2257,7 +2257,8 @@
       "lint": "Lint",
       "contradiction": "Contradiction check",
       "community": "Community summary",
-      "harvest": "Chat harvest"
+      "harvest": "Chat harvest",
+      "coach": "Learner coach"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",
@@ -2432,9 +2433,20 @@
         "manual": "Written here",
         "document-thread": "From a page comment",
         "mr-thread": "From a review thread",
-        "finding": "From a dismissed finding"
+        "finding": "From a dismissed finding",
+        "derived": "From findings people kept dismissing"
       },
       "approvedAt": "approved {time}",
+      "derived": "Derived",
+      "derivedHint": "Drafted by the coach from findings several people dismissed. Read the evidence before approving: no agent is told it until an admin approves it.",
+      "evidence": "{n} dismissed finding | {n} dismissed findings",
+      "evidenceHidden": "+{n} not visible to you",
+      "evidenceDismissed": "dismissed {time}",
+      "archiveProposed": "Proposed for archiving: dismissals did not drop after it was approved.",
+      "archiveCounts": "Before: {beforeDismissed} of {beforeFindings} findings dismissed over {beforeRuns} runs. After: {afterDismissed} of {afterFindings} over {afterRuns} runs.",
+      "archiveProposedHint": "The learner only proposes. Archive it, or keep it active and the learner will not ask again until it is approved anew.",
+      "keep": "Keep active",
+      "kept": "Kept active. The learner will not propose archiving it again.",
       "teach": "Teach agent",
       "teachTitle": "Teach {agent}",
       "editTitle": "Edit learning",

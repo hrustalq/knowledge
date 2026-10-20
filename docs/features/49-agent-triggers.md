@@ -273,6 +273,111 @@ learning. A dismissal is only useful if the next run knows about it, so
 ten succeeded runs (at most 20) as quoted data, with an instruction not to
 report them again.
 
+## Derived learnings (#305)
+
+The learner is a fifth `apps/api` entrypoint, `learner.main.ts`
+(`createApplicationContext(LearnerModule)`). It loads no controller, gateway,
+processor or sweeper of the other processes, and `make deps` enforces that.
+It is off by default (`LEARNER_ENABLED=false`); a disabled learner boots and
+idles. It writes proposals only. A derived learning is always `proposed`, and
+an admin activates or archives it on the same PATCH route as any other.
+
+**Clock.** `LearnerTicker` fires every `LEARNER_TICK_MS` (15 minutes) and passes
+over each workspace at most once a day. A tick that finds a pass still running
+starts nothing. The due check is in memory, so a restart makes every workspace
+due once more. That is safe because a pass is idempotent.
+
+**Derivation**, per workspace:
+
+1. **Read.** Findings dismissed by a person within `LEARNER_WINDOW_DAYS` (30),
+   citing at least one page. Every cited page must be listed and open to the
+   whole workspace (`visibilitySql` over `systemScope` clamped to the workspace
+   audience, in the query). A finding citing a restricted page, or anything
+   under one, never enters.
+2. **Cluster.** Grouped by agent and by the project of the first cited page,
+   then clustered greedily by raw cosine to a running centroid at
+   `LEARNER_CLUSTER_THRESHOLD`. Findings are embedded on the fly and never
+   stored.
+3. **Qualify.** A cluster needs `LEARNER_MIN_DISMISSALS` (3) findings from
+   `LEARNER_MIN_PEOPLE` (2) distinct dismissers. Three dismissals by one person
+   do not qualify.
+4. **Fold or write.**
+   - A cluster sharing a finding with a proposed or active learning for the same
+     agent and project folds the new findings into that row's `evidence`, in one
+     de-duplicating statement. A fourth similar dismissal therefore never inserts
+     a second row.
+   - A cluster sharing a finding with an archived learning is an admin's "no",
+     and nothing is written.
+   - Otherwise the `coach` drafts one correction from the findings, which are
+     wrapped untrusted. A draft whose text is within the threshold of an
+     existing proposed or active learning for the target folds into it.
+     Anything else becomes a new `proposed` row with `source_kind = 'derived'`,
+     `evidence` (run ids and finding indexes) and `created_by` = the zeros stub.
+
+**Coach.** `coach` is a built-in agent, resolved through `resolveFor` like any
+other, so it can be pinned to a provider or disabled. Its usage rows are
+`operation = 'coach'` and billed to the zeros stub. Its "quote nothing, name no
+page" rule is only a prompt. The ACL filter in step 1 is the enforcement.
+
+**Budget.** `choosePromptLearnings` picks hand-written learnings first, exactly
+as before. Derived ones then take the room left, but never more than half of
+`AGENT_LEARNINGS_MAX` or half of the 4 000 characters. A derived learning never
+displaces a manual one.
+
+**Lifecycle.** For each active learning, `AgentOutcomesService.beforeAfter`
+counts the agent's succeeded runs on each side of its approval:
+
+- `after` is every run whose `learning_ids` contain it.
+- `before` is every attributed run created before the approval. Runs from before
+  the ledger (`learning_ids` NULL) are on neither side.
+
+When both sides have at least `LEARNER_MIN_RUNS` (20) runs and the dismissal
+rate did not drop, the learner sets `archive_proposed_at` and stores the counts
+in `archive_check`. The learning stays active. An admin either archives it or
+presses **Keep**, which clears the flag and records `keptAt`. A re-approval
+starts a new period.
+
+**Review.** The **Learnings** panel marks derived learnings with a badge and
+shows their evidence. A finding is titled only when the viewer can open every
+page it cites. The rest count as "+N not visible to you", without titles. A
+flagged learning shows its before/after counts with **Archive** and **Keep**.
+
+### Calibration
+
+`make backtest ARGS="--learner"` measures the threshold for the configured
+embedding model. It reads only. The input is 38 built-in labelled findings
+(`learner/learner-calibration.ts`): eight recurring mistakes with four findings
+each, one in Russian, plus six one-offs, two of which share a mistake's `kind`
+for a legitimate reason. `--workspace <id>` adds that workspace's style findings,
+labelled by rule.
+
+The run clusters the findings with the learner's own `clusterFindings` at every
+threshold and counts:
+
+- **mixed**: a cluster holding two mistakes. It must be 0, because the result
+  would be a learning nobody taught.
+- **absorbed**: a one-off swept into a cluster big enough to qualify. It must
+  be 0.
+- **recovered**: mistakes with three findings in one cluster.
+
+On bge-m3 (2026-10-20):
+
+| t    | pair recall | mixed | absorbed | recovered |
+| ---- | ----------- | ----- | -------- | --------- |
+| 0.64 | 56 %        | 3     | 2        | 5/8       |
+| 0.66 | 42 %        | 2     | 1        | 4/8       |
+| 0.68 | 33 %        | 0     | 0        | 3/8       |
+| 0.70 | 31 %        | 0     | 0        | 3/8       |
+| 0.74 | 15 %        | 0     | 0        | 2/8       |
+| 0.78 | 0 %         | 0     | 0        | 0/8       |
+
+0.68 is the edge: one step lower mixes two clusters. The default is **0.70**,
+which keeps one grid step of margin at the same recovery. Paraphrases of one
+mistake on different pages sit lower in bge-m3 than intuition suggests: at
+0.80, nothing clusters at all. A missed cluster only waits for more dismissals,
+while a mixed one drafts a wrong learning, so the margin goes on the safe side.
+Re-run the calibration when the embedding model changes.
+
 ## Repository guidance as skills
 
 After a successful sync of a codebase or Markdown/Git connector,
@@ -313,9 +418,9 @@ finishes while the API is down is picked up by the next sync or by **Import now*
 | `POST /v1/ai/agents/triggers/:id/rotate-secret`     | admin, `agent-trigger`    | Returns the secret once                         |
 | `POST /v1/ai/agents/triggers/:id/webhook`           | `@Public()` + HMAC        | 202 with `runId` or `skipped`                   |
 | `POST /v1/ai/agents/recipes/:recipe/apply`          | admin, body               | Disabled and ownerless                          |
-| `GET /v1/ai/agents/learnings`                       | viewer, query             |                                                 |
+| `GET /v1/ai/agents/learnings`                       | viewer, query             | Evidence filtered by the caller's scope         |
 | `POST /v1/ai/agents/learnings`                      | editor, body              | `status: "active"` re-checks admin              |
-| `PATCH /v1/ai/agents/learnings/:id`                 | admin, `agent-learning`   | Approve, reword, archive                        |
+| `PATCH /v1/ai/agents/learnings/:id`                 | admin, `agent-learning`   | Approve, reword, archive; `keepActive` (#305)   |
 | `POST /v1/ai/agents/runs/:id/findings/:index/dismiss` | editor, query           | Optional learning text                          |
 | `POST /v1/connectors/:id/guidance/import`           | admin, `connector`        |                                                 |
 | `POST /v1/ai/skills/:id/accept-upstream`            | admin, `ai-skill`         | 409 when nothing is pending                     |
@@ -341,11 +446,19 @@ Every one has a default, and the new behaviour is off or inert until asked for.
 | `AGENT_WEBHOOK_TOLERANCE_SECONDS` | `300`   | Allowed clock difference on a delivery's timestamp                  |
 | `AGENT_LEARNINGS_MAX`             | `20`    | Active learnings per prompt; `0` turns them off                     |
 | `REPO_GUIDANCE_IMPORT_ENABLED`    | `true`  | After-sync import; **Import now** works either way                  |
+| `LEARNER_ENABLED`                 | `false` | The learner process works at all (#305); off, it idles              |
+| `LEARNER_TICK_MS`                 | `900000` | How often it wakes; each workspace is passed over once a day        |
+| `LEARNER_WINDOW_DAYS`             | `30`    | How far back dismissals are read                                    |
+| `LEARNER_CLUSTER_THRESHOLD`       | `0.7`   | Raw cosine to join a cluster, and to fold a draft into a learning   |
+| `LEARNER_MIN_DISMISSALS`          | `3`     | Findings a cluster needs                                            |
+| `LEARNER_MIN_PEOPLE`              | `2`     | Distinct dismissers a cluster needs                                 |
+| `LEARNER_MIN_RUNS`                | `20`    | Runs on each side of an activation before the check says anything   |
 
 Migrations, all additive and all run cleanly by the previous image:
 `20261021100000_agent_schedule_time_of_day`, `20261022100000_agent_triggers`,
 `20261023100000_agent_trigger_webhooks`, `20261024100000_agent_learnings`,
-`20261025100000_ai_skill_repo_source`. The CHANGELOG's Operations section says
+`20261025100000_ai_skill_repo_source`, and for #305 `20261123100000_derived_learnings`
+(`evidence`, `archive_proposed_at`, `archive_check` on `agent_learnings`). The CHANGELOG's Operations section says
 what each one does on rollback.
 
 ## Web
@@ -381,15 +494,20 @@ through `AlertDialog`.
 - **A triggered run's cost is as invisible as a scheduled one's**
   ([20-agents-todo item F](20-agents-todo.md#f-nothing-shows-a-scheduled-runs-cost--m)),
   and triggers make that more pressing.
-- Learnings are person-authored. Extracting them from threads automatically is
-  deferred.
+- Learnings are person-authored or derived from dismissed findings (#305).
+  Extracting them from threads automatically is deferred.
+- A derived learning is scoped to one project, and a workspace-wide run (no
+  pages, no connector) is given no project-scoped learning. An admin can widen
+  the scope to every project when approving it.
 
 ## Specs
 
 `apps/api/test/agent-schedule.spec.ts` (contracts' `nextScheduledRun`, including
 DST in both directions), `agent-trigger.service.spec.ts`,
 `agent-webhook-mention.spec.ts`, `agent-recipes.spec.ts`,
-`agent-learnings.spec.ts` (learnings, the rendered prompt, dismiss) and
-`repo-guidance.service.spec.ts`. There is
+`agent-learnings.spec.ts` (learnings, the rendered prompt, dismiss),
+`repo-guidance.service.spec.ts`, `learner.spec.ts` (thresholds, fold, budget
+split, back-pressure, lifecycle) and `learner.e2e-spec.ts` (the derivation and
+before/after queries in Postgres, a restricted page excluded). There is
 no contracts-level test runner, so contracts functions are tested from
 `apps/api/test`.

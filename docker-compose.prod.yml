@@ -200,6 +200,26 @@ services:
       start_period: 60s
       retries: 3
 
+  # The learner (#305, docs/features/49 §Derived learnings), opt-in twice like
+  # gotenberg: started only when COMPOSE_PROFILES names `learner`, and working
+  # only with LEARNER_ENABLED=true in the production environment. Without the
+  # flag it idles (it does not exit, so `restart` cannot loop it). Same image as
+  # api: learner.main.ts is a fifth entrypoint of apps/api. It reads Postgres,
+  # embeds through EMBEDDINGS_* and calls the `coach` through the workspace's
+  # provider; it consumes no queue and listens on no port, so there is nothing
+  # to health-check beyond the process being up.
+  learner:
+    image: knowledge-api:${TAG:-latest}
+    command: ["node", "dist/learner.main"]
+    profiles: ["learner"]
+    restart: unless-stopped
+    init: true
+    env_file: [.env]
+    volumes:
+      - applogs:/app/logs
+    depends_on:
+      postgres: { condition: service_healthy }
+
   # PDF export (docs/features/45), opt-in: started only when COMPOSE_PROFILES
   # names it. Production sets COMPOSE_PROFILES and GOTENBERG_URL in the GitHub
   # `production` environment, which the deploy renders into .env; a hand edit

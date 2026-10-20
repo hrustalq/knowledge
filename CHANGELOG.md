@@ -13,6 +13,61 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- Agents can now learn from findings people keep dismissing (#305). A new
+  learner process finds dismissed findings of one agent in one project that
+  are the same mistake: three or more within 30 days, dismissed by at least
+  two people. The new `coach` agent then drafts one correction from them,
+  which lands under **Settings → AI → Learnings** as a *proposed* learning
+  with a **Derived** badge and its evidence. Each finding in the evidence is
+  shown only to someone who can open every page it cites; the others appear
+  as "+N not visible to you". A later similar dismissal is added to the same
+  learning instead of creating another. Findings that cite a restricted page,
+  or a page under one, are never used. A derived learning reaches no prompt
+  until an admin approves it, and derived learnings never take more than
+  half of an agent's learning budget or push out a hand-written one. When an
+  active learning has 20 runs on each side of its approval and dismissals
+  did not drop, it is flagged as proposed for archiving with the before and
+  after counts. The admin archives it or presses **Keep active**
+  (`PATCH /v1/ai/agents/learnings/:id` with `keepActive: true`). The learner
+  never activates or archives anything itself. `make backtest
+  ARGS="--learner"` measures the clustering threshold for the configured
+  embedding model.
+
+### Operations
+
+- New process `learner` (#305): a fifth entrypoint of the API image,
+  `node dist/learner.main`, added to `docker-compose.prod.yml` under the
+  compose profile `learner`. It starts only when `COMPOSE_PROFILES` names
+  `learner`, and it works only with `LEARNER_ENABLED=true`. Otherwise it boots
+  and idles. Locally run it with `make dev-learner`. It reads Postgres, embeds
+  through `EMBEDDINGS_*` and calls the `coach` agent through the workspace's
+  provider, billed as `coach` usage. It needs no Redis, listens on no port and
+  consumes no queue.
+- New env vars, all with defaults, so nothing needs to be set to deploy:
+  - `LEARNER_ENABLED` (`false`)
+  - `LEARNER_TICK_MS` (`900000`): each workspace gets one pass a day at most
+  - `LEARNER_WINDOW_DAYS` (`30`)
+  - `LEARNER_CLUSTER_THRESHOLD` (`0.7`, calibrated on bge-m3; re-run the
+    calibration if the embedding model changes)
+  - `LEARNER_MIN_DISMISSALS` (`3`)
+  - `LEARNER_MIN_PEOPLE` (`2`)
+  - `LEARNER_MIN_RUNS` (`20`)
+
+  They are commented out in `.env.production.example`, so the deploy's
+  environment check asks for nothing new. Turning the learner on means
+  setting `LEARNER_ENABLED=true` and adding `learner` to `COMPOSE_PROFILES` in
+  the GitHub `production` environment.
+- Migration `20261123100000_derived_learnings` adds three nullable columns to
+  `agent_learnings`: `evidence`, `archive_proposed_at` and `archive_check`.
+  It also widens the `source_kind` CHECK to allow `derived`. It is additive
+  with no backfill and survives a code rollback, since the previous release
+  ignores the columns and never writes `derived`. After a rollback, derived learnings
+  still show as proposed learnings and an admin can archive them. (#305)
+
 ## [0.28.0] — 2026-10-20
 
 ### Breaking

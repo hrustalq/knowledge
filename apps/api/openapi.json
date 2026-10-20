@@ -14352,7 +14352,7 @@
             }
           }
         },
-        "summary": "Approve, edit or archive a learning. Approving or rewording an active one records the caller.",
+        "summary": "Approve, edit, archive or keep a learning. Approving or rewording an active one records the caller. Only an admin activates or archives — never the learner.",
         "tags": [
           "ai"
         ]
@@ -31133,7 +31133,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.27.0",
+    "version": "0.28.0",
     "contact": {}
   },
   "tags": [],
@@ -34072,6 +34072,10 @@
               "active",
               "archived"
             ]
+          },
+          "keepActive": {
+            "type": "boolean",
+            "description": "Keep an active learning the learner proposed archiving (#305): clears the flag, and the learner does not raise it again until the learning is approved anew."
           }
         }
       },
@@ -36467,7 +36471,8 @@
             "enum": [
               "zip",
               "html",
-              "pdf"
+              "pdf",
+              "docx"
             ],
             "description": "`zip`: markdown + attachments; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL"
           }

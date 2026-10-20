@@ -140,6 +140,15 @@ await import('@knowledge/editor-schema/suggestions'); \
 await import('@knowledge/editor-schema/suggestion-entries'); \
 console.log('type stripping OK');"
 
+# The learner (#305) is a fifth entrypoint of this image, and the one most
+# likely to be broken unnoticed: it is off by default, so nothing exercises it
+# on deploy. Resolve its whole import graph here (the entry itself would boot
+# the app, so its root module is imported instead), as a build failure.
+RUN node --input-type=module -e "\
+await import('./dist/learner/learner.module.js'); \
+await import('./dist/learner/learner-derive.js'); \
+console.log('learner entry OK');"
+
 EXPOSE 3000
 
 # LIVENESS ONLY. GET / is the single @Public() route (AppController) — there is

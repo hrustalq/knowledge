@@ -424,7 +424,9 @@
       "location": "Location",
       "test": "Check",
       "destination": "Destination",
-      "options": "What it does"
+      "options": "What it does",
+      "serviceAccount": "Service account",
+      "folder": "Folder"
     },
     "testing": "Checking the connection",
     "testingHint": "Making one request to prove the credential reaches the right place.",
@@ -785,6 +787,19 @@
       "added": "Added to API specs",
       "specNote": "An API spec file, shown as it will be stored. Once the page exists, every change to it arrives as a merge request.",
       "assistOff": "The AI assists rewrite markdown, so they are not offered for an API spec."
+    },
+    "kindText": {
+      "googleDrive": {
+        "credential": "Paste the whole JSON key file of a Google Cloud service account with the Drive API enabled. Then share the folder with the service account's email, or add it to the shared drive.",
+        "folderId": {
+          "label": "Folder or shared drive ID",
+          "help": "The last part of the folder URL. Share the folder (or add the service account to the shared drive) so it can read it."
+        },
+        "subject": {
+          "label": "Act as user",
+          "help": "Domain-wide delegation: read Drive as this person instead of as the service account. Also needed to read Google Groups when access is mirrored."
+        }
+      }
     }
   },
   "workflow": {

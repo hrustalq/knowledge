@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { ConnectorKind } from '@knowledge/contracts';
 import { CodebaseAdapter } from './codebase.adapter.js';
+import { GoogleDriveAdapter } from './google-drive.adapter.js';
 import { ConfluenceAdapter } from './confluence.adapter.js';
 import { ConfluenceServerAdapter } from './confluence-server.adapter.js';
 import { JiraAdapter } from './jira.adapter.js';
@@ -24,6 +25,7 @@ export class ConnectorRegistry {
     notion: NotionAdapter,
     markdownGit: MarkdownGitAdapter,
     codebase: CodebaseAdapter,
+    googleDrive: GoogleDriveAdapter,
   ) {
     this.byKind = {
       confluence,
@@ -32,6 +34,7 @@ export class ConnectorRegistry {
       notion,
       'markdown-git': markdownGit,
       codebase,
+      'google-drive': googleDrive,
     };
   }
 

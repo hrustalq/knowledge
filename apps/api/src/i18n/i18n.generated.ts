@@ -549,6 +549,15 @@ export type I18nTranslations = {
                 "outside": string;
                 "unreadable": string;
             };
+            "trashedUpstream": string;
+            "goneUpstream": string;
+            "removedFound": string;
+            "googleDrive": {
+                "skipped": string;
+                "oversizeName": string;
+                "imagesDropped": string;
+                "firstSheetOnly": string;
+            };
         };
         "pushVersionMessage": string;
         "syncRevisionMessage": string;
@@ -573,6 +582,9 @@ export type I18nTranslations = {
         "guidance": {
             "skillDescription": string;
             "skillDescriptionTruncated": string;
+        };
+        "googleDrive": {
+            "sharedDrive": string;
         };
     };
     "error": {
@@ -948,6 +960,16 @@ export type I18nTranslations = {
             "identityNotMember": string;
             "guidanceNotARepository": string;
             "specNoAssist": string;
+            "googleDrive": {
+                "badKey": string;
+                "badId": string;
+                "notAFolder": string;
+                "unsupported": string;
+                "tooLarge": string;
+                "groupsNeedSubject": string;
+                "noStartToken": string;
+                "noToken": string;
+            };
         };
         "routeNotFound": string;
         "validationFailed": string;

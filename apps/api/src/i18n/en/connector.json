@@ -56,6 +56,15 @@
       "missing": "{ref} (in {file}) names a file that is not in the repository snapshot.",
       "outside": "{ref} (in {file}) climbs out of the repository and was not followed.",
       "unreadable": "{ref} (in {file}) points at something the referenced file does not contain."
+    },
+    "trashedUpstream": "Moved to the bin in the source. The page here is kept; restoring the file there updates this page again.",
+    "goneUpstream": "No longer visible to this connector — deleted, unshared, or moved out of its folder. The page here is kept.",
+    "removedFound": "{count} linked page(s) left the source's view since the last sync. Their pages were kept and are listed in this run.",
+    "googleDrive": {
+      "skipped": "{count} file(s) in \"{folder}\" were skipped because no importer reads them: {names}.",
+      "oversizeName": "{name} (too large)",
+      "imagesDropped": "{count} image(s) were not carried over: connector pages do not pull images yet.",
+      "firstSheetOnly": "Only the first sheet was imported: Google Drive exports a spreadsheet as CSV one sheet at a time."
     }
   },
   "pushVersionMessage": "Updated from the knowledge base",
@@ -81,5 +90,8 @@
   "guidance": {
     "skillDescription": "Imported from {connector}: {path}",
     "skillDescriptionTruncated": "Imported from {connector}: {path} — the first {kept} of {total} characters"
+  },
+  "googleDrive": {
+    "sharedDrive": "{name} (shared drive)"
   }
 }

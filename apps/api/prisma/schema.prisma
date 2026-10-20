@@ -1961,7 +1961,7 @@ model WorkflowRunNode {
 model Connector {
   id          String  @id @default(uuid()) @db.Uuid
   workspaceId String  @map("workspace_id") @db.Uuid
-  /// ConnectorKind — 'confluence' | 'jira' | 'notion' | 'markdown-git'.
+  /// ConnectorKind — 'confluence' | 'jira' | 'notion' | 'markdown-git' | 'google-drive' | ….
   kind        String
   /// Display name, unique per workspace ("Product wiki", "Runbooks repo").
   name        String
@@ -2005,6 +2005,10 @@ model Connector {
 
   lastRunId    String?   @map("last_run_id") @db.Uuid
   lastSyncedAt DateTime? @map("last_synced_at") @db.Timestamptz
+  /// Where the next incremental pull reads the source's change feed from
+  /// (#338: the Drive Changes API page token). Null = never read: the next run
+  /// walks the whole tree. Written only when a run finishes.
+  changeCursor String?   @map("change_cursor")
 
   /// Access mirroring (#76). Columns rather than `config` keys: like sync_mode
   /// they apply to every kind, and the schedule sweeper filters on them.
@@ -2230,11 +2234,14 @@ model ConnectorRun {
 
   /// Capped [{ externalId, title, message }] — a lossy sync that says nothing
   /// is the failure this feature exists to prevent.
-  warnings Json?
-  error    Json?
+  warnings     Json?
+  error        Json?
   /// External ids this run is limited to; absent = the connector's whole scope.
   /// Webhooks send a handful, a full sync sends none.
-  scope    Json?
+  scope        Json?
+  /// The change-feed cursor this run read at its start (#338), copied onto the
+  /// connector when it finishes — never before, so a failed run re-reads.
+  changeCursor String? @map("change_cursor")
 
   locale  String  @default("en")
   actorId String? @map("actor_id") @db.Uuid

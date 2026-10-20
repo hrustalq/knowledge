@@ -114,6 +114,11 @@ export class ConnectorSyncService {
 
     const adapter = this.connectors.adapterFor(row);
     const ctx = await this.connectors.contextFor(row, onStage, signal);
+    // Discovery's run-level warnings (#338): what an adapter will not import,
+    // said once even when a resumed walk asks the same folder twice.
+    ctx.warn = (message) => {
+      if (!warnings.some((w) => w.externalId === null && w.message === message)) pushWarning(warnings, null, null, message);
+    };
 
     // Push has nothing to stage or review; it keeps the pre-feature shape whole.
     if (runRow.direction === 'push') {
@@ -154,12 +159,15 @@ export class ConnectorSyncService {
       if (outcome.truncated) {
         pushWarning(warnings, null, null, t('connector.stoppedAtMax', { max: this.maxItems }));
       }
+      if (outcome.removed) {
+        pushWarning(warnings, null, null, t('connector.warning.removedFound', { count: outcome.removed }));
+      }
       if (!outcome.done) {
         await this.checkpoint(runRow.id, totals, warnings);
         return { done: false };
       }
 
-      const orphans = await this.discovery.repairOrphans(runRow, adapter, ctx);
+      const orphans = outcome.incremental ? 0 : await this.discovery.repairOrphans(runRow, adapter, ctx);
       if (orphans > 0) pushWarning(warnings, null, null, t('connector.warning.orphansFound', { count: orphans }));
 
       if (adapter.codeImports) await this.indexCode(row, adapter, ctx, warnings);
@@ -535,7 +543,13 @@ export class ConnectorSyncService {
     });
     await this.prisma.connector.update({
       where: { id: row.id },
-      data: { lastRunId: runRow.id, lastSyncedAt: new Date() },
+      data: {
+        lastRunId: runRow.id,
+        lastSyncedAt: new Date(),
+        // The change feed's bookmark moves only now (#338): a run that failed
+        // or was cancelled leaves it, so the next one re-reads those changes.
+        ...(runRow.changeCursor ? { changeCursor: runRow.changeCursor } : {}),
+      },
     });
     await this.events.publish({
       workspaceId: row.workspaceId,

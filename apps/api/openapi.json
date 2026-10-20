@@ -34284,7 +34284,8 @@
               "jira",
               "notion",
               "markdown-git",
-              "codebase"
+              "codebase",
+              "google-drive"
             ]
           },
           "name": {

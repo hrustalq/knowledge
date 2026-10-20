@@ -8,15 +8,17 @@ import { exportFormatAvailable } from './export-formats'
  */
 describe('exportFormatAvailable', () => {
   it('follows what the deployment reports', () => {
-    const formats = { zip: true, html: false, pdf: true }
+    const formats = { zip: true, html: false, pdf: true, docx: false }
     expect(exportFormatAvailable(formats, 'zip')).toBe(true)
     expect(exportFormatAvailable(formats, 'html')).toBe(false)
     expect(exportFormatAvailable(formats, 'pdf')).toBe(true)
+    expect(exportFormatAvailable(formats, 'docx')).toBe(false)
   })
 
-  it('assumes ZIP and HTML but never PDF before the answer arrives', () => {
+  it('assumes every format but PDF before the answer arrives', () => {
     expect(exportFormatAvailable(undefined, 'zip')).toBe(true)
     expect(exportFormatAvailable(null, 'html')).toBe(true)
+    expect(exportFormatAvailable(undefined, 'docx')).toBe(true)
     expect(exportFormatAvailable(undefined, 'pdf')).toBe(false)
   })
 })

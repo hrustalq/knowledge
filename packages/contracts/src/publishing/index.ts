@@ -1114,9 +1114,10 @@ export function publicSiteAttachmentPath(siteId: string, versionId: string, atta
 // Export (issue #77 phase 2c, docs/features/45)
 //
 // A page, a page and its subpages, or a whole project, written out as a file a
-// member downloads: markdown sources in a ZIP, an offline HTML bundle, or a
-// PDF. The worker collects and packages; the web renders the HTML, so the
-// reader's parser stays the only one (`renderExport`, apps/web).
+// member downloads: markdown sources in a ZIP, an offline HTML bundle, a PDF
+// or a Word document. The worker collects and packages; the web renders the
+// HTML (`renderExport`, apps/web), and the worker writes the Word document
+// from the same parser's tokens (`markdownTokens`, @knowledge/editor-schema).
 // ---------------------------------------------------------------------------
 
 export const EXPORT_SCOPES = ['page', 'subtree', 'project'] as const;
@@ -1124,11 +1125,11 @@ export type ExportScope = (typeof EXPORT_SCOPES)[number];
 
 /**
  * What an export can be written as. `pdf` needs a Gotenberg sidecar
- * (GOTENBERG_URL); the other two need nothing beyond the worker. DOCX is not
- * here: Gotenberg converts only *to* PDF, and a format the code cannot emit
- * must not be offered.
+ * (GOTENBERG_URL); the others need nothing beyond the worker. `docx` is
+ * written by the worker itself from the parser's tokens (#162), because
+ * Gotenberg converts only *to* PDF.
  */
-export const EXPORT_FORMATS = ['zip', 'html', 'pdf'] as const;
+export const EXPORT_FORMATS = ['zip', 'html', 'pdf', 'docx'] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
 /** queued → running → completed | failed; a completed file becomes `expired` after EXPORT_TTL_HOURS. */
@@ -1229,7 +1230,8 @@ export interface ExportManifest {
  * root for `html`, Gotenberg's flat upload folder for `pdf`.
  */
 export interface ExportRenderRequest {
-  format: Exclude<ExportFormat, 'zip'>;
+  /** `zip` needs no render, and `docx` is written by the worker from the parser's tokens. */
+  format: Exclude<ExportFormat, 'zip' | 'docx'>;
   locale: Locale;
   title: string;
   exportedAt: string;

@@ -72,6 +72,16 @@ in the pull request that introduces them — see
   the head. Viewer and editor on the page respectively, checked on every
   call; a read-only key is not offered the suggestion tool. The stdio MCP
   server does not offer either tool.
+- Word (`.docx`) export (#162). A page, a page and its subpages, or a project
+  can now be exported as one Word document from the export dialog, through
+  `POST /v1/documents/:id/exports` and `POST /v1/projects/:id/exports` with
+  `format: "docx"`, and from MCP `knowledge_export`. It needs no Gotenberg, so
+  `GET /v1/exports/capabilities` always offers it. Headings are Word heading
+  styles, so the navigation pane works. Lists, tables, code, links and the
+  export's own images are kept, and images from the web stay links. Callouts
+  and expands become shaded blocks. Each page starts on a new sheet, and an
+  export of more than one page opens with a title page and contents. Mermaid
+  diagrams stay as their source in a code block.
 - The server side of real-time co-editing (#80, phase 1), off by default. With
   `COLLAB_ENABLED=true`, a `/v1/collab` WebSocket serves one shared Yjs draft
   per document branch. The draft is seeded once from the branch head, stored in

@@ -8430,10 +8430,10 @@ export interface components {
         };
         CreateDocumentExportDto: {
             /**
-             * @description `zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL
+             * @description `zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL; `docx`: one Word document
              * @enum {string}
              */
-            format: "zip" | "html" | "pdf";
+            format: "zip" | "html" | "pdf" | "docx";
             /** @description Branch name to read each page from; a page without it uses its default branch. Omitted or null: default branches */
             branch?: string | null;
             /** @description Also export every page under this one. Omitted: false */
@@ -8441,10 +8441,10 @@ export interface components {
         };
         CreateProjectExportDto: {
             /**
-             * @description `zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL
+             * @description `zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL; `docx`: one Word document
              * @enum {string}
              */
-            format: "zip" | "html" | "pdf";
+            format: "zip" | "html" | "pdf" | "docx";
             /** @description Branch name to read each page from; a page without it uses its default branch. Omitted or null: default branches */
             branch?: string | null;
         };

@@ -42,8 +42,13 @@ export interface CreateExportInput {
 const LIST_LIMIT = 100;
 
 /** The extension a finished export downloads with. An HTML bundle is a folder, so it travels zipped. */
-const EXTENSION: Record<ExportFormat, string> = { zip: '.zip', html: '.zip', pdf: '.pdf' };
-const CONTENT_TYPE: Record<ExportFormat, string> = { zip: 'application/zip', html: 'application/zip', pdf: 'application/pdf' };
+const EXTENSION: Record<ExportFormat, string> = { zip: '.zip', html: '.zip', pdf: '.pdf', docx: '.docx' };
+export const EXPORT_CONTENT_TYPE: Record<ExportFormat, string> = {
+  zip: 'application/zip',
+  html: 'application/zip',
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+};
 
 /**
  * Exports, API side (docs/features/45): asking for one, listing them and
@@ -260,7 +265,7 @@ export class ExportService {
     const filename = exportFilename(row.title, row.format as ExportFormat);
     const url = await this.storage.presignGet(row.s3Key, {
       filename,
-      contentType: CONTENT_TYPE[row.format as ExportFormat] ?? 'application/octet-stream',
+      contentType: EXPORT_CONTENT_TYPE[row.format as ExportFormat] ?? 'application/octet-stream',
       disposition: 'attachment',
       expiresInSeconds: 300,
     });

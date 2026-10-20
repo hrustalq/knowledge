@@ -3000,7 +3000,7 @@ model ExportJob {
   projectId   String? @map("project_id") @db.Uuid
   /// Per-page branch name, falling back to each page's default; null = default.
   branch      String?
-  /// EXPORT_FORMATS: zip | html | pdf.
+  /// EXPORT_FORMATS: zip | html | pdf | docx.
   format      String
   /// The page's or project's name when the export was asked for.
   title       String

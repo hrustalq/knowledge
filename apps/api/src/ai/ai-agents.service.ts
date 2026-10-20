@@ -3,6 +3,7 @@ import { Prisma, type AgentRun, type AiAgent } from '@prisma/client';
 import {
   ASSISTANT_TOOL_NAMES,
   BUILT_IN_AGENT_KEYS,
+  LEARNING_TARGETS,
   isConnectorScopedAgent,
   isPageScopedAgent,
   isValidTimezone,
@@ -186,7 +187,9 @@ export class AiAgentsService {
     }
     // A custom agent shadowing a built-in would make `resolve` ambiguous and
     // silently take over a call site, so the namespace is closed at the front.
-    if ((BUILT_IN_AGENT_KEYS as readonly string[]).includes(key)) {
+    // `mcp` is the learning target for external agents (#305): a custom agent
+    // under it would be handed their learnings.
+    if ((LEARNING_TARGETS as readonly string[]).includes(key)) {
       throw new BadRequestException(t('error.ai.agentIsBuiltInCreate', { key }));
     }
     const clash = await this.prisma.aiAgent.findUnique({ where: { workspaceId_key: { workspaceId, key } } });

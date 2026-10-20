@@ -2118,19 +2118,34 @@ export type AgentLearningSource = (typeof AGENT_LEARNING_SOURCES)[number];
 export const AGENT_LEARNING_PERSON_SOURCES = ['document-thread', 'mr-thread', 'finding', 'manual'] as const satisfies readonly AgentLearningSource[];
 export type AgentLearningPersonSource = (typeof AGENT_LEARNING_PERSON_SOURCES)[number];
 
-/** One dismissed finding a derived learning was drafted from (#305): its run and its position in it. */
-export interface AgentLearningEvidenceRef {
-  runId: string;
-  findingIndex: number;
-}
+/**
+ * The learning target for external agents connected over MCP — Claude Code,
+ * Cursor and the rest (#305, phase 3). Not an agent: nothing runs under it, so
+ * it is not in BUILT_IN_AGENT_KEYS and the registry, the agent UI and
+ * `resolveFor` never see it. Its active learnings are rendered into the MCP
+ * server instructions and `knowledge://skill`, and never into a built-in
+ * agent's prompt. Reserved as a custom agent key.
+ */
+export const MCP_LEARNING_TARGET = 'mcp';
 
-/** A piece of evidence the viewer may see: the finding as its run recorded it. */
-export interface AgentLearningEvidenceFinding extends AgentLearningEvidenceRef {
+/** Who a learning may teach: a built-in agent, or the MCP target. A custom agent is checked against its row. */
+export const LEARNING_TARGETS = [...BUILT_IN_AGENT_KEYS, MCP_LEARNING_TARGET] as const;
+
+/**
+ * One failure a derived learning was drafted from (#305): a dismissed finding
+ * (its run and its position in it), or, for the `mcp` target, an MCP agent's
+ * capture a person rejected or whose merge request was closed unmerged, or a
+ * downvote on an answer it built from `knowledge_search`.
+ */
+export type AgentLearningEvidenceRef = { runId: string; findingIndex: number } | { captureId: string } | { feedbackId: string };
+
+/** A piece of evidence the viewer may see: the finding (or capture, or answer) as it was recorded. */
+export type AgentLearningEvidenceFinding = AgentLearningEvidenceRef & {
   agentKey: string;
   kind: string;
   title: string;
   dismissedAt: string | null;
-}
+};
 
 /**
  * A derived learning's evidence as one viewer sees it (#305). A finding whose

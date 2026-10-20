@@ -22,6 +22,8 @@ import { toast } from 'vue-sonner'
 import { Archive, Check, GraduationCap, Pencil, Plus, RotateCcw, Sparkles, TriangleAlert } from 'lucide-vue-next'
 import {
   AGENT_LEARNING_STATUSES,
+  MCP_LEARNING_TARGET,
+  type AgentLearningEvidenceFinding,
   type AgentLearningStatus,
   type AgentLearningSummary,
   type ListAgentLearningsResponse,
@@ -96,7 +98,11 @@ function openEdit(learning: AgentLearningSummary) {
   dialogOpen.value = true
 }
 
-const agentLabel = (key: string | null) => (key ? (agentNames.value.get(key) ?? key) : t('ai.learnings.everyAgent'))
+// `mcp` is a learning target, not an agent (#305): the agents list never names it.
+const agentLabel = (key: string | null) =>
+  key === MCP_LEARNING_TARGET ? t('ai.learnings.mcpTarget') : key ? (agentNames.value.get(key) ?? key) : t('ai.learnings.everyAgent')
+const evidenceKey = (f: AgentLearningEvidenceFinding) =>
+  'runId' in f ? `${f.runId}:${f.findingIndex}` : 'captureId' in f ? f.captureId : f.feedbackId
 const projectLabel = (id: string | null) =>
   id ? (projects.items.find((p) => p.projectId === id)?.name ?? id) : t('ai.learnings.everyProject')
 
@@ -196,7 +202,7 @@ function sourceLink(l: AgentLearningSummary): string | null {
               <ul class="mt-1.5 space-y-1 border-l pl-3">
                 <li
                   v-for="f in l.evidence.findings"
-                  :key="`${f.runId}:${f.findingIndex}`"
+                  :key="evidenceKey(f)"
                   class="text-xs leading-relaxed"
                 >
                   <span class="text-foreground/90">{{ f.title }}</span>

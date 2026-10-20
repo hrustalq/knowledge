@@ -3,10 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, type AgentLearning } from '@prisma/client';
 import {
   AGENT_LEARNING_MAX_CHARS,
-  BUILT_IN_AGENT_KEYS,
+  LEARNING_TARGETS,
+  MCP_LEARNING_TARGET,
   type AgentFinding,
   type AgentLearningArchiveCheck,
   type AgentLearningEvidence,
+  type AgentLearningEvidenceFinding,
   type AgentLearningEvidenceRef,
   type AgentLearningSource,
   type AgentLearningStatus,
@@ -53,6 +55,12 @@ export interface LearningAudience {
   agentKey: string;
   /** Project-scoped learnings apply only where the turn is about one of these. */
   projectIds?: readonly string[];
+  /**
+   * False: only learnings naming this agent, none of those for every agent.
+   * The `mcp` target (#305) takes it — an every-agent learning was written for
+   * the platform's own agents, and must not start reaching external ones.
+   */
+  everyAgent?: boolean;
 }
 
 /**
@@ -102,15 +110,17 @@ export class AgentLearningsService {
 
   /**
    * `list`, with each learning's evidence resolved for one viewer (#305): the
-   * findings it rests on, titled only when the viewer may open every page the
-   * finding cites (`visible` is the caller's scope, asked once for all of
-   * them). The rest are counted, never named — a finding about a page somebody
-   * restricted after the fact must not leak its title through this list.
+   * failures it rests on, titled only when the viewer may open every page one
+   * names (`visible` is the caller's scope, asked once for all of them) and,
+   * for a capture, its project is not one `deniedProjects` holds — the
+   * captures inbox's rule. The rest are counted, never named: a finding about
+   * a page somebody restricted after the fact must not leak its title here.
    */
   async listForViewer(
     workspaceId: string,
     filter: { agentKey?: string; status?: AgentLearningStatus },
     visible: (documentIds: string[]) => Promise<Set<string>>,
+    deniedProjects: ReadonlySet<string> = new Set(),
   ): Promise<AgentLearningSummary[]> {
     const learnings = await this.list(workspaceId, filter);
     const withEvidence = learnings.filter((l) => l.evidenceCount > 0).map((l) => l.id);
@@ -122,39 +132,76 @@ export class AgentLearningsService {
       });
       for (const row of rows) refsById.set(row.id, evidenceRefsOf(row.evidence));
     }
-    const runIds = [...new Set([...refsById.values()].flat().map((r) => r.runId))];
-    const runs = runIds.length
-      ? await this.prisma.agentRun.findMany({
-          where: { workspaceId, id: { in: runIds } },
-          select: { id: true, agentKey: true, findings: true },
-        })
+    const refs = [...refsById.values()].flat();
+    const ids = <K extends 'runId' | 'captureId' | 'feedbackId'>(k: K) =>
+      [...new Set(refs.flatMap((r) => (k in r ? [(r as Record<K, string>)[k]] : [])))];
+    const [runs, captures, votes] = await Promise.all([
+      ids('runId').length
+        ? this.prisma.agentRun.findMany({ where: { workspaceId, id: { in: ids('runId') } }, select: { id: true, agentKey: true, findings: true } })
+        : [],
+      ids('captureId').length
+        ? this.prisma.knowledgeCapture.findMany({
+            where: { workspaceId, id: { in: ids('captureId') } },
+            select: { id: true, projectId: true, kind: true, title: true, targetDocumentId: true, mergeRequestId: true, updatedAt: true },
+          })
+        : [],
+      ids('feedbackId').length
+        ? this.prisma.answerFeedback.findMany({
+            where: { workspaceId, id: { in: ids('feedbackId') } },
+            select: { id: true, reason: true, query: true, citedDocumentIds: true, createdAt: true },
+          })
+        : [],
+    ]);
+    const mrIds = captures.flatMap((c) => (c.mergeRequestId ? [c.mergeRequestId] : []));
+    const mrs = mrIds.length
+      ? await this.prisma.mergeRequest.findMany({ where: { id: { in: mrIds } }, select: { id: true, documentId: true, closedAt: true } })
       : [];
     const runById = new Map(runs.map((r) => [r.id, r]));
-    const findingOf = (ref: AgentLearningEvidenceRef): AgentFinding | undefined => {
-      const findings = runById.get(ref.runId)?.findings;
-      return Array.isArray(findings) ? (findings as unknown as AgentFinding[])[ref.findingIndex] : undefined;
+    const captureById = new Map(captures.map((c) => [c.id, c]));
+    const voteById = new Map(votes.map((v) => [v.id, v]));
+    const mrById = new Map(mrs.map((m) => [m.id, m]));
+
+    /** What one ref shows when visible, and the pages it names; null when the row is gone. */
+    const resolve = (ref: AgentLearningEvidenceRef): { shown: AgentLearningEvidenceFinding; pages: string[] } | null => {
+      if ('runId' in ref) {
+        const run = runById.get(ref.runId);
+        const f = Array.isArray(run?.findings) ? (run.findings as unknown as AgentFinding[])[ref.findingIndex] : undefined;
+        if (!run || !f) return null;
+        // A finding citing no page is never shown: it cannot be checked against anything.
+        const pages = f.documentIds ?? [];
+        return pages.length
+          ? { shown: { ...ref, agentKey: run.agentKey, kind: f.kind, title: f.title, dismissedAt: f.dismissedAt ?? null }, pages }
+          : null;
+      }
+      if ('captureId' in ref) {
+        const c = captureById.get(ref.captureId);
+        if (!c || deniedProjects.has(c.projectId)) return null;
+        const mr = c.mergeRequestId ? mrById.get(c.mergeRequestId) : undefined;
+        const pages = [c.targetDocumentId, mr?.documentId].filter((id): id is string => !!id);
+        const at = mr?.closedAt ?? c.updatedAt;
+        return { shown: { ...ref, agentKey: MCP_LEARNING_TARGET, kind: c.kind, title: c.title, dismissedAt: at.toISOString() }, pages };
+      }
+      const v = voteById.get(ref.feedbackId);
+      const pages = Array.isArray(v?.citedDocumentIds) ? (v.citedDocumentIds as string[]) : [];
+      return v && pages.length
+        ? {
+            shown: { ...ref, agentKey: MCP_LEARNING_TARGET, kind: v.reason ?? 'other', title: v.query.slice(0, 200), dismissedAt: v.createdAt.toISOString() },
+            pages,
+          }
+        : null;
     };
-    const cited = [...refsById.values()].flat().flatMap((ref) => findingOf(ref)?.documentIds ?? []);
-    const open = cited.length ? await visible([...new Set(cited)]) : new Set<string>();
+    const resolved = new Map(refs.map((r) => [r, resolve(r)]));
+    const named = [...resolved.values()].flatMap((r) => r?.pages ?? []);
+    const open = named.length ? await visible([...new Set(named)]) : new Set<string>();
 
     return learnings.map((l) => {
-      const refs = refsById.get(l.id);
-      if (!refs) return l;
+      const mine = refsById.get(l.id);
+      if (!mine) return l;
       const evidence: AgentLearningEvidence = { findings: [], hidden: 0 };
-      for (const ref of refs) {
-        const f = findingOf(ref);
-        const pages = f?.documentIds ?? [];
-        if (!f || pages.length === 0 || !pages.every((id) => open.has(id))) {
-          evidence.hidden += 1;
-          continue;
-        }
-        evidence.findings.push({
-          ...ref,
-          agentKey: runById.get(ref.runId)!.agentKey,
-          kind: f.kind,
-          title: f.title,
-          dismissedAt: f.dismissedAt ?? null,
-        });
+      for (const ref of mine) {
+        const r = resolved.get(ref);
+        if (r && r.pages.every((id) => open.has(id))) evidence.findings.push(r.shown);
+        else evidence.hidden += 1;
       }
       return { ...l, evidence };
     });
@@ -324,9 +371,9 @@ export class AgentLearningsService {
     return rows;
   }
 
-  /** A built-in, or a custom agent this workspace has a row for. */
+  /** A built-in, the `mcp` target, or a custom agent this workspace has a row for. */
   private async assertAgent(workspaceId: string, key: string, db: Prisma.TransactionClient = this.prisma): Promise<void> {
-    if ((BUILT_IN_AGENT_KEYS as readonly string[]).includes(key)) return;
+    if ((LEARNING_TARGETS as readonly string[]).includes(key)) return;
     const row = await db.aiAgent.findUnique({ where: { workspaceId_key: { workspaceId, key } }, select: { id: true } });
     if (!row) throw new BadRequestException(t('error.ai.agentNotFound', { key }));
   }
@@ -423,7 +470,7 @@ export function choosePromptLearnings(
   const projects = new Set(audience.projectIds ?? []);
   const applies = rows.filter(
     (row) =>
-      (row.agentKey === null || row.agentKey === audience.agentKey) &&
+      (row.agentKey === audience.agentKey || (row.agentKey === null && audience.everyAgent !== false)) &&
       (row.projectId === null || projects.has(row.projectId)),
   );
   const chosen = new Set<AgentLearning>();
@@ -455,11 +502,14 @@ export function choosePromptLearnings(
 /** A learning's `evidence` column as refs, tolerating anything malformed in it. */
 export function evidenceRefsOf(json: unknown): AgentLearningEvidenceRef[] {
   if (!Array.isArray(json)) return [];
-  return json.flatMap((e: unknown) => {
-    const ref = e as Partial<AgentLearningEvidenceRef> | null;
-    return typeof ref?.runId === 'string' && Number.isInteger(ref.findingIndex) && (ref.findingIndex as number) >= 0
-      ? [{ runId: ref.runId, findingIndex: ref.findingIndex as number }]
-      : [];
+  return json.flatMap((e: unknown): AgentLearningEvidenceRef[] => {
+    const ref = e as { runId?: unknown; findingIndex?: unknown; captureId?: unknown; feedbackId?: unknown } | null;
+    if (typeof ref?.runId === 'string' && Number.isInteger(ref.findingIndex) && (ref.findingIndex as number) >= 0) {
+      return [{ runId: ref.runId, findingIndex: ref.findingIndex as number }];
+    }
+    if (typeof ref?.captureId === 'string') return [{ captureId: ref.captureId }];
+    if (typeof ref?.feedbackId === 'string') return [{ feedbackId: ref.feedbackId }];
+    return [];
   });
 }
 

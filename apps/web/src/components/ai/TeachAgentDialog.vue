@@ -11,6 +11,7 @@ import { computed, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import {
   AGENT_LEARNING_MAX_CHARS,
+  MCP_LEARNING_TARGET,
   type AgentLearningPersonSource,
   type AgentLearningSummary,
 } from '@knowledge/contracts'
@@ -73,7 +74,11 @@ watch(open, (now) => {
 })
 
 const agentLabel = computed(() =>
-  form.value.agentKey === ALL ? t('ai.learnings.everyAgent') : (agentNames.value.get(form.value.agentKey) ?? form.value.agentKey),
+  form.value.agentKey === ALL
+    ? t('ai.learnings.everyAgent')
+    : form.value.agentKey === MCP_LEARNING_TARGET
+      ? t('ai.learnings.mcpTarget')
+      : (agentNames.value.get(form.value.agentKey) ?? form.value.agentKey),
 )
 const agents = computed(() => [...agentNames.value.entries()].map(([key, name]) => ({ key, name })))
 const tooLong = computed(() => form.value.text.length > AGENT_LEARNING_MAX_CHARS)
@@ -140,6 +145,7 @@ async function submit() {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem :value="ALL">{{ t('ai.learnings.everyAgent') }}</SelectItem>
+                <SelectItem :value="MCP_LEARNING_TARGET">{{ t('ai.learnings.mcpTarget') }}</SelectItem>
                 <SelectItem v-for="a in agents" :key="a.key" :value="a.key">{{ a.name }}</SelectItem>
               </SelectContent>
             </Select>

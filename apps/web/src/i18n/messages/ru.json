@@ -2415,6 +2415,7 @@
         "archived": "Архив пуст."
       },
       "everyAgent": "Все агенты",
+      "mcpTarget": "Агенты по MCP (Claude Code, Cursor…)",
       "everyProject": "Все проекты",
       "agent": "Агент",
       "project": "Где действует",

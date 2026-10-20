@@ -15,7 +15,7 @@ import {
 } from '../src/learner/learner-derive.js';
 import { AUTHOR_ID_STUB, LearnerService } from '../src/learner/learner.service.js';
 import { LearnerTicker } from '../src/learner/learner.ticker.js';
-import { AgentLearningsService, choosePromptLearnings } from '../src/ai/agent-learnings.service.js';
+import { AgentLearningsService, choosePromptLearnings, evidenceRefsOf } from '../src/ai/agent-learnings.service.js';
 import { BUILT_IN_CASES, measure, recommend } from '../src/learner/learner-calibration.js';
 
 /**
@@ -101,7 +101,8 @@ function learnerWorld(opts: { findings: DismissedFinding[]; learnings?: Partial<
       ({ LEARNER_CLUSTER_THRESHOLD: 0.7, LEARNER_MIN_DISMISSALS: 3, LEARNER_MIN_PEOPLE: 2, LEARNER_WINDOW_DAYS: 30, LEARNER_MIN_RUNS: 20, I18N_DEFAULT_LOCALE: 'en' })[k],
   };
   const learner = new LearnerService(prisma as never, embedding as never, agents as never, client as never, aiUsage as never, outcomes as never, config as never);
-  vi.spyOn(learner, 'dismissedFindings').mockResolvedValue(opts.findings);
+  vi.spyOn(learner, 'dismissedFindings').mockResolvedValue(opts.findings.filter((f) => f.agentKey !== 'mcp'));
+  vi.spyOn(learner, 'mcpFailures').mockResolvedValue(opts.findings.filter((f) => f.agentKey === 'mcp'));
   return { learner, prisma, client, learnings, outcomes };
 }
 
@@ -225,6 +226,44 @@ describe('LearnerService.derive', () => {
   });
 });
 
+describe('LearnerService.derive — the mcp target (#305, phase 3)', () => {
+  /** An MCP failure: a turned-down capture, or a downvoted answer. */
+  const failure = (ref: { captureId: string } | { feedbackId: string }, over: Partial<DismissedFinding> = {}) => {
+    const { runId: _r, findingIndex: _i, ...rest } = dismissed({ agentKey: 'mcp', kind: 'gotcha', title: 'stale capture of the legal rule', ...over }) as DismissedFinding & {
+      runId: string;
+      findingIndex: number;
+    };
+    return { ...ref, ...rest } as DismissedFinding;
+  };
+
+  it('clusters rejected captures and downvoted answers into one proposed mcp learning, with their refs as evidence', async () => {
+    const failures = [failure({ captureId: 'c1' }), failure({ captureId: 'c2' }, { dismissedBy: BOB }), failure({ feedbackId: 'f1' })];
+    const w = learnerWorld({ findings: failures });
+    expect(await w.learner.derive(WS)).toEqual({ proposed: 1, folded: 0, declined: 0 });
+    expect(w.client.chat.mock.calls[0]![1]![1]!.content).toContain('external agents connected over MCP');
+    const data = w.prisma.agentLearning.create.mock.calls[0]![0].data;
+    expect(data).toMatchObject({ agentKey: 'mcp', projectId: P, sourceKind: 'derived', status: 'proposed' });
+    expect(data.evidence).toEqual(expect.arrayContaining([{ captureId: 'c1' }, { captureId: 'c2' }, { feedbackId: 'f1' }]));
+    expect(data.evidence).toHaveLength(3);
+  });
+
+  it('never mixes the mcp target with an agent that made the same mistake', async () => {
+    const w = learnerWorld({
+      findings: [failure({ captureId: 'c1' }), failure({ captureId: 'c2' }, { dismissedBy: BOB }), dismissed({ title: 'legal rule' }), dismissed({ title: 'legal rule', dismissedBy: BOB })],
+    });
+    expect(await w.learner.derive(WS)).toEqual({ proposed: 0, folded: 0, declined: 0 });
+  });
+});
+
+describe('evidence refs', () => {
+  it('reads all three kinds back and drops anything malformed', () => {
+    expect(
+      evidenceRefsOf([{ runId: 'r', findingIndex: 2 }, { captureId: 'c' }, { feedbackId: 'f' }, { runId: 'r' }, { captureId: 3 }, null, 'x']),
+    ).toEqual([{ runId: 'r', findingIndex: 2 }, { captureId: 'c' }, { feedbackId: 'f' }]);
+    expect(new Set([refKey({ runId: 'a', findingIndex: 0 }), refKey({ captureId: 'a' }), refKey({ feedbackId: 'a' })]).size).toBe(3);
+  });
+});
+
 describe('LearnerService.checkLifecycle', () => {
   const side = (runs: number, findings: number, dismissedN: number) => ({ runs, findings, dismissed: dismissedN });
   const active = (over: Record<string, unknown> = {}) => ({ id: 'l1', status: 'active', agentKey: 'reviewer', approvedAt: new Date(), archiveCheck: null, ...over });
@@ -284,6 +323,13 @@ describe('prompt budget split', () => {
     const long = [row('derived', 'x'.repeat(1_500)), row('derived', 'y'.repeat(1_500)), row('manual', 'z'.repeat(100))];
     const byChars = choosePromptLearnings(long, audience, 20, 4_000);
     expect(byChars.map((l) => l.text.length)).toEqual([1_500, 100]);
+  });
+
+  it('gives the mcp target only learnings naming it, never every-agent ones (#305)', () => {
+    const mcp = { ...row('manual', 'mcp rule'), agentKey: 'mcp' } as AgentLearning;
+    const rows = [row('manual', 'every agent'), mcp];
+    expect(choosePromptLearnings(rows, { workspaceId: WS, agentKey: 'mcp', everyAgent: false }, 20)).toEqual([mcp]);
+    expect(choosePromptLearnings(rows, audience, 20).map((l) => l.text)).toEqual(['every agent']);
   });
 
   it('is exactly the old choice when nothing is derived', () => {
@@ -363,6 +409,36 @@ describe('learnings API surface', () => {
     expect(learning!.evidence!.findings.map((x) => x.title)).toEqual(['Open page is stale']);
     expect(learning!.evidence!.hidden).toBe(2);
     expect(JSON.stringify(learning)).not.toContain('Secret page');
+  });
+
+  it('resolves capture and vote evidence by the same rule, and a denied project hides a capture (#305)', async () => {
+    const { svc, prisma } = service(
+      [{ ...base, id: 'l1', agentKey: 'mcp', status: 'proposed', sourceKind: 'derived', evidence: [{ captureId: 'c-open' }, { captureId: 'c-denied' }, { feedbackId: 'f-open' }, { feedbackId: 'f-secret' }] as never }],
+      [],
+    );
+    const at = new Date('2026-10-02T00:00:00Z');
+    Object.assign(prisma, {
+      knowledgeCapture: {
+        findMany: vi.fn(async () => [
+          { id: 'c-open', projectId: 'p-open', kind: 'gotcha', title: 'Open capture', targetDocumentId: 'open', mergeRequestId: 'mr1', updatedAt: at },
+          { id: 'c-denied', projectId: 'p-secret', kind: 'gotcha', title: 'Secret capture', targetDocumentId: null, mergeRequestId: null, updatedAt: at },
+        ]),
+      },
+      answerFeedback: {
+        findMany: vi.fn(async () => [
+          { id: 'f-open', reason: 'wrong', query: 'Open question', citedDocumentIds: ['open'], createdAt: at },
+          { id: 'f-secret', reason: 'wrong', query: 'Secret question', citedDocumentIds: ['secret'], createdAt: at },
+        ]),
+      },
+      mergeRequest: { findMany: vi.fn(async () => [{ id: 'mr1', documentId: 'open', closedAt: at }]) },
+    });
+    const [learning] = await svc.listForViewer(WS, {}, async (ids) => new Set(ids.filter((id) => id !== 'secret')), new Set(['p-secret']));
+    expect(learning!.evidence!.findings.map((x) => [x.title, x.agentKey])).toEqual([
+      ['Open capture', 'mcp'],
+      ['Open question', 'mcp'],
+    ]);
+    expect(learning!.evidence!.hidden).toBe(2);
+    expect(JSON.stringify(learning)).not.toMatch(/Secret/);
   });
 
   it('refuses a learning claiming to be derived from anyone but the learner', async () => {

@@ -36,6 +36,17 @@ in the pull request that introduces them — see
   never activates or archives anything itself. `make backtest
   ARGS="--learner"` measures the clustering threshold for the configured
   embedding model.
+- Coding agents connected over MCP (Claude Code, Cursor and others) now get
+  the team's guidance (#305). A learning can teach **Agents over MCP**. Once
+  an admin approves it, it appears in the instructions the MCP server sends
+  when a client connects, and in `knowledge://skill` under **Team guidance**.
+  A key narrowed to projects sees only those projects' learnings, plus the
+  workspace-wide ones. Learnings for every agent are not sent to MCP clients.
+  The learner also drafts MCP learnings from repeated failures: captures a
+  person rejected, captured merge requests closed unmerged, and answers built
+  from `knowledge_search` that were downvoted. A capture dropped as a
+  duplicate does not count. The key `mcp` is now reserved and cannot be used
+  for a custom agent.
 
 ### Operations
 

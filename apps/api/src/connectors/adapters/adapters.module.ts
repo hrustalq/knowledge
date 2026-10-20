@@ -2,10 +2,12 @@ import { Module } from '@nestjs/common';
 import { AgentCoreModule } from '../../agents/agent-core.module.js';
 import { AiCoreModule } from '../../ai/ai-core.module.js';
 import { AssistantClientModule } from '../../assistant/assistant-client.module.js';
+import { ParsersModule } from '../../import/parsers/parsers.module.js';
 import { CodebaseAdapter } from './codebase.adapter.js';
 import { ConfluenceAdapter } from './confluence.adapter.js';
 import { ConfluenceServerAdapter } from './confluence-server.adapter.js';
 import { ConnectorRegistry } from './connector.registry.js';
+import { GoogleDriveAdapter } from './google-drive.adapter.js';
 import { JiraAdapter } from './jira.adapter.js';
 import { MarkdownGitAdapter } from './markdown-git.adapter.js';
 import { NotionAdapter } from './notion.adapter.js';
@@ -28,9 +30,14 @@ import { TreeSitterService } from './tree-sitter.service.js';
  * this instance. What the export must never become is a second *provider* —
  * a grammar cache constructed twice would be two owners of a wasm heap this
  * one is careful about.
+ *
+ * `ParsersModule` is here for `GoogleDriveAdapter` (#338): a Drive file is
+ * converted by the feature-16 parsers, through their registry. Its providers
+ * are therefore constructed in the API process too, but nothing there calls
+ * `fetch` — only a sync run, in the worker, ever starts a parse.
  */
 @Module({
-  imports: [AiCoreModule, AgentCoreModule, AssistantClientModule],
+  imports: [AiCoreModule, AgentCoreModule, AssistantClientModule, ParsersModule],
   providers: [
     ConfluenceAdapter,
     ConfluenceServerAdapter,
@@ -38,6 +45,7 @@ import { TreeSitterService } from './tree-sitter.service.js';
     NotionAdapter,
     MarkdownGitAdapter,
     CodebaseAdapter,
+    GoogleDriveAdapter,
     TreeSitterService,
     ConnectorRegistry,
   ],

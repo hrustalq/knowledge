@@ -117,6 +117,22 @@ in the pull request that introduces them — see
   the server from the signed-in person, whatever the client sends.
   `GET /v1/collab/capabilities` says whether co-editing is on and which editor
   schema version a peer must match.
+- A Google Drive connector. Point it at a folder or a shared drive with a
+  service account's JSON key (stored encrypted and write-only, like every
+  connector credential); "Act as user" turns on domain-wide delegation. It
+  walks the folder as a tree, so with "Keep the external page tree" folders
+  become pages and files nest under them, and new connectors are offered
+  review mode. Google Docs, Slides and Sheets are exported to DOCX, PPTX and
+  CSV and converted by the same parsers as the upload wizard, and so are PDF,
+  Word, PowerPoint, HTML, CSV, JSON/YAML and Markdown files. Anything else
+  (images, archives, files over 20 MB) is skipped and named on the run, once
+  per folder. Images inside a document are not carried over yet, and the page
+  says so. With access mirroring on, Drive sharing becomes page restrictions:
+  link or whole-domain sharing stays open, and people and groups are matched
+  by email. Scheduled syncs read Drive's change feed and fetch only what
+  changed. A manual Sync still compares the whole tree. A linked file that was
+  trashed, deleted, unshared or moved out of the folder is listed on the run
+  with its page kept. Pull only. (#338)
 - Several people can now edit one page at once (#80, phase 3), when the server
   runs with `COLLAB_ENABLED=true`. Opening an existing page's editor joins its
   shared draft on the default branch. Typing, the title, tags, category, parent,
@@ -602,6 +618,11 @@ in the pull request that introduces them — see
   this release is rolled forward again. Everything else in the previous
   release still runs. `CHAT_CAPTURE_TIMEOUT_SECONDS` is no longer read, and
   can be removed from the `production` environment.
+- Migration `20261122100000_connector_change_cursor` adds the nullable
+  `connectors.change_cursor` and `connector_runs.change_cursor` (the Google
+  Drive change feed's bookmark). It is additive and survives a code rollback.
+  The Drive connector needs outbound HTTPS to `oauth2.googleapis.com`,
+  `www.googleapis.com` and, for group mirroring, `admin.googleapis.com`. (#338)
 - Migration `20261116100000_usage_analytics` adds the `page_views`,
   `search_queries` and `mcp_tool_calls` tables and two nullable
   `workspace_settings` columns (`analytics_enabled`,

@@ -15,8 +15,9 @@ workspace-configured **sources and destinations**. Three tabs:
 | **Runs**        | Every sync execution with its stage, progress, counts and warnings.                    |
 | **Links**       | The external item ↔ page identity map, and the ability to break one.                   |
 
-Four adapters ship: **Confluence**, **Jira** (pull only), **Notion** and a
-generic **Markdown / Git** remote. The last one is what covers an Obsidian
+Four adapters shipped first: **Confluence**, **Jira** (pull only), **Notion** and a
+generic **Markdown / Git** remote; **Confluence Server**, **Codebase** and
+**Google Drive** (#338, pull only) came later. The last one is what covers an Obsidian
 vault — Obsidian has no server API, and a vault is exactly a folder of markdown
 files, so there is nothing else to integrate with.
 
@@ -167,6 +168,7 @@ Confluence site holds thousands that no page in scope mentions. *(The plan had
 | --- | --- |
 | Confluence Cloud / Server | Read restrictions on the page and every ancestor, intersected. Space permissions are **not** read: restrict the destination project to narrow a space's readers. Cloud identifies people by `accountId` (email only where the profile shows it); Server by `userKey`, with no email, so Server people are mapped by hand. |
 | GitHub (`markdown-git`, `codebase`) | Public repository → `source-wide`. Private → collaborators (`affiliation=all`; push/maintain/admin → edit, pull/triage → view) plus teams, mirrored as groups. Team members need the App's `members: read`, which the GitHub access card lists under *access mirroring*. One read per run, shared by every page. GitLab and other hosts are refused when mirroring is switched on. |
+| Google Drive | Each file's own permission list, which Drive already folds folder and shared-drive inheritance into: one layer, nothing to intersect. Link sharing (`anyone`) and whole-domain sharing → `source-wide`. People and groups are keyed by lower-cased email — the one id the Drive and Directory APIs share; the service account itself is left out. Group members come from the Admin SDK Directory API and need domain-wide delegation (`subject` set to an admin); without it a group mirrors with no members, which narrows a page rather than widening it. |
 | Notion, Jira | No per-item ACL. Mirroring restricts every page to one workspace group, `connectors.acl_audience_group_id`, required while it is on. |
 
 **Identities.** `external_identities` holds every upstream person an ACL or a
@@ -205,6 +207,71 @@ conversation sources) or Jira issue security. A mapping by email is only as
 good as email verification until IdP-verified identities arrive with the
 *Enterprise auth* milestone. Mirrored grants do not send `access.granted`
 notifications: a sync is not a person's decision.
+
+## Google Drive (#338)
+
+A seventh adapter, `google-drive`, and the first whose source is a folder tree
+of *files* rather than a wiki of pages. Pull only and no webhook (Drive push
+notifications need a verified domain).
+
+**Authentication is a service account.** The credential is the account's JSON
+key, through `secret-box.ts` like every other credential (the DTO's
+`credential` limit went from 2 000 to 8 000 characters to fit one). The adapter
+signs an RS256 JWT with `node:crypto` and trades it for a one-hour token per
+scope — no Google SDK. The token URL is fixed at
+`https://oauth2.googleapis.com/token`, never the key's own `token_uri`: that is
+a URL an admin pasted, and this server would dial it with a signed assertion.
+Every call still goes through `connectorFetch`, so the SSRF guard runs at the
+dial. `subject` (*Act as user*) is domain-wide delegation: Drive is read as
+that person, and it is what reading Google Groups needs.
+
+**Scope is one folder or shared drive** (`folderId`). A shared drive's id is
+its root folder's id, so one field serves both; the adapter notices a shared
+drive and adds `corpora=drive&driveId=…` to every listing and to the change
+feed. Ids are checked against `[A-Za-z0-9_-]` before they reach a `q=` query.
+
+**Tree.** `children()` lists one folder; folders yield `hasChildren: true`.
+With `preserveHierarchy` a folder becomes a page with no body, so its files
+have somewhere to hang — unlike a git connector's transparent directories,
+Drive folders are real objects people name and share. The connector's own
+folder is not a page; its contents land under the connector's destination.
+
+**Conversion is feature 16's.** `importFormatFor` decides what a file is, and
+`ParserRegistry` converts it, so a Drive file imports exactly as the upload
+wizard would import it. Google-native files are exported first: Docs → DOCX,
+Slides → PPTX, Sheets → CSV (first sheet only, said on the page). Images are
+*not* imported: their parser is OCR, which bills a model per file, and an
+unattended sync must not run up a bill on a folder of screenshots. Unsupported
+and oversized (> 20 MB) files are skipped and named in one run warning per
+folder, through the new optional `ConnectorContext.warn`. Images inside a
+document are dropped with a warning, the attachment deferral below.
+`ParsersModule` therefore loads in the API process too (the adapters module is
+shared); only a sync run, in the worker, ever calls `parse`.
+
+**Change detection is the Changes API**, through a second optional adapter
+method, `changes?(ctx, cursor)`, and a cursor column on the connector and on
+the run:
+
+- Every pull of a kind that has `changes()` reads the feed *before* it walks.
+  With no stored cursor that is just a bookmark (`startPageToken`), so whatever
+  changes during the walk is picked up next time rather than lost.
+- The cursor goes on the run and is copied to `connectors.change_cursor` only
+  in `finish()`: a run that fails or is cancelled leaves the bookmark, and the
+  next one re-reads the same changes.
+- A **scheduled** pull with a stored cursor seeds its run from the feed alone —
+  no folder listing, no orphan repair — so a quiet folder costs one request.
+  A **manual** Sync still walks the whole tree, and the version skip keeps
+  that cheap; on a second sync every item is `unchanged`.
+- A refused cursor (expired, revoked) falls back to the walk with a fresh one.
+- The feed covers everything the account sees, so a changed file is kept only
+  if its ancestry reaches the folder (memoised per read).
+
+**Gone upstream.** A linked file the feed reports trashed, deleted, unshared or
+moved out of the folder becomes an `unchanged` row carrying why, and one run
+warning counts them. The page is kept and so is its link: deleting a page is a
+person's decision, and a file restored from the bin updates the same page
+rather than creating a second one. Its mirrored ACL stays as last written (the
+rule for a failed re-read).
 
 ## Surface
 

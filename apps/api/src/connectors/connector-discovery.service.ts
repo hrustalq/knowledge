@@ -4,7 +4,15 @@ import { Prisma, type Connector, type ConnectorRun, type ConnectorRunItem } from
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { ConnectorAdapter, ConnectorContext, ExternalRef } from './adapters/connector.types.js';
+import type {
+  ConnectorAdapter,
+  ConnectorContext,
+  ExternalChanges,
+  ExternalRef,
+} from './adapters/connector.types.js';
+
+/** `connector_links.external_id IN (…)` is chunked: a change feed can name thousands of ids. */
+const LINK_LOOKUP_CHUNK = 500;
 
 /** One entry of the persisted discovery frontier. */
 interface FrontierEntry {
@@ -20,6 +28,17 @@ export interface DiscoveryOutcome {
   done: boolean;
   discovered: number;
   truncated: boolean;
+  /**
+   * Linked items the source's change feed says are gone (#338), recorded as
+   * rows that keep their page. Set on the first call only.
+   */
+  removed?: number;
+  /**
+   * The run was seeded from the change feed alone, so it holds only what
+   * moved: the orphan repair, which attaches everything the walk missed,
+   * would turn it back into a full sync.
+   */
+  incremental?: boolean;
 }
 
 /**
@@ -77,12 +96,31 @@ export class ConnectorDiscoveryService {
 
     // First call: seed the roots.
     if (frontier === null) {
+      // The change feed (#338) is read before the walk, never after: whatever
+      // changes while the tree is being walked lands after the bookmark and is
+      // picked up by the next run rather than lost between the two.
+      let removed = 0;
+      if (adapter.changes) {
+        const feed = await this.readChanges(row, run, adapter, ctx);
+        if (feed) {
+          removed = await this.recordRemoved(row, run, feed.changes.removed, discovered);
+          discovered += removed;
+          if (feed.incremental) {
+            const seeded = await this.seedChanged(run, feed.changes.changed, discovered);
+            discovered += seeded.count;
+            ctx.debug('discovery: from the change feed', { changed: seeded.count, removed });
+            await this.saveFrontier(run.id, [], discovered);
+            return { done: true, discovered, truncated: seeded.truncated, removed, incremental: true };
+          }
+        }
+      }
+
       ctx.debug('discovery: roots');
       const created = await this.walk(run, adapter, ctx, null, discovered);
       discovered += created.length;
       frontier = created.filter((i) => i.hasChildren).map(toFrontier);
       await this.saveFrontier(run.id, frontier, discovered);
-      return { done: frontier.length === 0, discovered, truncated: discovered >= this.maxItems };
+      return { done: frontier.length === 0, discovered, truncated: discovered >= this.maxItems, removed };
     }
 
     let walked = 0;
@@ -176,6 +214,142 @@ export class ConnectorDiscoveryService {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return null;
       throw err;
     }
+  }
+
+  // --- the change feed (#338) ---
+
+  /**
+   * Read the change feed from the connector's stored cursor, or bookmark where
+   * it starts now. The cursor goes on the run, not the connector: `finish()`
+   * copies it across, so a run that dies halfway re-reads the same changes.
+   *
+   * Only a scheduled pull trusts the feed alone. A person pressing Sync asked
+   * for the whole tree to be compared, and the version skip keeps that cheap;
+   * a rejected cursor (expired, revoked) falls back to the walk with a fresh
+   * bookmark. Null when the feed cannot be read at all — the run then walks
+   * and the connector keeps the cursor it had.
+   */
+  private async readChanges(
+    row: Connector,
+    run: ConnectorRun,
+    adapter: ConnectorAdapter,
+    ctx: ConnectorContext,
+  ): Promise<{ changes: ExternalChanges; incremental: boolean } | null> {
+    let changes: ExternalChanges | null = null;
+    let incremental = false;
+    if (row.changeCursor) {
+      try {
+        changes = await adapter.changes!(ctx, row.changeCursor);
+        incremental = run.trigger === 'schedule';
+      } catch (err) {
+        if (ctx.signal?.aborted) throw err;
+        this.logger.warn(`Change feed for connector ${row.id} refused its cursor, walking instead: ${(err as Error).message}`);
+      }
+    }
+    if (!changes) {
+      try {
+        changes = await adapter.changes!(ctx, null);
+      } catch (err) {
+        if (ctx.signal?.aborted) throw err;
+        this.logger.warn(`Change feed for connector ${row.id} is unreadable (non-fatal): ${(err as Error).message}`);
+        return null;
+      }
+    }
+    await this.prisma.connectorRun.update({ where: { id: run.id }, data: { changeCursor: changes.cursor } });
+    return { changes, incremental };
+  }
+
+  /**
+   * One `unchanged` row per linked item the feed says is gone, carrying why.
+   *
+   * The page is kept — deleting a page is a person's decision, and a file
+   * trashed by mistake comes back as an update to the same page because its
+   * link survives. But it is said: an item that silently stops syncing is the
+   * failure feature 26 exists to prevent.
+   */
+  private async recordRemoved(
+    row: Connector,
+    run: ConnectorRun,
+    removed: ExternalChanges['removed'],
+    offset: number,
+  ): Promise<number> {
+    const reasonOf = new Map(removed.map((r) => [r.externalId, r.reason]));
+    const ids = [...reasonOf.keys()];
+    let count = 0;
+    for (let i = 0; i < ids.length; i += LINK_LOOKUP_CHUNK) {
+      const links = await this.prisma.connectorLink.findMany({
+        where: { connectorId: row.id, externalId: { in: ids.slice(i, i + LINK_LOOKUP_CHUNK) } },
+      });
+      for (const link of links) {
+        if (offset + count >= this.maxItems) return count;
+        const reason = reasonOf.get(link.externalId);
+        try {
+          await this.prisma.connectorRunItem.create({
+            data: {
+              runId: run.id,
+              parentItemId: null,
+              externalId: link.externalId,
+              externalParentId: null,
+              externalUrl: link.externalUrl,
+              externalVersion: link.externalVersion,
+              title: link.externalTitle || link.externalId,
+              depth: 0,
+              position: offset + count,
+              hasChildren: false,
+              status: 'unchanged',
+              action: 'unchanged',
+              linkId: link.id,
+              documentId: link.documentId,
+              draft: {
+                warnings: [t(reason === 'trashed' ? 'connector.warning.trashedUpstream' : 'connector.warning.goneUpstream')],
+              } as Prisma.InputJsonValue,
+            },
+          });
+          count += 1;
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') continue;
+          throw err;
+        }
+      }
+    }
+    return count;
+  }
+
+  /**
+   * The changed items, as rows, nested among themselves.
+   *
+   * An incremental run holds only what moved, so a new file's folder is
+   * usually not in it. Parents that are in it are linked here, parents first;
+   * the rest are found through their link at apply time (`resolveParent`),
+   * which is what keeps a file added to an imported folder in that folder.
+   */
+  private async seedChanged(
+    run: ConnectorRun,
+    refs: ExternalRef[],
+    offset: number,
+  ): Promise<{ count: number; truncated: boolean }> {
+    const byId = new Map(refs.map((r) => [r.externalId, r]));
+    const depthOf = (ref: ExternalRef): number => {
+      let depth = 0;
+      for (let cur = ref; cur.parentExternalId && byId.has(cur.parentExternalId) && depth < 64; depth += 1) {
+        cur = byId.get(cur.parentExternalId)!;
+      }
+      return depth;
+    };
+    const ordered = [...byId.values()].map((ref) => ({ ref, depth: depthOf(ref) })).sort((a, b) => a.depth - b.depth);
+
+    const itemIds = new Map<string, string>();
+    let count = 0;
+    for (const { ref, depth } of ordered) {
+      if (offset + count >= this.maxItems) return { count, truncated: true };
+      const parentItemId = (ref.parentExternalId && itemIds.get(ref.parentExternalId)) || null;
+      // Nothing below a changed folder is walked, so it promises no more rows.
+      const item = await this.upsertItem(run, { ...ref, hasChildren: false }, parentItemId, depth, offset + count);
+      if (!item) continue;
+      itemIds.set(ref.externalId, item.id);
+      count += 1;
+    }
+    return { count, truncated: false };
   }
 
   // --- the non-tree paths ---

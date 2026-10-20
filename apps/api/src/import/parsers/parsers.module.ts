@@ -12,9 +12,11 @@ import { StructuredParser } from './structured.parser.js';
 import { TabularParser } from './tabular.parser.js';
 
 /**
- * The parsing half of the import feature. Worker-only: nothing in the API
- * process should ever be able to start a parse, and keeping the module out of
- * `AppModule` is what guarantees it.
+ * The parsing half of the import feature. Nothing in the API process should
+ * ever start a parse. The connector adapters import this module too, for the
+ * Google Drive adapter (#338), so its providers exist in the API process — but
+ * the one caller there, Test connection, never fetches a file; parsing happens
+ * only in a sync run, in the worker.
  *
  * AiCoreModule and AgentCoreModule are imported for the OCR parser alone, and
  * are the worker-safe slices of the AI layer — the same ones `ExtractorFactory`

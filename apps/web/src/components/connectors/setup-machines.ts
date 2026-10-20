@@ -223,6 +223,16 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
       },
     },
   ],
+  // The service account's key, then which folder (#338). Delegation rides with
+  // the key because it changes *who* the key reads as, not *what* it reads —
+  // and the folder is what the connection test opens, so it comes last.
+  'google-drive': [
+    {
+      name: 'account',
+      meta: { labelKey: 'connectors.step.serviceAccount', fields: ['subject'], credential: true },
+    },
+    { name: 'folder', meta: { labelKey: 'connectors.step.folder', fields: ['folderId'] } },
+  ],
 }
 
 export const confluenceSetup = kindMachine('confluenceSetup', KIND_STEPS.confluence)
@@ -231,6 +241,7 @@ export const jiraSetup = kindMachine('jiraSetup', KIND_STEPS.jira)
 export const notionSetup = kindMachine('notionSetup', KIND_STEPS.notion)
 export const markdownGitSetup = kindMachine('markdownGitSetup', KIND_STEPS['markdown-git'])
 export const codebaseSetup = kindMachine('codebaseSetup', KIND_STEPS.codebase)
+export const googleDriveSetup = kindMachine('googleDriveSetup', KIND_STEPS['google-drive'])
 
 export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   confluence: confluenceSetup,
@@ -239,6 +250,7 @@ export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   notion: notionSetup,
   'markdown-git': markdownGitSetup,
   codebase: codebaseSetup,
+  'google-drive': googleDriveSetup,
 }
 
 /** The per-kind steps, for the stepper — read without running the machine. */

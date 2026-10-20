@@ -64,7 +64,7 @@ import GithubRepoPicker from './GithubRepoPicker.vue'
 const props = defineProps<{ open: boolean; editing: ConnectorSummary | null }>()
 const emit = defineEmits<{ 'update:open': [boolean] }>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const projects = useProjectsStore()
 const queryClient = useQueryClient()
 const workspaceId = getWorkspaceId()
@@ -90,8 +90,24 @@ const stepMeta = computed(() => kindStepMeta(kind.value, childStep.value))
 const fieldsFor = computed(() =>
   (stepMeta.value?.fields ?? [])
     .map((key) => info.value?.fields.find((f) => f.key === key))
-    .filter((f): f is NonNullable<typeof f> => !!f),
+    .filter((f): f is NonNullable<typeof f> => !!f)
+    .map((f) => ({
+      ...f,
+      label: kindText(`${f.key}.label`) ?? f.label,
+      help: kindText(`${f.key}.help`) ?? f.help,
+    })),
 )
+
+/**
+ * A kind's own copy in the reader's language, where the catalogue has it
+ * (#338). CONNECTOR_KIND_INFO carries English for the API's error messages;
+ * a kind that ships translations names them under `connectors.kindText`, and
+ * anything it does not name falls back to the catalogue.
+ */
+function kindText(path: string): string | undefined {
+  const key = `connectors.kindText.${kind.value.replace(/-(\w)/g, (_, c: string) => c.toUpperCase())}.${path}`
+  return te(key) ? t(key) : undefined
+}
 
 /**
  * Spec files the connection test found (#78). A snapshot persisted before this
@@ -473,6 +489,7 @@ function startOver() {
               :placeholder="editing?.hasCredential ? t('connectors.credentialKeep', { hint: editing.credentialHint ?? '' }) : (info?.credentialLabel ?? '')"
               @update:model-value="patch({ credential: String($event) })"
             />
+            <span v-if="kindText('credential')" class="text-muted-foreground block text-xs">{{ kindText('credential') }}</span>
             <span class="text-muted-foreground block text-xs">{{ t('connectors.credentialHint') }}</span>
           </label>
         </div>

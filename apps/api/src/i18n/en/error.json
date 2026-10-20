@@ -368,7 +368,17 @@
     "identityNotFound": "No upstream identity {id} on this connector.",
     "identityNotMember": "Only a member of this workspace can be mapped to an upstream identity.",
     "guidanceNotARepository": "Connector {name} is not a repository — guidance files are read from codebase and markdown/git connectors only",
-    "specNoAssist": "An API spec is synced as written; the AI assists rewrite markdown and are not offered for it"
+    "specNoAssist": "An API spec is synced as written; the AI assists rewrite markdown and are not offered for it",
+    "googleDrive": {
+      "badKey": "The credential is not a Google service account JSON key (it needs client_email and private_key)",
+      "badId": "\"{id}\" is not a Google Drive id",
+      "notAFolder": "{name} is a file, not a folder or shared drive",
+      "unsupported": "{name} ({type}) cannot be imported",
+      "tooLarge": "{name} is too large to import",
+      "groupsNeedSubject": "Reading Google Groups needs domain-wide delegation: set \"Act as user\" to an admin",
+      "noStartToken": "Google Drive did not return a change feed start token",
+      "noToken": "Google did not issue an access token for this service account"
+    }
   },
   "routeNotFound": "Cannot {method} {path}",
   "validationFailed": "Validation failed",

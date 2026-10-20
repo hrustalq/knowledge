@@ -88,7 +88,8 @@ export class CreateConnectorDto {
   @ApiPropertyOptional({ description: 'Write-only. Encrypted at rest; never returned.' })
   @IsOptional()
   @IsString()
-  @MaxLength(2000, { message: vmsg('maxLength') })
+  // A Google service account JSON key (#338) is ~2.4 KB; a token is far less.
+  @MaxLength(8000, { message: vmsg('maxLength') })
   credential?: string;
 
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Create pulled pages under this page' })
@@ -180,7 +181,8 @@ export class UpdateConnectorDto {
   @IsOptional()
   @NULLABLE<UpdateConnectorDto>('credential')
   @IsString()
-  @MaxLength(2000, { message: vmsg('maxLength') })
+  // A Google service account JSON key (#338) is ~2.4 KB; a token is far less.
+  @MaxLength(8000, { message: vmsg('maxLength') })
   credential?: string | null;
 
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true })

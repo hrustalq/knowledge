@@ -146,12 +146,14 @@ export class WorkspacesService {
   async updateMember(workspaceId: string, userId: string, dto: UpdateMemberDto): Promise<ListWorkspaceMembersResponse> {
     const member = await this.requireMember(workspaceId, userId);
     // A row JIT, group sync or SCIM wrote is theirs (#75): a hand edit would be
-    // undone at the next sign-in. Taking it over is an explicit act.
-    if (member.source !== 'manual' && !dto.convertToManual) {
+    // undone at the next sign-in. Taking it over is an explicit act. Read
+    // through membershipSourceOf, as the member list is: what shows as manual edits as manual.
+    const source = membershipSourceOf(member.source);
+    if (source !== 'manual' && !dto.convertToManual) {
       throw new ConflictException({
         statusCode: 409,
-        message: t('error.workspace.managedByIdp', { source: member.source }),
-        source: membershipSourceOf(member.source),
+        message: t('error.workspace.managedByIdp', { source }),
+        source,
       });
     }
     if (dto.role !== undefined && !(await setRoleGuarded(this.prisma, workspaceId, userId, dto.role))) {

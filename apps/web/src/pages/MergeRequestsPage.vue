@@ -230,7 +230,7 @@ watch(railOpen, (open) => setFilterRailOpen(open))
       >
         <PanelLeftClose v-if="railOpen" />
         <PanelLeftOpen v-else />
-        <span class="hidden sm:inline">{{ t('filters.railLabel') }}</span>
+        <span class="sr-only sm:not-sr-only">{{ t('filters.railLabel') }}</span>
         <!-- A closed rail must not take what it was telling you with it. -->
         <span
           v-if="narrowCount"

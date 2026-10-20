@@ -28,6 +28,7 @@ import { apiFetch } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@/components/ui/badge'
 import UserChip from '@/components/people/UserChip.vue'
+import AccountSessions from './AccountSessions.vue'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -59,6 +60,8 @@ const workspaces = ref<WorkspaceSummary[]>([])
 const loading = ref(true)
 
 const createOpen = ref(false)
+// The account whose sessions dialog is open (#292); null while closed.
+const sessionsOf = ref<UserSummary | null>(null)
 const newEmail = ref('')
 const newName = ref('')
 const newPassword = ref('')
@@ -249,6 +252,7 @@ function setPassword(user: UserSummary) {
                 {{ user.isAdmin ? t('users.revokeAdmin') : t('users.makeAdmin') }}
               </Button>
               <Button size="sm" variant="outline" @click="setPassword(user)">{{ t('users.setPassword') }}</Button>
+              <Button size="sm" variant="outline" @click="sessionsOf = user">{{ t('users.sessions') }}</Button>
               <Button
                 size="sm" :variant="user.disabled ? 'outline' : 'destructive'" :disabled="user.userId === auth.me?.userId"
                 @click="patchUser(user, { disabled: !user.disabled }, user.disabled ? t('users.accountEnabled') : t('users.accountDisabled'))"
@@ -260,6 +264,12 @@ function setPassword(user: UserSummary) {
         </TableRow>
       </TableBody>
     </Table>
+
+    <Dialog :open="sessionsOf !== null" @update:open="(open) => { if (!open) sessionsOf = null }">
+      <DialogContent class="sm:max-w-lg">
+        <AccountSessions v-if="sessionsOf" :key="sessionsOf.userId" :user="sessionsOf" />
+      </DialogContent>
+    </Dialog>
 
     <Dialog v-model:open="createOpen">
       <DialogContent class="sm:max-w-md">

@@ -4,11 +4,11 @@
  * results and the list all draw from here, so a page cannot be amber in the
  * rail and red in the sheet.
  *
- * `verificationTone` itself lives in `lib/citations` — the provenance chips
- * read it first — and is re-exported rather than copied.
+ * `verificationTone` itself lives in `lib/verification-tone` — the provenance
+ * chips read it too — and is re-exported rather than copied.
  */
 import type { SourceVerificationState, VerificationSource } from '@knowledge/contracts'
-import { verificationTone } from '@/lib/citations'
+import { verificationTone } from '@/lib/verification-tone'
 
 export { verificationTone }
 

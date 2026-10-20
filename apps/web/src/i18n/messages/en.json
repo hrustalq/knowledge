@@ -3049,7 +3049,14 @@
     "displayNamePlaceholder": "Teammate",
     "initialPassword": "Initial password",
     "viaResetLink": "invite by email if empty",
-    "creating": "Creating…"
+    "creating": "Creating…",
+    "sessions": "Sessions",
+    "sessionsTitle": "Sessions of {name}",
+    "sessionsDesc": "Where {email} is signed in. A signed-out session has to log in again on its next request; API keys keep working.",
+    "sessionsNone": "No live sessions.",
+    "sessionsLoadFailed": "Could not load sessions",
+    "sessionsRevokeAll": "Sign out everywhere",
+    "sessionsRevokedAll": "Signed out of {n} session | Signed out of {n} sessions"
   },
   "glossary": {
     "title": "Glossary",

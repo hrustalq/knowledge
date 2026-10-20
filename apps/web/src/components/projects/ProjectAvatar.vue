@@ -14,7 +14,8 @@
  * like initials on its own page would read as two different projects.
  */
 import { computed, ref, watch } from 'vue'
-import { hueOf, initialsOf } from '@/lib/monogram'
+import { avatarColor } from '@/lib/avatar'
+import { initialsOf } from '@/lib/monogram'
 import { resolveAssetUrl } from '@/lib/api'
 
 const props = withDefaults(
@@ -54,8 +55,8 @@ const url = computed(() =>
 )
 const background = computed(() => {
   if (url.value) return 'transparent'
-  if (props.avatarEmoji) return props.avatarColor ?? `hsl(${hueOf(props.projectId)} 55% 45%)`
-  return `hsl(${hueOf(props.projectId)} 55% 45%)`
+  if (props.avatarEmoji && props.avatarColor) return props.avatarColor
+  return avatarColor(props.projectId)
 })
 </script>
 

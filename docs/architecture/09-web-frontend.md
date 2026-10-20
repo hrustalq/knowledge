@@ -245,6 +245,36 @@ when each component drew. The rail renders before the page, so when a page's
 the data present, and the two disagree. The rail's tree therefore waits for
 `onMounted` (the `mounted` ref below) and adopts the rows one frame later.
 
+The fix for the common case is to have the data before anything draws.
+`entry-server.ts` runs `prefetchShell` between `router.isReady()` and the
+render, on every route that draws the shell (authenticated, not `meta.public`,
+not pending email verification). It loads the project roster and the tree's
+first level, so the rail and the breadcrumbs are in the HTML (#279). The
+remembered project's tree is fetched alongside the roster. When the roster
+resolves another project (the cookie's is gone, or there is none), the render
+switches its own `projectId` to that one and fetches its tree instead.
+`entry-client.ts` then adopts the resolved id with `setActiveProject`, so the
+client's API calls ask for the scope the page was drawn in. When the tree
+loaded, `documents.treePrefetched` is set, and the rail draws rows on the
+server and on the client's first render alike. Without it (the prefetch failed,
+or a page loaded the tree later) the rail keeps the skeleton until mount, as
+above. A failed prefetch never fails the render. The store stays unloaded and
+the client fetches as before.
+
+Rows drawn on the server bring two more rules. Anything they start must not run
+during setup. `SidebarTreeNode` fetches an open row's children from a
+`watchPostEffect`, which never runs on the server and runs after the row has
+hydrated on the client. A fetch from setup would mark the row `loading` before
+its first draw. `revealPath` returns at once during SSR. The rail and the
+breadcrumbs call it from immediate watchers that the render does not await, so
+its answer would land in the serialized state after the rows were drawn without
+it.
+
+The stores' in-flight dedupe (`treeFetches`, `listFetches`, …) keys its
+WeakMaps by `toRaw(this)`, never by `this`. In development Pinia's devtools
+plugin calls each action of an options store through a fresh `Proxy` of it, so
+a key of `this` never matched and every caller sent its own request.
+
 ## Intl wrappers, because "no locale" means "the host"
 
 `lib/format.ts` wraps every date, number, relative-time and byte-size format.

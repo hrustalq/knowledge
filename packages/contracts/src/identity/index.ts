@@ -455,6 +455,8 @@ export interface SessionView {
   authMethod: AuthMethod;
   /** identity_providers.id for an SSO login. */
   providerId: string | null;
+  /** That provider's login-button name, while the provider still exists (#292). */
+  providerName: string | null;
   ip: string | null;
   userAgent: string | null;
   createdAt: string;

@@ -6024,6 +6024,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/chat/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search the masked messages of searchable groups the caller may read */
+        post: operations["ChatSearchController_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/captures": {
         parameters: {
             query?: never;
@@ -8593,6 +8610,27 @@ export interface components {
         ChatLinkCodeDto: {
             /** @description The code from the link the bot sent */
             code: string;
+        };
+        ChatSearchDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            query: string;
+            /** @description Only groups bound to these projects */
+            projectIds?: string[];
+            /** @description Only these bound groups */
+            bindingIds?: string[];
+            /**
+             * Format: date-time
+             * @description Only windows still going at or after this time
+             */
+            from?: string;
+            /**
+             * Format: date-time
+             * @description Only windows started at or before this time
+             */
+            to?: string;
+            /** @description Hits to return; 10 when omitted */
+            limit?: number;
         };
         CaptureSessionDto: {
             /** @enum {string} */
@@ -28010,6 +28048,48 @@ export interface operations {
         requestBody?: never;
         responses: {
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ChatSearchController_run: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatSearchDto"];
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

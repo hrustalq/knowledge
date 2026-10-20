@@ -6,10 +6,12 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsISO8601,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   ValidateIf,
@@ -285,4 +287,47 @@ export class UpdateChatSubscriptionDto {
   @ValidateIf((o: UpdateChatSubscriptionDto) => o.digestMinutes !== undefined && o.digestMinutes !== null)
   @IsIn([...CHAT_DIGEST_MINUTES])
   digestMinutes?: ChatDigestMinutes | null;
+}
+
+export class ChatSearchDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ maxLength: 500 })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500, { message: vmsg('maxLength') })
+  query!: string;
+
+  @ApiPropertyOptional({ type: [String], description: 'Only groups bound to these projects' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsUUID('all', { each: true })
+  projectIds?: string[];
+
+  @ApiPropertyOptional({ type: [String], description: 'Only these bound groups' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsUUID('all', { each: true })
+  bindingIds?: string[];
+
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Only windows still going at or after this time' })
+  @IsOptional()
+  @IsISO8601()
+  from?: string;
+
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Only windows started at or before this time' })
+  @IsOptional()
+  @IsISO8601()
+  to?: string;
+
+  @ApiPropertyOptional({ type: Number, minimum: 1, maximum: 50, description: 'Hits to return; 10 when omitted' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit?: number;
 }

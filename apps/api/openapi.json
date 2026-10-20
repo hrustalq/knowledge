@@ -29551,6 +29551,65 @@
         ]
       }
     },
+    "/v1/chat/search": {
+      "post": {
+        "operationId": "ChatSearchController_run",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatSearchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Search the masked messages of searchable groups the caller may read",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
     "/v1/captures": {
       "post": {
         "operationId": "CapturesController_create",
@@ -37038,6 +37097,53 @@
         },
         "required": [
           "code"
+        ]
+      },
+      "ChatSearchDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "projectIds": {
+            "description": "Only groups bound to these projects",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "bindingIds": {
+            "description": "Only these bound groups",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Only windows still going at or after this time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Only windows started at or before this time"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Hits to return; 10 when omitted"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "query"
         ]
       },
       "CaptureSessionDto": {

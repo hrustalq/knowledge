@@ -159,6 +159,20 @@ export function canSee(scope: AccessScope, row: VisibilityRow): boolean {
 }
 
 /**
+ * Whether a searchable group's chat (#339) is visible: the group is a row on
+ * its binding's project with no page path, so this is `canSee` and nothing
+ * else — a restricted project hides it from whoever holds no grant there, and
+ * a guest reaches it only through a grant on the project. A binding with no
+ * project speaks for the whole workspace, which a guest is never part of.
+ * One predicate, read in memory over a workspace's few bindings, so there is
+ * no SQL spelling to keep in step.
+ */
+export function canSeeChat(scope: AccessScope, binding: { projectId: string | null; projectRestricted: boolean }): boolean {
+  if (binding.projectId === null) return scope.bypass || !scope.guest;
+  return canSee(scope, { projectId: binding.projectId, path: '', restrictedBy: binding.projectRestricted ? [binding.projectId] : [] });
+}
+
+/**
  * The visibility predicate as a `documents` filter. `{}` for a caller who sees
  * everything, so a workspace with no restrictions runs the queries it ran
  * before this existed.

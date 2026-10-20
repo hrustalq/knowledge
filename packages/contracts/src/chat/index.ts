@@ -224,6 +224,30 @@ export interface ChatAutoHarvestLimits {
   quietMinutes: number;
 }
 
+/**
+ * One matching window of a searchable group (#339): masked text, authors as
+ * `author-n`, never a name. Only from groups the caller may read.
+ */
+export interface ChatSearchHit {
+  chunkId: string;
+  bindingId: string;
+  chatTitle: string | null;
+  platform: ChatPlatformKind;
+  /** The binding's project; null = the whole workspace. */
+  projectId: string | null;
+  firstAt: string;
+  lastAt: string;
+  messageCount: number;
+  snippet: string;
+  /** The window's first message, where the platform has links (Telegram supergroups); else null. */
+  url: string | null;
+  score: number;
+}
+
+export interface ChatSearchResponse {
+  hits: ChatSearchHit[];
+}
+
 export interface ChatBindingsResponse {
   bindings: ChatBindingEntry[];
   /** CHAT_LISTEN_TTL_DAYS: how long a listening group's messages are kept. */

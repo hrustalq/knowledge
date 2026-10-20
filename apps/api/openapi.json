@@ -26561,6 +26561,147 @@
         ]
       }
     },
+    "/v1/public/shares/{token}/exports": {
+      "post": {
+        "operationId": "PublicSharesController_createExport",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShareExportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "The link is locked: unlock it first"
+          },
+          "404": {
+            "description": "Dead link, or download is off"
+          },
+          "409": {
+            "description": "PDF without Gotenberg (details.reason export.formatUnavailable)"
+          },
+          "429": {
+            "description": "Too many exports from this address or link (details.reason share.exportRateLimited)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Export what the link shows as ZIP, HTML or PDF, when the link allows download (#161); poll the job",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/shares/{token}/exports/{exportId}": {
+      "get": {
+        "operationId": "PublicSharesController_getExport",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Dead link, download off, or not this link’s export"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One of this link’s exports — polled while it runs",
+        "tags": [
+          "public"
+        ]
+      }
+    },
     "/v1/public/sites/resolve": {
       "get": {
         "operationId": "PublicSitesController_resolve",
@@ -35930,6 +36071,10 @@
             "minLength": 6,
             "maxLength": 200,
             "description": "Readers must enter it first"
+          },
+          "allowDownload": {
+            "type": "boolean",
+            "description": "Let readers download an export of what the link shows (#161). Omitted reads as false"
           }
         }
       },
@@ -35950,6 +36095,10 @@
             "type": "string",
             "nullable": true,
             "description": "Omit to keep; a string sets it (ends every unlocked session); null clears it"
+          },
+          "allowDownload": {
+            "type": "boolean",
+            "description": "Let readers download an export; turning it off ends downloads of finished files at once"
           }
         }
       },
@@ -36205,6 +36354,23 @@
         },
         "required": [
           "password"
+        ]
+      },
+      "CreateShareExportDto": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "zip",
+              "html",
+              "pdf"
+            ],
+            "description": "`zip`: markdown + attachments; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL"
+          }
+        },
+        "required": [
+          "format"
         ]
       },
       "AskSiteDto": {

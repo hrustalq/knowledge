@@ -1050,6 +1050,7 @@ export type I18nTranslations = {
             "expiryInPast": string;
             "rateLimited": string;
             "unlockRateLimited": string;
+            "exportRateLimited": string;
             "locked": string;
             "restricted": string;
         };

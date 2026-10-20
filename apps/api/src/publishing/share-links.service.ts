@@ -32,6 +32,8 @@ export interface ShareLinkInput {
   expiresAt?: string | null;
   /** A string sets the password; `null` clears it; omitted keeps it. */
   password?: string | null;
+  /** Readers may download an export of the scope (#161). Omitted: off on create, kept on update. */
+  allowDownload?: boolean;
 }
 
 type ShareRow = ShareLink & { document: { title: string } };
@@ -132,6 +134,7 @@ export class ShareLinksService {
         tokenHash: shareTokenHash(token),
         tokenCipher: key ? encryptSecret(token, key) : null,
         passwordHash: hasPassword ? await hashPassword(input.password as string) : null,
+        allowDownload: input.allowDownload ?? false,
         expiresAt,
         createdBy: actorId ?? AUTHOR_ID_STUB,
       },
@@ -149,8 +152,9 @@ export class ShareLinksService {
     const current = await this.requireLive(shareId);
     const settings = await this.requireEnabled(current.workspaceId);
 
-    const data: { includeSubtree?: boolean; expiresAt?: Date | null; passwordHash?: string | null } = {};
+    const data: { includeSubtree?: boolean; expiresAt?: Date | null; passwordHash?: string | null; allowDownload?: boolean } = {};
     if (input.includeSubtree !== undefined) data.includeSubtree = input.includeSubtree;
+    if (input.allowDownload !== undefined) data.allowDownload = input.allowDownload;
     if (input.expiresAt !== undefined) data.expiresAt = this.clampExpiry(input.expiresAt).expiresAt;
     if (input.password !== undefined) data.passwordHash = input.password === null ? null : await hashPassword(input.password);
 
@@ -232,6 +236,7 @@ export class ShareLinksService {
         shareId: row.id,
         includeSubtree: row.includeSubtree,
         hasPassword: row.passwordHash !== null,
+        allowDownload: row.allowDownload,
         expiresAt: row.expiresAt?.toISOString() ?? null,
         ...extra,
       },
@@ -248,6 +253,7 @@ export class ShareLinksService {
       includeSubtree: row.includeSubtree,
       url: token ? this.shareUrl(token) : null,
       hasPassword: row.passwordHash !== null,
+      allowDownload: row.allowDownload,
       expiresAt: row.expiresAt?.toISOString() ?? null,
       revokedAt: row.revokedAt?.toISOString() ?? null,
       createdBy: row.createdBy,

@@ -232,6 +232,9 @@ export const envSchema = z.object({
   PUBLIC_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(120),
   /** Password attempts per IP and link in 15 minutes before the unlock answers 429. */
   PUBLIC_UNLOCK_ATTEMPTS_PER_15MIN: z.coerce.number().int().positive().default(10),
+  /** Exports a share link's readers may ask for in an hour (#161): per IP and link, and per link. Fail-closed. */
+  PUBLIC_EXPORTS_PER_HOUR_PER_IP: z.coerce.number().int().positive().default(5),
+  PUBLIC_EXPORTS_PER_HOUR_PER_LINK: z.coerce.number().int().positive().default(30),
   /**
    * Published sites (docs/features/44, issue #77). PUBLIC_SITES_ENABLED is the
    * ceiling over the workspace's `allow_public_sites` switch: false refuses to

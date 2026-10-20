@@ -6,6 +6,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { activityKindFor, shareExpiryFor, shareNeedsPassword } from '@knowledge/contracts';
 import { ApiExceptionFilter } from '../src/common/api-exception.filter.js';
+import { ExportService } from '../src/export/export.service.js';
 import { PublishingSettingsService } from '../src/publishing/publishing-settings.service.js';
 import { ShareLinksService, shareTokenHash } from '../src/publishing/share-links.service.js';
 import { clientIp, PublicRateLimiter, PublicRateLimitGuard } from '../src/public/public-rate-limit.js';
@@ -24,7 +25,10 @@ import { ShareUnlockService } from '../src/public/share-unlock.service.js';
  *   the same answer as a link that does not exist;
  * - expiry, revoke and the password gate, including that changing the password
  *   ends open sessions and that guessing is rate-limited, fail-closed;
- * - the response headers a shared page must carry, errors included.
+ * - the response headers a shared page must carry, errors included;
+ * - download (#161): off by default, the link's own jobs only, dead the moment
+ *   the link is revoked or download is switched off, behind the password, and
+ *   rate-limited per address and link, fail-closed.
  */
 
 const WS = '11111111-1111-4111-8111-111111111111';
@@ -69,12 +73,37 @@ function fakePrisma() {
     { id: ATT_SIBLING, documentId: SIBLING, status: 'ready' },
   ];
   const shares: Array<Record<string, unknown>> = [];
+  const jobs: Array<Record<string, unknown>> = [];
   let settings: { workspaceId: string; allowShareLinks: boolean | null; allowPasswordlessShares: boolean | null } | null = null;
   const withDoc = (row: Record<string, unknown>) => ({ ...row, document: { title: docs.find((d) => d.id === row.documentId)!.title } });
 
   const prisma = {
     docs,
     shares,
+    jobs,
+    exportJob: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        const row = {
+          id: `0000000${jobs.length + 1}-0000-4000-8000-000000000000`,
+          status: 'queued',
+          stage: null,
+          pageCount: null,
+          sizeBytes: null,
+          s3Key: null,
+          error: null,
+          createdAt: new Date(),
+          completedAt: null,
+          expiresAt: null,
+          ...data,
+        };
+        jobs.push(row);
+        return row;
+      }),
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => jobs.find((j) => j.id === where.id) ?? null),
+      update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) =>
+        Object.assign(jobs.find((j) => j.id === where.id)!, data),
+      ),
+    },
     document: {
       findUnique: vi.fn(async ({ where, select }: { where: { id: string }; select?: Record<string, unknown> }) => {
         const d = docs.find((x) => x.id === where.id);
@@ -175,6 +204,11 @@ function env(overrides: Record<string, unknown> = {}) {
     SHARE_UNLOCK_TTL_MIN: 60,
     PUBLIC_RATE_LIMIT_PER_MIN: 1000,
     PUBLIC_UNLOCK_ATTEMPTS_PER_15MIN: 3,
+    PUBLIC_EXPORTS_PER_HOUR_PER_IP: 2,
+    PUBLIC_EXPORTS_PER_HOUR_PER_LINK: 3,
+    EXPORT_MAX_PAGES: 100,
+    EXPORT_TTL_HOURS: 72,
+    GOTENBERG_URL: '',
     SETTINGS_ENCRYPTION_KEY: KEY,
     WEB_BASE_URL: 'https://kb.example.com/',
     REDIS_URL: 'redis://unused',
@@ -203,6 +237,11 @@ function harness(envOverrides: Record<string, unknown> = {}) {
     })),
   };
   const attachments = { readUrl: vi.fn(async (doc: string, att: string) => `https://s3.example.com/${doc}/${att}`) };
+  // The scope itself is ExportScopeService's, pinned in export.spec.ts.
+  const exportScope = { documents: vi.fn(async () => [{ id: ROOT }]) };
+  const producer = { enqueue: vi.fn(async () => undefined) };
+  const storage = { presignGet: vi.fn(async (key: string) => `https://s3.example.com/${key}?signed`) };
+  const exports = new ExportService(prisma as never, {} as never, storage as never, exportScope as never, producer as never, config as never);
   const reader = new PublicSharesService(
     prisma as never,
     settings,
@@ -210,9 +249,10 @@ function harness(envOverrides: Record<string, unknown> = {}) {
     attachments as never,
     unlocks,
     limiter,
+    exports,
     config as never,
   );
-  return { prisma, settings, shares, reader, kv, store, limiter, unlocks, documents, attachments, activity, config };
+  return { prisma, settings, shares, reader, kv, store, limiter, unlocks, documents, attachments, activity, config, exportScope, producer, storage };
 }
 
 const tokenOf = (url: string) => url.split('/s/')[1]!;
@@ -415,6 +455,112 @@ describe('PublicSharesService (the anonymous reader)', () => {
   });
 });
 
+describe('PublicSharesService: download (#161)', () => {
+  async function shared(input: Parameters<ShareLinksService['create']>[1] = {}) {
+    const h = harness();
+    await h.settings.update(WS, { allowShareLinks: true, allowPasswordlessShares: true });
+    const res = await h.shares.create(ROOT, input, USER);
+    return { ...h, token: tokenOf(res.url), shareId: res.share.id };
+  }
+  const finish = (h: Awaited<ReturnType<typeof shared>>, id: string) =>
+    Object.assign(h.prisma.jobs.find((j) => j.id === id)!, {
+      status: 'completed',
+      s3Key: `workspaces/${WS}/exports/${id}/guide.zip`,
+      completedAt: new Date(),
+      expiresAt: new Date(Date.now() + 3_600_000),
+    });
+
+  it('is off on a new link: no offer, and every export route is a 404', async () => {
+    const h = await shared();
+    expect(h.prisma.shares[0]!.allowDownload).toBe(false);
+    expect(await h.reader.view(h.token, undefined)).toMatchObject({ locked: false, download: null });
+    await expect(h.reader.createExport(h.token, 'zip', req())).rejects.toMatchObject({ status: 404 });
+    expect(h.prisma.exportJob.create).not.toHaveBeenCalled();
+  });
+
+  it('offers the formats the deployment has, and exports the link’s scope as the link, not its creator', async () => {
+    const h = await shared({ allowDownload: true, includeSubtree: true });
+    expect(await h.reader.view(h.token, undefined)).toMatchObject({
+      download: { formats: { zip: true, html: true, pdf: false }, ttlHours: 72 },
+    });
+    const job = await h.reader.createExport(h.token, 'zip', req());
+    expect(h.prisma.jobs[0]).toMatchObject({ shareLinkId: h.shareId, requestedBy: USER, scope: 'subtree', documentId: ROOT });
+    expect(h.exportScope.documents).toHaveBeenCalledWith(expect.objectContaining({ requester: { shareLinkId: h.shareId } }));
+    // The reader's shape names no workspace, page or person.
+    expect(Object.keys(job).sort()).toEqual(['createdAt', 'error', 'expiresAt', 'format', 'id', 'pageCount', 'sizeBytes', 'stage', 'status']);
+    await expect(h.reader.createExport(h.token, 'pdf', req('198.51.100.1'))).rejects.toMatchObject({
+      status: 409,
+      response: { reason: 'export.formatUnavailable' },
+    });
+  });
+
+  it('reads only this link’s jobs: another link’s and a member’s are a 404', async () => {
+    const h = await shared({ allowDownload: true });
+    const mine = await h.reader.createExport(h.token, 'zip', req());
+    const other = await h.shares.create(ROOT, { allowDownload: true }, USER);
+    const otherJob = await h.reader.createExport(tokenOf(other.url), 'zip', req());
+    await expect(h.reader.getExport(h.token, mine.id, undefined)).resolves.toMatchObject({ id: mine.id, status: 'queued' });
+    await expect(h.reader.getExport(h.token, otherJob.id, undefined)).rejects.toMatchObject({ status: 404 });
+    h.prisma.jobs.push({ ...h.prisma.jobs[0], id: 'member-job', shareLinkId: null });
+    await expect(h.reader.exportDownload(h.token, 'member-job', undefined)).rejects.toMatchObject({ status: 404 });
+    // Not finished: 409, the file is not handed out early.
+    await expect(h.reader.exportDownload(h.token, mine.id, undefined)).rejects.toMatchObject({ status: 409 });
+    finish(h, mine.id);
+    await expect(h.reader.exportDownload(h.token, mine.id, undefined)).resolves.toMatchObject({ filename: 'guide.zip' });
+  });
+
+  it('ends a finished file’s download the moment download is switched off or the link is revoked', async () => {
+    const h = await shared({ allowDownload: true });
+    const job = await h.reader.createExport(h.token, 'zip', req());
+    finish(h, job.id);
+    await expect(h.reader.exportDownload(h.token, job.id, undefined)).resolves.toMatchObject({ url: expect.stringContaining('signed') });
+
+    await h.shares.update(h.shareId, { allowDownload: false }, USER);
+    await expect(h.reader.exportDownload(h.token, job.id, undefined)).rejects.toMatchObject({ status: 404 });
+    await expect(h.reader.getExport(h.token, job.id, undefined)).rejects.toMatchObject({ status: 404 });
+    expect(await h.reader.view(h.token, undefined)).toMatchObject({ download: null });
+
+    await h.shares.update(h.shareId, { allowDownload: true }, USER);
+    await expect(h.reader.exportDownload(h.token, job.id, undefined)).resolves.toBeDefined();
+    await h.shares.revoke(h.shareId, USER);
+    await expect(h.reader.exportDownload(h.token, job.id, undefined)).rejects.toMatchObject({ status: 404 });
+    expect(h.storage.presignGet).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a locked link’s export until it is unlocked', async () => {
+    const h = await shared({ allowDownload: true, password: 'secret1' });
+    expect(await h.reader.view(h.token, undefined)).toEqual({ locked: true });
+    await expect(h.reader.createExport(h.token, 'zip', req())).rejects.toMatchObject({ status: 401 });
+    expect(h.prisma.exportJob.create).not.toHaveBeenCalled();
+    const { session, shareId } = await h.reader.unlock(h.token, 'secret1', req());
+    const cookie = `kn_share_${shareId}=${session}`;
+    const job = await h.reader.createExport(h.token, 'zip', { ...req(), headers: { cookie } });
+    await expect(h.reader.getExport(h.token, job.id, undefined)).rejects.toMatchObject({ status: 401 });
+    await expect(h.reader.getExport(h.token, job.id, cookie)).resolves.toMatchObject({ id: job.id });
+  });
+
+  it('rate-limits exports per address and link and per link, and starts none while the counter is down', async () => {
+    const h = await shared({ allowDownload: true });
+    await h.reader.createExport(h.token, 'zip', req());
+    await h.reader.createExport(h.token, 'zip', req());
+    await expect(h.reader.createExport(h.token, 'zip', req())).rejects.toMatchObject({
+      status: 429,
+      response: { reason: 'share.exportRateLimited' },
+    });
+    // Another address has its own budget — until the link's own runs out.
+    await h.reader.createExport(h.token, 'zip', req('198.51.100.7'));
+    await expect(h.reader.createExport(h.token, 'zip', req('192.0.2.44'))).rejects.toMatchObject({ status: 429 });
+    expect(h.producer.enqueue).toHaveBeenCalledTimes(3);
+    // Polling is not creating: it does not spend the budget.
+    await expect(h.reader.getExport(h.token, h.prisma.jobs[0]!.id as string, undefined)).resolves.toBeDefined();
+
+    const fresh = await shared({ allowDownload: true });
+    fresh.kv.down = true;
+    await expect(fresh.reader.createExport(fresh.token, 'zip', req())).rejects.toMatchObject({ status: 429 });
+    expect(fresh.prisma.exportJob.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('clientIp', () => {
   it('believes X-Forwarded-For only from an internal peer', () => {
     expect(clientIp({ socket: { remoteAddress: '172.18.0.5' }, headers: { 'x-forwarded-for': '203.0.113.9, 172.18.0.2' } })).toBe('203.0.113.9');
@@ -467,6 +613,25 @@ describe('PublicSharesController over HTTP', () => {
     expect(cookie).toMatch(/^kn_share_[^=]+=[^;]+;.*HttpOnly/i);
     const view = await request(server).get(`/v1/public/shares/${token}`).set('Cookie', cookie.split(';')[0]!);
     expect(view.body).toMatchObject({ locked: false, title: 'Guide' });
+    await nest.close();
+  });
+
+  it('queues a download, polls it and redirects to the finished file (#161)', async () => {
+    const { app: nest, token, h } = await app();
+    const server = nest.getHttpServer();
+    await h.shares.update(h.prisma.shares[0]!.id as string, { allowDownload: true }, USER);
+    const ok = await request(server).post(`/v1/public/shares/${token}/unlock`).send({ password: 'secret1' });
+    const cookie = String(ok.headers['set-cookie']).split(';')[0]!;
+    expect((await request(server).post(`/v1/public/shares/${token}/exports`).send({ format: 'zip' })).status).toBe(401);
+    const queued = await request(server).post(`/v1/public/shares/${token}/exports`).set('Cookie', cookie).send({ format: 'zip' });
+    expect(queued.status).toBe(201);
+    expect(queued.headers['cache-control']).toBe('no-store');
+    const id = queued.body.id as string;
+    expect((await request(server).get(`/v1/public/shares/${token}/exports/${id}`).set('Cookie', cookie)).body).toMatchObject({ status: 'queued' });
+    Object.assign(h.prisma.jobs[0]!, { status: 'completed', s3Key: 'k/guide.zip', expiresAt: new Date(Date.now() + 60_000) });
+    const download = await request(server).get(`/v1/public/shares/${token}/exports/${id}/download`).set('Cookie', cookie);
+    expect(download.status).toBe(302);
+    expect(download.headers.location).toBe('https://s3.example.com/k/guide.zip?signed');
     await nest.close();
   });
 

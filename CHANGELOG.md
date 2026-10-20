@@ -80,6 +80,22 @@ in the pull request that introduces them — see
   to it yet; that is phase 3. The editor's node specs now live in the new
   buildless package `@knowledge/editor-schema`, so the API builds the same
   schema the editor does.
+- A share link can let its readers download what it shows (#161). Tick
+  **Let readers download it** when creating the link, or flip **Downloads**
+  on an existing one in the page's Share menu; it is off by default and on no
+  existing link. The reader then gets a **Download** button that exports the
+  link's page, or the page and its subpages when the link includes them, as
+  ZIP, HTML or PDF (PDF only where Gotenberg is set up), without signing in.
+  The file contains exactly the pages the reader can open through the link,
+  never a restricted page and never more than the link's scope. A
+  password-protected link asks for its password first. Revoking the link or
+  switching downloads off stops even a finished file from downloading at
+  once. The job belongs to the link, not to a person: nobody gets an
+  inbox notification for it, and it is not in its creator's export history
+  (an admin's list on Exports still shows it). The new public routes are
+  `POST /v1/public/shares/:token/exports`, `GET …/exports/:id` and
+  `GET …/exports/:id/download`. `knowledge_share_page` takes
+  `allowDownload`.
 - Who may co-edit a draft, checked for as long as they stay (#80, phase 2).
   Joining `/v1/collab` now takes a single-use `kt_` ticket from
   `POST /v1/auth/url-ticket`; a session token or API key is refused there. An
@@ -491,6 +507,15 @@ in the pull request that introduces them — see
   the Vite dev proxy both do. A deployment that points `VITE_API_URL` at a
   different origin will see every attachment and avatar fail with 401, because
   the browser does not send the `kn_token` cookie there. (#102)
+- Migration `20261119100000_share_link_download` adds
+  `share_links.allow_download` (default `false`) and a nullable
+  `export_jobs.share_link_id` with an index. It is additive and reversible
+  under expand/contract: the previous release ignores both columns, so after
+  a rollback a reader's files show up in the link creator's Exports until
+  the export sweeper removes them. Two env vars, both with defaults:
+  `PUBLIC_EXPORTS_PER_HOUR_PER_IP` (`5` per address and link) and
+  `PUBLIC_EXPORTS_PER_HOUR_PER_LINK` (`30` per link). Both limits fail
+  closed: with Redis down, no reader can start an export. (#161)
 - Migration `20261118100000_chat_listening_buffer` adds
   `chat_channel_bindings.listening` (default `false`) and the
   `chat_buffered_messages` table. It is additive and survives a code

@@ -16,6 +16,7 @@ import { toggleTheme } from '@/lib/theme'
 import PublicMarkdown from '@/components/public/PublicMarkdown.vue'
 import PublicPasswordGate from '@/components/public/PublicPasswordGate.vue'
 import { shareHref, treeRows, type PublicReaderState } from './reader-state'
+import ShareDownload from './ShareDownload.vue'
 
 const props = defineProps<{ state: PublicReaderState }>()
 
@@ -44,6 +45,14 @@ const date = (iso: string) => formatDate(iso, props.state.locale)
         <span v-if="share?.expiresAt" class="hidden text-xs text-muted-foreground sm:inline">
           {{ t('shareReader.expires', { date: date(share.expiresAt) }) }}
         </span>
+        <ShareDownload
+          v-if="share?.download"
+          :token="share.token"
+          :api-base="state.apiBase"
+          :title="share.title"
+          :subtree="share.tree.length > 1"
+          :offer="share.download"
+        />
         <button
           type="button"
           class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"

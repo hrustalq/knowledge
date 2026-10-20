@@ -245,8 +245,10 @@ branch head after a squash.
 **Duplicates are compared in Node.** `meanRevisionEmbeddings` plus the
 Nest-free `duplicatePeers`, instead of the planned
 `GraphService.documentNeighbours`, so the pairing is testable without
-ArcadeDB. Pairwise cosine is O(n²); it moves to ArcadeDB HNSW when
-`searchChunks` does. On `EMBEDDINGS_PROVIDER=stub` duplication is `null` and
+ArcadeDB. Pairwise cosine is O(n²). `searchChunks` moved to an ArcadeDB
+vector index in #304, and this comparison did not: it ranks means the run
+already holds. `meanRevisionEmbeddings` now averages every chunk of a page
+instead of stopping at 5,000 per batch. On `EMBEDDINGS_PROVIDER=stub` duplication is `null` and
 the run says so, because the stub's similarity measures shared words, not
 shared meaning (the surveyor's rule).
 

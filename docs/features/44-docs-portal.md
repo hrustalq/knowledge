@@ -630,9 +630,9 @@ destination may have its own). Deleting pages removes their snapshot rows
   the reader came from.
 - Ask is one question, one answer: no follow-ups and no streaming. Nothing is
   stored, so there is no history and no feedback on a public answer.
-- Ask's semantic leg scans the snapshot's chunks in Node, capped at 5,000
-  chunks like workspace search; past that it ranks an arbitrary subset and
-  logs an error.
+- Ask's semantic leg asks the chunk vector index for the nearest chunks of
+  the snapshot's pinned revisions (#304). Until the worker has built the
+  index, it scans them instead, capped at 5,000 chunks.
 - The daily budget counts questions that reach the model, including ones the
   provider then refuses.
 - A top-level page slugged `_widget` is shadowed by the widget's frame.

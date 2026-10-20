@@ -5,7 +5,7 @@ import {
   entityTypeOf,
   normalizeEntityKey,
 } from '@knowledge/contracts';
-import { aclAdmits, type DocumentAclFilter } from '../common/document-acl.js';
+import { aclAdmits, UNFILTERED, type DocumentAclFilter } from '../common/document-acl.js';
 import { ArcadeClient } from './arcade.client.js';
 import { EntityAliasService } from './entity-alias.service.js';
 import {
@@ -48,12 +48,33 @@ export interface StoredChunk {
 }
 
 /**
- * Phase 1 ranks by cosine in Node, so every candidate chunk crosses the wire.
- * This caps that fan-out. It is a correctness ceiling, not a tuning knob: past
- * it the ranking is over an arbitrary subset (see `searchChunks`).
+ * The HNSW index over `Chunk.embedding` (#304), as `vector.neighbors` names it.
+ * One index for one dimension: `ensureSchema` drops and rebuilds it when
+ * `EMBEDDINGS_DIM` changes (see `ensureVectorIndex`).
+ */
+const VECTOR_INDEX = 'Chunk[embedding]';
+/**
+ * The HNSW search beam (`efSearch`), never below `k`. Measured on the demo
+ * corpus (5,936 eligible bge-m3 chunks, 120 title queries, docs/architecture/
+ * 04-search-graph.md §Vector search): ArcadeDB's adaptive default gave
+ * recall@10 0.947 against the exact ranking, 200 gave 0.978, 400 gave 0.988,
+ * at the same ~30 ms p95. Raise it if a larger corpus loses recall.
+ */
+const VECTOR_EF_SEARCH = 400;
+/** How long a reader trusts what it learned about the vector index before asking ArcadeDB again. */
+const VECTOR_INDEX_RECHECK_MS = 30_000;
+/**
+ * The scan fallback's cap, used only while no index of the query's dimension
+ * exists: before the worker's first boot on this version, mid-rebuild after a
+ * dimension change, or on an ArcadeDB that rejects the index query. Past it
+ * the fallback ranks an arbitrary subset, and says so.
  */
 const CHUNK_SCAN_LIMIT = 5000;
-/** Revisions averaged per read in `meanRevisionEmbeddings`, so each read stays under the scan cap. */
+/** Rows per read for the readers that need every matching vector (`liveChunks`, `meanRevisionEmbeddings`). */
+const VECTOR_PAGE = 1000;
+/** A record id as ArcadeDB prints it, the only shape `allChunkRows` inlines into SQL. */
+const RID = /^#\d+:\d+$/;
+/** Revisions averaged per read in `meanRevisionEmbeddings`. */
 const MEAN_BATCH = 100;
 
 /**
@@ -113,6 +134,30 @@ function aclClause(acl: DocumentAclFilter): { sql: string; params: { aclDocs: st
     sql: acl.kind === 'allow' ? ' AND documentId IN :aclDocs' : ' AND NOT (documentId IN :aclDocs)',
     params: { aclDocs },
   };
+}
+
+/**
+ * The ACL predicate inside a nearest-neighbour search (#304). While the list
+ * fits it is `aclClause`. Past it, a member's filter falls back to the
+ * `aclNodes` stamps — the OpenSearch provider's rule — so a denied page does
+ * not occupy top-k slots that `aclAdmits` would then empty. A stamp lags a
+ * restriction change by one re-stamp tick, which can cost recall, never leak:
+ * `aclAdmits` and PG still decide. A guest's long allow list is not pushed.
+ */
+function annAclClause(acl: DocumentAclFilter): { sql: string; params: Record<string, unknown> } | null {
+  const pushed = aclClause(acl);
+  if (pushed || acl.kind !== 'deny' || acl.nodeIds.length === 0) return pushed;
+  return { sql: ' AND (aclNodes IS NULL OR NOT (aclNodes CONTAINSANY :aclNodeIds))', params: { aclNodeIds: [...acl.nodeIds] } };
+}
+
+/** A nearest-neighbour row: `distance` is ArcadeDB's COSINE distance, `1 - cosine`. */
+interface NeighbourRow {
+  chunkId: string;
+  documentId: string;
+  revisionId: string;
+  text: string;
+  headingPath: string[];
+  distance: number;
 }
 
 /** A code edge's provenance: the usage files, cut at a whole path. */
@@ -225,13 +270,19 @@ export interface WorkspaceRelationGraph {
 export class GraphService {
   private readonly logger = new Logger(GraphService.name);
 
+  /** What a reader last learned about the vector index: its dimension, or null for none (#304). */
+  private vectorIndex: { dimension: number | null; checkedAt: number } | null = null;
+
   constructor(
     private readonly arcade: ArcadeClient,
     private readonly aliases: EntityAliasService,
   ) {}
 
-  /** Idempotent DDL, applied on worker boot. */
-  async ensureSchema(): Promise<void> {
+  /**
+   * Idempotent DDL, applied on worker boot. `vectorDimension` is
+   * `EMBEDDINGS_DIM`, the one dimension the chunk vector index is built for.
+   */
+  async ensureSchema(vectorDimension: number): Promise<void> {
     const statements = [
       'CREATE VERTEX TYPE Document IF NOT EXISTS',
       'CREATE VERTEX TYPE DocumentRevision IF NOT EXISTS',
@@ -247,6 +298,9 @@ export class GraphService {
       'CREATE PROPERTY DocumentRevision.revisionId IF NOT EXISTS STRING',
       'CREATE PROPERTY Chunk.chunkId IF NOT EXISTS STRING',
       'CREATE PROPERTY Chunk.workspaceId IF NOT EXISTS STRING',
+      // #304: the type LSM_VECTOR indexes. Declaring it converts nothing
+      // already stored, and the index reads those rows as they are.
+      'CREATE PROPERTY Chunk.embedding IF NOT EXISTS ARRAY_OF_FLOATS',
       'CREATE PROPERTY Entity.entityKey IF NOT EXISTS STRING',
       'CREATE PROPERTY Entity.workspaceId IF NOT EXISTS STRING',
       'CREATE INDEX IF NOT EXISTS ON Document (documentId) UNIQUE',
@@ -289,6 +343,143 @@ export class GraphService {
           'defaultDatabases note in docker-compose.prod.yml; the group is the third bracket element.',
       );
     }
+
+    await this.ensureVectorIndex(vectorDimension);
+  }
+
+  /**
+   * The HNSW index `searchChunks` and `searchRevisionChunks` read (#304).
+   *
+   * **One index, one dimension, and the configured one wins.** When
+   * `EMBEDDINGS_DIM` changes, the index is dropped and rebuilt for the new
+   * dimension. ArcadeDB skips every stored vector of another length while it
+   * builds (they stay in the type, unindexed, and updating their other fields
+   * still works), and refuses to insert one afterwards. So during a reindex
+   * the vector leg ranks only the chunks already re-embedded, BM25 finds the
+   * rest, and a stale vector is never compared — the rule the scan applied by
+   * skipping lengths that differ from the query's.
+   *
+   * Never throws: without the index every reader falls back to the scan, and
+   * a worker that refused to boot would stop indexing altogether.
+   */
+  private async ensureVectorIndex(dimension: number): Promise<void> {
+    if (!Number.isInteger(dimension) || dimension <= 0) {
+      this.logger.error(`Vector index skipped: EMBEDDINGS_DIM=${dimension} is not a positive integer.`);
+      return;
+    }
+    try {
+      const current = await this.readVectorIndexDimension();
+      if (current === dimension) return;
+      if (current !== null) {
+        this.logger.warn(`Rebuilding the chunk vector index: it is for ${current} dimensions, EMBEDDINGS_DIM is ${dimension}.`);
+        await this.arcade.command('sql', `DROP INDEX \`${VECTOR_INDEX}\``);
+      }
+      const started = Date.now();
+      const [row] = await this.arcade.command<{ totalIndexed?: number }>(
+        'sql',
+        `CREATE INDEX IF NOT EXISTS ON Chunk (embedding) LSM_VECTOR METADATA { dimensions: ${dimension}, similarity: 'COSINE' }`,
+      );
+      this.logger.log(`Chunk vector index ready (${dimension} dimensions, ${row?.totalIndexed ?? 0} vectors, ${Date.now() - started} ms).`);
+    } catch (e) {
+      this.logger.error(`Chunk vector index unavailable, vector search falls back to the scan: ${(e as Error).message}`);
+    } finally {
+      this.vectorIndex = null;
+    }
+  }
+
+  /** The dimension of the chunk vector index, or null when there is none. */
+  private async readVectorIndexDimension(): Promise<number | null> {
+    const [type] = await this.arcade.query<{ indexes?: Array<{ name?: string; dimensions?: number }> }>(
+      'sql',
+      "SELECT indexes FROM schema:types WHERE name = 'Chunk'",
+    );
+    const index = type?.indexes?.find((i) => i.name === VECTOR_INDEX);
+    return index && typeof index.dimensions === 'number' ? index.dimensions : null;
+  }
+
+  /**
+   * Whether a query of this length can be answered by the index. Cached for
+   * `VECTOR_INDEX_RECHECK_MS`, because only the worker builds the index: the
+   * API learns of it within that window and scans until then.
+   */
+  private async vectorIndexFits(dimension: number): Promise<boolean> {
+    const now = Date.now();
+    if (!this.vectorIndex || now - this.vectorIndex.checkedAt > VECTOR_INDEX_RECHECK_MS) {
+      const found = await this.readVectorIndexDimension().catch(() => null);
+      this.vectorIndex = { dimension: found, checkedAt: now };
+    }
+    return this.vectorIndex.dimension === dimension;
+  }
+
+  /**
+   * Nearest neighbours through the index, the candidates restricted by
+   * `where` **inside** the HNSW walk (`filter`), so nothing outside it can
+   * take a top-k slot. Null when the index cannot answer — none yet, another
+   * dimension, or a rejected query — and the caller scans instead.
+   *
+   * `where` is a predicate over Chunk built only from code constants and bound
+   * parameters, and always begins with the workspace predicate; the outer
+   * WHERE repeats it, so a store that ignored the filter still could not hand
+   * back another tenant's chunk. ArcadeDB's COSINE `distance` is `1 - cosine`
+   * for any vectors, normalized or not, so `score` is the cosine the scan
+   * computed and every threshold calibrated on it holds.
+   */
+  private async nearestChunks(
+    queryEmbedding: number[],
+    k: number,
+    where: string,
+    params: Record<string, unknown> & { workspaceId: string },
+  ): Promise<ChunkHit[] | null> {
+    if (k <= 0) return [];
+    if (!(await this.vectorIndexFits(queryEmbedding.length))) return null;
+    try {
+      const rows = await this.arcade.query<NeighbourRow & { workspaceId: string }>(
+        'sql',
+        `SELECT chunkId, documentId, revisionId, workspaceId, text, headingPath, distance FROM (SELECT expand(vector.neighbors('${VECTOR_INDEX}', :queryVector, :k, { efSearch: ${Math.max(VECTOR_EF_SEARCH, Math.floor(k))}, filter: (SELECT @rid FROM Chunk WHERE ${where}) }))) WHERE workspaceId = :workspaceId`,
+        { ...params, queryVector: queryEmbedding, k: Math.floor(k) },
+      );
+      return rows
+        .filter((r) => r.workspaceId === params.workspaceId)
+        .map((r) => ({
+          chunkId: r.chunkId,
+          documentId: r.documentId,
+          revisionId: r.revisionId,
+          text: r.text ?? '',
+          headingPath: r.headingPath ?? [],
+          score: 1 - r.distance,
+        }))
+        .sort((a, b) => b.score - a.score);
+    } catch (e) {
+      this.logger.warn(`Vector index query failed, scanning instead: ${(e as Error).message}`);
+      this.vectorIndex = null;
+      return null;
+    }
+  }
+
+  /**
+   * Every Chunk row matching `where`, vectors included, for the readers that
+   * need each vector rather than the nearest few (#304). No cap: a page is
+   * averaged over all of its chunks, and the calibration backtest sees the
+   * whole corpus.
+   *
+   * It reads the matching RIDs first (no vectors), then loads them
+   * `VECTOR_PAGE` at a time by RID, re-applying `where` so the workspace
+   * predicate holds on every read. Not keyset paging (`@rid > :last ORDER BY
+   * @rid`): on 26.10.2 that ordering is not global once the planner splits
+   * the live predicate's `OR` into two branches, and a page boundary then
+   * skips rows (measured: 1,888 of 1,889).
+   */
+  private async allChunkRows<T>(fields: string, where: string, params: Record<string, unknown>): Promise<T[]> {
+    const rids = (await this.arcade.query<{ rid?: string }>('sql', `SELECT @rid AS rid FROM Chunk WHERE ${where}`, params))
+      .map((r) => r.rid)
+      .filter((rid): rid is string => typeof rid === 'string' && RID.test(rid));
+    const out: T[] = [];
+    for (let at = 0; at < rids.length; at += VECTOR_PAGE) {
+      // RIDs are inlined (a target list cannot be a parameter) after RID.test.
+      const target = rids.slice(at, at + VECTOR_PAGE).join(', ');
+      out.push(...(await this.arcade.query<T>('sql', `SELECT ${fields} FROM [${target}] WHERE ${where}`, params)));
+    }
+    return out;
   }
 
   /**
@@ -445,12 +636,11 @@ export class GraphService {
     const sums = new Map<string, { sum: number[]; n: number }>();
     for (let at = 0; at < revisionIds.length; at += MEAN_BATCH) {
       const batch = revisionIds.slice(at, at + MEAN_BATCH);
-      const rows = await this.arcade.query<{ revisionId: string; embedding: number[] }>(
-        'sql',
-        `SELECT revisionId, embedding FROM Chunk WHERE workspaceId = :workspaceId AND revisionId IN :revisionIds LIMIT ${CHUNK_SCAN_LIMIT}`,
+      const rows = await this.allChunkRows<{ revisionId: string; embedding: number[] }>(
+        'revisionId, embedding',
+        'workspaceId = :workspaceId AND revisionId IN :revisionIds',
         { workspaceId, revisionIds: [...batch] },
       );
-      if (rows.length >= CHUNK_SCAN_LIMIT) this.logger.error(`Mean embeddings hit the ${CHUNK_SCAN_LIMIT}-chunk scan cap; some pages are averaged over part of their chunks.`);
       for (const r of rows) {
         if (!Array.isArray(r.embedding) || r.embedding.length === 0) continue;
         const acc = sums.get(r.revisionId);
@@ -1224,41 +1414,58 @@ export class GraphService {
   }
 
   /**
-   * Phase 1 semantic search: fetch workspace-scoped chunks and rank by cosine
-   * similarity in Node. Swap the body for ArcadeDB HNSW later — same signature.
+   * Semantic search over the live projection (or, with `at`, the chunks valid
+   * then): the `k` chunks nearest `queryEmbedding` that the reader may see.
    *
-   * `acl` (#76) keeps out chunks of pages the reader may not open — in the
-   * query when the list is short enough, so the scan cap counts only what
-   * they may see, otherwise before ranking.
+   * #304: answered by the HNSW index, with the workspace, the live (or as-of)
+   * predicate and the ACL pushed **into** the nearest-neighbour search, so a
+   * chunk of another workspace, a non-live revision or a denied page never
+   * takes a slot. ArcadeDB returns `k` rows, not the corpus. `aclAdmits` still
+   * runs last — the stores only prefilter, PG and this check decide.
+   *
+   * Until an index of the query's dimension exists (first boot on this
+   * version, a dimension change mid-rebuild) it falls back to the scan.
    */
   async searchChunks(workspaceId: string, queryEmbedding: number[], k: number, acl: DocumentAclFilter, at?: TemporalPoint): Promise<ChunkHit[]> {
-    const pushed = aclClause(acl);
     // #81: as of a point, the chunks that were each page's content then.
     const asOf = at ? asOfChunkClause(at) : null;
-    const rows = await this.arcade.query<{
-      chunkId: string;
-      documentId: string;
-      revisionId: string;
-      text: string;
-      headingPath: string[];
-      embedding: number[];
-    }>(
-      'sql',
-      `SELECT chunkId, documentId, revisionId, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId AND ${asOf?.sql ?? LIVE}${pushed?.sql ?? ''} LIMIT ${CHUNK_SCAN_LIMIT}`,
-      { workspaceId, ...pushed?.params, ...asOf?.params },
-    );
+    const pre = annAclClause(acl);
+    const hits = await this.nearestChunks(queryEmbedding, k, `workspaceId = :workspaceId AND ${asOf?.sql ?? LIVE}${pre?.sql ?? ''}`, {
+      workspaceId,
+      ...pre?.params,
+      ...asOf?.params,
+    });
+    if (hits) return hits.filter((h) => aclAdmits(acl, h.documentId)).slice(0, k);
 
-    // Ranking is exhaustive-scan, so hitting the cap does not degrade results
-    // gracefully — it ranks an arbitrary subset and returns it as if it were
-    // the best match. Say so loudly; the fix is a native vector index.
+    const pushed = aclClause(acl);
+    return this.scanChunks(
+      `workspaceId = :workspaceId AND ${asOf?.sql ?? LIVE}${pushed?.sql ?? ''}`,
+      { workspaceId, ...pushed?.params, ...asOf?.params },
+      queryEmbedding,
+      k,
+      acl,
+    );
+  }
+
+  /**
+   * The pre-#304 exhaustive ranking, kept as the fallback for when the index
+   * cannot answer: every candidate vector crosses the wire and is ranked by
+   * cosine here. A vector whose length differs from the query's is skipped.
+   */
+  private async scanChunks(where: string, params: Record<string, unknown>, queryEmbedding: number[], k: number, acl: DocumentAclFilter): Promise<ChunkHit[]> {
+    const rows = await this.arcade.query<NeighbourRow & { embedding: number[] }>(
+      'sql',
+      `SELECT chunkId, documentId, revisionId, text, headingPath, embedding FROM Chunk WHERE ${where} LIMIT ${CHUNK_SCAN_LIMIT}`,
+      params,
+    );
+    // An exhaustive scan does not degrade gracefully at the cap — it ranks an
+    // arbitrary subset and returns it as if it were the best match.
     if (rows.length >= CHUNK_SCAN_LIMIT) {
       this.logger.error(
-        `Workspace ${workspaceId} has at least ${CHUNK_SCAN_LIMIT} chunks — the scan cap. ` +
-          'Vector search is now ranking an arbitrary subset and silently missing matches. ' +
-          'Move to an ArcadeDB HNSW index before trusting these results.',
+        `Vector search scanned ${CHUNK_SCAN_LIMIT} chunks — the fallback's cap — and is ranking an arbitrary subset. ` +
+          'The chunk vector index is missing or of another dimension; the worker builds it on boot (ensureSchema).',
       );
     }
-
     return rows
       .filter((r) => aclAdmits(acl, r.documentId))
       .filter((r) => Array.isArray(r.embedding) && r.embedding.length === queryEmbedding.length)
@@ -1275,59 +1482,43 @@ export class GraphService {
   }
 
   /**
-   * Every live chunk of a workspace with its stored vector, unranked — the
-   * corpus `searchChunks` scans, handed over whole so the capture calibration
-   * backtest (#234) can score many probes against one read instead of one
-   * full scan per probe. Same scan cap, same ACL pushdown.
+   * Every live chunk of a workspace with its stored vector, unranked — handed
+   * over whole so the capture calibration backtest (#234) can score many
+   * probes against one read. Paged, not capped (#304); same ACL pushdown.
    */
   async liveChunks(workspaceId: string, acl: DocumentAclFilter): Promise<StoredChunk[]> {
     const pushed = aclClause(acl);
-    const rows = await this.arcade.query<StoredChunk>(
-      'sql',
-      `SELECT chunkId, documentId, idx, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId AND ${LIVE}${pushed?.sql ?? ''} LIMIT ${CHUNK_SCAN_LIMIT}`,
+    const rows = await this.allChunkRows<StoredChunk>(
+      'chunkId, documentId, idx, text, headingPath, embedding',
+      `workspaceId = :workspaceId AND ${LIVE}${pushed?.sql ?? ''}`,
       { workspaceId, ...pushed?.params },
     );
-    if (rows.length >= CHUNK_SCAN_LIMIT) this.logger.error(`Workspace ${workspaceId} has at least ${CHUNK_SCAN_LIMIT} chunks — the scan cap.`);
     return rows
       .filter((r) => aclAdmits(acl, r.documentId) && Array.isArray(r.embedding))
-      .map((r) => ({ ...r, idx: r.idx ?? 0, text: r.text ?? '', headingPath: r.headingPath ?? [] }));
+      .map((r) => ({
+        chunkId: r.chunkId,
+        documentId: r.documentId,
+        idx: r.idx ?? 0,
+        text: r.text ?? '',
+        headingPath: r.headingPath ?? [],
+        embedding: r.embedding,
+      }));
   }
 
   /**
    * Semantic search over the chunks of the given revisions only, live or not —
    * a published version pins revisions that may since have become history
    * (issue #77 phase 3, a site's Ask). The caller owns the list, so nothing
-   * outside it can rank; the workspace predicate still applies.
+   * outside it can rank; the workspace predicate still applies. Through the
+   * index with the revision list as the filter (#304), else the scan.
    */
   async searchRevisionChunks(workspaceId: string, revisionIds: readonly string[], queryEmbedding: number[], k: number): Promise<ChunkHit[]> {
     if (!revisionIds.length) return [];
-    const rows = await this.arcade.query<{
-      chunkId: string;
-      documentId: string;
-      revisionId: string;
-      text: string;
-      headingPath: string[];
-      embedding: number[];
-    }>(
-      'sql',
-      `SELECT chunkId, documentId, revisionId, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId AND revisionId IN :revisionIds LIMIT ${CHUNK_SCAN_LIMIT}`,
-      { workspaceId, revisionIds: [...revisionIds] },
-    );
-    if (rows.length >= CHUNK_SCAN_LIMIT) {
-      this.logger.error(`Revision-scoped vector search hit the ${CHUNK_SCAN_LIMIT}-chunk scan cap; ranking an arbitrary subset.`);
-    }
-    return rows
-      .filter((r) => Array.isArray(r.embedding) && r.embedding.length === queryEmbedding.length)
-      .map((r) => ({
-        chunkId: r.chunkId,
-        documentId: r.documentId,
-        revisionId: r.revisionId,
-        text: r.text ?? '',
-        headingPath: r.headingPath ?? [],
-        score: cosine(queryEmbedding, r.embedding),
-      }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, k);
+    const where = 'workspaceId = :workspaceId AND revisionId IN :revisionIds';
+    const params = { workspaceId, revisionIds: [...revisionIds] };
+    const hits = await this.nearestChunks(queryEmbedding, k, where, params);
+    if (hits) return hits.slice(0, k);
+    return this.scanChunks(where, params, queryEmbedding, k, UNFILTERED);
   }
 
   /**

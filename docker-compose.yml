@@ -59,7 +59,13 @@ services:
       retries: 10
 
   arcadedb:
-    image: arcadedata/arcadedb:latest
+    # Pinned by tag and digest (#304): vector search runs on this version's
+    # LSM_VECTOR index and `vector.neighbors(…, { filter: (SELECT @rid …) })`.
+    # 26.9.x snapshots reject a subquery filter ("must contain RIDs"), and
+    # `latest` is a nightly snapshot, so a query feature cannot float with it.
+    # A volume written by 26.9.1-SNAPSHOT or 26.11.1-SNAPSHOT opens on it.
+    # Keep docker-compose.prod.yml in step.
+    image: arcadedata/arcadedb:26.10.2@sha256:7a498ebbbb9a5f02f7d43487c13b6632f83eb7fff345968baf220ac9266fd791
     ports: ["2480:2480", "2424:2424"]
     environment:
       JAVA_OPTS: >-

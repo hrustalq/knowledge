@@ -63,9 +63,110 @@ re-extraction or withdrawn by a person is expired, never deleted.
 
 ## Vector search
 
-Phase 1 similarity is **cosine computed in Node**, inside
-`GraphService.searchChunks`. That is deliberately unclever: it keeps the vector
-store swappable, and moving to native HNSW should touch only that one method.
+`GraphService.searchChunks` and `searchRevisionChunks` ask ArcadeDB for the
+nearest chunks through an HNSW index, `LSM_VECTOR` on `Chunk.embedding` with
+COSINE similarity (#304). ArcadeDB returns the `k` rows, never the corpus.
+
+```sql
+SELECT chunkId, documentId, revisionId, workspaceId, text, headingPath, distance
+FROM (SELECT expand(vector.neighbors('Chunk[embedding]', :queryVector, :k,
+  { efSearch: 400, filter: (SELECT @rid FROM Chunk WHERE workspaceId = :workspaceId AND <live | as-of> <acl>) })))
+WHERE workspaceId = :workspaceId
+```
+
+- **Every restriction is inside the search.** `filter` restricts the HNSW walk
+  to the RIDs its subquery returns, so a chunk of another workspace, a
+  non-live revision or a denied page never takes one of the `k` slots. The
+  subquery carries the workspace predicate, `LIVE` (or `asOfChunkClause`) and
+  the ACL: the id list while it fits `ACL_DENY_LIST_MAX`, and past it a
+  member's `aclNodes` stamps (the OpenSearch rule). The outer `WHERE` repeats
+  the workspace, and `aclAdmits` still runs last. PG decides after that, as
+  [§Page restrictions](#page-restrictions) says. `searchRevisionChunks` filters
+  on its revision list instead of `live`.
+- **`score` is cosine.** ArcadeDB's COSINE `distance` is `1 - cosine` for any
+  vectors, normalized or not (checked against a cosine computed outside it).
+  So `score = 1 - distance` is the number the scan produced, and the capture
+  and duplicate thresholds calibrated on it still hold.
+- **`efSearch` is 400** (`VECTOR_EF_SEARCH`, never below `k`). The index's
+  adaptive default lost recall on the demo corpus. The measurement is below.
+- **One index, one dimension.** The worker builds it in `ensureSchema` for
+  `EMBEDDINGS_DIM`, after declaring `Chunk.embedding` as `ARRAY_OF_FLOATS`.
+  Stored rows are not converted; the index reads them as they are. When
+  `EMBEDDINGS_DIM` changes, the worker drops the index and builds it again for
+  the new dimension. ArcadeDB skips every stored vector of another length
+  while building, keeps those rows in the type unindexed (updating their other
+  fields still works), and refuses to insert one afterwards. So during a
+  reindex the vector leg ranks only what is already re-embedded and BM25
+  finds the rest, as before, and a stale vector is never compared. One
+  property per dimension (`embedding_1024`) was the other option. It was not
+  chosen because it keeps two indexes for a state that lasts one reindex.
+- **Until the index exists, it scans.** The API learns the index's dimension
+  from `schema:types` and caches it for 30 s. If there is no index, if the
+  index has another dimension (the API restarted before the worker rebuilt
+  it), or if ArcadeDB rejects the query, `searchChunks` falls back to the
+  pre-#304 scan: up to `CHUNK_SCAN_LIMIT` (5,000) vectors ranked in Node, with
+  an error logged at the cap. `ensureSchema` never fails the worker's boot
+  over the index.
+- **Readers that need every vector page instead of capping.** `liveChunks`
+  (the capture calibration backtest) and `meanRevisionEmbeddings` (the
+  doc-quality duplicate check) read the matching RIDs first, then load them
+  1,000 at a time by RID with the predicate applied again. Keyset paging
+  (`@rid > :last ORDER BY @rid`) was tried and dropped: on 26.10.2 that order
+  is not global once the planner splits `LIVE`'s `OR` into two branches, and
+  a page boundary skipped rows.
+- **ArcadeDB is pinned to 26.10.2** by tag and digest in both compose files.
+  Its `filter` accepts a subquery. The `26.9.1-SNAPSHOT` the dev stack ran
+  rejects one ("must contain RIDs").
+
+### Pre-filter: one RID subquery, not a bucket per workspace
+
+Two layouts were considered. (a) is built; (b) was not measured.
+
+- **(a)** `filter: (SELECT @rid FROM Chunk WHERE workspaceId = …)`. No layout
+  change. The subquery reads RIDs through the `workspaceId` index, without
+  vectors. When the filter is narrower than ArcadeDB's
+  `vectorIndex.prefilterMaxSelectivity` (20% of the index), ArcadeDB skips
+  the graph walk and scores the filtered set exactly. That is why a small
+  workspace sharing a server with a large one gets recall 1.0 below.
+- **(b)** `partitioned(workspaceId)` buckets, one HNSW graph per workspace.
+  On the demo corpus one workspace holds 5,936 of 6,266 chunks, so a
+  partition would narrow nothing for it, and small workspaces already take
+  the exact path. It also means rewriting every Chunk into new buckets.
+  Revisit it if a second large tenant shares a server and (a)'s p95 grows.
+
+### Measurement (2026-10-20)
+
+**Corpus.** The local dev stack's chunks were copied read-only into a
+throwaway ArcadeDB 26.10.2 container with production's heap (`-Xmx1g`), on a
+laptop: 6,266 bge-m3 chunks (1024-d), 5,936 of them matching the demo
+workspace's live predicate (4,191 stamped live, 1,745 never stamped). The
+vectors are real, but this is not production's corpus. **Queries:** the first
+120 demo page titles by id, embedded with bge-m3, which is the backtest's
+known-item query. **Exact:** cosine over every eligible chunk. Latency is the
+ArcadeDB round trip from Node; embedding the query is not included.
+
+| Read                                        | rows  | response | p50    | p95      | recall vs exact          |
+| ------------------------------------------- | ----- | -------- | ------ | -------- | ------------------------ |
+| Before: the scan, as `searchChunks` read it | 5,000 | 71.0 MB  | 854 ms | 1,552 ms | arbitrary 5,000 of 5,936 |
+| Index, adaptive efSearch, k = 10            | 10    | 18 KB    | 32 ms  | 55 ms    | @10: 0.947 (min 0.2)     |
+| Index, efSearch 200, k = 10                 | 10    | 18 KB    | 26 ms  | 32 ms    | @10: 0.978 (min 0.6)     |
+| **Index, efSearch 400, k = 10**             | 10    | 18 KB    | 27 ms  | 32 ms    | **@10: 0.988** (min 0.8) |
+| Index, efSearch 400, k = 50 (5× over-fetch) | 50    | 103 KB   | 30 ms  | 35 ms    | @50: 0.993               |
+| Index, efSearch 1600, k = 10                | 10    | 18 KB    | 29 ms  | 35 ms    | @10: 0.998               |
+| Index, 85-chunk workspace, k = 10           | 10    | 4 KB     | 3 ms   | 5 ms     | @10: 1.0                 |
+
+- No row from another workspace came back in any run.
+- Building the index over 6,266 vectors took 1.8 s.
+- **Concurrency, same 1 GB heap.** Two loops of the old scan: 1 of 20 reads
+  died with `OutOfMemoryError: Java heap space`. Four loops: 17 of 20. The
+  index read (k = 50) in four loops of 50 reads: no failures, p95 91 ms.
+  Eight loops: no failures, p95 125 ms.
+
+**Still to run:** `make backtest` (recall@1 against the 63.3% of 2026-10-15)
+and `make backtest ARGS="--captures"` on the dev stack once it runs the pinned
+image, and the same measurement on production's corpus after the deploy.
+`apps/api/test/vector-index.e2e-spec.ts` checks the behaviour above against a
+real ArcadeDB (set `ARCADE_VECTOR_TEST_URL` to a throwaway server).
 
 ## BM25, behind a provider token
 
@@ -140,8 +241,8 @@ does every caller: the HTTP and MCP routes pass the person's, a system job passe
   rewrites them for pages whose `acl_version` is ahead of
   `acl_stamped_version`, guarded on the version it stamped; nothing is
   re-embedded. OpenSearch falls back to `must_not aclNodes ∈ denied` past the
-  list cap; nothing else reads the stamps yet. They are groundwork for an HNSW
-  pre-filter.
+  list cap, and so does the vector index's pre-filter
+  ([§Vector search](#vector-search)).
 - `getDocumentRelations` takes no filter: it is per page, reached through a
   route the guard has already checked, and its edges point at entities, not
   pages.
@@ -314,17 +415,20 @@ withholds a community whose pages the reader may not all open.
 
 ## Limits
 
-- Cosine in Node is O(chunks) per query; it is correct, not fast, and is the
-  first thing to replace under load.
+- Vector search is approximate: recall@10 0.988 against the exact ranking on
+  the demo corpus at `efSearch` 400. A larger corpus may need a wider beam.
+- Until the worker has built the vector index, the vector leg scans at most
+  `CHUNK_SCAN_LIMIT` chunks, as it did before #304.
 - The 5× over-fetch is a heuristic. A filter matching very few documents in a
   large workspace can still return a short page. The same holds for a reader
   who can open only a small slice of a large workspace: the one refill round is
   capped at `SEARCH_ACL_MAX_FETCH`.
-- Past `ACL_DENY_LIST_MAX` ids, a deny or allow list is applied to what the
-  vector leg scanned (at most `CHUNK_SCAN_LIMIT` chunks), not inside the query,
-  so recall can fall for a reader who sees a small slice of a large workspace.
-  The real fix is an HNSW index pre-filtered on the `aclNodes` stamps, which
-  exist for that reason.
+- Past `ACL_DENY_LIST_MAX` ids, a member's deny list reaches the vector index
+  as the `aclNodes` stamps, which lag a restriction change by one re-stamp
+  tick. A guest's allow list past the cap is not pushed at all: the index
+  returns `k` hits and `aclAdmits` drops the hidden ones. Recall can therefore
+  fall for a guest who sees a small slice of a large workspace, within
+  `SEARCH_ACL_MAX_FETCH`'s one refill round.
 - `make backtest ARGS="--generate --as <userId>"` measures known-item recall
   through one person's scope. It asks only about the pages that person can
   open, so a restricted page is never counted as a miss. Run it beside the

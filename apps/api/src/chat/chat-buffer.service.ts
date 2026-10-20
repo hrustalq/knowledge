@@ -19,6 +19,19 @@ export interface BufferedThread {
   consumed: string[];
 }
 
+/** One listening thread with messages its automatic harvest (#340) has not read. */
+export interface ListenedThread {
+  bindingId: string;
+  /** The forum topic; '' outside one. */
+  topicKey: string;
+  /** Kept messages newer than the mark and the switch. */
+  fresh: number;
+  /** `created_at` of the newest of them. */
+  newestAt: Date;
+  /** The mark as read; null when this thread was never harvested automatically. */
+  through: Date | null;
+}
+
 /**
  * Where a Telegram harvest (#82, phase 3) gets its thread, since Telegram has
  * no thread to fetch: a listening group's kept messages, or what a person
@@ -163,6 +176,56 @@ export class ChatBufferService {
       topicId: m.topicId,
       replyTo: { messageId: inbound.messageId, authorId: m.authorId, text: m.text, at: m.sentAt, fromBot: false },
     };
+  }
+
+  /**
+   * The automatic harvest's view of the buffer (#340): per listening thread of
+   * a binding with auto-harvest on (a group, or one forum topic of it), how
+   * many messages were kept since both the switch and the last automatic
+   * harvest's mark, and when the newest of them arrived. Only threads with
+   * something new come back; whether one is due is `isThreadDue`'s to say.
+   * `created_at` throughout, the server's clock, never Telegram's `sent_at`.
+   * `newestAt` is rounded up to the millisecond: the column keeps microseconds
+   * and a JS Date does not, so a mark at the truncated value would count the
+   * newest message as new again, and read past it.
+   */
+  async listenedThreads(): Promise<ListenedThread[]> {
+    return this.prisma.$queryRaw<ListenedThread[]>`
+      SELECT m.binding_id AS "bindingId",
+             COALESCE(m.topic_id, '') AS "topicKey",
+             COUNT(*)::int AS "fresh",
+             date_trunc('milliseconds', MAX(m.created_at)) + interval '1 millisecond' AS "newestAt",
+             k.harvested_through AS "through"
+        FROM chat_buffered_messages m
+        JOIN chat_channel_bindings b ON b.id = m.binding_id
+        JOIN chat_integrations i ON i.id = b.integration_id
+        LEFT JOIN chat_harvest_marks k ON k.binding_id = m.binding_id AND k.topic_key = COALESCE(m.topic_id, '')
+       WHERE b.listening AND b.auto_harvest_by IS NOT NULL AND i.enabled
+         AND m.created_at > b.auto_harvest_at
+         AND (k.harvested_through IS NULL OR m.created_at > k.harvested_through)
+       GROUP BY m.binding_id, COALESCE(m.topic_id, ''), k.harvested_through`;
+  }
+
+  /**
+   * What an automatic harvest of `thread` reads: the kept messages after its
+   * mark (and the switch), up to the newest the sweep saw, oldest first and
+   * capped like every other harvest (the first and the newest). The rows stay:
+   * a group's buffer is only ever emptied by the TTL, listening off or /forget.
+   */
+  async listenedThread(thread: ListenedThread, after: Date, max: number): Promise<{ thread: ChatThread; firstMessageId: string | null }> {
+    const where = {
+      bindingId: thread.bindingId,
+      topicId: thread.topicKey || null,
+      createdAt: { gt: after, lte: thread.newestAt },
+    };
+    const select = { externalMessageId: true, authorId: true, text: true, sentAt: true } as const;
+    let rows = (await this.prisma.chatBufferedMessage.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: max, select })).reverse();
+    const truncated = thread.fresh > rows.length;
+    if (truncated) {
+      const first = await this.prisma.chatBufferedMessage.findFirst({ where, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select });
+      if (first) rows = [first, ...rows.slice(-(max - 1))];
+    }
+    return { thread: { messages: rows.map(toMessage), url: null, truncated }, firstMessageId: rows[0]?.externalMessageId ?? null };
   }
 
   /** Forwards a harvest has read: gone, so the next `/capture` starts from nothing. */

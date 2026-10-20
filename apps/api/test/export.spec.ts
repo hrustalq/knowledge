@@ -76,6 +76,7 @@ function jobRow(over: Partial<ExportJob> = {}): ExportJob {
     error: null,
     locale: 'en',
     requestedBy: ME,
+    shareLinkId: null,
     createdAt: new Date('2026-10-13T10:00:00Z'),
     startedAt: null,
     completedAt: null,
@@ -130,7 +131,8 @@ describe('ExportService.create*', () => {
       response: { reason: 'export.formatUnavailable' },
     });
     expect(prisma.exportJob.create).not.toHaveBeenCalled();
-    expect(svc.capabilities().formats).toEqual({ zip: true, html: true, pdf: false });
+    // Word needs nothing beyond the worker, so it is always on.
+    expect(svc.capabilities().formats).toEqual({ zip: true, html: true, pdf: false, docx: true });
   });
 
   it('offers PDF once GOTENBERG_URL is set', async () => {
@@ -162,6 +164,18 @@ describe('ExportService.create*', () => {
     expect(created[0]).toMatchObject({ scope: 'subtree', documentId: DOC, projectId: null, format: 'html', branch: 'next', title: 'Install Guide', requestedBy: ME });
     expect(producer.enqueue).toHaveBeenCalledWith('job-new');
     expect(job).toMatchObject({ id: 'job-new', status: 'queued' });
+  });
+
+  it('a share link’s job (#161): the link’s scope, the link as its owner, the creator as attribution only', async () => {
+    const { svc, created, scope } = service();
+    const share = { id: 'share-1', workspaceId: WS, documentId: DOC, includeSubtree: true, createdBy: SOMEONE };
+    const row = await svc.createForShareLink(share, 'zip');
+    expect(created[0]).toMatchObject({ scope: 'subtree', documentId: DOC, projectId: null, branch: null, requestedBy: SOMEONE, shareLinkId: 'share-1' });
+    // Counted as the link's reader, never as its creator.
+    expect(scope.documents).toHaveBeenCalledWith(expect.objectContaining({ requester: { shareLinkId: 'share-1' }, scope: 'subtree' }));
+    expect(row.shareLinkId).toBe('share-1');
+    await svc.createForShareLink({ ...share, includeSubtree: false }, 'zip');
+    expect(created[1]).toMatchObject({ scope: 'page' });
   });
 
   it('leaves a failed row, not a queued one, when the queue refuses the job', async () => {
@@ -197,10 +211,28 @@ describe('ExportService: who sees an export', () => {
   it('lists a member’s own exports and an admin’s whole workspace', async () => {
     const member = service(jobRow());
     await member.svc.list(WS, principal(ME));
-    expect(member.prisma.exportJob.findMany.mock.calls[0][0]).toMatchObject({ where: { workspaceId: WS, requestedBy: ME } });
+    // A share link reader's job is not its creator's history (#161).
+    expect(member.prisma.exportJob.findMany.mock.calls[0][0]).toMatchObject({ where: { workspaceId: WS, requestedBy: ME, shareLinkId: null } });
     const admin = service(jobRow(), [ME]);
     await admin.svc.list(WS, principal(ME));
     expect(admin.prisma.exportJob.findMany.mock.calls[0][0].where).toEqual({ workspaceId: WS });
+  });
+
+  it('a share link’s job is that link’s alone: another link, a member’s job and its creator all miss (#161)', async () => {
+    const row = jobRow({ shareLinkId: 'share-1', requestedBy: ME, status: 'completed', s3Key: 'k', expiresAt: new Date(Date.now() + 3_600_000) });
+    const { svc } = service(row);
+    const link = { id: 'share-1', includeSubtree: true };
+    await expect(svc.shareLinkJob(row.id, link)).resolves.toMatchObject({ id: row.id });
+    await expect(svc.shareLinkDownload(row.id, link)).resolves.toMatchObject({ url: 'https://minio/signed' });
+    await expect(svc.shareLinkJob(row.id, { ...link, id: 'share-2' })).rejects.toMatchObject({ status: 404 });
+    await expect(svc.shareLinkDownload(row.id, { ...link, id: 'share-2' })).rejects.toMatchObject({ status: 404 });
+    await expect(service(jobRow()).svc.shareLinkJob('job-1', link)).rejects.toMatchObject({ status: 404 });
+    // The link narrowed to its page since: the subtree file is no longer handed out.
+    await expect(svc.shareLinkDownload(row.id, { ...link, includeSubtree: false })).rejects.toMatchObject({ status: 404 });
+    await expect(service(jobRow({ ...row, scope: 'page' })).svc.shareLinkJob(row.id, { ...link, includeSubtree: false })).resolves.toBeDefined();
+    // The creator is attribution, not the owner; an admin still sees it.
+    await expect(svc.get(row.id, principal(ME))).rejects.toMatchObject({ status: 403 });
+    await expect(service(row, [SOMEONE]).svc.get(row.id, principal(SOMEONE))).resolves.toMatchObject({ id: row.id });
   });
 
   it('answers 409 while the file is being made and 410 once it is gone', async () => {
@@ -226,6 +258,7 @@ describe('ExportService: who sees an export', () => {
   it('names files from the title, marks an HTML bundle and never yields an empty name', () => {
     expect(exportFilename('Install Guide', 'pdf')).toBe('install-guide.pdf');
     expect(exportFilename('Install Guide', 'html')).toBe('install-guide-html.zip');
+    expect(exportFilename('Install Guide', 'docx')).toBe('install-guide.docx');
     expect(exportFilename('Руководство', 'zip')).toBe('руководство.zip');
     expect(exportFilename('???', 'zip')).toBe('export.zip');
   });
@@ -271,6 +304,24 @@ describe('ExportScopeService', () => {
     expect(findMany.mock.calls[0][0]).toMatchObject({
       where: { projectId: 'p-1', AND: [{ AND: [{ NOT: { restrictedBy: { hasSome: ['hidden'] } } }] }] },
     });
+  });
+
+  it('holds what a share link shows, not what its creator may open (#161)', async () => {
+    const findFirst = vi.fn(async () => ({ id: DOC, workspaceId: WS, path: `/${DOC}/`, archivedAt: null, parentId: null, title: 'Root', position: 0, category: 'guide' }));
+    const findMany = vi.fn(async () => []);
+    const { scope, access, permissions } = scopeService({ document: { findFirst, findMany } });
+    const reader = { shareLinkId: 'share-1' };
+    await scope.documents({ workspaceId: WS, scope: 'subtree', documentId: DOC, projectId: null, requester: reader });
+    expect(access.principalFor).not.toHaveBeenCalled();
+    expect(permissions.scopeFor).not.toHaveBeenCalled();
+    // Nothing restricted on the chain, for the root and the subtree alike — the share tree's rule.
+    expect(findFirst.mock.calls[0][0]).toMatchObject({ where: { id: DOC, AND: [{ restrictedBy: { isEmpty: true } }] } });
+    expect(findMany.mock.calls[0][0]).toMatchObject({
+      where: { workspaceId: WS, archivedAt: null, path: { startsWith: `/${DOC}/` }, AND: [{ restrictedBy: { isEmpty: true } }] },
+    });
+    // A link names a page: a project scope through one is empty.
+    await expect(scope.documents({ workspaceId: WS, scope: 'project', documentId: null, projectId: 'p-1', requester: reader })).resolves.toEqual([]);
+    expect(findMany).toHaveBeenCalledTimes(1);
   });
 
   it('exports one page as itself, and nothing for a root in another workspace', async () => {
@@ -431,7 +482,7 @@ function buildHarness(opts: { row?: Partial<ExportJob>; gotenberg?: boolean; ren
     events as never,
     configOf() as never,
   );
-  return { svc, row: () => row, written, renderer, gotenberg, events, storage };
+  return { svc, row: () => row, written, renderer, gotenberg, events, storage, scope };
 }
 
 describe('ExportBuildService', () => {
@@ -457,6 +508,14 @@ describe('ExportBuildService', () => {
     expect(h.events.publish).toHaveBeenCalledWith(expect.objectContaining({ type: 'export.completed', userId: ME, subjectId: 'job-1' }));
   });
 
+  it('builds a share link’s job from the link’s scope and tells nobody (#161)', async () => {
+    const h = buildHarness({ row: { shareLinkId: 'share-1' } });
+    await h.svc.build('job-1');
+    expect(h.row().status).toBe('completed');
+    expect(h.scope.documents).toHaveBeenCalledWith(expect.objectContaining({ requester: { shareLinkId: 'share-1' } }));
+    expect(h.events.publish).not.toHaveBeenCalled();
+  });
+
   it('never rebuilds an export that already finished', async () => {
     const h = buildHarness({ row: { status: 'completed' } });
     await h.svc.build('job-1');
@@ -479,6 +538,23 @@ describe('ExportBuildService', () => {
     ]);
     expect(h.written[0]).toMatchObject({ key: `workspaces/${WS}/exports/job-1/install-guide.pdf`, type: 'application/pdf' });
     expect(h.row().status).toBe('completed');
+  });
+
+  it('writes a Word document in the worker, without the renderer or Gotenberg, reading only the images', async () => {
+    const h = buildHarness({ row: { format: 'docx' }, gotenberg: false });
+    await h.svc.build('job-1');
+    expect(h.row()).toMatchObject({ status: 'completed', pageCount: 2 });
+    expect(h.renderer.render).not.toHaveBeenCalled();
+    expect(h.gotenberg.htmlToPdf).not.toHaveBeenCalled();
+    expect(h.storage.getObjectBytes.mock.calls.map((c) => c[0])).toEqual(['k-img']);
+    expect(h.written[0]).toMatchObject({
+      key: `workspaces/${WS}/exports/job-1/install-guide.docx`,
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const xml = strFromU8(unzipSync(h.written[0].bytes)['word/document.xml']);
+    // Frontmatter is not content, and both pages are there in reading order.
+    expect(xml).not.toContain('tags:');
+    expect(xml.indexOf('Install body')).toBeGreaterThan(xml.indexOf('>Guide<'));
   });
 
   it('fails a PDF with formatUnavailable when Gotenberg went away after it was queued', async () => {

@@ -232,6 +232,9 @@ export const envSchema = z.object({
   PUBLIC_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(120),
   /** Password attempts per IP and link in 15 minutes before the unlock answers 429. */
   PUBLIC_UNLOCK_ATTEMPTS_PER_15MIN: z.coerce.number().int().positive().default(10),
+  /** Exports a share link's readers may ask for in an hour (#161): per IP and link, and per link. Fail-closed. */
+  PUBLIC_EXPORTS_PER_HOUR_PER_IP: z.coerce.number().int().positive().default(5),
+  PUBLIC_EXPORTS_PER_HOUR_PER_LINK: z.coerce.number().int().positive().default(30),
   /**
    * Published sites (docs/features/44, issue #77). PUBLIC_SITES_ENABLED is the
    * ceiling over the workspace's `allow_public_sites` switch: false refuses to
@@ -873,6 +876,18 @@ export const envSchema = z.object({
   HARVEST_FORWARD_WINDOW_SEC: z.coerce.number().int().min(10).default(120),
   /** Days a listening Telegram group's messages are kept, masked, for a harvest to read. */
   CHAT_LISTEN_TTL_DAYS: z.coerce.number().int().min(1).default(7),
+  /**
+   * Automatic harvest (#340): the ceiling over each binding's switch. Off, no
+   * thread is harvested by the sweeper whatever a binding asks for, and the
+   * settings page says so. HARVEST_ENABLED=false turns it off too.
+   */
+  HARVEST_AUTO_ENABLED: boolish(true),
+  /** Kept messages a listening thread needs, since its last automatic harvest, before it is due. */
+  HARVEST_AUTO_MIN_MESSAGES: z.coerce.number().int().min(2).default(8),
+  /** Minutes without a new kept message before a listening thread is due. */
+  HARVEST_AUTO_QUIET_MINUTES: z.coerce.number().int().min(1).default(60),
+  /** Automatic harvests one binding may run per sweeper tick (one model call each). */
+  HARVEST_AUTO_MAX_PER_TICK: z.coerce.number().int().min(0).default(1),
 
   /**
    * Interface + API language (docs/features/18). Also the fallback whenever a

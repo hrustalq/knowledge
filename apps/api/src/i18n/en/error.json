@@ -481,6 +481,7 @@
     "expiryInPast": "The expiry must be in the future",
     "rateLimited": "Too many requests — try again in a minute",
     "unlockRateLimited": "Too many password attempts — try again later",
+    "exportRateLimited": "Too many downloads asked for from this link — try again later",
     "locked": "This link is password-protected",
     "restricted": "A restricted page cannot be shared by link. Grant access to the people who need it instead"
   },
@@ -567,8 +568,10 @@
     "serverUrlNotHttps": "The messenger server must use https (http is allowed only with CHAT_ALLOW_PRIVATE_URLS)",
     "serverUrlPrivate": "{address} is on a private network; set CHAT_ALLOW_PRIVATE_URLS to allow it",
     "serverHostUnresolved": "{host} could not be resolved",
-    "listenTelegramOnly": "Keeping messages for harvesting is for Telegram groups only; Time threads are read whole",
-    "listenNoticeFailed": "The bot could not tell the group it keeps messages, so nothing is kept: {reason}"
+    "listenTelegramOnly": "Keeping messages for harvesting is for Telegram groups only; Time and Mattermost threads are read whole",
+    "listenNoticeFailed": "The bot could not tell the group it keeps messages, so nothing is kept: {reason}",
+    "autoHarvestNeedsListening": "Automatic harvest reads the messages a group keeps: turn on Keep messages first",
+    "autoHarvestNoticeFailed": "The bot could not tell the group its threads will be harvested automatically, so it stays off: {reason}"
   },
   "group": {
     "notFound": "Group {id} not found",

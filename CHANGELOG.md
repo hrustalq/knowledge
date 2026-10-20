@@ -72,6 +72,16 @@ in the pull request that introduces them — see
   the head. Viewer and editor on the page respectively, checked on every
   call; a read-only key is not offered the suggestion tool. The stdio MCP
   server does not offer either tool.
+- Word (`.docx`) export (#162). A page, a page and its subpages, or a project
+  can now be exported as one Word document from the export dialog, through
+  `POST /v1/documents/:id/exports` and `POST /v1/projects/:id/exports` with
+  `format: "docx"`, and from MCP `knowledge_export`. It needs no Gotenberg, so
+  `GET /v1/exports/capabilities` always offers it. Headings are Word heading
+  styles, so the navigation pane works. Lists, tables, code, links and the
+  export's own images are kept, and images from the web stay links. Callouts
+  and expands become shaded blocks. Each page starts on a new sheet, and an
+  export of more than one page opens with a title page and contents. Mermaid
+  diagrams stay as their source in a code block.
 - The server side of real-time co-editing (#80, phase 1), off by default. With
   `COLLAB_ENABLED=true`, a `/v1/collab` WebSocket serves one shared Yjs draft
   per document branch. The draft is seeded once from the branch head, stored in
@@ -80,6 +90,22 @@ in the pull request that introduces them — see
   to it yet; that is phase 3. The editor's node specs now live in the new
   buildless package `@knowledge/editor-schema`, so the API builds the same
   schema the editor does.
+- A share link can let its readers download what it shows (#161). Tick
+  **Let readers download it** when creating the link, or flip **Downloads**
+  on an existing one in the page's Share menu; it is off by default and on no
+  existing link. The reader then gets a **Download** button that exports the
+  link's page, or the page and its subpages when the link includes them, as
+  ZIP, HTML or PDF (PDF only where Gotenberg is set up), without signing in.
+  The file contains exactly the pages the reader can open through the link,
+  never a restricted page and never more than the link's scope. A
+  password-protected link asks for its password first. Revoking the link or
+  switching downloads off stops even a finished file from downloading at
+  once. The job belongs to the link, not to a person: nobody gets an
+  inbox notification for it, and it is not in its creator's export history
+  (an admin's list on Exports still shows it). The new public routes are
+  `POST /v1/public/shares/:token/exports`, `GET …/exports/:id` and
+  `GET …/exports/:id/download`. `knowledge_share_page` takes
+  `allowDownload`.
 - Who may co-edit a draft, checked for as long as they stay (#80, phase 2).
   Joining `/v1/collab` now takes a single-use `kt_` ticket from
   `POST /v1/auth/url-ticket`; a session token or API key is refused there. An
@@ -141,6 +167,20 @@ in the pull request that introduces them — see
   and `DELETE /v1/documents/:id/drafts/:branchId`. `POST /:id/revisions` takes
   optional `collabDraftId` and `draftSnapshot`. Revisions in API responses now
   carry `coAuthorIds`, an empty list unless they came from a shared draft.
+- Knowledge health has an **Agents** tab for workspace admins, showing what
+  became of each agent's output (#305). A finding counts as accepted when the
+  merge request it was proposed as merged, or when nobody dismissed it within
+  14 days. It counts as dismissed when a person dismissed it or closed that
+  merge request. An upvoted answer counts as accepted and a downvoted one as
+  downvoted. Everything else is pending. Each row can be split by prompt hash
+  or by model. With fewer than 20 runs a cell shows a count ("4 of 9") rather
+  than a percentage. The same figures are at `GET /v1/agent-outcomes`
+  (admin). To make the split possible, every new agent run now records its
+  provider, model, a hash of its trusted prompt (instructions, skills,
+  styleguide and learnings, never page content) and the learnings it was
+  given. Every model call made during a run records the run, and every answer
+  vote records the model that wrote the answer, where the server knows it.
+  Nothing else changes: outcomes are computed when read and never stored.
 - The editor assistant's suggestions are shared in a co-edited page (#80,
   phase 5). Everyone in the draft sees a suggestion as it is written, credited
   to the agent and to the person who asked ("Reviewer · for Ada"), and anyone
@@ -166,6 +206,17 @@ in the pull request that introduces them — see
   is documented in `docs/features/56-realtime-coediting.md`, numbers included.
   It stays off by default (`COLLAB_ENABLED=false`) and is on in the hosted
   deployment, after a dogfood pass on the dev stack.
+- Mattermost bots (#343). **Settings → Chat bots → Connect a bot** now offers
+  Mattermost beside Telegram and Time: paste a bot account's access token and
+  your Mattermost server's address. The bot does everything a Time bot does:
+  it answers mentions and direct messages in the question's thread, takes
+  👍/👎 and Save, posts a bound channel's notifications, and harvests a thread
+  on `capture` (also `remember` or `запомни`) or 📌 (`pushpin`). Commands are
+  plain words, because Mattermost's client keeps a leading `/` for its own
+  slash commands. Time and Mattermost share one adapter, so a fix to one is a
+  fix to both. Buttons need the Mattermost server to reach `API_PUBLIC_URL`,
+  and on a private network its `AllowedUntrustedInternalConnections` must list
+  that host.
 - The graph records when each fact was true (#81, phase 1). Every chunk and
   every frontmatter, inferred and spec relation of a page revision now carries
   the interval its revision was the page's content: from the revision's
@@ -182,6 +233,20 @@ in the pull request that introduces them — see
   believed then, so a relation retracted since still shows. Each response
   echoes `resolvedAsOf`. A malformed value is a 400, an unknown tag or another
   workspace's revision a 404. Page permissions apply exactly as they do now.
+- A Telegram group that keeps its messages can be harvested automatically
+  (#340). A workspace admin turns on *Harvest quiet threads automatically* on
+  the group in Settings → Chat bots, and the bot tells the group first; if it
+  cannot, the switch stays off. From then on, a thread (the group, or one
+  forum topic) is harvested once it has `HARVEST_AUTO_MIN_MESSAGES` new kept
+  messages and nothing new for `HARVEST_AUTO_QUIET_MINUTES`, and again only
+  after something new is said in it. Nothing said before the switch went on
+  is read. The captures are proposed in the name of the admin who turned it
+  on, whose admin role is checked again on every harvest. Nothing is posted
+  in the group: that admin gets an inbox notification with the counts, and
+  the captures wait in the Captures inbox. Each harvest is one `harvest`
+  model call, counted against that admin's `HARVEST_RATE_PER_HOUR`, and at
+  most `HARVEST_AUTO_MAX_PER_TICK` run per group per minute. Turning keeping
+  off turns this off too. Off by default on every group.
 - Release tags (#81): named instants such as `v2.3` that `asOf=tag:<name>`
   resolves to. `GET /v1/release-tags` (viewer), `POST /v1/release-tags`
   (editor; a duplicate name is a 409) and `DELETE /v1/release-tags/:id`
@@ -507,6 +572,15 @@ in the pull request that introduces them — see
   the Vite dev proxy both do. A deployment that points `VITE_API_URL` at a
   different origin will see every attachment and avatar fail with 401, because
   the browser does not send the `kn_token` cookie there. (#102)
+- Migration `20261119100000_share_link_download` adds
+  `share_links.allow_download` (default `false`) and a nullable
+  `export_jobs.share_link_id` with an index. It is additive and reversible
+  under expand/contract: the previous release ignores both columns, so after
+  a rollback a reader's files show up in the link creator's Exports until
+  the export sweeper removes them. Two env vars, both with defaults:
+  `PUBLIC_EXPORTS_PER_HOUR_PER_IP` (`5` per address and link) and
+  `PUBLIC_EXPORTS_PER_HOUR_PER_LINK` (`30` per link). Both limits fail
+  closed: with Redis down, no reader can start an export. (#161)
 - Migration `20261118100000_chat_listening_buffer` adds
   `chat_channel_bindings.listening` (default `false`) and the
   `chat_buffered_messages` table. It is additive and survives a code
@@ -524,6 +598,17 @@ in the pull request that introduces them — see
   `HARVEST_MAX_MESSAGES` (`200`: the root and the newest replies) and
   `HARVEST_RATE_PER_HOUR` (`10` per person). The `harvester` agent appears
   under Settings → AI agents and can be switched off there. No migration.
+- Migration `20261120100000_chat_auto_harvest` adds the nullable
+  `chat_channel_bindings.auto_harvest_by` and `auto_harvest_at` columns and
+  the `chat_harvest_marks` table (#340). It is additive and survives a code
+  rollback; after a final rollback, drop the table and the two columns by
+  hand. Four env vars, each with a default, so nothing needs setting:
+  `HARVEST_AUTO_ENABLED` (`true`; `false` stops every automatic harvest
+  whatever a group's switch says, and the settings page says so),
+  `HARVEST_AUTO_MIN_MESSAGES` (`8`), `HARVEST_AUTO_QUIET_MINUTES` (`60`) and
+  `HARVEST_AUTO_MAX_PER_TICK` (`1` harvest per group per minute; `0` stops
+  the sweeper). The sweeper runs in the API, beside the chat answer sweeper,
+  only while `CHAT_ENABLED` and `HARVEST_ENABLED` are on.
 - Migration `20261117100000_chat_captures_into_agent_memory` adds a nullable
   `knowledge_captures.origin` column. It copies every `chat_captures` row into
   `knowledge_captures` under the same id, with its status, and then **drops
@@ -547,6 +632,12 @@ in the pull request that introduces them — see
   secret is empty, the reader key is derived from `SETTINGS_ENCRYPTION_KEY`,
   which production sets. No retention runs yet (phase 4), so the tables grow
   until then.
+- Migration `20261121100000_learning_ledger` adds nullable attribution
+  columns: `agent_runs.provider_id`, `model`, `prompt_hash` and
+  `learning_ids`; `ai_usage.agent_key` and `agent_run_id`;
+  `answer_feedback.provider_id` and `model`. There is no backfill, so rows
+  from before it read as unattributed. It is additive, so rolling back to the
+  previous image is safe. No new env vars. (#305)
 - New env var with a default: `ANALYTICS_READ_TIME_CAP_MS` (`1800000`), the
   most active read time one web view can record. No migration in #79
   phase 2.

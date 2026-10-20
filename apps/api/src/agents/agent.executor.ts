@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { HttpException, HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type AgentRun } from '@prisma/client';
@@ -56,6 +57,7 @@ import { AgentRegistryService, type ResolvedAgent } from './agent-registry.servi
 import { runCodeReadingLoop } from './code-reading-loop.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { AgentLearningsService } from '../ai/agent-learnings.service.js';
+import { withAgentRun } from '../ai/agent-run-context.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
 import { TemplatesService } from '../templates/templates.service.js';
@@ -234,9 +236,35 @@ export type AgentReporter = (update: {
  * and means a workspace with no model configured still gets the half of the
  * answer that never needed one.
  */
+/**
+ * What one run's prompt was built from (#305), collected as the executor
+ * renders it and stamped on the run at the end. `trusted` holds only text a
+ * person wrote or approved — skills, learnings, a styleguide — never page
+ * content, which every executor wraps untrusted in the user turn.
+ */
+interface RunLedger {
+  guidance: Promise<string> | null;
+  trusted: Set<string>;
+  learningIds: string[];
+}
+
+/**
+ * SHA-256 over a run's trusted prompt: the agent's instructions (the built-in
+ * prompt or its override) and the trusted parts, order-free and with empty
+ * parts dropped, so an agent with no skills hashes the same whether or not its
+ * executor asked for guidance. Untrusted content never reaches it — that is
+ * what makes two runs over different pages comparable as one prompt.
+ */
+export function promptHashOf(instructions: string, trusted: Iterable<string>): string {
+  const parts = [...new Set(trusted)].filter((p) => p.trim() !== '').sort();
+  return createHash('sha256').update(JSON.stringify([instructions, ...parts])).digest('hex');
+}
+
 @Injectable()
 export class AgentExecutor {
   private readonly logger = new Logger(AgentExecutor.name);
+  /** In-flight runs' ledgers, by run id. A run's entry lives from its first prompt to its stamp. */
+  private readonly ledgers = new Map<string, RunLedger>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -272,7 +300,15 @@ export class AgentExecutor {
    * agent explicitly names apply. Project-scoped learnings apply when the run
    * is about pages, or a connector, in that project.
    */
-  private async guidance(run: AgentRun, agent: ResolvedAgent): Promise<string> {
+  private guidance(run: AgentRun, agent: ResolvedAgent): Promise<string> {
+    // Rendered once per run, however many stages ask: the learnings stamped on
+    // the run (#305) must be the ones every one of its calls was given.
+    const ledger = this.ledgerOf(run);
+    ledger.guidance ??= this.renderGuidance(run, agent, ledger);
+    return ledger.guidance;
+  }
+
+  private async renderGuidance(run: AgentRun, agent: ResolvedAgent, ledger: RunLedger): Promise<string> {
     const [skills, projectIds] = await Promise.all([
       this.skills.forTurn(run.workspaceId, '', agent.skillIds),
       this.runProjects(run),
@@ -281,7 +317,53 @@ export class AgentExecutor {
       this.learnings.promptFor({ workspaceId: run.workspaceId, agentKey: agent.key, projectIds }),
       this.learnings.dismissedPrompt(run.workspaceId, agent.key),
     ]);
-    return this.skills.renderPrompt(skills) + learnings + dismissed;
+    const skillText = this.skills.renderPrompt(skills);
+    ledger.trusted.add(skillText);
+    ledger.trusted.add(learnings.prompt);
+    ledger.learningIds = learnings.learningIds;
+    // The dismissed block is not hashed: its titles are the agent's earlier
+    // words written from page content, quoted as data, and they change with
+    // every dismissal. Hashing them would split one prompt into many.
+    return skillText + learnings.prompt + dismissed;
+  }
+
+  /** The ledger of one run, created on first use. */
+  private ledgerOf(run: AgentRun): RunLedger {
+    let ledger = this.ledgers.get(run.id);
+    if (!ledger) {
+      ledger = { guidance: null, trusted: new Set(), learningIds: [] };
+      this.ledgers.set(run.id, ledger);
+    }
+    return ledger;
+  }
+
+  /** Trusted text a run's prompt carries besides its guidance — a styleguide's rules. */
+  private trust(run: AgentRun, part: string): void {
+    this.ledgerOf(run).trusted.add(part);
+  }
+
+  /**
+   * Stamps what produced the run (#305): the model, the prompt hash and the
+   * learnings rendered. Guarded on the run still being ours, like every write
+   * the processor makes, and never thrown: attribution is observability, and
+   * it must not fail a run that did its work.
+   */
+  private async stamp(run: AgentRun, agent: ResolvedAgent): Promise<void> {
+    const ledger = this.ledgers.get(run.id) ?? { guidance: null, trusted: new Set<string>(), learningIds: [] };
+    this.ledgers.delete(run.id);
+    try {
+      await this.prisma.agentRun.updateMany({
+        where: { id: run.id, status: 'running' },
+        data: {
+          providerId: agent.config.enabled ? agent.config.providerId : null,
+          model: agent.config.enabled ? agent.config.model || null : null,
+          promptHash: promptHashOf(agent.instructions, ledger.trusted),
+          learningIds: ledger.learningIds,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(`Agent run ${run.id} could not record its attribution: ${String(error)}`);
+    }
   }
 
   /** The projects a run is about: its pages', else its connector's. Empty for a workspace-wide run. */
@@ -328,6 +410,23 @@ export class AgentExecutor {
    * settings page calls) bills and authorises as that same person.
    */
   async run(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    // Every model call below is billed to this run (#305), and the run is
+    // stamped with what produced it whether it succeeds or fails.
+    return withAgentRun({ agentKey: agent.key, agentRunId: run.id }, async () => {
+      try {
+        return await this.dispatch(run, agent, principal, report);
+      } finally {
+        await this.stamp(run, agent);
+      }
+    });
+  }
+
+  private async dispatch(
     run: AgentRun,
     agent: ResolvedAgent,
     principal: Principal,
@@ -936,6 +1035,7 @@ export class AgentExecutor {
     if (!styleguide || enabledRules(styleguide.rules).length === 0) {
       return { summary: t('agent.lint.noStyleguide'), findings: [] };
     }
+    this.trust(run, JSON.stringify(styleguide.rules));
 
     await report({ stage: 'diff' });
     const target = mr.targetBranch.headRevisionId;
@@ -1037,6 +1137,7 @@ export class AgentExecutor {
       if (!rules) {
         rules = (await this.skills.effectiveStyleguide(run.workspaceId, projectId))?.rules ?? [];
         styleguides.set(projectId, rules);
+        if (rules.length > 0) this.trust(run, JSON.stringify(rules));
       }
       return rules;
     };

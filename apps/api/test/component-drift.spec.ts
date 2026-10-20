@@ -267,7 +267,7 @@ describe('the sentinel with component ties', () => {
         scopeFor: async (_p: unknown, workspaceId: string) => ({ workspaceId, bypass: true }),
         audienceScope: async (scope: unknown) => scope,
       } as never,
-      { promptFor: async () => '', dismissedPrompt: async () => '' } as never,
+      { promptFor: async () => ({ prompt: '', learningIds: [] }), dismissedPrompt: async () => '' } as never,
       componentUsages as never,
       {} as never,
       { forPullRequest: async () => null } as never,

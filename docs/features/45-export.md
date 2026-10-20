@@ -9,11 +9,11 @@ a page and every page under it, or a whole project, written as
 | `zip` | One markdown source per page, frontmatter included, under `pages/`; every attachment under `attachments/<id>/<name>`; `manifest.json` | nothing |
 | `html` | An offline site, zipped: `index.html` (cover + contents), one file per page under `pages/` with breadcrumbs, subpages and previous/next, attachments under `assets/` | nothing |
 | `pdf` | One document: cover and contents (for more than one page), a page break per page, diagrams drawn, page numbers in the footer | a Gotenberg sidecar (`GOTENBERG_URL`) |
+| `docx` | One Word document: title page and contents (for more than one page), a section per page, Word heading styles, images embedded, diagrams as their source, page numbers in the footer | nothing |
 
-DOCX is not offered. The plan put it on Gotenberg's LibreOffice route, but that
-route converts *to* PDF only, and a closed vocabulary must not promise a
-format the code never emits (`EXPORT_FORMATS`). A writer from `marked` tokens
-(the `docx` package) is the way to add it, as its own change.
+The plan put DOCX on Gotenberg's LibreOffice route, but that route converts
+*to* PDF only. The worker writes it itself instead (#162), see
+[Word](#word-docx).
 
 ## Who can export
 
@@ -27,6 +27,16 @@ Seeing an export is narrower. The row says who exported what, so `GET
 /v1/exports/:id` and its download answer the requester or a workspace admin,
 and 403 anyone else (`ExportService.visible`). `GET /v1/exports` lists the
 caller's own exports; an admin's lists the workspace's.
+
+**A share link's reader** can also export, anonymously, when the link allows
+download (#161, [43](43-share-links.md#download)). That job belongs to the
+link (`share_link_id`), not to a person. Its scope is the link's page, or the
+page and its subtree when the link includes it. The requester is
+`{ shareLinkId }`, and `ExportScopeService.documents` reads only pages with
+nothing restricted on their chain (`OPEN_TO_WORKSPACE`), never what the
+link's creator could open. `requested_by` keeps the creator for attribution,
+but the job is not in their list and not theirs to download. An admin still
+sees it, and only the link's own public routes hand out the file.
 
 When page-level permissions land, the scope must be filtered through their
 predicate (`ExportScopeService.documents`). Until then, everything a viewer can
@@ -61,7 +71,9 @@ queued → running → completed → expired
 3. **Done.** `export.completed` / `export.failed` go out with `userId` set to
    the requester, so the live frame reaches them alone. The notification
    fan-out finds them through the run-owner rule (`runOwnerOf`), in the `job`
-   category. The inbox row links to `/settings/exports`.
+   category. The inbox row links to `/settings/exports`. A share link's job
+   announces nothing: its reader has no inbox and polls, and the link's
+   creator did not ask.
 4. **Expiry** (`ExportSweeper`, API). A completed export past `expires_at` has
    its object purged, every version of it, since the bucket is versioned. The
    row stays, marked `expired`, as the record of who exported what. A row
@@ -162,6 +174,54 @@ Gotenberg is optional and off in production (about 1 GB). With
 `GOTENBERG_URL` empty the dialog shows PDF disabled, with the reason, and the
 API refuses it. `make infra-up-gotenberg` runs it on `:3100` in dev.
 
+## Word (DOCX)
+
+`export-docx.ts` writes the file in the worker with the `docx` package. It
+walks the tokens of the one markdown parser: `markdownTokens`
+(`@knowledge/editor-schema/markdown`) is the same `marked` instance that
+`markdownToHtml` renders with, stopped before HTML. The writer parses no
+markdown of its own. A callout is a callout to it because `panelOf`, which the
+HTML renderer also uses, says so.
+
+**Why the worker, not the web renderer.** HTML and PDF are rendered by the web
+because the HTML is the product there. A Word file embeds image bytes, and the
+worker already holds them, while the render route answers JSON text files and
+never sees an attachment. Writing the file where the bytes are keeps the
+route unchanged and the image bytes off the internal network. It also means
+DOCX does not need the web up, nor Gotenberg. The parser was already a shared
+package (moved for #80), so no token walk had to be lifted.
+
+What each block becomes (pinned by `export-docx.spec.ts`):
+
+| Markdown | Word |
+| --- | --- |
+| Page title | Heading 1, bookmarked (`kn_p<n>`), at the top of its own section, so a new sheet |
+| `#` … `#####` | Heading 2 … 6, one level under the title, so the navigation pane nests a page's sections under it. h1–h3 are bookmarked with the reader's ids, so `#section` links work |
+| Lists | Word bullet and numbered lists. Each ordered list gets its own numbering and keeps its `start`. Tasks are `☐`/`☑` lines |
+| Tables | A Word table, full width, with a repeating bold header row and the column alignment |
+| Code | Style `Code` (Courier New, shaded), one line break per line, indentation kept |
+| Callouts (`> [!NOTE]` …) | A label line in the callout's colour, then the body, shaded with a coloured rule on the left |
+| Quote | Indented, with a grey rule |
+| `<details>` | `▸ summary` in bold over the body, shaded |
+| Layout columns, API blocks | Their content flows in order. An API block's heading and tables are ordinary headings and tables |
+| Contents macro | The page's headings, linked to their bookmarks |
+| Inline marks | Bold, italic, strike, code, `<u>`, `<mark>` (yellow highlight), `<sub>`/`<sup>`; a status lozenge is bold and coloured; mentions keep their text |
+| Links | A page in the export becomes an internal link to its title. `#heading` becomes an internal link. `http(s)`/`mailto` stay web links. Anything else, a page outside the export included, keeps its text |
+| Images | An attachment of the export is embedded (PNG, JPEG, GIF, BMP), scaled to the page width or to its resized width. A WebP or SVG attachment shows as `[alt]`. A web image stays a link to its address. An attachment the export does not carry is left out, as in the reader |
+| File embeds | An image attachment is shown. Anything else is named (`Attachment: name`), because a Word file cannot link to a file beside it |
+| Mermaid | Its source in a code block, under "Diagram (mermaid source)" |
+| Drawing | A line saying to open the page, since its scene is JSON |
+
+**Diagrams stay source.** Drawing them would mean the mermaid bundle, which
+lives in the web, plus a Chromium screenshot per diagram through Gotenberg.
+That is a second rendering path for one format, and it would make DOCX depend
+on Gotenberg. A deployment that wants drawn diagrams exports PDF.
+
+The labels (contents, page count, callout names) come from the API's
+`export.docx.*` catalog in the export's locale. The fonts are Calibri and
+Courier New. Both carry Cyrillic, and LibreOffice and Google Docs substitute
+metric twins where they lack them.
+
 ## The ZIP manifest
 
 `manifest.json` (`ExportManifest`, contracts) is what an import can rebuild a
@@ -196,6 +256,10 @@ Feature 16 does not read it yet.
 - **MCP.** `knowledge_export` (documentId + includeSubtree, or projectId)
   and `knowledge_get_export` (status, and a download URL once completed).
   Both are read tools, offered to read-only keys.
+- **Share reader.** `POST /v1/public/shares/:token/exports` (`format` only),
+  `GET …/exports/:id` and `GET …/exports/:id/download` (a 302), behind the
+  link's own checks and rate limits. The format choice is
+  `ExportFormatPicker.vue`, the same control `ExportDialog.vue` renders.
 
 ## Modules
 
@@ -223,11 +287,12 @@ attributes no act to anyone but the person who asked.
 | `EXPORT_TTL_HOURS` | `72` | How long a file can be downloaded |
 | `EXPORT_CONCURRENCY` | `2` | Builds per worker at once |
 | `EXPORT_TIMEOUT_MS` | 10 min | Render + convert ceiling; the sweeper fails a job at twice this |
+| `PUBLIC_EXPORTS_PER_HOUR_PER_IP` | `5` | Share-link exports per address and link; fails closed |
+| `PUBLIC_EXPORTS_PER_HOUR_PER_LINK` | `30` | Share-link exports per link, every address together; fails closed |
 
 ## Not built
 
-- **DOCX**, see above.
-- **Public download from a share** (`share_links.allow_download`). It belongs
-  with its own rate limits and review.
+- **Diagrams drawn in DOCX**, see [Word](#word-docx).
+- **Downloads from a published site.** Only a share link offers one (#161).
 - **Exporting an old revision** of a page: an export reads branch heads.
 - **Reading a ZIP back in** through import.

@@ -2,7 +2,8 @@
 /**
  * Connect a bot (issue #71). One step: pick the messenger, name the bot, paste
  * its token — BotFather's for Telegram; for Time, the token from Integrations
- * → Bot accounts plus the address of the customer's own Time server. The API
+ * → Bot accounts plus the address of the customer's own Time server; for
+ * Mattermost, a bot account's access token plus its server's address. The API
  * checks the token with the platform before saving, so a bad token or an
  * unreachable server fails here, in words, rather than as a bot that silently
  * never answers.
@@ -12,6 +13,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import {
   CHAT_PLATFORM_KINDS,
+  CHAT_PLATFORM_NAMES,
   SUPPORTED_LOCALES,
   chatPlatformNeedsServer,
   type ChatIntegrationSummary,
@@ -43,6 +45,13 @@ const blank = () => ({
 const form = reactive(blank())
 const saving = ref(false)
 const needsServer = computed(() => chatPlatformNeedsServer(form.kind))
+const platform = computed(() => CHAT_PLATFORM_NAMES[form.kind])
+/** Where each platform's bot token comes from. */
+const TOKEN_HINT: Record<ChatPlatformKind, string> = {
+  telegram: 'chatBots.fields.tokenHint',
+  time: 'chatBots.fields.tokenHintTime',
+  mattermost: 'chatBots.fields.tokenHintMattermost',
+}
 /** Telegram's strings sit at the top of `connect`; every other platform has its own block. */
 const copy = (key: string) => t(form.kind === 'telegram' ? `chatBots.connect.${key}` : `chatBots.connect.${form.kind}.${key}`)
 const valid = computed(
@@ -102,7 +111,7 @@ async function submit() {
           <li>{{ copy('step3') }}</li>
         </ol>
         <div v-if="needsServer" class="space-y-1.5">
-          <Label for="chat-bot-server">{{ t('chatBots.fields.serverUrl') }}</Label>
+          <Label for="chat-bot-server">{{ t('chatBots.fields.serverUrl', { platform }) }}</Label>
           <Input
             id="chat-bot-server"
             v-model="form.serverUrl"
@@ -111,9 +120,9 @@ async function submit() {
             autocomplete="off"
             spellcheck="false"
             maxlength="500"
-            placeholder="https://time.example.com"
+            :placeholder="`https://${form.kind}.example.com`"
           />
-          <p class="text-xs text-muted-foreground">{{ t('chatBots.fields.serverUrlHint') }}</p>
+          <p class="text-xs text-muted-foreground">{{ t('chatBots.fields.serverUrlHint', { platform }) }}</p>
         </div>
         <div class="space-y-1.5">
           <Label for="chat-bot-name">{{ t('chatBots.fields.name') }}</Label>
@@ -123,7 +132,7 @@ async function submit() {
           <Label for="chat-bot-token">{{ t('chatBots.fields.token') }}</Label>
           <Input id="chat-bot-token" v-model="form.token" type="password" autocomplete="off" spellcheck="false" />
           <p class="text-xs text-muted-foreground">
-            {{ t(form.kind === 'time' ? 'chatBots.fields.tokenHintTime' : 'chatBots.fields.tokenHint') }}
+            {{ t(TOKEN_HINT[form.kind]) }}
           </p>
         </div>
         <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ExportJob } from '@prisma/client';
 import matter from 'gray-matter';
+import { PANEL_TYPES, type PanelType } from '@knowledge/editor-schema/nodes';
 import type { ExportErrorCode, ExportFormat, ExportRenderRequest, ExportScope, ExportStage, Locale } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { EventsPublisher } from '../events/events.publisher.js';
@@ -11,7 +12,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { planSiteBuild, type ResolvedRevision } from '../publishing/site-build.plan.js';
 import { StorageService } from '../storage/storage.service.js';
 import { exportObjectPrefix } from './export.constants.js';
-import { exportFilename } from './export.service.js';
+import { EXPORT_CONTENT_TYPE, exportFilename } from './export.service.js';
+import { writeDocx } from './export-docx.js';
 import {
   archiveRoot,
   attachmentArchivePath,
@@ -108,13 +110,15 @@ export class ExportBuildService {
           ? await this.zip(row, pages, attachments)
           : format === 'html'
             ? await this.html(row, pages, attachments, signal)
-            : await this.pdf(row, pages, attachments, signal);
+            : format === 'docx'
+              ? await this.docx(row, pages, attachments)
+              : await this.pdf(row, pages, attachments, signal);
       if (bytes.byteLength > this.maxBytes) throw this.tooLarge();
 
       await this.stage(row.id, 'packaging');
       const filename = exportFilename(row.title, format);
       const key = `${exportObjectPrefix(row.workspaceId, row.id)}${filename}`;
-      await this.storage.putObjectBytes(key, bytes, format === 'pdf' ? 'application/pdf' : 'application/zip');
+      await this.storage.putObjectBytes(key, bytes, EXPORT_CONTENT_TYPE[format]);
 
       const now = new Date();
       const done = await this.prisma.exportJob.updateMany({
@@ -168,7 +172,8 @@ export class ExportBuildService {
       scope: row.scope as ExportScope,
       documentId: row.documentId,
       projectId: row.projectId,
-      requester: { userId: row.requestedBy, locale: row.locale as Locale },
+      // A share link's job holds what the link shows, not what its creator can open (#161).
+      requester: row.shareLinkId ? { shareLinkId: row.shareLinkId } : { userId: row.requestedBy, locale: row.locale as Locale },
     });
     const revisions = await this.scope.revisions(
       documents.map((d) => d.id),
@@ -310,6 +315,39 @@ export class ExportBuildService {
     }
   }
 
+  /**
+   * One Word document, written here from the parser's tokens (export-docx.ts)
+   * rather than by the web: the worker holds the image bytes it embeds, and
+   * it needs no Gotenberg. Only images are read; other attachments are named.
+   */
+  private async docx(row: ExportJob, pages: PackagedPage[], attachments: CollectedAttachment[]): Promise<Uint8Array> {
+    await this.stage(row.id, 'rendering');
+    const images = attachments.filter((a) => a.contentType.startsWith('image/'));
+    const bytes = await this.readAttachments(images);
+    const locale = row.locale as Locale;
+    const date = new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(new Date());
+    try {
+      return await writeDocx({
+        title: row.title,
+        pages: pages.map((p) => ({ documentId: p.documentId, title: p.title, depth: p.depth, markdown: p.markdown })),
+        images: new Map(images.map((a, i) => [a.id, { bytes: bytes[i], filename: a.filename }])),
+        labels: {
+          contents: t('export.docx.contents'),
+          meta: `${t('export.docx.exportedOn', { date })} · ${t('export.docx.pageCount', { count: pages.length })}`,
+          onThisPage: t('export.docx.onThisPage'),
+          noHeadings: t('export.docx.noHeadings'),
+          diagramSource: t('export.docx.diagramSource'),
+          drawing: t('export.docx.drawing'),
+          // The writer fills the name in, per file.
+          attachment: t('export.docx.attachment', { name: '{name}' }),
+          panel: Object.fromEntries(PANEL_TYPES.map((k) => [k, t(`export.docx.panel.${k}`)])) as Record<PanelType, string>,
+        },
+      });
+    } catch (e) {
+      throw new ExportFailure('renderFailed', t('error.export.renderFailed', { detail: (e as Error).message }));
+    }
+  }
+
   private async render(
     row: ExportJob,
     format: ExportRenderRequest['format'],
@@ -350,8 +388,13 @@ export class ExportBuildService {
     await this.prisma.exportJob.updateMany({ where: { id, status: 'running' }, data: { stage } }).catch(() => undefined);
   }
 
-  /** To the person who asked, and only them: who exported what is not the workspace's news. */
+  /**
+   * To the person who asked, and only them: who exported what is not the
+   * workspace's news. A share link's reader has no inbox, and the link's
+   * creator did not ask, so their job says nothing — the reader polls (#161).
+   */
   private async announce(row: ExportJob, type: 'export.completed' | 'export.failed'): Promise<void> {
+    if (row.shareLinkId) return;
     await this.events.publish({ workspaceId: row.workspaceId, userId: row.requestedBy, type, subjectId: row.id, title: row.title });
   }
 }

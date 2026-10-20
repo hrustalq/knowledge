@@ -168,7 +168,7 @@ describe('the listening switch', () => {
 
   it('on: tells the group first, then keeps', async () => {
     const h = integrations('telegram');
-    const entry = await h.svc.updateBinding('b-1', { listening: true });
+    const entry = await h.svc.updateBinding('b-1', { listening: true }, 'admin-1');
     expect(h.adapter.postMessage).toHaveBeenCalledWith({ token: 'T' }, { chatId: '-1001' }, { kind: 'notice', text: 'chat.listen.on' });
     expect(entry.listening).toBe(true);
   });
@@ -177,20 +177,20 @@ describe('the listening switch', () => {
     const h = integrations('telegram', async () => {
       throw new Error('bot was kicked');
     });
-    await expect(h.svc.updateBinding('b-1', { listening: true })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(h.svc.updateBinding('b-1', { listening: true }, 'admin-1')).rejects.toBeInstanceOf(BadRequestException);
     expect(h.prisma.chatChannelBinding.update).not.toHaveBeenCalled();
   });
 
   it('off: what was kept goes at once', async () => {
     const h = integrations('telegram');
     h.row.listening = true;
-    await h.svc.updateBinding('b-1', { listening: false });
+    await h.svc.updateBinding('b-1', { listening: false }, 'admin-1');
     expect(h.prisma.chatBufferedMessage.deleteMany).toHaveBeenCalledWith({ where: { bindingId: 'b-1' } });
   });
 
   it('Time threads are read whole: no listening there', async () => {
     const h = integrations('time');
-    await expect(h.svc.updateBinding('b-1', { listening: true })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(h.svc.updateBinding('b-1', { listening: true }, 'admin-1')).rejects.toBeInstanceOf(BadRequestException);
   });
 });
 

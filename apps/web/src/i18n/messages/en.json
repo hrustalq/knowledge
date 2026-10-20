@@ -3900,6 +3900,7 @@
       "import.parsed": "an import is ready to review",
       "import.failed": "an import failed",
       "export.completed": "an export is ready to download",
+      "chat.harvest.proposed": "an automatic chat harvest proposed captures for review",
       "export.failed": "an export failed",
       "connector.run.failed": "a sync failed",
       "knowledge-issue.reported": "reported a problem with this page",
@@ -4197,7 +4198,8 @@
     "tab": {
       "pages": "Pages",
       "settings": "Settings",
-      "quality": "Quality"
+      "quality": "Quality",
+      "agents": "Agents"
     },
     "presets": "Presets",
     "preset": {
@@ -4336,6 +4338,38 @@
           "hint": "Multiply search scores by each page's verification state, so verified pages rank above outdated ones"
         }
       }
+    },
+    "agents": {
+      "title": "Agent outcomes {scope}",
+      "hint": "What became of each agent's output. A finding is accepted when its proposal merged or nobody dismissed it within {days} days, dismissed when a person dismissed it or closed its proposal. Below {n} runs a cell is a count, not a rate.",
+      "since": "since {date}",
+      "answers": "Answers (votes)",
+      "unknownAgent": "Unknown agent",
+      "unattributed": "unattributed",
+      "ofTotal": "{count} of {total}",
+      "runs": "{n} run | {n} runs",
+      "votes": "{n} vote | {n} votes",
+      "fewRuns": "too few for a rate",
+      "column": {
+        "agent": "Agent",
+        "runs": "Runs"
+      },
+      "outcome": {
+        "accepted": "Accepted",
+        "dismissed": "Dismissed",
+        "downvoted": "Downvoted",
+        "pending": "Pending"
+      },
+      "split": {
+        "label": "Split by",
+        "none": "Per agent",
+        "prompt": "By prompt",
+        "model": "By model"
+      },
+      "empty": {
+        "title": "No agent output to measure yet",
+        "body": "Outcomes appear after an agent's first finished run, or the first vote on an answer, in this window."
+      }
     }
   },
   "templates": {
@@ -4468,6 +4502,10 @@
     "disabledAdmin": "Turn them on in Settings → Publishing.",
     "disabledAsk": "Ask a workspace admin to turn them on.",
     "includeSubtree": "Include subpages",
+    "allowDownload": "Let readers download it (ZIP, HTML or PDF)",
+    "downloadToggle": "Downloads",
+    "downloadOn": "Readers can download this link’s pages",
+    "downloadOff": "Downloads are off — files already made stop downloading now",
     "expiry": "Expires",
     "expiryPreset": {
       "1d": "In 1 day",
@@ -4731,11 +4769,11 @@
     "viewExports": "View exports",
     "download": "Download",
     "pdfUnavailable": "Not set up on this server: PDF needs a Gotenberg service (GOTENBERG_URL).",
+    "formatLabel": "Format",
     "dialog": {
       "title": "Export “{title}”",
       "titleProject": "Export the project “{title}”",
       "description": "The file is kept for {hours} hours, then deleted. Only you and the workspace admins can download it.",
-      "format": "Format",
       "includeSubtree": "Include subpages",
       "branch": "Branch",
       "branchPlaceholder": "Default branch",
@@ -4746,12 +4784,14 @@
     "format": {
       "zip": "Markdown (ZIP)",
       "html": "HTML site (ZIP)",
-      "pdf": "PDF"
+      "pdf": "PDF",
+      "docx": "Word (.docx)"
     },
     "formatHint": {
       "zip": "The pages as markdown with their frontmatter, attachments and a manifest — for backup or moving elsewhere.",
       "html": "A small website that opens offline: a contents page, one page per file, images included.",
-      "pdf": "One document to read or print: a page break per page, diagrams drawn."
+      "pdf": "One document to read or print: a page break per page, diagrams drawn.",
+      "docx": "One Word document to keep editing in Word, LibreOffice or Google Docs: each page on a new sheet, images included, diagrams as their source."
     },
     "scope": {
       "page": "page",
@@ -4800,7 +4840,7 @@
     "ceilingOff": "Chat bots are switched off on this server (CHAT_ENABLED=false). You can prepare a bot here, but nothing will be answered until an operator turns them on.",
     "empty": {
       "title": "No bots yet",
-      "body": "Connect a Telegram or Time bot, then message it privately to link your account. To let it answer in a group or channel, add it there and send /bind (in Time: mention it with the word bind)."
+      "body": "Connect a Telegram, Time or Mattermost bot, then message it privately to link your account. To let it answer in a group or channel, add it there and send /bind (in Time and Mattermost: mention it with the word bind)."
     },
     "connect": {
       "open": "Connect a bot",
@@ -4818,6 +4858,13 @@
         "step2": "Copy the token it shows once, and paste it below with your Time server address.",
         "step3": "Add the bot to a channel and mention it, or message it privately: it replies with a link that connects your account.",
         "checking": "Checking with Time…"
+      },
+      "mattermost": {
+        "description": "The token is checked with your Mattermost server and stored encrypted. It is never shown again.",
+        "step1": "In Mattermost, open Integrations → Bot Accounts and add a bot (a system admin may first need to enable bot account creation in the System Console).",
+        "step2": "Copy the access token it shows once, and paste it below with your Mattermost server address.",
+        "step3": "Add the bot to a team and a channel and mention it, or message it privately: it replies with a link that connects your account.",
+        "checking": "Checking with Mattermost…"
       }
     },
     "fields": {
@@ -4834,9 +4881,10 @@
       "chatTitle": "Chat name",
       "agentShort": "Agent",
       "platform": "Messenger",
-      "serverUrl": "Time server",
-      "serverUrlHint": "The address you open Time at. This server must be able to reach it, and it must reach API_PUBLIC_URL for buttons to work.",
-      "tokenHintTime": "From Integrations → Bot accounts. Write-only: the page only ever shows its last four characters."
+      "serverUrl": "{platform} server",
+      "serverUrlHint": "The address you open {platform} at. This server must be able to reach it, and it must reach API_PUBLIC_URL for buttons to work.",
+      "tokenHintTime": "From Integrations → Bot accounts. Write-only: the page only ever shows its last four characters.",
+      "tokenHintMattermost": "The bot account's access token, from Integrations → Bot Accounts. Write-only: the page only ever shows its last four characters."
     },
     "locale": {
       "en": "English",
@@ -4844,7 +4892,8 @@
     },
     "kind": {
       "telegram": "Telegram",
-      "time": "Time"
+      "time": "Time",
+      "mattermost": "Mattermost"
     },
     "answerMode": {
       "mention": "When mentioned",
@@ -4852,7 +4901,7 @@
       "off": "Never"
     },
     "bindings": {
-      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
+      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time and Mattermost: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
       "untitled": "Untitled chat",
       "wholeWorkspace": "Whole workspace",
       "botDefault": "Bot default",
@@ -4863,7 +4912,14 @@
       "add": "Add group",
       "listen": "Keep messages for /capture",
       "listenHint": "Kept for {days}, with emails, phone numbers, card numbers and secrets masked, so editors can harvest a thread into captures: reply /capture to its first message, or react ✍ to it. Never searchable. Needs privacy mode off in {'@'}BotFather or the bot as a group admin; ✍ works only with the bot as admin. Turning this on posts a notice in the group; turning it off deletes what is kept.",
-      "listenDays": "{days} day | {days} day | {days} days"
+      "listenDays": "{days} day | {days} day | {days} days",
+      "autoHarvest": "Harvest quiet threads automatically",
+      "autoHarvestHint": "Once a thread has {messages} kept since its last harvest and has been quiet for {quiet}, the bot proposes what it settled as captures in your name, for review in Captures. Nothing is posted in the group: you get an inbox notification instead. Turning this on posts a notice in the group.",
+      "autoHarvestMessages": "{n} message | {n} message | {n} messages",
+      "autoHarvestQuiet": "{n} minute | {n} minute | {n} minutes",
+      "autoHarvestRunsAs": "Runs as",
+      "autoHarvestNeedsListening": "Needs Keep messages for /capture.",
+      "autoHarvestUnavailable": "Switched off on this server (HARVEST_AUTO_ENABLED): no thread is harvested automatically, whatever this switch says."
     },
     "card": {
       "off": "Off",
@@ -4881,10 +4937,10 @@
       "deleteTitle": "Disconnect {name}?",
       "deleteBody": "Its groups and linked accounts are removed, and it stops answering. The conversations stay in each person's assistant history.",
       "webhookFix": "Telegram only delivers to a public HTTPS address. Point API_PUBLIC_URL at one, then press Test.",
-      "socketDown": "This server is not connected to Time, so the bot hears nothing.",
-      "socketFix": "Check that the Time server is reachable from here and that the bot token is still valid; the connection retries on its own.",
+      "socketDown": "This server is not connected to {platform}, so the bot hears nothing.",
+      "socketFix": "Check that the {platform} server is reachable from here and that the bot token is still valid; the connection retries on its own.",
       "socketOk": "Listening to {server}",
-      "testOkSocket": "{bot} is reachable. Messages arrive over the bot’s connection to Time."
+      "testOkSocket": "{bot} is reachable. Messages arrive over the bot’s connection to {platform}."
     },
     "people": {
       "hint": "Every answer runs as the linked person, with exactly their access. Unlinking stops the bot answering that account.",

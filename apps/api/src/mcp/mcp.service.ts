@@ -434,24 +434,27 @@ export class McpService {
       {
         description:
           'Create a public, read-only link to a page (docs/features/43) that anyone with the URL can open without ' +
-          'signing in — only when a person asked for one. includeSubtree also shares every page under it. Without ' +
+          'signing in — only when a person asked for one. includeSubtree also shares every page under it. ' +
+          'allowDownload lets readers download it as ZIP/HTML/PDF (off unless asked for). Without ' +
           'expiresInDays the link never expires, which most workspaces only allow with a password. Fails with 403 ' +
           'when the workspace has sharing switched off. Returns the URL; revoke it from the page\'s Share menu.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           documentId: z.string().uuid(),
           includeSubtree: z.boolean().optional(),
+          allowDownload: z.boolean().optional(),
           expiresInDays: z.number().int().min(1).max(3650).optional(),
           password: z.string().min(SHARE_PASSWORD_MIN_CHARS).max(SHARE_PASSWORD_MAX_CHARS).optional(),
         },
       },
-      async ({ workspaceId, documentId, includeSubtree, expiresInDays, password }) => {
+      async ({ workspaceId, documentId, includeSubtree, allowDownload, expiresInDays, password }) => {
         // The REST twin is POST /v1/documents/:id/shares, editor.
         await guard.doc(documentId, 'editor');
         const res = await this.shareLinks.create(
           documentId,
           {
             includeSubtree: includeSubtree ?? false,
+            allowDownload: allowDownload ?? false,
             expiresAt: expiresInDays ? new Date(Date.now() + expiresInDays * 86_400_000).toISOString() : null,
             ...(password ? { password } : {}),
           },
@@ -463,6 +466,7 @@ export class McpService {
           shareId: res.share.id,
           url: res.url,
           includeSubtree: res.share.includeSubtree,
+          allowDownload: res.share.allowDownload,
           expiresAt: res.share.expiresAt,
           hasPassword: res.share.hasPassword,
         });
@@ -475,7 +479,8 @@ export class McpService {
         description:
           'Export a page, a page and its subpages, or a whole project as a file a person can download ' +
           '(docs/features/45): zip (markdown sources with frontmatter, attachments and manifest.json), html (an ' +
-          'offline site, zipped) or pdf (only where the deployment has Gotenberg). Give documentId, or projectId for ' +
+          'offline site, zipped), pdf (only where the deployment has Gotenberg) or docx (one Word document). Give ' +
+          'documentId, or projectId for ' +
           'a whole project. Runs in the background: returns the export id — poll knowledge_get_export for the ' +
           'download URL.',
         inputSchema: {

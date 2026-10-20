@@ -517,6 +517,8 @@ export class AssistantService {
       sources: settled.sources,
       confidence: settled.confidence,
       principal,
+      providerId: call.config.providerId,
+      model: call.config.model,
     });
     return {
       enabled: true,
@@ -895,6 +897,8 @@ export class AssistantService {
       threadId: thread.id,
       messageId: assistantMessage.id,
       principal,
+      providerId: turn.agent.config.providerId,
+      model: turn.agent.config.model,
     });
     await this.events.publish({
       type: 'assistant.turn.finished',
@@ -1270,11 +1274,13 @@ export class AssistantService {
       ) +
       // Team guidance (#70): learnings an admin approved for this agent, after
       // the skills they sit beside. Project-scoped ones apply on that project's pages.
-      (await this.learnings.promptFor({
-        workspaceId: thread.workspaceId,
-        agentKey: agent.key,
-        projectIds: groundingDoc ? [groundingDoc.projectId] : [],
-      }));
+      (
+        await this.learnings.promptFor({
+          workspaceId: thread.workspaceId,
+          agentKey: agent.key,
+          projectIds: groundingDoc ? [groundingDoc.projectId] : [],
+        })
+      ).prompt;
 
     const priorTurns = (await this.threads.recentHistory(threadId, 16)).filter((m) => m.id !== userMessageId);
     const history: ChatCompletionMessageParam[] = priorTurns.map((m) => ({

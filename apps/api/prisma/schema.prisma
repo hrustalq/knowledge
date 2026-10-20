@@ -1023,6 +1023,11 @@ model AnswerFeedback {
   citedDocumentIds Json     @default("[]") @map("cited_document_ids")
   /// AnswerConfidence snapshot at answer time.
   confidence       Json?
+  /// The model that wrote the answer (#305): the turn's config for an implicit
+  /// signal, the thread's or caller's latest model call for a vote. Null when
+  /// the server cannot know — an MCP agent's own model, a pre-ledger row.
+  providerId       String?  @map("provider_id") @db.Uuid
+  model            String?
   createdBy        String   @map("created_by") @db.Uuid
   apiKeyId         String?  @map("api_key_id") @db.Uuid
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -1475,6 +1480,16 @@ model AgentRun {
   /// graph store that was down. Capped by the executor.
   warnings Json?
 
+  /// The ledger (#305): what produced this run's output, stamped by the
+  /// executor at execution. Null on runs from before the ledger, which read as
+  /// unattributed. `prompt_hash` is the SHA-256 of the trusted prompt parts
+  /// only (instructions, skills, styleguide, learnings) — never page content —
+  /// and `learning_ids` are exactly the learnings that prompt rendered.
+  providerId  String?  @map("provider_id") @db.Uuid
+  model       String?
+  promptHash  String?  @map("prompt_hash")
+  learningIds String[] @map("learning_ids") @db.Uuid
+
   startedAt  DateTime? @map("started_at") @db.Timestamptz
   finishedAt DateTime? @map("finished_at") @db.Timestamptz
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -1626,6 +1641,10 @@ model AiUsage {
   error         String?
   threadId      String? @map("thread_id") @db.Uuid
   toolCallCount Int     @default(0) @map("tool_call_count")
+  /// The agent run this call was made for (#305), from the run context; null
+  /// for a call outside a background run. No FK: usage outlives its run.
+  agentKey      String? @map("agent_key")
+  agentRunId    String? @map("agent_run_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -2769,6 +2788,8 @@ model ShareLink {
   tokenCipher    String?   @map("token_cipher")
   /// scrypt (auth/password.ts). Changing it ends every unlocked session.
   passwordHash   String?   @map("password_hash")
+  /// Readers may download an export of the link's scope (#161). Off by default.
+  allowDownload  Boolean   @default(false) @map("allow_download")
   expiresAt      DateTime? @map("expires_at") @db.Timestamptz
   revokedAt      DateTime? @map("revoked_at") @db.Timestamptz
   createdBy      String    @map("created_by") @db.Uuid
@@ -2986,7 +3007,7 @@ model ExportJob {
   projectId   String? @map("project_id") @db.Uuid
   /// Per-page branch name, falling back to each page's default; null = default.
   branch      String?
-  /// EXPORT_FORMATS: zip | html | pdf.
+  /// EXPORT_FORMATS: zip | html | pdf | docx.
   format      String
   /// The page's or project's name when the export was asked for.
   title       String
@@ -3004,7 +3025,12 @@ model ExportJob {
   /// Language of whoever asked, frozen: the worker renders the contents page
   /// and dates in it, and has no request to read Accept-Language from.
   locale      String    @default("en")
+  /// For a share-link download (#161), the link's creator: attribution only.
   requestedBy String    @map("requested_by") @db.Uuid
+  /// Set when an anonymous reader asked through a share link (#161). The job
+  /// belongs to the link: only that link's public routes can read it, and
+  /// only while the link is live with download on. No FK, per house policy.
+  shareLinkId String?   @map("share_link_id") @db.Uuid
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   startedAt   DateTime? @map("started_at") @db.Timestamptz
   completedAt DateTime? @map("completed_at") @db.Timestamptz
@@ -3012,6 +3038,7 @@ model ExportJob {
 
   @@index([workspaceId, createdAt])
   @@index([status, expiresAt])
+  @@index([shareLinkId])
   @@map("export_jobs")
 }
 
@@ -3026,11 +3053,11 @@ model ExportJob {
 model ChatIntegration {
   id          String  @id @default(uuid()) @db.Uuid
   workspaceId String  @map("workspace_id") @db.Uuid
-  /// CHAT_PLATFORM_KINDS — 'telegram' | 'time'.
+  /// CHAT_PLATFORM_KINDS — 'telegram' | 'time' | 'mattermost'.
   kind        String
   name        String
   enabled     Boolean @default(true)
-  /// The messenger's own server, for a platform each customer hosts (Time):
+  /// The messenger's own server, for a platform each customer hosts (Time, Mattermost):
   /// an admin-typed origin, checked by the SSRF guard. '' where the platform
   /// has one fixed API (Telegram) — empty rather than null so the bot-account
   /// unique below still holds for those rows (PG treats nulls as distinct).
@@ -3073,31 +3100,55 @@ model ChatIntegration {
 
 /// A group or channel the bot may answer in. DMs need none.
 model ChatChannelBinding {
-  id             String   @id @default(uuid()) @db.Uuid
-  integrationId  String   @map("integration_id") @db.Uuid
-  workspaceId    String   @map("workspace_id") @db.Uuid
-  externalChatId String   @map("external_chat_id")
+  id             String    @id @default(uuid()) @db.Uuid
+  integrationId  String    @map("integration_id") @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  externalChatId String    @map("external_chat_id")
   title          String?
   /// Retrieval scope for answers here; null = the whole workspace.
-  projectId      String?  @map("project_id") @db.Uuid
+  projectId      String?   @map("project_id") @db.Uuid
   /// null = the integration's default agent.
-  agentKey       String?  @map("agent_key")
+  agentKey       String?   @map("agent_key")
   /// CHAT_ANSWER_MODES — 'mention' | 'all' | 'off'.
-  answerMode     String   @default("mention") @map("answer_mode")
+  answerMode     String    @default("mention") @map("answer_mode")
   locale         String?
   /// Keep this group's messages, masked, so a thread can be harvested (#82).
   /// Telegram only; a workspace admin turns it on, and the group is told.
-  listening      Boolean  @default(false)
-  createdBy      String?  @map("created_by") @db.Uuid
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  listening      Boolean   @default(false)
+  /// Automatic harvest (#340): the admin who turned it on, and whom its
+  /// captures are attributed to. null = off. Needs `listening`.
+  autoHarvestBy  String?   @map("auto_harvest_by") @db.Uuid
+  autoHarvestAt  DateTime? @map("auto_harvest_at") @db.Timestamptz
+  createdBy      String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   integration   ChatIntegration       @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   subscriptions ChatSubscription[]
   buffered      ChatBufferedMessage[]
+  harvestMarks  ChatHarvestMark[]
 
   @@unique([integrationId, externalChatId])
   @@map("chat_channel_bindings")
+}
+
+/// How far the automatic harvest (#340) has read one listening thread: a
+/// group, or one forum topic of it. A thread is due again only once a message
+/// newer than `harvestedThrough` has been kept. Moved by a guarded statement
+/// before the harvest runs, so two API processes never harvest one thread twice.
+model ChatHarvestMark {
+  id               String   @id @default(uuid()) @db.Uuid
+  bindingId        String   @map("binding_id") @db.Uuid
+  /// The Telegram forum topic; '' outside one (a unique key cannot hold a null).
+  topicKey         String   @default("") @map("topic_key")
+  /// `created_at` of the newest kept message the last harvest read.
+  harvestedThrough DateTime @map("harvested_through") @db.Timestamptz
+  harvestedAt      DateTime @default(now()) @map("harvested_at") @db.Timestamptz
+
+  binding ChatChannelBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+
+  @@unique([bindingId, topicKey])
+  @@map("chat_harvest_marks")
 }
 
 /// A message kept so a thread can be harvested (#82): a listening group's

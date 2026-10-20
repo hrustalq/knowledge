@@ -98,9 +98,13 @@ export class ChatSettingsController {
 
   @Patch('bindings/:id')
   @Access('admin', 'chat-binding')
-  @ApiOperation({ summary: 'Change a group’s project, agent, answer mode or language' })
-  updateBinding(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateChatBindingDto): Promise<ChatBindingEntry> {
-    return this.integrations.updateBinding(id, dto);
+  @ApiOperation({ summary: 'Change a group’s project, agent, answer mode, language, listening or automatic harvest' })
+  updateBinding(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateChatBindingDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ChatBindingEntry> {
+    return this.integrations.updateBinding(id, dto, principal.userId);
   }
 
   @Delete('bindings/:id')

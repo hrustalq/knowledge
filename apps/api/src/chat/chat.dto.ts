@@ -44,7 +44,7 @@ export class CreateChatIntegrationDto {
   name!: string;
 
   @ApiProperty({
-    description: 'The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts). Write-only — never returned.',
+    description: 'The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token). Write-only — never returned.',
   })
   @IsString()
   @IsNotEmpty()
@@ -54,7 +54,7 @@ export class CreateChatIntegrationDto {
   @ApiPropertyOptional({
     maxLength: 500,
     example: 'https://time.example.com',
-    description: 'The messenger server, for a self-hosted platform (Time) — required there, refused for Telegram',
+    description: 'The messenger server, for a self-hosted platform (Time, Mattermost) — required there, refused for Telegram',
   })
   @IsOptional()
   @IsString()
@@ -177,6 +177,15 @@ export class UpdateChatBindingDto {
   @IsOptional()
   @IsBoolean()
   listening?: boolean;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description:
+      'Harvest this group’s quiet threads automatically (#340), as the admin who turns it on — never anyone named in the body. Needs listening; turning listening off turns this off too.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  autoHarvest?: boolean;
 }
 
 export class ChatLinkCodeDto {

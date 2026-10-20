@@ -488,6 +488,12 @@ export type I18nTranslations = {
                 "few": string;
                 "many": string;
             };
+            "autoOn": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
         };
     };
     "connector": {
@@ -1072,6 +1078,7 @@ export type I18nTranslations = {
             "expiryInPast": string;
             "rateLimited": string;
             "unlockRateLimited": string;
+            "exportRateLimited": string;
             "locked": string;
             "restricted": string;
         };
@@ -1160,6 +1167,8 @@ export type I18nTranslations = {
             "serverHostUnresolved": string;
             "listenTelegramOnly": string;
             "listenNoticeFailed": string;
+            "autoHarvestNeedsListening": string;
+            "autoHarvestNoticeFailed": string;
         };
         "group": {
             "notFound": string;
@@ -1323,6 +1332,28 @@ export type I18nTranslations = {
             "notFound": string;
             "notOpen": string;
             "alreadyProposed": string;
+        };
+    };
+    "export": {
+        "docx": {
+            "contents": string;
+            "exportedOn": string;
+            "pageCount": {
+                "one": string;
+                "other": string;
+            };
+            "onThisPage": string;
+            "noHeadings": string;
+            "diagramSource": string;
+            "drawing": string;
+            "attachment": string;
+            "panel": {
+                "note": string;
+                "tip": string;
+                "important": string;
+                "warning": string;
+                "caution": string;
+            };
         };
     };
     "import": {

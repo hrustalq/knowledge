@@ -409,6 +409,12 @@ in the pull request that introduces them — see
   Retry button and a link to the page, Publish stays unavailable and nothing
   is stored on the device until the page loads. Retry joins the shared draft
   when co-editing is on.
+- Changing the role of a member whose membership source is missing or not one
+  of `manual`, `jit`, `group`, `scim` no longer fails with 409 "managed by
+  single sign-on (manual)" (#295). The members list already shows such a row
+  as manual, and editing it now treats it as manual too. Every row the
+  current release writes has a known source, so this only affects data
+  written some other way.
 - Returning to the app no longer re-downloads its scripts and styles (#277).
   The content-hashed files under `/assets/` were sent with no `Cache-Control`,
   so the edge's 4-hour default applied; they are now cached for a year as

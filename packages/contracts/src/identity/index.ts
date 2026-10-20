@@ -443,6 +443,8 @@ export const SSO_LOGIN_ERRORS = [
   'domain-not-allowed',
   'jit-disabled',
   'account-disabled',
+  /** The fragment code was unknown, expired or already spent (POST /v1/auth/sso/exchange). */
+  'exchange-invalid',
   'failed',
 ] as const;
 export type SsoLoginError = (typeof SSO_LOGIN_ERRORS)[number];
@@ -453,6 +455,8 @@ export interface SessionView {
   authMethod: AuthMethod;
   /** identity_providers.id for an SSO login. */
   providerId: string | null;
+  /** That provider's login-button name, while the provider still exists (#292). */
+  providerName: string | null;
   ip: string | null;
   userAgent: string | null;
   createdAt: string;

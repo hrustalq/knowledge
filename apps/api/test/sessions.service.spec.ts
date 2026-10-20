@@ -24,6 +24,9 @@ function fakePrisma() {
       findMany: vi.fn(async () => [] as unknown[]),
       findUnique: vi.fn(async () => null as unknown),
     },
+    identityProvider: {
+      findMany: vi.fn(async () => [{ id: 'p1', name: 'Corp SSO' }]),
+    },
   };
 }
 
@@ -93,10 +96,12 @@ describe('SessionsService', () => {
     const list = await sessions.listForUser('u1', 's2');
     const where = prisma.session.findMany.mock.calls[0][0] as never as { where: Record<string, unknown> };
     expect(where.where).toMatchObject({ userId: 'u1', revokedAt: null });
-    expect(list.map((s) => [s.id, s.authMethod, s.current, s.lastSeenAt])).toEqual([
-      ['s1', 'oidc', false, at.toISOString()],
-      ['s2', 'password', true, null],
+    expect(list.map((s) => [s.id, s.authMethod, s.providerName, s.current, s.lastSeenAt])).toEqual([
+      ['s1', 'oidc', 'Corp SSO', false, at.toISOString()],
+      ['s2', 'password', null, true, null],
     ]);
+    // One name lookup for the distinct provider ids, none at all without any.
+    expect(prisma.identityProvider.findMany.mock.calls[0][0]).toMatchObject({ where: { id: { in: ['p1'] } } });
   });
 
   it('returns how many sessions revokeAllForUser signed out', async () => {

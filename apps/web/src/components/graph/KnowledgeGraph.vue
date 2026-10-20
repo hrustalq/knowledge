@@ -174,6 +174,27 @@ let fitted = false
 let refitOnSettle = false
 let lastStructure = ''
 
+/**
+ * Main-thread time the physics may take in one frame. Run in one go, the
+ * opening settle of a few hundred nodes was a task of a hundred-odd
+ * milliseconds, and the clock-driven catch-up below fed on its own slowness: a
+ * long frame owed more steps, which made the next frame long too — a run of
+ * 55–70 ms tasks for the first second of every load (#279). A machine that
+ * cannot afford the steps now settles a little later instead of stalling input.
+ */
+const TICK_BUDGET_MS = 8
+
+/** Ticks still owed before the first frame is worth drawing, and what to do once they are paid. */
+let presettle = 0
+let afterPresettle: (() => void) | null = null
+
+/** Settle `ticks` steps undrawn, spread over frames by the budget, then run `then`. */
+function settleFirst(ticks: number, then: () => void) {
+  presettle = ticks
+  afterPresettle = then
+  wake()
+}
+
 function build() {
   const { nodes, edges, counts, orphanCount } = projection.value
   emit('stats', { nodes: nodes.length, edges: edges.length, orphans: orphanCount, counts })
@@ -228,6 +249,8 @@ function build() {
   // plane; a single connected graph needs almost none and reads better loose.
   const gravity = Math.min(0.035 + nodes.length / 5200, 0.115)
   sim.value?.stop()
+  presettle = 0
+  afterPresettle = null
   const s = forceSimulation<SimNode>(simNodes)
     .force(
       'link',
@@ -252,6 +275,8 @@ function build() {
     .alpha(1)
     .alphaDecay(0.028)
     .velocityDecay(0.42)
+  // d3's stepper is never used; `frame()` owns integration.
+  s.stop()
 
   // Reframe on the first draw, and when the population changed enough that the
   // old frame would leave the reader staring at empty space — but not on a
@@ -259,30 +284,27 @@ function build() {
   // view you cannot hold still and read.
   const reframe = !fitted || (!sameNodes && Math.abs(nodes.length - previousCount) > previousCount * 0.25)
 
+  sim.value = s
   if (reduced) {
     // No settling animation to watch, so settle it before the first paint.
-    s.stop()
-    for (let i = 0; i < 320; i++) s.tick()
-    sim.value = s
-    if (reframe) { fit(); fitted = true }
-    draw()
+    settleFirst(320, () => {
+      if (reframe) { fit(); fitted = true }
+    })
     return
   }
 
-  sim.value = s
   if (sameNodes) {
     s.alpha(0.32)
-  } else {
-    // One free settle before framing, so the opening shot is structure rather
-    // than the spiral seed exploding outward.
-    s.stop()
-    for (let i = 0; i < 90; i++) s.tick()
-    s.alpha(0.55)
+    if (reframe) { fit(); fitted = true; refitOnSettle = true }
+    wake()
+    return
   }
-  // d3's stepper is never used; `frame()` owns integration.
-  s.stop()
-  if (reframe) { fit(); fitted = true; refitOnSettle = true }
-  wake()
+  // One free settle before framing, so the opening shot is structure rather
+  // than the spiral seed exploding outward.
+  settleFirst(90, () => {
+    s.alpha(0.55)
+    if (reframe) { fit(); fitted = true; refitOnSettle = true }
+  })
 }
 
 /* ------------------------------------------------------------- render loop */
@@ -296,6 +318,22 @@ function wake() {
 
 function frame(now = performance.now()) {
   const s = sim.value
+  if (s && presettle > 0) {
+    const until = performance.now() + TICK_BUDGET_MS
+    do {
+      s.tick()
+      presettle--
+    } while (presettle > 0 && performance.now() < until)
+    if (presettle > 0) {
+      raf = requestAnimationFrame(frame)
+      return
+    }
+    const then = afterPresettle
+    afterPresettle = null
+    then?.()
+    // The settle's own frames are not time the layout owes steps for.
+    lastFrame = now
+  }
   // The simulation is integrated here rather than by d3's internal timer.
   // Two independent loops — d3's for physics, ours for painting — means a frame
   // can be drawn from a half-stepped state, and it leaves the physics running
@@ -311,7 +349,9 @@ function frame(now = performance.now()) {
   const settling = !!s && s.alpha() > s.alphaMin()
   if (s && settling) {
     const steps = Math.min(Math.max(Math.round(elapsed / 16.7), 1), 6)
-    for (let i = 0; i < steps && s.alpha() > s.alphaMin(); i++) s.tick()
+    // The clock says how many steps are owed; the budget caps what one frame pays.
+    const until = performance.now() + TICK_BUDGET_MS
+    for (let i = 0; i < steps && s.alpha() > s.alphaMin() && (i === 0 || performance.now() < until); i++) s.tick()
   }
   // The frame chosen mid-settle is the frame of a layout that had not finished
   // spreading, which is how nodes end up hanging off the bottom edge. Reframe

@@ -771,6 +771,7 @@ export type I18nTranslations = {
             "notFound": string;
         };
         "ai": {
+            "disabled": string;
             "skillNotFound": string;
             "skillNameTaken": string;
             "pluginNotFound": string;

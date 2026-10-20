@@ -57,6 +57,8 @@ const title = computed(() => projects.activeName ?? t('nav.allPages'))
  * even when the page's `onServerPrefetch` then loads the tree into the state
  * the client hydrates from (#278). Holding the skeleton until mount keeps the
  * first client render equal to the server's; the rows follow one frame later.
+ * Unless the tree was there before the render began (`treePrefetched`, #279):
+ * then the server drew the rows, and so does the client's first render.
  */
 const mounted = ref(false)
 onMounted(() => {
@@ -211,7 +213,7 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
       :style="{ '--kn-tree-shift': `${shift}px` }"
       :data-windowed="shift > 0"
     >
-      <div v-if="!mounted || !store.treeLoaded" class="space-y-1.5 px-1 pt-1">
+      <div v-if="!(mounted || store.treePrefetched) || !store.treeLoaded" class="space-y-1.5 px-1 pt-1">
         <Skeleton v-for="i in 6" :key="i" class="h-7 w-full" />
       </div>
       <p v-else-if="store.tree.length === 0" class="text-muted-foreground px-2.5 pt-1 text-xs">

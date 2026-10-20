@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Left navigation rail: brand, workspace switcher, primary nav, and the
 // Projects → Pages navigation stack (Confluence-style space sidebar).
-import { computed, ref, type Component } from 'vue'
+import { computed, defineAsyncComponent, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
@@ -21,7 +21,6 @@ import { useAuthStore } from '@/stores/auth'
 import ScopeSwitcher from './ScopeSwitcher.vue'
 import SidebarPanes from './SidebarPanes.vue'
 import SidebarResizeHandle from './SidebarResizeHandle.vue'
-import SwitcherCreateDialog from './SwitcherCreateDialog.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -33,6 +32,14 @@ const router = useRouter()
 // workspace row in the switcher above, and the roster's + button below.
 const creating = ref<'workspace' | 'project' | null>(null)
 const seedName = ref('')
+
+// Loaded on first open and kept after, so closing still animates: its steps,
+// pickers and member search are not what a first load needs (#279).
+const SwitcherCreateDialog = defineAsyncComponent(() => import('./SwitcherCreateDialog.vue'))
+const createMounted = ref(false)
+watch(creating, (kind) => {
+  if (kind) createMounted.value = true
+})
 
 function openCreate(kind: 'workspace' | 'project', query = '') {
   seedName.value = query
@@ -110,6 +117,7 @@ function isCurrent(to: string): boolean {
     <SidebarResizeHandle />
 
     <SwitcherCreateDialog
+      v-if="createMounted"
       :kind="creating"
       :initial-name="seedName"
       @update:kind="creating = $event"

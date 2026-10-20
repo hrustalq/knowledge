@@ -97,6 +97,8 @@ watch(
     result.value = null
     finishing = false
   },
+  // The rail mounts the dialog on its first open (#279).
+  { immediate: true },
 )
 
 const header = computed(() => {

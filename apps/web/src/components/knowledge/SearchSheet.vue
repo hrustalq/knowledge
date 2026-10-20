@@ -32,7 +32,8 @@ const open = computed({
   set: (v: boolean) => (v ? ui.openSearch() : ui.close()),
 })
 
-// Rosters are only needed once the sheet is actually used.
+// Rosters are only needed once the sheet is actually used. Immediate, because
+// the shell mounts the sheet on its first open (#279).
 watch(
   () => ui.open,
   (isOpen) => {
@@ -57,6 +58,7 @@ watch(
       if (search.query.value.trim()) void search.run()
     }
   },
+  { immediate: true },
 )
 
 function switchWorkspace(workspaceId: string) {

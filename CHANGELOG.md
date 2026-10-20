@@ -31,6 +31,11 @@ in the pull request that introduces them — see
   `Cross-Origin-Opener-Policy: same-origin` (#277). Share links and published
   sites keep the headers their renders set, so a site's Ask widget stays
   embeddable where its `frame-ancestors` allows.
+- Access logs and every log line written while a request is handled now show
+  `?code=` and `?state=` as `[REDACTED]`, as they already did `?token=`. The
+  SSO and GitHub App callbacks no longer put the identity provider's
+  authorization code and state in a log, and neither do share-site and chat
+  link codes. (#297)
 - Attachment, import-image and avatar URLs in the web app no longer carry your
   session token. Those `<img>` and `<object>` requests now authenticate with the
   app's own session cookie, so the token can no longer end up in a proxy log,

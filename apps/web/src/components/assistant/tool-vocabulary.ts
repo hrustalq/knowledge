@@ -2,7 +2,7 @@
 // and the finished transcript can never label the same call differently.
 import {
   FileCode2, FilePlus2, FileText, FolderTree, Globe, LayoutList, LayoutPanelTop, LayoutTemplate, Link, ListTree, MessageCircleQuestion, Network,
-  CircleDot, MessageSquarePlus, PenLine, Search, SearchCode, SquarePen, TicketPlus, Wand2, Wrench,
+  CircleDot, MessageSquarePlus, MessagesSquare, PenLine, Search, SearchCode, SquarePen, TicketPlus, Wand2, Wrench,
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -26,6 +26,9 @@ const TOOLS: Record<string, ToolVocabulary> = {
   // should not take "looked at the page templates" for "showed a component".
   list_templates: { icon: LayoutList, running: 'tool.list_templates.running', done: 'tool.list_templates.done' },
   get_template: { icon: LayoutPanelTop, running: 'tool.get_template.running', done: 'tool.get_template.done' },
+  // #339. Its own verb: an answer resting on what people said in a chat is a
+  // different kind of evidence from one resting on a page.
+  search_chat: { icon: MessagesSquare, running: 'tool.search_chat.running', done: 'tool.search_chat.done' },
   render_component: { icon: LayoutTemplate, running: 'tool.render_component.running', done: 'tool.render_component.done' },
   create_document: { icon: FilePlus2, running: 'tool.create_document.running', done: 'tool.create_document.done' },
   propose_update: { icon: SquarePen, running: 'tool.propose_update.running', done: 'tool.propose_update.done' },

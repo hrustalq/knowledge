@@ -4,7 +4,7 @@ import { Prisma, type ChatAnswer, type ChatChannelBinding, type ChatIntegration 
 import {
   ANSWER_FEEDBACK_REASONS,
   isLocale,
-  isWebSource,
+  assistantSourceHref,
   type AssistantMessageInfo,
   type AssistantSource,
   type ChatPlatformKind,
@@ -475,7 +475,7 @@ export class ChatAnswersService {
       sources: ordered.slice(0, this.maxSources).map((s) => ({
         ...(s.cite ? { cite: s.cite } : {}),
         title: s.title,
-        url: isWebSource(s) ? s.url : `${this.webBaseUrl}/documents/${s.documentId}`,
+        url: assistantSourceHref(s, this.webBaseUrl),
       })),
       sourcesHeading: t('chat.answer.sources'),
       full: { label: t('chat.answer.openFull'), url: `${this.webBaseUrl}/assistant?thread=${threadId}` },

@@ -141,6 +141,13 @@ const DRAFT_TOOLS = ['edit_draft'];
  */
 const WEB_TOOLS = ['web_search', 'web_fetch'];
 /**
+ * Searchable groups' chat (#339). Named for the two conversational agents
+ * only — they answer a person, who can weigh "someone said so in a chat". A
+ * background agent's findings become proposals, and a proposal resting on an
+ * unreviewed message is the wrong default. Inert until a group is searchable.
+ */
+const CHAT_TOOLS = ['search_chat'];
+/**
  * A connected repository (docs/features/31). Same footing as the web pair:
  * named in the two conversational lists, and inert until the workspace has a
  * repository connector — `definitions()` withholds them otherwise.
@@ -191,6 +198,7 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
       ...READ_TOOLS,
       ...UI_TOOLS,
       ...WEB_TOOLS,
+      ...CHAT_TOOLS,
       ...CODE_TOOLS,
       ...TASK_READ_TOOLS,
       ...DRAFT_TOOLS,
@@ -214,7 +222,7 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     instructions: CHAT_PREAMBLE + AGENT_CLAUSE + FORM_CLAUSE + CHAT_RULES,
     // definitions('agent', { ui: true }) drops request_agent_mode — offering
     // the switch when the write tools are already on the table is confusing.
-    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CODE_TOOLS, ...TASK_READ_TOOLS, ...DRAFT_TOOLS, ...WRITE_TOOLS],
+    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CHAT_TOOLS, ...CODE_TOOLS, ...TASK_READ_TOOLS, ...DRAFT_TOOLS, ...WRITE_TOOLS],
     skillIds: [],
     purpose: 'chat',
     surfaces: ['interactive'],

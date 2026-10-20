@@ -12,7 +12,7 @@ import type {
   AnswerVote,
   AssistantSource,
 } from '@knowledge/contracts';
-import { isWebSource } from '@knowledge/contracts';
+import { isPageSource } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { Principal } from '../auth/principal.js';
 import { t } from '../i18n/t.js';
@@ -322,7 +322,7 @@ export class AnswerFeedbackService {
 
 /** Pages only — a web citation has no id to report against. */
 function citedIds(sources: readonly AssistantSource[]): string[] {
-  return [...new Set(sources.filter((s) => !isWebSource(s)).map((s) => (s as { documentId: string }).documentId))];
+  return [...new Set(sources.filter(isPageSource).map((s) => s.documentId))];
 }
 
 export function signalKindFor(confidence: AnswerConfidence | null): Exclude<AnswerSignalKind, 'vote'> | null {

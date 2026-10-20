@@ -24,7 +24,7 @@ import {
   assessAnswer,
   assistantSourceKey,
   draftEditNeedsAnchor,
-  isWebSource,
+  isPageSource,
 } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
 import type { AssistantThread } from '@prisma/client';
@@ -239,6 +239,8 @@ interface PreparedTurn {
   repos: RepoSummary[];
   /** Connectors with work items — empty means the task tools are not offered. */
   taskRepos: Array<{ id: string; name: string }>;
+  /** The workspace has a searchable group (#339) — false means `search_chat` is not offered. */
+  chat: boolean;
   messages: ChatCompletionMessageParam[];
   collected: Map<string, AssistantSource>;
   uiBlocks: AssistantUiBlock[];
@@ -499,9 +501,9 @@ export class AssistantService {
         });
         if (!result.ok) toolErrors++;
         for (const source of result.sources) {
-          // isWebSource can only be false here — see the map's type above —
-          // but the narrowing is what proves it rather than a cast.
-          if (isWebSource(source)) continue;
+          // Pages only here — see the map's type above — and the narrowing is
+          // what proves it rather than a cast.
+          if (!isPageSource(source)) continue;
           if (!collected.has(source.documentId)) collected.set(source.documentId, source);
         }
         return { content: result.content, ok: result.ok };
@@ -597,6 +599,7 @@ export class AssistantService {
             web: turn.agent.config.webAccess.effective !== 'off',
             code: turn.repos.length > 0,
       tasks: turn.taskRepos.length > 0,
+            chat: turn.chat,
           }),
           ...(await this.plugins.toolsFor(thread.workspaceId)),
         ],
@@ -652,6 +655,7 @@ export class AssistantService {
             web: turn.agent.config.webAccess.effective !== 'off',
             code: turn.repos.length > 0,
             tasks: turn.taskRepos.length > 0,
+            chat: turn.chat,
           }),
           ...(await this.plugins.toolsFor(thread.workspaceId)),
         ],
@@ -716,6 +720,7 @@ export class AssistantService {
             web: turn.agent.config.webAccess.effective !== 'off',
             code: turn.repos.length > 0,
             tasks: turn.taskRepos.length > 0,
+            chat: turn.chat,
             // Streaming only: the whole-response path has no channel to carry
             // the edit back while the author watches.
             draft: turn.draft !== null,
@@ -1221,6 +1226,8 @@ export class AssistantService {
     // And which of those carry issues (docs/features/32). One indexed query,
     // no network, for the same reason.
     const taskRepos = await this.tasks.repositories(thread.workspaceId);
+    // And whether any group's chat is searchable (#339): one indexed query.
+    const chat = await this.tools.chatAvailable(thread.workspaceId);
 
     // The turn's static instructions come from the agent the mode selected
     // (docs/features/20) — Ask mode is the researcher, Agent mode the author.
@@ -1293,6 +1300,7 @@ export class AssistantService {
       agent,
       repos,
       taskRepos,
+      chat,
       messages: [{ role: 'system', content: system }, ...history, { role: 'user', content: dto.content }],
       collected: new Map<string, AssistantSource>([
         ...(groundingDoc

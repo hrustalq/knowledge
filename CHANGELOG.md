@@ -51,8 +51,20 @@ in the pull request that introduces them — see
 
     Chat results are kept apart from page results. Filters by project, group
     and time span only narrow what the caller may already read.
-  - **Not in agents or the web yet:** the agents' tools, bot answers and the
-    web UI arrive in the next phases.
+  - **Agents and bots** (phase 4) can search the same chats through
+    `knowledge_search_chat` (MCP) and `search_chat` (the assistant).
+    - **Offered only while the workspace has a searchable group**, and only
+      to the Researcher and Author agents, which also answer in chat bots.
+      Background agents never get it.
+    - **Masked, cited and labelled.** Results are masked and wrapped as
+      untrusted, and an answer cites a chat window as its own kind of
+      source. The window opens in the messenger where the platform has
+      links, and shows the group and time span in the sources panel.
+    - **Group answers stay inside the group's audience.** A bot answering
+      in a group searches only the chats of the group's project, and never
+      a restricted project's chat.
+  - **Not in the web UI yet:** the search page's Chat tab and the switch in
+    Settings → Chat bots arrive in the next phase.
 
 ### Operations
 

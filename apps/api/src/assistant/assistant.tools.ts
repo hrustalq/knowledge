@@ -123,16 +123,21 @@ export class AssistantToolsService {
    * a repository connector to read — there is nothing to offer otherwise.
    * @param opts.draft offer `edit_draft`; the caller decides from whether the turn carries a draft
    * and can stream the edit back to it. */
+  /** Whether `search_chat` has anything to search in this workspace (#339). */
+  chatAvailable(workspaceId: string): Promise<boolean> {
+    return this.readTools.chatAvailable(workspaceId);
+  }
+
   definitions(
     mode: AssistantChatMode = 'ask',
-    opts: { ui?: boolean; web?: boolean; code?: boolean; tasks?: boolean; draft?: boolean } = {},
+    opts: { ui?: boolean; web?: boolean; code?: boolean; tasks?: boolean; draft?: boolean; chat?: boolean } = {},
   ): ChatCompletionFunctionTool[] {
     const ui = opts.ui ?? true;
     const all: ChatCompletionFunctionTool[] = [
       // The read half, from the service the background agents also run — one
       // definition list, so what the chat offers and what an agent may call
       // cannot drift apart.
-      ...this.readTools.definitions(),
+      ...this.readTools.definitions({ chat: opts.chat }),
       // Same rule for the repository tools.
       ...this.code.definitions(),
       {

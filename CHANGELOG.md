@@ -51,6 +51,13 @@ in the pull request that introduces them — see
   `[PASSPORT_n]` after `паспорт`, `серия` or `passport` in any common
   spacing, or with no such word only in its printed `45 09 123456` form.
   Buffered Telegram messages are masked the same way on write. (#342)
+- A platform admin can see and sign out anyone's sessions from **Access →
+  Accounts → Sessions**: each live sign-in with its method and identity
+  provider, IP, browser and last use, one at a time or all at once. API keys
+  are untouched. The new `DELETE /v1/users/:id/sessions/:sessionId` revokes
+  one session (404 for a session id that is not that person's) and is audited
+  as `auth.session_revoked` by `admin`; session lists now carry
+  `providerName`. (#292)
 - MCP agents can work in a page's shared draft (#316). Over the HTTP MCP
   server (`/v1/mcp`), with co-editing on, `knowledge_get_draft` reads the
   draft people are writing in the editor: the body as publishing it would

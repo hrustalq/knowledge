@@ -393,6 +393,14 @@ in the pull request that introduces them — see
   grew, and search stayed `degraded: ['fulltext']`. The next call now retries
   the setup, so after an OpenSearch restart the sweep re-mirrors the stale
   revisions and search logs its recovery.
+- On a phone, screen readers now name the buttons that show only an icon
+  (#354). Below the `sm` width, the Graph / Tree / List tabs, Upload, New page,
+  Show archived and Filters on `/documents` hid their label from assistive
+  technology along with the screen, so they were announced as "tab, selected"
+  or "link". The same applied to New chat in the assistant, the editor's AI
+  button, Ask on a published site, the filter rail toggle on merge requests,
+  and Ask the architect and Configure in the workflow builder. The label is
+  still hidden on screen but is now read aloud. Nothing looks different.
 - The editor no longer opens a page it failed to load (#314). If any request
   for an existing page failed (the connection dropped mid-load, a 5xx, a
   timeout), the editor used to open with an empty title and body and Publish

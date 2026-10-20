@@ -5,6 +5,7 @@ import { AuthFlowService } from '../src/auth/auth-flow.service.js';
 import { OidcService } from '../src/auth/sso/oidc.service.js';
 import { SamlService } from '../src/auth/sso/saml.service.js';
 import { LdapService } from '../src/auth/sso/ldap.service.js';
+import { IdentityProvidersService } from '../src/auth/sso/identity-providers.service.js';
 import { SsoFlowService } from '../src/auth/sso/sso-flow.service.js';
 import { SsoLoginService } from '../src/auth/sso/sso-login.service.js';
 import { RoleSyncService } from '../src/auth/sso/role-sync.service.js';
@@ -169,5 +170,34 @@ export function ssoHarness(config = fakeConfig(), defaults: Row = {}) {
   };
   const failures = () => (audit.record.mock.calls as unknown as Row[][]).map((c) => c[0]).filter((e) => e.action === 'auth.login_failed');
   return { sso, oidc, saml, ldap, prisma, db, audit, sessions, provider, failures };
+}
+
+/** `IdentityProvidersService` (the admin CRUD) over an in-memory provider table; `rows` is what the DB holds. */
+export function identityProvidersHarness(config = fakeConfig()) {
+  const rows: Row[] = [];
+  const prisma = {
+    identityProvider: {
+      create: vi.fn(async ({ data }: Row) => {
+        const row = { id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), enabled: false, showOnLogin: true, platformWide: false, jitEnabled: false, defaultRole: null, allowedDomains: [], groupsClaim: null, groupSyncMode: 'additive', sessionTtlHours: null, secretCipher: null, ...data };
+        rows.push(row);
+        return row;
+      }),
+      findFirst: vi.fn(async ({ where }: Row) => rows.find((r) => r.id === where.id && r.workspaceId === where.workspaceId) ?? null),
+      update: vi.fn(async ({ where, data }: Row) => Object.assign(rows.find((r) => r.id === where.id)!, data)),
+      findMany: vi.fn(async () => rows),
+    },
+  };
+  const audit = { record: vi.fn(async () => undefined) };
+  const saml = new SamlService(config as never);
+  const svc = new IdentityProvidersService(
+    prisma as never,
+    config as never,
+    new OidcService(config as never),
+    audit as never,
+    noAuthPolicy as never,
+    saml,
+    new LdapService(config as never),
+  );
+  return { svc, saml, rows, audit };
 }
 

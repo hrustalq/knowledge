@@ -1,18 +1,27 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'reflect-metadata';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Logger, type LoggerService } from '@nestjs/common';
 import { exportJWK, generateKeyPair, SignJWT, type JWK } from 'jose';
+import { closeBacktest, configureBacktest, createRootLogger } from '@knowledge/observability';
+import { traceMiddleware } from '@knowledge/observability/express';
+import { IDP_PRESETS, type IdpPreset } from '@knowledge/contracts';
+import { decryptSecret, parseKey } from '../src/ai/secret-box.js';
 import { AuthFlowService } from '../src/auth/auth-flow.service.js';
+import { OIDC_PRESETS } from '../src/auth/sso/oidc-presets.js';
 import { identityFromClaims } from '../src/auth/sso/oidc-claims.js';
 import { SsoLoginService } from '../src/auth/sso/sso-login.service.js';
 import { RoleSyncService } from '../src/auth/sso/role-sync.service.js';
 import { normalizeDomain } from '../src/auth/sso/identity-providers.service.js';
 import { safeReturnTo } from '../src/common/safe-return-to.js';
+import { PinoNestLogger } from '../src/observability/nest-logger.js';
 import { noAuthPolicy } from './auth-policy-fakes.js';
-import { fakeConfig, ssoHarness, WEB, WS, type Row } from './sso-fakes.js';
+import { fakeConfig, identityProvidersHarness, ssoHarness, WEB, WS, type Row } from './sso-fakes.js';
 
 /**
  * OIDC sign-in end to end (#75 phase 2), against an in-process OpenID provider:
@@ -190,21 +199,55 @@ describe('OIDC sign-in', () => {
     expect(h.db.identities).toHaveLength(1);
   });
 
-  it('a reused exchange code is refused', async () => {
+  /** The 400 a refused exchange answers with: the page reads `loginError` and goes to /login?error=. */
+  const refusal = async (p: Promise<unknown>) => {
+    const err = await p.then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect((err as BadRequestException).getResponse()).toMatchObject({ statusCode: 400, loginError: 'exchange-invalid' });
+  };
+
+  it('a reused exchange code is refused, and audited as a failed sign-in', async () => {
     const h = harness();
     const p = h.provider();
     const code = fragmentCode(await signIn(h, p.id, person()))!;
     await h.sso.exchange(code, meta);
-    await expect(h.sso.exchange(code, meta)).rejects.toBeInstanceOf(BadRequestException);
-    await expect(h.sso.exchange('forged', meta)).rejects.toBeInstanceOf(BadRequestException);
+    expect(h.failures()).toHaveLength(0);
+
+    await refusal(h.sso.exchange(code, meta));
+    expect(h.failures()).toHaveLength(1);
+    // The spent code's hash is cleared, so the row — and its provider — is not found.
+    expect(h.failures()[0]).toMatchObject({
+      workspaceId: null,
+      actor: 'anonymous',
+      ok: false,
+      ip: meta.ip,
+      params: { providerId: null, error: 'exchange-invalid' },
+    });
+
+    await refusal(h.sso.exchange('forged', meta));
+    expect(h.failures()).toHaveLength(2);
   });
 
-  it('an expired exchange code is refused', async () => {
+  it('an expired exchange code is refused, and audited under its provider', async () => {
     const h = harness();
     const p = h.provider();
     const code = fragmentCode(await signIn(h, p.id, person()))!;
     h.db.requests[0].expiresAt = new Date(Date.now() - 1);
-    await expect(h.sso.exchange(code, meta)).rejects.toBeInstanceOf(BadRequestException);
+    await refusal(h.sso.exchange(code, meta));
+    expect(h.sessions.create).not.toHaveBeenCalled();
+    expect(h.failures()).toHaveLength(1);
+    expect(h.failures()[0]).toMatchObject({
+      workspaceId: WS,
+      actor: 'anonymous',
+      ok: false,
+      ip: meta.ip,
+      error: 'exchange code expired',
+      params: { method: 'oidc', providerId: p.id, error: 'exchange-invalid' },
+      target: h.db.users[0].id,
+    });
   });
 
   it('a replayed state fails to /login?error=invalid-state with an audit row, and redeems no second code', async () => {
@@ -239,6 +282,8 @@ describe('OIDC sign-in', () => {
     const back = authorize(await h.sso.start(p.id, '/projects/x'), person());
     h.db.requests[0].expiresAt = new Date(Date.now() - 1);
     expect(await h.sso.callback(p.id, back, meta)).toBe(`${WEB}/login?error=invalid-state&redirect=%2Fprojects%2Fx`);
+    expect(h.failures()).toHaveLength(1);
+    expect(h.failures()[0]).toMatchObject({ workspaceId: WS, ok: false, ip: meta.ip, params: { method: 'oidc', providerId: p.id, error: 'invalid-state' } });
   });
 
   it("a state from another provider's transaction fails", async () => {
@@ -357,6 +402,74 @@ describe('OIDC sign-in', () => {
     const p = h.provider();
     expect(await h.sso.start(p.id, '/documents')).toBe(`${WEB}/login?error=provider-error`);
     expect(h.db.requests).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------- logs (#297)
+
+describe('logs during an OIDC sign-in (#297)', () => {
+  const nest = Logger as unknown as { staticInstanceRef: LoggerService };
+  let previous: LoggerService;
+  let lines: string[];
+  let dir: string;
+
+  beforeEach(() => {
+    // The production wiring: pino root logger at the lowest level, behind the
+    // Nest bridge, so every `new Logger(X.name)` in the flow lands in `lines`.
+    lines = [];
+    previous = nest.staticInstanceRef;
+    const root = createRootLogger({ service: 'api', level: 'trace', stream: { write: (s: string) => void lines.push(s) } });
+    Logger.overrideLogger(new PinoNestLogger(root));
+    dir = mkdtempSync(join(tmpdir(), 'kn-sso-logs-'));
+    configureBacktest({ enabled: true, dir, service: 'api' });
+  });
+
+  afterEach(() => {
+    Logger.overrideLogger(previous);
+    configureBacktest({ enabled: false });
+    closeBacktest();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** One request through the access-log middleware: the handler runs in its trace scope, then the response finishes. */
+  async function request<T>(method: string, url: string, handler: () => Promise<T>): Promise<T> {
+    const onFinish: (() => void)[] = [];
+    const res = { statusCode: 302, setHeader: () => undefined, getHeader: () => undefined, on: (_e: 'finish', fn: () => void) => onFinish.push(fn) };
+    let out!: Promise<T>;
+    traceMiddleware({ method, url, headers: {} }, res, () => {
+      out = handler();
+    });
+    const value = await out;
+    onFinish.forEach((fn) => fn());
+    return value;
+  }
+
+  const accessLog = () => readdirSync(dir).map((f) => readFileSync(join(dir, f), 'utf8')).join('');
+
+  it('carry neither the IdP code, the state, the exchange code nor the ks_ token', async () => {
+    const h = harness();
+    const p = h.provider();
+    const start = await request('GET', `/v1/auth/oidc/${p.id}/start?returnTo=%2Fdocuments`, () => h.sso.start(p.id, '/documents'));
+    const back = authorize(start, person());
+    const redirect = await request('GET', `/v1/auth/oidc/${p.id}/callback?${back}`, async () => {
+      // A canary in the callback's scope: proves the capture sees a Nest
+      // Logger line at debug, with the request's route mixed in.
+      new Logger('Canary').debug('inside the callback');
+      return h.sso.callback(p.id, back, meta);
+    });
+    const exchangeCode = fragmentCode(redirect)!;
+    const res = await request('POST', '/v1/auth/sso/exchange', () => h.sso.exchange(exchangeCode, meta));
+    expect(res.token).toMatch(/^ks_/);
+
+    const canary = lines.map((l) => JSON.parse(l) as Row).find((r) => r.ctx === 'Canary');
+    expect(canary).toMatchObject({ level: 20, route: `/v1/auth/oidc/${p.id}/callback?code=[REDACTED]&state=[REDACTED]` });
+    await vi.waitFor(() => expect(accessLog().match(/"kind":"http\.request"/g)).toHaveLength(3));
+
+    const written = [...lines, accessLog()].join('\n');
+    for (const secret of [back.get('code')!, back.get('state')!, exchangeCode, res.token]) {
+      expect(written).not.toContain(secret);
+    }
+    expect(written).not.toMatch(/ks_/);
   });
 });
 
@@ -548,5 +661,60 @@ describe('OIDC back-channel logout', () => {
     const h = harness();
     expect(h.oidc.backchannelLogoutUri({ id: 'p1', preset: 'keycloak' })).toBe('http://api.test/v1/auth/oidc/p1/backchannel-logout');
     expect(h.oidc.backchannelLogoutUri({ id: 'p1', preset: 'yandex' })).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------- provider setup (#296)
+
+describe('OIDC provider setup', () => {
+  const ENC_KEY = randomBytes(32).toString('base64');
+  const ISSUER = 'https://idp.example/realms/corp';
+  const SECRET = 's3cret-client-value';
+  const admin = { userId: 'u1', isAdmin: false } as never;
+  const body = (preset: IdpPreset) => ({ kind: 'oidc' as const, name: 'Corp', preset, issuer: ISSUER, clientId: 'knowledge', clientSecret: SECRET });
+  /** Every key in a JSON value, at any depth. */
+  const keysOf = (v: unknown): string[] =>
+    v && typeof v === 'object' ? Object.entries(v).flatMap(([k, inner]) => [k, ...keysOf(inner)]) : [];
+
+  it.each(IDP_PRESETS)('%s: the client secret is stored encrypted and shown only as hasSecret', async (preset) => {
+    const { svc, rows, audit } = identityProvidersHarness(fakeConfig({ SETTINGS_ENCRYPTION_KEY: ENC_KEY }));
+    const view = await svc.create(WS, body(preset), admin);
+
+    expect(view).toMatchObject({ kind: 'oidc', preset, hasSecret: true, config: { clientId: 'knowledge' } });
+    expect(decryptSecret(rows[0].secretCipher, parseKey(ENC_KEY))).toBe(SECRET);
+    const json = JSON.stringify(view);
+    expect(json).not.toContain(SECRET);
+    expect(json).not.toContain(rows[0].secretCipher);
+    expect(keysOf(view).filter((k) => /secret|cipher/i.test(k))).toEqual(['hasSecret']);
+    expect(JSON.stringify(audit.record.mock.calls)).not.toContain(SECRET);
+    // Google and Yandex are one IdP each: their issuer is fixed, whatever the body sends.
+    expect(view.config.issuer).toBe(OIDC_PRESETS[preset].issuer ?? ISSUER);
+    expect(rows[0].config.issuer).toBe(OIDC_PRESETS[preset].issuer ?? ISSUER);
+  });
+
+  it('keeps the stored secret on an update that sends none, and clears it only on an empty string', async () => {
+    const { svc, rows } = identityProvidersHarness(fakeConfig({ SETTINGS_ENCRYPTION_KEY: ENC_KEY }));
+    const view = await svc.create(WS, body('keycloak'), admin);
+    const cipher = rows[0].secretCipher;
+    expect((await svc.update(WS, view.id, { name: 'Renamed', clientId: 'knowledge-2' }, admin)).hasSecret).toBe(true);
+    expect(rows[0].secretCipher).toBe(cipher);
+    expect((await svc.update(WS, view.id, { clientSecret: '' }, admin)).hasSecret).toBe(false);
+    expect(rows[0].secretCipher).toBeNull();
+  });
+
+  it('refuses a secret without SETTINGS_ENCRYPTION_KEY, on create and on update', async () => {
+    const { svc, rows } = identityProvidersHarness(fakeConfig({ SETTINGS_ENCRYPTION_KEY: '' }));
+    expect((await svc.list(WS)).secretsWritable).toBe(false);
+    const err = await svc.create(WS, body('keycloak'), admin).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect((err as BadRequestException).message).toBe('error.sso.secretKeyMissing');
+    expect(rows).toHaveLength(0);
+
+    // Intended: a public client (PKCE, no secret) needs no key, so it saves.
+    const { clientSecret: _secret, ...publicClient } = body('keycloak');
+    const view = await svc.create(WS, publicClient, admin);
+    expect(view.hasSecret).toBe(false);
+    await expect(svc.update(WS, view.id, { clientSecret: SECRET }, admin)).rejects.toThrow('error.sso.secretKeyMissing');
+    expect(rows[0].secretCipher).toBeNull();
   });
 });

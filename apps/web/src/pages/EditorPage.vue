@@ -1254,7 +1254,7 @@ onBeforeUnmount(() => {
             :title="`${t('editorAi.toggle')} (${modKey}J)`"
             @click="setAiOpen(!aiOpen)"
           >
-            <Sparkles class="size-4" /> <span class="hidden sm:inline">{{ t('editorAi.button') }}</span>
+            <Sparkles class="size-4" /> <span class="sr-only sm:not-sr-only">{{ t('editorAi.button') }}</span>
           </Button>
           <Button variant="ghost" size="sm" class="hidden sm:inline-flex" @click="settingsOpen = true">
             <Settings2 class="size-4" /> {{ t('editor.settings') }}

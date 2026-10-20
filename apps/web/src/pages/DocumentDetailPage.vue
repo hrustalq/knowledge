@@ -609,9 +609,14 @@ const isSpec = computed(() => !!detail.value?.document.kind && detail.value.docu
 const apiRef = useApiReference(documentId, viewingRevision, isSpec)
 const canComment = computed(() => auth.canComment && !viewingRevision.value)
 // Usage analytics (#79): opening this page is one view, once it is known to be
-// readable — a refused or missing page records nothing.
-usePageView(() =>
-  detail.value ? { documentId: documentId.value, revisionId: viewingRevision.value ?? detail.value.revision.revisionId } : null,
+// readable — a refused or missing page records nothing. The insights query
+// started before the beacon, so it is read again once this visit is a row (#336).
+usePageView(
+  () =>
+    detail.value ? { documentId: documentId.value, revisionId: viewingRevision.value ?? detail.value.revision.revisionId } : null,
+  (id) => {
+    if (id === documentId.value) void insightsQuery.refetch()
+  },
 )
 
 onMounted(() => {

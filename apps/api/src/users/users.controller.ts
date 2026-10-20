@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -49,8 +50,25 @@ export class UsersController {
 
   @Get(':id/sessions')
   @ApiOperation({ summary: "A user's live login sessions (platform admin, #75)" })
-  listSessions(@Param('id', ParseUUIDPipe) id: string): Promise<ListSessionsResponse> {
-    return this.users.listSessions(id);
+  listSessions(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ListSessionsResponse> {
+    // An admin looking at their own account sees which row is this browser.
+    return this.users.listSessions(id, id === principal.userId ? principal.sessionId : undefined);
+  }
+
+  /** Sign one of a person's sessions out; another user's session id is a 404 (#292). */
+  @Delete(':id/sessions/:sessionId')
+  @HttpCode(204)
+  @ApiOperation({ summary: "Revoke one of a user's sessions (platform admin); its token gets 401 from the next request" })
+  revokeSession(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Req() req: Request,
+  ): Promise<void> {
+    return this.users.revokeSession(principal, id, sessionId, requestMeta(req).ip);
   }
 
   /** Sign a person out everywhere without disabling them — a lost laptop, say. */

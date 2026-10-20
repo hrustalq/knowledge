@@ -19,7 +19,8 @@ import { ChevronsUpDown } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { getWorkspaceId } from '@/lib/api'
-import { hueOf, initialsOf } from '@/lib/monogram'
+import { avatarColor } from '@/lib/avatar'
+import { initialsOf } from '@/lib/monogram'
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 
 const { t } = useI18n()
@@ -79,7 +80,7 @@ const showWorkspaceRow = computed(() => workspaces.items.length > 0)
         <template #option="{ option }">
           <span
             class="grid size-5 shrink-0 place-items-center rounded-[6px] text-[9px] font-semibold text-white"
-            :style="{ backgroundColor: `hsl(${hueOf(option.value)} 55% 45%)` }"
+            :style="{ backgroundColor: avatarColor(option.value) }"
             aria-hidden="true"
           >{{ initialsOf(option.label) }}</span>
           <span class="min-w-0 flex-1 truncate">{{ option.label }}</span>

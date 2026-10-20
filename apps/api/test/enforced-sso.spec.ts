@@ -1,8 +1,24 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import 'reflect-metadata';
-import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Controller,
+  ForbiddenException,
+  Get,
+  UnauthorizedException,
+  type INestApplication,
+} from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { Test } from '@nestjs/testing';
+import request from 'supertest';
+import { ApiExceptionFilter } from '../src/common/api-exception.filter.js';
+import { Access } from '../src/auth/access.decorator.js';
 import { AccessService } from '../src/auth/access.service.js';
 import { AclGuard } from '../src/auth/acl.guard.js';
+import { AuthGuard } from '../src/auth/auth.guard.js';
+import { TokenAuthService } from '../src/auth/token-auth.service.js';
+import { PermissionService } from '../src/permissions/permission.service.js';
 import { AuthPolicyService, policyFailure } from '../src/auth/auth-policy.service.js';
 import { AuthFlowService } from '../src/auth/auth-flow.service.js';
 import { hashPassword } from '../src/auth/password.js';
@@ -11,7 +27,7 @@ import { DOMAIN_RECHECK_MS, SsoDomainsService } from '../src/auth/sso/sso-domain
 import { proveDomain } from '../src/auth/sso/sso-dns.js';
 import { SsoMaintenanceSweeper } from '../src/auth/sso/sso-maintenance.sweeper.js';
 import { LiveGateway } from '../src/events/live.gateway.js';
-import { ENFORCING_PROVIDER, enforcingPolicy } from './auth-policy-fakes.js';
+import { ENFORCING_PROVIDER, enforcingPolicy, policyByWorkspace } from './auth-policy-fakes.js';
 
 /**
  * Enforced SSO (#75 phase 4). What is pinned:
@@ -184,6 +200,108 @@ describe('every surface meets the same check', () => {
   });
 });
 
+// ------------------------------------------------------------ real transports (#300)
+
+const WS_B = '22222222-2222-4222-8222-222222222222';
+
+@Controller('v1')
+class ProbeController {
+  @Get('probe')
+  @Access('viewer', 'query')
+  probe() {
+    return { ok: true };
+  }
+}
+
+describe('enforced SSO through the real transports (#75 criterion 11)', () => {
+  let app: INestApplication | undefined;
+  afterEach(async () => {
+    await app?.close();
+    app = undefined;
+  });
+
+  const principals: Record<string, Principal> = {
+    ks_password: passwordSession(),
+    ks_sso: ssoSession(),
+    ks_admin: passwordSession({ sessionId: 's-admin', isAdmin: true }),
+    kn_key: key(),
+  };
+
+  /** AuthGuard → AclGuard → the handler, with ApiExceptionFilter writing the body a client reads. */
+  async function rest(policy: AuthPolicyService, role: string | null = 'viewer') {
+    const tokenAuth = {
+      blocksUnverified: () => false,
+      resolve: vi.fn(async (token: string | undefined) => {
+        const principal = token ? principals[token] : undefined;
+        if (!principal) throw new UnauthorizedException('no');
+        return principal;
+      }),
+    };
+    const mod = await Test.createTestingModule({
+      controllers: [ProbeController],
+      providers: [
+        { provide: TokenAuthService, useValue: tokenAuth },
+        { provide: AccessService, useValue: accessWith(policy, role) },
+        { provide: PermissionService, useValue: {} },
+        { provide: APP_GUARD, useClass: AuthGuard },
+        { provide: APP_GUARD, useClass: AclGuard },
+      ],
+    }).compile();
+    app = mod.createNestApplication({ logger: false });
+    app.useGlobalFilters(new ApiExceptionFilter());
+    await app.init();
+    const http = request(app.getHttpServer());
+    return (token: string, workspaceId = WS) => http.get('/v1/probe').query({ workspaceId }).set('Authorization', `Bearer ${token}`);
+  }
+
+  it('REST: the 403 body carries reason, workspaceId and providers in details; the right IdP gets a 200', async () => {
+    const get = await rest(enforcingPolicy().policy);
+    const res = await get('ks_password');
+    expect(res.status).toBe(403);
+    expect(res.body).toMatchObject({
+      statusCode: 403,
+      message: expect.stringMatching(/ssoRequired/),
+      details: { reason: 'ssoRequired', workspaceId: WS, providers: [ENFORCING_PROVIDER] },
+    });
+    expect((await get('ks_sso')).status).toBe(200);
+  });
+
+  it('allowApiKeys=false blocks a key in that workspace only', async () => {
+    const get = await rest(policyByWorkspace({ [WS]: { allowApiKeys: false } }).policy);
+    const blocked = await get('kn_key', WS);
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.details).toEqual({ reason: 'apiKeysBlocked', workspaceId: WS });
+    expect((await get('kn_key', WS_B)).status).toBe(200);
+    // And nothing else of WS's policy reaches WS_B either.
+    expect((await get('ks_password', WS_B)).status).toBe(200);
+  });
+
+  it('REST: a platform admin on a password session passes, and one auth.sso_bypassed row is written', async () => {
+    const { policy, audit } = enforcingPolicy();
+    const get = await rest(policy, null);
+    expect((await get('ks_admin')).status).toBe(200);
+    expect((await get('ks_admin')).status).toBe(200);
+    expect(audit.record).toHaveBeenCalledTimes(1);
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'auth.sso_bypassed', workspaceId: WS, params: expect.objectContaining({ reason: 'password-session', sessionId: 's-admin' }) }),
+    );
+  });
+
+  it('WS: a platform admin on a password session subscribes, and one auth.sso_bypassed row is written', async () => {
+    const { policy, audit } = enforcingPolicy();
+    const config = { get: (k: string) => ({ LIVE_WS_ENABLED: true, LIVE_TRACKED_EVENTS: '', LIVE_WS_MAX_SUBSCRIPTIONS: 10 })[k] };
+    const tokenAuth = { resolve: vi.fn(async () => principals.ks_admin), blocksUnverified: () => false };
+    const gw = new LiveGateway(config as never, tokenAuth as never, accessWith(policy, null), {} as never, {} as never);
+    const socket = { on: vi.fn(), close: vi.fn(), send: vi.fn() };
+    await gw.handleConnection(socket as never, { url: '/v1/events/ws?token=ks_admin', headers: {} } as never);
+    const handle = (gw as unknown as { handleMessage(s: unknown, raw: string): Promise<void> }).handleMessage.bind(gw);
+    await handle(socket, JSON.stringify({ type: 'subscribe', workspaceId: WS }));
+    expect(socket.send.mock.calls.map(([frame]) => (JSON.parse(frame as string) as { type: string }).type)).toEqual(['subscribed']);
+    expect(audit.record).toHaveBeenCalledTimes(1);
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'auth.sso_bypassed', workspaceId: WS }));
+  });
+});
+
 // ------------------------------------------------------------ enforced domains
 
 async function loginWorld(opts: { admin?: boolean; allowPasswordForAdmins?: boolean; breakGlass?: string; enforced?: boolean } = {}) {
@@ -210,7 +328,7 @@ async function loginWorld(opts: { admin?: boolean; allowPasswordForAdmins?: bool
   const mail = { enqueue: vi.fn(async () => undefined) };
   const policy = new AuthPolicyService(prisma as never, config as never, audit as never);
   const flow = new AuthFlowService(prisma as never, config as never, sessions as never, mail as never, audit as never, policy);
-  return { flow, audit, sessions, mail };
+  return { flow, audit, sessions, mail, prisma };
 }
 
 const refusalOf = async (p: Promise<unknown>) => {
@@ -231,9 +349,15 @@ describe('a verified, enforced domain refuses passwords', () => {
   });
 
   it('at signup, and mints no reset link', async () => {
-    const { flow, mail } = await loginWorld();
-    await refusalOf(flow.signup('new@corp.example', 'New', 'correct horse battery'));
+    const { flow, mail, prisma } = await loginWorld();
+    expect(await refusalOf(flow.signup('new@corp.example', 'New', 'correct horse battery'))).toMatchObject({
+      reason: 'ssoRequiredForDomain',
+      domain: 'corp.example',
+      providerId: ENFORCING_PROVIDER.id,
+    });
     expect(await flow.forgotPassword('ada@corp.example')).toEqual({ ok: true });
+    // Refused before the token is minted, not just before the mail is queued.
+    expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
     expect(mail.enqueue).not.toHaveBeenCalled();
   });
 

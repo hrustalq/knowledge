@@ -3885,6 +3885,7 @@
       "import.parsed": "an import is ready to review",
       "import.failed": "an import failed",
       "export.completed": "an export is ready to download",
+      "chat.harvest.proposed": "an automatic chat harvest proposed captures for review",
       "export.failed": "an export failed",
       "connector.run.failed": "a sync failed",
       "knowledge-issue.reported": "reported a problem with this page",
@@ -4453,6 +4454,10 @@
     "disabledAdmin": "Turn them on in Settings → Publishing.",
     "disabledAsk": "Ask a workspace admin to turn them on.",
     "includeSubtree": "Include subpages",
+    "allowDownload": "Let readers download it (ZIP, HTML or PDF)",
+    "downloadToggle": "Downloads",
+    "downloadOn": "Readers can download this link’s pages",
+    "downloadOff": "Downloads are off — files already made stop downloading now",
     "expiry": "Expires",
     "expiryPreset": {
       "1d": "In 1 day",
@@ -4716,11 +4721,11 @@
     "viewExports": "View exports",
     "download": "Download",
     "pdfUnavailable": "Not set up on this server: PDF needs a Gotenberg service (GOTENBERG_URL).",
+    "formatLabel": "Format",
     "dialog": {
       "title": "Export “{title}”",
       "titleProject": "Export the project “{title}”",
       "description": "The file is kept for {hours} hours, then deleted. Only you and the workspace admins can download it.",
-      "format": "Format",
       "includeSubtree": "Include subpages",
       "branch": "Branch",
       "branchPlaceholder": "Default branch",
@@ -4857,7 +4862,14 @@
       "add": "Add group",
       "listen": "Keep messages for /capture",
       "listenHint": "Kept for {days}, with emails, phone numbers, card numbers and secrets masked, so editors can harvest a thread into captures: reply /capture to its first message, or react ✍ to it. Never searchable. Needs privacy mode off in {'@'}BotFather or the bot as a group admin; ✍ works only with the bot as admin. Turning this on posts a notice in the group; turning it off deletes what is kept.",
-      "listenDays": "{days} day | {days} day | {days} days"
+      "listenDays": "{days} day | {days} day | {days} days",
+      "autoHarvest": "Harvest quiet threads automatically",
+      "autoHarvestHint": "Once a thread has {messages} kept since its last harvest and has been quiet for {quiet}, the bot proposes what it settled as captures in your name, for review in Captures. Nothing is posted in the group: you get an inbox notification instead. Turning this on posts a notice in the group.",
+      "autoHarvestMessages": "{n} message | {n} message | {n} messages",
+      "autoHarvestQuiet": "{n} minute | {n} minute | {n} minutes",
+      "autoHarvestRunsAs": "Runs as",
+      "autoHarvestNeedsListening": "Needs Keep messages for /capture.",
+      "autoHarvestUnavailable": "Switched off on this server (HARVEST_AUTO_ENABLED): no thread is harvested automatically, whatever this switch says."
     },
     "card": {
       "off": "Off",

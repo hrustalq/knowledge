@@ -6,14 +6,17 @@ import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { CapturesModule } from '../captures/captures.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
+import { EventsModule } from '../events/events.module.js';
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { GraphModule } from '../graph/graph.module.js';
+import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { SearchCoreModule } from '../search/search-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
 import { ChatAnswerSweeper } from './chat-answer.sweeper.js';
+import { ChatAutoHarvestSweeper } from './chat-auto-harvest.sweeper.js';
 import { ChatAnswersService } from './chat-answers.service.js';
 import { ChatBufferService } from './chat-buffer.service.js';
 import { ChatCapturesService } from './chat-captures.service.js';
@@ -41,6 +44,9 @@ import { HarvestService } from './harvest.service.js';
  * Harvesting a thread into captures (#82) is HarvestService: API-side for the
  * same reason Save is, and fed by the same dispatch; Telegram's threads come
  * from ChatBufferService, which keeps a listening group's messages masked.
+ * ChatAutoHarvestSweeper (#340) harvests a listening group's quiet threads
+ * without anyone asking, as the admin who opted the group in — here, not in
+ * the worker, for the same reason: a capture is a person's act.
  */
 @Module({
   imports: [
@@ -51,9 +57,11 @@ import { HarvestService } from './harvest.service.js';
     AssistantClientModule,
     CapturesModule,
     DocumentsModule,
+    EventsModule,
     FeedbackCoreModule,
     GlossaryCoreModule,
     GraphModule,
+    NotificationsCoreModule,
     PermissionsCoreModule,
     SearchCoreModule,
     StorageModule,
@@ -67,6 +75,7 @@ import { HarvestService } from './harvest.service.js';
     ChatBufferService,
     ChatCapturesService,
     ChatAnswerSweeper,
+    ChatAutoHarvestSweeper,
     ChatSubscriptionsService,
     ChatSubscriptionSweeper,
     ChatSocketSupervisor,

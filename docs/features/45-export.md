@@ -28,6 +28,16 @@ Seeing an export is narrower. The row says who exported what, so `GET
 and 403 anyone else (`ExportService.visible`). `GET /v1/exports` lists the
 caller's own exports; an admin's lists the workspace's.
 
+**A share link's reader** can also export, anonymously, when the link allows
+download (#161, [43](43-share-links.md#download)). That job belongs to the
+link (`share_link_id`), not to a person. Its scope is the link's page, or the
+page and its subtree when the link includes it. The requester is
+`{ shareLinkId }`, and `ExportScopeService.documents` reads only pages with
+nothing restricted on their chain (`OPEN_TO_WORKSPACE`), never what the
+link's creator could open. `requested_by` keeps the creator for attribution,
+but the job is not in their list and not theirs to download. An admin still
+sees it, and only the link's own public routes hand out the file.
+
 When page-level permissions land, the scope must be filtered through their
 predicate (`ExportScopeService.documents`). Until then, everything a viewer can
 read is exportable.
@@ -61,7 +71,9 @@ queued → running → completed → expired
 3. **Done.** `export.completed` / `export.failed` go out with `userId` set to
    the requester, so the live frame reaches them alone. The notification
    fan-out finds them through the run-owner rule (`runOwnerOf`), in the `job`
-   category. The inbox row links to `/settings/exports`.
+   category. The inbox row links to `/settings/exports`. A share link's job
+   announces nothing: its reader has no inbox and polls, and the link's
+   creator did not ask.
 4. **Expiry** (`ExportSweeper`, API). A completed export past `expires_at` has
    its object purged, every version of it, since the bucket is versioned. The
    row stays, marked `expired`, as the record of who exported what. A row
@@ -196,6 +208,10 @@ Feature 16 does not read it yet.
 - **MCP.** `knowledge_export` (documentId + includeSubtree, or projectId)
   and `knowledge_get_export` (status, and a download URL once completed).
   Both are read tools, offered to read-only keys.
+- **Share reader.** `POST /v1/public/shares/:token/exports` (`format` only),
+  `GET …/exports/:id` and `GET …/exports/:id/download` (a 302), behind the
+  link's own checks and rate limits. The format choice is
+  `ExportFormatPicker.vue`, the same control `ExportDialog.vue` renders.
 
 ## Modules
 
@@ -223,11 +239,12 @@ attributes no act to anyone but the person who asked.
 | `EXPORT_TTL_HOURS` | `72` | How long a file can be downloaded |
 | `EXPORT_CONCURRENCY` | `2` | Builds per worker at once |
 | `EXPORT_TIMEOUT_MS` | 10 min | Render + convert ceiling; the sweeper fails a job at twice this |
+| `PUBLIC_EXPORTS_PER_HOUR_PER_IP` | `5` | Share-link exports per address and link; fails closed |
+| `PUBLIC_EXPORTS_PER_HOUR_PER_LINK` | `30` | Share-link exports per link, every address together; fails closed |
 
 ## Not built
 
 - **DOCX**, see above.
-- **Public download from a share** (`share_links.allow_download`). It belongs
-  with its own rate limits and review.
+- **Downloads from a published site.** Only a share link offers one (#161).
 - **Exporting an old revision** of a page: an export reads branch heads.
 - **Reading a ZIP back in** through import.

@@ -14,7 +14,7 @@
  * This pane also owns the tree's horizontal window — see ./tree-window.
  */
 import { useI18n } from 'vue-i18n'
-import { computed, provide, ref, watch } from 'vue'
+import { computed, onMounted, provide, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { Braces, ChevronDown, ChevronLeft, FilePlus2, FileUp, LayoutTemplate, Plus } from 'lucide-vue-next'
 import type { DocumentTreeNode } from '@knowledge/contracts'
@@ -51,6 +51,19 @@ const route = useRoute()
 // tells the truth about what is listed rather than naming a project we are
 // not scoped to.
 const title = computed(() => projects.activeName ?? t('nav.allPages'))
+
+/**
+ * The rail renders before the page, so on the server it draws the skeleton
+ * even when the page's `onServerPrefetch` then loads the tree into the state
+ * the client hydrates from (#278). Holding the skeleton until mount keeps the
+ * first client render equal to the server's; the rows follow one frame later.
+ * Unless the tree was there before the render began (`treePrefetched`, #279):
+ * then the server drew the rows, and so does the client's first render.
+ */
+const mounted = ref(false)
+onMounted(() => {
+  mounted.value = true
+})
 
 const activeDocId = computed(() =>
   route.path.startsWith('/documents/') ? ((route.params.id as string) ?? null) : null,
@@ -127,7 +140,7 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
       <button
         type="button"
         class="group/back hover:bg-sidebar-accent -ml-3.5 flex h-6 min-w-0 items-center gap-0.5 rounded-md pr-1.5 transition-colors"
-        :aria-label="t('nav.backToProjects')"
+        :aria-label="`${title}, ${t('nav.backToProjects')}`"
         :title="t('nav.backToProjects')"
         @click="$emit('back')"
       >
@@ -164,7 +177,7 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
             <DropdownMenuTrigger as-child>
               <button
                 type="button"
-                class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid h-6 w-3.5 place-items-center rounded-r transition-colors"
+                class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid size-6 place-items-center rounded-r transition-colors"
                 :aria-label="t('nav.newPageOptions')"
                 :title="t('nav.newPageOptions')"
               >
@@ -200,7 +213,7 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
       :style="{ '--kn-tree-shift': `${shift}px` }"
       :data-windowed="shift > 0"
     >
-      <div v-if="!store.treeLoaded" class="space-y-1.5 px-1 pt-1">
+      <div v-if="!(mounted || store.treePrefetched) || !store.treeLoaded" class="space-y-1.5 px-1 pt-1">
         <Skeleton v-for="i in 6" :key="i" class="h-7 w-full" />
       </div>
       <p v-else-if="store.tree.length === 0" class="text-muted-foreground px-2.5 pt-1 text-xs">

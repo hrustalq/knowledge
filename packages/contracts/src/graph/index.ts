@@ -185,6 +185,8 @@ export interface EntitySummary {
 
 // GET /v1/entities?workspaceId=
 export interface ListEntitiesResponse {
+  /** Present when read as of a point in time (#81). */
+  resolvedAsOf?: ResolvedAsOf;
   entities: EntitySummary[];
 }
 
@@ -201,6 +203,8 @@ export interface EntityRelationEdge {
 
 // GET /v1/entities/:key/neighbors (plan.md §9 knowledge.find_relations)
 export interface EntityNeighborsResponse {
+  /** Present when read as of a point in time (#81). */
+  resolvedAsOf?: ResolvedAsOf;
   entity: EntityRef;
   /** Edges touching the entity (depth 1). */
   edges: EntityRelationEdge[];
@@ -221,6 +225,8 @@ export interface ImpactedNode {
   path: ImpactPathStep[];
 }
 export interface ImpactAnalysisResponse {
+  /** Present when read as of a point in time (#81). */
+  resolvedAsOf?: ResolvedAsOf;
   entity: EntityRef;
   direction: 'dependents' | 'dependencies';
   impactedEntities: ImpactedNode[];
@@ -230,6 +236,8 @@ export interface ImpactAnalysisResponse {
 
 // GET /v1/entities/trace?workspaceId&from&to (plan.md §9 knowledge.trace_relation)
 export interface TraceRelationResponse {
+  /** Present when read as of a point in time (#81). */
+  resolvedAsOf?: ResolvedAsOf;
   from: string;
   to: string;
   /** Alternating entity/document steps, or null when no path exists. */
@@ -239,3 +247,148 @@ export interface TraceRelationResponse {
 
 // ---------------------------------------------------------------------------
 // Phase 5 — governance & scale: auth/ACLs, audited operator queries,
+
+// ---------------------------------------------------------------------------
+// Bi-temporal graph (#81)
+
+/**
+ * How an `asOf` was given: an ISO date, `rev:<uuid>` (that revision's
+ * finalize time), `tag:<name>` (a release tag's instant), or `now` — only
+ * `knownAt` was given, so the valid-time point is the present.
+ */
+export const AS_OF_KINDS = ['date', 'revision', 'tag', 'now'] as const;
+export type AsOfKind = (typeof AS_OF_KINDS)[number];
+
+/** What an `asOf`/`knownAt` pair resolved to — echoed so a UI shows what applied. */
+export interface ResolvedAsOf {
+  kind: AsOfKind;
+  /** The value as given (`2026-05-01`, `rev:…`, `tag:v2.3`), or `now`. */
+  ref: string;
+  /** The valid-time instant the read used, ISO. A future date clamps to now. */
+  at: string;
+  /** The system-time instant (what was believed then), ISO; null = now. */
+  knownAt: string | null;
+}
+
+/** A release tag's name: letters, digits and `. _ - /`, at most 64. */
+export const RELEASE_TAG_NAME_PATTERN = '^[A-Za-z0-9._\\-/]{1,64}$';
+
+/** A named instant on the valid-time axis ("v2.3", "Q3 audit"). Not a git tag. */
+export interface ReleaseTagDto {
+  id: string;
+  workspaceId: string;
+  /** null = the whole workspace. */
+  projectId: string | null;
+  name: string;
+  at: string;
+  note: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+// GET /v1/release-tags?workspaceId=&projectId=
+export interface ListReleaseTagsResponse {
+  tags: ReleaseTagDto[];
+}
+
+/** One day of fact changes: how many facts became valid, and how many stopped. */
+export interface GraphTimelineDay {
+  /** YYYY-MM-DD, UTC. */
+  day: string;
+  opened: number;
+  closed: number;
+}
+
+// GET /v1/graph/timeline?workspaceId=&projectId=&from=&to=
+export interface GraphTimelineResponse {
+  workspaceId: string;
+  projectId: string | null;
+  from: string;
+  to: string;
+  /** Tags in the window, oldest first: the labelled ticks of the slider. */
+  tags: ReleaseTagDto[];
+  /** Days with at least one change, oldest first: the density sparkline. */
+  days: GraphTimelineDay[];
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge conflicts (#81)
+
+/** What disagrees with what: two pages (the arbiter), or a page and a code change (the sentinel). */
+export const CONFLICT_KINDS = ['doc-doc', 'doc-code'] as const;
+export type ConflictKind = (typeof CONFLICT_KINDS)[number];
+
+/**
+ * `open` until a person acts or the text goes away: `resolved` (fixed, or not
+ * a conflict after all with a note), `dismissed` (wrong; stays dismissed when
+ * re-detected), `superseded` (a side's page changed, so the quoted text is no
+ * longer current — reopened if the new text still conflicts).
+ */
+export const CONFLICT_STATUSES = ['open', 'resolved', 'dismissed', 'superseded'] as const;
+export type ConflictStatus = (typeof CONFLICT_STATUSES)[number];
+
+/** One side of a conflict: the page, the revision the quote was read from, and the quote. */
+export interface ConflictSide {
+  documentId: string;
+  title: string;
+  revisionId: string;
+  chunkId: string | null;
+  quote: string;
+}
+
+/** The code side of a doc↔code conflict: the pull request the sentinel judged. */
+export interface ConflictCodeRef {
+  connectorId: string;
+  repository: string;
+  pullRequestNumber: number;
+  pullRequestUrl: string;
+  headSha: string;
+  /** Files the change touches, as the sentinel saw them; may be capped. */
+  paths: string[];
+}
+
+/** A contradiction between two pages, or a page and code (#81). A proposal, never a change. */
+export interface KnowledgeConflictDto {
+  id: string;
+  workspaceId: string;
+  kind: ConflictKind;
+  status: ConflictStatus;
+  a: ConflictSide;
+  /** The other page; null on a doc↔code conflict, which has `codeRef` instead. */
+  b: ConflictSide | null;
+  codeRef: ConflictCodeRef | null;
+  explanation: string;
+  confidence: number;
+  /** The arbiter run that found it, and the merge request a fix was proposed as. */
+  agentRunId: string | null;
+  mergeRequestId: string | null;
+  detectedAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolution: string | null;
+}
+
+// GET /v1/conflicts?workspaceId=&status=&kind=&documentId=
+export interface ListConflictsResponse {
+  conflicts: KnowledgeConflictDto[];
+}
+
+// ---------------------------------------------------------------------------
+// Communities (#81, phase 7)
+
+/** One community of pages and what they are about, for global questions. */
+export interface CommunitySummaryDto {
+  communityId: string;
+  title: string;
+  /** Written by the atlas agent from the member pages; a summary, not a source. */
+  summary: string;
+  documents: Array<{ documentId: string; title: string }>;
+  builtAt: string;
+  /** Closeness to the question asked, 0..1; 0 when none was. */
+  score: number;
+}
+
+// GET /v1/graph/communities?workspaceId=&q=&limit=
+export interface ListCommunitiesResponse {
+  communities: CommunitySummaryDto[];
+}

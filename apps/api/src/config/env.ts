@@ -88,7 +88,7 @@ export const envSchema = z.object({
   AUTH_RESET_TTL_MIN: z.coerce.number().int().positive().default(30),
   /**
    * #102 phase 2: lifetime of a single-use `kt_` URL ticket (POST /v1/auth/url-ticket),
-   * the credential the web puts in `?token=` for SSE and <img>/<object> routes.
+   * the only credential `?token=` accepts (the SSE stream) and what joins /v1/collab.
    */
   AUTH_URL_TICKET_TTL_SEC: z.coerce.number().int().min(5).max(3600).default(60),
   /** Auth flow: allow self-service POST /v1/auth/signup. */
@@ -232,6 +232,9 @@ export const envSchema = z.object({
   PUBLIC_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(120),
   /** Password attempts per IP and link in 15 minutes before the unlock answers 429. */
   PUBLIC_UNLOCK_ATTEMPTS_PER_15MIN: z.coerce.number().int().positive().default(10),
+  /** Exports a share link's readers may ask for in an hour (#161): per IP and link, and per link. Fail-closed. */
+  PUBLIC_EXPORTS_PER_HOUR_PER_IP: z.coerce.number().int().positive().default(5),
+  PUBLIC_EXPORTS_PER_HOUR_PER_LINK: z.coerce.number().int().positive().default(30),
   /**
    * Published sites (docs/features/44, issue #77). PUBLIC_SITES_ENABLED is the
    * ceiling over the workspace's `allow_public_sites` switch: false refuses to
@@ -377,6 +380,30 @@ export const envSchema = z.object({
    * question text is user content and must not live forever.
    */
   ANSWER_FEEDBACK_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
+  /**
+   * Usage & search analytics (#79): page views, searches and MCP tool calls as
+   * rows in PostgreSQL. A ceiling — a workspace may turn it off, never on past
+   * this. Off, nothing is recorded and every request behaves as before.
+   */
+  ANALYTICS_ENABLED: boolish(true),
+  /**
+   * HMAC key for `reader_key`, which counts readers without naming them.
+   * Empty: derived from SETTINGS_ENCRYPTION_KEY; both empty, a per-process
+   * random key, so unique readers restart with the process (warned at boot).
+   */
+  ANALYTICS_READER_SECRET: z.string().default(''),
+  /** Per-view cap on a web view's active read time, in ms: a tab left open all day reads as half an hour. */
+  ANALYTICS_READ_TIME_CAP_MS: z.coerce.number().int().positive().default(1_800_000),
+  /**
+   * A page older than this many days that nobody opened in the app within it
+   * is `unread`; one no search returned either is `dead` (knowledge health,
+   * project analytics).
+   */
+  ANALYTICS_DEAD_PAGE_DAYS: z.coerce.number().int().positive().default(90),
+  /** Days analytics rows are kept. A ceiling: a workspace may keep them for less, never more. */
+  ANALYTICS_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
+  /** After this many days a recorded search loses its text and keeps its hash, so grouping still works. */
+  ANALYTICS_QUERY_TEXT_DAYS: z.coerce.number().int().positive().default(90),
   /** Knowledge issues one principal (per API key when present) may file per 24 h; past it a report is 429. */
   KNOWLEDGE_ISSUE_DAILY_LIMIT: z.coerce.number().int().positive().default(50),
   /**
@@ -424,6 +451,25 @@ export const envSchema = z.object({
   QUALITY_AUDIT_DAYS: z.coerce.number().int().positive().default(7),
   QUALITY_DUPLICATE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.92),
   QUALITY_FINDING_THRESHOLD: z.coerce.number().int().min(0).max(100).default(50),
+
+  /**
+   * The arbiter (#81, phase 5): the chunk cosine two passages from different
+   * pages must clear to be judged at all (pages that share an entity get 0.1
+   * of slack), the confidence below which the judge's "contradicts" is
+   * dropped, and the most pairs one run judges — one model call each.
+   */
+  CONTRADICTION_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.82),
+  CONTRADICTION_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.7),
+  CONTRADICTION_MAX_PAIRS_PER_RUN: z.coerce.number().int().positive().default(20),
+
+  /**
+   * Community summaries (#81, phase 7). Off by default: each rebuild costs one
+   * model call per community. On, the atlas agent groups pages into
+   * communities and summarises at most COMMUNITY_MAX_PER_RUN of them; an
+   * unchanged graph skips the rebuild.
+   */
+  COMMUNITY_SUMMARIES_ENABLED: boolish(false),
+  COMMUNITY_MAX_PER_RUN: z.coerce.number().int().positive().default(30),
 
   /**
    * Feature 12 AI settings: AES-256-GCM key (base64, 32 bytes) for provider
@@ -716,6 +762,31 @@ export const envSchema = z.object({
   LIVE_WS_MAX_SUBSCRIPTIONS: z.coerce.number().int().positive().max(64).default(8),
 
   /**
+   * Real-time co-editing of drafts over /v1/collab (#80, docs/features/56).
+   * Off is today's behaviour exactly: the socket refuses with 4503 and no
+   * Hocuspocus instance or Redis connection is ever created.
+   */
+  COLLAB_ENABLED: boolish(false),
+  /** A shared draft is persisted this long after the last edit… */
+  COLLAB_STORE_DEBOUNCE_MS: z.coerce.number().int().min(100).default(2000),
+  /** …and at least this often while someone keeps typing: the most a crash can lose. */
+  COLLAB_STORE_MAX_DEBOUNCE_MS: z.coerce.number().int().min(100).default(10000),
+  /** Encoded Y state ceiling per draft. A store above it is refused and the draft's peers are closed (reason `too-large`). */
+  COLLAB_MAX_DOC_BYTES: z.coerce.number().int().positive().default(8 * 1024 * 1024),
+  /**
+   * Open co-editing connections are re-judged this often (credential still
+   * live, page still open, edit gained or lost). `acl.changed` re-checks its
+   * workspace at once; a plain role change has no event, so this is its bound.
+   */
+  COLLAB_REAUTH_INTERVAL_SECONDS: z.coerce.number().int().min(5).default(300),
+  /** A draft edited since its last checkpoint gets a MinIO copy at most this often (recovery, not hot state). */
+  COLLAB_CHECKPOINT_INTERVAL_MINUTES: z.coerce.number().int().min(1).default(15),
+  /** Checkpoint versions kept per draft; older ones are deleted. */
+  COLLAB_CHECKPOINT_KEEP: z.coerce.number().int().min(1).default(20),
+  /** A draft with nothing unpublished and untouched this long is dropped; it reseeds on next open. Never one with unpublished changes. */
+  COLLAB_DRAFT_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
+
+  /**
    * Minimum level written to stdout (stderr in the MCP process, whose stdout is
    * the JSON-RPC transport). Declared here so a typo fails boot, but note the
    * asymmetry: the entrypoints build their logger *before* DI exists, so they
@@ -769,12 +840,6 @@ export const envSchema = z.object({
    */
   CHAT_RATE_LIMIT_PER_USER_PER_MINUTE: z.coerce.number().int().positive().default(10),
   /**
-   * A saved conversation still drafting after this long is failed, and its
-   * "Drafting…" message says so. Longer than an answer: a page is a longer
-   * completion than a reply.
-   */
-  CHAT_CAPTURE_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(300),
-  /**
    * How often subscribed groups are checked for news (phase 3). Instant
    * delivery is "within one tick"; a digest is due on the first tick past its
    * window.
@@ -798,6 +863,31 @@ export const envSchema = z.object({
    * within one tick. Reconnects after a drop do not wait for it.
    */
   CHAT_SOCKET_SYNC_MS: z.coerce.number().int().min(1_000).default(15_000),
+  /**
+   * Harvesting a chat thread into captures (#82). Off: `capture` in a chat is
+   * answered with a notice and no thread is read.
+   */
+  HARVEST_ENABLED: boolish(true),
+  /** Messages of one thread the harvester reads, at most: the root and the newest replies. */
+  HARVEST_MAX_MESSAGES: z.coerce.number().int().min(2).default(200),
+  /** Harvests one person may start in an hour, counted from their `harvest` AI usage rows. */
+  HARVEST_RATE_PER_HOUR: z.coerce.number().int().min(0).default(10),
+  /** Telegram: messages forwarded to the bot this many seconds before `/capture` are the thread. */
+  HARVEST_FORWARD_WINDOW_SEC: z.coerce.number().int().min(10).default(120),
+  /** Days a listening Telegram group's messages are kept, masked, for a harvest to read. */
+  CHAT_LISTEN_TTL_DAYS: z.coerce.number().int().min(1).default(7),
+  /**
+   * Automatic harvest (#340): the ceiling over each binding's switch. Off, no
+   * thread is harvested by the sweeper whatever a binding asks for, and the
+   * settings page says so. HARVEST_ENABLED=false turns it off too.
+   */
+  HARVEST_AUTO_ENABLED: boolish(true),
+  /** Kept messages a listening thread needs, since its last automatic harvest, before it is due. */
+  HARVEST_AUTO_MIN_MESSAGES: z.coerce.number().int().min(2).default(8),
+  /** Minutes without a new kept message before a listening thread is due. */
+  HARVEST_AUTO_QUIET_MINUTES: z.coerce.number().int().min(1).default(60),
+  /** Automatic harvests one binding may run per sweeper tick (one model call each). */
+  HARVEST_AUTO_MAX_PER_TICK: z.coerce.number().int().min(0).default(1),
 
   /**
    * Interface + API language (docs/features/18). Also the fallback whenever a

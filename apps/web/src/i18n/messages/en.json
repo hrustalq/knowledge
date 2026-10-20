@@ -86,6 +86,7 @@
     "mergeRequests": "Merge requests",
     "workflows": "Workflows",
     "knowledgeHealth": "Knowledge health",
+    "analytics": "Analytics",
     "assistant": "Assistant",
     "settings": "Settings",
     "activity": "Activity",
@@ -161,7 +162,9 @@
     "captures": "Captures",
     "newApiSpec": "API spec",
     "apiReference": "API reference",
-    "security": "Security"
+    "security": "Security",
+    "releases": "Releases",
+    "conflicts": "Contradictions"
   },
   "role": {
     "guest": "Guest",
@@ -241,6 +244,7 @@
         "domain-not-allowed": "This identity provider cannot sign in addresses on your domain.",
         "jit-disabled": "There is no account for you yet, and this provider does not create one. Ask an administrator to invite you.",
         "account-disabled": "This account is disabled.",
+        "exchange-invalid": "This sign-in link is invalid, expired or already used. Sign in again.",
         "failed": "Single sign-on is not available for this provider."
       },
       "domainEnforced": "Your organization requires single sign-on for this address, so a password cannot be used.",
@@ -288,7 +292,9 @@
     "provenance": "{extractor} · confidence {confidence}",
     "fromTemplate": "From template: {name} v{version}",
     "fromTemplateUnnamed": "From a template, v{version}",
-    "moreActions": "More actions"
+    "moreActions": "More actions",
+    "asOfBanner": "As of {date}",
+    "asOfBannerTag": "As of {tag}, {date}"
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -306,7 +312,8 @@
     "exportsHint": "Files you exported",
     "chatBotsHint": "Answer questions in Telegram, citing your pages.",
     "apiReferenceHint": "Try-it proxy for spec pages",
-    "securityHint": "Sign-in and the audit trail"
+    "securityHint": "Sign-in and the audit trail",
+    "releasesHint": "Named points in time"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -417,7 +424,9 @@
       "location": "Location",
       "test": "Check",
       "destination": "Destination",
-      "options": "What it does"
+      "options": "What it does",
+      "serviceAccount": "Service account",
+      "folder": "Folder"
     },
     "testing": "Checking the connection",
     "testingHint": "Making one request to prove the credential reaches the right place.",
@@ -778,6 +787,19 @@
       "added": "Added to API specs",
       "specNote": "An API spec file, shown as it will be stored. Once the page exists, every change to it arrives as a merge request.",
       "assistOff": "The AI assists rewrite markdown, so they are not offered for an API spec."
+    },
+    "kindText": {
+      "googleDrive": {
+        "credential": "Paste the whole JSON key file of a Google Cloud service account with the Drive API enabled. Then share the folder with the service account's email, or add it to the shared drive.",
+        "folderId": {
+          "label": "Folder or shared drive ID",
+          "help": "The last part of the folder URL. Share the folder (or add the service account to the shared drive) so it can read it."
+        },
+        "subject": {
+          "label": "Act as user",
+          "help": "Domain-wide delegation: read Drive as this person instead of as the service account. Also needed to read Google Groups when access is mirrored."
+        }
+      }
     }
   },
   "workflow": {
@@ -1641,7 +1663,22 @@
     "countLinks": "{n} link | {n} links",
     "truncated": "showing the first 4000 links",
     "lightboxHint": "Drag to pan, scroll to zoom, press Escape to close.",
-    "keyboardHelp": "Arrow keys pan, plus and minus zoom, 0 fits the view, Escape clears the selection."
+    "keyboardHelp": "Arrow keys pan, plus and minus zoom, 0 fits the view, Escape clears the selection.",
+    "time": {
+      "title": "Time",
+      "now": "Now",
+      "asOf": "As of {date}",
+      "asOfTag": "{tag} · {date}",
+      "reset": "Now",
+      "label": "Point in time",
+      "tagTick": "Release {tag}, {date}",
+      "changesSince": "Show changes since",
+      "legendEnded": "Ended since",
+      "legendAdded": "Added since",
+      "pickPoint": "Pick a point on the timeline to compare it with now.",
+      "nowHint": "Now — drag left to read the past"
+    },
+    "colorByCommunity": "Colour pages by community"
   },
   "revisions": {
     "allBranches": "all branches",
@@ -1663,7 +1700,8 @@
     "view": "view",
     "compareTitle": "Compare {from} → {to}",
     "mergeBaseAt": "merge base {id}",
-    "apiChanges": "API changes"
+    "apiChanges": "API changes",
+    "coAuthors": "{n} co-author from a shared draft | {n} co-authors from a shared draft"
   },
   "count": {
     "messages": "{n} message | {n} messages",
@@ -2216,7 +2254,10 @@
       "public_ask": "Site Ask",
       "chat-capture": "Saved from chat",
       "component-draft": "Component draft",
-      "lint": "Lint"
+      "lint": "Lint",
+      "contradiction": "Contradiction check",
+      "community": "Community summary",
+      "harvest": "Chat harvest"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",
@@ -2552,7 +2593,15 @@
     "openAsPage": "Open as page",
     "filtersClearedForWorkspace": "Project and tag filters were cleared for the new workspace.",
     "failedCheckConnection": "{error} — check your connection and try again.",
-    "via": "via {path}"
+    "via": "via {path}",
+    "asOf": {
+      "label": "As of",
+      "clear": "Clear",
+      "pickDate": "Search as of this date",
+      "pickTag": "Release tag",
+      "hint": "Searches the text each page held then.",
+      "superseded": "Superseded {date}"
+    }
   },
   "import": {
     "project": "Project",
@@ -2699,7 +2748,9 @@
     "glossary": "Glossary",
     "site": "Site",
     "usedBy": "Used by",
-    "quality": "Quality"
+    "quality": "Quality",
+    "conflicts": "Contradictions",
+    "insights": "Insights"
   },
   "knowledgeIssue": {
     "report": "Report a problem",
@@ -2998,7 +3049,14 @@
     "displayNamePlaceholder": "Teammate",
     "initialPassword": "Initial password",
     "viaResetLink": "invite by email if empty",
-    "creating": "Creating…"
+    "creating": "Creating…",
+    "sessions": "Sessions",
+    "sessionsTitle": "Sessions of {name}",
+    "sessionsDesc": "Where {email} is signed in. A signed-out session has to log in again on its next request; API keys keep working.",
+    "sessionsNone": "No live sessions.",
+    "sessionsLoadFailed": "Could not load sessions",
+    "sessionsRevokeAll": "Sign out everywhere",
+    "sessionsRevokedAll": "Signed out of {n} session | Signed out of {n} sessions"
   },
   "glossary": {
     "title": "Glossary",
@@ -3153,7 +3211,94 @@
     "statusColor": "Status: {color}",
     "untitledPage": "Untitled page",
     "fromTemplate": "from {name}",
-    "fromATemplate": "from a template"
+    "fromATemplate": "from a template",
+    "collab": {
+      "status": {
+        "connecting": {
+          "label": "Connecting…",
+          "hint": "Joining the shared draft."
+        },
+        "live": {
+          "label": "Live",
+          "hint": "Your edits reach everyone in this draft as you type."
+        },
+        "readOnly": {
+          "label": "Read-only",
+          "hint": "You can follow this draft but not edit it."
+        },
+        "offline": {
+          "label": "Offline",
+          "hint": "Your edits are kept on this device and sync when the connection comes back."
+        },
+        "schemaMismatch": {
+          "label": "Reload to edit",
+          "hint": "This tab runs an older editor than the server, so it is read-only. Reload the page to edit."
+        },
+        "stopped": {
+          "unauthorized": {
+            "label": "Signed out",
+            "hint": "Your sign-in no longer covers this draft. Sign in again and reopen the page."
+          },
+          "forbidden": {
+            "label": "No access",
+            "hint": "You can no longer open this page."
+          },
+          "too-large": {
+            "label": "Not saving",
+            "hint": "The draft is over the size limit and stopped saving. Copy anything you still need before you leave."
+          },
+          "disabled": {
+            "label": "Live editing off",
+            "hint": "Live editing was switched off on this server. Reload the page to edit on your own."
+          },
+          "reset": {
+            "label": "Reopening",
+            "hint": "Someone discarded the shared draft. It is reopening from the published page."
+          }
+        }
+      },
+      "presence": {
+        "editing": "{n} other person editing: {names} | {n} other people editing: {names}",
+        "agentWriting": "{agent} is writing for {name}…"
+      },
+      "unpublished": {
+        "label": "Unpublished changes",
+        "hint": "The shared draft differs from the published page. Click to review."
+      },
+      "localCopy": {
+        "title": "Changes kept in this browser from {when}",
+        "body": "They were made before this page was edited live. Applying them replaces the shared draft for everyone — review the diff after.",
+        "apply": "Apply to draft",
+        "ignore": "Discard"
+      },
+      "unavailable": "Live editing is unavailable right now, so you are editing on your own.",
+      "reset": "The shared draft was discarded, so it reopened from the published page.",
+      "headMoved": {
+        "title": "Published since this draft started",
+        "body": "Someone published this page another way, so publishing the draft as it stands would undo their change. Review what changed, then publish on top of it or discard the draft.",
+        "review": "Review changes",
+        "publishOnTop": "Publish on top"
+      },
+      "discard": {
+        "action": "Discard draft",
+        "title": "Discard the shared draft?",
+        "body": "Every unpublished change in it is lost, and it reopens from the published page.",
+        "bodyPeers": "Every unpublished change in it is lost, and it reopens from the published page for you and {n} other person editing now. | Every unpublished change in it is lost, and it reopens from the published page for you and the {n} other people editing now.",
+        "confirm": "Discard draft"
+      },
+      "badge": {
+        "editing": "{n} editing now | {n} editing now",
+        "unpublished": "Unpublished changes by",
+        "unpublishedMr": "The source branch has unpublished draft changes by",
+        "open": "Open the draft"
+      }
+    },
+    "branchNotFound": "This page has no branch {name}, so you are editing its default branch.",
+    "loadFailed": {
+      "title": "This page did not load, so it cannot be edited yet",
+      "openPage": "Open the page",
+      "body": "{reason} — nothing was saved. Check your connection and retry, or open the page to read it."
+    }
   },
   "toolbar": {
     "formatting": "Formatting",
@@ -3755,6 +3900,7 @@
       "import.parsed": "an import is ready to review",
       "import.failed": "an import failed",
       "export.completed": "an export is ready to download",
+      "chat.harvest.proposed": "an automatic chat harvest proposed captures for review",
       "export.failed": "an export failed",
       "connector.run.failed": "a sync failed",
       "knowledge-issue.reported": "reported a problem with this page",
@@ -3916,6 +4062,7 @@
     "discardAll": "Discard all",
     "accept": "Keep",
     "discard": "Discard",
+    "suggestedBy": "{agent} · for {name}",
     "suggestionActions": "Assistant suggestion",
     "decideBeforePublish": "Keep or discard the assistant's suggestion before publishing | Keep or discard the assistant's {n} suggestions before publishing",
     "placeholder": "Ask about this page, or for a change to it…"
@@ -4051,7 +4198,8 @@
     "tab": {
       "pages": "Pages",
       "settings": "Settings",
-      "quality": "Quality"
+      "quality": "Quality",
+      "agents": "Agents"
     },
     "presets": "Presets",
     "preset": {
@@ -4066,6 +4214,8 @@
       "flagged": "Reported",
       "inactive": "Inactive",
       "missing-paths": "Missing code",
+      "unread": "Unread",
+      "dead": "Dead",
       "archived": "Archived"
     },
     "presetHint": {
@@ -4080,6 +4230,8 @@
       "flagged": "A reader or an agent reported a problem",
       "inactive": "No edit, comment or check for the inactivity window",
       "missing-paths": "A component page declares a path no file matches at the indexed head",
+      "unread": "Older than the read window, and nobody opened it in the app during it",
+      "dead": "Unread, and no search returned it either: a candidate to archive",
       "archived": "Put away; hidden from lists, search and the assistant"
     },
     "search": "Search by title…",
@@ -4097,7 +4249,8 @@
       "status": "State",
       "owner": "Owner",
       "verified": "Verified",
-      "activity": "Last activity"
+      "activity": "Last activity",
+      "read": "Last read"
     },
     "selectAll": "Select every loaded page",
     "selectRow": "Select “{title}”",
@@ -4106,6 +4259,7 @@
     "openPage": "Open page",
     "emptyChip": "Empty",
     "missingPathsChip": "{n} missing path | {n} missing paths",
+    "neverRead": "No reads",
     "emptyHint": "The body is under the workspace's empty-page threshold",
     "children": "{n} page under it | {n} pages under it",
     "verifiedBy": "{who}, {when}",
@@ -4183,6 +4337,38 @@
           "label": "Trust-aware ranking",
           "hint": "Multiply search scores by each page's verification state, so verified pages rank above outdated ones"
         }
+      }
+    },
+    "agents": {
+      "title": "Agent outcomes {scope}",
+      "hint": "What became of each agent's output. A finding is accepted when its proposal merged or nobody dismissed it within {days} days, dismissed when a person dismissed it or closed its proposal. Below {n} runs a cell is a count, not a rate.",
+      "since": "since {date}",
+      "answers": "Answers (votes)",
+      "unknownAgent": "Unknown agent",
+      "unattributed": "unattributed",
+      "ofTotal": "{count} of {total}",
+      "runs": "{n} run | {n} runs",
+      "votes": "{n} vote | {n} votes",
+      "fewRuns": "too few for a rate",
+      "column": {
+        "agent": "Agent",
+        "runs": "Runs"
+      },
+      "outcome": {
+        "accepted": "Accepted",
+        "dismissed": "Dismissed",
+        "downvoted": "Downvoted",
+        "pending": "Pending"
+      },
+      "split": {
+        "label": "Split by",
+        "none": "Per agent",
+        "prompt": "By prompt",
+        "model": "By model"
+      },
+      "empty": {
+        "title": "No agent output to measure yet",
+        "body": "Outcomes appear after an agent's first finished run, or the first vote on an answer, in this window."
       }
     }
   },
@@ -4316,6 +4502,10 @@
     "disabledAdmin": "Turn them on in Settings → Publishing.",
     "disabledAsk": "Ask a workspace admin to turn them on.",
     "includeSubtree": "Include subpages",
+    "allowDownload": "Let readers download it (ZIP, HTML or PDF)",
+    "downloadToggle": "Downloads",
+    "downloadOn": "Readers can download this link’s pages",
+    "downloadOff": "Downloads are off — files already made stop downloading now",
     "expiry": "Expires",
     "expiryPreset": {
       "1d": "In 1 day",
@@ -4579,11 +4769,11 @@
     "viewExports": "View exports",
     "download": "Download",
     "pdfUnavailable": "Not set up on this server: PDF needs a Gotenberg service (GOTENBERG_URL).",
+    "formatLabel": "Format",
     "dialog": {
       "title": "Export “{title}”",
       "titleProject": "Export the project “{title}”",
       "description": "The file is kept for {hours} hours, then deleted. Only you and the workspace admins can download it.",
-      "format": "Format",
       "includeSubtree": "Include subpages",
       "branch": "Branch",
       "branchPlaceholder": "Default branch",
@@ -4594,12 +4784,14 @@
     "format": {
       "zip": "Markdown (ZIP)",
       "html": "HTML site (ZIP)",
-      "pdf": "PDF"
+      "pdf": "PDF",
+      "docx": "Word (.docx)"
     },
     "formatHint": {
       "zip": "The pages as markdown with their frontmatter, attachments and a manifest — for backup or moving elsewhere.",
       "html": "A small website that opens offline: a contents page, one page per file, images included.",
-      "pdf": "One document to read or print: a page break per page, diagrams drawn."
+      "pdf": "One document to read or print: a page break per page, diagrams drawn.",
+      "docx": "One Word document to keep editing in Word, LibreOffice or Google Docs: each page on a new sheet, images included, diagrams as their source."
     },
     "scope": {
       "page": "page",
@@ -4648,7 +4840,7 @@
     "ceilingOff": "Chat bots are switched off on this server (CHAT_ENABLED=false). You can prepare a bot here, but nothing will be answered until an operator turns them on.",
     "empty": {
       "title": "No bots yet",
-      "body": "Connect a Telegram or Time bot, then message it privately to link your account. To let it answer in a group or channel, add it there and send /bind (in Time: mention it with the word bind)."
+      "body": "Connect a Telegram, Time or Mattermost bot, then message it privately to link your account. To let it answer in a group or channel, add it there and send /bind (in Time and Mattermost: mention it with the word bind)."
     },
     "connect": {
       "open": "Connect a bot",
@@ -4666,6 +4858,13 @@
         "step2": "Copy the token it shows once, and paste it below with your Time server address.",
         "step3": "Add the bot to a channel and mention it, or message it privately: it replies with a link that connects your account.",
         "checking": "Checking with Time…"
+      },
+      "mattermost": {
+        "description": "The token is checked with your Mattermost server and stored encrypted. It is never shown again.",
+        "step1": "In Mattermost, open Integrations → Bot Accounts and add a bot (a system admin may first need to enable bot account creation in the System Console).",
+        "step2": "Copy the access token it shows once, and paste it below with your Mattermost server address.",
+        "step3": "Add the bot to a team and a channel and mention it, or message it privately: it replies with a link that connects your account.",
+        "checking": "Checking with Mattermost…"
       }
     },
     "fields": {
@@ -4682,9 +4881,10 @@
       "chatTitle": "Chat name",
       "agentShort": "Agent",
       "platform": "Messenger",
-      "serverUrl": "Time server",
-      "serverUrlHint": "The address you open Time at. This server must be able to reach it, and it must reach API_PUBLIC_URL for buttons to work.",
-      "tokenHintTime": "From Integrations → Bot accounts. Write-only: the page only ever shows its last four characters."
+      "serverUrl": "{platform} server",
+      "serverUrlHint": "The address you open {platform} at. This server must be able to reach it, and it must reach API_PUBLIC_URL for buttons to work.",
+      "tokenHintTime": "From Integrations → Bot accounts. Write-only: the page only ever shows its last four characters.",
+      "tokenHintMattermost": "The bot account's access token, from Integrations → Bot Accounts. Write-only: the page only ever shows its last four characters."
     },
     "locale": {
       "en": "English",
@@ -4692,7 +4892,8 @@
     },
     "kind": {
       "telegram": "Telegram",
-      "time": "Time"
+      "time": "Time",
+      "mattermost": "Mattermost"
     },
     "answerMode": {
       "mention": "When mentioned",
@@ -4700,7 +4901,7 @@
       "off": "Never"
     },
     "bindings": {
-      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
+      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time and Mattermost: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
       "untitled": "Untitled chat",
       "wholeWorkspace": "Whole workspace",
       "botDefault": "Bot default",
@@ -4708,7 +4909,17 @@
       "none": "No groups yet. Private chats need no setup.",
       "chatIdPlaceholder": "-1001234567890",
       "titlePlaceholder": "Name (optional)",
-      "add": "Add group"
+      "add": "Add group",
+      "listen": "Keep messages for /capture",
+      "listenHint": "Kept for {days}, with emails, phone numbers, card numbers and secrets masked, so editors can harvest a thread into captures: reply /capture to its first message, or react ✍ to it. Never searchable. Needs privacy mode off in {'@'}BotFather or the bot as a group admin; ✍ works only with the bot as admin. Turning this on posts a notice in the group; turning it off deletes what is kept.",
+      "listenDays": "{days} day | {days} day | {days} days",
+      "autoHarvest": "Harvest quiet threads automatically",
+      "autoHarvestHint": "Once a thread has {messages} kept since its last harvest and has been quiet for {quiet}, the bot proposes what it settled as captures in your name, for review in Captures. Nothing is posted in the group: you get an inbox notification instead. Turning this on posts a notice in the group.",
+      "autoHarvestMessages": "{n} message | {n} message | {n} messages",
+      "autoHarvestQuiet": "{n} minute | {n} minute | {n} minutes",
+      "autoHarvestRunsAs": "Runs as",
+      "autoHarvestNeedsListening": "Needs Keep messages for /capture.",
+      "autoHarvestUnavailable": "Switched off on this server (HARVEST_AUTO_ENABLED): no thread is harvested automatically, whatever this switch says."
     },
     "card": {
       "off": "Off",
@@ -4726,10 +4937,10 @@
       "deleteTitle": "Disconnect {name}?",
       "deleteBody": "Its groups and linked accounts are removed, and it stops answering. The conversations stay in each person's assistant history.",
       "webhookFix": "Telegram only delivers to a public HTTPS address. Point API_PUBLIC_URL at one, then press Test.",
-      "socketDown": "This server is not connected to Time, so the bot hears nothing.",
-      "socketFix": "Check that the Time server is reachable from here and that the bot token is still valid; the connection retries on its own.",
+      "socketDown": "This server is not connected to {platform}, so the bot hears nothing.",
+      "socketFix": "Check that the {platform} server is reachable from here and that the bot token is still valid; the connection retries on its own.",
       "socketOk": "Listening to {server}",
-      "testOkSocket": "{bot} is reachable. Messages arrive over the bot’s connection to Time."
+      "testOkSocket": "{bot} is reachable. Messages arrive over the bot’s connection to {platform}."
     },
     "people": {
       "hint": "Every answer runs as the linked person, with exactly their access. Unlinking stops the bot answering that account.",
@@ -4808,6 +5019,7 @@
     },
     "client": {
       "assistant": "Assistant chat",
+      "chat": "Chat bot",
       "other": "Another agent"
     },
     "outcome": {
@@ -4904,6 +5116,12 @@
       "rejectedN": "{n} captures rejected | {n} capture rejected | {n} captures rejected",
       "closedN": "{n} merge requests closed | {n} merge request closed | {n} merge requests closed",
       "skipped": "{n} were left alone. Run it again in a moment, or ask a page editor. | {n} was left alone. Run it again in a moment, or ask a page editor. | {n} were left alone. Run it again in a moment, or ask a page editor."
+    },
+    "origin": {
+      "directMessage": "Direct message",
+      "span": "Messages from {from} to {to}",
+      "thread": "thread",
+      "openThread": "Open the thread in {platform}"
     }
   },
   "component": {
@@ -5375,6 +5593,7 @@
         "ai-readable_llms-full": "Full-text export for AI read",
         "api_try": "API console request",
         "feedback_export": "Answer feedback exported",
+        "analytics_export": "Usage analytics exported",
         "merge-request_lint-override": "Style lint overridden on merge",
         "auth_login": "Signed in",
         "auth_login_failed": "Sign-in failed",
@@ -5650,6 +5869,209 @@
       "revoke": "Revoke",
       "revokeConfirm": "Revoke “{name}”? The identity provider gets 401 from its next request.",
       "revoked": "Token revoked"
+    }
+  },
+  "releaseTags": {
+    "title": "Releases",
+    "subtitle": "Name a point in time — a release, an audit — so the graph and search can show what the knowledge base said then.",
+    "name": "Name",
+    "nameHelp": "Letters, digits and . _ - /",
+    "badName": "Use letters, digits and . _ - / only, up to 64.",
+    "duplicate": "A release named {name} already exists.",
+    "at": "Point in time",
+    "atHelp": "Leave empty for now.",
+    "note": "Note",
+    "notePlaceholder": "What this release is",
+    "scope": "Shown in",
+    "wholeWorkspace": "Whole workspace",
+    "create": "Add release",
+    "creating": "Adding…",
+    "created": "Release {name} added",
+    "emptyTitle": "No releases yet",
+    "empty": "Add one to read the graph and search as they stood at that point.",
+    "delete": "Delete {name}",
+    "deleteTitle": "Delete release {name}?",
+    "deleteBody": "Only the name goes. What the knowledge base said at that point stays, and can still be read by date.",
+    "deleteConfirm": "Delete",
+    "deleted": "Release {name} deleted",
+    "namePlaceholder": "v2.3"
+  },
+  "conflicts": {
+    "title": "Contradictions",
+    "subtitle": "Passages in two pages that say different things about the same thing. Found by the arbiter; decided by people.",
+    "thisPage": "This page",
+    "says": "says",
+    "found": "Found {when}",
+    "confidence": "{value}% sure",
+    "openMergeRequest": "Fix proposed",
+    "propose": "Propose fix",
+    "proposing": "Proposing…",
+    "resolve": "Resolve",
+    "dismiss": "Not a contradiction",
+    "recentlyClosed": "Recently closed ({n})",
+    "allInWorkspace": "All contradictions in the workspace",
+    "status": {
+      "open": "Open",
+      "resolved": "Resolved",
+      "dismissed": "Dismissed",
+      "superseded": "Superseded"
+    },
+    "toast": {
+      "resolved": "Marked resolved",
+      "dismissed": "Dismissed — it stays dismissed if found again",
+      "proposed": "Fix proposed on “{title}”"
+    },
+    "empty": {
+      "open": "No open contradictions",
+      "resolved": "Nothing resolved yet",
+      "dismissed": "Nothing dismissed",
+      "superseded": "Nothing superseded",
+      "hint": "The arbiter agent compares passages across pages and lists the ones that disagree here. Run it, schedule it, or trigger it on every indexed page in",
+      "hintLink": "Settings → AI → Agents"
+    },
+    "changes": "changes",
+    "morePaths": "+{n} more"
+  },
+  "analytics": {
+    "traffic": {
+      "human": "People",
+      "assisted": "Assistant",
+      "agent": "Agents"
+    },
+    "trafficHint": {
+      "human": "Opened in the app",
+      "assisted": "Read by the in-app assistant or a chat bot for a person",
+      "agent": "Read through an API key, MCP or a background agent"
+    },
+    "views": "Views",
+    "viewsWord": "view | views",
+    "uniqueReaders": "Readers",
+    "medianRead": "Median read",
+    "lastHumanView": "Last opened in the app",
+    "last30": "Last 30 days",
+    "viewsChartLabel": "Views per day over {n} days, by who read: people, assistant, agents",
+    "chartPoint": "{date}: {human} people, {assisted} assistant, {agent} agents",
+    "collectingSince": "Counting since {when}",
+    "notCollecting": "No reads recorded yet in this workspace.",
+    "project": {
+      "title": "Reading",
+      "range": "Range",
+      "days": "{n} days",
+      "topPages": "Most read",
+      "neverRead": "Never opened in the app",
+      "dead": "Dead pages",
+      "deadHint": "Older than {n} days, unopened in the app and returned by no search in that time.",
+      "deadNotYet": "Shows once reads have been counted for {n} days.",
+      "noViews": "No views in this range.",
+      "none": "None.",
+      "createdAgo": "created {when}"
+    },
+    "viewsCount": "{n} view | {n} views",
+    "title": "Analytics",
+    "subtitle": "How the workspace is read and searched: by people, by the assistant for them, and by agents.",
+    "adminOnly": "Usage analytics is for workspace admins: it shows what people searched for.",
+    "tabs": {
+      "overview": "Overview",
+      "pages": "Pages",
+      "search": "Search",
+      "agents": "Agents",
+      "settings": "Settings"
+    },
+    "trafficFilter": "Traffic",
+    "trafficAll": "All",
+    "recordingOff": "Recording is off for this workspace. The numbers below stop at the moment it was turned off.",
+    "readersCount": "{n} reader | {n} readers",
+    "searchesCount": "{n} search | {n} searches",
+    "export": "Export CSV",
+    "exportOf": "Export {name} as CSV",
+    "metrics": {
+      "views": {
+        "label": "Views",
+        "hint": "Page opens in the range, from every channel the filter keeps"
+      },
+      "uniqueReaders": {
+        "label": "Readers",
+        "hint": "Distinct readers. Browsers that send Do Not Track or Global Privacy Control count as views only"
+      },
+      "medianRead": {
+        "label": "Median read",
+        "hint": "Active reading time of a page opened in the app"
+      },
+      "searches": {
+        "label": "Searches",
+        "hint": "A reader repeating one query within 10 seconds counts once"
+      },
+      "zeroResult": {
+        "label": "Found nothing",
+        "hint": "Share of searches that returned no results"
+      },
+      "clickThrough": {
+        "label": "Click-through",
+        "hint": "Share of searches in the app that found something and were followed by opening a result"
+      },
+      "assistantQuestions": {
+        "label": "Assistant questions",
+        "hint": "Questions people asked the in-app assistant"
+      },
+      "mcpCalls": {
+        "label": "MCP calls",
+        "hint": "Tool calls agents made over MCP"
+      }
+    },
+    "pages": {
+      "deadPending": "Not judged yet."
+    },
+    "search": {
+      "top": "Top queries",
+      "topHint": "Click-through and the mean rank of the opened result count searches in the app only.",
+      "zeroResult": "Found nothing",
+      "zeroResultHint": "Queries that returned no results: pages that may be missing.",
+      "noClick": "Searched, never opened",
+      "noClickHint": "Searches in the app whose results nobody opened.",
+      "none": "No searches in this range.",
+      "noneZero": "Every search found something.",
+      "redacted": "Text removed by retention · {hash}",
+      "ctr": "{value} clicked",
+      "rank": "rank {n}"
+    },
+    "agents": {
+      "tools": "MCP tools",
+      "keys": "API keys",
+      "keysHint": "MCP calls, page reads and searches per key. Shown by name and prefix only.",
+      "noKeys": "No API key was used in this range.",
+      "noCalls": "No calls in this range.",
+      "deletedKey": "Deleted key · {id}",
+      "callsCount": "{n} call | {n} calls",
+      "errorsCount": "{n} error | {n} errors",
+      "assistant": "In-app assistant",
+      "questionsCount": "{n} question | {n} questions",
+      "questionsChartLabel": "Questions asked of the assistant per day over {n} days",
+      "questionsPoint": "{date}: {n} questions",
+      "noQuestions": "Nobody asked the assistant anything in this range.",
+      "operations": "Model calls",
+      "operationsHint": "Every AI call in the workspace, by what it was for."
+    },
+    "settings": {
+      "title": "Recording and retention",
+      "intro": "The deployment sets a ceiling: a workspace can turn recording off and keep rows for less time, never more.",
+      "applies": "Applies:",
+      "on": "On",
+      "off": "Off",
+      "inherit": "Default ({value})",
+      "offByDeployment": "(off for the whole deployment)",
+      "days": "{n} day | {n} days",
+      "ceiling": "Deployment ceiling: {value}",
+      "saved": "Analytics settings saved",
+      "recording": {
+        "label": "Record usage",
+        "hint": "Page views, searches and MCP calls. Off, nothing new is recorded; existing rows stay until retention removes them."
+      },
+      "retention": {
+        "label": "Keep rows for",
+        "hint": "Older rows are deleted every hour. A search keeps its text for {text}, then only its hash.",
+        "belowDead": "Shorter than the {n}-day dead-page window: the unread and dead lists will never match a page.",
+        "clamped": "Longer than the deployment allows: {n} days will apply."
+      }
     }
   }
 }

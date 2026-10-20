@@ -117,6 +117,7 @@ model Document {
   siteAudienceRules    SiteAudienceRule[]
   componentDeclaration ComponentDeclaration?
   apiOperations        ApiOperation[]
+  collabDrafts         CollabDraft[]
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, category])
@@ -142,10 +143,11 @@ model DocumentBranch {
   protected      Boolean  @default(false)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  document   Document           @relation(fields: [documentId], references: [id])
-  revisions  DocumentRevision[]
-  mrAsSource MergeRequest[]     @relation("mrSource")
-  mrAsTarget MergeRequest[]     @relation("mrTarget")
+  document     Document           @relation(fields: [documentId], references: [id])
+  revisions    DocumentRevision[]
+  mrAsSource   MergeRequest[]     @relation("mrSource")
+  mrAsTarget   MergeRequest[]     @relation("mrTarget")
+  collabDrafts CollabDraft[]
 
   @@unique([documentId, name])
   @@map("document_branches")
@@ -180,6 +182,12 @@ model DocumentRevision {
   // The stale sweeper re-mirrors it from the graph and clears the stamp only
   // if it is still the one it read. Null means in step, or no BM25 layer.
   fulltextStaleAt DateTime? @map("fulltext_stale_at") @db.Timestamptz
+  // #80: published from this shared draft, at this Y snapshot (what
+  // finalize rebases the draft onto), crediting who wrote in it since the
+  // last publish. Null for every revision that did not come from a draft.
+  collabDraftId   String?   @map("collab_draft_id") @db.Uuid
+  collabSnapshot  Bytes?    @map("collab_snapshot")
+  coAuthorIds     Json?     @map("co_author_ids")
 
   document Document         @relation(fields: [documentId], references: [id])
   branch   DocumentBranch?  @relation(fields: [branchId], references: [id])
@@ -192,6 +200,45 @@ model DocumentRevision {
   @@unique([documentId, branchId, contentHash])
   @@index([fulltextStaleAt])
   @@map("document_revisions")
+}
+
+/// One shared, CRDT-backed editing session per branch (#80, docs/features/56).
+/// NOT a DocumentRevision: revisions stay immutable, and publishing a draft
+/// writes an ordinary revision through finalize. Created lazily on the first
+/// connect to a (document, branch), seeded once from the branch head — the
+/// unique pair is what makes the seed single across API instances. No FK on
+/// workspace_id or user ids (house rule).
+model CollabDraft {
+  id                String    @id @default(uuid()) @db.Uuid
+  workspaceId       String    @map("workspace_id") @db.Uuid
+  documentId        String    @map("document_id") @db.Uuid
+  branchId          String    @map("branch_id") @db.Uuid
+  /// Revision the draft was seeded from or last rebased onto; null for a branch with no head.
+  baseRevisionId    String?   @map("base_revision_id") @db.Uuid
+  /// Y.encodeStateAsUpdate of the whole doc. Hot state; checkpoints go to MinIO.
+  state             Bytes
+  stateBytes        Int       @map("state_bytes")
+  /// Y.encodeSnapshot of the state as last stored (state vector + delete set).
+  snapshot          Bytes?
+  /// The snapshot that was last published, or seeded: "unpublished changes" = `snapshot` differs.
+  /// A snapshot, not a state vector — a state vector does not move on a deletion.
+  publishedSnapshot Bytes?    @map("published_snapshot")
+  /// `SCHEMA_VERSION` of @knowledge/editor-schema the state was written with.
+  schemaVersion     String    @map("schema_version")
+  /// Distinct user ids that wrote since the last publish (co-author credit).
+  contributors      Json      @default("[]")
+  lastEditedBy      String?   @map("last_edited_by") @db.Uuid
+  lastCheckpointAt  DateTime? @map("last_checkpoint_at") @db.Timestamptz
+  resetAt           DateTime? @map("reset_at") @db.Timestamptz
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  document Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  branch   DocumentBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, branchId])
+  @@index([workspaceId, updatedAt])
+  @@map("collab_drafts")
 }
 
 /// Confluence-style page attachments (images, PDFs, files embedded in the
@@ -976,6 +1023,11 @@ model AnswerFeedback {
   citedDocumentIds Json     @default("[]") @map("cited_document_ids")
   /// AnswerConfidence snapshot at answer time.
   confidence       Json?
+  /// The model that wrote the answer (#305): the turn's config for an implicit
+  /// signal, the thread's or caller's latest model call for a vote. Null when
+  /// the server cannot know — an MCP agent's own model, a pre-ledger row.
+  providerId       String?  @map("provider_id") @db.Uuid
+  model            String?
   createdBy        String   @map("created_by") @db.Uuid
   apiKeyId         String?  @map("api_key_id") @db.Uuid
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -1023,6 +1075,9 @@ model KnowledgeCapture {
   contentHash      String    @map("content_hash")
   /// CaptureSession: client, sessionId, repo, branch, commit, files (paths only).
   session          Json
+  /// CaptureOrigin of a chat capture (#82): platform, chat, thread link, span.
+  /// Server-set from the delivery, never from a caller or a model.
+  origin           Json?
   /// Top dedupe hits [{ documentId, title, score }], kept for the reviewer.
   similar          Json      @default("[]")
   targetDocumentId String?   @map("target_document_id") @db.Uuid
@@ -1425,6 +1480,16 @@ model AgentRun {
   /// graph store that was down. Capped by the executor.
   warnings Json?
 
+  /// The ledger (#305): what produced this run's output, stamped by the
+  /// executor at execution. Null on runs from before the ledger, which read as
+  /// unattributed. `prompt_hash` is the SHA-256 of the trusted prompt parts
+  /// only (instructions, skills, styleguide, learnings) — never page content —
+  /// and `learning_ids` are exactly the learnings that prompt rendered.
+  providerId  String?  @map("provider_id") @db.Uuid
+  model       String?
+  promptHash  String?  @map("prompt_hash")
+  learningIds String[] @map("learning_ids") @db.Uuid
+
   startedAt  DateTime? @map("started_at") @db.Timestamptz
   finishedAt DateTime? @map("finished_at") @db.Timestamptz
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -1576,6 +1641,10 @@ model AiUsage {
   error         String?
   threadId      String? @map("thread_id") @db.Uuid
   toolCallCount Int     @default(0) @map("tool_call_count")
+  /// The agent run this call was made for (#305), from the run context; null
+  /// for a call outside a background run. No FK: usage outlives its run.
+  agentKey      String? @map("agent_key")
+  agentRunId    String? @map("agent_run_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -1911,7 +1980,7 @@ model WorkflowRunNode {
 model Connector {
   id          String  @id @default(uuid()) @db.Uuid
   workspaceId String  @map("workspace_id") @db.Uuid
-  /// ConnectorKind — 'confluence' | 'jira' | 'notion' | 'markdown-git'.
+  /// ConnectorKind — 'confluence' | 'jira' | 'notion' | 'markdown-git' | 'google-drive' | ….
   kind        String
   /// Display name, unique per workspace ("Product wiki", "Runbooks repo").
   name        String
@@ -1955,6 +2024,10 @@ model Connector {
 
   lastRunId    String?   @map("last_run_id") @db.Uuid
   lastSyncedAt DateTime? @map("last_synced_at") @db.Timestamptz
+  /// Where the next incremental pull reads the source's change feed from
+  /// (#338: the Drive Changes API page token). Null = never read: the next run
+  /// walks the whole tree. Written only when a run finishes.
+  changeCursor String?   @map("change_cursor")
 
   /// Access mirroring (#76). Columns rather than `config` keys: like sync_mode
   /// they apply to every kind, and the schedule sweeper filters on them.
@@ -2180,11 +2253,14 @@ model ConnectorRun {
 
   /// Capped [{ externalId, title, message }] — a lossy sync that says nothing
   /// is the failure this feature exists to prevent.
-  warnings Json?
-  error    Json?
+  warnings     Json?
+  error        Json?
   /// External ids this run is limited to; absent = the connector's whole scope.
   /// Webhooks send a handful, a full sync sends none.
-  scope    Json?
+  scope        Json?
+  /// The change-feed cursor this run read at its start (#338), copied onto the
+  /// connector when it finishes — never before, so a failed run re-reads.
+  changeCursor String? @map("change_cursor")
 
   locale  String  @default("en")
   actorId String? @map("actor_id") @db.Uuid
@@ -2712,6 +2788,8 @@ model ShareLink {
   tokenCipher    String?   @map("token_cipher")
   /// scrypt (auth/password.ts). Changing it ends every unlocked session.
   passwordHash   String?   @map("password_hash")
+  /// Readers may download an export of the link's scope (#161). Off by default.
+  allowDownload  Boolean   @default(false) @map("allow_download")
   expiresAt      DateTime? @map("expires_at") @db.Timestamptz
   revokedAt      DateTime? @map("revoked_at") @db.Timestamptz
   createdBy      String    @map("created_by") @db.Uuid
@@ -2929,7 +3007,7 @@ model ExportJob {
   projectId   String? @map("project_id") @db.Uuid
   /// Per-page branch name, falling back to each page's default; null = default.
   branch      String?
-  /// EXPORT_FORMATS: zip | html | pdf.
+  /// EXPORT_FORMATS: zip | html | pdf | docx.
   format      String
   /// The page's or project's name when the export was asked for.
   title       String
@@ -2947,7 +3025,12 @@ model ExportJob {
   /// Language of whoever asked, frozen: the worker renders the contents page
   /// and dates in it, and has no request to read Accept-Language from.
   locale      String    @default("en")
+  /// For a share-link download (#161), the link's creator: attribution only.
   requestedBy String    @map("requested_by") @db.Uuid
+  /// Set when an anonymous reader asked through a share link (#161). The job
+  /// belongs to the link: only that link's public routes can read it, and
+  /// only while the link is live with download on. No FK, per house policy.
+  shareLinkId String?   @map("share_link_id") @db.Uuid
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   startedAt   DateTime? @map("started_at") @db.Timestamptz
   completedAt DateTime? @map("completed_at") @db.Timestamptz
@@ -2955,6 +3038,7 @@ model ExportJob {
 
   @@index([workspaceId, createdAt])
   @@index([status, expiresAt])
+  @@index([shareLinkId])
   @@map("export_jobs")
 }
 
@@ -2969,11 +3053,11 @@ model ExportJob {
 model ChatIntegration {
   id          String  @id @default(uuid()) @db.Uuid
   workspaceId String  @map("workspace_id") @db.Uuid
-  /// CHAT_PLATFORM_KINDS — 'telegram' | 'time'.
+  /// CHAT_PLATFORM_KINDS — 'telegram' | 'time' | 'mattermost'.
   kind        String
   name        String
   enabled     Boolean @default(true)
-  /// The messenger's own server, for a platform each customer hosts (Time):
+  /// The messenger's own server, for a platform each customer hosts (Time, Mattermost):
   /// an admin-typed origin, checked by the SSRF guard. '' where the platform
   /// has one fixed API (Telegram) — empty rather than null so the bot-account
   /// unique below still holds for those rows (PG treats nulls as distinct).
@@ -3004,6 +3088,7 @@ model ChatIntegration {
   linkCodes     ChatLinkCode[]
   answers       ChatAnswer[]
   conversations ChatConversation[]
+  buffered      ChatBufferedMessage[]
 
   @@unique([workspaceId, name])
   // One bot account serves one workspace: deliveries carry no workspace, so a
@@ -3015,27 +3100,90 @@ model ChatIntegration {
 
 /// A group or channel the bot may answer in. DMs need none.
 model ChatChannelBinding {
-  id             String   @id @default(uuid()) @db.Uuid
-  integrationId  String   @map("integration_id") @db.Uuid
-  workspaceId    String   @map("workspace_id") @db.Uuid
-  externalChatId String   @map("external_chat_id")
+  id             String    @id @default(uuid()) @db.Uuid
+  integrationId  String    @map("integration_id") @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  externalChatId String    @map("external_chat_id")
   title          String?
   /// Retrieval scope for answers here; null = the whole workspace.
-  projectId      String?  @map("project_id") @db.Uuid
+  projectId      String?   @map("project_id") @db.Uuid
   /// null = the integration's default agent.
-  agentKey       String?  @map("agent_key")
+  agentKey       String?   @map("agent_key")
   /// CHAT_ANSWER_MODES — 'mention' | 'all' | 'off'.
-  answerMode     String   @default("mention") @map("answer_mode")
+  answerMode     String    @default("mention") @map("answer_mode")
   locale         String?
-  createdBy      String?  @map("created_by") @db.Uuid
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  /// Keep this group's messages, masked, so a thread can be harvested (#82).
+  /// Telegram only; a workspace admin turns it on, and the group is told.
+  listening      Boolean   @default(false)
+  /// Automatic harvest (#340): the admin who turned it on, and whom its
+  /// captures are attributed to. null = off. Needs `listening`.
+  autoHarvestBy  String?   @map("auto_harvest_by") @db.Uuid
+  autoHarvestAt  DateTime? @map("auto_harvest_at") @db.Timestamptz
+  createdBy      String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  integration   ChatIntegration    @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  integration   ChatIntegration       @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   subscriptions ChatSubscription[]
+  buffered      ChatBufferedMessage[]
+  harvestMarks  ChatHarvestMark[]
 
   @@unique([integrationId, externalChatId])
   @@map("chat_channel_bindings")
+}
+
+/// How far the automatic harvest (#340) has read one listening thread: a
+/// group, or one forum topic of it. A thread is due again only once a message
+/// newer than `harvestedThrough` has been kept. Moved by a guarded statement
+/// before the harvest runs, so two API processes never harvest one thread twice.
+model ChatHarvestMark {
+  id               String   @id @default(uuid()) @db.Uuid
+  bindingId        String   @map("binding_id") @db.Uuid
+  /// The Telegram forum topic; '' outside one (a unique key cannot hold a null).
+  topicKey         String   @default("") @map("topic_key")
+  /// `created_at` of the newest kept message the last harvest read.
+  harvestedThrough DateTime @map("harvested_through") @db.Timestamptz
+  harvestedAt      DateTime @default(now()) @map("harvested_at") @db.Timestamptz
+
+  binding ChatChannelBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+
+  @@unique([bindingId, topicKey])
+  @@map("chat_harvest_marks")
+}
+
+/// A message kept so a thread can be harvested (#82): a listening group's
+/// discussion, or what a person forwarded to the bot in a private chat.
+/// Masked before it is written — raw text never reaches this table — and
+/// never searched or indexed. A group's rows go after CHAT_LISTEN_TTL_DAYS,
+/// with the binding (cascade), when listening is turned off, or per author
+/// on /forget; a DM's forwards after HARVEST_FORWARD_WINDOW_SEC or once
+/// harvested.
+model ChatBufferedMessage {
+  id                String   @id @default(uuid()) @db.Uuid
+  integrationId     String   @map("integration_id") @db.Uuid
+  /// The listening group; null for a forward in a private chat.
+  bindingId         String?  @map("binding_id") @db.Uuid
+  externalChatId    String   @map("external_chat_id")
+  /// A Telegram forum topic; null outside one.
+  topicId           String?  @map("topic_id")
+  externalMessageId String   @map("external_message_id")
+  /// The platform's opaque id for who wrote it: what /forget matches, and how
+  /// a harvest tells speakers apart. A forward keeps its original author.
+  authorId          String   @map("author_id")
+  /// Masked, placeholders numbered per message.
+  text              String
+  /// When it was written — for a forward, the original's time.
+  sentAt            DateTime @map("sent_at") @db.Timestamptz
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  integration ChatIntegration     @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  binding     ChatChannelBinding? @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, externalChatId, externalMessageId])
+  @@index([integrationId, externalChatId, topicId, sentAt])
+  @@index([authorId])
+  @@index([createdAt])
+  @@map("chat_buffered_messages")
 }
 
 /// A bound group told about pages and merge requests (issue #71, phase 3).
@@ -3165,7 +3313,6 @@ model ChatAnswer {
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   integration ChatIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  captures    ChatCapture[]
 
   @@unique([integrationId, externalChatId, inboundMessageId])
   @@index([status, createdAt])
@@ -3173,42 +3320,6 @@ model ChatAnswer {
   @@index([integrationId, externalChatId, replyMessageId])
   @@index([integrationId, externalChatId, threadId])
   @@map("chat_answers")
-}
-
-/// A chat conversation saved as a page draft behind a merge request, or as a
-/// proposed glossary term (issue #71, phase 2). Drafted and published in one
-/// API-side continuation, as the person who pressed Save; the pending row is
-/// the claim, and the chat sweeper fails what a restart strands.
-model ChatCapture {
-  id             String   @id @default(uuid()) @db.Uuid
-  workspaceId    String   @map("workspace_id") @db.Uuid
-  /// The answer whose Save was pressed: the conversation up to it is what is saved.
-  answerId       String   @map("answer_id") @db.Uuid
-  /// CHAT_CAPTURE_KINDS — 'page' | 'glossary-term'.
-  kind           String
-  /// CHAT_CAPTURE_STATUSES — 'pending' | 'published' | 'failed'.
-  status         String   @default("pending")
-  requestedBy    String   @map("requested_by") @db.Uuid
-  /// The bot's "Drafting…" message, edited into the result.
-  replyMessageId String?  @map("reply_message_id")
-  /// Reply language, frozen at the claim so the sweeper can still use it.
-  locale         String   @default("en")
-  /// The page title or the term, once published.
-  title          String?
-  documentId     String?  @map("document_id") @db.Uuid
-  mergeRequestId String?  @map("merge_request_id") @db.Uuid
-  glossaryTermId String?  @map("glossary_term_id") @db.Uuid
-  error          String?
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-
-  answer ChatAnswer @relation(fields: [answerId], references: [id], onDelete: Cascade)
-
-  // One page and one term per answer: a double press is one capture. A failed
-  // one is claimed again in place, by a guarded update.
-  @@unique([answerId, kind])
-  @@index([status, createdAt])
-  @@map("chat_captures")
 }
 
 /// The operations and channels of one spec revision (#78): a projection of the
@@ -3272,6 +3383,12 @@ model WorkspaceSettings {
   /// #75 SCIM: the role a provisioned user gets without a mapped SCIM group —
   /// a WORKSPACE_ROLES value or `none`; null is `viewer`.
   scimDefaultRole         String?  @map("scim_default_role")
+  /// #79 usage analytics: record reads, searches and MCP calls; null inherits
+  /// ANALYTICS_ENABLED, and `true` cannot turn on what the env turned off.
+  analyticsEnabled        Boolean? @map("analytics_enabled")
+  /// Days of analytics rows kept; null inherits ANALYTICS_RETENTION_DAYS, and
+  /// a value may only shorten it.
+  analyticsRetentionDays  Int?     @map("analytics_retention_days")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 
@@ -3458,4 +3575,147 @@ model SsoAuthRequest {
 
   @@index([expiresAt])
   @@map("sso_auth_requests")
+}
+
+/// A named instant in a workspace (#81): "v2.3", "Q3 audit". Not a git tag —
+/// a point on the graph's valid-time axis that `asOf=tag:<name>` resolves to.
+model ReleaseTag {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// No FK, house policy.
+  workspaceId String   @map("workspace_id") @db.Uuid
+  /// null = the whole workspace; set = shown in that project's views only.
+  projectId   String?  @map("project_id") @db.Uuid
+  name        String
+  at          DateTime @db.Timestamptz
+  note        String?
+  /// users.id, or the dev principal's zeros. No FK, house policy.
+  createdBy   String   @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, at])
+  @@map("release_tags")
+}
+
+/// A contradiction between two pages (#81), found by the arbiter. A proposal,
+/// never a change: a person resolves, dismisses or proposes a fix for it.
+model KnowledgeConflict {
+  id             String    @id @default(uuid()) @db.Uuid
+  /// No FK, house policy.
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  /// CONFLICT_KINDS.
+  kind           String
+  /// CONFLICT_STATUSES.
+  status         String    @default("open")
+  /// sha256 over both sides' page and normalized quote, order-free: the same
+  /// disagreement found twice is one row.
+  fingerprint    String
+  aDocumentId    String    @map("a_document_id") @db.Uuid
+  aRevisionId    String    @map("a_revision_id") @db.Uuid
+  aChunkId       String?   @map("a_chunk_id")
+  aQuote         String    @map("a_quote")
+  /// Null for a conflict between a page and code (the sentinel's, a later phase).
+  bDocumentId    String?   @map("b_document_id") @db.Uuid
+  bRevisionId    String?   @map("b_revision_id") @db.Uuid
+  bChunkId       String?   @map("b_chunk_id")
+  bQuote         String?   @map("b_quote")
+  codeRef        Json?     @map("code_ref")
+  explanation    String
+  confidence     Float
+  agentRunId     String?   @map("agent_run_id") @db.Uuid
+  /// The finding on that run that reported it, so "propose a fix" reuses the finding's path.
+  findingIndex   Int?      @map("finding_index")
+  mergeRequestId String?   @map("merge_request_id") @db.Uuid
+  detectedAt     DateTime  @default(now()) @map("detected_at") @db.Timestamptz
+  resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz
+  resolvedBy     String?   @map("resolved_by") @db.Uuid
+  resolution     String?
+
+  @@unique([workspaceId, fingerprint])
+  @@index([workspaceId, status, detectedAt])
+  @@index([aDocumentId, status])
+  @@index([bDocumentId, status])
+  @@map("knowledge_conflicts")
+}
+
+// ---------------------------------------------------------------------------
+// #79 usage & search analytics. Event rows only: one row per thing that
+// happened, and every dashboard number a rollup over them at read time. No FK
+// on workspace/project/document/search ids (house policy) — an event outlives
+// the page it describes, as activity_log does. Never a user id: a reader is
+// `reader_key`, an HMAC per workspace, so readers can be counted but not named.
+
+/// One page open. A web view is one row however long it stays open: the
+/// heartbeat folds read time into it rather than adding a row per tick.
+model PageView {
+  /// The web's own viewId (so a replayed beacon is a no-op), else a server uuid.
+  id          String   @id @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  /// Denormalized at write time by the recorder; a later move keeps the old one.
+  projectId   String?  @map("project_id") @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  revisionId  String?  @map("revision_id") @db.Uuid
+  /// ANALYTICS_CHANNELS
+  channel     String
+  /// HMAC(secret, workspaceId:userId); null under DNT / GPC.
+  readerKey   String?  @map("reader_key")
+  apiKeyId    String?  @map("api_key_id") @db.Uuid
+  /// Set when the view came from a search result (?sid=&rank=).
+  searchId    String?  @map("search_id") @db.Uuid
+  searchRank  Int?     @map("search_rank")
+  /// Web only; capped at ANALYTICS_READ_TIME_CAP_MS.
+  activeMs    Int      @default(0) @map("active_ms")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([documentId, createdAt])
+  @@index([searchId])
+  @@map("page_views")
+}
+
+/// One executed search, from any surface.
+model SearchQuery {
+  id           String   @id @db.Uuid
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  /// The project filter the caller applied (string[]).
+  projectIds   Json     @default("[]") @map("project_ids")
+  /// Trimmed, NFC, at most 500 chars. Nulled by retention after ANALYTICS_QUERY_TEXT_DAYS.
+  queryText    String?  @map("query_text")
+  /// sha256 of the folded text: the grouping key that survives redaction.
+  queryHash    String   @map("query_hash")
+  mode         String
+  resultCount  Int      @map("result_count")
+  /// The top 10 document ids returned, in rank order.
+  resultDocIds Json     @default("[]") @map("result_doc_ids")
+  channel      String
+  readerKey    String?  @map("reader_key")
+  apiKeyId     String?  @map("api_key_id") @db.Uuid
+  durationMs   Int      @map("duration_ms")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, queryHash, createdAt])
+  @@index([workspaceId, resultCount, createdAt])
+  @@map("search_queries")
+}
+
+/// One MCP tool invocation, HTTP or stdio.
+model McpToolCall {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Null when the tool takes no workspace (whoami) or names it some other way.
+  workspaceId String?  @map("workspace_id") @db.Uuid
+  tool        String
+  ok          Boolean
+  /// The thrown error's class name, or `tool-error` for an isError result.
+  errorCode   String?  @map("error_code")
+  readerKey   String?  @map("reader_key")
+  apiKeyId    String?  @map("api_key_id") @db.Uuid
+  durationMs  Int      @map("duration_ms")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([apiKeyId, createdAt])
+  @@map("mcp_tool_calls")
 }

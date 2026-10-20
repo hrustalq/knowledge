@@ -1,3 +1,4 @@
+import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
 import { forwardRef, Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { ActivityModule } from '../activity/activity.module.js';
@@ -21,6 +22,8 @@ import { AgentTiebreakService } from './agent-tiebreak.service.js';
 import { McpClientService } from './mcp-client.service.js';
 import { AiController } from './ai.controller.js';
 import { AiUsageController } from './ai-usage.controller.js';
+import { AgentOutcomesController } from './agent-outcomes.controller.js';
+import { AgentOutcomesService } from './agent-outcomes.service.js';
 
 /**
  * AI settings (docs/features/12). API-only module — keep it out of worker and
@@ -38,6 +41,8 @@ import { AiUsageController } from './ai-usage.controller.js';
     PrismaModule,
     AiCoreModule,
     AgentCoreModule,
+    // Propose links a finding's conflict to its merge request (#81).
+    ConflictsCoreModule,
     AgentQueueModule,
     // A signed delivery fires its trigger inline (#70); controller-free.
     AgentTriggerCoreModule,
@@ -53,8 +58,8 @@ import { AiUsageController } from './ai-usage.controller.js';
     GlossaryCoreModule,
     forwardRef(() => AssistantModule),
   ],
-  controllers: [AiController, AiUsageController, AgentWebhookController],
-  providers: [AiAgentsService, AgentRunsService, AgentTriggersService, AgentRecipesService, AgentFindingsService, AgentTiebreakService, AiPluginsService, AiSettingsService, McpClientService],
+  controllers: [AiController, AiUsageController, AgentWebhookController, AgentOutcomesController],
+  providers: [AgentOutcomesService, AiAgentsService, AgentRunsService, AgentTriggersService, AgentRecipesService, AgentFindingsService, AgentTiebreakService, AiPluginsService, AiSettingsService, McpClientService],
   // AgentFindingsService for the drift check's publisher (docs/features/35),
   // which proposes through the very path the Propose button takes.
   exports: [AiCoreModule, AgentCoreModule, AiPluginsService, AgentTiebreakService, AgentFindingsService],

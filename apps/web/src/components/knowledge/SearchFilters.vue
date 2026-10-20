@@ -7,9 +7,12 @@
 // the pages list offers exactly the same ones; what stays here is the part that
 // is only meaningful while searching: which workspace, and how the query runs.
 import { useI18n } from 'vue-i18n'
-import { computed, ref } from 'vue'
-import type { DocumentCategory } from '@knowledge/contracts'
-import { getWorkspaceId } from '@/lib/api'
+import { computed, onMounted, ref } from 'vue'
+import type { DocumentCategory, ListReleaseTagsResponse, ReleaseTagDto } from '@knowledge/contracts'
+import { X } from 'lucide-vue-next'
+import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { formatDate } from '@/lib/format'
+import { Input } from '@/components/ui/input'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -53,6 +56,41 @@ const selectedTags = computed({
   get: () => [...props.search.tags.value],
   set: (v: string[]) => {
     props.search.tags.value = new Set(v)
+  },
+})
+
+/* ------------------------------------------------------------- as of (#81) */
+
+const releaseTags = ref<ReleaseTagDto[]>([])
+onMounted(async () => {
+  try {
+    releaseTags.value = (await apiFetch<ListReleaseTagsResponse>(`/v1/release-tags?workspaceId=${getWorkspaceId()}`)).tags
+  } catch {
+    // The date field still works; tags are a shortcut to a date.
+  }
+})
+
+/** A local calendar day, YYYY-MM-DD — what `<input type="date">` speaks. */
+const dayOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const today = dayOf(new Date())
+
+const asOfTag = computed({
+  get: () => (props.search.asOf.value?.startsWith('tag:') ? props.search.asOf.value.slice(4) : ''),
+  set: (name: string) => {
+    props.search.asOf.value = name ? `tag:${name}` : null
+  },
+})
+/**
+ * A picked day means "as the day ended": a page changed at 3 pm on the 4th
+ * read as changed on the 4th. The instant is the end of that local day.
+ */
+const asOfDay = computed({
+  get: () => {
+    const v = props.search.asOf.value
+    return v && !v.startsWith('tag:') ? dayOf(new Date(v)) : ''
+  },
+  set: (day: string | number) => {
+    props.search.asOf.value = day ? new Date(`${day}T23:59:59.999`).toISOString() : null
   },
 })
 
@@ -153,6 +191,39 @@ function onWorkspace(next: string[]) {
           </SelectContent>
         </Select>
       </div>
+    </section>
+
+    <div class="border-t" />
+
+    <!-- #81: the knowledge base as it read at a point. A day or a release tag,
+         never both: picking one clears the other. -->
+    <section class="space-y-2 text-sm">
+      <div class="flex items-center justify-between gap-2">
+        <Label for="search-as-of" class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {{ t('search.asOf.label') }}
+        </Label>
+        <button
+          v-if="search.asOf.value"
+          type="button"
+          class="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          @click="search.asOf.value = null"
+        >
+          <X class="size-3" />
+          {{ t('search.asOf.clear') }}
+        </button>
+      </div>
+      <Input id="search-as-of" v-model="asOfDay" type="date" :max="today" class="h-8 text-xs" :aria-label="t('search.asOf.pickDate')" />
+      <Select v-if="releaseTags.length" v-model="asOfTag">
+        <SelectTrigger size="sm" class="w-full text-xs" :aria-label="t('search.asOf.pickTag')">
+          <SelectValue :placeholder="t('search.asOf.pickTag')" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem v-for="tag in releaseTags" :key="tag.id" :value="tag.name">
+            {{ tag.name }} <span class="text-muted-foreground">· {{ formatDate(tag.at) }}</span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      <p class="text-[11px] leading-snug text-muted-foreground">{{ t('search.asOf.hint') }}</p>
     </section>
   </div>
 </template>

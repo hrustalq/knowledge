@@ -109,13 +109,33 @@ Three further projections ride on the same endpoint and the same cache:
   no longer do". See [05](05-merge-review.md#breaking-api-changes) and
   [feature 52](../features/52-api-reference.md).
 
+### Drafts are not revisions
+
+A co-edited page ([feature 56](../features/56-realtime-coediting.md)) has one
+mutable **shared draft** per branch in `collab_drafts`: encoded Yjs state, the
+base revision it was seeded from or last published as, and the snapshot that
+was last published. It sits beside the DAG, never in it. Publishing a draft is
+an ordinary `POST :id/revisions` → PUT → finalize. The request also names the
+draft (`collabDraftId`) and the Y snapshot its markdown was serialized at
+(`draftSnapshot`), and `finalizeRevision` rebases the draft inside the same
+transaction that advances the head: the dedupe path too, so a content-equal
+publish still rebases. The revision records the draft id, the snapshot and
+`co_author_ids`. A revision in status `draft` is still only "row exists, bytes
+not uploaded" and is never an editing session.
+
+Discarding a draft reseeds the row from the branch head and moves `reset_at`,
+which every later store from an older copy fails against.
+
 ## Optimistic concurrency
 
 `POST /v1/documents/:id/revisions` accepts **`If-Match: <expected-head-revision-id>`**.
 If the branch head has advanced since the client read it, the write is refused
 with a 409 carrying a `comparisonUrl` — the conflict is reported as a place to
 look, not merely as a failure. The MCP equivalent is the `baseRevisionId`
-argument, since a stdio tool call has no HTTP headers.
+argument, since a stdio tool call has no HTTP headers. A shared draft publishes
+with `If-Match: <draft base>`, and **Publish on top** sends the moved head
+instead. The server does not require the two to match: `If-Match` is the
+client's statement of what it builds on.
 
 ## Routes
 
@@ -129,7 +149,10 @@ POST   /v1/documents/:id/branches         fork
 GET    /v1/documents/:id/compare          direct | merge-base, ?structural= ?semantic=
 GET    /v1/documents/:id/content          full markdown + frontmatter
 GET    /v1/documents/:id/facts            ?at=<rev> — snapshot via newest asserting ancestor
-GET    /v1/documents/:id/facts/timeline   introduced / removed revisions
+GET    /v1/documents/:id/facts/timeline   introduced / removed / retracted (#81)
+GET    /v1/documents/:id/content?asOf=    the default-branch revision current at a point (#81)
+GET    /v1/documents/:id/drafts           each branch's shared draft (feature 56)
+DELETE /v1/documents/:id/drafts/:branchId discard: reseed from the head
 ```
 
 ## Limits
@@ -139,4 +162,7 @@ GET    /v1/documents/:id/facts/timeline   introduced / removed revisions
 - The diff cache grows without bound. Nothing prunes `revision_diffs`, which is
   acceptable precisely because entries can never be wrong, but it is not free.
 - History queries read the revision-scoped fact set kept by every indexed
-  revision, so a revision that never indexed has no facts to snapshot.
+  revision, so a revision that never indexed has no facts to snapshot. Those
+  rows now also carry the interval they were true and, when withdrawn, when
+  and by whom (#81). A retracted fact stays readable in the timeline and
+  through `knownAt` ([feature 57](../features/57-temporal-graph.md)).

@@ -1,6 +1,8 @@
+import { HttpException } from '@nestjs/common';
 import type { McpServer, RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpToolSummary } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
+import type { RecordedToolCall } from '../analytics/analytics.recorder.js';
 
 /** The key every generated client config files this server under. */
 export const MCP_SERVER_NAME = 'knowledge';
@@ -19,8 +21,15 @@ export const MCP_INSTRUCTIONS = [
   'Every search hit carries trust.status (verified | expired | edited | requested | outdated | flagged | unverified). Prefer verified pages; say so when you rely on an outdated, expired or edited one. knowledge_flag_document marks a page requested (please check) or outdated (known wrong) — verifying is a person\'s act and has no tool.',
   'To change an existing page: knowledge_create_branch → knowledge_create_revision → knowledge_create_merge_request. Do not merge your own merge request unless asked to.',
   'When the session settles something durable — a decision and why, a non-obvious gotcha, a team convention — record it with knowledge_capture_decision / knowledge_capture_note (check knowledge_find_similar first). Captures become merge requests a person reviews.',
+  'Graph tools take asOf (an ISO date, rev:<revisionId> or tag:<release tag>) to answer as the knowledge base stood then; knowledge_list_release_tags lists the tags.',
   'Read the knowledge://skill resource (or the "guide" prompt) for the full playbook.',
 ].join('\n');
+
+/** The `asOf` / `knownAt` arguments of the graph tools (#81), described once. */
+export const MCP_AS_OF =
+  'Answer as the knowledge base stood at a point: an ISO date, "rev:<revisionId>" or "tag:<release tag name>". Omit for now.';
+export const MCP_KNOWN_AT =
+  'What was believed at this ISO date: facts retracted since still show, facts written since do not. Omit for now.';
 
 /**
  * Tools that change the knowledge base. The complement is read-only, and gets
@@ -62,6 +71,12 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_propose_agent_learning',
   // Queues a model run that opens a merge request with a drafted component page (#236).
   'knowledge_document_component',
+  // Writes a suggestion into a page's shared draft (#316). HTTP only, with COLLAB_ENABLED.
+  'knowledge_suggest_draft_edit',
+  // Names an instant the graph can be read as of (#81).
+  'knowledge_create_release_tag',
+  // Resolves or dismisses a contradiction between pages (#81).
+  'knowledge_resolve_conflict',
 ]);
 
 /**
@@ -82,20 +97,84 @@ export const CAPTURE_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Keep a handle on every tool registered from here on.
+ * Keep a handle on every tool registered from here on, and time every call
+ * through `onCall` (#79).
  *
  * Wraps the instance rather than each call site, because `server.registerTool(
- * 'name', {` is a shape `generate-docs-reference.mjs` reads the source for.
+ * 'name', {` is a shape `generate-docs-reference.mjs` reads the source for —
+ * and so a tool added later is counted without knowing it is.
  */
-export function trackTools(server: McpServer): Map<string, RegisteredTool> {
+export function trackTools(
+  server: McpServer,
+  onCall: (call: RecordedToolCall) => void = () => {},
+): Map<string, RegisteredTool> {
   const handles = new Map<string, RegisteredTool>();
   const register = server.registerTool.bind(server) as (...args: unknown[]) => RegisteredTool;
   server.registerTool = ((name: string, ...rest: unknown[]) => {
+    const cb = rest.at(-1);
+    if (typeof cb === 'function') rest[rest.length - 1] = timed(name, cb as ToolCallback, onCall);
     const handle = register(name, ...rest);
     handles.set(name, handle);
     return handle;
   }) as McpServer['registerTool'];
   return handles;
+}
+
+type ToolCallback = (args: unknown, extra: unknown) => Promise<unknown>;
+
+function timed(tool: string, cb: ToolCallback, onCall: (call: RecordedToolCall) => void): ToolCallback {
+  return async (args, extra) => {
+    const startedAt = performance.now();
+    const a = (args ?? {}) as Record<string, unknown>;
+    // Counting a call must never be why it failed.
+    const finish = (ok: boolean, errorCode: string | null) => {
+      try {
+        onCall({
+          tool,
+          workspaceId: typeof a.workspaceId === 'string' ? a.workspaceId : null,
+          documentId: typeof a.documentId === 'string' ? a.documentId : null,
+          ok,
+          errorCode,
+          durationMs: performance.now() - startedAt,
+        });
+      } catch {
+        // swallowed: the recorder is fire-and-forget
+      }
+    };
+    try {
+      const result = await cb(args, extra);
+      const isError = (result as { isError?: boolean } | null)?.isError === true;
+      finish(!isError, isError ? 'tool-error' : null);
+      return result;
+    } catch (e) {
+      finish(false, e instanceof Error ? e.constructor.name : 'unknown');
+      const envelope = toolErrorEnvelope(e);
+      if (envelope) return envelope;
+      throw e;
+    }
+  };
+}
+
+/**
+ * A refusal's flat extras, on the tool result as REST puts them in `details`
+ * (#300). The SDK turns a throw into its message alone, so an agent refused
+ * by enforced SSO learned neither `reason: 'ssoRequired'` nor the providers to
+ * sign in through. The message stays the first block, unchanged; an exception
+ * with no extras is still thrown and reaches the client exactly as before.
+ */
+function toolErrorEnvelope(e: unknown): { content: { type: 'text'; text: string }[]; isError: true } | null {
+  if (!(e instanceof HttpException)) return null;
+  const body = e.getResponse();
+  if (typeof body !== 'object' || body === null) return null;
+  const { statusCode: _s, error: _e, message: _m, code: _c, ...details } = body as Record<string, unknown>;
+  if (!Object.keys(details).length) return null;
+  return {
+    content: [
+      { type: 'text', text: e.message },
+      { type: 'text', text: JSON.stringify({ statusCode: e.getStatus(), message: e.message, details }) },
+    ],
+    isError: true,
+  };
 }
 
 /**

@@ -1,12 +1,20 @@
 /**
  * Structural blocks: panels, expands and multi-column layouts.
  *
- * Each node's `renderHTML` is the exact shape `lib/markdown/serialize.ts`
- * expects and `lib/markdown/render.ts` produces. Change one, change all three.
+ * The specs (attributes, parse and render rules) live in
+ * `@knowledge/editor-schema`, where the API builds the same schema to seed a
+ * shared draft. This file adds what only a browser editor has: node views,
+ * commands and shortcuts.
  */
-import { Node, mergeAttributes } from '@tiptap/core'
 import { VueNodeViewRenderer } from '@tiptap/vue-3'
-import { KN, PANEL_TYPES, isPanelType, type PanelType } from '@/lib/markdown/nodes'
+import {
+  Expand as ExpandSpec,
+  Layout as LayoutSpec,
+  LayoutColumn as LayoutColumnSpec,
+  Panel as PanelSpec,
+  TableOfContents as TocSpec,
+} from '@knowledge/editor-schema'
+import { PANEL_TYPES, type PanelType } from '@/lib/markdown/nodes'
 import PanelNode from '../nodes/PanelNode.vue'
 import ExpandNode from '../nodes/ExpandNode.vue'
 import LayoutNode from '../nodes/LayoutNode.vue'
@@ -25,33 +33,7 @@ declare module '@tiptap/core' {
   }
 }
 
-export const Panel = Node.create({
-  name: 'knPanel',
-  group: 'block',
-  content: 'block+',
-  defining: true,
-
-  addAttributes() {
-    return {
-      type: {
-        default: 'note' as PanelType,
-        parseHTML: (element) => {
-          const raw = element.getAttribute(KN.panel) ?? 'note'
-          return isPanelType(raw) ? raw : 'note'
-        },
-        renderHTML: (attributes) => ({ [KN.panel]: attributes.type }),
-      },
-    }
-  },
-
-  parseHTML() {
-    return [{ tag: `div[${KN.panel}]` }]
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes), 0]
-  },
-
+export const Panel = PanelSpec.extend({
   addNodeView() {
     return VueNodeViewRenderer(PanelNode)
   },
@@ -87,56 +69,7 @@ export const Panel = Node.create({
 /** Panels remember which type each shortcut cycles to. */
 export const PANEL_ORDER = PANEL_TYPES
 
-export const Expand = Node.create({
-  name: 'knExpand',
-  group: 'block',
-  content: 'block+',
-  defining: true,
-
-  addAttributes() {
-    return {
-      summary: {
-        default: 'Details',
-        parseHTML: (element) => {
-          const summary = [...element.children].find((c) => c.tagName === 'SUMMARY')
-          return summary?.textContent?.trim() || 'Details'
-        },
-        renderHTML: () => ({}),
-      },
-      open: {
-        default: true,
-        parseHTML: (element) => element.hasAttribute('open'),
-        renderHTML: (attributes) => (attributes.open ? { open: 'open' } : {}),
-      },
-    }
-  },
-
-  parseHTML() {
-    return [
-      {
-        tag: 'details',
-        // The summary is an attribute, not content — hand ProseMirror a copy
-        // with it removed so the label does not also appear inside the body.
-        contentElement: (element) => {
-          const clone = element.cloneNode(true) as HTMLElement
-          for (const child of [...clone.children]) {
-            if (child.tagName === 'SUMMARY') child.remove()
-          }
-          return clone
-        },
-      },
-    ]
-  },
-
-  renderHTML({ node, HTMLAttributes }) {
-    return [
-      'details',
-      mergeAttributes(HTMLAttributes),
-      ['summary', {}, node.attrs.summary as string],
-      ['div', { 'data-kn-expand-body': '' }, 0],
-    ]
-  },
-
+export const Expand = ExpandSpec.extend({
   addNodeView() {
     return VueNodeViewRenderer(ExpandNode)
   },
@@ -151,48 +84,13 @@ export const Expand = Node.create({
   },
 })
 
-export const LayoutColumn = Node.create({
-  name: 'knLayoutColumn',
-  content: 'block+',
-  isolating: true,
-
-  parseHTML() {
-    return [{ tag: `div[${KN.column}]` }]
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes, { [KN.column]: '' }), 0]
-  },
-
+export const LayoutColumn = LayoutColumnSpec.extend({
   addNodeView() {
     return VueNodeViewRenderer(LayoutColumnNode)
   },
 })
 
-export const Layout = Node.create({
-  name: 'knLayout',
-  group: 'block',
-  content: 'knLayoutColumn{2,3}',
-  isolating: true,
-
-  addAttributes() {
-    return {
-      columns: {
-        default: 2,
-        parseHTML: (element) => (Number(element.getAttribute(KN.layout)) === 3 ? 3 : 2),
-        renderHTML: (attributes) => ({ [KN.layout]: String(attributes.columns) }),
-      },
-    }
-  },
-
-  parseHTML() {
-    return [{ tag: `div[${KN.layout}]` }]
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes), 0]
-  },
-
+export const Layout = LayoutSpec.extend({
   addNodeView() {
     return VueNodeViewRenderer(LayoutNode)
   },
@@ -215,20 +113,7 @@ export const Layout = Node.create({
   },
 })
 
-export const TableOfContents = Node.create({
-  name: 'knToc',
-  group: 'block',
-  atom: true,
-  selectable: true,
-
-  parseHTML() {
-    return [{ tag: `div[${KN.toc}]` }]
-  },
-
-  renderHTML() {
-    return ['div', { [KN.toc]: '1' }]
-  },
-
+export const TableOfContents = TocSpec.extend({
   addNodeView() {
     return VueNodeViewRenderer(TocNode)
   },

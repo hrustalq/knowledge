@@ -20,6 +20,7 @@ import {
   type CaptureApiKey,
   type CaptureInfo,
   type CaptureKind,
+  type CaptureOrigin,
   type CaptureOutcome,
   type CapturePageKind,
   type CaptureResult,
@@ -70,9 +71,11 @@ import {
   appendCaptureSection,
   CAPTURE_HEADING_KEYS,
   capturedEntry,
+  describeOrigin,
   describeSession,
   renderCaptureBody,
   withCapturedEntry,
+  withOriginSource,
   type CaptureBodyInput,
   type CaptureHeadings,
   type LinkedPage,
@@ -160,8 +163,12 @@ export class CaptureService {
     this.webBaseUrl = this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
   }
 
-  /** Stage one capture and propose it. The caller has passed the capture guard for the workspace or page. */
-  async capture(req: CreateCaptureRequest, principal: Principal): Promise<CaptureResult> {
+  /**
+   * Stage one capture and propose it. The caller has passed the capture guard
+   * for the workspace or page. `origin` is the server's own (a chat delivery,
+   * #82) — no request body carries one.
+   */
+  async capture(req: CreateCaptureRequest, principal: Principal, opts: { origin?: CaptureOrigin } = {}): Promise<CaptureResult> {
     const workspaceId = req.workspaceId;
     if (principal.mode !== 'dev') await this.access.requireRole(principal, workspaceId, 'editor', false, { capture: true });
     const settings = await this.aiConfig.captureSettings(workspaceId);
@@ -196,6 +203,7 @@ export class CaptureService {
       payload: staged.payload as unknown as Prisma.InputJsonValue,
       contentHash,
       session: session as unknown as Prisma.InputJsonValue,
+      ...(opts.origin ? { origin: opts.origin as unknown as Prisma.InputJsonValue } : {}),
       apiKeyId: principal.apiKey?.id ?? null,
       createdBy: principal.userId,
     };
@@ -604,6 +612,7 @@ export class CaptureService {
     const h = this.headings(lang, row.title);
     const input = await this.bodyInput(kind, payload);
     const session = row.session as unknown as CaptureSession;
+    const origin = row.origin as unknown as CaptureOrigin | null;
     const entry = capturedEntry(row.id, kind, session, row.createdAt);
     const title = t('capture.mergeRequest.title', { kind: t(`capture.kind.${kind}`, undefined, lang), title: row.title }, lang).slice(0, 200);
     const branch = `capture/${row.id.slice(0, 8)}-${claimedAt.getTime()}`;
@@ -614,7 +623,7 @@ export class CaptureService {
       const target = decision.targetDocumentId;
       const content = await this.documents.getContent(target);
       const top = similar.find((s) => s.documentId === target);
-      const description = this.describe(session, similar, lang, t('capture.mergeRequest.amends', { page: top?.title ?? '', score: top?.score ?? '' }, lang));
+      const description = this.describe(session, origin, similar, lang, t('capture.mergeRequest.amends', { page: top?.title ?? '', score: top?.score ?? '' }, lang));
       await openDraftMergeRequest(deps, {
         documentId: target,
         branch,
@@ -622,7 +631,7 @@ export class CaptureService {
         description,
         markdown: composeFrontmatter(
           appendCaptureSection(content.markdown, renderCaptureBody(input, h, 3), h),
-          withCapturedEntry(content.frontmatter ?? {}, entry),
+          withOriginSource(withCapturedEntry(content.frontmatter ?? {}, entry), origin),
         ),
         userId: principal.userId,
         provenance: 'captured',
@@ -644,7 +653,7 @@ export class CaptureService {
     // person merges it.
     const parentId = await this.parentFor(settings.parentDocumentId, row.projectId);
     const category = CATEGORY_BY_KIND[kind];
-    const description = this.describe(session, similar, lang, t('capture.mergeRequest.newPage', undefined, lang));
+    const description = this.describe(session, origin, similar, lang, t('capture.mergeRequest.newPage', undefined, lang));
     await this.prisma.withTransaction(async () => {
       const created = await this.documents.createDocument(
         {
@@ -661,7 +670,10 @@ export class CaptureService {
         branch,
         title,
         description,
-        markdown: composeFrontmatter(renderCaptureBody(input, h, 2), { source: `capture:${session.client}`, captured: [entry] }),
+        markdown: composeFrontmatter(
+          renderCaptureBody(input, h, 2),
+          withOriginSource({ source: `capture:${session.client}`, captured: [entry] }, origin),
+        ),
         userId: principal.userId,
         provenance: 'captured',
         captureId: row.id,
@@ -688,7 +700,7 @@ export class CaptureService {
       {
         add: [{ type: payload.type as AuthorableRelationType, target: { type: entityTypeOf(payload.targetKey), key: payload.targetKey } }],
         title: t('capture.mergeRequest.title', { kind: t('capture.kind.relation', undefined, lang), title: row.title }, lang).slice(0, 200),
-        description: `${this.describe(session, [], lang)}\n\n${t('capture.mergeRequest.rationale', undefined, lang)} ${payload.rationale}`.slice(0, 2_000),
+        description: `${this.describe(session, row.origin as unknown as CaptureOrigin | null, [], lang)}\n\n${t('capture.mergeRequest.rationale', undefined, lang)} ${payload.rationale}`.slice(0, 2_000),
       },
       principal,
       {
@@ -841,11 +853,19 @@ export class CaptureService {
   }
 
   /** The merge request description: where it came from, what it does, what it was compared with. */
-  private describe(session: CaptureSession, similar: readonly CaptureSimilar[], lang: Principal['locale'], what?: string): string {
+  private describe(
+    session: CaptureSession,
+    origin: CaptureOrigin | null,
+    similar: readonly CaptureSimilar[],
+    lang: Principal['locale'],
+    what?: string,
+  ): string {
     const lines = [
-      session.client === 'assistant'
-        ? t('capture.mergeRequest.introAssistant', undefined, lang)
-        : t('capture.mergeRequest.intro', { source: describeSession(session) }, lang),
+      origin
+        ? t('capture.mergeRequest.introChat', { source: describeOrigin(origin, t('capture.origin.directMessage', undefined, lang)) }, lang)
+        : session.client === 'assistant'
+          ? t('capture.mergeRequest.introAssistant', undefined, lang)
+          : t('capture.mergeRequest.intro', { source: describeSession(session) }, lang),
     ];
     if (what) lines.push('', what);
     if (similar.length) {
@@ -894,6 +914,7 @@ export class CaptureService {
       title: row.title,
       payload: row.payload as unknown as CapturePayload,
       session: row.session as unknown as CaptureSession,
+      origin: (row.origin as unknown as CaptureOrigin | null) ?? null,
       createdBy: row.createdBy,
       apiKeyId: row.apiKeyId,
       apiKey,

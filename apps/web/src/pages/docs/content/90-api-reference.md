@@ -17,12 +17,14 @@ Authorization: Bearer kn_…    # an API key, from `make auth-bootstrap`
 ```
 
 With `AUTH_MODE=none` no header is required and every request is a full-access dev
-principal. `?token=` works only where a header cannot be sent: `GET /v1/events`
-(`EventSource`) and the attachment, import-image and avatar redirects (`<img>`). On
-every other route a token in the URL is ignored and the request is **401**.
+principal. `?token=` works only on `GET /v1/events` (`EventSource` cannot send a
+header). On every other route a token in the URL is ignored and the request is **401**.
+The attachment, import-image and avatar redirects take a header from a script, or the
+web's session cookie from a browser `<img>`.
 
-An API key is never accepted in a URL. To open the event stream from a script, trade the
-key for a single-use ticket first — it expires in 60 seconds and works once:
+Neither an API key nor a session token is accepted in a URL. To open the event stream
+from a script, trade the key for a single-use ticket first — it expires in 60 seconds and
+works once:
 
 ```bash
 T=$(curl -s -X POST -H "Authorization: Bearer $KEY" $API/v1/auth/url-ticket | jq -r .ticket)

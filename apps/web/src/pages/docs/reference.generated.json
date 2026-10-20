@@ -132,6 +132,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/agent-outcomes",
+      "tag": "ai",
+      "summary": "Per agent, how many findings were accepted, dismissed or are pending, and how answers were voted; optionally split by prompt hash or model. Derived on read from runs, merge requests and votes",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/ai/agents",
       "tag": "ai",
       "summary": "Effective agent roster: built-in defaults ∪ this workspace overrides",
@@ -802,6 +812,116 @@
     },
     {
       "method": "GET",
+      "path": "/v1/analytics/agents",
+      "tag": "analytics",
+      "summary": "MCP calls by tool and by API key, and the in-app assistant's questions and model calls",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/export.csv",
+      "tag": "analytics",
+      "summary": "One dashboard table as RFC 4180 CSV (formula cells defused); audited",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/overview",
+      "tag": "analytics",
+      "summary": "The workspace's headline usage: views by traffic class, searches, click-through, assistant and MCP volume",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/pages",
+      "tag": "analytics",
+      "summary": "The workspace's most read, never read and dead pages",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/search",
+      "tag": "analytics",
+      "summary": "Top queries, queries that found nothing, and web searches whose results nobody opened",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/settings",
+      "tag": "analytics",
+      "summary": "The workspace's analytics settings: what it asks for, the deployment's ceiling, and what applies",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/analytics/settings",
+      "tag": "analytics",
+      "summary": "Set recording and retention for the workspace; null inherits the env, which is a ceiling",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/analytics/views/{viewId}/heartbeat",
+      "tag": "analytics",
+      "summary": "Fold a view's active read time into it. Monotonic and capped; a view the caller did not open is unchanged",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/insights",
+      "tag": "analytics",
+      "summary": "One page's reading over the last 30 days: views by traffic class, unique readers, median read time",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/views",
+      "tag": "analytics",
+      "summary": "Record that the caller opened this page (the web beacon). Idempotent on viewId",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/analytics",
+      "tag": "analytics",
+      "summary": "A project's reading: totals, the most read pages, and the pages nobody reads",
+      "role": "editor",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/api-operations",
       "tag": "api-specs",
       "summary": "Search API operations by method + path, summary, operationId or entity key",
@@ -1254,7 +1374,7 @@
       "method": "POST",
       "path": "/v1/auth/url-ticket",
       "tag": "auth",
-      "summary": "Mint a single-use, short-lived kt_ ticket for ?token= on SSE (EventSource cannot set headers); API keys are refused in URLs",
+      "summary": "Mint a single-use, short-lived kt_ ticket for ?token= on SSE (EventSource cannot set headers) and for joining /v1/collab; API keys are refused in URLs",
       "role": null,
       "source": null,
       "public": false,
@@ -1694,7 +1814,7 @@
       "method": "PATCH",
       "path": "/v1/chat/bindings/{id}",
       "tag": "chat",
-      "summary": "Change a group’s project, agent, answer mode or language",
+      "summary": "Change a group’s project, agent, answer mode, language, listening or automatic harvest",
       "role": "admin",
       "source": "chat-binding",
       "public": false,
@@ -1867,6 +1987,86 @@
       "summary": "Unlink one of my messenger accounts",
       "role": null,
       "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/collab/capabilities",
+      "tag": "collab",
+      "summary": "Whether this deployment co-edits drafts, and the editor schema version a peer must match to write",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/drafts",
+      "tag": "collab",
+      "summary": "Each branch's shared draft: its base, whether it holds unpublished changes, who wrote them, who has it open",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/documents/{id}/drafts/{branchId}",
+      "tag": "collab",
+      "summary": "Discard a branch's shared draft: it is reseeded from the branch head, and everyone in it rejoins (reason `reset`)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conflicts",
+      "tag": "conflicts",
+      "summary": "Contradictions the arbiter found, newest first; only those whose pages the caller may open",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conflicts/{id}",
+      "tag": "conflicts",
+      "summary": "One conflict with both quotes",
+      "role": "viewer",
+      "source": "conflict",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conflicts/{id}/dismiss",
+      "tag": "conflicts",
+      "summary": "Dismiss an open conflict as not one. It stays dismissed when found again",
+      "role": "editor",
+      "source": "conflict",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conflicts/{id}/propose",
+      "tag": "conflicts",
+      "summary": "Open a merge request that fixes the conflict on its first page. 409 when one was proposed already",
+      "role": "editor",
+      "source": "conflict",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conflicts/{id}/resolve",
+      "tag": "conflicts",
+      "summary": "Mark an open conflict resolved, with an optional note. 409 when it is no longer open",
+      "role": "editor",
+      "source": "conflict",
       "public": false,
       "platformAdmin": false
     },
@@ -2871,12 +3071,62 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/graph/communities",
+      "tag": "graph",
+      "summary": "Communities of related pages with their summaries, closest to a question first",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/graph/query",
       "tag": "graph",
       "summary": "Read-only graph query (trusted operator only; row-limited; every call is audited)",
       "role": "admin",
       "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/graph/timeline",
+      "tag": "graph",
+      "summary": "Markers for the graph time slider: release tags and per-day fact changes in a window",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/release-tags",
+      "tag": "graph",
+      "summary": "Release tags of the workspace, oldest first",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/release-tags",
+      "tag": "graph",
+      "summary": "Name an instant (now, or `at`) so the graph can be read as of it. 409 on a duplicate name",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/release-tags/{id}",
+      "tag": "graph",
+      "summary": "Remove a release tag. What the graph said at that instant is unaffected",
+      "role": "admin",
+      "source": "release-tag",
       "public": false,
       "platformAdmin": false
     },
@@ -3651,6 +3901,26 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/public/shares/{token}/exports",
+      "tag": "public",
+      "summary": "Export what the link shows as ZIP, HTML or PDF, when the link allows download (#161); poll the job",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/shares/{token}/exports/{exportId}",
+      "tag": "public",
+      "summary": "One of this link’s exports — polled while it runs",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/public/shares/{token}/pages/{documentId}",
       "tag": "public",
@@ -4261,6 +4531,16 @@
       "platformAdmin": true
     },
     {
+      "method": "DELETE",
+      "path": "/v1/users/{id}/sessions/{sessionId}",
+      "tag": "users",
+      "summary": "Revoke one of a user's sessions (platform admin); its token gets 401 from the next request",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
       "method": "GET",
       "path": "/v1/documents/{id}/workflow-runs",
       "tag": "workflows",
@@ -4653,6 +4933,32 @@
       ]
     },
     {
+      "name": "knowledge_create_release_tag",
+      "description": "Name an instant (now, or `at`) so the graph can later be read as of it with asOf=tag:<name>. Names are unique per workspace.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "name",
+          "optional": false
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        },
+        {
+          "name": "at",
+          "optional": true
+        },
+        {
+          "name": "note",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_create_revision",
       "description": "Create a new markdown revision on a branch (immutable; parented on the branch head), upload the content and finalize it for indexing. Pass baseRevisionId for optimistic concurrency: the call is rejected if the branch head has moved past it. Content without a frontmatter block keeps the branch head's frontmatter (tags, relations); include a block to replace it. For an API spec document (kind openapi or asyncapi), content is the whole spec in YAML or JSON (say which with syntax); it is validated, and refused with the validator's messages when it does not.",
       "inputs": [
@@ -4740,7 +5046,7 @@
     },
     {
       "name": "knowledge_export",
-      "description": "Export a page, a page and its subpages, or a whole project as a file a person can download (docs/features/45): zip (markdown sources with frontmatter, attachments and manifest.json), html (an offline site, zipped) or pdf (only where the deployment has Gotenberg). Give documentId, or projectId for a whole project. Runs in the background: returns the export id — poll knowledge_get_export for the download URL.",
+      "description": "Export a page, a page and its subpages, or a whole project as a file a person can download (docs/features/45): zip (markdown sources with frontmatter, attachments and manifest.json), html (an offline site, zipped), pdf (only where the deployment has Gotenberg) or docx (one Word document). Give documentId, or projectId for a whole project. Runs in the background: returns the export id — poll knowledge_get_export for the download URL.",
       "inputs": [
         {
           "name": "workspaceId",
@@ -4820,6 +5126,14 @@
         },
         {
           "name": "depth",
+          "optional": true
+        },
+        {
+          "name": "asOf",
+          "optional": true
+        },
+        {
+          "name": "knownAt",
           "optional": true
         }
       ]
@@ -4922,7 +5236,7 @@
     },
     {
       "name": "knowledge_get_historical_context",
-      "description": "What the knowledge base stated about an entity at a given revision (plan.md §11 historical queries): the fact snapshot at that point in the revision DAG, plus the entity\\u2019s current neighborhood for contrast.",
+      "description": "What the knowledge base stated about an entity at a given revision (plan.md §11 historical queries): the fact snapshot at that point in the revision DAG, plus the entity\\u2019s current neighborhood for contrast. Give asOf instead of atRevisionId for the whole workspace\\u2019s view of the entity at a date or release tag.",
       "inputs": [
         {
           "name": "workspaceId",
@@ -4934,7 +5248,15 @@
         },
         {
           "name": "atRevisionId",
-          "optional": false
+          "optional": true
+        },
+        {
+          "name": "asOf",
+          "optional": true
+        },
+        {
+          "name": "knownAt",
+          "optional": true
         }
       ]
     },
@@ -4959,6 +5281,16 @@
     {
       "name": "knowledge_get_page_access",
       "description": "The restrictions on a page as they apply to you: whether it is restricted itself, the restricted pages and project above it, and your effective level (view | edit | manage). Grants are listed only when you may manage the page. Use it when a write is refused, or before telling someone a page is visible to a team.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_get_page_insights",
+      "description": "chat bots) and agent (API keys, MCP, background runs), unique readers, median read time, the last human view and a daily series. Counts only, never who read it. collectingSince is null before the first view.",
       "inputs": [
         {
           "name": "documentId",
@@ -5015,6 +5347,32 @@
         {
           "name": "projectId",
           "optional": true
+        },
+        {
+          "name": "asOf",
+          "optional": true
+        },
+        {
+          "name": "knownAt",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_global_overview",
+      "description": "For a broad question across the whole knowledge base (\"what are our main risks?\"): the communities of related pages closest to it, each with an agent-written summary and its pages. Read the pages before relying on a detail; cite pages, not summaries. Empty until the atlas agent has built communities.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "question",
+          "optional": false
+        },
+        {
+          "name": "limit",
+          "optional": true
         }
       ]
     },
@@ -5036,6 +5394,14 @@
         },
         {
           "name": "maxDepth",
+          "optional": true
+        },
+        {
+          "name": "asOf",
+          "optional": true
+        },
+        {
+          "name": "knownAt",
           "optional": true
         }
       ]
@@ -5127,6 +5493,24 @@
       ]
     },
     {
+      "name": "knowledge_list_conflicts",
+      "description": "Contradictions the arbiter found between pages: both pages, the passage each one says, and why they disagree. Only conflicts whose pages you may open. Newest first.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "status",
+          "optional": true
+        },
+        {
+          "name": "documentId",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_list_connectors",
       "description": "List the external systems this workspace syncs with (Confluence, Jira, Notion, markdown/git). Each entry says which direction it moves content, how many pages it has claimed, and how its last sync went.",
       "inputs": [
@@ -5211,6 +5595,20 @@
       ]
     },
     {
+      "name": "knowledge_list_release_tags",
+      "description": "Release tags of a workspace: named instants (\"v2.3\", \"Q3 audit\") that asOf=tag:<name> reads the graph as of. Oldest first.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_list_revisions",
       "description": "List the immutable revision DAG of a document (parent ids, branch, status).",
       "inputs": [
@@ -5220,6 +5618,20 @@
         },
         {
           "name": "branch",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_search_gaps",
+      "description": "Coverage gaps: queries searched over the last `days` (default 30) that found nothing (zeroResult), and web searches that found pages nobody opened (noClick), grouped by query with counts. Admin only. The query text was typed by readers and comes back wrapped as untrusted data; it is null once retention redacted it, and queryHash still groups it. Use it to find pages worth writing.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "days",
           "optional": true
         }
       ]
@@ -5401,8 +5813,30 @@
       ]
     },
     {
+      "name": "knowledge_resolve_conflict",
+      "description": "Close an open contradiction: \"resolve\" when it is fixed or explained (say how in note), \"dismiss\" when it is not a contradiction — a dismissed one stays dismissed when found again.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "conflictId",
+          "optional": false
+        },
+        {
+          "name": "action",
+          "optional": false
+        },
+        {
+          "name": "note",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_search",
-      "description": "Semantic search over the knowledge base. Every result carries document/revision/chunk citations plus provenance: revisionNumber, changedAt (freshness), authorName, verification / trust.status (verified | expired | edited | requested | outdated | flagged | unverified), trust.inactive, trust.ownerId and factClass. Ranking already favours verified pages and demotes outdated ones; still say when a page you relied on is outdated, expired or edited since verification. Archived pages are absent unless includeArchived is true. The response traceId identifies this search.",
+      "description": "Semantic search over the knowledge base. Every result carries document/revision/chunk citations plus provenance: revisionNumber, changedAt (freshness), authorName, verification / trust.status (verified | expired | edited | requested | outdated | flagged | unverified), trust.inactive, trust.ownerId and factClass. Ranking already favours verified pages and demotes outdated ones; still say when a page you relied on is outdated, expired or edited since verification. Archived pages are absent unless includeArchived is true. The response traceId identifies this search. With asOf, it searches the text each page held then, and a result whose validTo is set has since been superseded.",
       "inputs": [
         {
           "name": "workspaceId",
@@ -5427,12 +5861,20 @@
         {
           "name": "includeArchived",
           "optional": true
+        },
+        {
+          "name": "asOf",
+          "optional": true
+        },
+        {
+          "name": "knownAt",
+          "optional": true
         }
       ]
     },
     {
       "name": "knowledge_share_page",
-      "description": "Create a public, read-only link to a page (docs/features/43) that anyone with the URL can open without signing in — only when a person asked for one. includeSubtree also shares every page under it. Without expiresInDays the link never expires, which most workspaces only allow with a password. Fails with 403 when the workspace has sharing switched off. Returns the URL; revoke it from the page's Share menu.",
+      "description": "Create a public, read-only link to a page (docs/features/43) that anyone with the URL can open without signing in — only when a person asked for one. includeSubtree also shares every page under it. allowDownload lets readers download it as ZIP/HTML/PDF (off unless asked for). Without expiresInDays the link never expires, which most workspaces only allow with a password. Fails with 403 when the workspace has sharing switched off. Returns the URL; revoke it from the page's Share menu.",
       "inputs": [
         {
           "name": "workspaceId",
@@ -5444,6 +5886,10 @@
         },
         {
           "name": "includeSubtree",
+          "optional": true
+        },
+        {
+          "name": "allowDownload",
           "optional": true
         },
         {
@@ -5514,6 +5960,14 @@
         },
         {
           "name": "maxDepth",
+          "optional": true
+        },
+        {
+          "name": "asOf",
+          "optional": true
+        },
+        {
+          "name": "knownAt",
           "optional": true
         }
       ]

@@ -1,6 +1,6 @@
 {
-  "help": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a group, mention me or reply to one of my answers.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\n/new — start a new conversation\n/unlink — disconnect your account\n/bind — answer in this group (workspace admins)\n/unbind — stop answering in this group (workspace admins)\n/help — this message",
-  "helpTime": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a channel, mention me — I answer in the message's thread, and anything else said in that thread is a follow-up.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\nSend one of these words on its own (in a channel, after mentioning me):\nnew — start a new conversation\nunlink — disconnect your account\nbind — answer in this channel (workspace admins)\nunbind — stop answering in this channel (workspace admins)\nhelp — this message",
+  "help": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a group, mention me or reply to one of my answers.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\n/new — start a new conversation\n/unlink — disconnect your account\n/capture — as a reply to the first message of a thread: propose what it settled for the knowledge base (editors). In a private chat, forward me the messages first. Where I am a group admin and keep messages, ✍ on the first message does the same.\n/forget — delete the messages of yours I keep for that\n/bind — answer in this group (workspace admins)\n/unbind — stop answering in this group (workspace admins)\n/help — this message",
+  "helpTime": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a channel, mention me — I answer in the message's thread, and anything else said in that thread is a follow-up.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\nSend one of these words on its own (in a channel, after mentioning me):\nnew — start a new conversation\nunlink — disconnect your account\nbind — answer in this channel (workspace admins)\nunbind — stop answering in this channel (workspace admins)\ncapture — propose what this thread settled for the knowledge base, said inside the thread (editors). 📌 on any message of a thread does the same.\nhelp — this message",
   "link": {
     "required": "Link your account first: open the link below while signed in to {workspace}. It works once and expires in {minutes} minutes.",
     "button": "Link my account",
@@ -56,22 +56,24 @@
     "asPage": "📄 As a page draft",
     "asTerm": "📘 As a glossary term",
     "forbidden": "Only an editor of {workspace} with a linked account can save this.",
-    "draftingPage": "Drafting a page from this conversation…",
+    "savingAnswer": "Saving this answer for review…",
     "draftingTerm": "Looking for the term this conversation defines…",
-    "pageReady": "Drafted “{title}” for review. Nothing is published until the merge request is merged.",
-    "termReady": "Proposed “{term}” for the glossary. It stays switched off until an editor turns it on.",
+    "proposed": "Proposed for review. Nothing is published until the merge request is merged.",
+    "termQueued": "Proposed a glossary term. It waits in the Captures inbox until an editor approves it.",
+    "duplicate": "The knowledge base already has this, so nothing new was proposed.",
     "openMergeRequest": "Open the merge request",
-    "openGlossary": "Open the glossary",
-    "alreadySaved": "Already saved as “{title}”.",
-    "inProgress": "This is already being saved.",
+    "openCaptures": "Open the Captures inbox",
+    "openPage": "Open the page",
+    "noPages": "This answer cites no page, and only an answer that stands on a page can be saved.",
+    "unreadable": "This answer cites a page you cannot open, so you cannot save it.",
+    "secret": "This looks like it contains a credential, so it was not saved.",
+    "rateLimited": "Too many saves in {workspace} for now. Try again later.",
+    "capturesOff": "Saving to the knowledge base is switched off in {workspace}.",
     "noTerm": "I found no term in this conversation that the glossary does not already have.",
     "nothing": "There is nothing in this conversation I can save.",
     "noProject": "{workspace} has no project to save into.",
     "disabled": "That AI agent is switched off in {workspace}.",
-    "failed": "Saving did not work. Press Save to try again.",
-    "timeout": "This draft never arrived: it took too long, or the server restarted. Press Save to try again.",
-    "untitled": "Saved from chat",
-    "mrDescription": "Drafted from a conversation with the {platform} chat bot. Check it against the pages it links before merging — nothing is published until then."
+    "failed": "Saving did not work. Press Save to try again."
   },
   "updates": {
     "kind": {
@@ -83,5 +85,57 @@
     "heading": "{count} updates in {scope}",
     "digest": "Digest for {scope}: {count} updates",
     "more": "…and {count} more"
+  },
+  "harvest": {
+    "forbidden": "Only an editor of {workspace} with a linked account can ask me to remember a thread.",
+    "off": "Harvesting threads into the knowledge base is switched off on this server.",
+    "notInThread": "Send capture as a reply inside the thread you want me to remember.",
+    "reading": "Reading the thread for what it settled…",
+    "empty": "There is nothing in this thread for me to read.",
+    "rateLimited": "You have asked me to remember too many threads in the last hour. Try again later.",
+    "unreadable": "I could not read this thread. Try again in a moment.",
+    "failed": "Reading this thread did not work. Ask again in a moment.",
+    "nothing": "Nothing in this thread looked worth keeping.",
+    "proposed": {
+      "one": "Proposed {count} capture for review.",
+      "other": "Proposed {count} captures for review."
+    },
+    "duplicates": {
+      "one": "{count} was already in the knowledge base and was skipped.",
+      "other": "{count} were already in the knowledge base and were skipped."
+    },
+    "truncated": {
+      "one": "I read the first message and the newest {count} reply.",
+      "other": "I read the first message and the newest {count} replies."
+    },
+    "replyFirst": "Send /capture as a reply to the first message of the thread you want me to remember.",
+    "forwardFirst": "Forward me the messages you want me to remember, then send /capture.",
+    "forwardHeld": "Got it. Forward the rest of the thread, then send /capture within a couple of minutes.",
+    "listeningOff": "I only read the message you replied to: I do not keep this group's messages. A workspace admin can turn that on in the bot's settings.",
+    "beforeBuffer": {
+      "one": "The message you replied to is older than what I keep (I keep messages for {count} day, and only since keeping was turned on), so I read it and what I kept after it.",
+      "other": "The message you replied to is older than what I keep (I keep messages for {count} days, and only since keeping was turned on), so I read it and what I kept after it."
+    },
+    "reactionNotKept": {
+      "one": "I can't read that message: ✍ works on messages I keep, and I keep this group's messages for {count} day, only while keeping is on. Reply to it with /capture instead.",
+      "other": "I can't read that message: ✍ works on messages I keep, and I keep this group's messages for {count} days, only while keeping is on. Reply to it with /capture instead."
+    }
+  },
+  "forget": {
+    "done": {
+      "one": "Deleted {count} message of yours I was keeping.",
+      "other": "Deleted {count} messages of yours I was keeping."
+    },
+    "nothing": "I am not keeping any messages of yours."
+  },
+  "listen": {
+    "on": {
+      "one": "From now on I keep this group's messages for {count} day, with emails, phone numbers, card numbers and secrets masked, so workspace editors can ask me to /capture a thread for the knowledge base. Nothing kept is searchable. /forget deletes yours.",
+      "other": "From now on I keep this group's messages for {count} days, with emails, phone numbers, card numbers and secrets masked, so workspace editors can ask me to /capture a thread for the knowledge base. Nothing kept is searchable. /forget deletes yours."
+    },
+    "autoOn": {
+      "one": "From now on, once a thread here has been quiet for {count} minute, I read what I kept of it and propose what it settled for review in the knowledge base. Nothing is posted here and nothing kept is searchable. /forget deletes yours.",
+      "other": "From now on, once a thread here has been quiet for {count} minutes, I read what I kept of it and propose what it settled for review in the knowledge base. Nothing is posted here and nothing kept is searchable. /forget deletes yours."
+    }
   }
 }

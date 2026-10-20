@@ -43,6 +43,7 @@ import UserChip from '@/components/people/UserChip.vue'
 import ProjectAvatar from '@/components/projects/ProjectAvatar.vue'
 import ExportDialog from '@/components/knowledge/ExportDialog.vue'
 import QualityDistribution from '@/components/quality/QualityDistribution.vue'
+import ProjectAnalyticsSection from '@/components/analytics/ProjectAnalyticsSection.vue'
 import { scoreTone } from '@/components/quality/quality-ui'
 import { useProjectsStore } from '@/stores/projects'
 import { useAuthStore } from '@/stores/auth'
@@ -246,6 +247,9 @@ const isActive = computed(() => projectId.value === projects.activeId)
             </li>
           </ul>
         </section>
+
+        <!-- Which pages are read and which nobody needs (#79): curation, so editors only. -->
+        <ProjectAnalyticsSection v-if="auth.canEdit" :project-id="projectId" />
       </div>
 
       <!-- Same rail, same bound as the document page's: sticky and

@@ -1,7 +1,9 @@
 import { Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiProduces, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import { Access } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import type { Principal } from '../auth/principal.js';
+import { AnalyticsRecorder, noTrackOf } from '../analytics/analytics.recorder.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { sendPageMarkdown } from './ai-readable.http.js';
 import { AiReadableService } from './ai-readable.service.js';
@@ -10,7 +12,10 @@ import { wantsFrontmatter } from './render.js';
 @ApiTags('documents')
 @Controller('v1/documents')
 export class AiReadableController {
-  constructor(private readonly aiReadable: AiReadableService) {}
+  constructor(
+    private readonly aiReadable: AiReadableService,
+    private readonly analytics: AnalyticsRecorder,
+  ) {}
 
   @Get(':id/markdown')
   @Access('viewer', 'document')
@@ -25,6 +30,7 @@ export class AiReadableController {
   @ApiResponse({ status: 304, description: 'Unchanged since the ETag sent in If-None-Match' })
   async markdown(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
     @Query('revision') revision?: string,
@@ -37,6 +43,8 @@ export class AiReadableController {
       frontmatter: wantsFrontmatter(frontmatter),
       ifNoneMatch: req.headers['if-none-match'],
     });
+    // A 304 re-reads nothing; a 200 is a view (#79).
+    if (result.status === 200) void this.analytics.view({ principal, noTrack: noTrackOf(req.headers) }, id, revision || null);
     return sendPageMarkdown(res, result);
   }
 }

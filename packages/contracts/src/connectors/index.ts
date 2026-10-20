@@ -18,6 +18,7 @@ export const CONNECTOR_KINDS = [
   'notion',
   'markdown-git',
   'codebase',
+  'google-drive',
 ] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
@@ -452,6 +453,35 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
           { value: 'report', label: 'Report on the pull request' },
           { value: 'propose', label: 'Report and propose page updates' },
         ],
+      },
+    ],
+  },
+  {
+    // A folder tree of files rather than a wiki (#338). Pull only: a page here
+    // is a conversion of a Doc, a PDF or a Word file, and none of those can be
+    // rebuilt from markdown without losing what the conversion dropped. No
+    // webhook either — Drive push notifications need a verified domain, so
+    // change detection is the Changes API, polled by scheduled syncs.
+    kind: 'google-drive',
+    label: 'Google Drive',
+    capabilities: { pull: true, push: false, webhook: false, tree: true, acl: true },
+    credentialLabel: 'Service account JSON key',
+    fields: [
+      {
+        key: 'folderId',
+        label: 'Folder or shared drive ID',
+        kind: 'text',
+        required: true,
+        placeholder: '1AbCdEfGhIjKlMnOpQrStUvWxYz',
+        help: 'The last part of the folder URL. Share the folder (or add the service account to the shared drive) so it can read it.',
+      },
+      {
+        key: 'subject',
+        label: 'Act as user',
+        kind: 'text',
+        required: false,
+        placeholder: 'docs-reader@example.com',
+        help: 'Domain-wide delegation: read Drive as this person instead of as the service account. Also needed to read Google Groups when access is mirrored.',
       },
     ],
   },

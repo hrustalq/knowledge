@@ -13,6 +13,711 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.28.0] — 2026-10-20
+
+### Breaking
+
+- `HTTP`: a session token (`ks_…`) in `?token=` is now refused with 401, as an
+  API key already was. `?token=` takes only a single-use `kt_` ticket, and only
+  on `GET /v1/events`. The attachment, import-image and avatar redirects no
+  longer read `?token=` at all. (#102)
+  **Migration:** send `Authorization: Bearer <token>`. For the event stream,
+  trade the token for a ticket first with `POST /v1/auth/url-ticket`.
+
+### Security
+
+- The app's own pages now send `Strict-Transport-Security`,
+  `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and
+  `Cross-Origin-Opener-Policy: same-origin` (#277). Share links and published
+  sites keep the headers their renders set, so a site's Ask widget stays
+  embeddable where its `frame-ancestors` allows.
+- Access logs and every log line written while a request is handled now show
+  `?code=` and `?state=` as `[REDACTED]`, as they already did `?token=`. The
+  SSO and GitHub App callbacks no longer put the identity provider's
+  authorization code and state in a log, and neither do share-site and chat
+  link codes. (#297)
+- Attachment, import-image and avatar URLs in the web app no longer carry your
+  session token. Those `<img>` and `<object>` requests now authenticate with the
+  app's own session cookie, so the token can no longer end up in a proxy log,
+  browser history or a pasted image link. (#102)
+
+### Added
+
+- Chat harvests now mask Russian identity numbers before any model reads a
+  thread, as they already masked emails, phones and cards. An INN (10 or 12
+  digits) and a SNILS (`112-233-445 95` or eleven digits) are masked as
+  `[INN_n]` and `[SNILS_n]` only when their check digits pass, so an order
+  id or a date is left alone. A passport, which has no checksum, is masked as
+  `[PASSPORT_n]` after `паспорт`, `серия` or `passport` in any common
+  spacing, or with no such word only in its printed `45 09 123456` form.
+  Buffered Telegram messages are masked the same way on write. (#342)
+- A platform admin can see and sign out anyone's sessions from **Access →
+  Accounts → Sessions**: each live sign-in with its method and identity
+  provider, IP, browser and last use, one at a time or all at once. API keys
+  are untouched. The new `DELETE /v1/users/:id/sessions/:sessionId` revokes
+  one session (404 for a session id that is not that person's) and is audited
+  as `auth.session_revoked` by `admin`; session lists now carry
+  `providerName`. (#292)
+- MCP agents can work in a page's shared draft (#316). Over the HTTP MCP
+  server (`/v1/mcp`), with co-editing on, `knowledge_get_draft` reads the
+  draft people are writing in the editor: the body as publishing it would
+  write it, the page fields, whether it differs from the published page or
+  the page was published another way since, who has it open, and the
+  suggestions waiting for a decision. `knowledge_suggest_draft_edit` leaves
+  an edit in it, in the editor assistant's shape (`replace`, `insert_after`,
+  `insert_before`, `append` or `rewrite` against a quoted anchor), as a
+  shared suggestion: everyone with the page open sees it at once, credited to
+  the API key for its person, and any editor keeps or discards it. Reading
+  never creates a draft; suggesting into a branch without one starts it from
+  the head. Viewer and editor on the page respectively, checked on every
+  call; a read-only key is not offered the suggestion tool. The stdio MCP
+  server does not offer either tool.
+- Word (`.docx`) export (#162). A page, a page and its subpages, or a project
+  can now be exported as one Word document from the export dialog, through
+  `POST /v1/documents/:id/exports` and `POST /v1/projects/:id/exports` with
+  `format: "docx"`, and from MCP `knowledge_export`. It needs no Gotenberg, so
+  `GET /v1/exports/capabilities` always offers it. Headings are Word heading
+  styles, so the navigation pane works. Lists, tables, code, links and the
+  export's own images are kept, and images from the web stay links. Callouts
+  and expands become shaded blocks. Each page starts on a new sheet, and an
+  export of more than one page opens with a title page and contents. Mermaid
+  diagrams stay as their source in a code block.
+- The server side of real-time co-editing (#80, phase 1), off by default. With
+  `COLLAB_ENABLED=true`, a `/v1/collab` WebSocket serves one shared Yjs draft
+  per document branch. The draft is seeded once from the branch head, stored in
+  PG, and kept in sync across API instances through Redis. A page you may view
+  joins read-only, and a page you may edit joins as a writer. No editor connects
+  to it yet; that is phase 3. The editor's node specs now live in the new
+  buildless package `@knowledge/editor-schema`, so the API builds the same
+  schema the editor does.
+- A share link can let its readers download what it shows (#161). Tick
+  **Let readers download it** when creating the link, or flip **Downloads**
+  on an existing one in the page's Share menu; it is off by default and on no
+  existing link. The reader then gets a **Download** button that exports the
+  link's page, or the page and its subpages when the link includes them, as
+  ZIP, HTML or PDF (PDF only where Gotenberg is set up), without signing in.
+  The file contains exactly the pages the reader can open through the link,
+  never a restricted page and never more than the link's scope. A
+  password-protected link asks for its password first. Revoking the link or
+  switching downloads off stops even a finished file from downloading at
+  once. The job belongs to the link, not to a person: nobody gets an
+  inbox notification for it, and it is not in its creator's export history
+  (an admin's list on Exports still shows it). The new public routes are
+  `POST /v1/public/shares/:token/exports`, `GET …/exports/:id` and
+  `GET …/exports/:id/download`. `knowledge_share_page` takes
+  `allowDownload`.
+- Who may co-edit a draft, checked for as long as they stay (#80, phase 2).
+  Joining `/v1/collab` now takes a single-use `kt_` ticket from
+  `POST /v1/auth/url-ticket`; a session token or API key is refused there. An
+  open connection is re-judged when a page's access changes and every
+  `COLLAB_REAUTH_INTERVAL_SECONDS`: a revoked key, an ended session or a
+  disabled account is closed, a page restricted away is closed, and an editor
+  demoted to viewer (or the reverse) is closed with `access-changed` so the
+  client rejoins in its new scope. Every caret's name and avatar is now set by
+  the server from the signed-in person, whatever the client sends.
+  `GET /v1/collab/capabilities` says whether co-editing is on and which editor
+  schema version a peer must match.
+- A Google Drive connector. Point it at a folder or a shared drive with a
+  service account's JSON key (stored encrypted and write-only, like every
+  connector credential); "Act as user" turns on domain-wide delegation. It
+  walks the folder as a tree, so with "Keep the external page tree" folders
+  become pages and files nest under them, and new connectors are offered
+  review mode. Google Docs, Slides and Sheets are exported to DOCX, PPTX and
+  CSV and converted by the same parsers as the upload wizard, and so are PDF,
+  Word, PowerPoint, HTML, CSV, JSON/YAML and Markdown files. Anything else
+  (images, archives, files over 20 MB) is skipped and named on the run, once
+  per folder. Images inside a document are not carried over yet, and the page
+  says so. With access mirroring on, Drive sharing becomes page restrictions:
+  link or whole-domain sharing stays open, and people and groups are matched
+  by email. Scheduled syncs read Drive's change feed and fetch only what
+  changed. A manual Sync still compares the whole tree. A linked file that was
+  trashed, deleted, unshared or moved out of the folder is listed on the run
+  with its page kept. Pull only. (#338)
+- Several people can now edit one page at once (#80, phase 3), when the server
+  runs with `COLLAB_ENABLED=true`. Opening an existing page's editor joins its
+  shared draft on the default branch. Typing, the title, tags, category, parent,
+  project, relations and the revision message reach everyone on the page as
+  they change. Other people show as faces in the header and as named carets in
+  their avatar colour. A status dot says whether you are live, offline (edits
+  are kept on this device and sync on reconnect), read-only, or stopped and why.
+  An "Unpublished changes" chip opens the diff against the published page, and
+  publishing works as before. In a shared draft the per-browser working copy is
+  off. A copy saved before the page went live is offered once, and applied to
+  the draft only on a click. With the flag off, or if the draft cannot be
+  joined within 10 s, the editor works on its own exactly as before. Known
+  limits until later phases: an assistant suggestion reaches other people as
+  plain text (phase 5), and a publish by someone else is not yet shown in the
+  draft, so your next publish gets the usual "published since you started"
+  error (phase 4).
+- Publishing a shared draft now rebases it (#80, phase 4). Publish writes an
+  ordinary revision as before, and the draft then counts as published up to
+  the moment you pressed it: edits other people make after that stay
+  "unpublished" instead of vanishing or being claimed. The revision records
+  everyone who wrote in the draft since the last publish, shown as co-author
+  faces in the revision history. Opening a page no longer counts as a change.
+  When someone publishes the same page another way (MCP, a merge, a connector),
+  the editor says so as it happens, the review compares the draft with what
+  they published, and you choose **Publish on top** or **Discard draft**.
+  Discard resets the draft to the published page for everyone in it, on every
+  API instance, and clears each browser's offline copy. The document page and
+  an open merge request now show who is editing a branch's draft and whose
+  changes are unpublished; on a merge request this is a warning only, never a
+  merge gate. `/documents/:id/edit?branch=<name>` edits that branch and its
+  draft instead of the default one. New routes: `GET /v1/documents/:id/drafts`
+  and `DELETE /v1/documents/:id/drafts/:branchId`. `POST /:id/revisions` takes
+  optional `collabDraftId` and `draftSnapshot`. Revisions in API responses now
+  carry `coAuthorIds`, an empty list unless they came from a shared draft.
+- Knowledge health has an **Agents** tab for workspace admins, showing what
+  became of each agent's output (#305). A finding counts as accepted when the
+  merge request it was proposed as merged, or when nobody dismissed it within
+  14 days. It counts as dismissed when a person dismissed it or closed that
+  merge request. An upvoted answer counts as accepted and a downvoted one as
+  downvoted. Everything else is pending. Each row can be split by prompt hash
+  or by model. With fewer than 20 runs a cell shows a count ("4 of 9") rather
+  than a percentage. The same figures are at `GET /v1/agent-outcomes`
+  (admin). To make the split possible, every new agent run now records its
+  provider, model, a hash of its trusted prompt (instructions, skills,
+  styleguide and learnings, never page content) and the learnings it was
+  given. Every model call made during a run records the run, and every answer
+  vote records the model that wrote the answer, where the server knows it.
+  Nothing else changes: outcomes are computed when read and never stored.
+- The editor assistant's suggestions are shared in a co-edited page (#80,
+  phase 5). Everyone in the draft sees a suggestion as it is written, credited
+  to the agent and to the person who asked ("Reviewer · for Ada"), and anyone
+  who may edit can keep or discard it. A viewer sees it without the buttons.
+  Your undo never walks someone else's suggestion; keeping one makes it your
+  edit, which your undo takes back. Publishing is refused while anyone's
+  suggestion is undecided. The header says "Reviewer is writing for Ada…"
+  while another person's turn streams, and a suggestion whose writer closed
+  the tab mid-stream becomes decidable for everyone else. `draft-edit` stream
+  frames now carry the turn's `agent` (`key`, `name`).
+- A browser that was offline when someone discarded a shared draft no longer
+  brings the old page back (#80, phase 6). Each draft now has a generation
+  that changes on every reset, and each browser keeps it beside its offline
+  copy. A copy from an older generation is refused before it syncs, and the
+  editor clears it and reopens the reset page. This holds whether the page is
+  reopened later or was open the whole time. Offline edits on a current copy
+  still merge in, once. The `/v1/collab` token may now carry that generation
+  after the ticket (`collabToken`), and a peer receives it in a stateless
+  message after joining. Every draft store now writes a `collab.store` event
+  to the ops JSONL stream: duration, draft size, peers, and whether it was
+  stored or refused. `make backtest ARGS=--report` summarizes these events,
+  and `make collab-load` load-tests running API instances. Real-time co-editing
+  is documented in `docs/features/56-realtime-coediting.md`, numbers included.
+  It stays off by default (`COLLAB_ENABLED=false`) and is on in the hosted
+  deployment, after a dogfood pass on the dev stack.
+- Mattermost bots (#343). **Settings → Chat bots → Connect a bot** now offers
+  Mattermost beside Telegram and Time: paste a bot account's access token and
+  your Mattermost server's address. The bot does everything a Time bot does:
+  it answers mentions and direct messages in the question's thread, takes
+  👍/👎 and Save, posts a bound channel's notifications, and harvests a thread
+  on `capture` (also `remember` or `запомни`) or 📌 (`pushpin`). Commands are
+  plain words, because Mattermost's client keeps a leading `/` for its own
+  slash commands. Time and Mattermost share one adapter, so a fix to one is a
+  fix to both. Buttons need the Mattermost server to reach `API_PUBLIC_URL`,
+  and on a private network its `AllowedUntrustedInternalConnections` must list
+  that host.
+- The graph records when each fact was true (#81, phase 1). Every chunk and
+  every frontmatter, inferred and spec relation of a page revision now carries
+  the interval its revision was the page's content: from the revision's
+  finalize time until the next default-branch revision's. Branch revisions are
+  marked as such and never valid. Nothing reads these intervals yet; the "as
+  of" queries in the next phases do.
+- Read the graph as it stood at a point in time (#81, phase 2). `asOf` takes
+  an ISO date, `rev:<revisionId>` (that revision's finalize time) or
+  `tag:<name>` on `GET /v1/documents/graph`, `GET /v1/documents/:id/graph`,
+  `GET /v1/documents/:id/content` (the revision that was the page's content
+  then), the `/v1/entities` list, neighbours and trace routes, and impact
+  analysis. A fact a page has since dropped shows as of before the change;
+  one added later does not. `knownAt` (an ISO date) answers with what was
+  believed then, so a relation retracted since still shows. Each response
+  echoes `resolvedAsOf`. A malformed value is a 400, an unknown tag or another
+  workspace's revision a 404. Page permissions apply exactly as they do now.
+- A Telegram group that keeps its messages can be harvested automatically
+  (#340). A workspace admin turns on *Harvest quiet threads automatically* on
+  the group in Settings → Chat bots, and the bot tells the group first; if it
+  cannot, the switch stays off. From then on, a thread (the group, or one
+  forum topic) is harvested once it has `HARVEST_AUTO_MIN_MESSAGES` new kept
+  messages and nothing new for `HARVEST_AUTO_QUIET_MINUTES`, and again only
+  after something new is said in it. Nothing said before the switch went on
+  is read. The captures are proposed in the name of the admin who turned it
+  on, whose admin role is checked again on every harvest. Nothing is posted
+  in the group: that admin gets an inbox notification with the counts, and
+  the captures wait in the Captures inbox. Each harvest is one `harvest`
+  model call, counted against that admin's `HARVEST_RATE_PER_HOUR`, and at
+  most `HARVEST_AUTO_MAX_PER_TICK` run per group per minute. Turning keeping
+  off turns this off too. Off by default on every group.
+- Release tags (#81): named instants such as `v2.3` that `asOf=tag:<name>`
+  resolves to. `GET /v1/release-tags` (viewer), `POST /v1/release-tags`
+  (editor; a duplicate name is a 409) and `DELETE /v1/release-tags/:id`
+  (admin). A tag can belong to one project or the whole workspace.
+  `GET /v1/graph/timeline` returns the tags and per-day counts of facts that
+  started and stopped being true in a window, for the time slider to come.
+- MCP: `knowledge_get_workspace_graph`, `knowledge_find_relations`,
+  `knowledge_impact_analysis` and `knowledge_trace_relation` take `asOf` and
+  `knownAt`. `knowledge_get_historical_context` takes `asOf` instead of
+  `atRevisionId` for the workspace's view of an entity then. New tools:
+  `knowledge_list_release_tags` and `knowledge_create_release_tag` (a write,
+  hidden from read-only keys).
+- Search as of a point in time (#81, phase 3). `POST /v1/search` and MCP
+  `knowledge_search` take `asOf` (and `knownAt`, for the graph expansion):
+  the vector leg, the BM25 leg, the tag filter and the graph expansion all
+  answer from the text and relations each page held then, so a search as of
+  release `v1` finds the paragraph v1 said and a search of now finds only
+  today's. Each result of an `asOf` search carries `validFrom` and `validTo`;
+  a `validTo` means that text has since been superseded. Filters, page
+  permissions and the trust re-rank work as they do now.
+- Time in the app (#81, phase 4):
+  - **Graph timeline.** The pages graph and the maximized page graph have a
+    timeline along their bottom edge. Drag it, use the arrow keys (a day),
+    Page Up/Down (a week) or Home/End, or click a release tag's tick, and the
+    graph redraws as the knowledge base stood then. Faint bars over the
+    timeline show how much changed when.
+  - **Changes since.** In the graph panel's new **Time** section, "Show changes
+    since" overlays the difference against now: relations that have since
+    ended draw as a dotted trace, and relations added since draw in green.
+  - **Links.** `?asOf=` on `/documents` opens the graph at that point.
+  - **Search.** The search filters have an **As of** section (a date or a
+    release tag). A result whose text has since been replaced carries a dated
+    "Superseded" badge and opens the page as it read then.
+  - **Pages.** A page opened with `?asOf=` is read-only, with a note naming
+    the date, the tag and the revision.
+  - **Releases.** Settings → Releases lists the release tags. Editors add one
+    for now or any instant, for the whole workspace or one project; admins
+    delete them.
+- Contradictions between pages (#81, phase 5, API and MCP). A new
+  background agent, the **arbiter**, compares passages from different pages
+  that are close in meaning (pages that share an entity are held to a lower
+  bar), asks the model whether they disagree, and keeps the answer only when
+  both quoted sentences really are in the passages. Each one becomes a
+  conflict: `GET /v1/conflicts` and `GET /v1/conflicts/:id` (viewer; only
+  conflicts whose pages you may both open), `POST …/resolve` and
+  `POST …/dismiss` (editor, with an optional note), and `POST …/propose`
+  (editor), which opens one merge request fixing the first page — a second
+  press is a 409 `already-proposed`. A dismissed conflict stays dismissed when
+  found again; when one side's page changes, its open conflicts become
+  `superseded`, and reopen if the new text still disagrees. Run the arbiter
+  from Settings → AI, on a schedule, or on `page.indexed` to check every page
+  as it is indexed; nothing runs until one of these is set up. Each judgement
+  is one model call, recorded as `contradiction` in AI usage. MCP:
+  `knowledge_list_conflicts` and `knowledge_resolve_conflict` (a write,
+  hidden from read-only keys).
+- Contradictions in the app (#81, phase 5). A page with an open
+  contradiction gets a **Contradictions** section in its side rail: what this
+  page says, what the other page says, why they disagree, and, for editors,
+  **Propose fix** (opens a merge request), **Resolve** and **Not a
+  contradiction**. **Contradictions** in the sidebar lists them all by status,
+  each with the two passages side by side; with none open, it says how to run
+  the arbiter.
+- Pages a pull request makes wrong are contradictions too (#81, phase 6).
+  When the drift check (feature 35) finds a page the change makes untrue, it
+  records a page-vs-code conflict: the page's sentence, beside the pull
+  request, the commit it judged and the files it touches. Every push to the
+  same pull request updates that one conflict rather than adding another.
+  Both kinds of conflict now close themselves: merging the merge request a
+  fix was proposed as, from the conflict, the agent runs panel or the drift
+  check's own proposal, marks it resolved.
+- Broad questions across the whole knowledge base (#81, phase 7), off by
+  default. With `COMMUNITY_SUMMARIES_ENABLED=true`, a new background agent,
+  the **atlas**, groups pages that name the same things into communities and
+  summarises what each one covers. Run it from Settings → AI or on a
+  schedule; a run where the graph has not changed rebuilds nothing. The
+  Ask assistant gains a `global_overview` tool that finds the communities
+  closest to a broad question ("what are our main risks?") and cites their
+  pages; MCP gains `knowledge_global_overview`, and
+  `GET /v1/graph/communities` lists them. A community with a page you may
+  not open is withheld whole. The pages graph can colour pages by community
+  (**Colour pages by community** in its Filters). Each summary is one model
+  call, recorded as `community` in AI usage.
+- Usage analytics starts recording (#79, phase 1). Every search, MCP tool
+  call, and page read by an API key, MCP, the in-app assistant, a chat bot
+  or an agent now leaves a row in PostgreSQL (`search_queries`,
+  `mcp_tool_calls`, `page_views`). Each row is filed under the channel it
+  came from, so later phases can split human, assisted and agent traffic.
+  `POST /v1/search` and MCP `knowledge_search` return a `searchId`. A
+  person reading in the browser is not counted yet; that is phase 2's page
+  beacon. Readers are never stored by name: each one is an HMAC that is
+  per workspace, so readers can be counted but not identified. A request
+  sent with `DNT: 1` or `Sec-GPC: 1` is counted with no reader at all. A
+  failed analytics write never fails the request it describes. There is
+  no dashboard yet (phases 3–4), and nothing is backfilled, because no
+  earlier source recorded reads or who searched.
+- Page reads in the browser are counted (#79, phase 2). Opening a page in the
+  app records one view, and the time spent actually reading it is added to
+  that view: the time only grows while the tab is visible and the reader
+  has scrolled, typed or moved the pointer in the last 30 seconds. It is
+  reported every 15 seconds and once more when the tab is hidden or closed,
+  and capped at 30 minutes per view. Opening a search result records which
+  search it came from and its rank, which lets later phases measure
+  click-through; the `sid`/`rank` parameters leave the address bar once the
+  page loads. A browser that sends Do Not Track or Global Privacy Control is
+  counted with no reader. Only a page the reader may open is counted. The
+  beacon is a same-origin request using the app's own credential: no
+  cookie, nothing third-party. New routes: `POST /v1/documents/:id/views`
+  and `POST /v1/analytics/views/:viewId/heartbeat`, both `204`.
+- See how pages are read (#79, phase 3). A page's rail has an **Insights**
+  widget: views over the last 30 days split into people, the assistant
+  (in-app or a chat bot) and agents (API keys, MCP, background runs), plus
+  unique readers, median read time and when someone last opened it in the
+  app. Anyone who may open the page sees it; it shows counts, never who.
+  For editors, a project's overview page gains a **Reading** section: the
+  same numbers over 7, 30 or 90 days, the most read pages, pages nobody has
+  opened in the app, and dead pages, meaning pages older than 90 days that
+  nobody opened and no search returned in that time. Knowledge health gains
+  a **Last read** column and two filters, **Unread** and **Dead**, which list
+  the same pages. Neither filter lists anything until reads have been
+  counted for the whole 90 days, so a fresh install does not call every page
+  dead. Every count is limited to pages the viewer may open. New routes:
+  `GET /v1/documents/:id/insights` (viewer) and
+  `GET /v1/projects/:id/analytics?days=&traffic=` (editor).
+- A workspace **Analytics** page for admins (#79, phase 4), at `/analytics`
+  beside Knowledge health. **Overview** shows views, readers, median read
+  time, searches, the share that found nothing, click-through, assistant
+  questions and MCP calls, plus views per day split into people, assistant
+  and agents. **Pages** lists the most read, never opened and dead pages
+  across the workspace. **Search** lists top queries, queries that found
+  nothing, and searches whose results nobody opened. **Agents** lists MCP
+  calls by tool, what each API key did (by name and prefix only), the
+  assistant's questions per day and model calls by purpose. Every view takes
+  a range (7, 30 or 90 days), and every tab except Agents also takes a
+  traffic filter (all, people, assistant, agents). A reader who repeats one
+  query within 10 seconds, such as by toggling a filter, counts as one
+  search. Click-through counts only searches in the app that found
+  something. Every list has **Export CSV**: the whole table, up to 5,000
+  rows, in RFC 4180 CSV. A cell that starts with `=`, `+`, `-` or `@` gets a
+  leading `'` so a spreadsheet cannot run it as a formula. Each export is
+  written to the audit log as `analytics.export`. The **Settings** tab turns
+  recording off for the workspace or shortens how long rows are kept. It
+  shows each value as requested, the deployment ceiling, and the value that
+  applies. New admin routes: `GET /v1/analytics/overview`, `/pages`,
+  `/search`, `/agents`, `/export.csv?report=`, and `GET`/`PUT
+  /v1/analytics/settings`.
+- Analytics rows are now deleted when they age out (#79, phase 4). The worker
+  sweeps every hour and deletes page views, searches and MCP calls older than
+  the workspace's retention (default 180 days). After 90 days a search loses
+  its text but keeps its hash, so it still groups with the same query.
+- Two MCP tools for usage analytics (#79, phase 5).
+  `knowledge_get_page_insights` returns how often a page was read over the
+  last 30 days, split into people, assistant and agents. Anyone who may open
+  the page can call it. `knowledge_list_search_gaps` returns the searches
+  that found nothing and the app searches whose results nobody opened: the
+  pages worth writing next. It is for workspace admins, so a read-only key
+  sees it listed but is refused, as on `GET /v1/analytics/search`. The query
+  text in its answer is what readers typed, so it comes back wrapped as
+  untrusted data. The feature is documented in
+  `docs/features/58-usage-analytics.md`.
+- Ask a Time bot to remember a thread (#82, phase 2). An editor of the
+  workspace with a linked account sends `capture` (or `remember`, or
+  `запомни`) as a reply inside a thread, mentioning the bot in a channel. The
+  bot reads the thread up to that message, masks emails, phone numbers, card
+  numbers and credential-shaped tokens, and has the new `harvester` agent
+  propose what the thread settled: decisions, gotchas, conventions, how-tos,
+  glossary terms and answered questions. Each proposal becomes a capture in
+  the asker's name, with the usual dedupe and review, and shows where it came
+  from with a link to the thread. A glossary term is kept only if the thread
+  contains it word for word, and an answer only if it cites a page found by
+  searching the knowledge base as the asker. The bot replies with counts and
+  a link to the Captures inbox, never a title. A viewer or an unlinked person
+  is refused before the thread is read. Each harvest is booked as AI usage
+  `harvest` against the asker, and one person may start
+  `HARVEST_RATE_PER_HOUR` of them an hour.
+- Ask a Telegram bot to remember a thread (#82, phase 3). In a group, an
+  editor with a linked account sends `/capture` as a reply to the first
+  message of the thread. In a private chat, they forward the bot the
+  messages and then send `/capture`; the bot holds forwards for a couple of
+  minutes instead of answering them. A workspace admin can let a group keep
+  its messages for harvesting (*Keep messages for /capture* on the group in
+  Settings → Chat bots). The bot first posts a notice in the group, and
+  keeps nothing if it cannot. Kept messages are masked before they are
+  stored, are never searchable, and are deleted after `CHAT_LISTEN_TTL_DAYS`,
+  when keeping is turned off or the group unbound, and per person on
+  `/forget`. Without keeping, `/capture` reads only the message it replies
+  to, and the reply says so; it also says when that message is older than
+  what is kept. `/capture` and `/forget` are in the Telegram `/help`.
+- React to a message to have the bot remember its thread (#82, phase 4).
+  In Time, 📌 on any message of a thread harvests the whole thread. In
+  Telegram, which has no 📌 reaction, ✍ on a kept message works like
+  `/capture` sent as a reply to it. Telegram delivers reactions only to a bot
+  that is a group admin, and the reaction does not include the message, so ✍
+  needs keeping turned on. Only a linked editor's reaction does anything;
+  the bot says nothing to anyone else, so a busy channel's ordinary 📌 never
+  gets a reply. The bot answers under the message with counts and an inbox
+  link, the same as for `capture`.
+
+### Changed
+
+- 💾 Save on a chat bot answer now goes through agent memory (#82). *As a
+  page draft* saves the answer as an `answer` capture citing the pages the
+  answer cited, the same as "Save to knowledge base" in the assistant pane.
+  It no longer has a model rewrite the conversation into a page. *As a
+  glossary term* proposes the term into the Captures inbox instead of creating
+  it switched off. Both get the usual capture dedupe, rate limits and secret
+  scan. An answer that cites no page can no longer be saved, and the bot says
+  so. A second press reports the duplicate instead of "already saved". The
+  Captures inbox and a merge request's provenance strip show where a chat
+  capture came from: the platform, the chat and the time span. A new page's
+  frontmatter records it under `sources:`. Captures written over MCP or REST
+  may now report `session.client: 'chat'`.
+- The pages landing loads faster on a cold visit. The server now renders
+  the rail's project roster, the active project's name and the first level of
+  the page tree, so they no longer wait for the app's JavaScript.
+  `/v1/projects`, `/v1/workspaces` and `/v1/documents/tree` are requested once
+  per page load instead of once per component that wanted them. The shell
+  preloads 50 scripts instead of 103: the search sheet, the create dialog and
+  the page row's Move, Export and Access dialogs load when first opened. The
+  heading fonts no longer block the first paint, and the graph spreads its
+  opening layout over frames instead of one long task. (#279)
+- Deleting a relation, re-posting an explicit one or curating over an inferred
+  one no longer erases the old edge (#81). It is retracted: gone from every
+  current view as before, but listed in `GET /v1/documents/:id/facts/timeline`
+  with `status: 'retracted'`, `retractedAt` and `retractedBy` (`user:<id>`). A
+  re-index of the same revision that no longer infers a fact retracts it the
+  same way, with `retractedBy: 'extractor'`. Deleting a page still erases its
+  graph.
+
+### Fixed
+
+- An SSO sign-in link that is reused, expired or unknown now shows up in
+  Settings → Security → Audit as a failed sign-in, like every other refused
+  SSO attempt, and the browser lands on the sign-in page with the localized
+  reason instead of a bare "back to login" card. (#291)
+- Initials on generated avatars and on project and workspace monograms are
+  readable on every colour (#355). Yellow, green and cyan tiles put white
+  letters at as little as 2.3:1 contrast, below the 4.5:1 WCAG asks for. Those
+  tiles are now a deeper shade of the same hue, so a person, project or
+  workspace keeps its colour; tiles that were already dark enough, such as blues
+  and purples, are unchanged.
+- BM25 search and indexing recover by themselves once OpenSearch is reachable
+  again (#330). A worker or API that first reached OpenSearch while it was
+  down or still starting (connection refused, DNS, a dropped connection) kept
+  failing every BM25 call with `fetch failed` until it was restarted: the
+  worker wrote nothing to the keyword index and the stale sweep's backlog only
+  grew, and search stayed `degraded: ['fulltext']`. The next call now retries
+  the setup, so after an OpenSearch restart the sweep re-mirrors the stale
+  revisions and search logs its recovery.
+- On a phone, screen readers now name the buttons that show only an icon
+  (#354). Below the `sm` width, the Graph / Tree / List tabs, Upload, New page,
+  Show archived and Filters on `/documents` hid their label from assistive
+  technology along with the screen, so they were announced as "tab, selected"
+  or "link". The same applied to New chat in the assistant, the editor's AI
+  button, Ask on a published site, the filter rail toggle on merge requests,
+  and Ask the architect and Configure in the workflow builder. The label is
+  still hidden on screen but is now read aloud. Nothing looks different.
+- The editor no longer opens a page it failed to load (#314). If any request
+  for an existing page failed (the connection dropped mid-load, a 5xx, a
+  timeout), the editor used to open with an empty title and body and Publish
+  enabled, and publishing finalized an empty revision over the page; text
+  typed into it was kept as a working copy. It now shows the error with a
+  Retry button and a link to the page, Publish stays unavailable and nothing
+  is stored on the device until the page loads. Retry joins the shared draft
+  when co-editing is on.
+- Changing the role of a member whose membership source is missing or not one
+  of `manual`, `jit`, `group`, `scim` no longer fails with 409 "managed by
+  single sign-on (manual)" (#295). The members list already shows such a row
+  as manual, and editing it now treats it as manual too. Every row the
+  current release writes has a known source, so this only affects data
+  written some other way.
+- Returning to the app no longer re-downloads its scripts and styles (#277).
+  The content-hashed files under `/assets/` were sent with no `Cache-Control`,
+  so the edge's 4-hour default applied; they are now cached for a year as
+  `immutable`. The HTML shells and the favicon are revalidated on every use,
+  and a member's rendered page is `private, no-cache`.
+- An MCP tool call refused with structured reasons now carries them (#300).
+  Under enforced SSO, an agent's tool error said only "requires single
+  sign-on": it never got `reason: 'ssoRequired'` or the providers to sign in
+  through, which REST puts in `details`. A refused tool call now returns the
+  message as before, followed by a second text block
+  `{ statusCode, message, details }` with the same `details` REST sends. This
+  applies to every refusal that carries extras, such as a page permission's
+  `canRequestAccess`; errors without extras are unchanged.
+- `/robots.txt` on the app's own host returned the app's HTML page (#277). It
+  is now plain text that keeps crawlers out of the member app and lets them
+  into path-mode published sites under `/pub/`. A site's own `robots.txt` is
+  unchanged.
+- The app no longer throws away its server-rendered page on load (#278). Two
+  things made the first client render differ from the server's, so the browser
+  logged a hydration mismatch and rebuilt the page: a visitor who never picked a
+  language got the page in their browser's language (Russian, say) and the app
+  then started in English; and with the page tree open in the sidebar,
+  `/documents` drew a loading skeleton on the server but the tree in the
+  browser. The app now starts in the language the server rendered, renews the
+  language cookie from your saved choice, and shows the sidebar tree one frame
+  after load.
+- Voice control can now operate the workspace switcher, the sidebar's back
+  button, the account menu and the notification bell by what they show (#280).
+  Each one announced a generic name ("Workspaces", "Account menu",
+  "Notifications") instead of the workspace, project or person on screen, or
+  the unread count, so saying "click RTech OMS" did nothing. Screen readers now
+  hear the visible text first, then what the control is for. The "more ways to
+  start a page" chevron next to `+` in the sidebar is now 24 px wide instead of
+  14 px, so it is easier to hit.
+- Asking AI to clean up or merge a staged connector page while the `drafter`
+  agent is turned off now says so, in English or Russian (#294). The refusal
+  used to show the raw key `error.ai.disabled`. CI now fails when an API
+  message exists in only one language, when its `{placeholders}` differ
+  between them, or when the code names a message key neither one has.
+- A page's Insights widget now counts the visit you are making (#336). It was
+  read before the page recorded your view and never read again, so it showed
+  one view fewer than the API held, and the same was true of unique readers
+  and the last time a person opened the page. The widget is now read again
+  once your view is recorded. Read time still catches up on the next load.
+
+### Operations
+
+- After deploying #277, purge the Cloudflare cache once: asset URLs already
+  cached at the edge keep the 4-hour lifetime they were stored with until then.
+
+- The web app's images and file previews now depend on the browser calling the
+  API on the web's own origin under `/api`, which the bundled Caddy config and
+  the Vite dev proxy both do. A deployment that points `VITE_API_URL` at a
+  different origin will see every attachment and avatar fail with 401, because
+  the browser does not send the `kn_token` cookie there. (#102)
+- Migration `20261119100000_share_link_download` adds
+  `share_links.allow_download` (default `false`) and a nullable
+  `export_jobs.share_link_id` with an index. It is additive and reversible
+  under expand/contract: the previous release ignores both columns, so after
+  a rollback a reader's files show up in the link creator's Exports until
+  the export sweeper removes them. Two env vars, both with defaults:
+  `PUBLIC_EXPORTS_PER_HOUR_PER_IP` (`5` per address and link) and
+  `PUBLIC_EXPORTS_PER_HOUR_PER_LINK` (`30` per link). Both limits fail
+  closed: with Redis down, no reader can start an export. (#161)
+- Migration `20261118100000_chat_listening_buffer` adds
+  `chat_channel_bindings.listening` (default `false`) and the
+  `chat_buffered_messages` table. It is additive and survives a code
+  rollback; after a final rollback, drop `chat_buffered_messages` by hand,
+  since nothing else deletes its rows. Two env vars, both with defaults:
+  `HARVEST_FORWARD_WINDOW_SEC` (`120`) and `CHAT_LISTEN_TTL_DAYS` (`7`).
+  Keeping messages needs the bot's privacy mode off in @BotFather
+  (`/setprivacy`), or the bot made a group admin.
+- Telegram bots receive ✍ only after their webhook is registered again,
+  now that it also asks for `message_reaction`. After deploying, press
+  **Test** on each Telegram bot in Settings → Chat bots, which registers the
+  webhook again. Time needs nothing. No migration, no new env var.
+- Harvest adds three env vars, each with a default, so nothing needs setting:
+  `HARVEST_ENABLED` (`true`; `false` answers `capture` with a notice),
+  `HARVEST_MAX_MESSAGES` (`200`: the root and the newest replies) and
+  `HARVEST_RATE_PER_HOUR` (`10` per person). The `harvester` agent appears
+  under Settings → AI agents and can be switched off there. No migration.
+- Migration `20261120100000_chat_auto_harvest` adds the nullable
+  `chat_channel_bindings.auto_harvest_by` and `auto_harvest_at` columns and
+  the `chat_harvest_marks` table (#340). It is additive and survives a code
+  rollback; after a final rollback, drop the table and the two columns by
+  hand. Four env vars, each with a default, so nothing needs setting:
+  `HARVEST_AUTO_ENABLED` (`true`; `false` stops every automatic harvest
+  whatever a group's switch says, and the settings page says so),
+  `HARVEST_AUTO_MIN_MESSAGES` (`8`), `HARVEST_AUTO_QUIET_MINUTES` (`60`) and
+  `HARVEST_AUTO_MAX_PER_TICK` (`1` harvest per group per minute; `0` stops
+  the sweeper). The sweeper runs in the API, beside the chat answer sweeper,
+  only while `CHAT_ENABLED` and `HARVEST_ENABLED` are on.
+- Migration `20261117100000_chat_captures_into_agent_memory` adds a nullable
+  `knowledge_captures.origin` column. It copies every `chat_captures` row into
+  `knowledge_captures` under the same id, with its status, and then **drops
+  `chat_captures`**. A row that has no project anywhere (page and term both
+  deleted, saved in a DM, workspace without projects) is not copied. **Not
+  reversible:** after a rollback to v0.27.x, 💾 Save in a chat fails until
+  this release is rolled forward again. Everything else in the previous
+  release still runs. `CHAT_CAPTURE_TIMEOUT_SECONDS` is no longer read, and
+  can be removed from the `production` environment.
+- Migration `20261122100000_connector_change_cursor` adds the nullable
+  `connectors.change_cursor` and `connector_runs.change_cursor` (the Google
+  Drive change feed's bookmark). It is additive and survives a code rollback.
+  The Drive connector needs outbound HTTPS to `oauth2.googleapis.com`,
+  `www.googleapis.com` and, for group mirroring, `admin.googleapis.com`. (#338)
+- Migration `20261116100000_usage_analytics` adds the `page_views`,
+  `search_queries` and `mcp_tool_calls` tables and two nullable
+  `workspace_settings` columns (`analytics_enabled`,
+  `analytics_retention_days`). It is additive and survives a code
+  rollback. New env vars, both with defaults: `ANALYTICS_ENABLED` (`true`;
+  `false` records nothing) and `ANALYTICS_READER_SECRET` (empty). When the
+  secret is empty, the reader key is derived from `SETTINGS_ENCRYPTION_KEY`,
+  which production sets. No retention runs yet (phase 4), so the tables grow
+  until then.
+- Migration `20261121100000_learning_ledger` adds nullable attribution
+  columns: `agent_runs.provider_id`, `model`, `prompt_hash` and
+  `learning_ids`; `ai_usage.agent_key` and `agent_run_id`;
+  `answer_feedback.provider_id` and `model`. There is no backfill, so rows
+  from before it read as unattributed. It is additive, so rolling back to the
+  previous image is safe. No new env vars. (#305)
+- New env var with a default: `ANALYTICS_READ_TIME_CAP_MS` (`1800000`), the
+  most active read time one web view can record. No migration in #79
+  phase 2.
+- New env var with a default: `ANALYTICS_DEAD_PAGE_DAYS` (`90`), the window
+  behind the unread and dead page lists. No migration in #79 phase 3.
+- New env vars with defaults (#79 phase 4): `ANALYTICS_RETENTION_DAYS`
+  (`180`), a ceiling on how long analytics rows are kept, which a workspace
+  may only shorten; and `ANALYTICS_QUERY_TEXT_DAYS` (`90`), after which a
+  recorded search keeps its hash and loses its text. No migration. The
+  worker's first sweep runs at boot, so the first deploy deletes any
+  analytics rows already older than 180 days. Nothing that old exists yet,
+  because recording began in phase 1.
+- New env vars for community summaries, both with defaults:
+  `COMMUNITY_SUMMARIES_ENABLED` (`false`) and `COMMUNITY_MAX_PER_RUN`
+  (`30`). Summaries are stored in ArcadeDB as `Community` vertices (created
+  on worker boot); no migration.
+- Migration `20261115100000_knowledge_conflicts` adds the
+  `knowledge_conflicts` table and nothing else; it survives a code rollback.
+  New env vars, all with defaults: `CONTRADICTION_MIN_SIMILARITY` (`0.82`),
+  `CONTRADICTION_MIN_CONFIDENCE` (`0.7`) and `CONTRADICTION_MAX_PAIRS_PER_RUN`
+  (`20`). The arbiter does not run on `EMBEDDINGS_PROVIDER=stub`.
+- With OpenSearch (`FULLTEXT_PROVIDER=opensearch`), the index gains
+  `validFrom`, `validTo` and `lineage` fields on its first write after the
+  deploy; no reindex is needed. `make graph-live-backfill` now stamps the
+  BM25 mirror as well as the graph, so run it after #81 phase 3 if it was
+  already run for phase 1. Until it runs, an `asOf` search's BM25 leg finds
+  no history for older pages (the vector leg is unaffected once the graph is
+  stamped).
+- Migration `20261114100000_release_tags` adds the `release_tags` table and
+  nothing else. It survives a code rollback, because the previous image never
+  reads it.
+- Run `make graph-live-backfill` once after deploying #81 phase 1. It now also
+  stamps valid time on the chunks and relations written before this release;
+  without it, the "as of" reads of later phases find no history for those
+  pages. It is idempotent and safe beside a running worker, and current views
+  do not depend on it. Note the target runs `nest build` first, so on a dev
+  machine it restarts a running `make dev`. No migration.
+- Migration `20261112100000_collab_drafts` adds the `collab_drafts` table and
+  nothing else. It survives a code rollback, because the previous image never
+  reads it. New env vars, all with defaults and none required:
+  `COLLAB_ENABLED` (`false`), `COLLAB_STORE_DEBOUNCE_MS` (`2000`),
+  `COLLAB_STORE_MAX_DEBOUNCE_MS` (`10000`), `COLLAB_MAX_DOC_BYTES` (8 MiB) and
+  `COLLAB_REAUTH_INTERVAL_SECONDS` (`300`). With the flag off, no Hocuspocus
+  instance or Redis connection is created, and the socket closes with 4503.
+- Migration `20261113100000_collab_publish` renames
+  `collab_drafts.published_state_vector` to `published_snapshot` (the column
+  was never written), adds `collab_drafts.snapshot`, and adds three nullable
+  columns to `document_revisions`: `collab_draft_id`, `collab_snapshot` and
+  `co_author_ids`. There is no backfill. It survives a rollback to v0.27.0,
+  which reads none of these. New env vars, all with defaults:
+  `COLLAB_CHECKPOINT_INTERVAL_MINUTES` (`15`), `COLLAB_CHECKPOINT_KEEP` (`20`)
+  and `COLLAB_DRAFT_RETENTION_DAYS` (`30`). With the flag on, a draft edited
+  since its last checkpoint is copied to MinIO at
+  `workspaces/{ws}/documents/{doc}/drafts/{branch}/checkpoint.ydoc` at most
+  every interval, and the newest `KEEP` versions are kept. A draft with
+  nothing unpublished and untouched for the retention period is dropped and
+  reseeds the next time it is opened.
+- The hosted deployment turns co-editing on: `.env.production.example` now
+  lists `COLLAB_ENABLED=true`, so the deploy refuses to run until the GitHub
+  `production` environment carries it
+  (`gh variable set COLLAB_ENABLED --env production --body true`). The socket
+  is `/api/v1/collab` on the existing `/api` route, so Caddy and the edge
+  Worker need no change. To turn it off again, set the variable to `false` and
+  redeploy: open editors fall back to single-user, and drafts stay in
+  `collab_drafts` until they are reopened or expire.
+
+- Production embeds with bge-m3 (1024-d) served by Ollama.app on the host,
+  not the hash stub (#257). The `production` environment carries
+  `EMBEDDINGS_PROVIDER=openai-compatible`,
+  `EMBEDDINGS_BASE_URL=http://host.docker.internal:11434/v1`,
+  `EMBEDDINGS_MODEL=bge-m3` and `EMBEDDINGS_DIM=1024`. These are applied
+  already (a rerun of the v0.27.0 deploy on 2026-10-18), and every branch head
+  is reindexed. `.env.production.example` now requires the two new keys, so
+  a deploy fails early if they are missing from the environment. The host needs
+  `bge-m3` pulled and the `dev.hrustalq.ollama-keepalive` LaunchAgent, which
+  keeps the model loaded. **Rollback:** set `EMBEDDINGS_PROVIDER=stub` and
+  `EMBEDDINGS_DIM=768` and redeploy. The sweeper's drift check then reindexes
+  every head back, with no code change. Until a page is reindexed, its chunks
+  drop out of the vector leg, though BM25 still finds it.
+
 ## [0.27.0] — 2026-10-18
 
 ### Added
@@ -3177,7 +3882,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.27.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/hrustalq/knowledge/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/hrustalq/knowledge/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/hrustalq/knowledge/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/hrustalq/knowledge/compare/v0.24.0...v0.25.0

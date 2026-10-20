@@ -16,17 +16,18 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { EXPORT_FORMATS, type ExportCapabilitiesResponse, type ExportFormat } from '@knowledge/contracts'
+import type { ExportCapabilitiesResponse, ExportFormat } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { getWorkspaceId } from '@/lib/api'
+import { exportFormatAvailable } from '@/lib/export-formats'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import ExportFormatPicker from './ExportFormatPicker.vue'
 
 export type ExportTarget =
   | { kind: 'document'; documentId: string; title: string }
@@ -48,12 +49,13 @@ const branch = ref('')
 const submitting = ref(false)
 
 // Reset per opening, like MoveToDialog: last time's choice is not this one's.
+// Immediate: a caller may mount this already open (TreeRowMenu, #279).
 watch(open, (isOpen) => {
   if (!isOpen) return
   format.value = 'zip'
   includeSubtree.value = !!props.subtree
   branch.value = ''
-})
+}, { immediate: true })
 
 const capsQuery = useQuery(
   computed(() => ({
@@ -63,7 +65,7 @@ const capsQuery = useQuery(
   })),
 )
 const caps = computed(() => capsQuery.data.value as ExportCapabilitiesResponse | undefined)
-const available = (f: ExportFormat) => caps.value?.formats[f] ?? f !== 'pdf'
+const available = (f: ExportFormat) => exportFormatAvailable(caps.value?.formats, f)
 
 const title = computed(() =>
   props.target.kind === 'project'
@@ -106,25 +108,7 @@ async function submit() {
       </DialogHeader>
 
       <form id="kn-export-form" class="space-y-4" @submit.prevent="submit">
-        <fieldset class="space-y-2">
-          <legend class="mb-1 text-sm font-medium">{{ t('export.dialog.format') }}</legend>
-          <RadioGroup v-model="format" class="gap-2">
-            <Label
-              v-for="f in EXPORT_FORMATS"
-              :key="f"
-              :for="`kn-export-${f}`"
-              class="has-[[data-state=checked]]:border-primary flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
-            >
-              <RadioGroupItem :id="`kn-export-${f}`" :value="f" :disabled="!available(f)" class="mt-0.5" />
-              <span class="min-w-0">
-                <span class="block text-sm font-medium">{{ t(`export.format.${f}`) }}</span>
-                <span class="text-muted-foreground block text-xs">
-                  {{ available(f) ? t(`export.formatHint.${f}`) : t('export.pdfUnavailable') }}
-                </span>
-              </span>
-            </Label>
-          </RadioGroup>
-        </fieldset>
+        <ExportFormatPicker v-model="format" :formats="caps?.formats" />
 
         <label v-if="target.kind === 'document'" class="flex items-center gap-2 text-sm">
           <Checkbox v-model="includeSubtree" />

@@ -20,6 +20,8 @@ export interface SearchSnapshot {
   expand: boolean
   depth: number
   limit: number
+  /** #81: search the text as it stood then — an ISO date or `tag:<name>`. Absent: now. */
+  asOf?: string | null
 }
 
 /** A run of snippet text; `hit` marks words the query matched. Never HTML. */
@@ -43,6 +45,8 @@ export interface SearchHit {
   score?: number
   trust?: SourceVerificationState
   badges: { key: string; label: string }[]
+  /** #81: when this text stopped being the page's content, on an `asOf` search. */
+  supersededAt?: string
 }
 
 export interface SearchRelatedHit {
@@ -86,6 +90,7 @@ export function useSearch(source: SearchSource, initial?: Partial<SearchSnapshot
   const expand = ref(initial?.expand ?? true)
   const depth = ref(initial?.depth ?? 1)
   const limit = ref(initial?.limit ?? 20)
+  const asOf = ref<string | null>(initial?.asOf ?? null)
 
   const response = ref<SearchView | null>(null)
   const busy = ref(false)
@@ -96,7 +101,7 @@ export function useSearch(source: SearchSource, initial?: Partial<SearchSnapshot
   let seq = 0
 
   const activeFilterCount = computed(
-    () => categories.value.size + projectIds.value.size + tags.value.size,
+    () => categories.value.size + projectIds.value.size + tags.value.size + (asOf.value ? 1 : 0),
   )
   const hasSearched = computed(() => response.value !== null || error.value !== null)
 
@@ -142,6 +147,7 @@ export function useSearch(source: SearchSource, initial?: Partial<SearchSnapshot
     categories.value = new Set()
     projectIds.value = new Set()
     tags.value = new Set()
+    asOf.value = null
   }
 
   function snapshot(): SearchSnapshot {
@@ -154,6 +160,7 @@ export function useSearch(source: SearchSource, initial?: Partial<SearchSnapshot
       expand: expand.value,
       depth: depth.value,
       limit: limit.value,
+      asOf: asOf.value,
     }
   }
 
@@ -166,6 +173,7 @@ export function useSearch(source: SearchSource, initial?: Partial<SearchSnapshot
     expand,
     depth,
     limit,
+    asOf,
     response,
     busy,
     error,

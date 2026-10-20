@@ -6,6 +6,7 @@ import { embeddingSignature } from '../embedding/embedding.provider.js';
 import { GraphService } from '../graph/graph.service.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { IngestionProducer } from './ingestion.producer.js';
+import { loadRevisionStamps } from '../graph/revision-stamps.js';
 
 /** Revisions re-mirrored into the BM25 index per sweep; the next sweep continues. */
 const FULLTEXT_REPAIR_BATCH = 25;
@@ -183,6 +184,9 @@ export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
           { live, aclNodes: restrictedBy },
         );
         if (live) await this.fulltext.setLiveRevision(workspaceId, rev.documentId, rev.id);
+        // Re-mirrored rows are written unstamped (#81).
+        const stamp = (await loadRevisionStamps(this.prisma, rev.documentId)).filter((s) => s.revisionId === rev.id);
+        await this.fulltext.stampRevisions(workspaceId, rev.documentId, stamp);
       } catch (e) {
         this.logger.warn(`Fulltext repair failed for revision ${rev.id}; retrying next sweep: ${(e as Error).message}`);
         break;

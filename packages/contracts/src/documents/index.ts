@@ -7,7 +7,7 @@ import type {
   SourceVerificationState,
 } from '@knowledge/contracts/core';
 import type { ApiSpecDiff } from '@knowledge/contracts/api/diff';
-import type { AuthorableRelationType, FactExtractor } from '@knowledge/contracts/graph';
+import type { AuthorableRelationType, FactExtractor, ResolvedAsOf } from '@knowledge/contracts/graph';
 import type { DeleteReviewCommentResponse, ReviewComment, ReviewThread, SemanticDiff, StructuralDiff } from '@knowledge/contracts/reviews';
 
 // rich editor. Two-step by design (presign → confirm), mirroring the revision
@@ -100,6 +100,10 @@ export interface SearchRequest {
   /** 'hybrid' fuses vector + BM25 (when a fulltext provider is configured); 'keyword' is BM25-only. */
   mode?: 'hybrid' | 'semantic' | 'keyword';
   limit?: number;
+  /** Search the text as it stood then (#81): an ISO date, `rev:<id>` or `tag:<name>`. */
+  asOf?: string;
+  /** What was believed at this ISO date (#81); only the graph expansion reads it. */
+  knownAt?: string;
   /**
    * Phase 4 hybrid expansion: walk relation edges out from the vector hits.
    * depth = entity hops (default 1, max 3); relationTypes filters edge types.
@@ -143,6 +147,13 @@ export interface SearchResult {
   headingPath?: string[];
   /** Entities related to the result's document (present when expandGraph is used). */
   entities?: EntityRef[];
+  /**
+   * When the matched text was the page's content (#81), ISO; present on an
+   * `asOf` search. A `validTo` means the page has since changed: the text is
+   * superseded.
+   */
+  validFrom?: string | null;
+  validTo?: string | null;
 }
 /** A retrieval leg a search skipped because its store failed or timed out (#173). */
 export type SearchDegradedLeg = 'fulltext';
@@ -156,6 +167,14 @@ export interface SearchResponse {
    * results are vector-only.
    */
   degraded?: SearchDegradedLeg[];
+  /** Present on an `asOf` search (#81). */
+  resolvedAsOf?: ResolvedAsOf;
+  /**
+   * This search's row in the analytics log (#79), present when analytics is
+   * on. The web carries it to the page a result opens (`?sid=&rank=`),
+   * which is what counts a click.
+   */
+  searchId?: string;
 }
 /** A document discovered by graph expansion, with the connecting evidence. */
 export interface RelatedDocumentResult {
@@ -426,6 +445,8 @@ export interface DocumentContentResponse {
   contentType: string;
   frontmatter: Record<string, unknown> | null;
   markdown: string;
+  /** Present when the revision was picked by `asOf` (#81). */
+  resolvedAsOf?: ResolvedAsOf;
 }
 
 
@@ -491,6 +512,8 @@ export interface DocumentGraphResponse {
   depth: number;
   nodes: DocumentGraphNode[];
   edges: DocumentGraphEdge[];
+  /** Present when the graph was read as of a point in time (#81). */
+  resolvedAsOf?: ResolvedAsOf;
 }
 
 // GET /v1/documents/graph?workspaceId=&projectId=
@@ -513,6 +536,8 @@ export interface WorkspaceGraphNode {
   status?: RevisionStatus | null;
   /** Incident edge count, after filtering. */
   degree: number;
+  /** Documents only: the community the page belongs to, when the atlas has built them (#81). */
+  community?: string;
 }
 export interface WorkspaceGraphResponse {
   workspaceId: string;
@@ -522,6 +547,8 @@ export interface WorkspaceGraphResponse {
   edges: DocumentGraphEdge[];
   /** True when the workspace holds more edges than the render cap allows. */
   truncated: boolean;
+  /** Present when the graph was read as of a point in time (#81). */
+  resolvedAsOf?: ResolvedAsOf;
 }
 
 // GET /v1/activity?workspaceId=&documentId=&limit=&cursor= (feature 10)
@@ -551,3 +578,112 @@ export interface ListActivityResponse {
 
 // ---------------------------------------------------------------------------
 // Activity kinds — the four things a person does to a knowledge base.
+
+// ---------------------------------------------------------------------------
+// Real-time co-editing (#80, docs/features/56): one shared draft per branch.
+
+/** `collab:{workspaceId}:{documentId}:{branchId}` — what a provider asks the `/v1/collab` socket for. */
+export function collabDocName(workspaceId: string, documentId: string, branchId: string): string {
+  return `collab:${workspaceId}:${documentId}:${branchId}`;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The inverse, or `null` for anything malformed. The workspace part is a
+ * routing hint only: the server re-resolves it from the document in PG.
+ */
+export function parseCollabDocName(
+  name: string,
+): { workspaceId: string; documentId: string; branchId: string } | null {
+  const [prefix, workspaceId, documentId, branchId, ...rest] = name.split(':');
+  if (prefix !== 'collab' || rest.length > 0) return null;
+  if (![workspaceId, documentId, branchId].every((id) => id !== undefined && UUID_RE.test(id))) return null;
+  return { workspaceId: workspaceId!, documentId: documentId!, branchId: branchId! };
+}
+
+/**
+ * Why a document was refused or closed. Hocuspocus multiplexes documents over
+ * one socket, so both arrive per document as a reason string, never a close
+ * code: a refusal as `permission-denied`, a close as a close message the
+ * provider reports as `{ code: 1000, reason }`. A refused page never names
+ * itself (feature 48).
+ *
+ * - `unauthorized` — no valid `kt_` ticket, or the credential behind it has
+ *   since been revoked or its account disabled.
+ * - `forbidden` — the page cannot be opened (any more).
+ * - `access-changed` — view stays but edit was gained or lost: rejoin with a
+ *   fresh ticket to learn the new scope.
+ * - `too-large` — the draft passed COLLAB_MAX_DOC_BYTES and stopped saving.
+ * - `reset` — someone discarded the draft and it was reseeded from the branch
+ *   head, or this device's copy is from before such a reseed
+ *   (`collabToken`). Rejoin with a **new** Y.Doc and this device's copy
+ *   cleared: merging the old state into the reseeded one would show the page
+ *   twice.
+ */
+export const COLLAB_DENY_REASONS = ['unauthorized', 'forbidden', 'access-changed', 'too-large', 'reset'] as const;
+export type CollabDenyReason = (typeof COLLAB_DENY_REASONS)[number];
+
+/**
+ * What a peer sends as its Hocuspocus token: its `kt_` ticket and, when this
+ * device holds a copy of the draft, the generation that copy came from. A
+ * draft gets a new generation whenever it is reseeded (a reset, or dropped
+ * and opened again). The server refuses a copy from another generation with
+ * `reset` before it syncs, so an offline copy of a discarded draft is never
+ * merged into its reseed. A `kt_` ticket never contains a space.
+ */
+export function collabToken(ticket: string, generation: string | null): string {
+  return generation ? `${ticket} ${generation}` : ticket;
+}
+
+/** The inverse. A plain ticket claims no copy. */
+export function parseCollabToken(token: string): { ticket: string; generation: string | null } {
+  const at = token.indexOf(' ');
+  return at < 0 ? { ticket: token, generation: null } : { ticket: token.slice(0, at), generation: token.slice(at + 1) || null };
+}
+
+/** The stateless message a peer gets once it joined: the generation to remember beside its copy. */
+export interface CollabJoined {
+  generation: string;
+}
+
+/** The one socket-level close: COLLAB_ENABLED is off. */
+export const COLLAB_DISABLED_CLOSE_CODE = 4503;
+
+/**
+ * Awareness `user`, as every peer sees it. The server overwrites these fields
+ * from the connection's principal on every awareness update, so a name or
+ * avatar on a caret is never the client's claim. Other fields pass through.
+ */
+export interface CollabUser {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+/** `GET /v1/collab/capabilities` — whether this deployment co-edits, and the schema a client must match to write. */
+export interface CollabCapabilitiesResponse {
+  enabled: boolean;
+  schemaVersion: string;
+}
+
+/** One branch's shared draft, as `GET /v1/documents/:id/drafts` reports it. */
+export interface CollabDraftInfo {
+  draftId: string;
+  branchId: string;
+  branch: string;
+  /** The revision the draft was seeded from or last published as. The `If-Match` a publish sends. */
+  baseRevisionId: string | null;
+  /** The draft differs from what was last published (or seeded). */
+  hasUnpublishedChanges: boolean;
+  /** Who wrote in it since the last publish. */
+  contributors: string[];
+  /** People with it open, as far as this API instance can see. */
+  activePeers: number;
+  updatedAt: string;
+}
+
+/** Empty while COLLAB_ENABLED is off, whatever drafts an earlier run left behind. */
+export interface ListCollabDraftsResponse {
+  drafts: CollabDraftInfo[];
+}

@@ -18,30 +18,41 @@
 // browser as they are made, restored when the page is reopened, reviewable as
 // a diff against the published head, and discarded only on request.
 //
+// With COLLAB_ENABLED on, an existing page is edited as a shared draft (#80,
+// docs/features/56): the body and the page fields live in a Y.Doc everyone on
+// the page edits at once, the working copy steps aside for the draft's own
+// copy on this device, and publishing is unchanged.
+//
 // A new page can start from a template (issue #69): `/create?template=` opens
 // on the skeleton the gallery rendered, and the template is sent as provenance
 // when the page is created. `/template` inserts one at the cursor of any page,
 // and "Save as template" goes the other way.
 import { useI18n } from 'vue-i18n'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { onKeyStroke, useStorage } from '@vueuse/core'
-import { History, LayoutTemplate, MoreHorizontal, Route, Settings2, Sparkles, X } from 'lucide-vue-next'
+import { GitCompareArrows, History, LayoutTemplate, MoreHorizontal, Route, Settings2, Sparkles, X } from 'lucide-vue-next'
 import {
   AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
+  collabDocName,
+  type CollabCapabilitiesResponse,
   type CompareResponse,
   type CreateDocumentResponse,
   type CreateUploadResponse,
   type DocumentCategory,
   type DocumentContentResponse,
   type DocumentDetailResponse,
+  type BranchInfo,
   type FinalizeRevisionResponse,
+  type ListBranchesResponse,
+  type ListCollabDraftsResponse,
   type RenderTemplateResponse,
   type RevisionInfo,
 } from '@knowledge/contracts'
-import { ApiError, apiFetch, getWorkspaceId } from '@/lib/api'
+import { SCHEMA_VERSION, editorSchema, parseMarkdown } from '@knowledge/editor-schema'
+import { ApiError, apiFetch, apiFetchText, getWorkspaceId } from '@/lib/api'
 import { errorMessage } from '@/api/errors'
 import { presignedPut } from '@/lib/presigned-put'
 import { labelFor } from '@/lib/labels'
@@ -65,11 +76,14 @@ import {
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useTemplatesStore } from '@/stores/templates'
+import { useEventsStore } from '@/stores/events'
+import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageState } from '@/components/layout/page'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import {
   Sheet,
@@ -107,6 +121,10 @@ import ApiOperationPicker, { type PickedOperation } from '@/components/api-refer
 import ApiOperationRef from '@/components/api-reference/ApiOperationRef.vue'
 import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/components/templates/SaveAsTemplateDialog.vue'
 import { useWorkingCopy } from '@/components/editor/use-working-copy'
+import { docToMarkdown } from '@/components/editor/editor-streams'
+import type { CollabHandle } from '@/components/editor/use-collab'
+import CollabStatus from '@/components/editor/CollabStatus.vue'
+import CollabPresence from '@/components/editor/CollabPresence.vue'
 import DiffView from '@/components/knowledge/DiffView.vue'
 import EditorAiPanel from '@/components/editor/EditorAiPanel.vue'
 import { connectDraft } from '@/stores/assistant'
@@ -119,6 +137,7 @@ const router = useRouter()
 const store = useDocumentsStore()
 const projects = useProjectsStore()
 const templates = useTemplatesStore()
+const auth = useAuthStore()
 
 const editId = ref<string | null>((route.params.id as string | undefined) ?? null)
 const isEdit = computed(() => editId.value !== null)
@@ -147,6 +166,16 @@ const template = ref<TemplateProvenance | null>(null)
  */
 const otherFrontmatter = ref<Record<string, unknown>>({})
 const headRevisionId = ref<string | null>(null)
+/**
+ * `?branch=<name>` (#80): edit that branch rather than the default one — a
+ * proposed change several people shape before it becomes a merge request.
+ * Read once; an unknown name falls back to the default branch.
+ */
+const requestedBranch = typeof route.query.branch === 'string' ? route.query.branch : null
+/** The branch being edited, once loaded. Null on a new page. */
+const branch = ref<BranchInfo | null>(null)
+/** `branch`'s name when it is not the page's default: its working copy has a slot of its own. */
+const branchSlot = ref<string | null>(null)
 
 /**
  * `/create?parent=&project=&template=` (issue #69): where a new page goes and
@@ -191,6 +220,12 @@ const busy = ref(false)
  * first mount for the published baseline.
  */
 const loading = ref(isEdit.value)
+/**
+ * Why the page being edited did not load (#314). While set, the editor is not
+ * mounted, nothing is stored as a working copy and Publish is refused: the
+ * fields are empty, and publishing them would finalize a blank page over the head.
+ */
+const loadError = ref<unknown>(null)
 const settingsOpen = ref(false)
 const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
 
@@ -349,10 +384,192 @@ function applyFields(fields: PageFields) {
  */
 const baseFields = ref<PageFields | null>(null)
 
-const storageKey = computed(() => workingCopyKey(getWorkspaceId(), editId.value))
+const storageKey = computed(() => workingCopyKey(getWorkspaceId(), editId.value, branchSlot.value))
+
+/* ------------------------------------------------------ shared draft */
+
+/** The page's shared draft, once joined (#80). `null` edits alone, exactly as before. */
+const collab = shallowRef<CollabHandle | null>(null)
+let unbindFields: (() => void) | null = null
+/** A working copy from before this page was edited live, offered once, applied only on a click. */
+const localCopy = ref<WorkingCopy | null>(null)
+
+/** How long joining may hold the skeleton before the page opens single-user instead. */
+const COLLAB_JOIN_TIMEOUT_MS = 10_000
+
+/**
+ * The published page as the editor would write it: what "unpublished" is
+ * measured against in a shared draft. The editor itself only ever holds the draft.
+ */
+function publishedFields(page: DocumentDetailResponse['document'], content: DocumentContentResponse): PageFields {
+  const fm = readFrontmatter(content.frontmatter)
+  return {
+    title: page.title,
+    body: docToMarkdown(parseMarkdown(content.markdown, document), editorSchema),
+    category: page.category,
+    parentId: page.parentId ?? '',
+    projectId: page.projectId,
+    relations: fm.relations,
+    tags: fm.tags,
+    message: '',
+    template: null,
+  }
+}
+
+/**
+ * Join the branch's shared draft and hold the editor until it is here to
+ * show. Anything short of that — a refusal, a socket that never opens — leaves
+ * the page as it always was: single-user, working copy and all.
+ */
+async function startCollab(
+  detail: DocumentDetailResponse,
+  content: DocumentContentResponse,
+  on: BranchInfo,
+  caps: CollabCapabilitiesResponse,
+) {
+  const doc = detail.document
+  // Loaded only here: a deployment that does not co-edit never fetches Yjs.
+  const { createCollab, bindPageFields, META_FIELD } = await import('@/components/editor/use-collab')
+  const handle = createCollab({
+    name: collabDocName(doc.workspaceId, doc.documentId, on.branchId),
+    schemaMatches: caps.schemaVersion === SCHEMA_VERSION,
+    me: auth.me ? { userId: auth.me.userId, name: auth.me.displayName } : null,
+  })
+  const ready = await Promise.race([
+    handle.ready,
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), COLLAB_JOIN_TIMEOUT_MS)),
+  ])
+  if (!ready) {
+    handle.destroy()
+    toast.info(t('editor.collab.unavailable'))
+    return
+  }
+  baseFields.value = publishedFields(doc, content)
+  collab.value = handle
+  const bind = () => {
+    if (collab.value !== handle) return
+    unbindFields = bindPageFields(handle.doc, {
+      texts: { title, tags, message },
+      values: { category, parentId, projectId, relations: relationRows },
+    })
+  }
+  // Fields the draft lacks are seeded from what was loaded, which only the
+  // server's copy can say: this device's copy may predate them.
+  if (handle.doc.getMap(META_FIELD).size > 0) bind()
+  else void handle.synced.then(bind)
+}
+
+onBeforeUnmount(() => {
+  unbindFields?.()
+  collab.value?.destroy()
+})
+
+/**
+ * The branch was published past the draft by another path — MCP, a merge, a
+ * connector — so publishing it as it stands would silently undo that change.
+ * Holds the head it moved to; the review then compares the draft against it.
+ */
+const headMoved = ref<string | null>(null)
+
+/**
+ * Bring the baseline level with the branch head after someone published. From
+ * this draft (its base is the head): nothing more to say — the chip clears.
+ * From elsewhere: the head-moved notice, with the review showing what changed.
+ */
+async function followHead() {
+  if (!collab.value || !editId.value || !branch.value) return
+  const id = editId.value
+  const [{ branches }, { drafts }, detail] = await Promise.all([
+    apiFetch<ListBranchesResponse>(`/v1/documents/${id}/branches`),
+    apiFetch<ListCollabDraftsResponse>(`/v1/documents/${id}/drafts`),
+    apiFetch<DocumentDetailResponse>(`/v1/documents/${id}`),
+  ])
+  const head = branches.find((b) => b.branchId === branch.value?.branchId)?.headRevisionId ?? null
+  const draft = drafts.find((d) => d.branchId === branch.value?.branchId)
+  if (!head || !draft || head === headRevisionId.value) return
+  const content = await apiFetch<DocumentContentResponse>(`/v1/documents/${id}/content?revision=${head}`)
+  baseFields.value = publishedFields(detail.document, content)
+  otherFrontmatter.value = readFrontmatter(content.frontmatter).other
+  headRevisionId.value = head
+  headMoved.value = draft.baseRevisionId === head ? null : head
+}
+
+const events = useEventsStore()
+watch(
+  () => events.lastEvent,
+  (e) => {
+    if (e?.type === 'revision.finalized' && e.documentId === editId.value) void followHead().catch(() => {})
+  },
+)
+
+/** Throw the shared draft away for everyone, back to the branch head. Every peer — this tab too — rejoins. */
+const discardOpen = ref(false)
+/** From the review: one modal at a time, or the question opens underneath the diff. */
+function askDiscard() {
+  reviewOpen.value = false
+  discardOpen.value = true
+}
+async function discardDraft() {
+  discardOpen.value = false
+  reviewOpen.value = false
+  if (!editId.value || !branch.value) return
+  try {
+    await apiFetchText(`/v1/documents/${editId.value}/drafts/${branch.value.branchId}`, { method: 'DELETE' })
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  }
+}
+
+/**
+ * Someone discarded the draft (`reset`): this tab's Y.Doc and this device's
+ * copy are the old draft, and merging either into the reseeded one would
+ * show the page twice. Drop both and open the page again from the start.
+ */
+watch(
+  () => collab.value?.status.reason,
+  async (reason) => {
+    const handle = collab.value
+    if (reason !== 'reset' || !handle) return
+    loading.value = true
+    unbindFields?.()
+    unbindFields = null
+    collab.value = null
+    headMoved.value = null
+    await handle.forget()
+    toast.info(t('editor.collab.reset'))
+    await loadPage()
+  },
+)
+
+function offerLocalCopy() {
+  const stored = readWorkingCopy(storageKey.value)
+  const base = baseFields.value
+  if (!stored || !base) return
+  if (samePage(stored, base)) removeWorkingCopy(storageKey.value)
+  else localCopy.value = stored
+}
+
+/** The old copy, laid over the shared draft as one ordinary edit everyone receives. */
+function applyLocalCopy() {
+  const stored = localCopy.value
+  localCopy.value = null
+  if (!stored) return
+  applyFields(stored)
+  editorRef.value?.replaceContent(stored.body)
+  removeWorkingCopy(storageKey.value)
+}
+
+function discardLocalCopy() {
+  localCopy.value = null
+  removeWorkingCopy(storageKey.value)
+}
 
 const workingCopy = useWorkingCopy({
-  key: () => storageKey.value,
+  // A shared draft keeps its own copy on this device (IndexedDB); a second,
+  // per-browser one restored into it would be a second seed. Loading suspends
+  // it too: reopening after a reset lays the new head over the last session's
+  // baseline, and storing that would offer the published page back as edits.
+  key: () => (collab.value || loading.value || loadError.value ? null : storageKey.value),
   fields: currentFields,
   base: () => {
     const base = baseFields.value
@@ -371,6 +588,12 @@ const unstaged = workingCopy.unstaged
 const staleCopy = ref<WorkingCopy | null>(null)
 
 function onEditorReady() {
+  if (collab.value) {
+    // Brings `body` level with the draft; the baseline is the published head.
+    editorRef.value?.flush()
+    offerLocalCopy()
+    return
+  }
   if (baseFields.value) return
   // Flushing sets `body` to the editor's normalised form of what was loaded.
   editorRef.value?.flush()
@@ -629,37 +852,59 @@ onMounted(async () => {
       if (!projectId.value) projectId.value = projects.activeId ?? ''
     })
   }
-  if (!editId.value) return
+  if (editId.value) await loadPage()
+})
+
+/** Load the page being edited — again after a reset — and join its draft when the deployment co-edits. */
+async function loadPage() {
+  const id = editId.value
+  if (!id) return
   loading.value = true
+  loadError.value = null
   try {
-    const [detail, content] = await Promise.all([
-      apiFetch<DocumentDetailResponse>(`/v1/documents/${editId.value}`),
-      apiFetch<DocumentContentResponse>(`/v1/documents/${editId.value}/content`),
+    const [detail, defaultContent, caps, { branches }] = await Promise.all([
+      apiFetch<DocumentDetailResponse>(`/v1/documents/${id}`),
+      apiFetch<DocumentContentResponse>(`/v1/documents/${id}/content`),
+      // Unknown means off: the page opens single-user, as it always has.
+      apiFetch<CollabCapabilitiesResponse>('/v1/collab/capabilities').catch(() => null),
+      apiFetch<ListBranchesResponse>(`/v1/documents/${id}/branches`),
     ])
     // An archived page is read-only until unarchived (docs/features/39);
     // the API would refuse the publish, so refuse the editing first.
     if (detail.document.archivedAt) {
       toast.info(t('verification.archived.editorBlocked'))
-      await router.replace(`/documents/${editId.value}`)
+      await router.replace(`/documents/${id}`)
       return
     }
+    const byName = (name: string | null) => branches.find((b) => b.name === name)
+    if (requestedBranch && !byName(requestedBranch)) toast.error(t('editor.branchNotFound', { name: requestedBranch }))
+    branch.value = byName(requestedBranch) ?? byName(detail.document.defaultBranch) ?? null
+    branchSlot.value = branch.value && branch.value.name !== detail.document.defaultBranch ? branch.value.name : null
+    const head = branch.value?.headRevisionId ?? detail.document.headRevisionId
+    const content =
+      head && head !== defaultContent.revisionId
+        ? await apiFetch<DocumentContentResponse>(`/v1/documents/${id}/content?revision=${head}`)
+        : defaultContent
     title.value = detail.document.title
     category.value = detail.document.category
     parentId.value = detail.document.parentId ?? ''
     projectId.value = detail.document.projectId
-    headRevisionId.value = detail.document.headRevisionId
+    headRevisionId.value = head
     body.value = content.markdown
     const fm = readFrontmatter(content.frontmatter)
     otherFrontmatter.value = fm.other
     relationRows.value = fm.relations
     tags.value = fm.tags
+    if (caps?.enabled && branch.value) {
+      await startCollab(detail, content, branch.value, caps).catch(() => toast.info(t('editor.collab.unavailable')))
+    }
   } catch (e) {
-    toast.error((e as Error).message)
+    loadError.value = e
   } finally {
     // Mounts the editor, whose `ready` captures the published baseline.
     loading.value = false
   }
-})
+}
 
 /**
  * Provenance for `POST /v1/documents`. `provenanceOnly`, because the body goes
@@ -753,7 +998,8 @@ async function publishRevision(
   )
 }
 
-async function save() {
+async function save(onTop = false) {
+  if (loadError.value) return
   // Publishing would drop them silently — the serializer skips suggestions — so
   // they are decided first, where the author can see what they are deciding.
   if (aiPending.value.count > 0) {
@@ -773,8 +1019,10 @@ async function save() {
     return
   }
   busy.value = true
+  // Read before a shared draft's seal clears it, and put back if the publish fails.
+  const sentMessage = message.value
   try {
-    const text = pageSource(markdown)
+    let text = pageSource(markdown)
     if (!isEdit.value) {
       const res = await apiFetch<CreateDocumentResponse>('/v1/documents', {
         method: 'POST',
@@ -793,6 +1041,27 @@ async function save() {
       toast.success(t('editor.documentCreated'))
       await router.push(`/documents/${res.documentId}`)
       return
+    }
+
+    // A shared draft is published as of one snapshot (#80): finalize rebases
+    // the draft onto it, and what peers typed after it stays unpublished. The
+    // revision builds on the draft's base, not on the head this tab loaded:
+    // a peer may have published since. "Publish on top" builds on the head
+    // that moved instead, once the author has seen the difference.
+    let draftFields = {}
+    let ifMatch = headRevisionId.value
+    if (collab.value && branch.value) {
+      const { drafts } = await apiFetch<ListCollabDraftsResponse>(`/v1/documents/${editId.value}/drafts`)
+      const draft = drafts.find((d) => d.branchId === branch.value?.branchId)
+      if (draft) {
+        ifMatch = onTop && headMoved.value ? headMoved.value : draft.baseRevisionId
+        draftFields = { collabDraftId: draft.draftId, draftSnapshot: collab.value.seal() }
+        // Read again in the same tick as the seal: a peer's edit that landed
+        // while the draft was fetched must be in the revision it is marked as.
+        text = pageSource(editorRef.value?.flush() ?? markdown)
+        // Sealing cleared it for everyone; this tab's field follows.
+        message.value = ''
+      }
     }
 
     // Edit: metadata via PATCH, then a new revision with If-Match (plan.md §7).
@@ -814,10 +1083,12 @@ async function save() {
       (
         await apiFetch<RevisionInfo>(`/v1/documents/${editId.value}/revisions`, {
           method: 'POST',
-          headers: headRevisionId.value ? { 'If-Match': headRevisionId.value } : {},
+          headers: ifMatch ? { 'If-Match': ifMatch } : {},
           body: JSON.stringify({
-            message: message.value || 'Edited in web editor',
+            ...(branch.value ? { branch: branch.value.name } : {}),
+            message: sentMessage || 'Edited in web editor',
             contentType: 'text/markdown',
+            ...draftFields,
           }),
         })
       ).revisionId
@@ -829,8 +1100,10 @@ async function save() {
     // Was a prefix match on the message text, which breaks the moment that
     // message is translated and could never distinguish a 413 from anything
     // else. Branch on the envelope instead.
+    if (collab.value && !message.value) message.value = sentMessage
     if (e instanceof ApiError && e.status === 409) {
-      toast.error(t('editor.headMoved'))
+      if (collab.value) await followHead().catch(() => {})
+      if (!headMoved.value) toast.error(t('editor.headMoved'))
     } else {
       toast.error(errorMessage(e, t))
     }
@@ -871,7 +1144,7 @@ function destination(): string {
  * "throw this away", and they are kept unless the author says so.
  */
 function cancel() {
-  if (!unstaged.value) {
+  if (!unstaged.value || collab.value) {
     void router.push(destination())
     return
   }
@@ -910,7 +1183,8 @@ function keepAndLeave() {
 // (`kn_editor_confirm_leave`); a refused write asks regardless, since there
 // leaving really would lose the edits.
 onBeforeRouteLeave((to) => {
-  if (leaving || !unstaged.value || busy.value) return true
+  // A shared draft is already kept, on the server and on this device.
+  if (leaving || collab.value || !unstaged.value || busy.value) return true
   const stored = workingCopy.flush()
   if (stored && !confirmLeave.value) return true
   pendingLeave = () => router.push(to.fullPath)
@@ -923,7 +1197,7 @@ onBeforeRouteLeave((to) => {
 // Closing the tab or reloading: write the copy, then the browser's own prompt
 // — a custom one cannot be shown there — under the same rule as above.
 function beforeUnload(event: BeforeUnloadEvent) {
-  if (!unstaged.value) return
+  if (collab.value || !unstaged.value) return
   if (workingCopy.flush() && !confirmLeave.value) return
   event.preventDefault()
   event.returnValue = ''
@@ -939,19 +1213,23 @@ onBeforeUnmount(() => {
     <div class="kn-page-column">
       <header class="kn-page-head">
         <div class="kn-page-crumb">
-          <strong>{{ projectName }}</strong>
+          <!-- Before a load the project is the sidebar's, not the page's. -->
+          <strong v-if="!loadError">{{ projectName }}</strong>
           <span class="kn-page-state">{{ isEdit ? t('editor.editing') : t('editor.newPage') }}</span>
           <span v-if="!isEdit && template" class="kn-page-state">
             {{ templateName ? t('editor.fromTemplate', { name: templateName }) : t('editor.fromATemplate') }}
           </span>
-          <!-- The working copy's state, and the way into what it holds. -->
+          <CollabStatus v-if="collab" :status="collab.status" />
+          <!-- The working copy's state (or the shared draft's), and the way into what it holds. -->
           <button
             v-if="unstaged"
             type="button"
             class="kn-unstaged-chip"
             :data-failed="workingCopy.persistFailed.value ? 'true' : undefined"
             :title="
-              workingCopy.persistFailed.value
+              collab
+                ? t('editor.collab.unpublished.hint')
+                : workingCopy.persistFailed.value
                 ? t('editor.unstaged.notSaved')
                 : workingCopy.savedAt.value
                   ? t('editor.unstaged.savedLocally', { when: formatDateTime(new Date(workingCopy.savedAt.value)) })
@@ -960,11 +1238,14 @@ onBeforeUnmount(() => {
             @click="openReview"
           >
             <span class="kn-dirty-dot" aria-hidden="true" />
-            <span class="kn-unstaged-label">{{ t('editor.unstaged.label') }}</span>
+            <span class="kn-unstaged-label">
+              {{ collab ? t('editor.collab.unpublished.label') : t('editor.unstaged.label') }}
+            </span>
           </button>
         </div>
 
         <div class="ml-auto flex items-center gap-1.5">
+          <CollabPresence v-if="collab" :peers="collab.status.peers" :writers="editorRef?.aiWriters ?? []" />
           <Button
             variant="ghost"
             size="sm"
@@ -973,7 +1254,7 @@ onBeforeUnmount(() => {
             :title="`${t('editorAi.toggle')} (${modKey}J)`"
             @click="setAiOpen(!aiOpen)"
           >
-            <Sparkles class="size-4" /> <span class="hidden sm:inline">{{ t('editorAi.button') }}</span>
+            <Sparkles class="size-4" /> <span class="sr-only sm:not-sr-only">{{ t('editorAi.button') }}</span>
           </Button>
           <Button variant="ghost" size="sm" class="hidden sm:inline-flex" @click="settingsOpen = true">
             <Settings2 class="size-4" /> {{ t('editor.settings') }}
@@ -999,7 +1280,11 @@ onBeforeUnmount(() => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" :disabled="busy || loading" @click="save">
+          <Button
+            size="sm"
+            :disabled="busy || loading || loadError !== null || (collab !== null && !collab.status.writable)"
+            @click="save()"
+          >
             {{ busy ? t('common.saving') : isEdit ? t('editor.publish') : t('editor.createAndIndex') }}
           </Button>
         </div>
@@ -1012,6 +1297,23 @@ onBeforeUnmount(() => {
             <Skeleton class="h-4 w-full" />
             <Skeleton class="h-4 w-5/6" />
             <Skeleton class="h-64 w-full" />
+          </div>
+
+          <div v-else-if="loadError" class="p-8">
+            <PageState
+              state="error"
+              :title="t('editor.loadFailed.title')"
+              :description="t('editor.loadFailed.body', { reason: errorMessage(loadError, t) })"
+            >
+              <template #actions>
+                <div class="flex flex-wrap justify-center gap-2">
+                  <Button size="sm" variant="outline" @click="loadPage()">{{ t('common.retry') }}</Button>
+                  <Button size="sm" variant="ghost" as-child>
+                    <RouterLink :to="`/documents/${editId}`">{{ t('editor.loadFailed.openPage') }}</RouterLink>
+                  </Button>
+                </div>
+              </template>
+            </PageState>
           </div>
 
           <template v-else>
@@ -1029,9 +1331,46 @@ onBeforeUnmount(() => {
               <Button size="sm" variant="outline" @click="restoreStale">{{ t('editor.unstaged.restore') }}</Button>
             </div>
 
+            <div v-if="localCopy" class="kn-stale-copy" role="status">
+              <History class="size-4 shrink-0" aria-hidden="true" />
+              <div class="min-w-0 flex-1">
+                <p class="font-medium">
+                  {{ t('editor.collab.localCopy.title', { when: formatDateTime(new Date(localCopy.savedAt)) }) }}
+                </p>
+                <p class="text-muted-foreground">{{ t('editor.collab.localCopy.body') }}</p>
+              </div>
+              <Button size="sm" variant="ghost" @click="discardLocalCopy">{{ t('editor.collab.localCopy.ignore') }}</Button>
+              <Button
+                size="sm"
+                variant="outline"
+                :disabled="!collab?.status.writable"
+                @click="applyLocalCopy"
+              >
+                {{ t('editor.collab.localCopy.apply') }}
+              </Button>
+            </div>
+
+            <!-- Published past the draft by another path: say so before a publish would undo it. -->
+            <div v-if="headMoved" class="kn-stale-copy" role="status">
+              <GitCompareArrows class="size-4 shrink-0" aria-hidden="true" />
+              <div class="min-w-0 flex-1">
+                <p class="font-medium">{{ t('editor.collab.headMoved.title') }}</p>
+                <p class="text-muted-foreground">{{ t('editor.collab.headMoved.body') }}</p>
+              </div>
+              <Button size="sm" variant="ghost" :disabled="!collab?.status.writable" @click="discardOpen = true">
+                {{ t('editor.collab.discard.action') }}
+              </Button>
+              <Button size="sm" variant="ghost" @click="openReview">{{ t('editor.collab.headMoved.review') }}</Button>
+              <Button size="sm" variant="outline" :disabled="busy || !collab?.status.writable" @click="save(true)">
+                {{ t('editor.collab.headMoved.publishOnTop') }}
+              </Button>
+            </div>
+
             <RichEditor
               ref="editorRef"
               v-model="body"
+              :collab="collab ?? undefined"
+              :editable="!collab || collab.status.writable"
               :pages="mentionablePages"
               :resolve-document-id="ensureDocumentId"
               :template-context="templateContext"
@@ -1045,6 +1384,7 @@ onBeforeUnmount(() => {
                   rows="1"
                   :placeholder="t('editor.pageTitle')"
                   :aria-label="t('editor.pageTitle')"
+                  :readonly="collab !== null && !collab.status.writable"
                   spellcheck="false"
                   @keydown.enter.prevent="editorRef?.focus()"
                 />
@@ -1113,10 +1453,32 @@ onBeforeUnmount(() => {
     </AlertDialog>
 
     <!-- What publishing would change, before it does. -->
+    <AlertDialog v-model:open="discardOpen">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ t('editor.collab.discard.title') }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{
+              collab && collab.status.peers.length > 0
+                ? t('editor.collab.discard.bodyPeers', { n: collab.status.peers.length }, collab.status.peers.length)
+                : t('editor.collab.discard.body')
+            }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{{ t('editor.keepEditing') }}</AlertDialogCancel>
+          <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="discardDraft">
+            {{ t('editor.collab.discard.confirm') }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     <Dialog v-model:open="reviewOpen">
       <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>{{ t('editor.unstaged.reviewTitle') }}</DialogTitle>
+          <!-- Named like the chip that opened it: a shared draft is unpublished, not unstaged in this browser. -->
+          <DialogTitle>{{ t(collab ? 'editor.collab.unpublished.label' : 'editor.unstaged.reviewTitle') }}</DialogTitle>
           <DialogDescription>{{ t('editor.unstaged.reviewDesc') }}</DialogDescription>
         </DialogHeader>
 
@@ -1135,8 +1497,18 @@ onBeforeUnmount(() => {
         <p v-else class="text-sm text-muted-foreground">{{ t('editor.unstaged.noSourceChanges') }}</p>
 
         <DialogFooter>
-          <Button variant="ghost" class="text-destructive" @click="discardUnstaged">
+          <Button v-if="!collab" variant="ghost" class="text-destructive" @click="discardUnstaged">
             {{ t('editor.unstaged.discardAll') }}
+          </Button>
+          <!-- A shared draft is everyone's: discarding it resets it for every peer, so it asks first. -->
+          <Button
+            v-else
+            variant="ghost"
+            class="text-destructive"
+            :disabled="!collab.status.writable"
+            @click="askDiscard"
+          >
+            {{ t('editor.collab.discard.action') }}
           </Button>
           <Button @click="reviewOpen = false">{{ t('editor.keepEditing') }}</Button>
         </DialogFooter>
@@ -1153,7 +1525,8 @@ onBeforeUnmount(() => {
           </SheetDescription>
         </SheetHeader>
 
-        <div class="space-y-5 px-4 pb-8">
+        <!-- One switch for every field: a read-only peer's writes would be dropped by the server anyway. -->
+        <fieldset class="min-w-0 space-y-5 px-4 pb-8" :disabled="collab !== null && !collab.status.writable">
           <Autocomplete
             v-model="projectSelection"
             :label="t('editor.project')"
@@ -1238,7 +1611,7 @@ onBeforeUnmount(() => {
             <Label for="editor-tags" class="kn-field-label">{{ t('editor.tags') }}</Label>
             <Input id="editor-tags" v-model="tags" :placeholder="t('editor.tagsPlaceholder')" class="h-8 text-xs" />
           </div>
-        </div>
+        </fieldset>
       </SheetContent>
     </Sheet>
 

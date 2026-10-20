@@ -127,7 +127,16 @@ let clientTreeOpen: string | null = null
 let clientLocale: Locale | null = null
 if (!import.meta.env.SSR) {
   try {
+    // Hydrate in the language the server rendered (`<html lang>`, resolved
+    // kn_lang → Accept-Language → en): any other one mismatches every string
+    // on the page (#278). Storage alone misses the Accept-Language fallback.
+    const rendered = document.documentElement.lang
+    if (isLocale(rendered)) clientLocale = rendered
     clientToken = localStorage.getItem(TOKEN_KEY)
+    // Renew the cookie mirror (setToken writes it with a 30-day max-age): the
+    // <img> asset routes authenticate from it (#102), so it must not lapse
+    // while localStorage still holds a live session.
+    if (clientToken) setToken(clientToken)
     clientWorkspaceId = localStorage.getItem(WS_KEY)
     clientProjectId = localStorage.getItem(PROJECT_KEY)
     clientPane = localStorage.getItem(PANE_KEY)
@@ -138,7 +147,12 @@ if (!import.meta.env.SSR) {
     clientAiPanel = localStorage.getItem(AI_PANEL_KEY)
     clientTreeOpen = localStorage.getItem(TREE_OPEN_KEY)
     const storedLocale = localStorage.getItem(LANG_KEY)
-    if (isLocale(storedLocale)) clientLocale = storedLocale
+    if (isLocale(storedLocale)) {
+      clientLocale ??= storedLocale
+      // Renew the mirror like the token's, so the server keeps rendering the
+      // stored choice instead of falling back to Accept-Language.
+      document.cookie = `${LANG_KEY}=${storedLocale}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+    }
   } catch {
     /* storage unavailable (private mode) — stay anonymous */
   }
@@ -417,6 +431,16 @@ export async function apiFetchBlob(path: string, init?: RequestInit): Promise<{ 
   return { blob: await res.blob(), filename: match?.[1] ?? null }
 }
 
+/** Hand bytes to the browser as a download: an object URL clicked through a detached link. */
+export function saveFile(blob: Blob, filename: string): void {
+  const href = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = href
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(href)
+}
+
 /** The one request path — headers, credential, and the error envelope — both readers share. */
 async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
   const token = getToken()
@@ -463,12 +487,11 @@ async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
  * proxy, in production, and in anything else that reads the markdown. The
  * environment prefix and the credential are added here, at render time.
  *
- * `<img>` and `<object>` cannot send an Authorization header, so the token
- * rides in the query string. Only the asset routes marked `@QueryTokenOk()` in
- * the API accept it (as the SSE stream does), and the request is same-origin
- * through the proxy. Point this at any other route and it 401s (#102). The web
- * only ever holds a `ks_` session token, which those routes accept; an API
- * key in a URL is refused. Per-asset tickets are #102 phase 2b.
+ * `<img>` and `<object>` cannot send an Authorization header, and no credential
+ * goes in the URL (#102): the asset routes marked `@CookieTokenOk()` in the API
+ * read the `kn_token` session cookie instead. The browser sends it because the
+ * API is same-origin under `/api` (the Vite proxy, Caddy in production); a
+ * cross-origin `VITE_API_URL` would leave every attachment and avatar a 401.
  */
 /**
  * The absolute URL of an API route, for a full-page navigation rather than a
@@ -480,11 +503,7 @@ export function apiUrl(path: string): string {
 }
 
 export function resolveAssetUrl(path: string): string {
-  if (!path.startsWith('/v1/')) return path
-  const token = getToken()
-  const url = `${base}${path}`
-  if (!token) return url
-  return `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+  return path.startsWith('/v1/') ? `${base}${path}` : path
 }
 
 /**

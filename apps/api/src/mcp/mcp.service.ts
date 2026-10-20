@@ -61,10 +61,11 @@ import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
-import { CAPTURE_TOOLS, MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
+import { CAPTURE_TOOLS, MCP_AS_OF, MCP_INSTRUCTIONS, MCP_KNOWN_AT, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderSkill, type McpWhoami } from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
+import { registerDraftTools, type McpDraftTools } from './draft-tools.js';
 import { CaptureService } from '../captures/capture.service.js';
 import { MAX_USAGE_LIMIT } from '../components/component-match.js';
 import { COMPONENT_DRAFT_MAX_PATHS } from '@knowledge/contracts';
@@ -75,12 +76,21 @@ import { API_CHANGE_RULE_IDS, API_SPEC_SYNTAXES, CODE_SAMPLE_LANGS, isApiSpecKin
 import { ComponentDraftsService } from '../components/component-drafts.service.js';
 import { StyleLintService } from '../assistant/style-lint.service.js';
 import { QualityService } from '../quality/quality.service.js';
+import { withAsOf } from '../graph/temporal.js';
+import { ReleaseTagsService } from '../temporal/release-tags.service.js';
+import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
+import { ConflictsService } from '../conflicts/conflicts.service.js';
+import { CommunitiesService } from '../communities/communities.service.js';
+import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
+import { AnalyticsQueryService } from '../analytics/analytics-query.service.js';
+import { wrapUntrusted } from '../common/untrusted.js';
+import { ANALYTICS_MAX_DAYS, CONFLICT_STATUSES, RELEASE_TAG_NAME_PATTERN } from '@knowledge/contracts';
 
 /**
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.27.0';
+export const MCP_SERVER_VERSION = '0.28.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -122,6 +132,8 @@ export const MCP_SERVER_VERSION = '0.27.0';
  *   knowledge_report_issue      → report a page as wrong / stale; checked by the sentinel (docs/features/38)
  *   knowledge_lint_draft        → check text against its project's styleguide (#74)
  *   knowledge_get_page_quality  → a page's newest quality score, issues and history (#74)
+ *   knowledge_get_page_insights → how often a page is read, by people, the assistant and agents (#79)
+ *   knowledge_list_search_gaps  → searches that found nothing or nothing anyone opened (#79)
  *
  *   Agent-session memory (issue #73, capture-tools.ts) — writes propose, never publish:
  *   knowledge_capture_decision      → a decision + rationale → merge request (new page or amended page)
@@ -142,6 +154,16 @@ export const MCP_SERVER_VERSION = '0.27.0';
  *                              scope and workspace pin. A read-only key is not
  *                              even offered the write tools.
  */
+/**
+ * Tools only the API process can serve, passed in by its HTTP controller.
+ * The stdio server builds without them (issue #316): it has no collab gateway.
+ */
+export interface McpExtras {
+  drafts?: McpDraftTools;
+  /** The HTTP request sent `DNT: 1` or `Sec-GPC: 1` (#79). */
+  noTrack?: boolean;
+}
+
 @Injectable()
 export class McpService {
   constructor(
@@ -185,6 +207,12 @@ export class McpService {
     private readonly apiDiffs: ApiSpecDiffService,
     private readonly styleLint: StyleLintService,
     private readonly quality: QualityService,
+    private readonly temporal: TemporalResolverService,
+    private readonly releaseTags: ReleaseTagsService,
+    private readonly conflicts: ConflictsService,
+    private readonly communities: CommunitiesService,
+    private readonly analytics: AnalyticsRecorder,
+    private readonly analyticsQuery: AnalyticsQueryService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -192,8 +220,8 @@ export class McpService {
   }
 
   /** What `principal` would be offered — the connection page's list and the skill's catalogue. */
-  toolsFor(principal: Principal): McpToolSummary[] {
-    return this.buildServer(principal).tools;
+  toolsFor(principal: Principal, extras: McpExtras = {}): McpToolSummary[] {
+    return this.buildServer(principal, extras).tools;
   }
 
   /**
@@ -201,12 +229,14 @@ export class McpService {
    * HTTP request (registration is a map insert per tool), which is what lets
    * the HTTP transport stay stateless: no session to pin a principal to.
    */
-  buildServer(principal: Principal): { server: McpServer; tools: McpToolSummary[] } {
+  buildServer(principal: Principal, extras: McpExtras = {}): { server: McpServer; tools: McpToolSummary[] } {
     const server = new McpServer(
       { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
       { instructions: MCP_INSTRUCTIONS },
     );
-    const handles = trackTools(server);
+    // Every call is filed as `mcp` traffic (#79), whoever the principal is.
+    const caller: AnalyticsCaller = { principal, channel: 'mcp', ...(extras.noTrack ? { noTrack: true } : {}) };
+    const handles = trackTools(server, (call) => void this.analytics.toolCall(caller, call));
     const guard = this.guardFor(principal);
 
     server.registerTool(
@@ -218,7 +248,8 @@ export class McpService {
           'expired | edited | requested | outdated | flagged | unverified), trust.inactive, trust.ownerId and ' +
           'factClass. Ranking already favours verified pages and demotes outdated ones; still say when a page you ' +
           'relied on is outdated, expired or edited since verification. Archived pages are absent unless ' +
-          'includeArchived is true. The response traceId identifies this search.',
+          'includeArchived is true. The response traceId identifies this search. With asOf, it searches the text ' +
+          'each page held then, and a result whose validTo is set has since been superseded.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           query: z.string().min(1),
@@ -236,9 +267,11 @@ export class McpService {
               'Restrict results to documents carrying ANY of these frontmatter tags ("security" or "tag:security")',
             ),
           includeArchived: z.boolean().optional().describe('Also return archived pages (default false)'),
+          asOf: z.string().optional().describe(MCP_AS_OF),
+          knownAt: z.string().optional().describe(MCP_KNOWN_AT),
         },
       },
-      async ({ workspaceId, query, limit, projectIds, tags, includeArchived }) => {
+      async ({ workspaceId, query, limit, projectIds, tags, includeArchived, asOf, knownAt }) => {
         const scope = await guard.pages(workspaceId);
         // One merged object: separate spreads would clobber each other.
         const filters = {
@@ -251,9 +284,12 @@ export class McpService {
             workspaceId,
             query,
             limit: limit ?? 20,
+            ...(asOf ? { asOf } : {}),
+            ...(knownAt ? { knownAt } : {}),
             ...(Object.keys(filters).length ? { filters } : {}),
           },
           scope,
+          caller,
         );
         // One batched read for the whole hit list (docs/features/38), and the
         // trace id of this call so an agent can quote it back to
@@ -398,24 +434,27 @@ export class McpService {
       {
         description:
           'Create a public, read-only link to a page (docs/features/43) that anyone with the URL can open without ' +
-          'signing in — only when a person asked for one. includeSubtree also shares every page under it. Without ' +
+          'signing in — only when a person asked for one. includeSubtree also shares every page under it. ' +
+          'allowDownload lets readers download it as ZIP/HTML/PDF (off unless asked for). Without ' +
           'expiresInDays the link never expires, which most workspaces only allow with a password. Fails with 403 ' +
           'when the workspace has sharing switched off. Returns the URL; revoke it from the page\'s Share menu.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           documentId: z.string().uuid(),
           includeSubtree: z.boolean().optional(),
+          allowDownload: z.boolean().optional(),
           expiresInDays: z.number().int().min(1).max(3650).optional(),
           password: z.string().min(SHARE_PASSWORD_MIN_CHARS).max(SHARE_PASSWORD_MAX_CHARS).optional(),
         },
       },
-      async ({ workspaceId, documentId, includeSubtree, expiresInDays, password }) => {
+      async ({ workspaceId, documentId, includeSubtree, allowDownload, expiresInDays, password }) => {
         // The REST twin is POST /v1/documents/:id/shares, editor.
         await guard.doc(documentId, 'editor');
         const res = await this.shareLinks.create(
           documentId,
           {
             includeSubtree: includeSubtree ?? false,
+            allowDownload: allowDownload ?? false,
             expiresAt: expiresInDays ? new Date(Date.now() + expiresInDays * 86_400_000).toISOString() : null,
             ...(password ? { password } : {}),
           },
@@ -427,6 +466,7 @@ export class McpService {
           shareId: res.share.id,
           url: res.url,
           includeSubtree: res.share.includeSubtree,
+          allowDownload: res.share.allowDownload,
           expiresAt: res.share.expiresAt,
           hasPassword: res.share.hasPassword,
         });
@@ -439,7 +479,8 @@ export class McpService {
         description:
           'Export a page, a page and its subpages, or a whole project as a file a person can download ' +
           '(docs/features/45): zip (markdown sources with frontmatter, attachments and manifest.json), html (an ' +
-          'offline site, zipped) or pdf (only where the deployment has Gotenberg). Give documentId, or projectId for ' +
+          'offline site, zipped), pdf (only where the deployment has Gotenberg) or docx (one Word document). Give ' +
+          'documentId, or projectId for ' +
           'a whole project. Runs in the background: returns the export id — poll knowledge_get_export for the ' +
           'download URL.',
         inputSchema: {
@@ -626,11 +667,14 @@ export class McpService {
         inputSchema: {
           workspaceId: z.string().uuid(),
           projectId: z.string().uuid().optional().describe('Restrict the graph to one project'),
+          asOf: z.string().optional().describe(MCP_AS_OF),
+          knownAt: z.string().optional().describe(MCP_KNOWN_AT),
         },
       },
-      async ({ workspaceId, projectId }) => {
+      async ({ workspaceId, projectId, asOf, knownAt }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.documents.getWorkspaceGraph(await guard.scope(workspaceId), projectId));
+        const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+        return this.json(withAsOf(await this.documents.getWorkspaceGraph(await guard.scope(workspaceId), projectId, at), at));
       },
     );
 
@@ -784,13 +828,15 @@ export class McpService {
           entity: z.string().min(1).describe('Entity key, e.g. "service:identity"'),
           relationship: z.string().optional().describe('Filter to one relation type, e.g. DEPENDS_ON'),
           depth: z.number().int().min(1).max(3).optional(),
+          asOf: z.string().optional().describe(MCP_AS_OF),
+          knownAt: z.string().optional().describe(MCP_KNOWN_AT),
         },
       },
-      async ({ workspaceId, entity, relationship, depth }) => {
+      async ({ workspaceId, entity, relationship, depth, asOf, knownAt }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(
-            await this.entities.neighbors(await guard.scope(workspaceId), entity, depth ?? 1, relationship ? [relationship] : undefined),
-          );
+        const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+        const scope = await guard.scope(workspaceId);
+        return this.json(withAsOf(await this.entities.neighbors(scope, entity, depth ?? 1, relationship ? [relationship] : undefined, at), at));
       },
     );
 
@@ -804,11 +850,15 @@ export class McpService {
           entityId: z.string().min(1).describe('Entity key, e.g. "service:identity"'),
           direction: z.enum(['dependents', 'dependencies']).optional(),
           maxDepth: z.number().int().min(1).max(5).optional(),
+          asOf: z.string().optional().describe(MCP_AS_OF),
+          knownAt: z.string().optional().describe(MCP_KNOWN_AT),
         },
       },
-      async ({ workspaceId, entityId, direction, maxDepth }) => {
+      async ({ workspaceId, entityId, direction, maxDepth, asOf, knownAt }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.entities.impactAnalysis(await guard.scope(workspaceId), entityId, direction ?? 'dependents', maxDepth ?? 3));
+        const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+        const scope = await guard.scope(workspaceId);
+        return this.json(withAsOf(await this.entities.impactAnalysis(scope, entityId, direction ?? 'dependents', maxDepth ?? 3, at), at));
       },
     );
 
@@ -984,11 +1034,14 @@ export class McpService {
           fromEntityId: z.string().min(1),
           toEntityId: z.string().min(1),
           maxDepth: z.number().int().min(1).max(6).optional(),
+          asOf: z.string().optional().describe(MCP_AS_OF),
+          knownAt: z.string().optional().describe(MCP_KNOWN_AT),
         },
       },
-      async ({ workspaceId, fromEntityId, toEntityId, maxDepth }) => {
+      async ({ workspaceId, fromEntityId, toEntityId, maxDepth, asOf, knownAt }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.entities.trace(await guard.scope(workspaceId), fromEntityId, toEntityId, maxDepth ?? 4));
+        const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+        return this.json(withAsOf(await this.entities.trace(await guard.scope(workspaceId), fromEntityId, toEntityId, maxDepth ?? 4, at), at));
       },
     );
 
@@ -1003,7 +1056,9 @@ export class McpService {
       },
       async ({ documentId, revisionId }) => {
         await guard.doc(documentId, 'viewer');
-        return this.json(await this.documents.getDocument(documentId, revisionId));
+        const doc = await this.documents.getDocument(documentId, revisionId);
+        void this.analytics.view(caller, documentId, revisionId);
+        return this.json(doc);
       },
     );
 
@@ -1072,7 +1127,9 @@ export class McpService {
       },
       async ({ documentId, revisionId }) => {
         await guard.doc(documentId, 'viewer');
-        return this.json(await this.documents.getContent(documentId, revisionId));
+        const content = await this.documents.getContent(documentId, revisionId);
+        void this.analytics.view(caller, documentId, content.revisionId);
+        return this.json(content);
       },
     );
 
@@ -1115,6 +1172,45 @@ export class McpService {
         await guard.doc(documentId, 'viewer');
         const scope = await guard.scope(await this.access.workspaceOfDocument(documentId));
         return this.json(await this.quality.forDocument(scope, documentId));
+      },
+    );
+
+    // Usage analytics (#79): the twins of GET /v1/documents/:id/insights
+    // (viewer) and the gap lists of GET /v1/analytics/search (admin).
+    server.registerTool(
+      'knowledge_get_page_insights',
+      {
+        description:
+          "How a page is read over the last 30 days: views split into human, assisted (the in-app assistant and " +
+          'chat bots) and agent (API keys, MCP, background runs), unique readers, median read time, the last human ' +
+          'view and a daily series. Counts only, never who read it. collectingSince is null before the first view.',
+        inputSchema: { documentId: z.string().uuid() },
+      },
+      async ({ documentId }) => {
+        await guard.doc(documentId, 'viewer');
+        return this.json(await this.analyticsQuery.pageInsights(documentId));
+      },
+    );
+
+    server.registerTool(
+      'knowledge_list_search_gaps',
+      {
+        description:
+          'Coverage gaps: queries searched over the last `days` (default 30) that found nothing (zeroResult), and ' +
+          'web searches that found pages nobody opened (noClick), grouped by query with counts. Admin only. The ' +
+          'query text was typed by readers and comes back wrapped as untrusted data; it is null once retention ' +
+          'redacted it, and queryHash still groups it. Use it to find pages worth writing.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          days: z.number().int().min(1).max(ANALYTICS_MAX_DAYS).optional(),
+        },
+      },
+      async ({ workspaceId, days }) => {
+        await guard.ws(workspaceId, 'admin');
+        const gaps = await this.analyticsQuery.searchGaps(workspaceId, days);
+        return {
+          content: [{ type: 'text' as const, text: wrapUntrusted(JSON.stringify(gaps, null, 2), 'knowledge_list_search_gaps', 'search') }],
+        };
       },
     );
 
@@ -1365,20 +1461,133 @@ export class McpService {
       },
     );
 
+    // Release tags (#81): the twins of GET / POST /v1/release-tags.
+    server.registerTool(
+      'knowledge_list_release_tags',
+      {
+        description:
+          'Release tags of a workspace: named instants ("v2.3", "Q3 audit") that asOf=tag:<name> reads the graph as of. Oldest first.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          projectId: z.string().uuid().optional().describe('Workspace-wide tags plus this project\u2019s'),
+        },
+      },
+      async ({ workspaceId, projectId }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json({ tags: await this.releaseTags.list(workspaceId, projectId) });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_create_release_tag',
+      {
+        description:
+          'Name an instant (now, or `at`) so the graph can later be read as of it with asOf=tag:<name>. Names are unique per workspace.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          name: z.string().regex(new RegExp(RELEASE_TAG_NAME_PATTERN)).describe('Letters, digits and . _ - /, at most 64'),
+          projectId: z.string().uuid().optional().describe('Only this project\u2019s views; the whole workspace when absent'),
+          at: z.string().datetime({ offset: true }).optional().describe('ISO instant; now when absent'),
+          note: z.string().max(500).optional(),
+        },
+      },
+      async ({ workspaceId, name, projectId, at, note }) => {
+        await guard.ws(workspaceId, 'editor');
+        return this.json(await this.releaseTags.create({ workspaceId, name, projectId, at, note }, principal.userId));
+      },
+    );
+
+    // Contradictions between pages (#81): the twins of GET /v1/conflicts and
+    // POST /v1/conflicts/:id/resolve|dismiss. Both under the caller's scope.
+    server.registerTool(
+      'knowledge_list_conflicts',
+      {
+        description:
+          'Contradictions the arbiter found between pages: both pages, the passage each one says, and why they ' +
+          'disagree. Only conflicts whose pages you may open. Newest first.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          status: z.enum(CONFLICT_STATUSES).optional().describe('Only this status; every status when omitted'),
+          documentId: z.string().uuid().optional().describe('Only conflicts with this page on either side'),
+        },
+      },
+      async ({ workspaceId, status, documentId }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json({ conflicts: await this.conflicts.list(await guard.scope(workspaceId), { status, documentId }) });
+      },
+    );
+
+    // Broad questions (#81, phase 7): the twin of GET /v1/graph/communities.
+    server.registerTool(
+      'knowledge_global_overview',
+      {
+        description:
+          'For a broad question across the whole knowledge base ("what are our main risks?"): the communities of ' +
+          'related pages closest to it, each with an agent-written summary and its pages. Read the pages before ' +
+          'relying on a detail; cite pages, not summaries. Empty until the atlas agent has built communities.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          question: z.string().min(1).max(2000),
+          limit: z.number().int().min(1).max(20).optional(),
+        },
+      },
+      async ({ workspaceId, question, limit }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json({ communities: await this.communities.overview(await guard.scope(workspaceId), question, limit ?? 5) });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_resolve_conflict',
+      {
+        description:
+          'Close an open contradiction: "resolve" when it is fixed or explained (say how in note), "dismiss" when ' +
+          'it is not a contradiction — a dismissed one stays dismissed when found again.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          conflictId: z.string().uuid(),
+          action: z.enum(['resolve', 'dismiss']),
+          note: z.string().max(1000).optional(),
+        },
+      },
+      async ({ workspaceId, conflictId, action, note }) => {
+        await guard.ws(workspaceId, 'editor');
+        if ((await this.conflicts.workspaceOf(conflictId)) !== workspaceId) {
+          throw new Error(`Conflict ${conflictId} not found in workspace ${workspaceId}`);
+        }
+        const status = action === 'resolve' ? 'resolved' : 'dismissed';
+        return this.json(await this.conflicts.close(await guard.scope(workspaceId), conflictId, status, principal.userId, note));
+      },
+    );
+
     server.registerTool(
       'knowledge_get_historical_context',
       {
         description:
           'What the knowledge base stated about an entity at a given revision (plan.md §11 historical queries): ' +
-          'the fact snapshot at that point in the revision DAG, plus the entity\u2019s current neighborhood for contrast.',
+          'the fact snapshot at that point in the revision DAG, plus the entity\u2019s current neighborhood for contrast. ' +
+          'Give asOf instead of atRevisionId for the whole workspace\u2019s view of the entity at a date or release tag.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           entityId: z.string().min(1).describe('Entity key, e.g. "service:identity"'),
-          atRevisionId: z.string().uuid(),
+          atRevisionId: z.string().uuid().optional().describe('One page revision; give this or asOf'),
+          asOf: z.string().optional().describe(MCP_AS_OF),
+          knownAt: z.string().optional().describe(MCP_KNOWN_AT),
         },
       },
-      async ({ workspaceId, entityId, atRevisionId }) => {
+      async ({ workspaceId, entityId, atRevisionId, asOf, knownAt }) => {
         await guard.ws(workspaceId, 'viewer');
+        if (!atRevisionId) {
+          // #81: the entity's neighbourhood across every page, as of a point.
+          const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
+          if (!at) throw new Error('Give atRevisionId or asOf');
+          const scope = await guard.scope(workspaceId);
+          const [then, now] = await Promise.all([
+            this.entities.neighbors(scope, entityId, 1, undefined, at).catch(() => null),
+            this.entities.neighbors(scope, entityId, 1).catch(() => null),
+          ]);
+          return this.json({ entityId, resolvedAsOf: at.resolved, neighborhoodAsOf: then, currentNeighborhood: now });
+        }
         const revision = await this.prisma.documentRevision.findUnique({
           where: { id: atRevisionId },
           include: { document: true },
@@ -1559,7 +1768,7 @@ export class McpService {
         description: 'How to use this knowledge base well: the workspaces you can reach, the tools, and the flows.',
         mimeType: 'text/markdown',
       },
-      async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'text/markdown', text: await this.skillFor(principal) }] }),
+      async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'text/markdown', text: await this.skillFor(principal, undefined, extras) }] }),
     );
     server.registerPrompt(
       'guide',
@@ -1568,7 +1777,7 @@ export class McpService {
         description: 'Load the knowledge-platform skill into the conversation before working with this knowledge base.',
       },
       async () => ({
-        messages: [{ role: 'user', content: { type: 'text', text: await this.skillFor(principal) } }],
+        messages: [{ role: 'user', content: { type: 'text', text: await this.skillFor(principal, undefined, extras) } }],
       }),
     );
 
@@ -1592,6 +1801,7 @@ export class McpService {
           const id = String(documentId);
           await guard.doc(id, 'viewer');
           const result = await this.aiReadable.pageMarkdown(id, { frontmatter: false });
+          if (result.status === 200) void this.analytics.view(caller, id);
           return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: result.status === 200 ? result.body : '' }] };
         },
       );
@@ -1635,11 +1845,15 @@ export class McpService {
       json: (value) => this.json(value),
     });
 
+    if (extras.drafts?.enabled) {
+      registerDraftTools(server, { drafts: extras.drafts, principal, guard, json: (value) => this.json(value) });
+    }
+
     return { server, tools: settleTools(handles, principal) };
   }
 
   /** The SKILL.md for `principal` — see skill.ts. `url` overrides the endpoint it names. */
-  async skillFor(principal: Principal, url?: string): Promise<string> {
+  async skillFor(principal: Principal, url?: string, extras: McpExtras = {}): Promise<string> {
     return renderSkill({
       url: url ?? this.publicUrl(),
       serverName: MCP_SERVER_NAME,
@@ -1647,7 +1861,7 @@ export class McpService {
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
       webUrl: this.webUrl(),
       whoami: await this.whoami(principal),
-      tools: this.toolsFor(principal),
+      tools: this.toolsFor(principal, extras),
     });
   }
 

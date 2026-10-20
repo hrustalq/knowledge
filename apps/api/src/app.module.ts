@@ -20,6 +20,7 @@ import { EntitiesModule } from './entities/entities.module.js';
 import { ActivityModule } from './activity/activity.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { EventsApiModule } from './events/events-api.module.js';
+import { CollabModule } from './collab/collab.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 import { ConnectorsModule } from './connectors/connectors.module.js';
 import { DriftModule } from './connectors/drift/drift.module.js';
@@ -32,6 +33,7 @@ import { WorkflowMaterializeModule } from './workflows/workflow-materialize.modu
 import { TemplatesModule } from './templates/templates.module.js';
 import { ComponentsModule } from './components/components.module.js';
 import { ApiSpecsModule } from './api-specs/api-specs.module.js';
+import { AnalyticsModule } from './analytics/analytics.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { McpHttpModule } from './mcp/mcp-http.module.js';
@@ -39,6 +41,9 @@ import { AiReadableModule } from './ai-readable/ai-readable.module.js';
 import { FeedbackModule } from './feedback/feedback.module.js';
 import { VerificationModule } from './verification/verification.module.js';
 import { QualityModule } from './quality/quality.module.js';
+import { TemporalModule } from './temporal/temporal.module.js';
+import { ConflictsModule } from './conflicts/conflicts.module.js';
+import { CommunitiesModule } from './communities/communities.module.js';
 import { PublishingModule } from './publishing/publishing.module.js';
 import { PublicModule } from './public/public.module.js';
 import { ExportModule } from './export/export.module.js';
@@ -68,6 +73,7 @@ import { ChatModule } from './chat/chat.module.js';
     ActivityModule,
     NotificationsModule,
     EventsApiModule,
+    CollabModule,
     AssistantModule,
     AiModule,
     ConnectorsModule,
@@ -97,6 +103,15 @@ import { ChatModule } from './chat/chat.module.js';
     // Docs quality reads (#74, phase 5). API-only: the controller; the scores
     // are the worker auditor's, and MCP loads QualityCoreModule.
     QualityModule,
+    // Release tags and the graph timeline (#81, phase 2). API-only: the
+    // controller; MCP loads TemporalCoreModule.
+    TemporalModule,
+    // Contradictions between pages (#81, phase 5). API-only: the controller;
+    // the worker's arbiter and MCP load ConflictsCoreModule.
+    ConflictsModule,
+    // Community summaries for global questions (#81, phase 7). API-only: the
+    // controller; the assistant and MCP load CommunitiesCoreModule.
+    CommunitiesModule,
     // Share links (docs/features/43, issue #77). API-only: the management
     // routes, and the anonymous /v1/public reader with its rate limiter.
     PublishingModule,
@@ -113,6 +128,9 @@ import { ChatModule } from './chat/chat.module.js';
     // MCP over Streamable HTTP at /v1/mcp (docs/features/33) — the stdio
     // server's tools, bound per request to the caller's principal.
     McpHttpModule,
+    // Usage analytics (#79): the page-view beacon. API-only; recording is
+    // AnalyticsCoreModule's, which search, MCP and the worker load.
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

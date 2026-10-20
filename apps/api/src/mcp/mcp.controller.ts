@@ -7,7 +7,9 @@ import { CAPTURE_KIT_CLIENTS, type CaptureKitResponse, type McpConnectionInfo } 
 import { CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { MCP_SERVER_NAME } from './mcp-tools.js';
-import { MCP_SERVER_VERSION, McpService } from './mcp.service.js';
+import { noTrackOf } from '../analytics/analytics.recorder.js';
+import { CollabDraftToolsService } from '../collab/collab-draft-tools.service.js';
+import { MCP_SERVER_VERSION, McpService, type McpExtras } from './mcp.service.js';
 
 /**
  * MCP over Streamable HTTP (docs/features/33): the stdio server's tool set,
@@ -31,10 +33,16 @@ import { MCP_SERVER_VERSION, McpService } from './mcp.service.js';
 export class McpController {
   private readonly logger = new Logger(McpController.name);
 
+  /** The draft tools need the collab gateway, which only this process has (#316). */
+  private readonly extras: McpExtras;
+
   constructor(
     private readonly mcp: McpService,
     private readonly config: ConfigService,
-  ) {}
+    drafts: CollabDraftToolsService,
+  ) {
+    this.extras = { drafts };
+  }
 
   @Post()
   @ReadKeyOk()
@@ -42,7 +50,7 @@ export class McpController {
     summary: 'MCP Streamable HTTP endpoint (JSON-RPC). Point an MCP client here with a Bearer API key',
   })
   async handle(@CurrentPrincipal() principal: Principal, @Req() req: Request, @Res() res: Response): Promise<void> {
-    const { server } = this.mcp.buildServer(principal);
+    const { server } = this.mcp.buildServer(principal, { ...this.extras, noTrack: noTrackOf(req.headers) });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => {
       void transport.close();
@@ -69,7 +77,7 @@ export class McpController {
       serverName: MCP_SERVER_NAME,
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
       version: MCP_SERVER_VERSION,
-      tools: this.mcp.toolsFor(principal),
+      tools: this.mcp.toolsFor(principal, this.extras),
     };
   }
 
@@ -81,7 +89,7 @@ export class McpController {
       'SKILL.md for an AI agent using this knowledge base over MCP, generated for the caller (workspaces, projects, offered tools)',
   })
   skill(@CurrentPrincipal() principal: Principal): Promise<string> {
-    return this.mcp.skillFor(principal);
+    return this.mcp.skillFor(principal, undefined, this.extras);
   }
 
   /*

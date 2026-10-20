@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import request from 'supertest';
 import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
 import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
+import { AnalyticsRecorder } from '../src/analytics/analytics.recorder.js';
 import { DocumentsService } from '../src/documents/documents.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import matter from 'gray-matter';
@@ -274,6 +275,7 @@ describe('GET /v1/documents/:id/markdown', () => {
         { provide: PrismaService, useValue: f.prisma },
         { provide: DocumentsService, useValue: f.documents },
         { provide: ConfigService, useValue: f.config },
+        { provide: AnalyticsRecorder, useValue: { view: vi.fn(async () => undefined) } },
       ],
     }).compile();
     app = mod.createNestApplication();

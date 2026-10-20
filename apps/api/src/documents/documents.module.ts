@@ -1,4 +1,7 @@
+import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
+import { CommunitiesCoreModule } from '../communities/communities-core.module.js';
 import { Module } from '@nestjs/common';
+import { TemporalCoreModule } from '../temporal/temporal-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { GraphModule } from '../graph/graph.module.js';
 import { IngestionModule } from '../ingestion/ingestion.module.js';
@@ -29,6 +32,7 @@ import { PermissionsCoreModule } from '../permissions/permissions-core.module.js
 import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { EntitiesModule } from '../entities/entities.module.js';
 import { LintCoreModule } from './lint/lint-core.module.js';
+import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
 
 /**
  * API side. DocumentsService itself lives in DocumentsCoreModule (worker-safe);
@@ -38,6 +42,14 @@ import { LintCoreModule } from './lint/lint-core.module.js';
 @Module({
   imports: [
     DocumentsCoreModule,
+    // A key's page read is a view (#79).
+    AnalyticsCoreModule,
+    // `asOf` on the graph and content routes (#81). Controller-free.
+    TemporalCoreModule,
+    // A merge resolves the conflicts it was proposed to fix (#81).
+    ConflictsCoreModule,
+    // Community colouring on the workspace graph (#81).
+    CommunitiesCoreModule,
     ActivityModule,
     StorageModule,
     GraphModule,

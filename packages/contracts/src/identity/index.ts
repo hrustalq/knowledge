@@ -63,6 +63,7 @@ export const AUDIT_ACTIONS = [
   'ai-readable.llms-full',
   'api.try',
   'feedback.export',
+  'analytics.export',
   'merge-request.lint-override',
   'auth.login',
   'auth.login_failed',
@@ -442,6 +443,8 @@ export const SSO_LOGIN_ERRORS = [
   'domain-not-allowed',
   'jit-disabled',
   'account-disabled',
+  /** The fragment code was unknown, expired or already spent (POST /v1/auth/sso/exchange). */
+  'exchange-invalid',
   'failed',
 ] as const;
 export type SsoLoginError = (typeof SSO_LOGIN_ERRORS)[number];
@@ -452,6 +455,8 @@ export interface SessionView {
   authMethod: AuthMethod;
   /** identity_providers.id for an SSO login. */
   providerId: string | null;
+  /** That provider's login-button name, while the provider still exists (#292). */
+  providerName: string | null;
   ip: string | null;
   userAgent: string | null;
   createdAt: string;
@@ -581,12 +586,21 @@ export interface FactTimelineEntry {
   type: string;
   targetKey: string;
   extractor: FactExtractor | string;
-  status: 'active' | 'removed';
+  /**
+   * `removed`: a later revision stopped asserting it. `retracted` (#81): a
+   * person withdrew it, or a re-extraction of the same revision dropped it —
+   * the page did not change, the belief did.
+   */
+  status: 'active' | 'removed' | 'retracted';
   introducedInRevisionId: string | null;
   introducedAt: string | null;
   /** First later revision that asserted facts without this one (removed-facts audit). */
   removedInRevisionId: string | null;
   removedAt: string | null;
+  /** When the fact was retracted (#81); null unless `status` is `retracted`. */
+  retractedAt: string | null;
+  /** `user:<id>` or `extractor`; null unless `status` is `retracted`. */
+  retractedBy: string | null;
 }
 
 // GET /v1/documents/:id/facts/timeline?branch=

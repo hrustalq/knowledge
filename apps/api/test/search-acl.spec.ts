@@ -115,6 +115,8 @@ function build(opts: {
     } as never,
     permissions,
     config as never,
+    // No asOf: every search here reads the live projection (#81).
+    { resolve: async () => undefined } as never,
   );
   return { svc, graph, permissions, prisma };
 }

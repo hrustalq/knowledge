@@ -8,6 +8,7 @@ import type {
   TraceRelationResponse,
 } from '@knowledge/contracts';
 import { GraphService, type WorkspaceRelationGraph } from '../graph/graph.service.js';
+import type { TemporalPoint } from '../graph/temporal.js';
 import { bfs, buildAdjacency, docIdOf, docNode, isDocNode, shortestPath } from '../graph/graph-walk.js';
 import { t } from '../i18n/t.js';
 import { PermissionService } from '../permissions/permission.service.js';
@@ -30,9 +31,10 @@ export class EntitiesService {
    * cannot open go, those pages go, and so does every entity only those pages
    * mention — otherwise a restricted page leaks the names it introduces.
    * GraphService does the pruning; this only supplies the caller's filter.
+   * `at` (#81) reads the graph as it stood then, under the same filter.
    */
-  private async graphFor(scope: AccessScope): Promise<WorkspaceRelationGraph> {
-    return this.graph.getWorkspaceRelationGraph(scope.workspaceId, await this.permissions.documentFilterFor(scope));
+  private async graphFor(scope: AccessScope, at?: TemporalPoint): Promise<WorkspaceRelationGraph> {
+    return this.graph.getWorkspaceRelationGraph(scope.workspaceId, await this.permissions.documentFilterFor(scope), at);
   }
 
   /**
@@ -43,8 +45,9 @@ export class EntitiesService {
   async listEntities(
     scope: AccessScope,
     opts: { type?: string; q?: string; limit?: number } = {},
+    at?: TemporalPoint,
   ): Promise<ListEntitiesResponse> {
-    const g = await this.graphFor(scope);
+    const g = await this.graphFor(scope, at);
     const degree = new Map<string, number>();
     for (const e of g.edges) degree.set(e.targetKey, (degree.get(e.targetKey) ?? 0) + 1);
 
@@ -93,8 +96,9 @@ export class EntitiesService {
     entityKey: string,
     depth = 1,
     relationTypes?: string[],
+    at?: TemporalPoint,
   ): Promise<EntityNeighborsResponse> {
-    const g = await this.graphFor(scope);
+    const g = await this.graphFor(scope, at);
     const entity = this.entityRef(g, entityKey);
     const adj = buildAdjacency(g.edges, relationTypes);
 
@@ -132,8 +136,9 @@ export class EntitiesService {
     entityKey: string,
     direction: 'dependents' | 'dependencies' = 'dependents',
     maxDepth = 3,
+    at?: TemporalPoint,
   ): Promise<ImpactAnalysisResponse> {
-    const g = await this.graphFor(scope);
+    const g = await this.graphFor(scope, at);
     const entity = this.entityRef(g, entityKey);
     const adj = buildAdjacency(g.edges);
 
@@ -172,8 +177,9 @@ export class EntitiesService {
     fromKey: string,
     toKey: string,
     maxDepth = 4,
+    at?: TemporalPoint,
   ): Promise<TraceRelationResponse> {
-    const g = await this.graphFor(scope);
+    const g = await this.graphFor(scope, at);
     this.entityRef(g, fromKey);
     this.entityRef(g, toKey);
     const adj = buildAdjacency(g.edges);

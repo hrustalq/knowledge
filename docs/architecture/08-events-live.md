@@ -79,11 +79,11 @@ below), and merges in a 30-second `{ type: 'ping' }` heartbeat so proxies do not
 close an idle connection.
 
 `EventSource` cannot set headers, so the route is marked `@QueryTokenOk()` and
-`AuthGuard` accepts `?token=` on it — the same accommodation `<img>` tags need
-for attachments. No other HTTP route reads a query token (#102). The token is a
-single-use `kt_` ticket from `POST /v1/auth/url-ticket` (a `kn_` key in a URL is
-refused), so `stores/events.ts` reconnects by hand with a fresh ticket rather
-than relying on `EventSource`'s own retry.
+`AuthGuard` accepts `?token=` on it. No other HTTP route reads a query token
+(#102; `<img>` asset routes read the session cookie instead). The token is a
+single-use `kt_` ticket from `POST /v1/auth/url-ticket` (a `kn_` key or `ks_`
+session in a URL is refused), so `stores/events.ts` reconnects by hand with a
+fresh ticket rather than relying on `EventSource`'s own retry.
 
 Two ordering rules inside the subscriber are load-bearing and were both bugs
 first. The `message` listener is registered **before** the subscribe and outside
@@ -149,6 +149,32 @@ plain objects.
   would have been.
 
 A 30-second ping/pong heartbeat terminates sockets that stop answering.
+
+## The second gateway: `/v1/collab`
+
+Co-editing ([feature 56](../features/56-realtime-coediting.md)) runs a second
+`@WebSocketGateway` on the same `WsAdapter` and port. It shares none of the
+above protocol: it hands each socket to an embedded Hocuspocus, which speaks
+binary y-protocols frames and multiplexes documents. What it shares is the
+stance:
+
+- **It authenticates itself**, per document: only a single-use `kt_` ticket is
+  accepted (no `ks_`/`kn_` in a socket URL), and page permissions decide view
+  or edit. Outcomes are per-document reasons, not close codes; the only close
+  code is 4503 with `COLLAB_ENABLED` off. `LIVE_WS_ENABLED` does not switch it
+  off.
+- **CRDT traffic never rides `knowledge:events`.** Updates and awareness go
+  between instances through `@hocuspocus/extension-redis` on its own
+  connections (`kn:collab` prefix). The bus carries only the two things a
+  page needs to *react* to, `draft.changed` and `draft.reset`. Both are
+  deliberately outside `document.*`, so an editor joining does not reload the
+  page, toast, or offer a workflow trigger.
+- **`acl.changed` re-judges open connections** of that workspace, exactly as
+  it narrows a `/v1/events/ws` subscription, plus a
+  `COLLAB_REAUTH_INTERVAL_SECONDS` sweep for role changes, which have no event.
+- **A lost `draft.reset` heals itself.** Each instance closes its own peers on
+  the event, and a store from a doc loaded before the reset is refused and
+  closes them anyway.
 
 ## Access control, then tracking
 

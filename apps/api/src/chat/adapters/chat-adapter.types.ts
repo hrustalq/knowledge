@@ -58,6 +58,34 @@ export interface ChatInbound {
    * untouched, and only for buttons this bot sent.
    */
   action: { id: string; data: string } | null;
+  /** When the message was sent; absent where the platform did not say. */
+  at?: Date;
+  /**
+   * The message this one replies to, whoever wrote it, as the platform
+   * delivered it — where a Telegram `/capture` starts reading (#82). The text
+   * is raw: never stored, only handed to a harvest, which masks it.
+   */
+  replyTo?: ChatQuotedMessage | null;
+  /** Forwarded into the chat: the original's author and time (#82). */
+  forwardedFrom?: { authorId: string; at: Date } | null;
+  /** A Telegram forum topic the message is in; null outside one. */
+  topicId?: string | null;
+  /**
+   * Not a message but the harvest reaction (#82) — 📌 on Time, ✍ on Telegram,
+   * which has no 📌 — just added by this person to message `messageId`. `text`
+   * is empty: neither platform says what the message was.
+   */
+  harvestReaction?: boolean;
+}
+
+/** A message another one quotes by replying to it. */
+export interface ChatQuotedMessage {
+  messageId: string;
+  authorId: string;
+  /** Empty for a message with no text (a topic's opening, a photo with no caption). */
+  text: string;
+  at: Date;
+  fromBot: boolean;
 }
 
 /** Where a message goes. */
@@ -135,6 +163,22 @@ export interface ChatUpdatesView {
 
 export type ChatView = ChatAnswerView | ChatNoticeView | ChatUpdatesView;
 
+/** One message of a thread read for a harvest (#82): who wrote it, as the platform's opaque id. */
+export interface ChatThreadMessage {
+  authorId: string;
+  text: string;
+  at: Date;
+}
+
+/** A thread as a harvest reads it: people's messages only, oldest first. */
+export interface ChatThread {
+  messages: ChatThreadMessage[];
+  /** A link to the thread, where the platform has one. */
+  url: string | null;
+  /** Messages left out to stay within the cap. */
+  truncated: boolean;
+}
+
 /** What a call to the platform needs; built per call from the integration row. */
 export interface ChatAdapterContext {
   token: string;
@@ -201,6 +245,23 @@ export interface ChatAdapter {
    * where messages arrive over the bot's websocket instead (Time).
    */
   registerWebhook(ctx: ChatAdapterContext, url: string, secret: string): Promise<void>;
+  /**
+   * The thread `messageId` is in, up to (not including) `beforeMessageId` —
+   * the command that asked for it; all of it for a reaction (null) — and at
+   * most `max` messages: the root and the newest replies. Bots' and system
+   * messages are left out. Absent on a platform with no thread to fetch
+   * (Telegram, whose threads are read from the listening buffer or a DM's
+   * forwards instead — `ChatBufferService`).
+   */
+  fetchThread?(
+    ctx: ChatAdapterContext,
+    chatId: string,
+    messageId: string,
+    beforeMessageId: string | null,
+    max: number,
+  ): Promise<ChatThread>;
+  /** A link to one message, where the platform has one for this chat; the origin of a harvest from the buffer. */
+  messageUrl?(chatId: string, messageId: string): string | null;
   /** A link that opens a private chat with the bot, or null if the platform has none. */
   directLink(botUsername: string | null, payload?: string): string | null;
 }

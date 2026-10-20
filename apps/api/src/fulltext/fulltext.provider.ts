@@ -1,4 +1,5 @@
 import type { DocumentAclFilter } from '../common/document-acl.js';
+import type { RevisionStamp, TemporalPoint } from '../graph/temporal.js';
 
 /**
  * Phase 5 optional BM25 layer (plan.md §11): pluggable full-text provider,
@@ -47,11 +48,14 @@ export interface FulltextProvider {
   setLiveRevision(workspaceId: string, documentId: string, revisionId: string | null): Promise<void>;
   /** Rewrite the `aclNodes` stamp on every row of a page after its restrictions changed (#76). */
   restamp(workspaceId: string, documentId: string, aclNodes: string[]): Promise<void>;
+  /** Mirror `GraphService.stampRevisions` (#81): each revision's valid-time interval and lineage. */
+  stampRevisions(workspaceId: string, documentId: string, stamps: readonly RevisionStamp[]): Promise<void>;
   /**
    * Workspace predicate is mandatory (plan.md §6 security note). Live rows
-   * only, and only pages `acl` admits (#76).
+   * only — or, with `at` (#81), the rows whose interval covers it — and only
+   * pages `acl` admits (#76).
    */
-  search(workspaceId: string, query: string, k: number, acl: DocumentAclFilter): Promise<FulltextHit[]>;
+  search(workspaceId: string, query: string, k: number, acl: DocumentAclFilter, at?: TemporalPoint): Promise<FulltextHit[]>;
 }
 
 export class NoopFulltextProvider implements FulltextProvider {
@@ -60,6 +64,7 @@ export class NoopFulltextProvider implements FulltextProvider {
   async deleteRevision(): Promise<void> {}
   async setLiveRevision(): Promise<void> {}
   async restamp(): Promise<void> {}
+  async stampRevisions(): Promise<void> {}
   async search(): Promise<FulltextHit[]> {
     return [];
   }

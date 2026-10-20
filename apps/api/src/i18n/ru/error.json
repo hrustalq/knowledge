@@ -8,7 +8,7 @@
     "accountDisabled": "Учётная запись отключена",
     "unknownApiKey": "Неизвестный API-ключ",
     "invalidUrlTicket": "Билет доступа в ссылке недействителен, истёк или уже использован",
-    "apiKeyInUrl": "API-ключи в URL не принимаются. Передайте ключ в заголовке Authorization: Bearer или обменяйте его на одноразовый билет через POST /v1/auth/url-ticket",
+    "credentialInUrl": "В URL принимается только одноразовый билет. Передайте API-ключ или сессию в заголовке Authorization: Bearer или обменяйте их на билет через POST /v1/auth/url-ticket",
     "invalidCredentials": "Неверный адрес электронной почты или пароль",
     "invalidResetToken": "Ссылка для сброса пароля недействительна или истекла",
     "noPasswordInDevMode": "В режиме AUTH_MODE=none пароля нет, менять нечего",
@@ -86,6 +86,12 @@
     "exists": "Ветка {name} уже существует в документе {documentId}",
     "headMoved": "Голова ветки {name} — {actual}, а не {expected}; сравните изменения и повторите",
     "needsFinalized": "Ревизия {id} — {status}; ветку можно создать только от финализированной ревизии"
+  },
+  "collab": {
+    "branchNotFound": "У документа {documentId} нет ветки {branch}",
+    "draftMismatch": "Черновик {draftId} не является общим черновиком ветки {branch} документа {documentId}",
+    "draftNotFound": "У ветки {branchId} документа {documentId} нет общего черновика",
+    "snapshotInvalid": "draftSnapshot не является снимком Y"
   },
   "revision": {
     "notFoundOnDocument": "Ревизия {revisionId} не найдена в документе {documentId}",
@@ -182,6 +188,7 @@
     "notFound": "Задача индексации {id} не найдена"
   },
   "ai": {
+    "disabled": "Агент «Черновик» отключён в этом рабочем пространстве, поэтому эта ИИ-подсказка недоступна.",
     "skillNotFound": "Навык {id} не найден",
     "skillNameTaken": "Навык с названием «{name}» уже есть в этом рабочем пространстве",
     "pluginNotFound": "Плагин {id} не найден",
@@ -363,7 +370,17 @@
     "identityNotFound": "У этого коннектора нет внешней учётной записи {id}.",
     "identityNotMember": "Сопоставить внешнюю учётную запись можно только с участником этого пространства.",
     "guidanceNotARepository": "Коннектор {name} — не репозиторий: файлы инструкций читаются только из коннекторов «Кодовая база» и «Markdown / Git»",
-    "specNoAssist": "Спецификация API синхронизируется как есть; помощники ИИ переписывают markdown и для неё недоступны"
+    "specNoAssist": "Спецификация API синхронизируется как есть; помощники ИИ переписывают markdown и для неё недоступны",
+    "googleDrive": {
+      "badKey": "Это не JSON-ключ сервисного аккаунта Google (нужны client_email и private_key)",
+      "badId": "«{id}» не похоже на идентификатор Google Drive",
+      "notAFolder": "{name} — это файл, а не папка или общий диск",
+      "unsupported": "Файл {name} ({type}) нельзя импортировать",
+      "tooLarge": "Файл {name} слишком большой для импорта",
+      "groupsNeedSubject": "Чтобы читать группы Google, нужно делегирование на уровне домена: укажите администратора в поле «Act as user»",
+      "noStartToken": "Google Drive не вернул начальный маркер ленты изменений",
+      "noToken": "Google не выдал токен доступа для этого сервисного аккаунта"
+    }
   },
   "routeNotFound": "Маршрут {method} {path} не найден",
   "validationFailed": "Проверка данных не пройдена",
@@ -466,6 +483,7 @@
     "expiryInPast": "Срок действия должен быть в будущем",
     "rateLimited": "Слишком много запросов — попробуйте через минуту",
     "unlockRateLimited": "Слишком много попыток ввода пароля — попробуйте позже",
+    "exportRateLimited": "По этой ссылке запрошено слишком много скачиваний — попробуйте позже",
     "locked": "Ссылка защищена паролем",
     "restricted": "Страницу с ограниченным доступом нельзя открыть по ссылке. Выдайте доступ тем, кому он нужен"
   },
@@ -551,7 +569,11 @@
     "serverUrlInvalid": "Это не адрес сервера — ожидается что-то вроде https://time.example.com",
     "serverUrlNotHttps": "Сервер мессенджера должен использовать https (http допустим только при CHAT_ALLOW_PRIVATE_URLS)",
     "serverUrlPrivate": "Адрес {address} находится в частной сети; разрешите его через CHAT_ALLOW_PRIVATE_URLS",
-    "serverHostUnresolved": "Не удалось разрешить хост {host}"
+    "serverHostUnresolved": "Не удалось разрешить хост {host}",
+    "listenTelegramOnly": "Хранить сообщения для сбора можно только в группах Telegram: треды Time и Mattermost читаются целиком",
+    "listenNoticeFailed": "Бот не смог сообщить группе, что хранит сообщения, поэтому ничего не хранится: {reason}",
+    "autoHarvestNeedsListening": "Автоматический сбор читает сохранённые сообщения группы: сначала включите хранение сообщений",
+    "autoHarvestNoticeFailed": "Бот не смог сообщить группе, что её треды будут собираться автоматически, поэтому сбор не включён: {reason}"
   },
   "group": {
     "notFound": "Группа {id} не найдена",
@@ -699,5 +721,21 @@
     "tokenLimit": "В пространстве уже {max} действующих токенов SCIM — отзовите один, прежде чем создать новый.",
     "tokenNotFound": "Токен SCIM не найден",
     "mappingGroup": "Выберите группу, которую создал SCIM-клиент пространства"
+  },
+  "temporal": {
+    "badAsOf": "asOf должен быть датой ISO, rev:<revisionId> или tag:<имя>; получено {value}",
+    "revisionNotFound": "Ревизия {id} не найдена в этом пространстве",
+    "revisionNotFinalized": "Ревизия {id} — черновик, у неё ещё нет момента времени",
+    "unknownTag": "Релизная метка {name} не найдена в этом пространстве",
+    "badWindow": "from и to должны быть датами ISO, и from раньше to"
+  },
+  "releaseTag": {
+    "notFound": "Релизная метка {id} не найдена",
+    "duplicate": "Релизная метка {name} уже есть в этом пространстве"
+  },
+  "conflict": {
+    "notFound": "Конфликт {id} не найден",
+    "notOpen": "Этот конфликт уже не открыт",
+    "alreadyProposed": "Исправление для этого конфликта уже предложено"
   }
 }

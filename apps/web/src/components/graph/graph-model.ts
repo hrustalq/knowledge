@@ -17,9 +17,25 @@ export interface GraphNodeInput {
   degree?: number
   /** Entity hops from a root, when the source was a neighbourhood query. */
   distance?: number
+  /** Documents only: the community the atlas put the page in (#81). */
+  community?: string
 }
 
-export type GraphEdgeInput = Pick<DocumentGraphEdge, 'from' | 'to' | 'type' | 'extractor' | 'confidence'>
+/**
+ * How an edge differs from now when the graph shows a past point with its
+ * changes (#81): `ended` was true then and is not now, `added` is true now and
+ * was not then. Absent on an edge that holds at both points.
+ */
+export type EdgeChange = 'ended' | 'added'
+
+export type GraphEdgeInput = Pick<DocumentGraphEdge, 'from' | 'to' | 'type' | 'extractor' | 'confidence'> & {
+  change?: EdgeChange
+}
+
+export interface GraphPair {
+  nodes: GraphNodeInput[]
+  edges: GraphEdgeInput[]
+}
 
 export interface GraphOptions {
   /** Off collapses the bipartite graph into page-to-page links via shared entities. */
@@ -34,6 +50,8 @@ export interface GraphOptions {
   linkDistance: number
   /** Zoom past which every label is drawn. Below it, only the loud ones. */
   labelZoom: number
+  /** #81: fill pages by their community instead of the one structural ink. */
+  colorByCommunity: boolean
 }
 
 export const DEFAULT_OPTIONS: GraphOptions = {
@@ -44,6 +62,7 @@ export const DEFAULT_OPTIONS: GraphOptions = {
   repel: 1,
   linkDistance: 1,
   labelZoom: 0.62,
+  colorByCommunity: false,
 }
 
 /**
@@ -161,5 +180,32 @@ export function toGraphNodes(nodes: WorkspaceGraphNode[]): GraphNodeInput[] {
     entityType: n.entityType,
     status: n.status ?? null,
     degree: n.degree,
+    ...(n.community ? { community: n.community } : {}),
   }))
+}
+
+/**
+ * The graph at a past point, overlaid with what changed since (#81): every
+ * edge of `past`, those `now` no longer has marked `ended`, plus every edge
+ * only `now` has, marked `added` — with the nodes it needs. An edge is its
+ * (from, type, to); provenance changing under the same claim is not a change.
+ */
+export function diffSince(past: GraphPair, now: GraphPair): GraphPair {
+  const key = (e: GraphEdgeInput) => `${e.from}\u0000${e.type}\u0000${e.to}`
+  const pastKeys = new Set(past.edges.map(key))
+  const nowKeys = new Set(now.edges.map(key))
+  const edges: GraphEdgeInput[] = [
+    ...past.edges.map((e) => (nowKeys.has(key(e)) ? e : { ...e, change: 'ended' as const })),
+    ...now.edges.filter((e) => !pastKeys.has(key(e))).map((e) => ({ ...e, change: 'added' as const })),
+  ]
+  const nodes = new Map(past.nodes.map((n) => [n.id, n]))
+  const nowById = new Map(now.nodes.map((n) => [n.id, n]))
+  for (const e of edges) {
+    if (e.change !== 'added') continue
+    for (const id of [e.from, e.to]) {
+      const n = nowById.get(id)
+      if (n && !nodes.has(id)) nodes.set(id, n)
+    }
+  }
+  return { nodes: [...nodes.values()], edges }
 }

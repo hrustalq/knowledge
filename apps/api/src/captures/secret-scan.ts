@@ -7,7 +7,7 @@
  * Shapes, not entropy: a false positive costs the agent one rewrite, a missed
  * key costs a rotation. Each pattern is a prefix a vendor documents.
  */
-const SECRET_PATTERNS: ReadonlyArray<readonly [name: string, re: RegExp]> = [
+export const SECRET_PATTERNS: ReadonlyArray<readonly [name: string, re: RegExp]> = [
   ['knowledge-api-key', /\bk[ns]_[A-Za-z0-9_-]{20,}/],
   ['github-token', /\bgh[pousr]_[A-Za-z0-9]{30,}/],
   ['github-pat', /\bgithub_pat_[A-Za-z0-9_]{22,}/],

@@ -5,7 +5,7 @@ import { vmsg } from '../common/validation.js';
 
 /** Exports (docs/features/45). */
 export class CreateProjectExportDto {
-  @ApiProperty({ enum: EXPORT_FORMATS, description: '`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL' })
+  @ApiProperty({ enum: EXPORT_FORMATS, description: '`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL; `docx`: one Word document' })
   @IsIn(EXPORT_FORMATS)
   format!: ExportFormat;
 

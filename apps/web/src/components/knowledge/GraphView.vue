@@ -10,7 +10,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import type { DocumentGraphResponse } from '@knowledge/contracts'
 import { apiFetch } from '@/lib/api'
 import { Label } from '@/components/ui/label'
@@ -19,6 +19,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import KnowledgeGraph from '@/components/graph/KnowledgeGraph.vue'
 import GraphCanvas from '@/components/graph/GraphCanvas.vue'
 import { DEFAULT_OPTIONS, type GraphNodeInput } from '@/components/graph/graph-model'
+import { useGraphTime } from '@/components/graph/use-graph-time'
+import { getWorkspaceId } from '@/lib/api'
 
 const props = withDefaults(
   defineProps<{ documentId: string; variant?: 'rail' | 'full' }>(),
@@ -40,17 +42,39 @@ const stats = ref({ nodes: 0, edges: 0 })
  */
 const railOptions = computed(() => ({ ...DEFAULT_OPTIONS, labelZoom: 0.35 }))
 
-const nodes = computed<GraphNodeInput[]>(() =>
-  (graph.value?.nodes ?? []).map((n) => ({
+const toNodes = (res: DocumentGraphResponse): GraphNodeInput[] =>
+  res.nodes.map((n) => ({
     id: n.id,
     kind: n.kind,
     label: n.label,
     category: n.category,
     entityType: n.entityType,
     distance: n.distance,
-  })),
-)
-const edges = computed(() => graph.value?.edges ?? [])
+  }))
+
+/**
+ * #81: maximized, the neighbourhood can be read at a point in time. The rail
+ * widget stays on now — a 20rem column has no room for a timeline, and the
+ * page beside it is the page as it is.
+ */
+const route = useRoute()
+const graphTime = props.variant === 'full'
+  ? useGraphTime({
+      now: () => (graph.value ? { nodes: toNodes(graph.value), edges: graph.value.edges } : null),
+      fetchAt: async (asOf) => {
+        const res = await apiFetch<DocumentGraphResponse>(
+          `/v1/documents/${props.documentId}/graph?depth=${depth.value}&asOf=${encodeURIComponent(asOf)}`,
+        )
+        return { pair: { nodes: toNodes(res), edges: res.edges }, resolvedAsOf: res.resolvedAsOf }
+      },
+      scopeQuery: () => `workspaceId=${getWorkspaceId()}`,
+      initial: typeof route.query.asOf === 'string' ? route.query.asOf : null,
+    })
+  : null
+
+const shown = computed(() => (graphTime ? graphTime.display.value : graph.value ? { nodes: toNodes(graph.value), edges: graph.value.edges } : null))
+const nodes = computed<GraphNodeInput[]>(() => shown.value?.nodes ?? [])
+const edges = computed(() => shown.value?.edges ?? [])
 const hasRelations = computed(() => (graph.value?.edges.length ?? 0) > 0)
 
 async function load() {
@@ -69,8 +93,14 @@ function open(id: string) {
   if (id !== props.documentId) void router.push(`/documents/${id}`)
 }
 
-onMounted(() => void load())
-watch(depth, () => void load())
+onMounted(() => {
+  void load()
+  void graphTime?.loadTimeline()
+})
+watch(depth, () => {
+  void load()
+  graphTime?.refresh()
+})
 watch(() => props.documentId, () => void load())
 onBeforeUnmount(() => { graph.value = null })
 </script>
@@ -95,6 +125,7 @@ onBeforeUnmount(() => { graph.value = null })
         :nodes="nodes"
         :edges="edges"
         :root-id="documentId"
+        :time="graphTime"
         storage-key="kn_graph_opts_page"
         @open="open"
       />

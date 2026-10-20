@@ -21,7 +21,7 @@
  */
 import { computed, onMounted, onServerPrefetch, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { Archive, FileText, List, ListTree, Loader2, Network, Plus, SlidersHorizontal, Upload, X } from 'lucide-vue-next'
 import { formatDate } from '@/lib/format'
@@ -29,7 +29,8 @@ import { labelFor } from '@/lib/labels'
 import { useAuthStore } from '@/stores/auth'
 import { EMPTY_FILTERS, useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
-import { statusDot, statusVariant } from '@/lib/api'
+import { apiFetch, getProjectId, getWorkspaceId, statusDot, statusVariant } from '@/lib/api'
+import type { WorkspaceGraphResponse } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -40,6 +41,7 @@ import { toast } from 'vue-sonner'
 import DocumentFacets from '@/components/knowledge/DocumentFacets.vue'
 import GraphCanvas from '@/components/graph/GraphCanvas.vue'
 import { toGraphNodes } from '@/components/graph/graph-model'
+import { useGraphTime } from '@/components/graph/use-graph-time'
 import { needsAttention, verificationDotClass } from '@/components/verification/verification-ui'
 
 const { t } = useI18n()
@@ -51,6 +53,7 @@ const store = useDocumentsStore()
 provideTreeDnd((message: string) => toast.error(message))
 const projects = useProjectsStore()
 const router = useRouter()
+const route = useRoute()
 
 type View = 'graph' | 'tree' | 'list'
 const VIEW_KEY = 'kn_docs_view'
@@ -99,7 +102,10 @@ const scopeLabel = computed(() =>
     : t('documents.scopeWorkspace'),
 )
 
-onServerPrefetch(() => Promise.all([store.fetchTree(), store.fetchList({ reset: true })]))
+// The tree is usually here already: entry-server loads it for the rail (#279).
+onServerPrefetch(() =>
+  Promise.all([store.treeLoaded ? undefined : store.fetchTree(), store.fetchList({ reset: true })]),
+)
 onMounted(() => {
   try {
     const stored = localStorage.getItem(VIEW_KEY) as View | null
@@ -107,6 +113,9 @@ onMounted(() => {
   } catch {
     /* private mode */
   }
+  // An `?asOf=` link is about the graph, so it opens there (#81).
+  if (graphTime.param.value) view.value = 'graph'
+  if (view.value === 'graph') void graphTime.loadTimeline()
   if (!store.treeLoaded) void store.fetchTree()
   if (!store.loaded) void store.fetchList({ reset: true })
   if (!projects.loaded) void projects.fetchList().catch(() => undefined)
@@ -122,12 +131,42 @@ function setView(next: View) {
 // for it.
 watch(
   [view, () => projects.activeId],
-  () => { if (view.value === 'graph' && !store.graphLoaded) void store.fetchGraph() },
+  // Not during SSR: the render does not wait for it (the canvas is client-only),
+  // so the answer would only race the serialized state.
+  () => { if (!import.meta.env.SSR && view.value === 'graph' && !store.graphLoaded) void store.fetchGraph() },
   { immediate: true },
 )
 
-const graphNodes = computed(() => toGraphNodes(store.graph?.nodes ?? []))
-const graphEdges = computed(() => store.graph?.edges ?? [])
+/**
+ * #81: the graph at a point in time. "Now" is the store's graph, kept live by
+ * the event bus; a past point is its own read, never cached in the store.
+ */
+const graphTime = useGraphTime({
+  now: () => (store.graph ? { nodes: toGraphNodes(store.graph.nodes), edges: store.graph.edges } : null),
+  fetchAt: async (asOf) => {
+    const projectId = getProjectId()
+    const res = await apiFetch<WorkspaceGraphResponse>(
+      `/v1/documents/graph?workspaceId=${getWorkspaceId()}${projectId ? `&projectId=${projectId}` : ''}&asOf=${encodeURIComponent(asOf)}`,
+    )
+    return { pair: { nodes: toGraphNodes(res.nodes), edges: res.edges }, resolvedAsOf: res.resolvedAsOf }
+  },
+  scopeQuery: () => {
+    const projectId = getProjectId()
+    return `workspaceId=${getWorkspaceId()}${projectId ? `&projectId=${projectId}` : ''}`
+  },
+  initial: typeof route.query.asOf === 'string' ? route.query.asOf : null,
+})
+watch(
+  [view, () => projects.activeId],
+  ([v], [, prevProject]) => {
+    if (v !== 'graph') return
+    void graphTime.loadTimeline()
+    if (prevProject !== undefined && prevProject !== projects.activeId) graphTime.refresh()
+  },
+)
+
+const graphNodes = computed(() => graphTime.display.value?.nodes ?? [])
+const graphEdges = computed(() => graphTime.display.value?.edges ?? [])
 const hasEntities = computed(() => graphNodes.value.some((n) => n.kind === 'entity'))
 
 const isEmpty = computed(() => store.treeLoaded && store.tree.length === 0)
@@ -202,7 +241,7 @@ watch(virtualRows, (rows) => {
           @click="setView(v.id)"
         >
           <component :is="v.icon" class="size-3.5" />
-          <span class="hidden sm:inline">{{ t(v.label) }}</span>
+          <span class="sr-only sm:not-sr-only">{{ t(v.label) }}</span>
         </button>
       </div>
 
@@ -216,7 +255,7 @@ watch(virtualRows, (rows) => {
         @click="store.setShowArchived(!store.showArchived)"
       >
         <Archive class="size-4" />
-        <span class="hidden sm:inline">{{ t('verification.archived.showArchived') }}</span>
+        <span class="sr-only sm:not-sr-only">{{ t('verification.archived.showArchived') }}</span>
       </Button>
 
       <Button
@@ -228,7 +267,7 @@ watch(virtualRows, (rows) => {
         @click="filtersOpen = !filtersOpen"
       >
         <SlidersHorizontal class="size-4" />
-        <span class="hidden sm:inline">{{ t('graph.filters') }}</span>
+        <span class="sr-only sm:not-sr-only">{{ t('graph.filters') }}</span>
         <span
           v-if="store.activeFilterCount"
           class="grid size-4 place-items-center rounded-full bg-primary text-[0.625rem] font-semibold text-primary-foreground"
@@ -237,10 +276,10 @@ watch(virtualRows, (rows) => {
 
       <div v-if="auth.canEdit" class="flex gap-2">
         <Button variant="outline" size="sm" as-child>
-          <RouterLink to="/upload"><Upload class="size-4" /> <span class="hidden sm:inline">{{ t('documents.upload') }}</span></RouterLink>
+          <RouterLink to="/upload"><Upload class="size-4" /> <span class="sr-only sm:not-sr-only">{{ t('documents.upload') }}</span></RouterLink>
         </Button>
         <Button size="sm" as-child>
-          <RouterLink to="/create"><Plus class="size-4" /> <span class="hidden sm:inline">{{ t('documents.newPage') }}</span></RouterLink>
+          <RouterLink to="/create"><Plus class="size-4" /> <span class="sr-only sm:not-sr-only">{{ t('documents.newPage') }}</span></RouterLink>
         </Button>
       </div>
     </header>
@@ -273,6 +312,7 @@ watch(virtualRows, (rows) => {
             :edges="graphEdges"
             :truncated="store.graph.truncated"
             :show-entity-controls="hasEntities"
+            :time="graphTime"
             storage-key="kn_graph_opts_workspace"
             @open="(id) => router.push(`/documents/${id}`)"
           />

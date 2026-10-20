@@ -166,6 +166,7 @@ export class WorkflowExecutors {
           : {}),
       } as Parameters<SearchService['search']>[0],
       scope,
+      { principal, channel: 'agent' },
     );
     return { kind: 'context', context: results };
   }

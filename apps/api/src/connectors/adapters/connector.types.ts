@@ -90,6 +90,30 @@ export interface ExternalAcl {
   principals: ExternalPrincipal[];
 }
 
+/**
+ * Why an item left the connector's view (#338). `trashed` is the source's own
+ * bin; `removed` covers everything the feed cannot tell apart — deleted for
+ * good, no longer shared with the connector, or moved out of its scope.
+ */
+export type ExternalRemovalReason = 'trashed' | 'removed';
+
+/**
+ * What changed upstream since a cursor (#338) — the Drive Changes API, read as
+ * one page of answers.
+ *
+ * `changed` is already narrowed to the connector's scope and to what the
+ * adapter can convert, and carries `parentExternalId` so a run seeded from it
+ * still nests. `removed` is deliberately not narrowed: an item that is gone
+ * cannot have its ancestry read, so the caller keeps the ids it has a link
+ * for and ignores the rest.
+ */
+export interface ExternalChanges {
+  /** Where the next read starts. Stored only once the run that read it finishes. */
+  cursor: string;
+  changed: ExternalRef[];
+  removed: Array<{ externalId: string; reason: ExternalRemovalReason }>;
+}
+
 export interface ExternalGroupMember {
   externalId: string;
   name?: string;
@@ -147,6 +171,12 @@ export interface ConnectorContext {
    * whether this install is one before it refuses a private address.
    */
   allowPrivate: boolean;
+  /**
+   * A warning for the run as a whole, raised during discovery (#338): files
+   * the adapter will not import, said once per folder rather than never.
+   * Optional because only a pull run has somewhere to put it.
+   */
+  warn?(message: string): void;
   /**
    * Who owns this connector — `connectors.created_by` (docs/features/27).
    *
@@ -217,6 +247,17 @@ export interface ConnectorAdapter {
    * this connector's scope mentions.
    */
   groupMembers?(ctx: ConnectorContext, group: ExternalPrincipal): Promise<ExternalGroupMember[]>;
+
+  /**
+   * The source's change feed since `cursor` (#338). With a null cursor it reads
+   * nothing and returns where the feed starts now — the bookmark a full walk
+   * takes before it begins, so nothing that changes during the walk is lost.
+   *
+   * A scheduled pull with a stored cursor seeds its run from `changed` instead
+   * of walking the tree; every pull reports the linked items in `removed`.
+   * Throws when the cursor is no longer accepted; the caller then walks.
+   */
+  changes?(ctx: ConnectorContext, cursor: string | null): Promise<ExternalChanges>;
 
   /**
    * The repository's reverse-import index at the head this run read (#236).

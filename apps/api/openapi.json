@@ -749,7 +749,7 @@
             }
           }
         },
-        "summary": "Mint a single-use, short-lived kt_ ticket for ?token= on SSE (EventSource cannot set headers); API keys are refused in URLs",
+        "summary": "Mint a single-use, short-lived kt_ ticket for ?token= on SSE (EventSource cannot set headers) and for joining /v1/collab; API keys are refused in URLs",
         "tags": [
           "auth"
         ]
@@ -2824,6 +2824,71 @@
           }
         },
         "summary": "A user's live login sessions (platform admin, #75)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/v1/users/{id}/sessions/{sessionId}": {
+      "delete": {
+        "operationId": "UsersController_revokeSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Revoke one of a user's sessions (platform admin); its token gets 401 from the next request",
         "tags": [
           "users"
         ]
@@ -5236,6 +5301,24 @@
             }
           },
           {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "knownAt",
+            "required": false,
+            "in": "query",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -5507,6 +5590,24 @@
             }
           },
           {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "knownAt",
+            "required": false,
+            "in": "query",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept",
             "in": "header",
             "description": "text/markdown (ranked above application/json) answers with the same body as GET :id/markdown (issue #68)",
@@ -5747,6 +5848,24 @@
             "name": "depth",
             "required": false,
             "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "knownAt",
+            "required": false,
+            "in": "query",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
             "schema": {
               "type": "string"
             }
@@ -9378,6 +9497,24 @@
             }
           },
           {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "knownAt",
+            "required": false,
+            "in": "query",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -9638,6 +9775,24 @@
             }
           },
           {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "knownAt",
+            "required": false,
+            "in": "query",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -9715,6 +9870,24 @@
             "required": false,
             "in": "query",
             "description": "Comma-separated relation types",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "knownAt",
+            "required": false,
+            "in": "query",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
             "schema": {
               "type": "string"
             }
@@ -11377,6 +11550,177 @@
         "summary": "Live workspace events over SSE (docs/features/04). EventSource cannot set headers — in api-key mode pass ?token=<kt_ ticket> from POST /v1/auth/url-ticket (API keys are refused in URLs).",
         "tags": [
           "events"
+        ]
+      }
+    },
+    "/v1/collab/capabilities": {
+      "get": {
+        "operationId": "CollabController_capabilities",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Whether this deployment co-edits drafts, and the editor schema version a peer must match to write",
+        "tags": [
+          "collab"
+        ]
+      }
+    },
+    "/v1/documents/{id}/drafts": {
+      "get": {
+        "operationId": "CollabDraftsController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Each branch's shared draft: its base, whether it holds unpublished changes, who wrote them, who has it open",
+        "tags": [
+          "collab"
+        ]
+      }
+    },
+    "/v1/documents/{id}/drafts/{branchId}": {
+      "delete": {
+        "operationId": "CollabDraftsController_reset",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Discard a branch's shared draft: it is reseeded from the branch head, and everyone in it rejoins (reason `reset`)",
+        "tags": [
+          "collab"
         ]
       }
     },
@@ -15960,6 +16304,108 @@
           }
         },
         "summary": "Drop a per-user override — the workspace default applies again",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/agent-outcomes": {
+      "get": {
+        "operationId": "AgentOutcomesController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentKey",
+            "required": false,
+            "in": "query",
+            "description": "Only this agent's runs; answers are left out when set",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Only findings and answers citing a page of this project",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "required": false,
+            "in": "query",
+            "description": "Window start; 90 days back when absent",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "name": "split",
+            "required": false,
+            "in": "query",
+            "description": "none (the default) | prompt | model",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "none",
+                "prompt",
+                "model"
+              ]
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Per agent, how many findings were accepted, dismissed or are pending, and how answers were voted; optionally split by prompt hash or model. Derived on read from runs, merge requests and votes",
         "tags": [
           "ai"
         ]
@@ -23207,6 +23653,8 @@
                 "flagged",
                 "inactive",
                 "missing-paths",
+                "unread",
+                "dead",
                 "archived"
               ]
             }
@@ -23794,6 +24242,708 @@
         "summary": "A page's newest quality score with its issues, near-duplicate peers the caller may open, and its history. score is null until the auditor has run",
         "tags": [
           "quality"
+        ]
+      }
+    },
+    "/v1/release-tags": {
+      "get": {
+        "operationId": "ReleaseTagsController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Workspace-wide tags plus this project’s; every tag when absent",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Release tags of the workspace, oldest first",
+        "tags": [
+          "graph"
+        ]
+      },
+      "post": {
+        "operationId": "ReleaseTagsController_create",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReleaseTagDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Name an instant (now, or `at`) so the graph can be read as of it. 409 on a duplicate name",
+        "tags": [
+          "graph"
+        ]
+      }
+    },
+    "/v1/release-tags/{id}": {
+      "delete": {
+        "operationId": "ReleaseTagsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a release tag. What the graph said at that instant is unaffected",
+        "tags": [
+          "graph"
+        ]
+      }
+    },
+    "/v1/graph/timeline": {
+      "get": {
+        "operationId": "ReleaseTagsController_timeline",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Workspace-wide tags plus this project’s; every tag when absent",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Window start; 90 days before `to` when absent",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Window end; now when absent",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Markers for the graph time slider: release tags and per-day fact changes in a window",
+        "tags": [
+          "graph"
+        ]
+      }
+    },
+    "/v1/conflicts": {
+      "get": {
+        "operationId": "ConflictsController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Every status when absent",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "resolved",
+                "dismissed",
+                "superseded"
+              ]
+            }
+          },
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "doc-doc",
+                "doc-code"
+              ]
+            }
+          },
+          {
+            "name": "documentId",
+            "required": false,
+            "in": "query",
+            "description": "Only conflicts with this page on either side",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Contradictions the arbiter found, newest first; only those whose pages the caller may open",
+        "tags": [
+          "conflicts"
+        ]
+      }
+    },
+    "/v1/conflicts/{id}": {
+      "get": {
+        "operationId": "ConflictsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One conflict with both quotes",
+        "tags": [
+          "conflicts"
+        ]
+      }
+    },
+    "/v1/conflicts/{id}/resolve": {
+      "post": {
+        "operationId": "ConflictsController_resolve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseConflictDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Mark an open conflict resolved, with an optional note. 409 when it is no longer open",
+        "tags": [
+          "conflicts"
+        ]
+      }
+    },
+    "/v1/conflicts/{id}/dismiss": {
+      "post": {
+        "operationId": "ConflictsController_dismiss",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseConflictDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Dismiss an open conflict as not one. It stays dismissed when found again",
+        "tags": [
+          "conflicts"
+        ]
+      }
+    },
+    "/v1/conflicts/{id}/propose": {
+      "post": {
+        "operationId": "ConflictsController_propose",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Open a merge request that fixes the conflict on its first page. 409 when one was proposed already",
+        "tags": [
+          "conflicts"
+        ]
+      }
+    },
+    "/v1/graph/communities": {
+      "get": {
+        "operationId": "CommunitiesController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Workspace-wide tags plus this project’s; every tag when absent",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "A broad question; communities closest to it first. Largest first when absent",
+            "schema": {
+              "maxLength": 2000,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "10 when absent",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Communities of related pages with their summaries, closest to a question first",
+        "tags": [
+          "graph"
         ]
       }
     },
@@ -25508,6 +26658,147 @@
           }
         },
         "summary": "One page the link reaches: title and markdown body, frontmatter stripped",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/shares/{token}/exports": {
+      "post": {
+        "operationId": "PublicSharesController_createExport",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShareExportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "The link is locked: unlock it first"
+          },
+          "404": {
+            "description": "Dead link, or download is off"
+          },
+          "409": {
+            "description": "PDF without Gotenberg (details.reason export.formatUnavailable)"
+          },
+          "429": {
+            "description": "Too many exports from this address or link (details.reason share.exportRateLimited)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Export what the link shows as ZIP, HTML or PDF, when the link allows download (#161); poll the job",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/shares/{token}/exports/{exportId}": {
+      "get": {
+        "operationId": "PublicSharesController_getExport",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Dead link, download off, or not this link’s export"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One of this link’s exports — polled while it runs",
         "tags": [
           "public"
         ]
@@ -27495,7 +28786,7 @@
             }
           }
         },
-        "summary": "Change a group’s project, agent, answer mode or language",
+        "summary": "Change a group’s project, agent, answer mode, language, listening or automatic harvest",
         "tags": [
           "chat"
         ]
@@ -29008,12 +30299,841 @@
           "mcp"
         ]
       }
+    },
+    "/v1/analytics/overview": {
+      "get": {
+        "operationId": "AnalyticsController_overview",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Days back from now. Omitted: 30",
+            "schema": {
+              "minimum": 1,
+              "maximum": 366,
+              "type": "number"
+            }
+          },
+          {
+            "name": "traffic",
+            "required": false,
+            "in": "query",
+            "description": "Count one traffic class only. Omitted: all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "human",
+                "assisted",
+                "agent"
+              ]
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace's headline usage: views by traffic class, searches, click-through, assistant and MCP volume",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/pages": {
+      "get": {
+        "operationId": "AnalyticsController_pages",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Days back from now. Omitted: 30",
+            "schema": {
+              "minimum": 1,
+              "maximum": 366,
+              "type": "number"
+            }
+          },
+          {
+            "name": "traffic",
+            "required": false,
+            "in": "query",
+            "description": "Count one traffic class only. Omitted: all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "human",
+                "assisted",
+                "agent"
+              ]
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace's most read, never read and dead pages",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/search": {
+      "get": {
+        "operationId": "AnalyticsController_search",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Days back from now. Omitted: 30",
+            "schema": {
+              "minimum": 1,
+              "maximum": 366,
+              "type": "number"
+            }
+          },
+          {
+            "name": "traffic",
+            "required": false,
+            "in": "query",
+            "description": "Count one traffic class only. Omitted: all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "human",
+                "assisted",
+                "agent"
+              ]
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Top queries, queries that found nothing, and web searches whose results nobody opened",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/agents": {
+      "get": {
+        "operationId": "AnalyticsController_agents",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Days back from now. Omitted: 30",
+            "schema": {
+              "minimum": 1,
+              "maximum": 366,
+              "type": "number"
+            }
+          },
+          {
+            "name": "traffic",
+            "required": false,
+            "in": "query",
+            "description": "Count one traffic class only. Omitted: all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "human",
+                "assisted",
+                "agent"
+              ]
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "MCP calls by tool and by API key, and the in-app assistant's questions and model calls",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/export.csv": {
+      "get": {
+        "operationId": "AnalyticsController_export",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Days back from now. Omitted: 30",
+            "schema": {
+              "minimum": 1,
+              "maximum": 366,
+              "type": "number"
+            }
+          },
+          {
+            "name": "traffic",
+            "required": false,
+            "in": "query",
+            "description": "Count one traffic class only. Omitted: all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "human",
+                "assisted",
+                "agent"
+              ]
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "report",
+            "required": true,
+            "in": "query",
+            "description": "Which dashboard table",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pages-top",
+                "pages-never-read",
+                "pages-dead",
+                "search-top",
+                "search-zero-result",
+                "search-no-click",
+                "agents-tools",
+                "agents-keys",
+                "agents-operations"
+              ]
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One dashboard table as RFC 4180 CSV (formula cells defused); audited",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/settings": {
+      "get": {
+        "operationId": "AnalyticsController_getSettings",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace's analytics settings: what it asks for, the deployment's ceiling, and what applies",
+        "tags": [
+          "analytics"
+        ]
+      },
+      "put": {
+        "operationId": "AnalyticsController_setSettings",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAnalyticsSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set recording and retention for the workspace; null inherits the env, which is a ceiling",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/documents/{id}/insights": {
+      "get": {
+        "operationId": "AnalyticsController_insights",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One page's reading over the last 30 days: views by traffic class, unique readers, median read time",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/projects/{id}/analytics": {
+      "get": {
+        "operationId": "AnalyticsController_project",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Days back from now. Omitted: 30",
+            "schema": {
+              "minimum": 1,
+              "maximum": 366,
+              "type": "number"
+            }
+          },
+          {
+            "name": "traffic",
+            "required": false,
+            "in": "query",
+            "description": "Count one traffic class only. Omitted: all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "human",
+                "assisted",
+                "agent"
+              ]
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A project's reading: totals, the most read pages, and the pages nobody reads",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/documents/{id}/views": {
+      "post": {
+        "operationId": "AnalyticsController_view",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordPageViewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Record that the caller opened this page (the web beacon). Idempotent on viewId",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/views/{viewId}/heartbeat": {
+      "post": {
+        "operationId": "AnalyticsController_heartbeat",
+        "parameters": [
+          {
+            "name": "viewId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageViewHeartbeatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Fold a view's active read time into it. Monotonic and capped; a view the caller did not open is unchanged",
+        "tags": [
+          "analytics"
+        ]
+      }
     }
   },
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.26.0",
+    "version": "0.27.0",
     "contact": {}
   },
   "tags": [],
@@ -30308,6 +32428,15 @@
           "contentType": {
             "type": "string",
             "example": "text/markdown"
+          },
+          "collabDraftId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Published from this shared draft (#80): finalize rebases the draft onto the new revision. Must be the draft of `branch`."
+          },
+          "draftSnapshot": {
+            "type": "string",
+            "description": "Base64 `Y.encodeSnapshot` of the draft at the moment its content was serialized. Edits after it stay unpublished. Required with collabDraftId."
           }
         }
       },
@@ -30660,6 +32789,14 @@
             "default": 3,
             "minimum": 1,
             "maximum": 5
+          },
+          "asOf": {
+            "type": "string",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph."
+          },
+          "knownAt": {
+            "type": "string",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now."
           }
         },
         "required": [
@@ -30852,6 +32989,14 @@
             "default": 20,
             "minimum": 1,
             "maximum": 100
+          },
+          "asOf": {
+            "type": "string",
+            "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph."
+          },
+          "knownAt": {
+            "type": "string",
+            "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now."
           },
           "expandGraph": {
             "$ref": "#/components/schemas/ExpandGraphDto"
@@ -32447,7 +34592,8 @@
               "jira",
               "notion",
               "markdown-git",
-              "codebase"
+              "codebase",
+              "google-drive"
             ]
           },
           "name": {
@@ -33967,6 +36113,49 @@
           }
         }
       },
+      "CreateReleaseTagDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Only this project’s views; the whole workspace when absent"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._\\-/]{1,64}$",
+            "example": "v2.3",
+            "description": "Unique in the workspace"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The instant the tag names; now when absent"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "workspaceId",
+          "name"
+        ]
+      },
+      "CloseConflictDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Why — kept on the conflict"
+          }
+        }
+      },
       "CreateShareLinkDto": {
         "type": "object",
         "properties": {
@@ -33985,6 +36174,10 @@
             "minLength": 6,
             "maxLength": 200,
             "description": "Readers must enter it first"
+          },
+          "allowDownload": {
+            "type": "boolean",
+            "description": "Let readers download an export of what the link shows (#161). Omitted reads as false"
           }
         }
       },
@@ -34005,6 +36198,10 @@
             "type": "string",
             "nullable": true,
             "description": "Omit to keep; a string sets it (ends every unlocked session); null clears it"
+          },
+          "allowDownload": {
+            "type": "boolean",
+            "description": "Let readers download an export; turning it off ends downloads of finished files at once"
           }
         }
       },
@@ -34262,6 +36459,23 @@
           "password"
         ]
       },
+      "CreateShareExportDto": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "zip",
+              "html",
+              "pdf"
+            ],
+            "description": "`zip`: markdown + attachments; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL"
+          }
+        },
+        "required": [
+          "format"
+        ]
+      },
       "AskSiteDto": {
         "type": "object",
         "properties": {
@@ -34300,9 +36514,10 @@
             "enum": [
               "zip",
               "html",
-              "pdf"
+              "pdf",
+              "docx"
             ],
-            "description": "`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL"
+            "description": "`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL; `docx`: one Word document"
           },
           "branch": {
             "type": "string",
@@ -34327,9 +36542,10 @@
             "enum": [
               "zip",
               "html",
-              "pdf"
+              "pdf",
+              "docx"
             ],
-            "description": "`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL"
+            "description": "`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL; `docx`: one Word document"
           },
           "branch": {
             "type": "string",
@@ -34353,7 +36569,8 @@
             "type": "string",
             "enum": [
               "telegram",
-              "time"
+              "time",
+              "mattermost"
             ]
           },
           "name": {
@@ -34363,13 +36580,13 @@
           },
           "token": {
             "type": "string",
-            "description": "The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts). Write-only — never returned."
+            "description": "The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token). Write-only — never returned."
           },
           "serverUrl": {
             "type": "string",
             "maxLength": 500,
             "example": "https://time.example.com",
-            "description": "The messenger server, for a self-hosted platform (Time) — required there, refused for Telegram"
+            "description": "The messenger server, for a self-hosted platform (Time, Mattermost) — required there, refused for Telegram"
           },
           "defaultAgentKey": {
             "type": "string",
@@ -34503,6 +36720,14 @@
               "en",
               "ru"
             ]
+          },
+          "listening": {
+            "type": "boolean",
+            "description": "Keep this group’s messages, masked, for harvesting (#82). Telegram only; turning it on posts a notice in the group, turning it off deletes what is kept."
+          },
+          "autoHarvest": {
+            "type": "boolean",
+            "description": "Harvest this group’s quiet threads automatically (#340), as the admin who turns it on — never anyone named in the body. Needs listening; turning listening off turns this off too."
           }
         }
       },
@@ -34624,6 +36849,7 @@
               "codex",
               "gemini",
               "assistant",
+              "chat",
               "other"
             ]
           },
@@ -34821,6 +37047,82 @@
             "description": "Defaults to the question"
           }
         }
+      },
+      "UpdateAnalyticsSettingsDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "enabled": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Record usage here; null inherits ANALYTICS_ENABLED, which true cannot exceed"
+          },
+          "retentionDays": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 3650,
+            "description": "Days rows are kept; null inherits ANALYTICS_RETENTION_DAYS, and a longer value is clamped to it"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "enabled",
+          "retentionDays"
+        ]
+      },
+      "RecordPageViewDto": {
+        "type": "object",
+        "properties": {
+          "viewId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The page's own id for this view; a replay is a no-op"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The revision shown"
+          },
+          "searchId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The search this page was opened from (`searchId` of the search response)"
+          },
+          "searchRank": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "1-based rank of the clicked result"
+          },
+          "noTrack": {
+            "type": "boolean",
+            "description": "The browser asked not to be tracked (Global Privacy Control): counted, never tied to a reader"
+          }
+        },
+        "required": [
+          "viewId"
+        ]
+      },
+      "PageViewHeartbeatDto": {
+        "type": "object",
+        "properties": {
+          "activeMs": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Active read time of the view so far, in ms — the total, not a delta"
+          },
+          "noTrack": {
+            "type": "boolean",
+            "description": "As on the view: must match it, or the heartbeat changes nothing"
+          }
+        },
+        "required": [
+          "activeMs"
+        ]
       },
       "ApiErrorResponse": {
         "type": "object",

@@ -27,7 +27,8 @@ actually arrived rather than what the caller claimed. The old object is deleted
 reader mid-request is entitled to it.
 
 Reads are a redirect because `<img>` cannot send an `Authorization` header. The
-API authorizes (the route is `@QueryTokenOk()`, the SSE mechanism) and hands
+API authorizes (the route is `@CookieTokenOk()`: the web's session cookie, no
+credential in the URL, #102) and hands
 the browser a URL it can fetch directly. Disposition and content type are decided
 server-side, so an upload can never talk the browser into treating it as
 something executable — the attachments rule.
@@ -70,6 +71,13 @@ for scopes (`lib/monogram.ts`) are the normal state, not a gap waiting to be
 filled. Most people never upload anything, and "no picture" still has to read as
 *someone in particular* — the hue is what makes a tile the thing you recognise
 before you have read the label.
+
+People, project and workspace monograms and cited sites all take their colour
+from one function, `avatarColor` in `lib/avatar.ts`. It keeps the hue hashed
+from the id and lowers the lightness only as far as that hue needs for white
+initials to reach 4.5:1 (WCAG 1.4.3). HSL lightness is not perceptual: at a
+fixed 45% a yellow-green measured 2.3:1 while a blue measured 9:1.
+`lib/avatar.spec.ts` checks all 360 hues.
 
 ## Hover cards
 

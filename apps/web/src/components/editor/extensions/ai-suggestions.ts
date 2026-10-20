@@ -15,6 +15,12 @@
  * - **Discard restores the slice.** Each suggestion carries the exact slice it
  *   replaced, mapped through every later transaction.
  *
+ * In a shared draft (#80) the list lives in the Y.Doc too (`SuggestionStore`),
+ * so every peer sees the same suggestions, credited to the agent and to who
+ * asked, and any editor may keep or discard one. This tab still maps its items
+ * through its own transactions; a peer's change — or an undo — re-reads them
+ * from the store, because ProseMirror's mapping cannot follow a remote edit.
+ *
  * The motion is the one authored moment of the feature: each newly revealed
  * run of text resolves from a tinted blur into ink. Those runs are tracked as
  * *text offsets* into the suggestion rather than document positions, because
@@ -25,15 +31,20 @@
  */
 import { Extension } from '@tiptap/core'
 import type { Editor } from '@tiptap/core'
-import { DOMParser as PMDOMParser, Fragment, Slice, type Node as PMNode, type Schema } from '@tiptap/pm/model'
+import { Slice, type Node as PMNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state'
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import type { AssistantDraftEdit } from '@knowledge/contracts'
-import { draftEditNeedsAnchor } from '@knowledge/contracts'
-import { markdownToHtml } from '@/lib/markdown/render'
-import { normalizeQuote } from '@/lib/anchor-match'
+import {
+  blockIndex,
+  blockStart,
+  markdownToFragment,
+  normalizeQuote,
+  targetRange,
+  type SuggestionCredit,
+  type SuggestionEntry,
+} from '@knowledge/editor-schema/suggestions'
 import { REVEAL_MS, type RevealRun } from '@/lib/stream-reveal'
-import { projectDoc } from './comment-anchors'
 
 /** Text offsets into the suggestion's own text — its text nodes, concatenated. */
 type FreshRun = RevealRun
@@ -49,7 +60,7 @@ function textLength(doc: PMNode, from: number, to: number): number {
   return length
 }
 
-export interface AiSuggestion {
+export interface AiSuggestion extends SuggestionCredit {
   id: string
   from: number
   to: number
@@ -61,22 +72,59 @@ export interface AiSuggestion {
   /** Text length already shown, so the next frame knows what is new. */
   shownText: number
   fresh: FreshRun[]
+  /** This tab is writing it — the only one that moves it or settles it. */
+  mine: boolean
+}
+
+/**
+ * A suggestion as the shared draft holds it. Positions are top-level block
+ * indices: a suggestion always spans whole blocks, and an index is what a
+ * Y relative position resolves to without the editor's position mapping.
+ */
+export interface SharedSuggestion extends Omit<SuggestionEntry, 'clientId'> {
+  mine: boolean
+  /** Its writer is still connected; a streaming suggestion whose writer left is finished. */
+  live: boolean
+}
+
+/**
+ * The shared draft's suggestion list, implemented over the Y.Doc in
+ * `use-collab.ts` — so this file, and every page without a shared draft,
+ * never loads Yjs.
+ */
+export interface SuggestionStore {
+  /** Who this tab writes suggestions for. */
+  me: { userId: string; name: string } | null
+  read(): SharedSuggestion[]
+  /** Called once the editor's change is in the Y.Doc, so the indices match it. */
+  write(item: Omit<SharedSuggestion, 'mine' | 'live' | 'requestedBy'>): void
+  remove(ids: string[]): void
+  /** Runs when a peer changed the list, or a writer joined or left. Returns the unsubscribe. */
+  subscribe(run: () => void): () => void
+  /** A transaction carrying a peer's edit or an undo into the editor. */
+  isRemote(tr: Transaction): boolean
 }
 
 interface PluginState {
   items: AiSuggestion[]
   decorations: DecorationSet
+  /** Suggestions this transaction moved, for the store once it is synced. */
+  writes: string[]
 }
 
 type Meta =
   | { type: 'upsert'; suggestion: AiSuggestion }
   | { type: 'remove'; ids: string[] }
   | { type: 'settle' }
+  /** A peer changed the list, or a writer came or went: re-read the store. */
+  | { type: 'sync' }
 
 export const aiSuggestionsKey = new PluginKey<PluginState>('knAiSuggestions')
 
 export interface AiSuggestionsOptions {
   t: (key: string, values?: Record<string, unknown>) => string
+  /** The shared draft's list, when there is one. */
+  shared: SuggestionStore | null
 }
 
 declare module '@tiptap/core' {
@@ -103,79 +151,6 @@ function inertDocument(): Document {
   return inert
 }
 
-function markdownToFragment(markdown: string, schema: Schema): Fragment {
-  if (!markdown.trim()) return Fragment.empty
-  const container = inertDocument().createElement('div')
-  container.innerHTML = markdownToHtml(markdown)
-  return PMDOMParser.fromSchema(schema).parse(container).content
-}
-
-function markdownToText(markdown: string): string {
-  const container = inertDocument().createElement('div')
-  container.innerHTML = markdownToHtml(markdown)
-  return normalizeQuote(container.textContent ?? '')
-}
-
-/* ------------------------------------------------------------- anchors */
-
-/** Start and end of the top-level block holding `pos`. */
-function topBlock(doc: PMNode, pos: number): { from: number; to: number } {
-  const $pos = doc.resolve(Math.min(Math.max(pos, 0), doc.content.size))
-  if ($pos.depth === 0) {
-    const node = doc.childAfter($pos.pos)
-    return { from: node.offset, to: node.offset + (node.node?.nodeSize ?? 0) }
-  }
-  return { from: $pos.before(1), to: $pos.after(1) }
-}
-
-/**
- * The top-level blocks an anchor quote falls in, or null.
- *
- * The model quotes *markdown*; the document holds rendered text. Rendering the
- * quote and searching the same whitespace-folded projection comment anchors
- * use makes `**Owner:** billing` find "Owner: billing". A quote that no longer
- * matches whole — a mention or an embed renders differently — falls back to
- * its opening words and its closing words, which is still enough to name the
- * blocks.
- */
-export function resolveAnchorBlocks(doc: PMNode, anchor: string): { from: number; to: number } | null {
-  const quote = markdownToText(anchor)
-  if (!quote) return null
-  const projection = projectDoc(doc)
-  const text = projection.text
-  const find = (needle: string, from = 0) => (needle ? text.indexOf(needle, from) : -1)
-
-  let start = find(quote)
-  let end = start >= 0 ? start + quote.length - 1 : -1
-  if (start < 0) {
-    const head = quote.slice(0, 40)
-    const tail = quote.slice(-40)
-    start = find(head)
-    if (start < 0) return null
-    const tailAt = find(tail, start)
-    end = tailAt >= 0 ? tailAt + tail.length - 1 : start + head.length - 1
-  }
-  const from = projection.positions[start]
-  const to = projection.positions[end]
-  if (from === undefined || to === undefined) return null
-  return { from: topBlock(doc, from).from, to: topBlock(doc, to).to }
-}
-
-/** Where a new edit goes, before any of it has been written. */
-function targetRange(doc: PMNode, edit: AssistantDraftEdit): { from: number; to: number } {
-  const end = doc.content.size
-  if (edit.op === 'rewrite') return { from: 0, to: end }
-  if (!draftEditNeedsAnchor(edit.op) || !edit.anchor) return { from: end, to: end }
-  const blocks = resolveAnchorBlocks(doc, edit.anchor)
-  // The server already checked this quote against the markdown, so a miss
-  // here is a rendering difference, not a bad edit. The page's end is a
-  // visible, discardable place to put it — dropping it would lose the work.
-  if (!blocks) return { from: end, to: end }
-  if (edit.op === 'insert_after') return { from: blocks.to, to: blocks.to }
-  if (edit.op === 'insert_before') return { from: blocks.from, to: blocks.from }
-  return blocks
-}
-
 /* ------------------------------------------------------------- applying */
 
 /**
@@ -185,7 +160,7 @@ function targetRange(doc: PMNode, edit: AssistantDraftEdit): { from: number; to:
  */
 function writeSuggestion(tr: Transaction, item: AiSuggestion, markdown: string): AiSuggestion {
   const schema = tr.doc.type.schema
-  const next = markdownToFragment(markdown, schema)
+  const next = markdownToFragment(markdown, schema, inertDocument())
   const current = tr.doc.slice(item.from, item.to).content
 
   let offset = 0
@@ -208,7 +183,7 @@ function writeSuggestion(tr: Transaction, item: AiSuggestion, markdown: string):
   return { ...item, to, shownText: Math.max(item.shownText, length), fresh }
 }
 
-function upsert(state: EditorState, edit: AssistantDraftEdit): Transaction | null {
+function upsert(state: EditorState, edit: AssistantDraftEdit, shared: SuggestionStore | null): Transaction | null {
   const tr = state.tr
   tr.setMeta('addToHistory', false)
   const known = aiSuggestionsKey.getState(state)?.items.find((s) => s.id === edit.id)
@@ -222,7 +197,7 @@ function upsert(state: EditorState, edit: AssistantDraftEdit): Transaction | nul
 
   let item = known
   if (!item) {
-    const range = targetRange(state.doc, edit)
+    const range = targetRange(state.doc, edit, inertDocument())
     const original = state.doc.slice(range.from, range.to)
     item = {
       id: edit.id,
@@ -233,6 +208,9 @@ function upsert(state: EditorState, edit: AssistantDraftEdit): Transaction | nul
       state: 'streaming',
       shownText: 0,
       fresh: [],
+      mine: true,
+      agent: edit.agent ?? null,
+      requestedBy: shared?.me ?? null,
     }
     // An insertion is written into a range that starts empty; a replacement
     // clears the old blocks on its first frame, so the new text grows into the
@@ -262,6 +240,54 @@ export function pendingSuggestions(state: EditorState): AiSuggestion[] {
   return aiSuggestionsKey.getState(state)?.items ?? []
 }
 
+/* ------------------------------------------------------------- sharing */
+
+function toShared(doc: PMNode, item: AiSuggestion): Parameters<SuggestionStore['write']>[0] {
+  return {
+    id: item.id,
+    fromIndex: blockIndex(doc, item.from, 'down'),
+    toIndex: blockIndex(doc, item.to, 'up'),
+    original: item.original.toJSON(),
+    originalText: item.originalText,
+    state: item.state,
+    agent: item.agent,
+  }
+}
+
+/** The store's list at positions in `doc`, keeping what this tab already knew of each (its reveal). */
+function fromStore(shared: SuggestionStore, doc: PMNode, known: AiSuggestion[]): AiSuggestion[] {
+  const items: AiSuggestion[] = []
+  for (const entry of shared.read()) {
+    const prev = known.find((i) => i.id === entry.id)
+    let original = prev?.original
+    try {
+      original ??= Slice.fromJSON(doc.type.schema, entry.original)
+    } catch {
+      continue // written by a build with another schema: nothing this tab could put back
+    }
+    const from = blockStart(doc, entry.fromIndex)
+    items.push({
+      id: entry.id,
+      from,
+      to: Math.max(from, blockStart(doc, entry.toIndex)),
+      original,
+      originalText: entry.originalText,
+      state: entry.state === 'streaming' && !entry.live ? 'ready' : entry.state,
+      shownText: prev?.shownText ?? 0,
+      fresh: prev?.fresh ?? [],
+      mine: entry.mine,
+      agent: entry.agent,
+      requestedBy: entry.requestedBy,
+    })
+  }
+  return items.filter(worthKeeping).sort((a, b) => a.from - b.from)
+}
+
+/** A range that holds nothing and replaced nothing has nothing left to decide. */
+function worthKeeping(item: AiSuggestion): boolean {
+  return item.to > item.from || item.originalText.length > 0 || item.state === 'streaming'
+}
+
 /**
  * Keep suggestions — as the author's own edit.
  *
@@ -271,11 +297,13 @@ export function pendingSuggestions(state: EditorState): AiSuggestion[] {
  * edit: two transactions in one tick, nothing painted between them, and undo
  * afterwards returns exactly the page from before the suggestion.
  */
-function keep(view: EditorView, ids?: string[]): boolean {
+function keep(view: EditorView, shared: SuggestionStore | null, ids?: string[]): boolean {
   const items = pendingSuggestions(view.state)
     .filter((i) => !ids || ids.includes(i.id))
     .sort((a, b) => b.from - a.from)
   if (items.length === 0) return false
+  // Off the list before the page changes, so no peer reads a decided one as a fresh suggestion.
+  shared?.remove(items.map((i) => i.id))
   const kept = items.map((i) => view.state.doc.slice(i.from, i.to))
 
   const back = view.state.tr.setMeta('addToHistory', false)
@@ -310,6 +338,13 @@ function actionBar(editor: Editor, item: AiSuggestion, t: AiSuggestionsOptions['
   bar.setAttribute('role', 'group')
   bar.setAttribute('aria-label', t('editorAi.suggestionActions'))
 
+  if (item.requestedBy && item.agent) {
+    const credit = document.createElement('span')
+    credit.className = 'kn-ai-credit'
+    credit.textContent = t('editorAi.suggestedBy', { agent: item.agent.name, name: item.requestedBy.name })
+    bar.appendChild(credit)
+  }
+
   if (item.from === item.to && item.originalText) {
     const removed = document.createElement('del')
     removed.className = 'kn-ai-removed'
@@ -324,14 +359,15 @@ function actionBar(editor: Editor, item: AiSuggestion, t: AiSuggestionsOptions['
     el.innerHTML = `${icon(svg)}<span>${label}</span>`
     // mousedown, not click: a click would first move the selection into the
     // widget's neighbour and scroll the page under the pointer.
+    // A viewer in a shared draft sees the suggestion, not the decision (the CSS hides these too).
     el.addEventListener('mousedown', (event) => {
       event.preventDefault()
-      run()
+      if (editor.isEditable) run()
     })
     el.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault()
-        run()
+        if (editor.isEditable) run()
       }
     })
     return el
@@ -445,7 +481,7 @@ function follower(view: EditorView) {
   return {
     update(view: EditorView) {
       const items = aiSuggestionsKey.getState(view.state)?.items ?? []
-      const live = items.find((i) => i.state === 'streaming')
+      const live = items.find((i) => i.state === 'streaming' && i.mine)
       if (!live || !scroller) return
       if (live.id !== lastId) {
         lastId = live.id
@@ -471,16 +507,18 @@ export const AiSuggestions = Extension.create<AiSuggestionsOptions>({
   name: 'aiSuggestions',
 
   addOptions() {
-    return { t: (key: string) => key }
+    return { t: (key: string) => key, shared: null }
   },
 
   addCommands() {
+    const shared = this.options.shared
     return {
       applyAiEdit:
         (edit) =>
         ({ state, dispatch }) => {
-          const tr = upsert(state, edit)
+          const tr = upsert(state, edit, shared)
           if (!tr) return false
+          if (dispatch && edit.state === 'rejected') shared?.remove([edit.id])
           dispatch?.(tr)
           return true
         },
@@ -492,13 +530,14 @@ export const AiSuggestions = Extension.create<AiSuggestionsOptions>({
           // was built on the document before them, and dispatching it after
           // would be a mismatched transaction — so it is told not to.
           tr.setMeta('preventDispatch', true)
-          return keep(view, ids)
+          return keep(view, shared, ids)
         },
       discardAiSuggestions:
         (ids) =>
         ({ state, tr, dispatch }) => {
           const items = pendingSuggestions(state).filter((i) => !ids || ids.includes(i.id))
           if (items.length === 0) return false
+          if (dispatch) shared?.remove(items.map((i) => i.id))
           tr.setMeta('addToHistory', false)
           for (const item of [...items].sort((a, b) => b.from - a.from)) {
             const from = tr.mapping.map(item.from, -1)
@@ -513,7 +552,7 @@ export const AiSuggestions = Extension.create<AiSuggestionsOptions>({
       settleAiSuggestions:
         () =>
         ({ state, tr, dispatch }) => {
-          if (!pendingSuggestions(state).some((i) => i.state === 'streaming')) return false
+          if (!pendingSuggestions(state).some((i) => i.state === 'streaming' && i.mine)) return false
           tr.setMeta(aiSuggestionsKey, { type: 'settle' } satisfies Meta)
           tr.setMeta('addToHistory', false)
           dispatch?.(tr)
@@ -536,46 +575,79 @@ export const AiSuggestions = Extension.create<AiSuggestionsOptions>({
 
   addProseMirrorPlugins() {
     const editor = this.editor
-    const t = this.options.t
+    const { t, shared } = this.options
     return [
       new Plugin<PluginState>({
         key: aiSuggestionsKey,
         state: {
-          init: () => ({ items: [], decorations: DecorationSet.empty }),
+          init: () => ({ items: [], decorations: DecorationSet.empty, writes: [] }),
           apply(tr, prev, _old, next) {
             const meta = tr.getMeta(aiSuggestionsKey) as Meta | undefined
             let items = prev.items
-            if (tr.docChanged) {
-              // Inward: text typed right at a suggestion's edge is the
-              // author's, not part of the suggestion. A replacement covering
-              // the range still maps its ends to the new content's edges.
-              items = items
-                .filter((i) => meta?.type !== 'upsert' || i.id !== meta.suggestion.id)
-                .map((i) => {
-                  const from = tr.mapping.map(i.from, 1)
-                  const to = Math.max(from, tr.mapping.map(i.to, -1))
-                  return { ...i, from, to }
-                })
-                .filter((i) => i.to > i.from || i.originalText.length > 0 || i.state === 'streaming')
-            }
-            if (meta?.type === 'upsert') {
-              items = [...items.filter((i) => i.id !== meta.suggestion.id), meta.suggestion].sort(
-                (a, b) => a.from - b.from,
-              )
-            } else if (meta?.type === 'remove') {
-              items = items.filter((i) => !meta.ids.includes(i.id))
-            } else if (meta?.type === 'settle') {
-              items = items.map((i) => (i.state === 'streaming' ? { ...i, state: 'ready' as const } : i))
+            let writes: string[] = []
+            if (shared && (meta?.type === 'sync' || shared.isRemote(tr))) {
+              items = fromStore(shared, next.doc, prev.items)
+            } else {
+              if (tr.docChanged) {
+                // Inward: text typed right at a suggestion's edge is the
+                // author's, not part of the suggestion. A replacement covering
+                // the range still maps its ends to the new content's edges.
+                items = items
+                  .filter((i) => meta?.type !== 'upsert' || i.id !== meta.suggestion.id)
+                  .map((i) => {
+                    const from = tr.mapping.map(i.from, 1)
+                    const to = Math.max(from, tr.mapping.map(i.to, -1))
+                    return { ...i, from, to }
+                  })
+                  .filter(worthKeeping)
+              }
+              if (meta?.type === 'upsert') {
+                items = [...items.filter((i) => i.id !== meta.suggestion.id), meta.suggestion].sort(
+                  (a, b) => a.from - b.from,
+                )
+                writes = [meta.suggestion.id]
+              } else if (meta?.type === 'remove') {
+                items = items.filter((i) => !meta.ids.includes(i.id))
+              } else if (meta?.type === 'settle') {
+                writes = items.filter((i) => i.state === 'streaming' && i.mine).map((i) => i.id)
+                items = items.map((i) => (writes.includes(i.id) ? { ...i, state: 'ready' as const } : i))
+              }
             }
             if (items === prev.items && !tr.docChanged) return prev
-            if (items.length === 0) return { items, decorations: DecorationSet.empty }
-            return { items, decorations: buildDecorations(editor, next, items, t) }
+            if (items.length === 0) return { items, decorations: DecorationSet.empty, writes }
+            return { items, decorations: buildDecorations(editor, next, items, t), writes }
           },
         },
         props: {
           decorations: (state) => aiSuggestionsKey.getState(state)?.decorations ?? DecorationSet.empty,
         },
-        view: follower,
+        view: (view) => {
+          const follow = follower(view)
+          if (!shared) return follow
+          let seen = aiSuggestionsKey.getState(view.state)
+          const unsubscribe = shared.subscribe(() => {
+            if (view.isDestroyed) return
+            view.dispatch(view.state.tr.setMeta(aiSuggestionsKey, { type: 'sync' } satisfies Meta))
+          })
+          return {
+            update(view: EditorView) {
+              follow.update(view)
+              // After the Collaboration plugin's own view update (it is registered
+              // first), so the Y.Doc already holds this change and the indices match.
+              const state = aiSuggestionsKey.getState(view.state)
+              if (!state || state === seen) return
+              seen = state
+              for (const id of state.writes) {
+                const item = state.items.find((i) => i.id === id)
+                if (item) shared.write(toShared(view.state.doc, item))
+              }
+            },
+            destroy() {
+              follow.destroy()
+              unsubscribe()
+            },
+          }
+        },
       }),
     ]
   },

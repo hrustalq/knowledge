@@ -19,7 +19,20 @@
     "unlockFailed": "Could not check the password. Try again.",
     "notFoundTitle": "This link does not work",
     "notFoundBody": "It may have expired or been revoked, or the address is incomplete. Ask whoever sent it for a new one.",
-    "diagramFailed": "This diagram could not be drawn."
+    "diagramFailed": "This diagram could not be drawn.",
+    "downloadTitle": "Download “{title}”",
+    "downloadScopePage": "A file of this page. It is kept for {hours} hours, then deleted.",
+    "downloadScopeSubtree": "A file of this page and every page under it. It is kept for {hours} hours, then deleted.",
+    "downloadStart": "Prepare file",
+    "downloadStarting": "Starting…",
+    "downloadWaiting": "Preparing the file…",
+    "downloadReady": "Your file is ready. If the download did not start, use the button below.",
+    "downloadFile": "Download file",
+    "downloadAnother": "Another format",
+    "downloadRetry": "Try again",
+    "downloadFailed": "The file could not be prepared. Try again in a moment.",
+    "downloadRateLimited": "Too many downloads from this link. Try again later.",
+    "downloadGone": "This link no longer allows downloads."
   },
   "siteReader": {
     "pages": "Pages",
@@ -120,5 +133,27 @@
     "guide": "Guide",
     "reference": "Reference",
     "other": "Other"
+  },
+  "export": {
+    "formatLabel": "Format",
+    "pdfUnavailable": "PDF is not available here.",
+    "format": {
+      "zip": "Markdown (ZIP)",
+      "html": "HTML site (ZIP)",
+      "pdf": "PDF",
+      "docx": "Word (.docx)"
+    },
+    "formatHint": {
+      "zip": "The pages as markdown with their frontmatter, attachments and a manifest — for backup or moving elsewhere.",
+      "html": "A small website that opens offline: a contents page, one page per file, images included.",
+      "pdf": "One document to read or print: a page break per page, diagrams drawn.",
+      "docx": "One Word document to keep editing in Word, LibreOffice or Google Docs: each page on a new sheet, images included, diagrams as their source."
+    },
+    "stage": {
+      "collecting": "Collecting pages",
+      "rendering": "Rendering",
+      "converting": "Making the PDF",
+      "packaging": "Packaging"
+    }
   }
 }

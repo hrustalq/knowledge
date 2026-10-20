@@ -6,7 +6,7 @@ import WebSocket from 'ws';
 import type { Env } from '../config/env.js';
 import { guardedLookup } from '../common/safe-fetch.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
+import { CHAT_SOCKET_KINDS, ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
 import { ChatAnswersService } from './chat-answers.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
 
@@ -18,6 +18,7 @@ const SILENCE_MS = 75_000;
 const HANDSHAKE_MS = 15_000;
 /** How long a post id stays claimed. Any replica that sees it later is late by far less. */
 const CLAIM_TTL_SEC = 3_600;
+/** Named when Time was the only socket platform; the key carries the bot's id, so kinds never collide. */
 const CLAIM_PREFIX = 'chat:time:posted:';
 
 /** The part of a websocket the supervisor uses — what a spec's fake implements. */
@@ -57,9 +58,11 @@ interface Connection {
 }
 
 /**
- * The second inbound path (issue #71, phase 4): Time delivers a bot's messages
- * over the bot's own websocket rather than to a webhook, so the API holds one
- * open socket per enabled Time bot and hands each `posted` event to
+ * The second inbound path (issue #71, phase 4): Time and Mattermost (#343)
+ * deliver a bot's messages over the bot's own websocket rather than to a
+ * webhook, so the API holds one open socket per enabled bot of those kinds
+ * (`CHAT_SOCKET_KINDS`) and hands each `posted` event (and each
+ * 📌 `reaction_added`, #82) to
  * {@link ChatAnswersService.receive} exactly as the webhook hands a Telegram
  * update — the same claim, the same refusals, the same reaper.
  *
@@ -126,7 +129,7 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
     if (this.syncing) return;
     this.syncing = true;
     try {
-      const rows = await this.prisma.chatIntegration.findMany({ where: { kind: 'time', enabled: true } });
+      const rows = await this.prisma.chatIntegration.findMany({ where: { kind: { in: [...CHAT_SOCKET_KINDS] }, enabled: true } });
       const wanted = new Map(rows.map((r) => [r.id, r]));
       for (const [id, conn] of this.connections) {
         const row = wanted.get(id);
@@ -172,7 +175,7 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
     }
     let socket: ChatSocket;
     try {
-      socket = this.connect(this.registry.time.socketUrl(ctx.serverUrl), ctx.token);
+      socket = this.connect(this.registry.socket(conn.row.kind).socketUrl(ctx.serverUrl), ctx.token);
     } catch (err) {
       return this.dropped(conn, `websocket: ${errorText(err)}`);
     }
@@ -253,10 +256,14 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
       await this.setStatus(conn, null);
       return;
     }
-    if (frame.event !== 'posted') return;
-    const inbound = this.registry.time.parseInbound({ headers: {}, body: raw }, conn.row.botUsername);
+    if (frame.event !== 'posted' && frame.event !== 'reaction_added') return;
+    const inbound = this.registry.socket(conn.row.kind).parseInbound({ headers: {}, body: raw }, conn.row.botUsername);
     if (!inbound.length) return;
-    if (!(await this.claim(`${conn.row.id}:${inbound[0].messageId}`))) return;
+    // A pin is claimed apart from its post, per person: the same person pinning
+    // again within the claim's hour is the same request.
+    const [first] = inbound;
+    const key = first.harvestReaction ? `${first.messageId}:pin:${first.externalUserId}` : first.messageId;
+    if (!(await this.claim(`${conn.row.id}:${key}`))) return;
     for (const message of inbound) await this.answers.receive(conn.row, message);
   }
 

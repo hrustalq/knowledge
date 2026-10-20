@@ -203,4 +203,13 @@ async function settle() {
   assert.equal(stepIndex('confluence', 'options', null), 5)
 }
 
+// --- Google Drive (#338): key first, folder second, offered the tree -------
+{
+  const steps = kindSteps('google-drive')
+  assert.deepEqual(steps.map((s) => s.labelKey), ['connectors.step.serviceAccount', 'connectors.step.folder'])
+  assert.equal(steps[0].credential, true, 'the JSON key is asked for with the delegation subject')
+  assert.deepEqual(steps[1].fields, ['folderId'])
+  assert.equal(canWalkTree('google-drive'), true, 'a new Drive connector is offered review + keep the tree')
+}
+
 console.log('setup-machines: all checks passed')

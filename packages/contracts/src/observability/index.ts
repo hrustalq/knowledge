@@ -110,7 +110,7 @@ export type OpsCode = (typeof OPS_CODES)[number];
  * stdout and to Postgres: a full corpus re-index emits tens of thousands of step
  * events, which belongs in a file a harness reads, not in the transactional DB.
  */
-export const BACKTEST_EVENT_KINDS = ['http.request', 'search.executed', 'ai.call', 'ingest.step'] as const;
+export const BACKTEST_EVENT_KINDS = ['http.request', 'search.executed', 'ai.call', 'ingest.step', 'collab.store'] as const;
 export type BacktestEventKind = (typeof BACKTEST_EVENT_KINDS)[number];
 
 interface BacktestEventBase extends TraceContext {
@@ -150,6 +150,8 @@ export interface SearchExecutedEvent extends BacktestEventBase {
   aclFiltered?: number;
   /** Legs that failed or timed out (#173), so a vector-only answer is not scored as a hybrid one. */
   degraded?: string[];
+  /** The `asOf` a search was run at (#81), as given; absent for a search of now. */
+  asOf?: string;
   results: Array<{ documentId: string; chunkId?: string; score: number }>;
 }
 
@@ -180,7 +182,23 @@ export interface IngestStepEvent extends BacktestEventBase {
   steps: Array<{ step: string; ms: number; count?: number; ok: boolean }>;
 }
 
-export type BacktestEvent = HttpRequestEvent | SearchExecutedEvent | AiCallEvent | IngestStepEvent;
+/**
+ * One shared-draft store (#80, doc 56): how long the full-state write took,
+ * how big the draft is and how many people had it open on this instance. The
+ * outcome counts what the server refused: a store from before a reset
+ * (`stale`) and one past COLLAB_MAX_DOC_BYTES (`too-large`) — both close the
+ * draft's peers.
+ */
+export interface CollabStoreEvent extends BacktestEventBase {
+  kind: 'collab.store';
+  documentId: string;
+  branchId: string;
+  outcome: 'stored' | 'stale' | 'too-large';
+  bytes: number;
+  peers: number;
+}
+
+export type BacktestEvent = HttpRequestEvent | SearchExecutedEvent | AiCallEvent | IngestStepEvent | CollabStoreEvent;
 
 // --- feedback as a backtest dataset -----------------------------------------
 //

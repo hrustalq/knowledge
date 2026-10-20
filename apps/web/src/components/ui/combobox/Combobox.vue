@@ -104,13 +104,16 @@ function requestCreate() {
       <button
         type="button"
         :disabled="disabled"
-        :aria-label="label"
         aria-haspopup="listbox"
         :aria-expanded="open"
         class="group/trigger w-full text-left outline-none disabled:pointer-events-none disabled:opacity-50"
         @click="open = !open"
       >
+        <!-- Named by its content, then the roster: speech input users say
+             what the trigger shows (WCAG 2.5.3), and an aria-label would
+             replace that text instead of extending it. -->
         <slot name="trigger" :open="open" />
+        <span class="sr-only">, {{ label }}</span>
       </button>
     </ComboboxAnchor>
 

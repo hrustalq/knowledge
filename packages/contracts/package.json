@@ -23,7 +23,8 @@
     "./chat": "./src/chat/index.ts",
     "./captures": "./src/captures/index.ts",
     "./quality": "./src/quality/index.ts",
-    "./observability": "./src/observability/index.ts"
+    "./observability": "./src/observability/index.ts",
+    "./analytics": "./src/analytics/index.ts"
   },
   "scripts": {
     "lint": "echo contracts: no lint",

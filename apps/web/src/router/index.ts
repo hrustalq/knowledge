@@ -119,8 +119,12 @@ export function createRouter() {
       // verification state, bulk actions and the freshness policy.
 
       { path: '/knowledge-health', component: () => import('@/pages/KnowledgeHealthPage.vue') },
+      // Usage analytics (#79). Gated in the page on auth.canAdminWorkspace; the API enforces admin.
+      { path: '/analytics', component: () => import('@/pages/AnalyticsPage.vue') },
       // What coding agents proposed from their sessions (issue #73).
       { path: '/captures', component: () => import('@/pages/CapturesPage.vue') },
+      // Contradictions between pages (#81).
+      { path: '/conflicts', component: () => import('@/pages/ConflictsPage.vue') },
       // meta.fill: the chat owns the viewport — see App.vue's two content modes.
       { path: '/assistant', component: () => import('@/pages/AssistantPage.vue'), meta: { fill: true } },
       // Settings: shell with its own right-hand nav; the sections are nested pages.
@@ -167,6 +171,8 @@ export function createRouter() {
           // auth.canAdminWorkspace and the API enforces admin.
           { path: 'api', component: () => import('@/pages/ApiSettingsPage.vue') },
           { path: 'exports', component: () => import('@/pages/ExportsPage.vue') },
+          // Release tags (#81): open to every role to read, like the timeline they mark.
+          { path: 'releases', component: () => import('@/pages/ReleasesSettingsPage.vue') },
           // Workflows: like AI settings, deliberately not meta.platformAdmin —
           // this is workspace administration, so the page gates on
           // auth.canAdminWorkspace and the API enforces the admin role.

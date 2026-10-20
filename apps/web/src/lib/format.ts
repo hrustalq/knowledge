@@ -60,6 +60,11 @@ export function formatNumber(value: number, locale?: Locale): string {
   return new Intl.NumberFormat(tag(locale)).format(value)
 }
 
+/** A 0–1 ratio as a percentage, at most one decimal: 0.1666 → "16.7%". */
+export function formatPercent(ratio: number, locale?: Locale): string {
+  return new Intl.NumberFormat(tag(locale), { style: 'percent', maximumFractionDigits: 1 }).format(ratio)
+}
+
 /**
  * Relative time, via Intl.RelativeTimeFormat so Russian gets its own plural
  * forms ("2 минуты назад" / "5 минут назад") without a hand-written table.
@@ -108,4 +113,11 @@ export function formatBytes(bytes: number, locale?: Locale): string {
 /** The CLDR plural category of `n` — `one`, `few`, `many`, `other` — for a catalog that lists its forms by name. */
 export function pluralCategory(n: number, locale?: Locale): Intl.LDMLPluralRule {
   return new Intl.PluralRules(tag(locale)).select(n)
+}
+
+/** A short duration — "45 sec", "3 min", "1.5 hr" / "3 мин" — by Intl unit formatting, no hand-written units. */
+export function formatDuration(ms: number, locale?: Locale): string {
+  const [value, unit] =
+    ms < 60_000 ? [Math.round(ms / 1000), 'second'] : ms < 3_600_000 ? [Math.round(ms / 60_000), 'minute'] : [ms / 3_600_000, 'hour']
+  return new Intl.NumberFormat(tag(locale), { style: 'unit', unit, unitDisplay: 'short', maximumFractionDigits: 1 }).format(value)
 }

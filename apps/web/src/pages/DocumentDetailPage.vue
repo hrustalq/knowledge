@@ -13,11 +13,12 @@
  * is what you would edit, and any passage in it can be commented on.
  */
 import { useI18n } from 'vue-i18n'
-import { formatDateTime } from '@/lib/format'
+import { formatDate, formatDateTime } from '@/lib/format'
 import { errorMessage, isRestrictedRefusal } from '@/api/errors'
 import { labelFor } from '@/lib/labels'
 import { hasWorkingCopy } from '@/lib/working-copy'
 import { readFrontmatter } from '@/lib/page-source'
+import { usePageView } from '@/lib/use-page-view'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -39,9 +40,11 @@ import {
   Info,
   Network,
   Pencil,
+  Scale,
   Share2,
   Workflow as WorkflowIcon,
   ListTree,
+  Eye,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type {
@@ -49,10 +52,13 @@ import type {
   ComponentDeclarationView,
   DocumentConnectorResponse,
   DocumentContentResponse,
+  ResolvedAsOf,
   DocumentDetailResponse,
   ListActivityResponse,
   ListKnowledgeIssuesResponse,
+  ListConflictsResponse,
   DocumentQualityResponse,
+  PageInsightsResponse,
   ListDocumentRelationsResponse,
   ListDocumentThreadsResponse,
   ListMergeRequestsResponse,
@@ -63,6 +69,7 @@ import type {
 import { apiFetch, getWorkspaceId, relativeTime, statusVariant } from '@/lib/api'
 import { isOpenIssueStatus } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
+import CollabDraftBadge from '@/components/editor/CollabDraftBadge.vue'
 import ComponentDeclarationNotice from '@/components/code/ComponentDeclarationNotice.vue'
 import UsedByRail from '@/components/code/UsedByRail.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -94,8 +101,10 @@ import GraphLightbox from '@/components/graph/GraphLightbox.vue'
 import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
 import WorkflowRail from '@/components/workflows/WorkflowRail.vue'
 import ConnectorRail from '@/components/connectors/ConnectorRail.vue'
+import ConflictsRail from '@/components/knowledge/ConflictsRail.vue'
 import KnowledgeIssuesRail from '@/components/knowledge/KnowledgeIssuesRail.vue'
 import QualityRail from '@/components/quality/QualityRail.vue'
+import PageInsightsRail from '@/components/analytics/PageInsightsRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
 import PageAiActions from '@/components/knowledge/PageAiActions.vue'
@@ -130,7 +139,11 @@ const RAIL_WIDGETS = [
   { id: 'issues', label: t('rail.issues'), icon: Flag, expandable: false },
   // The auditor's newest score (#74): only once the page has one.
   { id: 'quality', label: t('rail.quality'), icon: Gauge, expandable: false },
+  // Passages another page contradicts (#81): only while one is open.
+  { id: 'conflicts', label: t('rail.conflicts'), icon: Scale, expandable: false },
   { id: 'graph', label: t('rail.graph'), icon: Share2, expandable: true },
+  // How often the page is read and by whom — people, the assistant, agents (#79).
+  { id: 'insights', label: t('rail.insights'), icon: Eye, expandable: false },
   // Where the code a component page declares is used (#236): only on a page
   // that declares one.
   { id: 'used-by', label: t('rail.usedBy'), icon: Network, expandable: false },
@@ -173,6 +186,7 @@ const visibleWidgets = computed(() =>
       (w.id !== 'frontmatter' || !!content.value?.frontmatter) &&
       (w.id !== 'used-by' || !!declaration.value) &&
       (w.id !== 'quality' || !!quality.value?.score) &&
+      (w.id !== 'conflicts' || openConflicts.value > 0) &&
       (w.id !== 'operations' || isSpec.value),
   ),
 )
@@ -294,14 +308,29 @@ function onAccessSaved() {
   void store.invalidate()
 }
 
+/**
+ * #81: `?asOf=` (a date, `tag:` or `rev:`) asks for the page as it read then.
+ * The API picks the default-branch revision current at that point; from there
+ * it is the ordinary read-only revision view. An explicit `?revision=` wins.
+ */
+const asOfParam = computed(() => (route.query.revision ? null : ((route.query.asOf as string | undefined) ?? null)))
+const asOfRevision = ref<string | null>(null)
+const asOfResolved = ref<ResolvedAsOf | null>(null)
+
 async function loadContent() {
   contentError.value = null
   content.value = null
   try {
-    const rev = route.query.revision ? `?revision=${route.query.revision as string}` : ''
+    const rev = route.query.revision
+      ? `?revision=${route.query.revision as string}`
+      : asOfParam.value
+        ? `?asOf=${encodeURIComponent(asOfParam.value)}`
+        : ''
     content.value = await apiFetch<DocumentContentResponse>(
       `/v1/documents/${documentId.value}/content${rev}`,
     )
+    asOfRevision.value = asOfParam.value ? content.value.revisionId : null
+    asOfResolved.value = asOfParam.value ? (content.value.resolvedAsOf ?? null) : null
   } catch (e) {
     contentError.value = (e as Error).message
   }
@@ -456,6 +485,14 @@ const activityPreview = useQuery(
 const connectorsPreview = useQuery(
   computed(() => apiQueryOptions('/v1/documents/{id}/connectors', { path: { id: documentId.value } })),
 )
+// #81: the rail row's count, and the same cache entry ConflictsRail reads.
+const conflictsPreview = useQuery(
+  computed(() => apiQueryOptions('/v1/conflicts', { query: { workspaceId: getWorkspaceId(), documentId: documentId.value } })),
+)
+const openConflicts = computed(
+  () => ((conflictsPreview.data.value as ListConflictsResponse | undefined)?.conflicts ?? []).filter((c) => c.status === 'open').length,
+)
+
 const issuesPreview = useQuery(
   computed(() =>
     apiQueryOptions('/v1/knowledge-issues', {
@@ -470,6 +507,13 @@ const qualityQuery = useQuery(
   computed(() => apiQueryOptions('/v1/documents/{id}/quality', { path: { id: documentId.value } })),
 )
 const quality = computed(() => qualityQuery.data.value as DocumentQualityResponse | undefined)
+
+// Usage analytics (#79): the collapsed row previews the view count, so the
+// page owns the query and the widget only draws.
+const insightsQuery = useQuery(
+  computed(() => apiQueryOptions('/v1/documents/{id}/insights', { path: { id: documentId.value } })),
+)
+const insights = computed(() => insightsQuery.data.value as PageInsightsResponse | undefined)
 
 // The same query the declaration notice runs, which vue-query dedupes; the
 // usages are read only once a declaration resolved to a connector.
@@ -525,6 +569,8 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
           ? `${mrs.length} closed`
           : 'none'
       : null,
+    conflicts: openConflicts.value ? String(openConflicts.value) : null,
+    insights: insights.value ? t('analytics.viewsCount', { n: insights.value.views }, insights.value.views) : null,
     quality: quality.value?.score
       ? quality.value.stale
         ? t('quality.rail.previewStale', { n: quality.value.score.overall })
@@ -556,12 +602,22 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
 
 /* ------------------------------------------------------------- lifecycle */
 
-const viewingRevision = computed(() => (route.query.revision as string | undefined) ?? null)
+const viewingRevision = computed(() => (route.query.revision as string | undefined) ?? asOfRevision.value)
 // An API spec (#78) renders as a reference rather than a page, and is edited as text.
 const isSpec = computed(() => !!detail.value?.document.kind && detail.value.document.kind !== 'page')
 // One state for the rail's operation index and the main column's operation.
 const apiRef = useApiReference(documentId, viewingRevision, isSpec)
 const canComment = computed(() => auth.canComment && !viewingRevision.value)
+// Usage analytics (#79): opening this page is one view, once it is known to be
+// readable — a refused or missing page records nothing. The insights query
+// started before the beacon, so it is read again once this visit is a row (#336).
+usePageView(
+  () =>
+    detail.value ? { documentId: documentId.value, revisionId: viewingRevision.value ?? detail.value.revision.revisionId } : null,
+  (id) => {
+    if (id === documentId.value) void insightsQuery.refetch()
+  },
+)
 
 onMounted(() => {
   void load()
@@ -574,7 +630,7 @@ onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
 
-watch(() => route.query.revision, () => void loadContent())
+watch([() => route.query.revision, () => route.query.asOf], () => void loadContent())
 
 // Route reuse: navigating to a different document keeps this component alive.
 watch(documentId, () => {
@@ -727,6 +783,7 @@ watch(
             · {{ t('documents.finalizedAt', { when: formatDateTime(detail.revision.finalizedAt) }) }}
           </template>
         </p>
+        <CollabDraftBadge :document-id="documentId" :branch="detail.document.defaultBranch" context="page" />
       </template>
 
       <!-- Rail: everything about the page rather than in it ------------- -->
@@ -813,6 +870,9 @@ watch(
 
           <template #widget-revisions><RevisionsView :document-id="documentId" /></template>
           <template #widget-merge-requests><MergeRequestList :document-id="documentId" /></template>
+          <template #widget-conflicts>
+            <ConflictsRail :document-id="documentId" />
+          </template>
           <template #widget-issues>
             <KnowledgeIssuesRail
               :document-id="documentId"
@@ -824,6 +884,9 @@ watch(
             <QualityRail v-if="quality?.score" :quality="quality" />
           </template>
           <template #widget-graph><GraphView :document-id="documentId" /></template>
+          <template #widget-insights>
+            <PageInsightsRail v-if="insights" :insights="insights" />
+          </template>
           <template #widget-used-by>
             <UsedByRail
               :document-id="documentId"
@@ -863,7 +926,20 @@ watch(
 
       <!-- Main column: what this is, what it says, what was said about it -->
       <section class="space-y-2">
-        <p v-if="viewingRevision" class="text-xs text-muted-foreground">
+        <!-- #81: as of a point — the date, the tag when it was one, and the
+             revision that was the page then. A note, not an alert: the page is
+             fine, the reader asked for its past. -->
+        <p v-if="asOfResolved && viewingRevision" class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+          <History class="size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            {{ asOfResolved.kind === 'tag'
+              ? t('documents.asOfBannerTag', { date: formatDate(asOfResolved.at), tag: asOfResolved.ref.slice(4) })
+              : t('documents.asOfBanner', { date: formatDate(asOfResolved.at) }) }}
+          </span>
+          <span class="font-mono">({{ viewingRevision.slice(0, 8) }})</span>
+          <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
+        </p>
+        <p v-else-if="viewingRevision" class="text-xs text-muted-foreground">
           {{ t('documents.viewingRevision', { id: viewingRevision.slice(0, 8) }) }}
           <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
         </p>

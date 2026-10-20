@@ -24,7 +24,7 @@
 
 /** Feature directories: everything that is not the base/leaf layer. */
 const FEATURES =
-  '^src/(activity|agents|ai|assistant|attachments|auth|avatars|connectors|documents|embedding|entities|events|extraction|fulltext|glossary|graph|import|ingestion|mcp|notifications|profiles|projects|search|users|workflows|workspaces)/';
+  '^src/(activity|agents|ai|assistant|attachments|auth|avatars|collab|connectors|documents|embedding|entities|events|extraction|fulltext|glossary|graph|import|ingestion|mcp|notifications|profiles|projects|search|users|workflows|workspaces)/';
 
 /** The base layer: infrastructure every feature may use, which may use none of them. */
 const LEAF = '^src/(common|config|prisma|storage|i18n|observability)/';
@@ -98,6 +98,19 @@ module.exports = {
       severity: 'error',
       from: { path: '^src/documents/' },
       to: { path: '^src/captures/' },
+    },
+    {
+      name: 'collab-stays-api-only',
+      comment:
+        'CollabModule holds the /v1/collab gateway and its Hocuspocus instance (#80). In the ' +
+        'worker it would open Redis connections nobody uses; in the MCP server, started once per ' +
+        'agent client, every process would store drafts racing the API. A worker or MCP path that ' +
+        'needs drafts gets a controller- and gateway-free core module instead. The HTTP MCP ' +
+        '(mcp-http.module.ts) runs in the API process and does import it, for the draft tools (#316); ' +
+        'McpService knows them only as an argument, so McpCoreModule stays collab-free.',
+      severity: 'error',
+      from: { path: '^src/(worker|mcp/mcp)\\.module\\.ts$' },
+      to: { path: '^src/collab/collab\\.module\\.ts$', reachable: true },
     },
     {
       name: 'mcp-loads-no-processor',

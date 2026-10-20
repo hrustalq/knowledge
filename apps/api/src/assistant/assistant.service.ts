@@ -10,6 +10,7 @@ import type {
   AssistantRelatedResponse,
   AssistantReviewResponse,
   AssistantSource,
+  AssistantDraftEdit,
   AssistantStreamFrame,
   AssistantSuggestResponse,
   AssistantToolCall,
@@ -142,6 +143,11 @@ function conversational(agent: ResolvedAgent, mode: AssistantChatMode): boolean 
   if (agent.builtIn && !CHAT_BUILT_INS.has(agent.key)) return false;
   if (mode !== 'agent' && agent.tools.some((tool) => WRITE_TOOL_NAMES.has(tool))) return false;
   return true;
+}
+
+/** Who a `draft-edit` is credited to in a shared draft (#80): the agent the turn runs as. */
+function agentOf(turn: PreparedTurn): AssistantDraftEdit['agent'] {
+  return { key: turn.agent.key, name: turn.agent.name };
 }
 
 /**
@@ -511,6 +517,8 @@ export class AssistantService {
       sources: settled.sources,
       confidence: settled.confidence,
       principal,
+      providerId: call.config.providerId,
+      model: call.config.model,
     });
     return {
       enabled: true,
@@ -655,6 +663,7 @@ export class AssistantService {
           thread,
           turn,
           projectId,
+          channel: 'chat',
           ...(input.audience ? { audience: input.audience } : {}),
         }),
     );
@@ -692,7 +701,7 @@ export class AssistantService {
     emit({ type: 'status', phase: 'thinking' });
     let announcedSources = 0;
     let announcedPrompt = false;
-    const previewDraftEdit = this.draftPreviewer(emit);
+    const previewDraftEdit = this.draftPreviewer(emit, agentOf(turn));
 
     const { content, trace, cancelled } = await this.client.runWithToolsStream(
       { ...call, config: turn.agent.config, operation: 'chat-stream' },
@@ -888,6 +897,8 @@ export class AssistantService {
       threadId: thread.id,
       messageId: assistantMessage.id,
       principal,
+      providerId: turn.agent.config.providerId,
+      model: turn.agent.config.model,
     });
     await this.events.publish({
       type: 'assistant.turn.finished',
@@ -918,6 +929,8 @@ export class AssistantService {
       projectId?: string;
       /** Chat turns only: who reads the answer besides the asker (#76). */
       audience?: Audience;
+      /** Chat turns only: filed as `chat` in the analytics log (#79). */
+      channel?: 'chat';
     },
   ): Promise<{ content: string; ok: boolean }> {
     const { thread, turn } = ctx;
@@ -972,6 +985,7 @@ export class AssistantService {
       cite: (source) => turn.labels.label(source),
       ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
       ...(ctx.audience ? { audience: ctx.audience } : {}),
+      ...(ctx.channel ? { channel: ctx.channel } : {}),
     });
     if (!result.ok) turn.toolErrors++;
     for (const source of result.sources) {
@@ -1021,11 +1035,14 @@ export class AssistantService {
     const op = edit.op as DraftEditOp;
     const anchor = DRAFT_EDIT_OPS.includes(op) && draftEditNeedsAnchor(op) ? edit.anchor : null;
     if (refusal) {
-      emit({ type: 'draft-edit', edit: { id, op: DRAFT_EDIT_OPS.includes(op) ? op : 'append', anchor, markdown: '', state: 'rejected' } });
+      emit({
+        type: 'draft-edit',
+        edit: { id, op: DRAFT_EDIT_OPS.includes(op) ? op : 'append', anchor, markdown: '', state: 'rejected', agent: agentOf(turn) },
+      });
       return { content: JSON.stringify({ error: refusal }), ok: false };
     }
     turn.draft = applyDraftEdit(turn.draft, { op, anchor, markdown: edit.markdown });
-    emit({ type: 'draft-edit', edit: { id, op, anchor, markdown: edit.markdown, state: 'ready' } });
+    emit({ type: 'draft-edit', edit: { id, op, anchor, markdown: edit.markdown, state: 'ready', agent: agentOf(turn) } });
     return {
       content: JSON.stringify({
         ok: true,
@@ -1043,7 +1060,7 @@ export class AssistantService {
    * has nowhere to start drawing. After that, the growing `markdown` goes out
    * at most every {@link DRAFT_PREVIEW_MS}.
    */
-  private draftPreviewer(emit: (frame: AssistantStreamFrame) => void) {
+  private draftPreviewer(emit: (frame: AssistantStreamFrame) => void, agent: AssistantDraftEdit['agent']) {
     const sent = new Map<string, { at: number; length: number }>();
     return (id: string, raw: string): void => {
       const args = scanPartialObject(raw);
@@ -1058,7 +1075,7 @@ export class AssistantService {
       sent.set(id, { at: now, length: markdown.length });
       emit({
         type: 'draft-edit',
-        edit: { id, op, anchor: needsAnchor ? args.anchor!.value : null, markdown, state: 'streaming' },
+        edit: { id, op, anchor: needsAnchor ? args.anchor!.value : null, markdown, state: 'streaming', agent },
       });
     };
   }
@@ -1257,11 +1274,13 @@ export class AssistantService {
       ) +
       // Team guidance (#70): learnings an admin approved for this agent, after
       // the skills they sit beside. Project-scoped ones apply on that project's pages.
-      (await this.learnings.promptFor({
-        workspaceId: thread.workspaceId,
-        agentKey: agent.key,
-        projectIds: groundingDoc ? [groundingDoc.projectId] : [],
-      }));
+      (
+        await this.learnings.promptFor({
+          workspaceId: thread.workspaceId,
+          agentKey: agent.key,
+          projectIds: groundingDoc ? [groundingDoc.projectId] : [],
+        })
+      ).prompt;
 
     const priorTurns = (await this.threads.recentHistory(threadId, 16)).filter((m) => m.id !== userMessageId);
     const history: ChatCompletionMessageParam[] = priorTurns.map((m) => ({
@@ -1325,6 +1344,7 @@ export class AssistantService {
         expandGraph: { depth: 1 },
       },
       await this.permissions.scopeFor(principal, dto.workspaceId),
+      { principal, channel: 'assistant' },
     );
     return { results: res.results, related: res.related };
   }

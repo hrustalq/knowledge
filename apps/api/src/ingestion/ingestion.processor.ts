@@ -7,6 +7,9 @@ import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
+import { stampWindow } from '../graph/temporal.js';
+import { loadRevisionStamps } from '../graph/revision-stamps.js';
+import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { EMBEDDING_PROVIDER, embeddingSignature, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { INGESTION_QUEUE } from './ingestion.constants.js';
@@ -41,6 +44,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     private readonly producer: IngestionProducer,
     private readonly components: ComponentsService,
     private readonly apiSpecs: ApiSpecsService,
+    private readonly conflicts: ConflictsService,
   ) {
     super();
   }
@@ -345,6 +349,11 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       await this.reconcileLive(revision.document.workspaceId, revision.documentId, revision.id);
       mark('live');
 
+      // 9a. #81: stamp valid time on this revision and its default-branch
+      //     neighbours, from PG. Inside the try for the same reason as 9.
+      await this.stampValidity(revision.document.workspaceId, revision.documentId, revision.id);
+      mark('validity');
+
       await this.prisma.$transaction([
         this.prisma.ingestionJob.update({
           where: { id: ingestionJobId },
@@ -461,6 +470,12 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       if (head?.status !== 'indexed') return;
     }
     await this.graph.setLiveRevision(workspaceId, documentId, headId);
+    // #81: an open conflict quoting an older revision of this page now quotes
+    // text the page no longer says. Non-fatal: a missed supersede leaves a
+    // stale conflict open until the next index, never a wrong page served.
+    await this.conflicts
+      .supersedeStale(workspaceId, documentId, headId)
+      .catch((e) => this.logger.warn(`Conflict supersede failed for document ${documentId} (non-fatal): ${(e as Error).message}`));
     try {
       await this.fulltext.setLiveRevision(workspaceId, documentId, headId);
     } catch (e) {
@@ -468,6 +483,25 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         `Fulltext live update failed for document ${documentId} (non-fatal; the stale sweeper retries it): ${(e as Error).message}`,
       );
       await this.markFulltext(headId, 'stale');
+    }
+  }
+
+  /**
+   * Rewrite the valid-time stamps around `revisionId` (#81). The interval is
+   * read from PG every time — `revisionStamps` over the page's finalized
+   * revisions — so an out-of-order finish still converges: whichever job runs
+   * last stamps its predecessor closed and itself open or closed.
+   */
+  private async stampValidity(workspaceId: string, documentId: string, revisionId: string): Promise<void> {
+    const window = stampWindow(await loadRevisionStamps(this.prisma, documentId), revisionId);
+    await this.graph.stampRevisions(workspaceId, documentId, window);
+    // The BM25 mirror's copy is non-fatal like every other fulltext write; a
+    // re-mirror by the stale sweeper stamps the revision again.
+    try {
+      await this.fulltext.stampRevisions(workspaceId, documentId, window);
+    } catch (e) {
+      this.logger.warn(`Fulltext validity stamp failed for document ${documentId} (non-fatal): ${(e as Error).message}`);
+      await this.markFulltext(revisionId, 'stale');
     }
   }
 

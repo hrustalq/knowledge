@@ -18,14 +18,9 @@ import { useI18n } from 'vue-i18n'
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import type { Editor as CoreEditor } from '@tiptap/core'
-import StarterKit from '@tiptap/starter-kit'
-import { TaskItem, TaskList } from '@tiptap/extension-list'
-import { TableKit } from '@tiptap/extension-table'
 import { Placeholder } from '@tiptap/extensions'
-import Highlight from '@tiptap/extension-highlight'
-import TextAlign from '@tiptap/extension-text-align'
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import { createLowlight, common } from 'lowlight'
+import { IMAGE_OPTIONS, baseExtensions } from '@knowledge/editor-schema'
 import {
   AtSign,
   Bot,
@@ -84,6 +79,7 @@ import { CommentAnchors, type CommentAnchor } from './extensions/comment-anchors
 import { GlossaryTerms } from './extensions/glossary-terms'
 import { AiSuggestions, pendingSuggestions, withoutSuggestions } from './extensions/ai-suggestions'
 import { useAttachments } from './use-attachments'
+import type { CollabHandle } from './use-collab'
 import {
   EMPTY_FORMAT,
   createMarkdownSync,
@@ -197,6 +193,13 @@ const props = withDefaults(
      * and a template body landing in a page without them would lose its links.
      */
     templateContext?: TemplateInsertContext
+    /**
+     * A shared draft to edit with others (#80). Read once, at mount. The
+     * Y.Doc is then the only writer of the body: `modelValue` still reports
+     * the page as markdown, but a new value is never parsed back in — a local
+     * seed merged into the shared one would show the page twice.
+     */
+    collab?: Pick<CollabHandle, 'extensions' | 'suggestions'>
   }>(),
   {
     pages: () => [],
@@ -280,6 +283,8 @@ const format = shallowRef<FormatState>(EMPTY_FORMAT)
  * than read in a template, for the reason `format` is.
  */
 const aiPending = shallowRef<{ count: number; streaming: boolean }>({ count: 0, streaming: false })
+/** In a shared draft: the agents writing into it for someone else right now (#80). */
+const aiWriters = shallowRef<{ agent: string; name: string }[]>([])
 
 /**
  * The page as the author has it — every pending suggestion put back to what
@@ -635,19 +640,12 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDownO
 onMounted(() => {
   const instance = new Editor({
     editable: props.editable,
-    content: toHtml(props.modelValue),
+    content: props.collab ? undefined : toHtml(props.modelValue),
     extensions: [
-      StarterKit.configure({
-        codeBlock: false,
-        link: { openOnClick: false, autolink: true, HTMLAttributes: { rel: 'noopener noreferrer nofollow' } },
-        heading: { levels: [1, 2, 3, 4] },
-      }),
-      CodeBlockLowlight.configure({ lowlight, defaultLanguage: null }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      TableKit.configure({ table: { resizable: true, lastColumnResizable: false } }),
-      Highlight,
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      // Shared with the API's headless schema (@knowledge/editor-schema).
+      // A shared draft brings its own per-person undo.
+      ...baseExtensions(lowlight, { undoRedo: !props.collab }),
+      ...(props.collab?.extensions() ?? []),
       Placeholder.configure({
         placeholder: ({ node }) =>
           node.type.name === 'heading'
@@ -666,7 +664,7 @@ onMounted(() => {
       Mermaid,
       Drawing,
       FileEmbed,
-      ResizableImage.configure({ inline: false, allowBase64: false }),
+      ResizableImage.configure(IMAGE_OPTIONS),
       StatusMark,
       DocMention,
       UserMention,
@@ -679,7 +677,7 @@ onMounted(() => {
       CommentAnchors.configure({ t }),
       GlossaryTerms,
       // Its accept/discard bar builds labels, so it needs the translator too.
-      AiSuggestions.configure({ t }),
+      AiSuggestions.configure({ t, shared: props.collab?.suggestions ?? null }),
     ],
     editorProps: {
       attributes: { class: 'kn-prose', spellcheck: 'true' },
@@ -718,6 +716,10 @@ onMounted(() => {
       const items = pendingSuggestions(instance.state)
       const next = { count: items.length, streaming: items.some((i) => i.state === 'streaming') }
       if (!shallowEqual(next, aiPending.value)) aiPending.value = next
+      const writers = items
+        .filter((i) => i.state === 'streaming' && !i.mine && i.agent)
+        .map((i) => ({ agent: i.agent!.name, name: i.requestedBy?.name ?? '' }))
+      if (JSON.stringify(writers) !== JSON.stringify(aiWriters.value)) aiWriters.value = writers
       // Accepting changes what the page *is* without changing the document —
       // the text was already there — so no update event fires and the model
       // would never hear about it. Say it now: the author just made a decision.
@@ -780,7 +782,7 @@ watch(
   () => props.modelValue,
   (next) => {
     const instance = editor.value
-    if (!instance || next === lastEmitted) return
+    if (!instance || next === lastEmitted || props.collab) return
     // External change (loaded a document, restored a working copy): re-parse.
     // An edit still waiting out its pause described the text being replaced,
     // and a suggestion made against that text has nothing left to suggest into.
@@ -808,7 +810,7 @@ watch(
   () => props.resolvePage,
   () => {
     const instance = editor.value
-    if (!instance || props.editable) return
+    if (!instance || props.editable || props.collab) return
     instance.commands.setContent(toHtml(props.modelValue), { emitUpdate: false })
     syncCommentAnchors()
     syncGlossary()
@@ -839,6 +841,7 @@ defineExpose({
   },
   /** Suggestions the assistant has written into the page and nobody has decided on yet. */
   aiPending,
+  aiWriters,
   /** One streamed `draft-edit` frame from the assistant, applied as a suggestion. */
   applyAiEdit(edit: AssistantDraftEdit) {
     editor.value?.commands.applyAiEdit(edit)
@@ -862,6 +865,14 @@ defineExpose({
   },
   focus() {
     editor.value?.commands.focus()
+  },
+  /**
+   * Replace the whole body as an ordinary edit — in a shared draft, one every
+   * peer receives. Only on the author's say-so, and only once the draft has
+   * synced: before that it would be a second seed.
+   */
+  replaceContent(markdown: string) {
+    editor.value?.commands.setContent(toHtml(markdown))
   },
   /**
    * Open the file picker and insert whatever comes back. Compact mode has no

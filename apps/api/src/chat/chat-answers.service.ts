@@ -20,18 +20,21 @@ import { CITE_MARKER_RE } from '../assistant/citations.js';
 import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 import { t, withLocale } from '../i18n/t.js';
 import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
-import type {
-  ChatActionButton,
-  ChatAdapter,
-  ChatAdapterContext,
-  ChatInbound,
-  ChatMessageRef,
-  ChatView,
+import {
+  ChatPlatformError,
+  type ChatActionButton,
+  type ChatAdapter,
+  type ChatAdapterContext,
+  type ChatInbound,
+  type ChatMessageRef,
+  type ChatView,
 } from './adapters/chat-adapter.types.js';
 import { decodeChatAction, encodeChatAction } from './chat-actions.js';
+import { ChatBufferService, type BufferedThread } from './chat-buffer.service.js';
 import { ChatCapturesService } from './chat-captures.service.js';
 import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
+import { HarvestRefused, HarvestService, type HarvestOutcome } from './harvest.service.js';
 import { WORKSPACE_AUDIENCE } from '../permissions/access-scope.js';
 
 /** A DM picks up where it left off within this window; after it, a new conversation. */
@@ -42,10 +45,15 @@ const REAP_BATCH = 50;
 const REASONS_PER_ROW = 2;
 
 /**
- * The help each platform gets: Telegram's commands are `/slash`; Time's client
- * takes every leading `/` for itself, so its commands are plain words.
+ * The help each platform gets: Telegram's commands are `/slash`; a Mattermost
+ * client (Time's too) takes every leading `/` for itself, so its commands are
+ * plain words — one text for both, named for the platform that had it first.
  */
-const HELP_KEY: Record<ChatPlatformKind, string> = { telegram: 'chat.help', time: 'chat.helpTime' };
+const HELP_KEY: Record<ChatPlatformKind, string> = {
+  telegram: 'chat.help',
+  time: 'chat.helpTime',
+  mattermost: 'chat.helpTime',
+};
 
 /** Which buttons sit under an answer: the vote row, the reasons for a 👎, or what to save it as. */
 type AnswerButtons = 'vote' | 'reasons' | 'save';
@@ -85,6 +93,8 @@ export class ChatAnswersService {
   private readonly maxSources: number;
   private readonly ratePerMinute: number;
   private readonly timeoutMs: number;
+  private readonly harvestEnabled: boolean;
+  private readonly harvestMax: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -96,12 +106,16 @@ export class ChatAnswersService {
     private readonly identities: ChatIdentityService,
     private readonly feedback: AnswerFeedbackService,
     private readonly captures: ChatCapturesService,
+    private readonly harvester: HarvestService,
+    private readonly buffer: ChatBufferService,
     config: ConfigService<Env, true>,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true }).replace(/\/$/, '');
     this.maxSources = config.get('CHAT_MAX_SOURCES', { infer: true });
     this.ratePerMinute = config.get('CHAT_RATE_LIMIT_PER_USER_PER_MINUTE', { infer: true });
     this.timeoutMs = config.get('CHAT_ANSWER_TIMEOUT_SECONDS', { infer: true }) * 1000;
+    this.harvestEnabled = config.get('HARVEST_ENABLED', { infer: true });
+    this.harvestMax = config.get('HARVEST_MAX_MESSAGES', { infer: true });
   }
 
   /**
@@ -149,6 +163,25 @@ export class ChatAnswersService {
     // silence, so a stray bot cannot be made to talk anywhere. `/bind` is the
     // one way in, and it checks who is asking.
     if (!inbound.isDm && !d.binding && command?.name !== 'bind') return;
+    // A reaction is not addressed to the bot the way a command is: from anyone
+    // but a linked editor it is just a reaction, and passes in silence.
+    if (inbound.harvestReaction) return userId ? this.harvest(d, userId, locale) : undefined;
+
+    // Kept for a harvest (#82): a DM's forwards wait for `/capture` instead of
+    // being answered; a listening group's messages are kept and then handled
+    // as usual. Masked on the way in, either way.
+    if (this.harvestEnabled && !command && inbound.text) {
+      if (inbound.isDm && inbound.forwardedFrom) {
+        // The first of a batch is told how to finish; the rest are kept quietly.
+        if (await this.buffer.holdForward(integration.id, inbound)) await this.notice(d, t('chat.harvest.forwardHeld'));
+        return;
+      }
+      if (d.binding?.listening) {
+        await this.buffer.holdGroupMessage(integration.id, d.binding, inbound).catch((err: unknown) => {
+          this.logger.warn({ msg: 'chat message not kept', integrationId: integration.id, error: String(err) });
+        });
+      }
+    }
 
     if (command) {
       switch (command.name) {
@@ -173,6 +206,13 @@ export class ChatAnswersService {
         case 'bind':
         case 'unbind':
           return this.bindCommand(d, userId, command.name);
+        case 'capture':
+          return this.harvest(d, userId, locale);
+        case 'forget': {
+          // Anyone's right over their own messages: no link, no role.
+          const removed = await this.buffer.forget(integration.id, inbound);
+          return this.notice(d, removed ? t('chat.forget.done', { count: removed }) : t('chat.forget.nothing'));
+        }
         case 'ask':
           // `/ask question` is a question, in any chat — what a group member
           // types when mentioning feels odd.
@@ -472,7 +512,7 @@ export class ChatAnswersService {
     const message = answer?.assistantMessageId
       ? await this.prisma.assistantMessage.findUnique({
           where: { id: answer.assistantMessageId },
-          select: { id: true, threadId: true, content: true, sources: true },
+          select: { id: true, threadId: true, content: true, sources: true, createdAt: true },
         })
       : null;
     if (!answer || !message) return ack(t('chat.feedback.gone'));
@@ -493,7 +533,7 @@ export class ChatAnswersService {
         await ack();
         return rerender('save');
       }
-      await ack(t(action.capture === 'page' ? 'chat.capture.draftingPage' : 'chat.capture.draftingTerm'));
+      await ack(t(action.capture === 'page' ? 'chat.capture.savingAnswer' : 'chat.capture.draftingTerm'));
       await rerender('vote');
       return this.captures.start({
         integration,
@@ -501,10 +541,11 @@ export class ChatAnswersService {
         ctx: d.ctx,
         answerMessage: { chatId: inbound.chatId, messageId: inbound.messageId },
         answer: { id: answer.id, conversationId: answer.conversationId, createdAt: answer.createdAt },
+        message: { id: message.id, createdAt: message.createdAt },
+        chatTitle: inbound.isDm ? null : (d.binding?.title ?? inbound.chatTitle),
         projectId: d.binding?.projectId ?? null,
         principal,
         kind: action.capture,
-        locale,
         workspaceName: d.workspaceName,
       });
     }
@@ -549,6 +590,89 @@ export class ChatAnswersService {
       ),
     );
     await d.adapter.editMessage(d.ctx, { chatId: d.inbound.chatId, messageId: d.inbound.messageId }, d.adapter.render(view));
+  }
+
+  /**
+   * `capture` (#82): a thread, harvested into captures as the person who
+   * asked — a linked editor, checked here and again by `CaptureService`. Time
+   * fetches the thread the command was sent in; Telegram reads the group's
+   * buffer from the message the command replies to, or in a private chat what
+   * was just forwarded. The placeholder becomes counts and an inbox link,
+   * never a capture's or a page's title: the group may hold people who cannot
+   * open them. A refusal is said in the same place.
+   *
+   * A harvest reaction (📌 on Time, ✍ on Telegram) is the same request about
+   * the message it was put on, except that nobody but a linked editor is
+   * answered at all: a refusal to a reaction would be the bot talking to
+   * people who were not talking to it.
+   */
+  private async harvest(d: Delivery, userId: string | null, locale: Locale): Promise<void> {
+    const { inbound, integration, adapter } = d;
+    const reaction = !!inbound.harvestReaction;
+    if (!userId) return this.askToLink(d);
+    let principal: Principal;
+    try {
+      principal = await this.access.principalFor(userId, locale);
+      await this.access.requireRole(principal, integration.workspaceId, 'editor');
+    } catch {
+      return reaction ? undefined : this.notice(d, t('chat.harvest.forbidden', { workspace: d.workspaceName }));
+    }
+    if (!this.harvestEnabled) return reaction ? undefined : this.notice(d, t('chat.harvest.off'));
+
+    let read: () => Promise<BufferedThread>;
+    if (adapter.fetchThread) {
+      // A reaction reads the whole thread of the post it is on. A command said
+      // at the top of a channel is its own thread: there is nothing above it to read.
+      const from = reaction ? inbound.messageId : inbound.threadId;
+      if (!from || (!reaction && from === inbound.messageId)) return this.notice(d, t('chat.harvest.notInThread'));
+      const before = reaction ? null : inbound.messageId;
+      read = async () => ({
+        thread: await adapter.fetchThread!(d.ctx, inbound.chatId, from, before, this.harvestMax),
+        note: null,
+        consumed: [],
+      });
+    } else if (inbound.isDm) {
+      read = () => this.buffer.forwards(integration.id, inbound.chatId, this.harvestMax);
+    } else {
+      const asked = reaction ? await this.buffer.asReplyTo(integration.id, inbound) : inbound;
+      if (!asked) return this.notice(d, t('chat.harvest.reactionNotKept', { count: this.buffer.ttlDays }));
+      const m = asked.replyTo;
+      if (!m) return this.notice(d, t('chat.harvest.replyFirst'));
+      const url = adapter.messageUrl?.(inbound.chatId, m.messageId) ?? null;
+      read = () => this.buffer.groupThread(integration.id, d.binding!, asked, this.harvestMax, url);
+    }
+
+    let placeholder: ChatMessageRef;
+    try {
+      placeholder = await this.post(d, { kind: 'notice', text: t('chat.harvest.reading') });
+    } catch (err) {
+      this.logger.warn({ msg: 'chat harvest placeholder not delivered', integrationId: integration.id, error: String(err) });
+      return;
+    }
+    let view: ChatView;
+    try {
+      const { thread, note, consumed } = await read();
+      const outcome = await this.harvester.harvest(
+        {
+          workspaceId: integration.workspaceId,
+          projectId: d.binding?.projectId ?? null,
+          platform: integration.kind as ChatPlatformKind,
+          chatTitle: inbound.isDm ? null : (d.binding?.title ?? inbound.chatTitle),
+          thread,
+        },
+        principal,
+      );
+      await this.buffer.consume(consumed);
+      view = {
+        kind: 'notice',
+        text: harvestSummary(outcome, thread.truncated ? this.harvestMax - 1 : null, note),
+        ...(outcome.proposed + outcome.duplicates ? { button: { label: t('chat.capture.openCaptures'), url: `${this.webBaseUrl}/captures` } } : {}),
+      };
+    } catch (err) {
+      this.logger.warn({ msg: 'chat harvest failed', integrationId: integration.id, error: String(err) });
+      view = { kind: 'notice', text: t(harvestRefusalKey(err), { workspace: d.workspaceName }) };
+    }
+    await this.show(d, placeholder, view).catch(() => undefined);
   }
 
   /** Link instruction. A code only ever goes into a private chat; a group gets "message me". */
@@ -643,6 +767,28 @@ export class ChatAnswersService {
     }
     return closed;
   }
+}
+
+/**
+ * What a harvest proposed, as counts only. `readReplies` is set when the
+ * thread was cut to the cap; `note` says how a partial thread was read.
+ */
+export function harvestSummary(outcome: HarvestOutcome, readReplies: number | null, note: string | null = null): string {
+  const parts = [
+    outcome.proposed ? t('chat.harvest.proposed', { count: outcome.proposed }) : null,
+    outcome.duplicates ? t('chat.harvest.duplicates', { count: outcome.duplicates }) : null,
+    outcome.proposed + outcome.duplicates ? null : t('chat.harvest.nothing'),
+    readReplies !== null ? t('chat.harvest.truncated', { count: readReplies }) : null,
+    note,
+  ];
+  return parts.filter(Boolean).join(' ');
+}
+
+function harvestRefusalKey(err: unknown): string {
+  if (err instanceof HarvestRefused) return err.key;
+  if (err instanceof ChatPlatformError) return 'chat.harvest.unreadable';
+  if (err instanceof HttpException && err.getStatus() === HttpStatus.TOO_MANY_REQUESTS) return 'chat.answer.budget';
+  return 'chat.harvest.failed';
 }
 
 /** 👍 👎 and Save under an answer. The votes are emoji only: they read the same in every language. */

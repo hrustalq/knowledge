@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { aclAdmits, type DocumentAclFilter } from '../common/document-acl.js';
 import type { FulltextChunk, FulltextHit, FulltextProvider } from './fulltext.provider.js';
+import type { RevisionStamp, TemporalPoint } from '../graph/temporal.js';
 
 /**
  * The ACL fields (#76). Declared on create and again on every boot with
@@ -11,6 +12,13 @@ import type { FulltextChunk, FulltextHit, FulltextProvider } from './fulltext.pr
 const ACL_PROPERTIES = {
   aclNodes: { type: 'keyword' },
   aclRestricted: { type: 'boolean' },
+};
+
+/** Valid-time stamps (#81), added to an existing index by the same mapping update. */
+const VALIDITY_PROPERTIES = {
+  validFrom: { type: 'long' },
+  validTo: { type: 'long' },
+  lineage: { type: 'keyword' },
 };
 
 interface SearchHit {
@@ -45,6 +53,7 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
               documentId: { type: 'keyword' },
               revisionId: { type: 'keyword' },
               live: { type: 'boolean' },
+              ...VALIDITY_PROPERTIES,
               chunkId: { type: 'keyword' },
               index: { type: 'integer' },
               headingPath: { type: 'keyword' },
@@ -57,20 +66,22 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
       if (!res.ok) {
         const body = await res.text();
         if (!body.includes('resource_already_exists_exception')) {
-          this.ready = undefined; // retry on next call
           throw new Error(`OpenSearch index create failed (${res.status}): ${body.slice(0, 300)}`);
         }
         const mapped = await fetch(`${this.baseUrl}/${this.index}/_mapping`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ properties: ACL_PROPERTIES }),
+          body: JSON.stringify({ properties: { ...ACL_PROPERTIES, ...VALIDITY_PROPERTIES } }),
         });
         if (!mapped.ok) {
-          this.ready = undefined;
           throw new Error(`OpenSearch mapping update failed (${mapped.status}): ${(await mapped.text()).slice(0, 300)}`);
         }
       }
-    })();
+    })().catch((err: unknown) => {
+      // Any failure, an HTTP error or a thrown fetch, leaves nothing cached: the next call retries (#330).
+      this.ready = undefined;
+      throw err;
+    });
     return this.ready;
   }
 
@@ -176,12 +187,44 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
    * all. Either way the hits are filtered again below and in PG afterwards,
    * so a lagging stamp can only cost recall, never leak a page.
    */
-  async search(workspaceId: string, query: string, k: number, acl: DocumentAclFilter): Promise<FulltextHit[]> {
+  /** #81: one update_by_query per revision, scoped to the page. */
+  async stampRevisions(workspaceId: string, documentId: string, stamps: readonly RevisionStamp[]): Promise<void> {
+    if (stamps.length === 0) return;
+    await this.ensureIndex();
+    for (const stamp of stamps) {
+      const res = await fetch(`${this.baseUrl}/${this.index}/_update_by_query?refresh=true&conflicts=proceed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: { bool: { filter: [{ term: { workspaceId } }, { term: { documentId } }, { term: { revisionId: stamp.revisionId } }] } },
+          script: {
+            source: 'ctx._source.validFrom = params.validFrom; ctx._source.validTo = params.validTo; ctx._source.lineage = params.lineage',
+            lang: 'painless',
+            params: { validFrom: stamp.validFrom, validTo: stamp.validTo, lineage: stamp.lineage },
+          },
+        }),
+      });
+      if (!res.ok && res.status !== 404) {
+        throw new Error(`OpenSearch validity stamp failed (${res.status}) for document ${documentId}`);
+      }
+    }
+  }
+
+  async search(workspaceId: string, query: string, k: number, acl: DocumentAclFilter, at?: TemporalPoint): Promise<FulltextHit[]> {
     await this.ensureIndex();
     const filter: unknown[] = [{ term: { workspaceId } }];
     // #83: only the live projection. must_not rather than a term on true, so
     // documents indexed before the field existed still match.
-    const mustNot: unknown[] = [{ term: { live: false } }];
+    const mustNot: unknown[] = at ? [] : [{ term: { live: false } }];
+    // #81: as of a point, the rows whose interval covers it — the chunk
+    // predicate of `asOfChunkClause`, spelled for OpenSearch.
+    if (at) {
+      filter.push(
+        { term: { lineage: 'default' } },
+        { range: { validFrom: { lte: at.at } } },
+        { bool: { should: [{ bool: { must_not: [{ exists: { field: 'validTo' } }] } }, { range: { validTo: { gt: at.at } } }], minimum_should_match: 1 } },
+      );
+    }
     if (acl.kind !== 'all') {
       const ids = acl.documentIds.size ? [...acl.documentIds] : [''];
       if (acl.kind === 'allow') {

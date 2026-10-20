@@ -3,7 +3,7 @@
 // live indexing-status dots, active-trail auto-expansion. The row and the
 // branch are drawn by TreeRow / TreeBranch, which the public site reader
 // shares; this wrapper adds the stores, DnD, the row menu and RouterLink.
-import { computed, inject, ref, watch, watchEffect } from 'vue'
+import { computed, inject, ref, watch, watchPostEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { Lock } from 'lucide-vue-next'
@@ -94,8 +94,13 @@ function toggle() {
  * refetch, a scope change, a live invalidation). Fetching once from setup meant
  * a row that outlived its children stayed open over empty placeholders until
  * someone collapsed and reopened it.
+ *
+ * After the render, not in setup: the server draws these rows when it
+ * prefetched the tree (#279), and a fetch started in setup marks the row
+ * `loading` before its first draw — on the server a render that does not wait
+ * for the answer, on the client a first render that no longer matches it.
  */
-watchEffect(() => {
+watchPostEffect(() => {
   if (open.value && hasChildren.value && props.node.children.length === 0) {
     void store.fetchChildren(props.node.documentId)
   }

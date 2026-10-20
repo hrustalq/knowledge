@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import type { AssistantAskSource, DocumentTreeNode } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
+import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
@@ -10,6 +11,7 @@ import { SearchService } from '../search/search.service.js';
 import { readFrontmatterRelations, readFrontmatterTags } from '../common/relations.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { TemplatesService } from '../templates/templates.service.js';
+import { CommunitiesService } from '../communities/communities.service.js';
 import { READ_TOOL_NAMES } from './assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 
@@ -56,6 +58,8 @@ export class AssistantReadToolsService {
     private readonly documents: DocumentsService,
     private readonly templates: TemplatesService,
     private readonly permissions: PermissionService,
+    private readonly communities: CommunitiesService,
+    private readonly analytics: AnalyticsRecorder,
   ) {}
 
   /**
@@ -67,6 +71,11 @@ export class AssistantReadToolsService {
   private async scopeOf(ctx: AssistantToolContext): Promise<AccessScope> {
     const scope = await this.permissions.scopeFor(ctx.principal, ctx.workspaceId);
     return ctx.audience ? this.permissions.audienceScope(scope, ctx.audience) : scope;
+  }
+
+  /** The turn as the analytics log files it (#79). */
+  private callerOf(ctx: AssistantToolContext): AnalyticsCaller {
+    return { principal: ctx.principal, channel: ctx.channel ?? 'assistant' };
   }
 
   definitions(): ChatCompletionFunctionTool[] {
@@ -119,6 +128,25 @@ export class AssistantReadToolsService {
               limit: { type: 'integer', minimum: 1, maximum: 10, description: 'Max results (default 5)' },
             },
             required: ['query'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'global_overview',
+          description:
+            'For a broad question about the whole knowledge base ("what are our main risks?", "what do we know ' +
+            'about payments?"): the communities of related pages closest to it, each with a summary of what its ' +
+            'pages cover and the pages themselves (each with a `cite` label). Summaries are written by an agent ' +
+            'from the pages — read the pages before relying on a detail. Empty when communities have not been built.',
+          parameters: {
+            type: 'object',
+            properties: {
+              question: { type: 'string', description: 'The broad question, in natural language' },
+              limit: { type: 'integer', minimum: 1, maximum: 8, description: 'Max communities (default 4)' },
+            },
+            required: ['question'],
           },
         },
       },
@@ -245,6 +273,8 @@ export class AssistantReadToolsService {
           return await this.listTemplates(args, ctx);
         case 'get_template':
           return await this.getTemplate(args, ctx);
+        case 'global_overview':
+          return await this.globalOverview(args, ctx);
         default:
           return this.fail(`Unknown tool ${name}`);
       }
@@ -281,6 +311,7 @@ export class AssistantReadToolsService {
         ...(ctx.projectId ? { filters: { projectIds: [ctx.projectId] } } : { expandGraph: { depth: 1 } }),
       },
       scope,
+      this.callerOf(ctx),
     );
     // Where each hit lives, not just what it is called. Two pages both called
     // "Overview" in different sections were indistinguishable to the model,
@@ -350,6 +381,35 @@ export class AssistantReadToolsService {
   }
 
   /**
+   * #81 phase 7: the communities closest to a broad question, under the
+   * caller's scope (a community with a page they may not open is withheld
+   * whole). Summaries are agent-written from page content, so they travel
+   * wrapped untrusted; each member page is a citable source.
+   */
+  private async globalOverview(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
+    const question = String(args.question ?? '').slice(0, 2_000).trim();
+    if (!question) return this.fail('question is required');
+    const limit = Math.min(Math.max(Math.floor(Number(args.limit)) || 4, 1), 8);
+    const communities = await this.communities.overview(await this.scopeOf(ctx), question, limit);
+    const sources: AssistantAskSource[] = [];
+    const seen = new Map<string, AssistantAskSource>();
+    const results = communities.map((c) => ({
+      title: c.title,
+      summary: wrapUntrusted(c.summary, 'global_overview', 'page'),
+      pages: c.documents.map((d) => {
+        let source = seen.get(d.documentId);
+        if (!source) {
+          source = { documentId: d.documentId, title: d.title, snippet: c.summary.slice(0, 300), factClass: 'inferred' };
+          seen.set(d.documentId, source);
+          sources.push(source);
+        }
+        return { documentId: d.documentId, title: d.title, ...this.citeOf(ctx, source) };
+      }),
+    }));
+    return { content: JSON.stringify({ communities: results }), ok: true, sources };
+  }
+
+  /**
    * The gallery, as the model reads it. Names and descriptions are typed by
    * workspace members, so the whole answer is wrapped untrusted — a template
    * called "ignore your instructions" is a template with a strange name.
@@ -402,6 +462,7 @@ export class AssistantReadToolsService {
     await this.permissions.auditBypassRead(ctx.principal, scope, { type: 'document', id: documentId });
     try {
       const content = await this.documents.getContent(documentId);
+      void this.analytics.view(this.callerOf(ctx), documentId, content.revisionId);
       const trails = await this.documents.breadcrumbsFor(scope, [documentId]);
       const source: AssistantAskSource = { documentId, title: doc.title, revisionId: content.revisionId, factClass: 'explicit' };
       return {

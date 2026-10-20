@@ -16,6 +16,7 @@
  */
 import { Decoration, Extension } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
+import { projectDoc } from '@knowledge/editor-schema/suggestions'
 import { avatarColorDeep, avatarInitials } from '@/lib/avatar'
 import {
   MAX_QUOTE_CHARS,
@@ -91,53 +92,8 @@ export const ANCHOR_ATTR = 'data-kn-thread'
 /** Every thread a pin stands for, when several share one passage. */
 export const ANCHOR_LIST_ATTR = 'data-kn-threads'
 
-interface Projection {
-  /** Visible text, whitespace collapsed to single spaces. */
-  text: string
-  /** positions[i] is the document position of text[i]. */
-  positions: number[]
-}
-
-/**
- * Text as the reader sees it, plus where each character lives in the document.
- *
- * Block boundaries contribute a space even when no whitespace exists in the
- * document, so two paragraphs cannot glue into one match; and whitespace never
- * materializes until a real character follows, which keeps the projection free
- * of leading padding. Both rules mirror the DOM projection exactly.
- */
-export function projectDoc(doc: PMNode): Projection {
-  let text = ''
-  const positions: number[] = []
-  let pendingSpace = false
-
-  doc.descendants((node, pos) => {
-    if (node.isText) {
-      const raw = node.text ?? ''
-      for (let i = 0; i < raw.length; i++) {
-        const ch = raw[i]!
-        if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f') {
-          pendingSpace = text.length > 0
-          continue
-        }
-        if (pendingSpace) {
-          text += ' '
-          positions.push(pos + i)
-          pendingSpace = false
-        }
-        text += ch
-        positions.push(pos + i)
-      }
-      return false
-    }
-    // Entering any block starts a new run of text. Atom blocks (a diagram, a
-    // whiteboard) hold no prose the reader can quote, so they only break.
-    if (node.isBlock) pendingSpace = text.length > 0
-    return !node.isAtom
-  })
-
-  return { text, positions }
-}
+// Moved to @knowledge/editor-schema (#316): the API's draft tools resolve anchors with it too.
+export { projectDoc }
 
 /** Document range for an anchor, or null when the passage is gone. */
 export function resolveAnchorInDoc(doc: PMNode, anchor: TextAnchor): { from: number; to: number } | null {

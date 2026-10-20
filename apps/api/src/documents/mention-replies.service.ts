@@ -372,7 +372,7 @@ export class MentionRepliesService {
       where: { id: input.subject.documentId },
       select: { projectId: true },
     });
-    const learnings = await this.learnings.promptFor({
+    const { prompt: learnings } = await this.learnings.promptFor({
       workspaceId: input.workspaceId,
       agentKey: agent.key,
       projectIds: page ? [page.projectId] : [],

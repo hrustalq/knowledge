@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DEFAULT_API_BREAKING_CHANGE_POLICY, isApiSpecKind } from '@knowledge/contracts';
 import type {
@@ -17,11 +17,10 @@ import type {
   MergeRequestProvenance,
   MergeRequestStatus,
   MergeStrategy,
-  RevisionInfo,
-  RevisionStatus,
 } from '@knowledge/contracts';
-import type { DocumentBranch, DocumentRevision, MergeRequest, MergeRequestReviewer } from '@prisma/client';
+import type { DocumentBranch, MergeRequest, MergeRequestReviewer } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { toRevisionInfo } from './revision-info.js';
 import { StorageService } from '../storage/storage.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { AccessService } from '../auth/access.service.js';
@@ -37,6 +36,7 @@ import { visibilityWhere, type AccessScope } from '../permissions/access-scope.j
 import { ApiSpecDiffService } from '../api-specs/api-spec-diff.service.js';
 import { EntitiesService } from '../entities/entities.service.js';
 import { AuditService } from '../auth/audit.service.js';
+import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { LintChecksService } from './lint/lint-checks.service.js';
 import { lintGateEnforced, overridable } from './lint/lint-check.js';
 
@@ -73,6 +73,8 @@ type MrWithBranches = MergeRequest & {
  */
 @Injectable()
 export class MergeRequestsService {
+  private readonly logger = new Logger(MergeRequestsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
@@ -90,6 +92,7 @@ export class MergeRequestsService {
     private readonly entities: EntitiesService,
     private readonly lint: LintChecksService,
     private readonly audit: AuditService,
+    private readonly conflicts: ConflictsService,
   ) {}
 
   /**
@@ -797,9 +800,14 @@ export class MergeRequestsService {
       strategy,
       mergedRevisionId: finalized.revisionId,
     });
+    // #81: the conflicts this merge request was proposed to fix are resolved.
+    // Post-commit and non-fatal: the merge stands either way.
+    await this.conflicts
+      .resolveMerged(mr.id, principal?.userId ?? null)
+      .catch((e) => this.logger.warn(`Resolving conflicts for merge request ${mr.id} failed: ${(e as Error).message}`));
     return {
       mergeRequest: await this.toDetail(updated),
-      mergedRevision: mergedRevision ? this.toRevisionInfo(mergedRevision) : null,
+      mergedRevision: mergedRevision ? toRevisionInfo(mergedRevision) : null,
     };
   }
 
@@ -922,19 +930,6 @@ export class MergeRequestsService {
     return Array.isArray(mr.approvedBy) ? (mr.approvedBy as string[]) : [];
   }
 
-  private toRevisionInfo(r: DocumentRevision): RevisionInfo {
-    return {
-      revisionId: r.id,
-      documentId: r.documentId,
-      revisionNumber: r.revisionNumber,
-      contentHash: r.contentHash,
-      contentType: r.contentType,
-      status: r.status as RevisionStatus,
-      message: r.message,
-      createdAt: r.createdAt.toISOString(),
-      finalizedAt: r.finalizedAt?.toISOString() ?? null,
-    };
-  }
 
   /**
    * Public so MergeRequestThreadsService can record against the same funnel.

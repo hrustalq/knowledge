@@ -1,5 +1,5 @@
 import { ASSISTANT_CODE_TOOL_NAMES, ASSISTANT_TASK_READ_TOOL_NAMES, ASSISTANT_TASK_TOOL_NAMES } from '@knowledge/contracts';
-import type { AssistantPrompt, AssistantSource, AssistantUiBlock } from '@knowledge/contracts';
+import type { AnalyticsChannel, AssistantPrompt, AssistantSource, AssistantUiBlock } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { Audience } from '../permissions/access-scope.js';
 
@@ -53,6 +53,11 @@ export interface AssistantToolContext {
    * sees exactly what they can open. Pinned by the harness, never from args.
    */
   audience?: Audience;
+  /**
+   * Which surface the turn runs on, for the analytics log (#79): a chat bot
+   * or a background agent. Absent is the in-app assistant.
+   */
+  channel?: Extract<AnalyticsChannel, 'chat' | 'agent'>;
 }
 
 export interface AssistantToolResult {
@@ -83,6 +88,9 @@ export const READ_TOOL_NAMES = new Set([
   // reading one changes nothing, so it batches with the other reads.
   'list_templates',
   'get_template',
+  // Community summaries for broad questions (#81). Reads the graph's
+  // communities; changes nothing.
+  'global_overview',
 ]);
 
 /**

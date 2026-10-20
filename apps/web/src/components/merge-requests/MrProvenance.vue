@@ -14,6 +14,7 @@ import { Bot } from 'lucide-vue-next'
 import type { CaptureInfo, MergeRequestInfo } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/api/queries'
 import { clientLabel, repoAtCommit } from '@/components/captures/capture-ui'
+import CaptureOriginParts from '@/components/captures/CaptureOriginParts.vue'
 
 const { t } = useI18n()
 
@@ -29,13 +30,15 @@ const captureQuery = useQuery(
 const capture = computed(() => captureQuery.data.value as CaptureInfo | undefined)
 const session = computed(() => capture.value?.session ?? null)
 const repo = computed(() => (session.value ? repoAtCommit(session.value) : null))
+/** A chat capture's origin is the server's, not a report (#82): the "reported" hint would be untrue. */
+const origin = computed(() => capture.value?.origin ?? null)
 </script>
 
 <template>
   <div
     v-if="mergeRequest.provenance !== 'manual'"
     class="flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
-    :title="mergeRequest.provenance === 'captured' ? t('mr.provenance.reportedHint') : undefined"
+    :title="mergeRequest.provenance === 'captured' && !origin ? t('mr.provenance.reportedHint') : undefined"
   >
     <Bot class="size-3.5 shrink-0 text-foreground/70" aria-hidden="true" />
 
@@ -48,6 +51,7 @@ const repo = computed(() => (session.value ? repoAtCommit(session.value) : null)
         {{ t('mr.provenance.capturedFrom') }}
         <span class="font-medium text-foreground">{{ session ? clientLabel(session.client, t) : t('mr.provenance.anAgent') }}</span>
       </span>
+      <CaptureOriginParts v-if="origin" :origin="origin" />
       <template v-if="repo">
         <span aria-hidden="true">·</span>
         <code class="font-mono text-[0.6875rem] text-foreground/80" :title="session?.repo">{{ repo }}</code>

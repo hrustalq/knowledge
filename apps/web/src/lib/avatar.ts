@@ -8,26 +8,61 @@
  * person would be two different colours on one screen.
  */
 
-/** Stable hue per user id. Identity, so it must not depend on the display name. */
+/**
+ * Stable hue per id. Identity, so it must not depend on the display name.
+ * Also the hue of project and workspace monograms and of cited sites: one hash,
+ * so the same id is never two colours.
+ */
 export function avatarHue(userId: string): number {
   let hash = 0
   for (const ch of userId) hash = (hash * 31 + ch.charCodeAt(0)) % 360
   return hash
 }
 
-export function avatarColor(userId: string): string {
-  return `hsl(${avatarHue(userId)} 55% 45%)`
+/**
+ * The colour behind white initials, for a person, a project, a workspace or a
+ * cited site: every generated identity mark in the product goes through here.
+ */
+export function avatarColor(id: string): string {
+  return identityShade(avatarHue(id), 55, 45)
 }
 
 /**
- * The same identity, for a face too small to carry white initials at the
- * normal shade. A 14px avatar puts two letters at 8px, where 55%/45% measures
- * 2.6:1 — legible as a colour, not as letters. The hue is unchanged, so the
- * dot on a comment pin and the avatar in the discussion it opens are still
- * recognisably the same person.
+ * The same identity, deeper, for a face whose initials are tiny (a 14px avatar
+ * puts two letters at 8px) or for ink drawn on the shade itself. The hue is
+ * unchanged, so the dot on a comment pin and the avatar in the discussion it
+ * opens are still recognisably the same person.
  */
 export function avatarColorDeep(userId: string): string {
-  return `hsl(${avatarHue(userId)} 60% 30%)`
+  return identityShade(avatarHue(userId), 60, 30)
+}
+
+/**
+ * White text must reach 4.5:1 on the mark (WCAG 1.4.3; initials are 9–14px, so
+ * the large-text 3:1 allowance never applies). A fixed HSL lightness does not
+ * get there: HSL is not perceptual, and at 45% a yellow-green measures 2.3:1
+ * while a blue measures 9:1. So the lightness is the asked-for one, lowered
+ * only as far as this hue needs. The hue is never touched, which is what keeps
+ * an id recognisable, and the hues that already passed render exactly as
+ * before. The target leaves headroom over 4.5 for 8-bit rounding.
+ */
+const MAX_WHITE_LUMINANCE = 1.05 / 4.6 - 0.05
+
+export function identityShade(hue: number, saturation: number, lightness: number): string {
+  let l = lightness
+  while (l > 0 && hslLuminance(hue, saturation / 100, l / 100) > MAX_WHITE_LUMINANCE) l -= 0.5
+  return `hsl(${hue} ${saturation}% ${l}%)`
+}
+
+/** WCAG relative luminance of hsl(h s l), with s and l in [0,1]. */
+function hslLuminance(h: number, s: number, l: number): number {
+  const a = s * Math.min(l, 1 - l)
+  const channel = (n: number) => {
+    const k = (n + h / 30) % 12
+    const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * channel(0) + 0.7152 * channel(8) + 0.0722 * channel(4)
 }
 
 /**

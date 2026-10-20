@@ -49,9 +49,12 @@ watch(open, (isOpen) => {
     side="bottom"
     panel-class="w-[22rem] p-2"
   >
+    <!-- Named by its content, so the visible count is part of the name
+         (WCAG 2.5.3) — an aria-label would drop it. -->
     <template #trigger>
-      <Button variant="ghost" size="icon-sm" class="relative" :aria-label="t('notifications.title')">
+      <Button variant="ghost" size="icon-sm" class="relative">
         <Bell class="size-4" />
+        <span class="sr-only">{{ t('notifications.title') }}</span>
         <span
           v-if="store.hasUnread"
           class="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-medium tabular-nums text-primary-foreground"

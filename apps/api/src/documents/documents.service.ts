@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import matter from 'gray-matter';
+import * as Y from 'yjs';
 import type {
   BranchInfo,
   FactExtractor,
@@ -28,9 +29,11 @@ import type {
   WorkspaceGraphResponse,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { toRevisionInfo } from './revision-info.js';
 import { normalizeRelationTarget, tagFilterKey } from '../common/relations.js';
 import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
+import type { TemporalPoint } from '../graph/temporal.js';
 import { IngestionProducer } from '../ingestion/ingestion.producer.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
@@ -380,8 +383,55 @@ export class DocumentsService {
       // No default here: createDraftRevision picks one from the document's kind.
       contentType: dto.contentType,
       authorId,
+      collab: dto.collabDraftId ? await this.draftOf(documentId, dto.branch ?? document.defaultBranch, dto) : undefined,
     });
-    return this.toRevisionInfo(revision);
+    return toRevisionInfo(revision);
+  }
+
+  /**
+   * A revision published from a shared draft (#80) names the draft and the Y
+   * snapshot its content was serialized at. The draft must be this branch's:
+   * finalize rebases it, and rebasing another page's draft would mark edits
+   * published that never were.
+   */
+  private async draftOf(
+    documentId: string,
+    branch: string,
+    dto: CreateRevisionDto,
+  ): Promise<{ draftId: string; snapshot: Uint8Array<ArrayBuffer> }> {
+    const draft = await this.prisma.collabDraft.findFirst({
+      where: { id: dto.collabDraftId, documentId, branch: { name: branch } },
+      select: { id: true },
+    });
+    if (!draft) {
+      throw new BadRequestException(t('error.collab.draftMismatch', { draftId: dto.collabDraftId, branch, documentId }));
+    }
+    const snapshot = new Uint8Array(Buffer.from(dto.draftSnapshot ?? '', 'base64'));
+    try {
+      Y.decodeSnapshot(snapshot);
+    } catch {
+      throw new BadRequestException(t('error.collab.snapshotInvalid'));
+    }
+    return { draftId: draft.id, snapshot };
+  }
+
+  /**
+   * Rebase a shared draft onto the revision just published from it, inside
+   * the caller's transaction: its base becomes `revisionId`, what it held at
+   * the snapshot reads as published, and whoever wrote in it since the last
+   * publish is credited on the revision (`credit`) and cleared. Edits a peer
+   * made after the snapshot stay unpublished.
+   */
+  private async markPublished(draftId: string, revisionId: string, snapshot: Uint8Array<ArrayBuffer> | null, credit: boolean): Promise<void> {
+    if (credit) {
+      await this.prisma.$executeRaw`
+        UPDATE document_revisions r SET co_author_ids = d.contributors
+        FROM collab_drafts d WHERE r.id = ${revisionId}::uuid AND d.id = ${draftId}::uuid`;
+    }
+    await this.prisma.collabDraft.updateMany({
+      where: { id: draftId },
+      data: { baseRevisionId: revisionId, publishedSnapshot: snapshot, contributors: [] },
+    });
   }
 
   async finalizeRevision(documentId: string, revisionId: string): Promise<FinalizeRevisionResponse> {
@@ -416,6 +466,9 @@ export class DocumentsService {
       await this.prisma.withTransaction(async () => {
         await this.prisma.revisionParent.deleteMany({ where: { revisionId: revision.id } });
         await this.prisma.documentRevision.delete({ where: { id: revision.id } });
+        // The draft says what `existing` says: it is published as that, with
+        // no credit to write — `existing` keeps its own.
+        if (revision.collabDraftId) await this.markPublished(revision.collabDraftId, existing.id, revision.collabSnapshot, false);
       });
       return { revisionId: existing.id, status: existing.status as RevisionStatus, ingestionJobId: null, deduplicated: true };
     }
@@ -447,6 +500,7 @@ export class DocumentsService {
           : { documentId_name: { documentId, name: document.defaultBranch } },
         data: { headRevisionId: revision.id },
       });
+      if (revision.collabDraftId) await this.markPublished(revision.collabDraftId, revision.id, revision.collabSnapshot, true);
       // Outbox (plan.md §5): the job row commits atomically with the status change;
       // enqueue happens after commit, the sweeper covers enqueue failures.
       const job = await this.prisma.ingestionJob.create({
@@ -728,7 +782,7 @@ export class DocumentsService {
         // clock (docs/features/38 + 39). Writes live in VerificationService.
         ...this.trustFields(document, headId, issues.get(documentId) ?? 0, settings.inactiveAfterDays),
       },
-      revision: this.toRevisionInfo(revision),
+      revision: toRevisionInfo(revision),
       chunks,
     };
   }
@@ -804,14 +858,14 @@ export class DocumentsService {
     return {
       documentId,
       revisions: revisions.map((r) => ({
-        ...this.toRevisionInfo(r),
+        ...toRevisionInfo(r),
         branch: r.branch?.name ?? null,
         parentRevisionIds: r.parents.map((p) => p.parentRevisionId),
       })),
     };
   }
 
-  async addRelations(documentId: string, relations: RelationInputDto[]): Promise<ListDocumentRelationsResponse> {
+  async addRelations(documentId: string, relations: RelationInputDto[], actor?: string): Promise<ListDocumentRelationsResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     const branch = await this.prisma.documentBranch.findUnique({
       where: { documentId_name: { documentId, name: document.defaultBranch } },
@@ -822,6 +876,7 @@ export class DocumentsService {
       revisionId: branch?.headRevisionId ?? null,
       title: document.title,
       facts: this.toFacts(relations),
+      actor,
     });
     return this.listRelations(documentId);
   }
@@ -852,7 +907,7 @@ export class DocumentsService {
    * Curate a relation (plan.md §5 "curated" class): user-confirmed, confidence
    * 1, protected from automatic re-extraction overwrites.
    */
-  async curateRelation(documentId: string, relation: RelationInputDto): Promise<ListDocumentRelationsResponse> {
+  async curateRelation(documentId: string, relation: RelationInputDto, actor?: string): Promise<ListDocumentRelationsResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     const branch = await this.prisma.documentBranch.findUnique({
       where: { documentId_name: { documentId, name: document.defaultBranch } },
@@ -864,6 +919,7 @@ export class DocumentsService {
       revisionId: branch?.headRevisionId ?? null,
       title: document.title,
       fact: { ...fact, extractor: 'curated', confidence: 1 },
+      actor,
     });
     await this.activity.record({
       workspaceId: document.workspaceId,
@@ -880,9 +936,10 @@ export class DocumentsService {
     type: string,
     targetKey: string,
     extractor?: string,
+    actor?: string,
   ): Promise<ListDocumentRelationsResponse> {
     const document = await this.getDocumentOrThrow(documentId);
-    await this.graph.deleteRelations(document.workspaceId, documentId, type, targetKey, extractor);
+    await this.graph.deleteRelations(document.workspaceId, documentId, type, targetKey, extractor, actor);
     await this.activity.record({
       workspaceId: document.workspaceId,
       action: 'relations.deleted',
@@ -893,6 +950,29 @@ export class DocumentsService {
   }
 
   /** Feature 01 (docs/features/01): full raw content of a revision. */
+  /** The page's workspace, for resolving an `asOf` before the read (#81). */
+  async workspaceOf(documentId: string): Promise<string> {
+    return (await this.getDocumentOrThrow(documentId)).workspaceId;
+  }
+
+  /**
+   * The default-branch revision that was the page's content at `at` (#81): the
+   * newest one finalized by then. A legacy revision with no branch id is on
+   * the default branch. 404 when the page had no content yet.
+   */
+  async revisionAsOf(documentId: string, at: TemporalPoint): Promise<string> {
+    const document = await this.prisma.document.findUnique({ where: { id: documentId }, include: { branches: true } });
+    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
+    const branchId = document.branches.find((b) => b.name === document.defaultBranch)?.id ?? null;
+    const revision = await this.prisma.documentRevision.findFirst({
+      where: { documentId, finalizedAt: { lte: new Date(at.at) }, OR: [{ branchId }, { branchId: null }] },
+      orderBy: { finalizedAt: 'desc' },
+      select: { id: true },
+    });
+    if (!revision) throw new NotFoundException(t('error.document.noReadableRevision', { id: documentId }));
+    return revision.id;
+  }
+
   async getContent(documentId: string, revisionId?: string): Promise<DocumentContentResponse> {
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
@@ -1430,7 +1510,7 @@ export class DocumentsService {
    * those documents still reach: an entity whose every mention lives in
    * another project is not part of this project's vocabulary.
    */
-  async getWorkspaceGraph(scope: AccessScope, projectId?: string): Promise<WorkspaceGraphResponse> {
+  async getWorkspaceGraph(scope: AccessScope, projectId?: string, at?: TemporalPoint): Promise<WorkspaceGraphResponse> {
     const { workspaceId } = scope;
     // Pages the caller may not open are not nodes, so their edges go (below,
     // `inScope`) and with them every entity only they mention (#76).
@@ -1452,7 +1532,7 @@ export class DocumentsService {
 
     // `inScope` is the authority (it is PG under the same predicate); the
     // graph filter only keeps hidden pages' edges off the wire (#76).
-    const g = await this.graph.getWorkspaceRelationGraph(workspaceId, await this.permissions.documentFilterFor(scope));
+    const g = await this.graph.getWorkspaceRelationGraph(workspaceId, await this.permissions.documentFilterFor(scope), at);
 
     // The renderer draws every edge each frame; past this the canvas stops
     // being readable long before it stops being fast, so the cap is a
@@ -1503,14 +1583,14 @@ export class DocumentsService {
    * knowledge graph. depth = entity hops (one entity hop = two BFS hops over
    * the bipartite doc→entity graph, same convention as Phase 4 traversal).
    */
-  async getDocumentGraph(documentId: string, depth: number, scope: AccessScope): Promise<DocumentGraphResponse> {
+  async getDocumentGraph(documentId: string, depth: number, scope: AccessScope, at?: TemporalPoint): Promise<DocumentGraphResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     const d = Math.min(Math.max(Math.floor(depth) || 1, 1), 3);
 
     // Walk only what the caller may open: an edge from a page they cannot see
     // would otherwise both reveal the page and carry the walk on through it
     // to entities only it mentions. GraphService drops both (#76).
-    const g = await this.graph.getWorkspaceRelationGraph(document.workspaceId, await this.permissions.documentFilterFor(scope));
+    const g = await this.graph.getWorkspaceRelationGraph(document.workspaceId, await this.permissions.documentFilterFor(scope), at);
     const adj = buildAdjacency(g.edges);
     const hits = bfs(adj, docNode(documentId), d * 2);
 
@@ -1722,7 +1802,13 @@ export class DocumentsService {
 
   private async createDraftRevision(
     documentId: string,
-    opts: { branch?: string; message?: string; contentType?: string; authorId?: string },
+    opts: {
+      branch?: string;
+      message?: string;
+      contentType?: string;
+      authorId?: string;
+      collab?: { draftId: string; snapshot: Uint8Array<ArrayBuffer> };
+    },
   ): Promise<DocumentRevision> {
     const document = await this.getDocumentOrThrow(documentId);
     const branchName = opts.branch ?? document.defaultBranch;
@@ -1753,6 +1839,8 @@ export class DocumentsService {
           authorId: opts.authorId ?? AUTHOR_ID_STUB,
           message: opts.message,
           status: 'draft',
+          collabDraftId: opts.collab?.draftId,
+          collabSnapshot: opts.collab?.snapshot,
         },
       });
       const s3Key = this.storage.revisionObjectKey(
@@ -1786,19 +1874,6 @@ export class DocumentsService {
     return apiSpecContentType(kind, (requested && apiSpecSyntaxOf(requested)) || 'yaml');
   }
 
-  private toRevisionInfo(r: DocumentRevision): RevisionInfo {
-    return {
-      revisionId: r.id,
-      documentId: r.documentId,
-      revisionNumber: r.revisionNumber,
-      contentHash: r.contentHash,
-      contentType: r.contentType,
-      status: r.status as RevisionStatus,
-      message: r.message,
-      createdAt: r.createdAt.toISOString(),
-      finalizedAt: r.finalizedAt?.toISOString() ?? null,
-    };
-  }
 
   private async getDocumentOrThrow(documentId: string) {
     const doc = await this.prisma.document.findUnique({ where: { id: documentId } });

@@ -41,6 +41,26 @@ revision-scoped edges of the indexed head of each document's default branch.
 - `live IS NULL` reads as live, so rows written before the flag existed stay
   visible until `make graph-live-backfill` stamps them.
 
+## Reading as of a point in time
+
+Every revision-scoped row also carries the interval it was true (#81,
+[feature 57](../features/57-temporal-graph.md)). `validFrom` and `validTo`
+come from PG revision finalize times (`revisionStamps`). Edges additionally
+carry `ingestedAt`, `expiredAt` and `retractedBy`, because a fact dropped by
+re-extraction or withdrawn by a person is expired, never deleted.
+
+- A read with no `asOf` uses `live`, unchanged. A read with one swaps `live`
+  for `asOfEdgeClause` (edges) or `asOfChunkClause` (chunks), in
+  `graph/temporal.ts`. These are the only two predicates, and both instants
+  are bound parameters.
+- `getWorkspaceRelationGraph(ws, acl, at?)`, `searchChunks(…, at?)`,
+  `getDocumentIdsByTags(…, at?)` and `FulltextProvider.search(…, at?)` take
+  the point, under the same `DocumentAclFilter` as their current reads.
+- An as-of graph keeps only the entities a valid edge mentions.
+- `TemporalResolverService` turns `asOf` (an ISO date, `rev:`, `tag:`) and
+  `knownAt` into a `TemporalPoint`. A foreign revision is a 404, the same as a
+  missing one.
+
 ## Vector search
 
 Phase 1 similarity is **cosine computed in Node**, inside
@@ -262,6 +282,35 @@ audit row carries `aclBypass: true`.
 `knowledge_trace_relation`, `knowledge_get_historical_context`. Each passes the
 caller's `AccessScope`, exactly as the REST route it mirrors does; guests may
 use `knowledge_search`.
+
+## Recording searches
+
+Each search is measured twice, for two readers. `emitBacktest` writes a
+`search.executed` line to the per-service JSONL stream at every exit: the
+query, the timings of each leg and the ranked chunk ids. That is what `make
+backtest` replays to measure recall, and it records every search, the backtest's
+own replays included.
+
+When the caller passes an analytics context (REST, MCP, the assistant's tools,
+agent and workflow runs), `AnalyticsRecorder.search` also writes one
+`search_queries` row in PostgreSQL ([feature 58](../features/58-usage-analytics.md)):
+the channel, the result count, the top documents and a `searchId` the response
+carries for click-through. That row is product data. It is workspace-scoped,
+read by the `/analytics` dashboard and `knowledge_list_search_gaps`, kept only
+for the workspace's retention, and its query text is redacted after
+`ANALYTICS_QUERY_TEXT_DAYS`. A search with no context (the backtest replaying,
+the PR-drift candidate search) writes the JSONL line and no row. The write is
+fire-and-forget and never fails the search.
+
+## Communities
+
+The atlas agent ([feature 57](../features/57-temporal-graph.md)) groups pages
+with one Louvain level over the page-to-page projection (`agents/communities.ts`).
+Two pages are linked once per entity they share; hubs named by more than 12
+pages are skipped. Each group's summary is stored as an ArcadeDB `Community`
+vertex with its embedding. These are structural, outside `RELATION_EDGE_TYPES`,
+and never walked. `CommunitiesService` ranks them by cosine to a question and
+withholds a community whose pages the reader may not all open.
 
 ## Limits
 

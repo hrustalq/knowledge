@@ -208,10 +208,14 @@ the same rule, and both attach `Authorization`, `Accept-Language` and
 `resolveAssetUrl()` is the exception that proves the rule: attachment and avatar
 links are stored in markdown as bare `/v1/...` paths with no host and no
 credential, so the same document renders correctly through the dev proxy, in
-production, and in anything else reading the markdown. The environment prefix
-and a `?token=` are added at render time, because `<img>` and `<object>` cannot
-send an `Authorization` header — the same reason SSE accepts a query token
-([08-events-live.md](08-events-live.md), [06-auth-acl.md](06-auth-acl.md)).
+production, and in anything else reading the markdown. Only the environment
+prefix is added at render time. `<img>` and `<object>` cannot send an
+`Authorization` header, so those routes authenticate from the `kn_token` session
+cookie instead, never a token in the URL (#102, [06-auth-acl.md](06-auth-acl.md)).
+That holds only while the API is same-origin under `/api`; a cross-origin
+`VITE_API_URL` would 401 every attachment and avatar. The client re-writes the
+cookie from `localStorage` on every load, so its 30-day max-age cannot lapse
+under a live session.
 
 ## Language, resolved twice the same way
 
@@ -224,6 +228,52 @@ side (plus `?lang=`), so both halves of a page agree.
 The resolved locale is stamped into `<!--app-lang-->` and into the i18n instance
 for that render, so the SSR HTML is already in the right language instead of
 flashing English and swapping after hydration.
+
+The client reads it back from `<html lang>` before anything else, and only falls
+back to its stored choice when that attribute is missing. Storage alone is not
+enough: a visitor with no `kn_lang` cookie gets the `Accept-Language` language
+from the server, and a client hydrating in its own default instead mismatches
+every string on the page (#278). On load the client also re-writes the cookie
+from storage, the same renewal the token gets.
+
+## Shared state the server filled after drawing
+
+`window.__PINIA__` is the store as it stood at the **end** of the render, not
+when each component drew. The rail renders before the page, so when a page's
+`onServerPrefetch` loads something the rail also reads (the page tree on
+`/documents`), the server drew the rail's skeleton but the client hydrates with
+the data present, and the two disagree. The rail's tree therefore waits for
+`onMounted` (the `mounted` ref below) and adopts the rows one frame later.
+
+The fix for the common case is to have the data before anything draws.
+`entry-server.ts` runs `prefetchShell` between `router.isReady()` and the
+render, on every route that draws the shell (authenticated, not `meta.public`,
+not pending email verification). It loads the project roster and the tree's
+first level, so the rail and the breadcrumbs are in the HTML (#279). The
+remembered project's tree is fetched alongside the roster. When the roster
+resolves another project (the cookie's is gone, or there is none), the render
+switches its own `projectId` to that one and fetches its tree instead.
+`entry-client.ts` then adopts the resolved id with `setActiveProject`, so the
+client's API calls ask for the scope the page was drawn in. When the tree
+loaded, `documents.treePrefetched` is set, and the rail draws rows on the
+server and on the client's first render alike. Without it (the prefetch failed,
+or a page loaded the tree later) the rail keeps the skeleton until mount, as
+above. A failed prefetch never fails the render. The store stays unloaded and
+the client fetches as before.
+
+Rows drawn on the server bring two more rules. Anything they start must not run
+during setup. `SidebarTreeNode` fetches an open row's children from a
+`watchPostEffect`, which never runs on the server and runs after the row has
+hydrated on the client. A fetch from setup would mark the row `loading` before
+its first draw. `revealPath` returns at once during SSR. The rail and the
+breadcrumbs call it from immediate watchers that the render does not await, so
+its answer would land in the serialized state after the rows were drawn without
+it.
+
+The stores' in-flight dedupe (`treeFetches`, `listFetches`, …) keys its
+WeakMaps by `toRaw(this)`, never by `this`. In development Pinia's devtools
+plugin calls each action of an options store through a fresh `Proxy` of it, so
+a key of `this` never matched and every caller sent its own request.
 
 ## Intl wrappers, because "no locale" means "the host"
 
@@ -259,6 +309,14 @@ cytoscape because cytoscape nodes cannot be Vue components;
 
 `startLive()` throws under SSR outright, and `stores/events.ts` returns early —
 neither an `EventSource` nor a `WebSocket` has any meaning during a render.
+
+Co-editing ([56](../features/56-realtime-coediting.md)) goes one step further:
+`components/editor/use-collab.ts` (Yjs, the Hocuspocus provider, IndexedDB) is
+a **dynamic import** that `EditorPage` makes in `onMounted`, and only after
+`GET /v1/collab/capabilities` says `enabled`. The server render and a
+deployment with the flag off never load Yjs at all; the SSR pass renders the
+editor's existing skeleton. In collab mode the editor never calls
+`setContent`, because the Y.Doc is the only writer of the body.
 
 ## Limits
 

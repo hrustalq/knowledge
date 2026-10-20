@@ -200,7 +200,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Mint a single-use, short-lived kt_ ticket for ?token= on SSE (EventSource cannot set headers); API keys are refused in URLs */
+        /** Mint a single-use, short-lived kt_ ticket for ?token= on SSE (EventSource cannot set headers) and for joining /v1/collab; API keys are refused in URLs */
         post: operations["AuthFlowController_urlTicket"];
         delete?: never;
         options?: never;
@@ -640,6 +640,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/{id}/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke one of a user's sessions (platform admin); its token gets 401 from the next request */
+        delete: operations["UsersController_revokeSession"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2245,6 +2262,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/collab/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether this deployment co-edits drafts, and the editor schema version a peer must match to write */
+        get: operations["CollabController_capabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Each branch's shared draft: its base, whether it holds unpublished changes, who wrote them, who has it open */
+        get: operations["CollabDraftsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/drafts/{branchId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Discard a branch's shared draft: it is reseeded from the branch head, and everyone in it rejoins (reason `reset`) */
+        delete: operations["CollabDraftsController_reset"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/assistant/review": {
         parameters: {
             query?: never;
@@ -3160,6 +3228,23 @@ export interface paths {
         post?: never;
         /** Drop a per-user override — the workspace default applies again */
         delete: operations["AiUsageController_clearBudget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per agent, how many findings were accepted, dismissed or are pending, and how answers were voted; optionally split by prompt hash or model. Derived on read from runs, merge requests and votes */
+        get: operations["AgentOutcomesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4801,6 +4886,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/release-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Release tags of the workspace, oldest first */
+        get: operations["ReleaseTagsController_list"];
+        put?: never;
+        /** Name an instant (now, or `at`) so the graph can be read as of it. 409 on a duplicate name */
+        post: operations["ReleaseTagsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/release-tags/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a release tag. What the graph said at that instant is unaffected */
+        delete: operations["ReleaseTagsController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/graph/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Markers for the graph time slider: release tags and per-day fact changes in a window */
+        get: operations["ReleaseTagsController_timeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Contradictions the arbiter found, newest first; only those whose pages the caller may open */
+        get: operations["ConflictsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conflicts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One conflict with both quotes */
+        get: operations["ConflictsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conflicts/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark an open conflict resolved, with an optional note. 409 when it is no longer open */
+        post: operations["ConflictsController_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conflicts/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss an open conflict as not one. It stays dismissed when found again */
+        post: operations["ConflictsController_dismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conflicts/{id}/propose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a merge request that fixes the conflict on its first page. 409 when one was proposed already */
+        post: operations["ConflictsController_propose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/graph/communities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Communities of related pages with their summaries, closest to a question first */
+        get: operations["CommunitiesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/shares": {
         parameters: {
             query?: never;
@@ -5141,6 +5380,40 @@ export interface paths {
         };
         /** One page the link reaches: title and markdown body, frontmatter stripped */
         get: operations["PublicSharesController_page"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/shares/{token}/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export what the link shows as ZIP, HTML or PDF, when the link allows download (#161); poll the job */
+        post: operations["PublicSharesController_createExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/shares/{token}/exports/{exportId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of this link’s exports — polled while it runs */
+        get: operations["PublicSharesController_getExport"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5591,7 +5864,7 @@ export interface paths {
         delete: operations["ChatSettingsController_removeBinding"];
         options?: never;
         head?: never;
-        /** Change a group’s project, agent, answer mode or language */
+        /** Change a group’s project, agent, answer mode, language, listening or automatic harvest */
         patch: operations["ChatSettingsController_updateBinding"];
         trace?: never;
     };
@@ -5917,6 +6190,177 @@ export interface paths {
         get: operations["McpController_captureKitInstaller"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's headline usage: views by traffic class, searches, click-through, assistant and MCP volume */
+        get: operations["AnalyticsController_overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's most read, never read and dead pages */
+        get: operations["AnalyticsController_pages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Top queries, queries that found nothing, and web searches whose results nobody opened */
+        get: operations["AnalyticsController_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** MCP calls by tool and by API key, and the in-app assistant's questions and model calls */
+        get: operations["AnalyticsController_agents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One dashboard table as RFC 4180 CSV (formula cells defused); audited */
+        get: operations["AnalyticsController_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's analytics settings: what it asks for, the deployment's ceiling, and what applies */
+        get: operations["AnalyticsController_getSettings"];
+        /** Set recording and retention for the workspace; null inherits the env, which is a ceiling */
+        put: operations["AnalyticsController_setSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One page's reading over the last 30 days: views by traffic class, unique readers, median read time */
+        get: operations["AnalyticsController_insights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A project's reading: totals, the most read pages, and the pages nobody reads */
+        get: operations["AnalyticsController_project"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record that the caller opened this page (the web beacon). Idempotent on viewId */
+        post: operations["AnalyticsController_view"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/views/{viewId}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fold a view's active read time into it. Monotonic and capped; a view the caller did not open is unchanged */
+        post: operations["AnalyticsController_heartbeat"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6419,6 +6863,13 @@ export interface components {
             message?: string;
             /** @example text/markdown */
             contentType?: string;
+            /**
+             * Format: uuid
+             * @description Published from this shared draft (#80): finalize rebases the draft onto the new revision. Must be the draft of `branch`.
+             */
+            collabDraftId?: string;
+            /** @description Base64 `Y.encodeSnapshot` of the draft at the moment its content was serialized. Edits after it stay unpublished. Required with collabDraftId. */
+            draftSnapshot?: string;
         };
         GlossaryExclusionAnchorDto: {
             /** @description The occurrence, with its surrounding words collapsed */
@@ -6551,6 +7002,10 @@ export interface components {
             direction: "dependents" | "dependencies";
             /** @default 3 */
             maxDepth: number;
+            /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+            asOf?: string;
+            /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+            knownAt?: string;
         };
         CreateAttachmentDto: {
             /** @example architecture.png */
@@ -6607,6 +7062,10 @@ export interface components {
             mode: "hybrid" | "semantic" | "keyword";
             /** @default 20 */
             limit: number;
+            /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+            asOf?: string;
+            /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+            knownAt?: string;
             expandGraph?: components["schemas"]["ExpandGraphDto"];
             filters?: components["schemas"]["SearchFiltersDto"];
         };
@@ -7226,7 +7685,7 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase";
+            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive";
             /** @example Product wiki */
             name: string;
             /**
@@ -7807,6 +8266,30 @@ export interface components {
             /** @description Multiply search scores by the page's verification state */
             trustRanking?: boolean | null;
         };
+        CreateReleaseTagDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description Only this project’s views; the whole workspace when absent
+             */
+            projectId?: string;
+            /**
+             * @description Unique in the workspace
+             * @example v2.3
+             */
+            name: string;
+            /**
+             * Format: date-time
+             * @description The instant the tag names; now when absent
+             */
+            at?: string;
+            note?: string;
+        };
+        CloseConflictDto: {
+            /** @description Why — kept on the conflict */
+            note?: string;
+        };
         CreateShareLinkDto: {
             /** @description Also share every page under this one. Omitted reads as false */
             includeSubtree?: boolean;
@@ -7817,6 +8300,8 @@ export interface components {
             expiresAt?: string | null;
             /** @description Readers must enter it first */
             password?: string;
+            /** @description Let readers download an export of what the link shows (#161). Omitted reads as false */
+            allowDownload?: boolean;
         };
         UpdateShareLinkDto: {
             /** @description Also share every page under this one */
@@ -7828,6 +8313,8 @@ export interface components {
             expiresAt?: string | null;
             /** @description Omit to keep; a string sets it (ends every unlocked session); null clears it */
             password?: string | null;
+            /** @description Let readers download an export; turning it off ends downloads of finished files at once */
+            allowDownload?: boolean;
         };
         UpdatePublishingSettingsDto: {
             /** @description Allow public share links; null goes back to the default (off) */
@@ -7925,6 +8412,13 @@ export interface components {
         UnlockShareDto: {
             password: string;
         };
+        CreateShareExportDto: {
+            /**
+             * @description `zip`: markdown + attachments; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL
+             * @enum {string}
+             */
+            format: "zip" | "html" | "pdf";
+        };
         AskSiteDto: {
             question: string;
             /** @description A version slug; omitted = the default version */
@@ -7936,10 +8430,10 @@ export interface components {
         };
         CreateDocumentExportDto: {
             /**
-             * @description `zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL
+             * @description `zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL; `docx`: one Word document
              * @enum {string}
              */
-            format: "zip" | "html" | "pdf";
+            format: "zip" | "html" | "pdf" | "docx";
             /** @description Branch name to read each page from; a page without it uses its default branch. Omitted or null: default branches */
             branch?: string | null;
             /** @description Also export every page under this one. Omitted: false */
@@ -7947,10 +8441,10 @@ export interface components {
         };
         CreateProjectExportDto: {
             /**
-             * @description `zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL
+             * @description `zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL; `docx`: one Word document
              * @enum {string}
              */
-            format: "zip" | "html" | "pdf";
+            format: "zip" | "html" | "pdf" | "docx";
             /** @description Branch name to read each page from; a page without it uses its default branch. Omitted or null: default branches */
             branch?: string | null;
         };
@@ -7958,13 +8452,13 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            kind: "telegram" | "time";
+            kind: "telegram" | "time" | "mattermost";
             /** @example Team bot */
             name: string;
-            /** @description The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts). Write-only — never returned. */
+            /** @description The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token). Write-only — never returned. */
             token: string;
             /**
-             * @description The messenger server, for a self-hosted platform (Time) — required there, refused for Telegram
+             * @description The messenger server, for a self-hosted platform (Time, Mattermost) — required there, refused for Telegram
              * @example https://time.example.com
              */
             serverUrl?: string;
@@ -8019,6 +8513,10 @@ export interface components {
             answerMode?: "mention" | "all" | "off";
             /** @enum {string|null} */
             locale?: "en" | "ru" | null;
+            /** @description Keep this group’s messages, masked, for harvesting (#82). Telegram only; turning it on posts a notice in the group, turning it off deletes what is kept. */
+            listening?: boolean;
+            /** @description Harvest this group’s quiet threads automatically (#340), as the admin who turns it on — never anyone named in the body. Needs listening; turning listening off turns this off too. */
+            autoHarvest?: boolean;
         };
         CreateChatSubscriptionDto: {
             /**
@@ -8056,7 +8554,7 @@ export interface components {
         };
         CaptureSessionDto: {
             /** @enum {string} */
-            client: "claude-code" | "cursor" | "codex" | "gemini" | "assistant" | "other";
+            client: "claude-code" | "cursor" | "codex" | "gemini" | "assistant" | "chat" | "other";
             clientVersion?: string;
             sessionId?: string;
             /** @description owner/name or the remote URL */
@@ -8120,6 +8618,41 @@ export interface components {
             projectId?: string;
             /** @description Defaults to the question */
             title?: string;
+        };
+        UpdateAnalyticsSettingsDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description Record usage here; null inherits ANALYTICS_ENABLED, which true cannot exceed */
+            enabled: boolean | null;
+            /** @description Days rows are kept; null inherits ANALYTICS_RETENTION_DAYS, and a longer value is clamped to it */
+            retentionDays: number | null;
+        };
+        RecordPageViewDto: {
+            /**
+             * Format: uuid
+             * @description The page's own id for this view; a replay is a no-op
+             */
+            viewId: string;
+            /**
+             * Format: uuid
+             * @description The revision shown
+             */
+            revisionId?: string;
+            /**
+             * Format: uuid
+             * @description The search this page was opened from (`searchId` of the search response)
+             */
+            searchId?: string;
+            /** @description 1-based rank of the clicked result */
+            searchRank?: number;
+            /** @description The browser asked not to be tracked (Global Privacy Control): counted, never tied to a reader */
+            noTrack?: boolean;
+        };
+        PageViewHeartbeatDto: {
+            /** @description Active read time of the view so far, in ms — the total, not a delta */
+            activeMs: number;
+            /** @description As on the view: must match it, or the heartbeat changes nothing */
+            noTrack?: boolean;
         };
         ApiErrorResponse: {
             /**
@@ -10101,6 +10634,47 @@ export interface operations {
             };
         };
     };
+    UsersController_revokeSession: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     UsersController_revokeSessions: {
         parameters: {
             query?: never;
@@ -11643,6 +12217,10 @@ export interface operations {
                 workspaceId: string;
                 /** @description Restrict the graph to one project */
                 projectId?: string;
+                /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+                asOf?: string;
+                /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+                knownAt?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -11816,6 +12394,10 @@ export interface operations {
                 revision?: string;
                 /** @description With Accept: text/markdown, 1 to include the YAML block */
                 frontmatter?: string;
+                /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+                asOf?: string;
+                /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+                knownAt?: string;
             };
             header?: {
                 /** @description text/markdown (ranked above application/json) answers with the same body as GET :id/markdown (issue #68) */
@@ -11980,6 +12562,10 @@ export interface operations {
         parameters: {
             query?: {
                 depth?: string;
+                /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+                asOf?: string;
+                /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+                knownAt?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -14232,6 +14818,10 @@ export interface operations {
                 q?: string;
                 /** @description Max entities to return (1-200) */
                 limit?: string;
+                /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+                asOf?: string;
+                /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+                knownAt?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -14399,6 +14989,10 @@ export interface operations {
                 from: string;
                 to: string;
                 maxDepth?: string;
+                /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+                asOf?: string;
+                /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+                knownAt?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -14442,6 +15036,10 @@ export interface operations {
                 depth?: string;
                 /** @description Comma-separated relation types */
                 types?: string;
+                /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
+                asOf?: string;
+                /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
+                knownAt?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -15539,6 +16137,125 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CollabController_capabilities: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CollabDraftsController_list: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CollabDraftsController_reset: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                branchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18570,6 +19287,54 @@ export interface operations {
             path: {
                 userId: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AgentOutcomesController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Only this agent's runs; answers are left out when set */
+                agentKey?: string;
+                /** @description Only findings and answers citing a page of this project */
+                projectId?: string;
+                /** @description Window start; 90 days back when absent */
+                since?: string;
+                /** @description none (the default) | prompt | model */
+                split?: "none" | "prompt" | "model";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -23272,7 +24037,7 @@ export interface operations {
                 workspaceId: string;
                 projectId?: string;
                 /** @description Omitted lists every live page */
-                filter?: "stale" | "unowned" | "empty" | "expired" | "edited" | "outdated" | "requested" | "flagged" | "inactive" | "missing-paths" | "archived";
+                filter?: "stale" | "unowned" | "empty" | "expired" | "edited" | "outdated" | "requested" | "flagged" | "inactive" | "missing-paths" | "unread" | "dead" | "archived";
                 /** @description Only pages owned by this member */
                 ownerId?: string;
                 /** @description Title substring, case-insensitive */
@@ -23589,6 +24354,435 @@ export interface operations {
             path: {
                 id: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ReleaseTagsController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Workspace-wide tags plus this project’s; every tag when absent */
+                projectId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ReleaseTagsController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReleaseTagDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ReleaseTagsController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ReleaseTagsController_timeline: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Workspace-wide tags plus this project’s; every tag when absent */
+                projectId?: string;
+                /** @description Window start; 90 days before `to` when absent */
+                from?: string;
+                /** @description Window end; now when absent */
+                to?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConflictsController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Every status when absent */
+                status?: "open" | "resolved" | "dismissed" | "superseded";
+                kind?: "doc-doc" | "doc-code";
+                /** @description Only conflicts with this page on either side */
+                documentId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConflictsController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConflictsController_resolve: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseConflictDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConflictsController_dismiss: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseConflictDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConflictsController_propose: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CommunitiesController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Workspace-wide tags plus this project’s; every tag when absent */
+                projectId?: string;
+                /** @description A broad question; communities closest to it first. Largest first when absent */
+                q?: string;
+                /** @description 10 when absent */
+                limit?: number;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -24794,6 +25988,114 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Not a page this link reaches */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PublicSharesController_createExport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateShareExportDto"];
+            };
+        };
+        responses: {
+            /** @description The link is locked: unlock it first */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dead link, or download is off */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PDF without Gotenberg (details.reason export.formatUnavailable) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many exports from this address or link (details.reason share.exportRateLimited) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PublicSharesController_getExport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                token: string;
+                exportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dead link, download off, or not this link’s export */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -27158,6 +28460,483 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_overview: {
+        parameters: {
+            query: {
+                /** @description Days back from now. Omitted: 30 */
+                days?: number;
+                /** @description Count one traffic class only. Omitted: all */
+                traffic?: "all" | "human" | "assisted" | "agent";
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_pages: {
+        parameters: {
+            query: {
+                /** @description Days back from now. Omitted: 30 */
+                days?: number;
+                /** @description Count one traffic class only. Omitted: all */
+                traffic?: "all" | "human" | "assisted" | "agent";
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_search: {
+        parameters: {
+            query: {
+                /** @description Days back from now. Omitted: 30 */
+                days?: number;
+                /** @description Count one traffic class only. Omitted: all */
+                traffic?: "all" | "human" | "assisted" | "agent";
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_agents: {
+        parameters: {
+            query: {
+                /** @description Days back from now. Omitted: 30 */
+                days?: number;
+                /** @description Count one traffic class only. Omitted: all */
+                traffic?: "all" | "human" | "assisted" | "agent";
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_export: {
+        parameters: {
+            query: {
+                /** @description Days back from now. Omitted: 30 */
+                days?: number;
+                /** @description Count one traffic class only. Omitted: all */
+                traffic?: "all" | "human" | "assisted" | "agent";
+                workspaceId: string;
+                /** @description Which dashboard table */
+                report: "pages-top" | "pages-never-read" | "pages-dead" | "search-top" | "search-zero-result" | "search-no-click" | "agents-tools" | "agents-keys" | "agents-operations";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_getSettings: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_setSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAnalyticsSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_insights: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_project: {
+        parameters: {
+            query?: {
+                /** @description Days back from now. Omitted: 30 */
+                days?: number;
+                /** @description Count one traffic class only. Omitted: all */
+                traffic?: "all" | "human" | "assisted" | "agent";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_view: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordPageViewDto"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnalyticsController_heartbeat: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                viewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageViewHeartbeatDto"];
+            };
+        };
+        responses: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };

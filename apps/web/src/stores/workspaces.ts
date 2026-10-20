@@ -1,6 +1,10 @@
 import { defineStore } from 'pinia'
+import { toRaw } from 'vue'
 import type { ListWorkspacesResponse, WorkspaceSummary } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId, setActiveWorkspace } from '@/lib/api'
+
+/** The roster request in flight, per store instance — see stores/projects.ts (#279). */
+const listFetches = new WeakMap<object, Promise<void>>()
 
 /**
  * Workspace roster + the one place the active workspace is switched. Mirrors
@@ -13,10 +17,16 @@ export const useWorkspacesStore = defineStore('workspaces', {
     loaded: false,
   }),
   actions: {
-    async fetchList() {
-      const res = await apiFetch<ListWorkspacesResponse>('/v1/workspaces')
-      this.items = res.workspaces
-      this.loaded = true
+    fetchList(): Promise<void> {
+      const pending = listFetches.get(toRaw(this))
+      if (pending) return pending
+      const job = (async () => {
+        const res = await apiFetch<ListWorkspacesResponse>('/v1/workspaces')
+        this.items = res.workspaces
+        this.loaded = true
+      })().finally(() => listFetches.delete(toRaw(this)))
+      listFetches.set(toRaw(this), job)
+      return job
     },
     /** Lazy, fire-and-forget: no roster access just leaves the switcher hidden. */
     ensureLoaded() {

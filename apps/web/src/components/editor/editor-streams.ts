@@ -19,7 +19,7 @@
  * while something is subscribed and removed when the last subscriber leaves.
  */
 import type { Editor, EditorEvents } from '@tiptap/core'
-import { DOMSerializer, type Node as ProseMirrorNode, type Schema } from '@tiptap/pm/model'
+import type { Node as ProseMirrorNode, Schema } from '@tiptap/pm/model'
 import {
   Observable,
   Subject,
@@ -33,7 +33,7 @@ import {
   share,
   type Subscription,
 } from 'rxjs'
-import { htmlToMarkdown } from '@/lib/markdown/serialize'
+import { docToMarkdown as docToMarkdownIn } from '@knowledge/editor-schema/serialize'
 import { canIndent, canOutdent } from './extensions/list-indent'
 
 /** A Tiptap event as a stream. Listener attached on subscribe, removed on unsubscribe. */
@@ -196,10 +196,7 @@ function inertDocument(): Document {
  * DOM skips a full serialize-and-parse of the page on every sync.
  */
 export function docToMarkdown(doc: ProseMirrorNode, schema: Schema): string {
-  const owner = inertDocument()
-  const container = owner.createElement('div')
-  container.appendChild(DOMSerializer.fromSchema(schema).serializeFragment(doc.content, { document: owner }))
-  return htmlToMarkdown(container)
+  return docToMarkdownIn(doc, schema, inertDocument())
 }
 
 export interface MarkdownSync {

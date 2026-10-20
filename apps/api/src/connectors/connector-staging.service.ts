@@ -423,16 +423,30 @@ export class ConnectorStagingService {
   private async resolveParent(row: Connector, item: ConnectorRunItem): Promise<string | null> {
     if (!row.preserveHierarchy) return row.parentId;
 
-    let parentItemId = item.parentItemId;
+    let top: ConnectorRunItem = item;
     // Bounded by the tree's own depth; the guard is against a cycle the far side
     // let somebody build, not against deep nesting.
-    for (let hops = 0; parentItemId && hops < 64; hops += 1) {
+    for (let hops = 0; top.parentItemId && hops < 64; hops += 1) {
       const parent: ConnectorRunItem | null = await this.prisma.connectorRunItem.findUnique({
-        where: { id: parentItemId },
+        where: { id: top.parentItemId },
       });
       if (!parent) break;
       if (parent.documentId) return parent.documentId;
-      parentItemId = parent.parentItemId;
+      top = parent;
+    }
+
+    // The top of this run's chain hangs under an item an earlier run imported:
+    // an incremental pull (#338) carries only what changed, so a file added to
+    // a folder imported last week arrives without that folder. Its link still
+    // says where the folder's page is.
+    if (top.externalParentId) {
+      const link = await this.prisma.connectorLink.findUnique({
+        where: { connectorId_externalId: { connectorId: row.id, externalId: top.externalParentId } },
+        select: { documentId: true },
+      });
+      if (link && (await this.prisma.document.findUnique({ where: { id: link.documentId }, select: { id: true } }))) {
+        return link.documentId;
+      }
     }
     return row.parentId;
   }

@@ -28,6 +28,10 @@ import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { ComponentDraftsModule } from '../components/component-drafts.module.js';
 import { StyleLintModule } from '../assistant/style-lint.module.js';
 import { QualityCoreModule } from '../quality/quality-core.module.js';
+import { TemporalCoreModule } from '../temporal/temporal-core.module.js';
+import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
+import { CommunitiesCoreModule } from '../communities/communities-core.module.js';
+import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -40,6 +44,8 @@ import { McpService } from './mcp.service.js';
   imports: [
     PrismaModule,
     AuthCoreModule,
+    // Every tool call, and the page reads among them, is recorded (#79).
+    AnalyticsCoreModule,
     // Page-level checks behind guard.doc/mr/project and scoped tree/graph tools (#76).
     PermissionsCoreModule,
     GraphModule,
@@ -92,6 +98,12 @@ import { McpService } from './mcp.service.js';
     // knowledge_lint_draft / knowledge_get_page_quality (#74). Controller-free and read-only.
     StyleLintModule,
     QualityCoreModule,
+    // asOf resolution and release tags (#81). Controller-free.
+    TemporalCoreModule,
+    // knowledge_list_conflicts / knowledge_resolve_conflict (#81). Controller-free.
+    ConflictsCoreModule,
+    // knowledge_global_overview (#81). Controller-free.
+    CommunitiesCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

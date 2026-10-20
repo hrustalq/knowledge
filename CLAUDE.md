@@ -35,6 +35,7 @@ make deps               # dependency-cruiser: process boundaries, layering, cycl
 make deps-baseline      # re-record known violations (shrink-only: drops fixed ones, never adds)
 make smoke              # health-check every service
 make backtest           # retrieval/pipeline backtest. ARGS="--generate --limit 120" | "--report"
+make collab-load        # shared-draft load test against running APIs (AUTH_MODE=none, COLLAB_ENABLED=true). ARGS="--docs 50 --peers 5"
 
 make infra-up|down|logs        # docker compose: postgres, minio (+bucket init), redis, arcadedb
 make infra-up-opensearch       # + optional OpenSearch BM25 node (FULLTEXT_PROVIDER=opensearch)
@@ -131,7 +132,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 42 | Page templates       | Own tables with immutable versions, never indexed; built-ins are code, rows override; `{{x}}` rendered by `@knowledge/contracts/templates`; text always `wrapUntrusted`                |
 | 43 | Share links          | `kp_` public link to a page/subtree, opt-in twice (env ceiling × workspace setting); resolved afresh per request, out-of-scope 404s; web `/s/*` is a separate SSR entry                |
 | 44 | Published sites      | Project/subtree as a read-only docs site; public routes read only snapshot rows, never a head; TXT-proven custom domains, snapshot FTS, audiences, public Ask + widget                 |
-| 45 | Export               | Page/subtree/project → zip, html or pdf (Gotenberg) via `export_jobs`; the worker asks the web `/_internal/export/render` for HTML; `ExportSweeper` purges expired                     |
+| 45 | Export               | Page/subtree/project → zip, html, pdf (Gotenberg) or docx via `export_jobs`; the worker asks the web `/_internal/export/render` for HTML, writes docx itself from `markdownTokens`; `ExportSweeper` purges expired |
 | 46 | Repo wiki            | `codebase` connector wiki + Releases steered by `.knowledge/wiki.yml`; `effectiveWikiConfig` (code ← file ← connector, `WIKI_MAX_EFFORT` ceiling); Mermaid only via `wiki-diagrams.ts` |
 | 47 | Chat bots            | Telegram + Time bots answer as the **linked** person, never a bot principal; groups silent until bound; turns run API-side via `AssistantService.runChatTurn`                          |
 | 48 | Page permissions     | Page/project restrictions, groups, guests, access requests; view is intersective down the tree; every retrieval path takes an `AccessScope`, PG has the final say; connectors mirror source ACLs |
@@ -141,6 +142,10 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 52 | API reference        | `documents.kind` openapi/asyncapi; ingestion branches on kind → markdown projection + `api_operations` + revision-scoped `spec` `DESCRIBES`; `{param}` folds in `normalizeEntityKey`; slug pinned; try-it proxy is env-ceilinged, never MCP; `breakingBlocks` gates merge; synced spec changes always MR |
 | 53 | Doc quality          | Styleguide = `ai_skills` `kind='styleguide'`, project replaces workspace; `readLintViolations` drops unknown rules/ungrounded quotes, severity is the rule's; MR lint = added lines only, sweeper-triggered per head, published API-side; `lintGate` is the one predicate (fail-open); scores are append-only rows the worker writes |
 | 54 | Enterprise auth      | OIDC/SAML/LDAP providers per workspace (`platformWide` opt-in), JIT only on a verified address in `allowedDomains`; token via a 60 s fragment exchange code; `RoleSyncService` is the one non-manual membership writer; enforced SSO inside `requireRole` (`AuthPolicyService`, 30 s cache); SCIM `kscim_` is a credential, never a principal |
+| 56 | Co-editing           | One Yjs draft per (page, branch) in `collab_drafts`, never a revision; Hocuspocus embedded behind `/v1/collab` (API-only, `kt_` tickets, page permissions, per-document **reasons** not close codes); server seeds via `@knowledge/editor-schema`; publish = ordinary finalize that rebases the draft; reset moves `reset_at` + device copies carry a generation; collab mode never `setContent`; `COLLAB_ENABLED` default off; MCP draft tools are HTTP-only, passed to `buildServer` as an argument, and suggest through `CollabGateway.writeDraft` |
+| 57 | Temporal graph       | Per-revision rows stamped `validFrom/validTo/lineage` from PG (`revisionStamps`, order-free) + edge `ingestedAt/expiredAt/retractedBy`; `live` stays the current view, `asOfEdgeClause`/`asOfChunkClause` the only as-of predicates; `TemporalResolverService` (date, `rev:`, `tag:`); `knowledge_conflicts` = one guarded upsert per fingerprint (dismissed stays dismissed); propose links via `AgentFindingsService`, a merge resolves; communities withheld whole |
+| 58 | Usage analytics       | Event rows only (`page_views`, `search_queries`, `mcp_tool_calls`), every number a read-time rollup; channel resolved once by `channelFor`, class derived by `trafficClassFor` (human/assisted/agent); web reads only from the page's beacon, never `GET /content`; `reader_key` HMAC per workspace, no `user_id`; one unread/dead predicate in `read-signals.ts`; repeat searches collapse only in `searchCtesSql`; query text wrapped untrusted |
+| 59 | Chat harvest          | A linked editor's `capture` / DM forwards / 📌 (Time) / ✍ (Telegram) → `HarvestService` (API-side): regex mask (`harvest-mask.ts`) → `harvester` (no tools, JSON) → `planCaptures` drops a term not verbatim in the thread and an answer citing no page the asker's search handed out → `CaptureService.capture` as the asker; `origin` is server-set, never a DTO field or model output; the chat reply is counts + inbox link, never a title; a reaction from anyone else is silent; Telegram threads come from `chat_buffered_messages` (masked on write, admin opt-in after a group notice, TTL on the answer sweeper, never read by search/assistant/MCP) |
 
 ## Conventions
 
@@ -222,10 +227,12 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - `createI18nFor(locale)` is called **inside `createApp()`**, never at module scope, or concurrent SSR renders share a locale.
 - Use the `lib/format.ts` Intl wrappers — a locale-less `toLocale*` follows the host, which during SSR is the server: a hydration mismatch.
 - A preference the SSR pass must read before any JS runs is mirrored into a cookie (`kn_ws`, `kn_proj`, `kn_lang`, `kn_filterrail`).
+- The client's first render must use what the **server rendered with**, not what the client would pick: the locale comes from `<html lang>` (the server falls back to `Accept-Language`, which storage cannot see), and a component that renders *before* a later `onServerPrefetch` fills the store it reads (the rail's tree vs. a page's prefetch) waits for `onMounted` — the serialized state is the end of the render, not the moment it drew (#278). Data the shell needs is loaded *before* the render instead (`prefetchShell` in `entry-server.ts`, #279).
 - A map converted to hold message keys is only half the change — the render site must resolve them. A value from a known set still needs a fallback when the column is free text (`labelFor`).
 - `<img>` cannot send an `Authorization` header: authorize, then 302 to a signed URL. Cache-bust reused object keys with `?v=<updatedAt>`.
 - No favicons for third-party sites — never make a reader's browser request one.
 - `ResponsivePopover`: `HoverCard` under `(hover: hover)`, `Popover` otherwise. A link nested inside a `<button>` is invalid markup.
+- A store's in-flight dedupe keys its WeakMap by `toRaw(this)`: in dev, Pinia's devtools call every options-store action on a fresh Proxy, so `this` never matches (#279).
 - Fire-and-forget recorders (`ActivityService.record`, `AiUsageService.record`) never throw into a user request.
 - xstate wizards: invoke a child machine at the **root**, not inside a step (a step re-creates it on every entry), give it **no final state** if you may step back into it, and report both ends upward.
 
@@ -239,6 +246,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - `pnpm dlx` can hang on interactive prompts in non-TTY runs — use `pnpm exec shadcn-vue add <component>` from `apps/web`.
 - `corepack` does not exist on this Node install; pnpm is pinned only via the `packageManager` field.
 - Reindexing is idempotent by design: `GraphService.upsertRevisionChunks` deletes the revision's chunks and vertex before recreating them, and the processor skips jobs already `completed`.
+- **Relation edges are never deleted on reindex or by a person** (#81): a fact a re-extraction drops is expired, one a person removes is retracted (`retractedBy: user:<id>`), and the old revision's rows are closed by their `validTo`. Only `deleteDocumentGraph` hard-deletes. A new edge writer must go through `createRelationEdge` (it stamps `ingestedAt`) and must never revive an expired row.
 - Relation edge type names are **SQL-interpolated**, so every type is validated against `RELATION_EDGE_TYPES` in `GraphService`. **Never widen that list without keeping the allowlist check.**
 - A new `AUDIT_ACTIONS` value needs en/ru labels (`security.audit.actions.<action with . → _>`) **and** a literal `action: '<value>'` somewhere in `src` — `audit.service.spec.ts` fails otherwise, and a ternary does not count.
 - With the default `AUTH_MODE=none` every request passes as the dev principal, whose userId **is** the zeros `AUTHOR_ID_STUB`. Test ACLs and merge gates with a bootstrapped key, not in dev mode — and `make auth-bootstrap` makes a **platform admin**, who bypasses every page restriction. `test/page-permissions.e2e-spec.ts` creates its own non-admin people.

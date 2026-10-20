@@ -161,7 +161,19 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
         update: vi.fn(),
       },
       document: {
-        findUnique: vi.fn(async () => ({ defaultBranch: 'main', branches: [{ name: 'main', headRevisionId: opts.headId }] })),
+        findUnique: vi.fn(async () => ({
+          defaultBranch: 'main',
+          branches: [
+            { id: 'b-main', name: 'main', headRevisionId: opts.headId },
+            { id: 'b-x', name: 'x', headRevisionId: 'feature-x' },
+          ],
+          // #81 stamps valid time from these.
+          revisions: [
+            { id: 'r1', branchId: 'b-main', finalizedAt: new Date(1000) },
+            { id: 'r2', branchId: 'b-main', finalizedAt: new Date(2000) },
+            { id: 'feature-x', branchId: 'b-x', finalizedAt: new Date(1500) },
+          ],
+        })),
       },
       $transaction: vi.fn(async () => []),
     };
@@ -170,9 +182,13 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       replaceRevisionFrontmatterFacts: vi.fn(),
       replaceRevisionInferredFacts: vi.fn(),
       setLiveRevision: vi.fn(),
+      stampRevisions: vi.fn(),
       getWorkspaceRelationGraph: vi.fn(async () => ({ edges: [], documents: {}, entities: {} })),
     };
-    const fulltext = { enabled: false, indexRevisionChunks: vi.fn(), setLiveRevision: vi.fn() };
+    const fulltext = { enabled: false, indexRevisionChunks: vi.fn(), setLiveRevision: vi.fn(), stampRevisions: vi.fn() };
+    const apiSpecs = {};
+    // #81: a head going live supersedes conflicts quoting its older revisions.
+    const conflicts = { supersedeStale: vi.fn(async () => 0) };
     const processor = new IngestionProcessor(
       prisma as never,
       { getObjectText: vi.fn(async () => '---\ntags: [legacy]\n---\n# T\n\nAlpha unique-token-zebra\n'), putObjectJson: vi.fn() } as never,
@@ -184,19 +200,29 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       { publish: vi.fn() } as never,
       { enqueue: vi.fn() } as never,
       { record: vi.fn(async () => false), rebuild: vi.fn() } as never,
+      apiSpecs as never,
+      conflicts as never,
     );
-    return { processor, graph, fulltext };
+    return { processor, graph, fulltext, conflicts };
   }
   const run = (p: IngestionProcessor) => p.process({ data: { ingestionJobId: 'job' } } as never);
 
   it('the default-branch head is written live and becomes the live revision', async () => {
-    const { processor, graph, fulltext } = processorFor({ revisionId: 'r2', headId: 'r2' });
+    const { processor, graph, fulltext, conflicts } = processorFor({ revisionId: 'r2', headId: 'r2' });
     await run(processor);
+    expect(conflicts.supersedeStale).toHaveBeenCalledWith(WS, DOC, 'r2');
     expect(graph.upsertRevisionChunks).toHaveBeenCalledWith(expect.objectContaining({ live: true }));
     expect(graph.replaceRevisionFrontmatterFacts).toHaveBeenCalledWith(expect.objectContaining({ live: true }));
     expect(graph.replaceRevisionInferredFacts).toHaveBeenCalledWith(expect.objectContaining({ live: true }));
     expect(graph.setLiveRevision).toHaveBeenCalledWith(WS, DOC, 'r2');
     expect(fulltext.setLiveRevision).toHaveBeenCalledWith(WS, DOC, 'r2');
+    // #81: the new head opens, its predecessor closes at the head's finalize time.
+    expect(graph.stampRevisions).toHaveBeenCalledWith(WS, DOC, [
+      { revisionId: 'r1', validFrom: 1000, validTo: 2000, lineage: 'default' },
+      { revisionId: 'r2', validFrom: 2000, validTo: null, lineage: 'default' },
+    ]);
+    // The BM25 mirror gets the same window (#81, phase 3).
+    expect(fulltext.stampRevisions).toHaveBeenCalledWith(WS, DOC, graph.stampRevisions.mock.calls[0][2]);
   });
 
   it('a branch revision is written but never made live', async () => {
@@ -205,6 +231,7 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
     expect(graph.upsertRevisionChunks).toHaveBeenCalledWith(expect.objectContaining({ live: false }));
     expect(graph.replaceRevisionFrontmatterFacts).toHaveBeenCalledWith(expect.objectContaining({ live: false }));
     expect(graph.setLiveRevision).not.toHaveBeenCalledWith(WS, DOC, 'feature-x');
+    expect(graph.stampRevisions).toHaveBeenCalledWith(WS, DOC, [{ revisionId: 'feature-x', validFrom: null, validTo: null, lineage: 'branch' }]);
   });
 
   it('keeps the previous revision live while the new head is still indexing', async () => {

@@ -15,10 +15,12 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, Search, X } from 'lucide-vue-next'
+import { formatDayMonth } from '@/lib/format'
 import { Checkbox } from '@/components/ui/checkbox'
 import { labelFor } from '@/lib/labels'
 import { ENTITY_TYPE_ORDER, entityCssVar, isOperationType } from './graph-theme'
 import { PAGES_GROUP, type GraphOptions } from './graph-model'
+import type { GraphTime } from './use-graph-time'
 
 const props = defineProps<{
   options: GraphOptions
@@ -27,6 +29,10 @@ const props = defineProps<{
   orphans: number
   /** Hidden when the source graph has no entities to speak of. */
   showEntityControls?: boolean
+  /** #81: the surface's time state; absent where the graph has no time strip. */
+  time?: GraphTime | null
+  /** #81: some page carries a community, so colouring by one means something. */
+  hasCommunities?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -36,7 +42,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const open = ref<Record<string, boolean>>({ filters: true, groups: true, forces: false })
+const open = ref<Record<string, boolean>>({ filters: true, groups: true, time: false, forces: false })
 const toggle = (k: string) => (open.value[k] = !open.value[k])
 
 function set<K extends keyof GraphOptions>(key: K, value: GraphOptions[K]) {
@@ -67,6 +73,14 @@ const activeFilters = computed(() => {
 })
 
 const hiddenGroups = computed(() => props.options.hidden.length)
+
+/** The Time row's one fact: which point the graph shows. */
+const timeFact = computed(() => {
+  const p = props.time?.point.value
+  if (!p) return t('graph.time.now')
+  return p.tag ? `${p.tag} · ${formatDayMonth(new Date(p.at))}` : formatDayMonth(new Date(p.at))
+})
+const inPast = computed(() => !!props.time?.point.value)
 </script>
 
 <template>
@@ -121,6 +135,10 @@ const hiddenGroups = computed(() => props.options.hidden.length)
           <line x1="0" y1="2" x2="18" y2="2" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2.5 3" />
         </svg>
       </label>
+      <label v-if="hasCommunities" class="flex cursor-pointer items-center gap-2 text-xs">
+        <Checkbox :model-value="options.colorByCommunity" @update:model-value="set('colorByCommunity', !!$event)" />
+        <span class="flex-1">{{ t('graph.colorByCommunity') }}</span>
+      </label>
       <p v-if="!options.showEntities" class="pt-0.5 text-[0.68rem] leading-snug text-muted-foreground">
         {{ t('graph.derivedLinksNote') }}
       </p>
@@ -162,6 +180,42 @@ const hiddenGroups = computed(() => props.options.hidden.length)
         <span class="shrink-0 tabular-nums text-muted-foreground">{{ g.count }}</span>
       </button>
     </div>
+
+    <!-- Time (#81) ---------------------------------------------------------->
+    <template v-if="time">
+      <button
+        class="flex w-full items-center gap-2 border-t px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
+        :aria-expanded="open.time"
+        @click="toggle('time')"
+      >
+        <ChevronRight class="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150" :class="open.time ? 'rotate-90' : ''" />
+        <span class="text-sm font-medium">{{ t('graph.time.title') }}</span>
+        <span class="ml-auto truncate text-xs" :class="inPast ? 'text-primary' : 'text-muted-foreground'">{{ timeFact }}</span>
+      </button>
+
+      <div v-if="open.time" class="space-y-2.5 border-t px-3 py-3">
+        <label class="flex items-center gap-2 text-xs" :class="inPast ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'">
+          <Checkbox :model-value="time.compare.value" :disabled="!inPast" @update:model-value="time.compare.value = !!$event" />
+          <span class="flex-1">{{ t('graph.time.changesSince') }}</span>
+        </label>
+        <!-- The legend is a sample of how each line draws, like the inferred dash above. -->
+        <div class="space-y-1 pl-6 text-[0.68rem] text-muted-foreground">
+          <p class="flex items-center gap-2">
+            <svg width="18" height="4" class="shrink-0" aria-hidden="true">
+              <line x1="1" y1="2" x2="17" y2="2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="0.6 3.2" />
+            </svg>
+            {{ t('graph.time.legendEnded') }}
+          </p>
+          <p class="flex items-center gap-2">
+            <svg width="18" height="4" class="shrink-0" aria-hidden="true">
+              <line x1="0" y1="2" x2="18" y2="2" stroke="var(--kn-panel-tip)" stroke-width="1.6" />
+            </svg>
+            {{ t('graph.time.legendAdded') }}
+          </p>
+          <p v-if="!inPast" class="leading-snug">{{ t('graph.time.pickPoint') }}</p>
+        </div>
+      </div>
+    </template>
 
     <!-- Forces -------------------------------------------------------------->
     <button

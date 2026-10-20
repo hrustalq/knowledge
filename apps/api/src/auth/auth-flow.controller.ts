@@ -100,8 +100,9 @@ export class AuthFlowController {
 
   /**
    * #102: swap the caller's header credential for a single-use, ~60 s `kt_`
-   * ticket to put in `?token=` on a `@QueryTokenOk` route (the SSE stream), so
-   * the long-lived session token or API key never appears in a URL. The ticket
+   * ticket to put in `?token=` on a `@QueryTokenOk` route (the SSE stream), or
+   * in a `/v1/collab` provider's token (#80), so the long-lived session token
+   * or API key never appears in a URL or crosses that socket. The ticket
    * carries the principal as resolved now, API-key narrowing included, so it
    * can never reach more than the credential that minted it.
    *
@@ -114,7 +115,7 @@ export class AuthFlowController {
   @ReadKeyOk()
   @ApiOperation({
     summary:
-      'Mint a single-use, short-lived kt_ ticket for ?token= on SSE (EventSource cannot set headers); API keys are refused in URLs',
+      'Mint a single-use, short-lived kt_ ticket for ?token= on SSE (EventSource cannot set headers) and for joining /v1/collab; API keys are refused in URLs',
   })
   urlTicket(@CurrentPrincipal() principal: Principal): Promise<UrlTicketResponse> {
     return this.tickets.mint(principal);

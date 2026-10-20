@@ -137,6 +137,8 @@ export interface RevisionInfo {
   message: string | null;
   createdAt: string;
   finalizedAt: string | null;
+  /** Published from a shared draft (#80): everyone who wrote in it since the previous publish. Empty otherwise. */
+  coAuthorIds: string[];
 }
 
 export interface ChunkSummary {
@@ -337,6 +339,13 @@ export const KNOWN_EVENT_TYPES = [
   'revision.indexed',
   'revision.failed',
   'revision.dependent-reindex',
+  // A branch's shared draft (#80): someone joined or left it, or it was
+  // checkpointed (`changed`); someone discarded it (`reset`, which also closes
+  // its peers on every API instance). `subjectId` is the branch id. Not
+  // `document.*`: everything that reacts to a page event (the detail reload,
+  // toasts, workflow triggers) would fire on every tab that opens an editor.
+  'draft.changed',
+  'draft.reset',
   'relations.curated',
   'relations.deleted',
   'merge-request.created',
@@ -381,9 +390,14 @@ export const KNOWN_EVENT_TYPES = [
   'agent.trigger.fired',
   // Agent-session captures (issue #73): `subjectId` is the capture. Proposed
   // when its merge request opened; approved/rejected from the inbox.
+  'conflict.updated',
   'capture.proposed',
   'capture.approved',
   'capture.rejected',
+  // An automatic harvest (#340) proposed captures from a listening chat
+  // thread. Never published on the bus: a directed row to the admin it runs
+  // as. `title` is the group's name; metadata carries counts only.
+  'chat.harvest.proposed',
   'connector.created',
   'connector.updated',
   'connector.deleted',
@@ -643,8 +657,9 @@ export function verificationIsStale(state: SourceVerificationState): boolean {
 
 /**
  * No qualifying activity inside the window. Only writes, comments and
- * verification count (`FRESHNESS_ACTIONS`): read analytics is another
- * milestone, so a page read daily but never touched looks inactive here.
+ * verification count (`FRESHNESS_ACTIONS`), so a page read daily but never
+ * touched looks inactive here. Reads are their own health filters, `unread`
+ * and `dead` (#79).
  */
 export function isInactive(lastActivityAt: Date | string | null | undefined, inactiveAfterDays: number, now: Date = new Date()): boolean {
   if (!lastActivityAt || inactiveAfterDays <= 0) return false;
@@ -716,6 +731,9 @@ export interface DocumentTrust {
  * union of expired, outdated and inactive — the "needs attention" view.
  * `missing-paths` is a component page (docs/features/51) declaring a path no
  * file answers to at its connector's indexed head.
+ * `unread` is a page nobody opened in the app for `ANALYTICS_DEAD_PAGE_DAYS`;
+ * `dead` is one that no search returned either (#79). Both match nothing until
+ * read analytics has been collecting for that long.
  * `whereForHealthFilter` in the API is this list's SQL inverse, so a filter
  * here with no clause there fails the spec rather than returning everything.
  */
@@ -730,6 +748,8 @@ export const HEALTH_FILTERS = [
   'flagged',
   'inactive',
   'missing-paths',
+  'unread',
+  'dead',
   'archived',
 ] as const;
 export type HealthFilter = (typeof HEALTH_FILTERS)[number];
@@ -755,6 +775,8 @@ export interface KnowledgeHealthRow {
   expiresAt: string | null;
   lastActivityAt: string;
   inactive: boolean;
+  /** The newest web view of the page on record (#79); null with none. */
+  lastReadAt: string | null;
   /** Null while the head's body length is unknown (legacy revisions catch up in the sweeper). */
   empty: boolean | null;
   archivedAt: string | null;

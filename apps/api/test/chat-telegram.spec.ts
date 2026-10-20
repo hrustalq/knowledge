@@ -73,9 +73,45 @@ describe('parseInbound — button presses', () => {
   });
 });
 
+function reaction(r: Record<string, unknown>): { headers: Record<string, string>; body: string } {
+  return { headers: {}, body: JSON.stringify({ update_id: 3, message_reaction: { chat: group, message_id: 11, user: from, date: 1_760_000_000, ...r } }) };
+}
+const write = (emoji = '✍') => [{ type: 'emoji', emoji }];
+
+describe('parseInbound — harvest reactions (#82)', () => {
+  it('✍ just added by a person is a harvest request on that message, with no text', () => {
+    const [m] = adapter.parseInbound(reaction({ old_reaction: [], new_reaction: write() }), BOT);
+    expect(m).toMatchObject({
+      externalUserId: '42',
+      chatId: '-1001',
+      isDm: false,
+      messageId: '11',
+      text: '',
+      command: null,
+      action: null,
+      harvestReaction: true,
+      at: new Date(1_760_000_000 * 1000),
+    });
+    // Clients may send it with the emoji variation selector.
+    expect(adapter.parseInbound(reaction({ new_reaction: write('✍️') }), BOT)).toHaveLength(1);
+  });
+
+  it('ignores ✍ already there, any other reaction, a removal, an anonymous admin, a bot and a private chat', () => {
+    const none = [
+      reaction({ old_reaction: write(), new_reaction: [...write(), { type: 'emoji', emoji: '👍' }] }),
+      reaction({ new_reaction: [{ type: 'emoji', emoji: '👍' }] }),
+      reaction({ old_reaction: write(), new_reaction: [] }),
+      reaction({ user: undefined, actor_chat: group, new_reaction: write() }),
+      reaction({ user: { ...from, is_bot: true }, new_reaction: write() }),
+      reaction({ chat: dm, new_reaction: write() }),
+    ];
+    for (const r of none) expect(adapter.parseInbound(r, BOT)).toEqual([]);
+  });
+});
+
 describe('parseInbound', () => {
   it('normalises a private message', () => {
-    const [m] = adapter.parseInbound(update({ message_id: 7, from, chat: dm, text: 'How do we deploy?' }), BOT);
+    const [m] = adapter.parseInbound(update({ message_id: 7, date: 1_760_000_000, from, chat: dm, text: 'How do we deploy?' }), BOT);
     expect(m).toEqual({
       externalUserId: '42',
       externalUserName: '@alice',
@@ -89,6 +125,10 @@ describe('parseInbound', () => {
       threadId: null,
       command: null,
       action: null,
+      at: new Date(1_760_000_000_000),
+      replyTo: null,
+      forwardedFrom: null,
+      topicId: null,
     });
   });
 
@@ -115,6 +155,40 @@ describe('parseInbound', () => {
     const [own] = adapter.parseInbound(update({ message_id: 1, from, chat: group, text: '/ask@kn_bot what is X' }), BOT);
     expect(own.command).toEqual({ name: 'ask', args: 'what is X' });
     expect(adapter.parseInbound(update({ message_id: 2, from, chat: group, text: '/help@other_bot' }), BOT)).toEqual([]);
+  });
+
+  it('keeps the message a reply quotes, whoever wrote it, raw (#82)', () => {
+    const [m] = adapter.parseInbound(
+      update({
+        message_id: 20,
+        date: 1_760_000_100,
+        from,
+        chat: group,
+        text: '/capture',
+        reply_to_message: { message_id: 11, date: 1_760_000_000, from: { id: 7, first_name: 'Bob' }, text: 'Mail bob@example.com' },
+      }),
+      BOT,
+    );
+    expect(m).toMatchObject({
+      command: { name: 'capture', args: '' },
+      replyToBotMessageId: null,
+      replyTo: { messageId: '11', authorId: '7', text: 'Mail bob@example.com', at: new Date(1_760_000_000_000), fromBot: false },
+    });
+  });
+
+  it('names a forward’s original author and time, and a forum topic (#82)', () => {
+    const fwd = (origin: Record<string, unknown>) =>
+      adapter.parseInbound(update({ message_id: 3, date: 1_760_000_500, from, chat: dm, text: 'we ship on Tuesdays', forward_origin: { date: 1_760_000_000, ...origin } }), BOT)[0]!;
+    expect(fwd({ type: 'user', sender_user: { id: 9 } }).forwardedFrom).toEqual({ authorId: '9', at: new Date(1_760_000_000_000) });
+    expect(fwd({ type: 'hidden_user', sender_user_name: 'Carol' }).forwardedFrom?.authorId).toBe('name:Carol');
+    expect(fwd({ type: 'channel', chat: { id: -100555 } }).forwardedFrom?.authorId).toBe('-100555');
+    const [topic] = adapter.parseInbound(update({ message_id: 4, date: 1, from, chat: group, text: 'hi', is_topic_message: true, message_thread_id: 77 }), BOT);
+    expect(topic.topicId).toBe('77');
+  });
+
+  it('links a supergroup message, and nothing else', () => {
+    expect(adapter.messageUrl('-1001234', '55')).toBe('https://t.me/c/1234/55');
+    expect(adapter.messageUrl('-4321', '55')).toBeNull();
   });
 
   it('drops bots, edits, empty messages and garbage', () => {
@@ -251,11 +325,11 @@ describe('Bot API calls', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ callback_query_id: 'cb-1', text: 'Thanks' });
   });
 
-  it('registers the webhook for questions and button presses', async () => {
+  it('registers the webhook for questions, button presses and reactions', async () => {
     const fetchMock = stubFetch({ status: 200, body: { ok: true, result: true } });
     await adapter.registerWebhook({ token: 'T', botUsername: BOT, serverUrl: null, actionUrl: '' }, 'https://kn.test/hook', 's');
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
-      allowed_updates: ['message', 'callback_query'],
+      allowed_updates: ['message', 'callback_query', 'message_reaction'],
     });
   });
 

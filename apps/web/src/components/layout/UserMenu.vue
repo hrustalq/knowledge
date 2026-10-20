@@ -43,13 +43,21 @@ async function logout() {
   <DropdownMenu v-if="auth.me">
     <DropdownMenuTrigger
       class="flex items-center gap-2 rounded-md py-1 pl-1 pr-1.5 transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring data-[state=open]:bg-accent"
-      :aria-label="t('nav.accountMenu')"
     >
-      <UserAvatar :user-id="auth.me.userId" :name="auth.me.displayName" :src="auth.me.avatarUrl" />
-      <span class="hidden text-left leading-tight sm:block">
+      <!-- Named by its content (WCAG 2.5.3: the name starts with what is on
+           screen), so name and role stay in the tree below `sm` as sr-only,
+           and the avatar's initials are hidden rather than read first. -->
+      <UserAvatar
+        :user-id="auth.me.userId"
+        :name="auth.me.displayName"
+        :src="auth.me.avatarUrl"
+        aria-hidden="true"
+      />
+      <span class="sr-only text-left leading-tight sm:not-sr-only sm:block">
         <span class="block max-w-32 truncate text-xs font-medium">{{ auth.me.displayName }}</span>
         <span class="block text-[10px] text-muted-foreground">{{ roleLabel }}</span>
       </span>
+      <span class="sr-only">, {{ t('nav.accountMenu') }}</span>
       <ChevronDown class="hidden size-3.5 shrink-0 text-muted-foreground sm:block" aria-hidden="true" />
     </DropdownMenuTrigger>
 

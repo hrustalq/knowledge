@@ -275,3 +275,27 @@ destination's top level. `children()` now says it.
 
 The stored default for `preserveHierarchy` stays `false` — flipping it would silently
 restructure connectors that already run. The toggle simply does something for these kinds now.
+
+## Update — incremental runs from a change feed (#338)
+
+The Google Drive adapter adds `changes()`, and with it the first run that is
+neither a full walk nor a webhook's handful of ids: a **scheduled** pull with a
+stored cursor is seeded from what the feed says changed. Three things in this
+feature had to learn about it.
+
+- **Nesting.** Such a run holds only what moved, so a new file's folder is
+  usually not in it. Changed items are linked among themselves, parents first;
+  for the rest, `resolveParent` now looks past the top of the run's chain to
+  the link of its `externalParentId`, so a file added to a folder imported
+  last week lands in that folder's page instead of at the destination root. A
+  full walk is unaffected: its roots have no external parent.
+- **Orphan repair is skipped.** It attaches everything the walk missed, which
+  for a run that deliberately walked nothing is everything — it would turn the
+  incremental run back into a full one.
+- **Gone items are rows.** A linked item the feed reports trashed or no longer
+  visible is an `unchanged` row with a warning saying which, never a deletion.
+  `unchanged` because the page is left exactly as it is; the warning is what
+  stops it from silently ceasing to sync.
+
+A person pressing Sync still gets the whole tree compared, which is what makes
+"sync twice, every item `unchanged`" readable for this kind too.

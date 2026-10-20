@@ -45,6 +45,11 @@ import { t } from '../i18n/t.js';
 import { AiReadableService } from '../ai-readable/ai-readable.service.js';
 import { sendPageMarkdown } from '../ai-readable/ai-readable.http.js';
 import { prefersMarkdown, wantsFrontmatter } from '../ai-readable/render.js';
+import { withAsOf } from '../graph/temporal.js';
+import { ApiAsOfQuery } from '../temporal/temporal.dto.js';
+import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
+import { CommunitiesService } from '../communities/communities.service.js';
+import { AnalyticsRecorder, noTrackOf } from '../analytics/analytics.recorder.js';
 
 /** A query-string boolean: `1`, `true` and `yes` are on; anything else, including absence, is off. */
 function flag(value?: string): boolean {
@@ -73,6 +78,9 @@ export class DocumentsController {
     private readonly glossary: GlossaryService,
     private readonly aiReadable: AiReadableService,
     private readonly permissions: PermissionService,
+    private readonly temporal: TemporalResolverService,
+    private readonly communities: CommunitiesService,
+    private readonly analytics: AnalyticsRecorder,
   ) {}
 
   @Post()
@@ -155,13 +163,24 @@ export class DocumentsController {
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Whole-workspace relation graph for the pages landing; scoped to one project when projectId is given' })
   @ApiQuery({ name: 'projectId', required: false, description: 'Restrict the graph to one project' })
+  @ApiAsOfQuery()
   async workspaceGraph(
     @CurrentPrincipal() principal: Principal,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('projectId') projectId?: string,
+    @Query('asOf') asOf?: string,
+    @Query('knownAt') knownAt?: string,
   ) {
+    const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
     const scope = await this.permissions.scopeFor(principal, workspaceId);
-    return this.documents.getWorkspaceGraph(scope, projectId || undefined);
+    const graph = await this.documents.getWorkspaceGraph(scope, projectId || undefined, at);
+    // #81 phase 7: each page's community, for colouring — the current graph's
+    // grouping, so not on an as-of read.
+    if (!at) {
+      const community = await this.communities.membership(scope);
+      if (community.size) for (const n of graph.nodes) if (n.kind === 'document' && community.has(n.id)) n.community = community.get(n.id);
+    }
+    return withAsOf(graph, at);
   }
 
   @Get(':id')
@@ -207,6 +226,7 @@ export class DocumentsController {
   @ApiOperation({ summary: 'Full raw content of a revision (feature 01; head of the default branch by default)' })
   @ApiQuery({ name: 'revision', required: false })
   @ApiQuery({ name: 'frontmatter', required: false, description: 'With Accept: text/markdown, 1 to include the YAML block' })
+  @ApiAsOfQuery()
   @ApiHeader({
     name: 'Accept',
     required: false,
@@ -214,26 +234,39 @@ export class DocumentsController {
   })
   async content(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
     @Query('revision') revision?: string,
     @Query('frontmatter') frontmatter?: string,
+    @Query('asOf') asOf?: string,
+    @Query('knownAt') knownAt?: string,
   ) {
+    // `asOf` (#81) picks the default-branch revision that was the page's
+    // content then; an explicit `revision` wins over it.
+    const at = revision ? undefined : await this.temporal.resolve(await this.documents.workspaceOf(id), asOf, knownAt);
+    if (at) revision = await this.documents.revisionAsOf(id, at);
     // Read off the request rather than via @Headers(): that decorator emits the
     // header as a *required* parameter in openapi.json and so in the web client.
     const accept = req.headers.accept;
     const ifNoneMatch = req.headers['if-none-match'];
     // The representation depends on Accept either way, so both branches say so.
     res.setHeader('Vary', 'Accept');
+    // A key's read is a view (#79); a session's is dropped by the recorder —
+    // SSR and prefetch call this too, so the web counts its own on the page.
+    const caller = { principal, noTrack: noTrackOf(req.headers) };
     if (this.aiReadable.enabled() && prefersMarkdown(accept)) {
       const result = await this.aiReadable.pageMarkdown(id, {
         revisionId: revision || undefined,
         frontmatter: wantsFrontmatter(frontmatter),
         ifNoneMatch,
       });
+      if (result.status === 200) void this.analytics.view(caller, id, revision || null);
       return sendPageMarkdown(res, result);
     }
-    return this.documents.getContent(id, revision);
+    const content = await this.documents.getContent(id, revision);
+    void this.analytics.view(caller, id, content.revisionId);
+    return withAsOf(content, at);
   }
 
   @Get(':id/connectors')
@@ -276,13 +309,17 @@ export class DocumentsController {
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Document neighbourhood in the knowledge graph (feature 06); depth = entity hops (1-3)' })
   @ApiQuery({ name: 'depth', required: false })
+  @ApiAsOfQuery()
   async graph(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentPrincipal() principal: Principal,
     @Query('depth') depth?: string,
+    @Query('asOf') asOf?: string,
+    @Query('knownAt') knownAt?: string,
   ) {
     const scope = await this.permissions.scopeForDocument(principal, id);
-    return this.documents.getDocumentGraph(id, depth ? Number(depth) : 1, scope);
+    const at = await this.temporal.resolve(scope.workspaceId, asOf, knownAt);
+    return withAsOf(await this.documents.getDocumentGraph(id, depth ? Number(depth) : 1, scope, at), at);
   }
 
   @Get(':id/revisions')
@@ -335,15 +372,15 @@ export class DocumentsController {
   @Post(':id/relations')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Attach explicit relations (graph edges with provenance)' })
-  addRelations(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddRelationsDto) {
-    return this.documents.addRelations(id, dto.relations);
+  addRelations(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddRelationsDto, @CurrentPrincipal() principal: Principal) {
+    return this.documents.addRelations(id, dto.relations, principal.userId);
   }
 
   @Post(':id/relations/curate')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Curate a relation: user-confirmed, confidence 1, protected from re-extraction (plan.md §5)' })
-  curateRelation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CurateRelationDto) {
-    return this.documents.curateRelation(id, dto.relation);
+  curateRelation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CurateRelationDto, @CurrentPrincipal() principal: Principal) {
+    return this.documents.curateRelation(id, dto.relation, principal.userId);
   }
 
   @Post(':id/relations/propose')
@@ -370,10 +407,11 @@ export class DocumentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Query('type') type: string,
     @Query('targetKey') targetKey: string,
+    @CurrentPrincipal() principal: Principal,
     @Query('extractor') extractor?: string,
   ) {
     if (!type || !targetKey) throw new BadRequestException(t('error.relations.missingParams'));
-    return this.documents.deleteRelation(id, type, targetKey, extractor);
+    return this.documents.deleteRelation(id, type, targetKey, extractor, principal.userId);
   }
 
   @Get(':id/relations')

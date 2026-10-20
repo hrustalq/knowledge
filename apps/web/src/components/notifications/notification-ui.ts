@@ -80,6 +80,7 @@ export function notificationLink(entry: NotificationEntry): string | null {
   if (entry.type.startsWith('connector.run.')) return '/settings/connectors?tab=runs'
   if (entry.type.startsWith('import.')) return entry.documentId ? `/documents/${entry.documentId}` : '/upload'
   if (entry.type.startsWith('export.')) return '/settings/exports'
+  if (entry.type.startsWith('chat.harvest.')) return '/captures'
   // A manager answers a request from the inbox tab; a requester is sent to the
   // page itself, which shows the answer (or the request card, while refused).
   if (entry.type === 'access.requested') return '/settings/access?tab=requests'

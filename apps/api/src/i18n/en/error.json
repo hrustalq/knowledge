@@ -8,7 +8,7 @@
     "accountDisabled": "Account is disabled",
     "unknownApiKey": "Unknown API key",
     "invalidUrlTicket": "This link's access ticket is invalid, expired or already used",
-    "apiKeyInUrl": "API keys are not accepted in a URL. Send the key as an Authorization: Bearer header, or exchange it for a single-use ticket at POST /v1/auth/url-ticket",
+    "credentialInUrl": "Only a single-use ticket is accepted in a URL. Send the API key or session as an Authorization: Bearer header, or exchange it for a ticket at POST /v1/auth/url-ticket",
     "invalidCredentials": "Invalid email or password",
     "invalidResetToken": "Invalid or expired reset token",
     "noPasswordInDevMode": "No password to change in AUTH_MODE=none",
@@ -86,6 +86,12 @@
     "exists": "Branch {name} already exists on document {documentId}",
     "headMoved": "Branch {name} head is {actual}, not {expected} — compare before retrying",
     "needsFinalized": "Revision {id} is {status} — branches must start from a finalized revision"
+  },
+  "collab": {
+    "branchNotFound": "Document {documentId} has no branch named {branch}",
+    "draftMismatch": "Draft {draftId} is not the shared draft of branch {branch} on document {documentId}",
+    "draftNotFound": "Branch {branchId} of document {documentId} has no shared draft",
+    "snapshotInvalid": "draftSnapshot is not a Y snapshot"
   },
   "revision": {
     "notFoundOnDocument": "Revision {revisionId} not found on document {documentId}",
@@ -182,6 +188,7 @@
     "notFound": "Ingestion job {id} not found"
   },
   "ai": {
+    "disabled": "The drafter agent is turned off for this workspace, so this AI assist cannot run.",
     "skillNotFound": "Skill {id} not found",
     "skillNameTaken": "A skill named \"{name}\" already exists in this workspace",
     "pluginNotFound": "Plugin {id} not found",
@@ -361,7 +368,17 @@
     "identityNotFound": "No upstream identity {id} on this connector.",
     "identityNotMember": "Only a member of this workspace can be mapped to an upstream identity.",
     "guidanceNotARepository": "Connector {name} is not a repository — guidance files are read from codebase and markdown/git connectors only",
-    "specNoAssist": "An API spec is synced as written; the AI assists rewrite markdown and are not offered for it"
+    "specNoAssist": "An API spec is synced as written; the AI assists rewrite markdown and are not offered for it",
+    "googleDrive": {
+      "badKey": "The credential is not a Google service account JSON key (it needs client_email and private_key)",
+      "badId": "\"{id}\" is not a Google Drive id",
+      "notAFolder": "{name} is a file, not a folder or shared drive",
+      "unsupported": "{name} ({type}) cannot be imported",
+      "tooLarge": "{name} is too large to import",
+      "groupsNeedSubject": "Reading Google Groups needs domain-wide delegation: set \"Act as user\" to an admin",
+      "noStartToken": "Google Drive did not return a change feed start token",
+      "noToken": "Google did not issue an access token for this service account"
+    }
   },
   "routeNotFound": "Cannot {method} {path}",
   "validationFailed": "Validation failed",
@@ -464,6 +481,7 @@
     "expiryInPast": "The expiry must be in the future",
     "rateLimited": "Too many requests — try again in a minute",
     "unlockRateLimited": "Too many password attempts — try again later",
+    "exportRateLimited": "Too many downloads asked for from this link — try again later",
     "locked": "This link is password-protected",
     "restricted": "A restricted page cannot be shared by link. Grant access to the people who need it instead"
   },
@@ -549,7 +567,11 @@
     "serverUrlInvalid": "That is not a server address — expected something like https://time.example.com",
     "serverUrlNotHttps": "The messenger server must use https (http is allowed only with CHAT_ALLOW_PRIVATE_URLS)",
     "serverUrlPrivate": "{address} is on a private network; set CHAT_ALLOW_PRIVATE_URLS to allow it",
-    "serverHostUnresolved": "{host} could not be resolved"
+    "serverHostUnresolved": "{host} could not be resolved",
+    "listenTelegramOnly": "Keeping messages for harvesting is for Telegram groups only; Time and Mattermost threads are read whole",
+    "listenNoticeFailed": "The bot could not tell the group it keeps messages, so nothing is kept: {reason}",
+    "autoHarvestNeedsListening": "Automatic harvest reads the messages a group keeps: turn on Keep messages first",
+    "autoHarvestNoticeFailed": "The bot could not tell the group its threads will be harvested automatically, so it stays off: {reason}"
   },
   "group": {
     "notFound": "Group {id} not found",
@@ -697,5 +719,21 @@
     "tokenLimit": "This workspace already has {max} active SCIM tokens — revoke one before creating another.",
     "tokenNotFound": "SCIM token not found",
     "mappingGroup": "Choose a group the workspace's SCIM client has provisioned"
+  },
+  "temporal": {
+    "badAsOf": "asOf must be an ISO date, rev:<revisionId> or tag:<name>; got {value}",
+    "revisionNotFound": "Revision {id} not found in this workspace",
+    "revisionNotFinalized": "Revision {id} is a draft and has no point in time yet",
+    "unknownTag": "Release tag {name} not found in this workspace",
+    "badWindow": "from and to must be ISO dates with from before to"
+  },
+  "releaseTag": {
+    "notFound": "Release tag {id} not found",
+    "duplicate": "A release tag named {name} already exists in this workspace"
+  },
+  "conflict": {
+    "notFound": "Conflict {id} not found",
+    "notOpen": "This conflict is no longer open",
+    "alreadyProposed": "A fix for this conflict was already proposed"
   }
 }

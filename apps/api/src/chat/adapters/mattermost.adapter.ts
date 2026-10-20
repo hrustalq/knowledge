@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import type { ChatPlatformKind } from '@knowledge/contracts';
 import { CITE_MARKER_RE } from '../../assistant/citations.js';
 import { safeFetch } from '../../common/safe-fetch.js';
 import {
@@ -13,6 +14,7 @@ import {
   type ChatMessageRef,
   type ChatOutMessage,
   type ChatTarget,
+  type ChatThread,
   type ChatUpdatesView,
   type ChatView,
   type RawInbound,
@@ -31,8 +33,12 @@ const CALL_TIMEOUT_MS = 15_000;
  * capture) is started after the acknowledgement, never before.
  */
 const ACK_WAIT_MS = 5_000;
-/** Commands as a whole message: Time's client takes a leading `/` as its own slash command. */
-const COMMAND_RE = /^\/?(start|help|new|unlink|bind|unbind)$/i;
+/** Commands as a whole message: a Mattermost client takes a leading `/` as its own slash command. */
+const COMMAND_RE = /^\/?(start|help|new|unlink|bind|unbind|capture|remember|запомни)$/i;
+/** Asking the bot to remember a thread is `capture` (#82), in either language. */
+const CAPTURE_WORDS = new Set(['capture', 'remember', 'запомни']);
+/** The reaction that asks for a harvest (#82): 📌, by its Mattermost name. */
+const HARVEST_EMOJI = 'pushpin';
 /** A direct channel's name is the two user ids joined by `__`; a press carries the name, not the type. */
 const DM_CHANNEL_NAME_RE = /^[a-z0-9]+__[a-z0-9]+$/;
 /** Direct channels seen, so a reply there stays out of a thread. Bounded: forgotten ones only thread. */
@@ -40,7 +46,7 @@ const DM_MEMORY = 5_000;
 
 /**
  * The key a button's signature is made with: derived from the bot's token, the
- * one secret this API and the Time server share. A new token is a new bot, and
+ * one secret this API and the messenger's server share. A new token is a new bot, and
  * the old bot's buttons stop verifying with it — which is what they should do.
  */
 function actionKey(token: string): Buffer {
@@ -68,7 +74,7 @@ const escapeLinkText = (s: string): string => s.replace(/([[\]\\])/g, '\\$1');
 
 /**
  * `@name` → `@​name`. Answers quote pages and titles are typed by people,
- * and on Time `@channel`, `@all` or a colleague's handle in either would ping
+ * and on Mattermost `@channel`, `@all` or a colleague's handle in either would ping
  * them. A zero-width space after the `@` keeps the text and drops the mention.
  * An `@` inside a URL (after `/`, `:` or a word character) is left alone.
  */
@@ -86,12 +92,12 @@ function resolveUrl(raw: string, base: string): string | null {
 }
 
 /**
- * An answer's markdown as Time renders it. Time speaks markdown already, so
+ * An answer's markdown as Mattermost renders it. It speaks markdown already, so
  * this only does what a chat client cannot: resolve relative page links, turn
  * `[S#]` into numbered links to the source, drop links that are not http(s),
  * and defuse mentions. Code fences pass through untouched.
  */
-export function markdownForTime(md: string, cite: (label: string) => string | null, base: string): string {
+export function markdownForMattermost(md: string, cite: (label: string) => string | null, base: string): string {
   const parts = md.split(/(```[^\n]*\n[\s\S]*?```)/g);
   return parts
     .map((part, i) => {
@@ -123,7 +129,7 @@ function renderUpdates(view: ChatUpdatesView): string {
   return [...(view.heading ? [`**${defuseMentions(view.heading)}**`] : []), ...lines].join('\n').slice(0, MAX_CHARS);
 }
 
-/** Link buttons become a line of links: Time's buttons only call back, they never open a URL. */
+/** Link buttons become a line of links: Mattermost's buttons only call back, they never open a URL. */
 function linkLine(rows: ChatButton[][]): string {
   return rows
     .flat()
@@ -132,10 +138,16 @@ function linkLine(rows: ChatButton[][]): string {
     .join(' · ');
 }
 
+/** The platforms that speak Mattermost's `/api/v4`: Mattermost itself, and Time. */
+export type MattermostKind = Extract<ChatPlatformKind, 'mattermost' | 'time'>;
+
 /**
- * Time (issue #71, phase 4) — T-Bank's corporate messenger, self-hosted per
- * customer, with Mattermost's `/api/v4`. Plain `fetch` again, through the
- * SSRF-guarded one because the server is an address an admin typed.
+ * Mattermost (#343) and Time (issue #71, phase 4) — T-Bank's corporate
+ * messenger, which is Mattermost's `/api/v4` under another name. Both are
+ * self-hosted per customer, so this is one implementation and the kind is a
+ * constructor argument: it names the platform in errors and in the registry,
+ * and nothing else differs. Plain `fetch` again, through the SSRF-guarded one
+ * because the server is an address an admin typed.
  *
  * What differs from Telegram, and where it went:
  *
@@ -152,13 +164,10 @@ function linkLine(rows: ChatButton[][]): string {
  * - **The press is answered in the HTTP response** (`ephemeral_text`), not by a
  *   later call: {@link respondToAction} holds the response until the core's
  *   {@link acknowledge}.
- * - **Commands are plain words.** Time's client claims every leading `/`, so
+ * - **Commands are plain words.** The client claims every leading `/`, so
  *   `help`, `new`, `bind`… are read as a whole message on their own.
- *
- * The payload shapes are Mattermost's, which Time's documentation follows.
  */
-export class TimeAdapter implements ChatAdapter {
-  readonly kind = 'time' as const;
+export class MattermostAdapter implements ChatAdapter {
   readonly limits = { maxChars: MAX_CHARS, maxActionBytes: MAX_ACTION_BYTES };
   readonly inbound = 'socket' as const;
 
@@ -166,7 +175,10 @@ export class TimeAdapter implements ChatAdapter {
   private readonly pendingAcks = new Map<string, (note?: string) => void>();
   private readonly dmChannels = new Set<string>();
 
-  constructor(private readonly allowPrivate: boolean) {}
+  constructor(
+    readonly kind: MattermostKind,
+    private readonly allowPrivate: boolean,
+  ) {}
 
   /**
    * Only a button press is ever POSTed to the webhook, so only a correctly
@@ -175,7 +187,7 @@ export class TimeAdapter implements ChatAdapter {
    */
   verifyInbound(raw: RawInbound, _secretHash: string | null, ctx: ChatAdapterContext | null): boolean {
     if (!ctx) return false;
-    const press = parseJson<TimeActionRequest>(raw.body);
+    const press = parseJson<MattermostActionRequest>(raw.body);
     const context = press?.context;
     if (typeof context?.a !== 'string' || typeof context.s !== 'string') return false;
     return verifyAction(context.a, context.s, ctx.token);
@@ -187,15 +199,47 @@ export class TimeAdapter implements ChatAdapter {
    * a signed press cannot smuggle a message along with it.
    */
   parseInbound(raw: RawInbound, botUsername: string | null): ChatInbound[] {
-    const body = parseJson<TimeActionRequest & TimeEvent>(raw.body);
+    const body = parseJson<MattermostActionRequest & MattermostEvent>(raw.body);
     if (!body) return [];
     if (body.context) return this.parsePress(body);
     if (body.event === 'posted') return this.parsePosted(body, botUsername);
+    if (body.event === 'reaction_added') return this.parseReaction(body);
     return [];
   }
 
-  private parsePosted(event: TimeEvent, botUsername: string | null): ChatInbound[] {
-    const post = parseJson<TimePost>(event.data?.post);
+  /**
+   * 📌 (`pushpin`) added to a post (#82): harvest the thread it is in. The
+   * event carries the post's id and no text, which `fetchThread` reads anyway.
+   * Whether the channel is a direct one is known only if the bot has seen it.
+   */
+  private parseReaction(event: MattermostEvent): ChatInbound[] {
+    const r = parseJson<{ user_id?: string; post_id?: string; channel_id?: string; emoji_name?: string; create_at?: number }>(
+      event.data?.reaction,
+    );
+    const chatId = r?.channel_id;
+    if (r?.emoji_name !== HARVEST_EMOJI || !r.user_id || !r.post_id || !chatId) return [];
+    return [
+      {
+        externalUserId: r.user_id,
+        externalUserName: null,
+        chatId,
+        chatTitle: null,
+        isDm: this.dmChannels.has(chatId),
+        messageId: r.post_id,
+        text: '',
+        mentioned: false,
+        replyToBotMessageId: null,
+        threadId: null,
+        command: null,
+        action: null,
+        ...(r.create_at ? { at: new Date(r.create_at) } : {}),
+        harvestReaction: true,
+      },
+    ];
+  }
+
+  private parsePosted(event: MattermostEvent, botUsername: string | null): ChatInbound[] {
+    const post = parseJson<MattermostPost>(event.data?.post);
     if (!post?.id || !post.user_id || !post.channel_id) return [];
     // System messages (joins, header changes) and anything a bot wrote — this one included.
     if (post.type || post.props?.from_bot === 'true' || post.props?.from_bot === true) return [];
@@ -226,13 +270,13 @@ export class TimeAdapter implements ChatAdapter {
         mentioned,
         replyToBotMessageId: root,
         threadId: root ?? (isDm ? null : post.id),
-        command: cmd ? { name: cmd[1].toLowerCase(), args: '' } : null,
+        command: cmd ? { name: CAPTURE_WORDS.has(cmd[1].toLowerCase()) ? 'capture' : cmd[1].toLowerCase(), args: '' } : null,
         action: null,
       },
     ];
   }
 
-  private parsePress(press: TimeActionRequest): ChatInbound[] {
+  private parsePress(press: MattermostActionRequest): ChatInbound[] {
     const data = press.context?.a;
     if (!press.user_id || !press.channel_id || !press.post_id || typeof data !== 'string') return [];
     const isDm = DM_CHANNEL_NAME_RE.test(press.channel_name ?? '');
@@ -277,7 +321,7 @@ export class TimeAdapter implements ChatAdapter {
           .join('\n')
       : '';
     const { text, cut } = cutAnswer(view.answer, MAX_CHARS - ANSWER_HEADROOM - sources.length);
-    const body = markdownForTime(text, (label) => urls.get(label) ?? null, view.webBaseUrl) + sources;
+    const body = markdownForMattermost(text, (label) => urls.get(label) ?? null, view.webBaseUrl) + sources;
     return { text: body, plain: body, buttons: [...(cut && view.full ? [[view.full]] : []), ...view.actions] };
   }
 
@@ -325,11 +369,58 @@ export class TimeAdapter implements ChatAdapter {
   async registerWebhook(): Promise<void> {}
 
   /**
-   * Time has no link that opens a private chat without knowing the team, which
+   * Mattermost has no link that opens a private chat without knowing the team, which
    * a bot does not have. The group is told to message the bot instead.
    */
   directLink(): string | null {
     return null;
+  }
+
+  /**
+   * `GET /posts/:id/thread` — the whole thread in one call, from any post in
+   * it — trimmed to what people wrote before the command (a reaction has none,
+   * and reads it all). The link is the root's permalink, which needs the
+   * team's name: one call for the channel's team, one for the team. A link
+   * that cannot be built is left out rather than failing the harvest.
+   */
+  async fetchThread(
+    ctx: ChatAdapterContext,
+    chatId: string,
+    messageId: string,
+    beforeMessageId: string | null,
+    max: number,
+  ): Promise<ChatThread> {
+    const thread = await this.call<{ posts?: Record<string, MattermostPost & { create_at?: number }> }>(
+      ctx,
+      'GET',
+      `/posts/${encodeURIComponent(messageId)}/thread`,
+    );
+    const posts = Object.values(thread.posts ?? {});
+    const rootId = posts.find((p) => p.id === messageId)?.root_id || messageId;
+    const cutoff = posts.find((p) => p.id === beforeMessageId)?.create_at ?? Infinity;
+    const people = posts
+      .filter((p) => p.id !== beforeMessageId && (p.create_at ?? 0) < cutoff)
+      .filter((p) => !p.type && p.props?.from_bot !== 'true' && p.props?.from_bot !== true && p.message?.trim() && p.user_id)
+      .sort((a, b) => (a.create_at ?? 0) - (b.create_at ?? 0));
+    const kept = people.length > max ? [people[0]!, ...people.slice(people.length - (max - 1))] : people;
+    return {
+      messages: kept.map((p) => ({ authorId: p.user_id!, text: p.message!.trim(), at: new Date(p.create_at ?? 0) })),
+      url: await this.permalink(ctx, chatId, rootId),
+      truncated: kept.length < people.length,
+    };
+  }
+
+  private async permalink(ctx: ChatAdapterContext, chatId: string, postId: string): Promise<string | null> {
+    try {
+      const channel = await this.call<{ team_id?: string }>(ctx, 'GET', `/channels/${encodeURIComponent(chatId)}`);
+      // A direct channel belongs to no team, and a permalink needs one.
+      if (!channel.team_id) return null;
+      const team = await this.call<{ name?: string }>(ctx, 'GET', `/teams/${encodeURIComponent(channel.team_id)}`);
+      if (!team.name) return null;
+      return `${ctx.serverUrl!.replace(/\/$/, '')}/${encodeURIComponent(team.name)}/pl/${encodeURIComponent(postId)}`;
+    } catch {
+      return null;
+    }
   }
 
   /** The websocket URL for a server: the API's own origin and path, over ws(s). */
@@ -342,7 +433,7 @@ export class TimeAdapter implements ChatAdapter {
   /**
    * Where a reply to `messageId` goes: the thread that message is in, or a new
    * one under it — except in a direct chat, where a reply to a top-level
-   * message stays at the top. Time refuses a `root_id` that is itself a reply,
+   * message stays at the top. The server refuses a `root_id` that is itself a reply,
    * so the message is read for its root rather than used as one.
    */
   private async threadFor(ctx: ChatAdapterContext, chatId: string, messageId: string): Promise<string | null> {
@@ -382,10 +473,10 @@ export class TimeAdapter implements ChatAdapter {
     this.dmChannels.add(channelId);
   }
 
-  /** One API call. Errors carry the method, the path and Time's message — never the token. */
+  /** One API call. Errors carry the platform, the method, the path and the server's message — never the token. */
   private async call<T = unknown>(ctx: ChatAdapterContext, method: string, path: string, body?: unknown): Promise<T> {
-    if (!ctx.serverUrl) throw new ChatPlatformError('time: no server address');
-    const label = `time ${method} ${path.replace(/\/[a-z0-9]{26}(?=\/|$)/g, '/:id')}`;
+    if (!ctx.serverUrl) throw new ChatPlatformError(`${this.kind}: no server address`);
+    const label = `${this.kind} ${method} ${path.replace(/\/[a-z0-9]{26}(?=\/|$)/g, '/:id')}`;
     let res: Response;
     try {
       res = await safeFetch(
@@ -424,10 +515,12 @@ function parseJson<T>(raw: unknown): T | null {
 const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** A websocket event: `posted` carries the post as a JSON string, Mattermost's shape. */
-interface TimeEvent {
+interface MattermostEvent {
   event?: string;
   data?: {
     post?: string;
+    /** `reaction_added`: the Reaction as a JSON string — user, post, channel, emoji name. */
+    reaction?: string;
     /** `D` direct, `G` group direct, `O` public, `P` private. */
     channel_type?: string;
     channel_display_name?: string;
@@ -437,7 +530,7 @@ interface TimeEvent {
   seq?: number;
 }
 
-interface TimePost {
+interface MattermostPost {
   id?: string;
   user_id?: string;
   channel_id?: string;
@@ -448,8 +541,8 @@ interface TimePost {
   props?: { from_bot?: string | boolean };
 }
 
-/** What Time POSTs to a button's `integration.url`. */
-interface TimeActionRequest {
+/** What the server POSTs to a button's `integration.url` (`PostActionIntegrationRequest`). */
+interface MattermostActionRequest {
   user_id?: string;
   user_name?: string;
   channel_id?: string;

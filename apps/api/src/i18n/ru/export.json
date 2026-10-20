@@ -1,0 +1,24 @@
+{
+  "docx": {
+    "contents": "Содержание",
+    "exportedOn": "Экспортировано {date}",
+    "pageCount": {
+      "one": "{count} страница",
+      "few": "{count} страницы",
+      "many": "{count} страниц",
+      "other": "{count} страницы"
+    },
+    "onThisPage": "На этой странице",
+    "noHeadings": "На странице нет заголовков",
+    "diagramSource": "Диаграмма (исходный код mermaid)",
+    "drawing": "Рисунок — откройте страницу в базе знаний, чтобы его увидеть",
+    "attachment": "Вложение: {name}",
+    "panel": {
+      "note": "Инфо",
+      "tip": "Успех",
+      "important": "Заметка",
+      "warning": "Предупреждение",
+      "caution": "Ошибка"
+    }
+  }
+}

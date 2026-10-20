@@ -10,6 +10,7 @@
  * and each caller supplies its own text plus a map back to its own positions.
  */
 import type { ReviewThreadAnchor } from '@knowledge/contracts'
+import { normalizeQuote } from '@knowledge/editor-schema/suggestions'
 
 export type TextAnchor = Extract<ReviewThreadAnchor, { type: 'text' }>
 
@@ -27,15 +28,8 @@ export const CONTEXT_CHARS = 48
 export const MAX_QUOTE_CHARS = 1_000
 export const MIN_QUOTE_CHARS = 2
 
-/**
- * Whitespace as rendered is layout, not content: the same passage yields
- * different runs of spaces depending on where the line broke. Collapsing it is
- * what makes an anchor portable between viewports, renderers and clients — the
- * API normalizes identically on write.
- */
-export function normalizeQuote(raw: string): string {
-  return raw.replace(/\s+/g, ' ').trim()
-}
+// One spelling for every quote search, the editor's and the API's draft tools' (#316).
+export { normalizeQuote }
 
 /**
  * How many characters of the recorded context still match around a candidate.

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { HttpException, HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type AgentRun } from '@prisma/client';
@@ -37,6 +38,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { AssistantClient, ProviderAccountError } from '../assistant/assistant.client.js';
+import { ConflictsService } from '../conflicts/conflicts.service.js';
+import { candidatePairs, conflictFingerprint, quoteIn, readJudgement } from './contradiction.js';
+import { graphFingerprint, groupCommunities, louvain, pagePairs } from './communities.js';
 import { AssistantReadToolsService } from '../assistant/assistant-read-tools.service.js';
 import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
@@ -53,6 +57,7 @@ import { AgentRegistryService, type ResolvedAgent } from './agent-registry.servi
 import { runCodeReadingLoop } from './code-reading-loop.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { AgentLearningsService } from '../ai/agent-learnings.service.js';
+import { withAgentRun } from '../ai/agent-run-context.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
 import { TemplatesService } from '../templates/templates.service.js';
@@ -163,6 +168,8 @@ export const RUNNABLE_AGENTS = new Set([
   'surveyor',
   'digest',
   'auditor',
+  'arbiter',
+  'atlas',
 ]);
 
 /** A page id the model named is checked against the database only if it could be one. */
@@ -229,9 +236,35 @@ export type AgentReporter = (update: {
  * and means a workspace with no model configured still gets the half of the
  * answer that never needed one.
  */
+/**
+ * What one run's prompt was built from (#305), collected as the executor
+ * renders it and stamped on the run at the end. `trusted` holds only text a
+ * person wrote or approved — skills, learnings, a styleguide — never page
+ * content, which every executor wraps untrusted in the user turn.
+ */
+interface RunLedger {
+  guidance: Promise<string> | null;
+  trusted: Set<string>;
+  learningIds: string[];
+}
+
+/**
+ * SHA-256 over a run's trusted prompt: the agent's instructions (the built-in
+ * prompt or its override) and the trusted parts, order-free and with empty
+ * parts dropped, so an agent with no skills hashes the same whether or not its
+ * executor asked for guidance. Untrusted content never reaches it — that is
+ * what makes two runs over different pages comparable as one prompt.
+ */
+export function promptHashOf(instructions: string, trusted: Iterable<string>): string {
+  const parts = [...new Set(trusted)].filter((p) => p.trim() !== '').sort();
+  return createHash('sha256').update(JSON.stringify([instructions, ...parts])).digest('hex');
+}
+
 @Injectable()
 export class AgentExecutor {
   private readonly logger = new Logger(AgentExecutor.name);
+  /** In-flight runs' ledgers, by run id. A run's entry lives from its first prompt to its stamp. */
+  private readonly ledgers = new Map<string, RunLedger>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -254,6 +287,7 @@ export class AgentExecutor {
     private readonly templates: TemplatesService,
     private readonly apiDrift: ApiDriftService,
     private readonly compare: CompareService,
+    private readonly conflicts: ConflictsService,
   ) {}
 
   /**
@@ -266,7 +300,15 @@ export class AgentExecutor {
    * agent explicitly names apply. Project-scoped learnings apply when the run
    * is about pages, or a connector, in that project.
    */
-  private async guidance(run: AgentRun, agent: ResolvedAgent): Promise<string> {
+  private guidance(run: AgentRun, agent: ResolvedAgent): Promise<string> {
+    // Rendered once per run, however many stages ask: the learnings stamped on
+    // the run (#305) must be the ones every one of its calls was given.
+    const ledger = this.ledgerOf(run);
+    ledger.guidance ??= this.renderGuidance(run, agent, ledger);
+    return ledger.guidance;
+  }
+
+  private async renderGuidance(run: AgentRun, agent: ResolvedAgent, ledger: RunLedger): Promise<string> {
     const [skills, projectIds] = await Promise.all([
       this.skills.forTurn(run.workspaceId, '', agent.skillIds),
       this.runProjects(run),
@@ -275,7 +317,53 @@ export class AgentExecutor {
       this.learnings.promptFor({ workspaceId: run.workspaceId, agentKey: agent.key, projectIds }),
       this.learnings.dismissedPrompt(run.workspaceId, agent.key),
     ]);
-    return this.skills.renderPrompt(skills) + learnings + dismissed;
+    const skillText = this.skills.renderPrompt(skills);
+    ledger.trusted.add(skillText);
+    ledger.trusted.add(learnings.prompt);
+    ledger.learningIds = learnings.learningIds;
+    // The dismissed block is not hashed: its titles are the agent's earlier
+    // words written from page content, quoted as data, and they change with
+    // every dismissal. Hashing them would split one prompt into many.
+    return skillText + learnings.prompt + dismissed;
+  }
+
+  /** The ledger of one run, created on first use. */
+  private ledgerOf(run: AgentRun): RunLedger {
+    let ledger = this.ledgers.get(run.id);
+    if (!ledger) {
+      ledger = { guidance: null, trusted: new Set(), learningIds: [] };
+      this.ledgers.set(run.id, ledger);
+    }
+    return ledger;
+  }
+
+  /** Trusted text a run's prompt carries besides its guidance — a styleguide's rules. */
+  private trust(run: AgentRun, part: string): void {
+    this.ledgerOf(run).trusted.add(part);
+  }
+
+  /**
+   * Stamps what produced the run (#305): the model, the prompt hash and the
+   * learnings rendered. Guarded on the run still being ours, like every write
+   * the processor makes, and never thrown: attribution is observability, and
+   * it must not fail a run that did its work.
+   */
+  private async stamp(run: AgentRun, agent: ResolvedAgent): Promise<void> {
+    const ledger = this.ledgers.get(run.id) ?? { guidance: null, trusted: new Set<string>(), learningIds: [] };
+    this.ledgers.delete(run.id);
+    try {
+      await this.prisma.agentRun.updateMany({
+        where: { id: run.id, status: 'running' },
+        data: {
+          providerId: agent.config.enabled ? agent.config.providerId : null,
+          model: agent.config.enabled ? agent.config.model || null : null,
+          promptHash: promptHashOf(agent.instructions, ledger.trusted),
+          learningIds: ledger.learningIds,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(`Agent run ${run.id} could not record its attribution: ${String(error)}`);
+    }
   }
 
   /** The projects a run is about: its pages', else its connector's. Empty for a workspace-wide run. */
@@ -312,7 +400,7 @@ export class AgentExecutor {
 
   /** The tool context every agent loop runs with: the owner, clamped like {@link runScope}. */
   private toolCtx(run: AgentRun, principal: Principal) {
-    return { principal, workspaceId: run.workspaceId, audience: WORKSPACE_AUDIENCE };
+    return { principal, workspaceId: run.workspaceId, audience: WORKSPACE_AUDIENCE, channel: 'agent' as const };
   }
 
   /**
@@ -322,6 +410,23 @@ export class AgentExecutor {
    * settings page calls) bills and authorises as that same person.
    */
   async run(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    // Every model call below is billed to this run (#305), and the run is
+    // stamped with what produced it whether it succeeds or fails.
+    return withAgentRun({ agentKey: agent.key, agentRunId: run.id }, async () => {
+      try {
+        return await this.dispatch(run, agent, principal, report);
+      } finally {
+        await this.stamp(run, agent);
+      }
+    });
+  }
+
+  private async dispatch(
     run: AgentRun,
     agent: ResolvedAgent,
     principal: Principal,
@@ -344,6 +449,10 @@ export class AgentExecutor {
         return this.digest(run, agent, principal, report);
       case 'auditor':
         return this.audit(run, agent, principal, report);
+      case 'arbiter':
+        return this.arbitrate(run, agent, principal, report);
+      case 'atlas':
+        return this.chart(run, agent, principal, report);
       // Deliberately not in RUNNABLE_AGENTS (docs/features/35): that set offers
       // the Run button and feeds the schedule sweeper, and a sentinel run with
       // neither a pull request nor a report has nothing to check. Only
@@ -364,6 +473,240 @@ export class AgentExecutor {
         // if it had done something.
         throw new Error(t('error.ai.agentNoExecutor', { key: agent.key }));
     }
+  }
+
+  /**
+   * The arbiter (#81): contradictions between pages. The pairing is
+   * deterministic — passages from different pages close enough in meaning to
+   * be about the same thing (`candidatePairs`), at least one from a page that
+   * changed since the last run, or the page whose indexing triggered this one.
+   * The model judges each pair in one call; a judgement stands only if both
+   * quotes are really in their passages (`readJudgement`). Every kept one is
+   * recorded as a conflict row and mirrored as a finding, so the runs panel and
+   * the conflicts views read the same thing.
+   */
+  private async arbitrate(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    await report({ stage: 'scanning', progress: 0.05 });
+    if (this.config.get('EMBEDDINGS_PROVIDER', { infer: true }) === 'stub') {
+      // The stub hashes words: every page of one product would pair with every
+      // other on shared vocabulary. Not measured, and said.
+      return { summary: t('agent.arbitration.stubEmbeddings'), findings: [] };
+    }
+    const scope = await this.runScope(run, principal);
+    const acl = await this.permissions.documentFilterFor(scope);
+    const input = (run.input ?? {}) as AgentRunInput;
+
+    // What to re-judge: the pages the run names (a page.indexed trigger names
+    // the page), else the pages whose content changed since the last arbiter
+    // run that finished, else — the first run — every page.
+    let inScope: Set<string> | null = input.documentIds?.length ? new Set(input.documentIds.slice(0, AGENT_RUN_MAX_DOCUMENTS)) : null;
+    if (!inScope) {
+      const last = await this.prisma.agentRun.findFirst({
+        where: { workspaceId: run.workspaceId, agentKey: 'arbiter', status: 'succeeded', id: { not: run.id } },
+        orderBy: { finishedAt: 'desc' },
+        select: { finishedAt: true },
+      });
+      if (last?.finishedAt) {
+        const changed = await this.prisma.documentRevision.findMany({
+          where: { document: { workspaceId: run.workspaceId }, finalizedAt: { gt: last.finishedAt } },
+          select: { documentId: true },
+          distinct: ['documentId'],
+        });
+        inScope = new Set(changed.map((r) => r.documentId));
+        if (inScope.size === 0) return { summary: t('agent.arbitration.nothingChanged'), findings: [] };
+      }
+    }
+
+    const [chunks, relations] = await Promise.all([
+      this.graph.liveChunks(run.workspaceId, acl),
+      this.graph.getWorkspaceRelationGraph(run.workspaceId, acl),
+    ]);
+    const entitiesOf = new Map<string, Set<string>>();
+    for (const e of relations.edges) {
+      if (!entitiesOf.has(e.documentId)) entitiesOf.set(e.documentId, new Set())
+      entitiesOf.get(e.documentId)!.add(e.targetKey);
+    }
+    const sharesEntity = (a: string, b: string) => {
+      const ea = entitiesOf.get(a);
+      const eb = entitiesOf.get(b);
+      if (!ea || !eb) return false;
+      for (const k of ea) if (eb.has(k)) return true;
+      return false;
+    };
+    const pairs = candidatePairs(chunks, inScope, {
+      minSimilarity: this.config.get('CONTRADICTION_MIN_SIMILARITY', { infer: true }),
+      cap: this.config.get('CONTRADICTION_MAX_PAIRS_PER_RUN', { infer: true }),
+      sharesEntity,
+    });
+    if (pairs.length === 0) return { summary: t('agent.arbitration.noPairs'), findings: [] };
+
+    // PG has the last word on visibility (#76), and the titles.
+    const docIds = [...new Set(pairs.flatMap((p) => [p.a.documentId, p.b.documentId]))];
+    const docs = await this.prisma.document.findMany({
+      where: { id: { in: docIds }, workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
+      select: { id: true, title: true },
+    });
+    const titleOf = new Map(docs.map((d) => [d.id, d.title]));
+    const revisionOf = (chunkId: string) => chunkId.slice(0, chunkId.lastIndexOf(':'));
+
+    const minConfidence = this.config.get('CONTRADICTION_MIN_CONFIDENCE', { infer: true });
+    const call = { config: agent.config, userId: run.createdBy, operation: 'contradiction' as const, locale: run.locale as Locale };
+    const system = `${agent.instructions}` + (await this.guidance(run, agent));
+    const findings: AgentFinding[] = [];
+    let judged = 0;
+    for (const [i, pair] of pairs.entries()) {
+      const titleA = titleOf.get(pair.a.documentId);
+      const titleB = titleOf.get(pair.b.documentId);
+      if (!titleA || !titleB) continue;
+      await report({ stage: 'judging', progress: 0.1 + (0.85 * i) / pairs.length });
+      let raw: string;
+      try {
+        raw = await this.client.chat(
+          call,
+          [
+            { role: 'system', content: system },
+            {
+              role: 'user',
+              content:
+                `Passage A, from the page "${titleA}":\n${wrapUntrusted(pair.a.text, 'arbiter', 'page')}\n\n` +
+                `Passage B, from the page "${titleB}":\n${wrapUntrusted(pair.b.text, 'arbiter', 'page')}`,
+            },
+          ],
+          { json: true },
+        );
+        judged += 1;
+      } catch (error) {
+        // A budget refusal or a dead account is terminal for the run; anything
+        // else costs one pair, not the rest.
+        if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+          await report({ warning: t('agent.arbitration.budgetSpent', { judged }) });
+          break;
+        }
+        if (error instanceof ProviderAccountError) {
+          await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+          break;
+        }
+        this.logger.warn(`Arbiter judgement failed for one pair: ${String(error)}`);
+        continue;
+      }
+      const verdict = readJudgement(safeJson(raw), pair, minConfidence);
+      if (!verdict) continue;
+      const conflict = await this.conflicts.record({
+        workspaceId: run.workspaceId,
+        kind: 'doc-doc',
+        a: { documentId: pair.a.documentId, revisionId: revisionOf(pair.a.chunkId), chunkId: pair.a.chunkId, quote: verdict.aQuote },
+        b: { documentId: pair.b.documentId, revisionId: revisionOf(pair.b.chunkId), chunkId: pair.b.chunkId, quote: verdict.bQuote },
+        explanation: verdict.explanation,
+        confidence: verdict.confidence,
+        agentRunId: run.id,
+        findingIndex: findings.length,
+      });
+      // Found again while open, resolved or dismissed: the row stands as it
+      // was and this run has nothing new to say. New or reopened: a finding.
+      if (!conflict.written) continue;
+      findings.push({
+        kind: 'contradiction',
+        severity: 'warning',
+        title: t('agent.arbitration.findingTitle', { a: titleA, b: titleB }),
+        detail: `${verdict.explanation}\n\n> ${verdict.aQuote}\n\n> ${verdict.bQuote}`,
+        documentIds: [pair.a.documentId, pair.b.documentId],
+        documentTitles: [titleA, titleB],
+        conflictId: conflict.id,
+      });
+      if (findings.length >= MAX_FINDINGS) break;
+    }
+    return {
+      summary: t('agent.arbitration.summary', { judged, found: findings.length }),
+      findings,
+    };
+  }
+
+  /**
+   * The atlas (#81, phase 7): communities of pages for global questions. The
+   * grouping is deterministic — Louvain over the page-to-page projection of
+   * the live graph, as the run's audience may see it — and skipped outright
+   * when the projection's fingerprint is the one the stored communities were
+   * built from. The model summarises each community from its pages' titles
+   * and opening excerpts; each summary is embedded so a question can find it.
+   * Written whole at the end, so a failed run leaves the last good set.
+   */
+  private async chart(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    if (!this.config.get('COMMUNITY_SUMMARIES_ENABLED', { infer: true })) {
+      return { summary: t('agent.charting.disabled'), findings: [] };
+    }
+    await report({ stage: 'scanning', progress: 0.05 });
+    const scope = await this.runScope(run, principal);
+    const acl = await this.permissions.documentFilterFor(scope);
+    const graph = await this.graph.getWorkspaceRelationGraph(run.workspaceId, acl);
+    const pairs = pagePairs(graph.edges);
+    const fingerprint = graphFingerprint(pairs);
+    if ((await this.graph.communityFingerprint(run.workspaceId)) === fingerprint) {
+      return { summary: t('agent.charting.unchanged'), findings: [] };
+    }
+    const groups = groupCommunities(louvain(pairs), 2).slice(0, this.config.get('COMMUNITY_MAX_PER_RUN', { infer: true }));
+    if (groups.length === 0) return { summary: t('agent.charting.noCommunities'), findings: [] };
+
+    // Titles from PG under the run's scope (#76); an opening excerpt per page
+    // from its live chunks — the first chunk is the page's own introduction.
+    const memberIds = [...new Set(groups.flat())];
+    const docs = await this.prisma.document.findMany({
+      where: { id: { in: memberIds }, workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
+      select: { id: true, title: true },
+    });
+    const titleOf = new Map(docs.map((d) => [d.id, d.title]));
+    const opening = new Map<string, { idx: number; text: string }>();
+    for (const c of await this.graph.liveChunks(run.workspaceId, acl)) {
+      const held = opening.get(c.documentId);
+      if (!held || c.idx < held.idx) opening.set(c.documentId, { idx: c.idx, text: c.text });
+    }
+
+    const call = { config: agent.config, userId: run.createdBy, operation: 'community' as const, locale: run.locale as Locale };
+    const system = agent.instructions + (await this.guidance(run, agent));
+    const built: Array<{ communityId: string; title: string; summary: string; members: string[]; embedding: number[] }> = [];
+    let partial = false;
+    for (const [i, members] of groups.entries()) {
+      const pages = members.filter((m) => titleOf.has(m));
+      if (pages.length < 2) continue;
+      await report({ stage: 'summarising', progress: 0.1 + (0.85 * i) / groups.length });
+      const listing = pages
+        .slice(0, 25)
+        .map((id) => `## ${titleOf.get(id)}\n${wrapUntrusted((opening.get(id)?.text ?? '').slice(0, 600), 'atlas', 'page')}`)
+        .join('\n\n');
+      try {
+        const raw = await this.client.chat(call, [{ role: 'system', content: system }, { role: 'user', content: listing }], { json: true });
+        const parsed = safeJson(raw);
+        const title = typeof parsed?.title === 'string' ? parsed.title.trim().slice(0, 120) : '';
+        const summary = typeof parsed?.summary === 'string' ? parsed.summary.trim().slice(0, 2_000) : '';
+        if (!title || !summary) continue;
+        built.push({ communityId: members[0]!, title, summary, members: pages, embedding: await this.embedding.embed(`${title}\n${summary}`) });
+      } catch (error) {
+        if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+          await report({ warning: t('agent.charting.budgetSpent', { done: built.length }) });
+          partial = true;
+          break;
+        }
+        if (error instanceof ProviderAccountError) {
+          await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+          partial = true;
+          break;
+        }
+        this.logger.warn(`Atlas could not summarise one community: ${String(error)}`);
+      }
+    }
+    if (built.length === 0) return { summary: t('agent.charting.noneWritten'), findings: [] };
+    // A partial set is stored but not fingerprinted, so the next run finishes it.
+    await this.graph.replaceCommunities(run.workspaceId, built, partial ? '' : fingerprint);
+    return { summary: t('agent.charting.summary', { n: built.length, pages: built.reduce((s, c) => s + c.members.length, 0) }), findings: [] };
   }
 
   private async curate(
@@ -692,6 +1035,7 @@ export class AgentExecutor {
     if (!styleguide || enabledRules(styleguide.rules).length === 0) {
       return { summary: t('agent.lint.noStyleguide'), findings: [] };
     }
+    this.trust(run, JSON.stringify(styleguide.rules));
 
     await report({ stage: 'diff' });
     const target = mr.targetBranch.headRevisionId;
@@ -793,6 +1137,7 @@ export class AgentExecutor {
       if (!rules) {
         rules = (await this.skills.effectiveStyleguide(run.workspaceId, projectId))?.rules ?? [];
         styleguides.set(projectId, rules);
+        if (rules.length > 0) this.trust(run, JSON.stringify(rules));
       }
       return rules;
     };
@@ -1623,11 +1968,46 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
           : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
         checked += 1;
         judged.add(candidate.documentId);
+        const verdict = safeJson(raw);
         const finding = readDriftVerdict(
-          safeJson(raw),
+          verdict,
           { id: candidate.documentId, title: candidate.title, markdown: content.markdown },
           pr,
         );
+        // #81: a drifted page is a doc↔code conflict too. Its identity is the
+        // page and the pull request, so every push re-judges one row. The
+        // claim is the page's own sentence when the model quoted one that is
+        // really there, else the finding's title. Non-fatal: the finding stands.
+        if (finding) {
+          const quoted = typeof verdict?.quote === 'string' && quoteIn(content.markdown, verdict.quote) ? verdict.quote.trim() : null;
+          const conflict = await this.conflicts
+            .record({
+              workspaceId: run.workspaceId,
+              kind: 'doc-code',
+              a: { documentId: candidate.documentId, revisionId: content.revisionId, chunkId: null, quote: (quoted ?? finding.title).slice(0, 1_000) },
+              b: null,
+              codeRef: {
+                connectorId,
+                repository: connector.name,
+                pullRequestNumber: pr.number,
+                pullRequestUrl: pr.url,
+                headSha: pr.headSha,
+                paths: candidate.files.slice(0, 20),
+              },
+              fingerprint: conflictFingerprint([{ documentId: candidate.documentId, quote: `pr:${connectorId}#${pr.number}` }]),
+              refreshOpen: true,
+              explanation: finding.detail,
+              // The sentinel's verdict carries no score; a drift it reports is one it asserts.
+              confidence: 1,
+              agentRunId: run.id,
+              findingIndex: null,
+            })
+            .catch((e) => {
+              this.logger.warn(`Sentinel could not record a conflict for "${candidate.title}": ${String(e)}`);
+              return null;
+            });
+          if (conflict) finding.conflictId = conflict.id;
+        }
         // One finding per page, so one merge request: the path edit rides on
         // the corrected body when the model wrote one.
         const paths = pathFindings.get(candidate.documentId);
@@ -1960,6 +2340,8 @@ ${page.markdown}`, files);
     // A page outside the connector's destination — a hand-written design doc —
     // is the one most likely to drift and least likely to be tied above. One
     // search, few hits; a failure costs the weakest tie, never the run.
+    // Not filed in the analytics log (#79): a query built from a PR's files is
+    // nobody's question, like a backtest replay.
     try {
       const res = await this.search.search(
         {

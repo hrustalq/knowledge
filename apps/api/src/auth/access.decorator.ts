@@ -6,6 +6,7 @@ export const PUBLIC_META = 'knowledge:public';
 export const PLATFORM_ADMIN_META = 'knowledge:platform-admin';
 export const READ_KEY_OK_META = 'knowledge:read-key-ok';
 export const QUERY_TOKEN_OK_META = 'knowledge:query-token-ok';
+export const COOKIE_TOKEN_OK_META = 'knowledge:cookie-token-ok';
 export const UNVERIFIED_OK_META = 'knowledge:unverified-ok';
 
 /** Where AclGuard finds the workspace id for a route (resolved in PostgreSQL). */
@@ -44,6 +45,8 @@ export type WorkspaceSource =
   | 'group' // :id path param is a user group id (issue #76)
   | 'access-request' // :id path param is an access request id (issue #76, phase 5)
   | 'capture' // :id path param is a knowledge capture id (issue #73, phase 3)
+  | 'release-tag' // :id path param is a release tag id (issue #81, phase 2)
+  | 'conflict' // :id path param is a knowledge conflict id (issue #81, phase 5)
   | 'workspace'; // :id path param IS the workspace id (existence-checked)
 
 export interface AccessSpec {
@@ -96,14 +99,25 @@ export const ReadKeyOk = () => SetMetadata(READ_KEY_OK_META, true);
 
 /**
  * A route that may authenticate with `?token=` instead of an `Authorization`
- * header (#102). Only for callers that cannot set headers: `EventSource` (the
- * SSE stream) and `<img>` / `<object>` (attachment, import-image and avatar
- * redirects). Everywhere else AuthGuard ignores the query token, so a key
- * pasted into a URL authenticates nothing: URLs end up in access logs,
- * browser history and `Referer` headers. The allowlist is pinned by
- * test/query-token.spec.ts, so adding a route here is a reviewed decision.
+ * header (#102). Only for `EventSource` (the SSE stream), which cannot set
+ * headers, and only with a single-use `kt_` ticket. Everywhere else AuthGuard
+ * ignores the query token, so a key pasted into a URL authenticates nothing:
+ * URLs end up in access logs, browser history and `Referer` headers. The
+ * allowlist is pinned by test/query-token.spec.ts, so adding a route here is a
+ * reviewed decision.
  */
 export const QueryTokenOk = () => SetMetadata(QUERY_TOKEN_OK_META, true);
+
+/**
+ * A GET redirect that `<img>` / `<object>` load (attachment, import-image and
+ * avatar reads, #102 phase 2b): with no `Authorization` header it may
+ * authenticate from the web's `kn_token` cookie, a `ks_` session only. The web
+ * calls the API same-origin under `/api`, so the browser sends the cookie and
+ * no credential has to ride in the URL; `SameSite=Lax` keeps a cross-site
+ * `<img>` from carrying it. Pinned beside `@QueryTokenOk` in
+ * test/query-token.spec.ts.
+ */
+export const CookieTokenOk = () => SetMetadata(COOKIE_TOKEN_OK_META, true);
 
 /**
  * A route a session with an unproven address may still call while

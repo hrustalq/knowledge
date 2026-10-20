@@ -19,10 +19,10 @@ import {
 import { ApiExcludeEndpoint, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type { Observable } from 'rxjs';
-import type { PublicSharePage, PublicShareResponse } from '@knowledge/contracts';
+import type { PublicShareExport, PublicSharePage, PublicShareResponse } from '@knowledge/contracts';
 import { Public } from '../auth/access.decorator.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
-import { UnlockShareDto } from '../publishing/share-links.dto.js';
+import { CreateShareExportDto, UnlockShareDto } from '../publishing/share-links.dto.js';
 import { PublicRateLimitGuard } from './public-rate-limit.js';
 import { PublicSharesService } from './public-shares.service.js';
 import { unlockCookieName } from './share-unlock.service.js';
@@ -48,8 +48,8 @@ class ShareResponseHeaders implements NestInterceptor {
  * The anonymous reader's API (docs/features/43). `@Public()`: there is no
  * principal and no workspace to resolve; the token is the whole credential,
  * and `PublicSharesService` confines every read to the scope it names.
- * Literal segments (`unlock`, `pages`, `attachments`) sit after `:token`, so
- * none competes with it.
+ * Literal segments (`unlock`, `pages`, `attachments`, `exports`) sit after
+ * `:token`, so none competes with it.
  */
 @ApiTags('public')
 @Controller('v1/public/shares')
@@ -97,6 +97,43 @@ export class PublicSharesController {
     @Req() req: Request,
   ): Promise<PublicSharePage> {
     return this.shares.page(token, documentId, req.headers.cookie);
+  }
+
+  @Post(':token/exports')
+  @ApiOperation({ summary: 'Export what the link shows as ZIP, HTML or PDF, when the link allows download (#161); poll the job' })
+  @ApiResponse({ status: 404, description: 'Dead link, or download is off' })
+  @ApiResponse({ status: 401, description: 'The link is locked: unlock it first' })
+  @ApiResponse({ status: 429, description: 'Too many exports from this address or link (details.reason share.exportRateLimited)' })
+  @ApiResponse({ status: 409, description: 'PDF without Gotenberg (details.reason export.formatUnavailable)' })
+  createExport(@Param('token') token: string, @Body() dto: CreateShareExportDto, @Req() req: Request): Promise<PublicShareExport> {
+    return this.shares.createExport(token, dto.format, req);
+  }
+
+  @Get(':token/exports/:exportId')
+  @ApiOperation({ summary: 'One of this link’s exports — polled while it runs' })
+  @ApiResponse({ status: 404, description: 'Dead link, download off, or not this link’s export' })
+  getExport(
+    @Param('token') token: string,
+    @Param('exportId', ParseUUIDPipe) exportId: string,
+    @Req() req: Request,
+  ): Promise<PublicShareExport> {
+    return this.shares.getExport(token, exportId, req.headers.cookie);
+  }
+
+  /**
+   * A 302 to a short-lived URL, like an attachment: the reader's browser
+   * follows a plain link, with the unlock cookie and no header to add.
+   */
+  @Get(':token/exports/:exportId/download')
+  @Redirect(undefined, 302)
+  @ApiExcludeEndpoint() // binary redirect; not useful in the generated client
+  async exportDownload(
+    @Param('token') token: string,
+    @Param('exportId', ParseUUIDPipe) exportId: string,
+    @Req() req: Request,
+  ): Promise<{ url: string; statusCode: number }> {
+    const { url } = await this.shares.exportDownload(token, exportId, req.headers.cookie);
+    return { url, statusCode: 302 };
   }
 
   @Get(':token/attachments/:attachmentId')

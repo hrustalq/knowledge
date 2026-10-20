@@ -106,7 +106,17 @@ incompatible schemes with nothing able to detect it.
 
 **Reindexing is idempotent by construction.** `GraphService.upsertRevisionChunks`
 deletes the revision's `Chunk` rows and its `DocumentRevision` vertex before
-recreating them, so running it twice converges rather than duplicating.
+recreating them, so running it twice converges rather than duplicating. Chunks
+carry no system time, so recreating them loses nothing. Relation edges are
+different; see the next paragraphs.
+
+**Valid time is stamped after every job** (#81). `stampValidity` reads the
+page's finalized revisions from PG (`loadRevisionStamps`) and rewrites the
+`validFrom`/`validTo`/`lineage` of the indexed revision and its default-branch
+neighbours, on chunks and revision-scoped edges, then the same on the BM25
+mirror (non-fatal). Because the interval is a pure function of PG order, jobs
+finishing out of order converge. Once a page's new head is live, its open
+conflicts quoting an older revision are superseded.
 
 ## Why embeddings are a DI token
 
@@ -184,20 +194,23 @@ declaration changes. The same rebuild stores each declaration's
 `missing_paths` against the head's `code_files`. A frontmatter relation cannot
 claim the `code` extractor.
 
-Reindexing replaces only that revision's frontmatter edges:
-`GraphService.replaceRevisionFrontmatterFacts` loops the edge-type allowlist
-issuing `DELETE … WHERE documentId = :documentId AND revisionId = :revisionId
-AND extractor = 'frontmatter'`. Scoping by both revision _and_ extractor is what
-lets explicit, curated and inferred edges survive a reindex untouched.
+Reindexing reconciles only that revision's frontmatter edges, and since #81 it
+never deletes. `reconcileRevisionFacts` reads the revision's rows for one
+extractor (scoped by revision _and_ extractor, so explicit, curated and
+inferred edges are untouched) and diffs them by `(type, targetKey)`:
+re-asserted facts are updated in place, new ones created, and dropped ones
+**expired** (`expiredAt`, `retractedBy: 'extractor'`, `live = false`). The
+inferred and spec extractors go through the same path.
 
 **Explicit relations** come from a person or an API client, not from the
 document body: `relations[]` on `POST /v1/documents`
 (`@Access('editor', 'body')`) or `POST /v1/documents/:id/relations`
 (`@Access('editor', 'document')`), both landing in
 `DocumentsService.toFacts` with `extractor: 'explicit'` and confidence 1.
-Re-posting replaces by `(documentId, targetKey, type)` —
-`DELETE FROM ${fact.type} WHERE documentId = :documentId AND targetKey =
-:targetKey AND extractor = 'explicit'`.
+Re-posting replaces by `(documentId, targetKey, type)`: the previous edge is
+**retracted** (`expiredAt`, `validTo`, `retractedBy: user:<id>`), not deleted
+(#81). So are an edge removed through `DELETE …/relations` and one curation
+replaces.
 
 That replace is **not revision-scoped**, while the frontmatter one is. The
 asymmetry is correct and deliberate: a frontmatter edge is an assertion made by

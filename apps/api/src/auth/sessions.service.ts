@@ -92,10 +92,17 @@ export class SessionsService {
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
+    // providerId is a plain column (no relation), so names come in one lookup.
+    const providerIds = [...new Set(rows.flatMap((s) => (s.providerId ? [s.providerId] : [])))];
+    const providers = providerIds.length
+      ? await this.prisma.identityProvider.findMany({ where: { id: { in: providerIds } }, select: { id: true, name: true } })
+      : [];
+    const nameOf = new Map(providers.map((p) => [p.id, p.name]));
     return rows.map((s) => ({
       id: s.id,
       authMethod: authMethodOf(s.authMethod),
       providerId: s.providerId,
+      providerName: (s.providerId && nameOf.get(s.providerId)) ?? null,
       ip: s.ip,
       userAgent: s.userAgent,
       createdAt: s.createdAt.toISOString(),

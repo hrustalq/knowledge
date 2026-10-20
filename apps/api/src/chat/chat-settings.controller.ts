@@ -81,8 +81,8 @@ export class ChatSettingsController {
   @Get('integrations/:id/bindings')
   @Access('admin', 'chat-integration')
   @ApiOperation({ summary: 'The groups this bot answers in' })
-  async bindings(@Param('id', ParseUUIDPipe) id: string): Promise<ChatBindingsResponse> {
-    return { bindings: await this.integrations.listBindings(id) };
+  bindings(@Param('id', ParseUUIDPipe) id: string): Promise<ChatBindingsResponse> {
+    return this.integrations.listBindings(id);
   }
 
   @Post('integrations/:id/bindings')
@@ -98,9 +98,13 @@ export class ChatSettingsController {
 
   @Patch('bindings/:id')
   @Access('admin', 'chat-binding')
-  @ApiOperation({ summary: 'Change a group’s project, agent, answer mode or language' })
-  updateBinding(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateChatBindingDto): Promise<ChatBindingEntry> {
-    return this.integrations.updateBinding(id, dto);
+  @ApiOperation({ summary: 'Change a group’s project, agent, answer mode, language, listening or automatic harvest' })
+  updateBinding(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateChatBindingDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ChatBindingEntry> {
+    return this.integrations.updateBinding(id, dto, principal.userId);
   }
 
   @Delete('bindings/:id')

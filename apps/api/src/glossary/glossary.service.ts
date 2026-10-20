@@ -430,7 +430,7 @@ function normalizeAliases(aliases: string[] | undefined, term: string): string[]
 }
 
 /** Whole-word, case-insensitive count — the same shape the read-side linker matches on. */
-function countOccurrences(haystack: string, term: string): number {
+export function countOccurrences(haystack: string, term: string): number {
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Shared with the read-side linker: what a reader sees linked and what counts
   // as grounding for an AI proposal must be the same rule, and once was not.
@@ -438,7 +438,7 @@ function countOccurrences(haystack: string, term: string): number {
   return (haystack.match(re) ?? []).length;
 }
 
-function safeJson(raw: string): Record<string, unknown> | null {
+export function safeJson(raw: string): Record<string, unknown> | null {
   try {
     const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
     return JSON.parse(fenced ? fenced[1]! : raw) as Record<string, unknown>;

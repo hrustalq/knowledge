@@ -30,22 +30,28 @@ permanently empty).
 is execution order**: `AuthGuard` → `AclGuard`.
 
 1. **`AuthGuard`** resolves the principal, or 401. `@Public()` opts a route out
-   (signup, login, forgot/reset password). A `?token=` query credential is read
-   **only on routes marked `@QueryTokenOk()`**, because `EventSource` and
-   `<img>` cannot set headers: the SSE stream and the attachment, import-image
-   and avatar redirects. Anywhere else the query token is ignored as if absent,
-   so the request is a 401 (#102). `test/query-token.spec.ts` pins that list,
-   so a new route cannot opt in without a reviewed spec change. Query values
-   named `token` are masked in the API's request and error logs
-   (`redactUrl`) and in the bundled Caddy access log.
+   (signup, login, forgot/reset password). Two callers cannot set headers, and
+   each gets one narrow opt-in (#102):
 
-   What a query token may **be** is narrower than a header (#102, phase 2,
-   `TokenAuthService.resolveQueryToken`): a single-use `kt_` URL ticket or a
-   `ks_` session token. A `kn_` API key in a URL is a 401 even on an opted-in
-   route, because it lives until revoked. A caller that needs the SSE stream
-   mints a ticket first with `POST /v1/auth/url-ticket` (header credential
-   only; `@ReadKeyOk`) and puts that in `?token=`. `test/url-tickets.spec.ts`
-   pins the rules.
+   - **`@QueryTokenOk()`**: the SSE stream (`EventSource`) reads `?token=`, and
+     it must be a single-use `kt_` URL ticket (`TokenAuthService.resolveTicket`).
+     A `kn_` API key or a `ks_` session in a URL is a 401 even here, because
+     either outlives the request in access logs, history and `Referer`. A caller
+     mints the ticket first with `POST /v1/auth/url-ticket` (header credential
+     only; `@ReadKeyOk`).
+   - **`@CookieTokenOk()`**: the attachment, import-image and avatar redirects
+     (`<img>` / `<object>`) read the web's `kn_token` cookie, a `ks_` session
+     only (`resolveSessionCookie`). The web calls the API same-origin under
+     `/api`, so the browser sends the cookie and the asset URL carries no
+     credential at all; `SameSite=Lax` keeps a cross-site `<img>` from sending
+     it, and the routes are GET redirects that change nothing.
+
+   A header always wins. Anywhere else both the query token and the cookie are
+   ignored as if absent, so the request is a 401. `test/query-token.spec.ts`
+   pins both route lists, so a new route cannot opt in without a reviewed spec
+   change, and `test/url-tickets.spec.ts` pins what each may carry. Query
+   values named `token` are masked in the API's request and error logs
+   (`redactUrl`) and in the bundled Caddy access log.
 
 2. **`AclGuard`** reads `@Access(role, source)` metadata, resolves the target
    **workspace in PostgreSQL**, and 403s on failure.

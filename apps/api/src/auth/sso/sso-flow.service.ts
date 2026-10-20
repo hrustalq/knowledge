@@ -485,16 +485,24 @@ export class SsoFlowService {
     return `${this.web}/auth/sso/complete#code=${encodeURIComponent(code)}`;
   }
 
-  /** Trade the fragment code for a session. Single-use: the guarded statement clears the hash it matched. */
+  /**
+   * Trade the fragment code for a session. Single-use: the guarded statement
+   * clears the hash it matched. A refused code — unknown, expired or already
+   * spent — is audited like any other failed sign-in (a replayed code is the
+   * signal an admin looks for), and the 400 carries the `/login?error=`
+   * category for the page to show. A spent code's hash is gone, so its row is
+   * not found and the audit row names no provider.
+   */
   async exchange(code: string, meta: RequestMeta): Promise<SsoExchangeResponse> {
     const hash = sha256(code);
     const row = await this.prisma.ssoAuthRequest.findUnique({ where: { exchangeCodeHash: hash }, include: { provider: true } });
-    if (!row || !row.userId || row.expiresAt < new Date()) throw new BadRequestException(t('error.sso.exchangeInvalid'));
+    if (!row || !row.userId) throw this.exchangeRefused(row?.provider ?? null, 'exchange code unknown or already spent', meta);
+    if (row.expiresAt < new Date()) throw this.exchangeRefused(row.provider, 'exchange code expired', meta, row.userId);
     const spent = await this.prisma.ssoAuthRequest.updateMany({
       where: { id: row.id, exchangeCodeHash: hash },
       data: { exchangeCodeHash: null },
     });
-    if (spent.count === 0) throw new BadRequestException(t('error.sso.exchangeInvalid'));
+    if (spent.count === 0) throw this.exchangeRefused(row.provider, 'exchange code replayed', meta, row.userId);
 
     const user = await this.prisma.user.findUnique({ where: { id: row.userId } });
     if (!user || user.disabledAt) throw new UnauthorizedException(t('error.auth.accountDisabled'));
@@ -523,6 +531,18 @@ export class SsoFlowService {
     meta?: RequestMeta,
     userId?: string,
   ): string {
+    this.auditFailure(provider, error, reason, meta, userId);
+    return this.loginUrl(error, back);
+  }
+
+  /** The `auth.login_failed` row every refused sign-in leaves: the real reason for the admin, the category for the browser. */
+  private auditFailure(
+    provider: IdentityProvider | null,
+    error: SsoLoginError,
+    reason: string,
+    meta?: RequestMeta,
+    userId?: string,
+  ): void {
     void this.audit.record({
       workspaceId: provider?.workspaceId ?? null,
       actor: 'anonymous',
@@ -533,7 +553,16 @@ export class SsoFlowService {
       ip: meta?.ip,
       target: userId ?? null,
     });
-    return this.loginUrl(error, back);
+  }
+
+  /** A refused exchange code: audited, and a JSON 400 (the page POSTs it) carrying the login-error category. */
+  private exchangeRefused(provider: IdentityProvider | null, reason: string, meta: RequestMeta, userId?: string): BadRequestException {
+    this.auditFailure(provider, 'exchange-invalid', reason, meta, userId);
+    return new BadRequestException({
+      statusCode: HttpStatus.BAD_REQUEST,
+      message: t('error.sso.exchangeInvalid'),
+      loginError: 'exchange-invalid' satisfies SsoLoginError,
+    });
   }
 
   private loginUrl(error: SsoLoginError, back: string): string {

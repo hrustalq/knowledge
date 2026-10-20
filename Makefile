@@ -128,8 +128,12 @@ backtest: ## Retrieval/pipeline backtest. ARGS="--generate --limit 120" | "--rep
 	$(API) run build
 	$(API) exec node dist/scripts/backtest.main.js $(ARGS)
 
+.PHONY: collab-load
+collab-load: ## Shared-draft load test against running APIs (#80). ARGS="--docs 50 --peers 5 --seconds 60 --api http://localhost:3000,http://localhost:3001"
+	$(API) exec node test/collab-load.ts $(ARGS)
+
 .PHONY: graph-live-backfill
-graph-live-backfill: ## One-time (#83): stamp each page's live revision in ArcadeDB/OpenSearch. ARGS="--workspace <id>" | "--dry-run"
+graph-live-backfill: ## One-time (#83, #81): stamp each page's live revision and valid time in ArcadeDB/OpenSearch. ARGS="--workspace <id>" | "--dry-run"
 	$(API) run build
 	$(API) exec node dist/scripts/graph-live-backfill.main.js $(ARGS)
 

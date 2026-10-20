@@ -464,6 +464,8 @@ export interface AssistantDraftEdit {
    * editor drops whatever it previewed, and the model is told to try again.
    */
   state: 'streaming' | 'ready' | 'rejected';
+  /** The agent the turn runs as — what a shared draft (#80) credits the suggestion to. */
+  agent: { key: string; name: string };
 }
 export interface PostAssistantMessageResponse {
   /** False when ASSISTANT_PROVIDER=none — UI degrades instead of erroring. */
@@ -1115,6 +1117,12 @@ export type AiUsageOperation =
   | 'lint'
   /** Scoring a page's clarity, completeness and style for the quality auditor (#74). */
   | 'audit'
+  /** Judging whether two passages contradict each other, one call per pair (#81). */
+  | 'contradiction'
+  /** Summarising one community of pages for global questions (#81). */
+  | 'community'
+  /** Reading a chat thread a person asked to harvest into captures (#82). */
+  | 'harvest'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
@@ -1271,6 +1279,12 @@ export const BUILT_IN_AGENT_KEYS = [
   'linter',
   /** Scores every page's quality and reports the worst ones (#74). */
   'auditor',
+  /** Finds passages in two pages that contradict each other (#81). */
+  'arbiter',
+  /** Groups pages into communities and summarises each, for global questions (#81). */
+  'atlas',
+  /** Proposes captures from a chat thread a person asked to harvest (#82). */
+  'harvester',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -1425,7 +1439,7 @@ export const AGENT_WEBHOOK_HEADERS = {
 export const AGENT_RUN_MAX_DOCUMENTS = 20;
 
 /** The agents whose executors honour {@link AgentRunInput.documentIds}. */
-export const PAGE_SCOPED_AGENT_KEYS = ['curator', 'reviewer', 'glossarist'] as const;
+export const PAGE_SCOPED_AGENT_KEYS = ['curator', 'reviewer', 'glossarist', 'arbiter'] as const;
 
 export function isPageScopedAgent(key: string): boolean {
   return (PAGE_SCOPED_AGENT_KEYS as readonly string[]).includes(key);
@@ -2131,6 +2145,99 @@ export interface DismissAgentFindingResponse {
   dismissed: boolean;
 }
 
+/**
+ * The learning-loop ledger (#305): what became of an agent's output.
+ *
+ * Derived, never stored, the `activityKindFor` rule. The inputs are rows that
+ * already exist (a run's findings, the merge request a finding was proposed
+ * as, a vote on an answer), and the API's `outcomeCaseSql` is this function
+ * written in SQL, clause for clause, so a count is filtered in Postgres and
+ * never by loading rows. `edited` (merged after a person changed it) is not
+ * here: nothing computes it yet, and a closed vocabulary must not promise a
+ * value the code never emits.
+ */
+export const AGENT_OUTCOMES = ['accepted', 'dismissed', 'downvoted', 'pending'] as const;
+export type AgentOutcome = (typeof AGENT_OUTCOMES)[number];
+
+/** What an outcome is counted over: a background run's findings, or votes on answers. */
+export const AGENT_OUTCOME_SOURCES = ['finding', 'answer'] as const;
+export type AgentOutcomeSource = (typeof AGENT_OUTCOME_SOURCES)[number];
+
+/** A finding nobody dismissed or acted on is `accepted` once its run is this many days old. */
+export const AGENT_OUTCOME_SETTLE_DAYS = 14;
+
+/**
+ * Below this many runs (or votes) a group shows raw counts, never a rate:
+ * "4 of 9 dismissed" is a fact, "44 % dismissed" over nine is a guess.
+ */
+export const AGENT_OUTCOME_MIN_RUNS = 20;
+
+/** How `GET /v1/agent-outcomes` splits each agent's counts. */
+export const AGENT_OUTCOME_SPLITS = ['none', 'prompt', 'model'] as const;
+export type AgentOutcomeSplit = (typeof AGENT_OUTCOME_SPLITS)[number];
+
+/**
+ * One classified thing. A finding carries its own dismissal, the status of the
+ * merge request it was proposed as (null when it was not, or the row is gone)
+ * and when its run finished; an answer vote carries its rating.
+ */
+export type AgentOutcomeSubject =
+  | {
+      source: 'finding';
+      dismissedAt?: string | null;
+      mergeRequestStatus: string | null;
+      finishedAt: Date | string | null;
+    }
+  | { source: 'answer'; rating: string | null };
+
+/**
+ * The classifier. Precedence for a finding: a dismissal wins; then the merge
+ * request it became decides (merged = accepted, closed = dismissed, still open
+ * = pending); then a finding left standing past `AGENT_OUTCOME_SETTLE_DAYS` is
+ * accepted. A vote: up = accepted, down = downvoted.
+ */
+export function outcomeFor(subject: AgentOutcomeSubject, now: Date = new Date()): AgentOutcome {
+  if (subject.source === 'answer') {
+    if (subject.rating === 'up') return 'accepted';
+    if (subject.rating === 'down') return 'downvoted';
+    return 'pending';
+  }
+  if (subject.dismissedAt) return 'dismissed';
+  if (subject.mergeRequestStatus === 'merged') return 'accepted';
+  if (subject.mergeRequestStatus === 'closed') return 'dismissed';
+  if (subject.mergeRequestStatus !== null) return 'pending';
+  const finished = subject.finishedAt === null ? null : new Date(subject.finishedAt);
+  if (finished && finished.getTime() <= now.getTime() - AGENT_OUTCOME_SETTLE_DAYS * 86_400_000) return 'accepted';
+  return 'pending';
+}
+
+/** One row of the ledger: an agent (or the answers), optionally one prompt hash or model of it. */
+export interface AgentOutcomeGroup {
+  source: AgentOutcomeSource;
+  /** The run's agent. Null for answers: a vote records the model, not which agent answered. */
+  agentKey: string | null;
+  /** Set when split by prompt. Null there means unattributed (a run from before the ledger). */
+  promptHash: string | null;
+  /** Set when split by model. Null there means unattributed, or an MCP agent's own model. */
+  model: string | null;
+  /** Finished runs for findings, votes for answers: the n a rate would be over. */
+  runs: number;
+  /** Findings (or votes) per outcome. */
+  counts: Record<AgentOutcome, number>;
+}
+
+// GET /v1/agent-outcomes?workspaceId=&agentKey=&projectId=&since=&split=
+export interface AgentOutcomesResponse {
+  workspaceId: string;
+  /** The window start actually applied (the default is 90 days back). */
+  since: string;
+  split: AgentOutcomeSplit;
+  settleDays: number;
+  /** `AGENT_OUTCOME_MIN_RUNS`, so the client does not keep a copy of the threshold. */
+  minRuns: number;
+  groups: AgentOutcomeGroup[];
+}
+
 export const AGENT_FINDING_KINDS = [
   'stale',
   'duplicate',
@@ -2187,6 +2294,11 @@ export interface AgentFinding {
    */
   dismissedAt?: string | null;
   dismissedBy?: string | null;
+  /**
+   * The persisted conflict this finding reported (#81). The arbiter writes the
+   * conflict row as it finds it; the finding is the run's view of the same thing.
+   */
+  conflictId?: string;
   /** The proposed learning written with the dismissal ("Remember why"), if any. */
   learningId?: string | null;
   /**

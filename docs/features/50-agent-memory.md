@@ -38,6 +38,13 @@ revision DAG and graph as the pages people write, not in a separate store.
   `clientVersion`, `sessionId`, `repo`, `branch`, `commit`, at most 20 `files`
   (paths only) and `startedAt`. Every field is the agent's own report. The
   server infers none of it and **never receives a transcript**.
+- **A chat capture also carries an `origin`** (#82, `CaptureOrigin`):
+  platform, chat title, thread link where there is one, and the time span of
+  the messages. Its `session.client` is `chat`. Unlike the session it is set by
+  the server from the chat delivery, through the third argument of
+  `CaptureService.capture`; no request body and no model can supply it. The
+  inbox row and the merge request show it, and a page gets it under
+  `sources:` in its frontmatter.
 - **A capture key.** API keys have a third scope, `capture` ("Read & propose").
   It reads like a read-only key and can propose captures, but cannot write a
   page, merge, approve, sync, ingest or start a workflow. It can be pinned to
@@ -59,6 +66,11 @@ revision DAG and graph as the pages people write, not in a separate store.
   shows the agent, repository, branch and session it came from.
 - **Save to knowledge base** on an assistant reply that cites a page of this
   base. The reply is proposed as an `answer` capture.
+- **From chat** (#82). 💾 Save under a chat bot's answer is the same `answer`
+  capture, or a `glossary` one ([47](47-chat-bots.md#saving-a-conversation)).
+  A **harvest** has the `harvester` agent propose captures from a Telegram or
+  Time thread a linked editor asked about, checked server-side before each is
+  written ([59](59-chat-harvest.md)). Both are written as that person.
 - **Settings → AI → Agent memory** (`/settings/ai/capture`): the switch, both
   rate limits, both dedupe thresholds and the parent page for new captured
   pages.
@@ -185,8 +197,8 @@ row, not a revision, so there is nothing to merge. It waits `staged` with
 outcome `glossary` until an editor approves it. Approval creates the
 `GlossaryTerm` with `source: 'captured'` as the approver, and the capture then
 reads `merged`. This is the one deliberate exception to "always a merge
-request". The other option, a term created switched off in the glossary as
-chat capture does, was considered and not chosen: the inbox keeps every
+request". The other option, a term created switched off in the glossary, as
+chat Save did before #82, was considered and not chosen: the inbox keeps every
 capture decision in one list. Page and relation captures cannot be decided in
 the inbox. Approve answers 409 `capture-not-approvable`, and reject answers
 409 `capture-use-merge-request` with `details.mergeRequestId`, so the merge
@@ -323,6 +335,7 @@ line names the pin.
 | Key scope                                                | `AccessService.requireKeyAllows`, `apiKeyScopeOf` (contracts)                                      |
 | Hidden head-less pages                                   | `apps/api/src/common/listed-page.ts`, `documents/draft-merge-request.ts`                           |
 | Inbox                                                    | `apps/web/src/pages/CapturesPage.vue`, `components/captures/`                                      |
+| Chat Save and harvest (#82)                              | `apps/api/src/chat/chat-captures.service.ts`, `chat/harvest.service.ts`                            |
 | Provenance strip, Save to knowledge base, settings panel | `components/merge-requests/MrProvenance.vue`, `assistant/ChatMessage.vue`, `ai/AiCapturePanel.vue` |
 | Connect AI step 4                                        | `apps/web/src/pages/ConnectAiPage.vue`, `lib/mcp-clients.ts` (`captureKit`)                        |
 
@@ -349,7 +362,7 @@ the merge request's state.
 ## Data
 
 - `knowledge_captures`: kind, stored status, outcome, title, payload,
-  `content_hash`, session, `similar` (top hits kept for the reviewer), the
+  `content_hash`, session, `origin` (chat captures only, #82), `similar` (top hits kept for the reviewer), the
   target page, merge request or term, `api_key_id`, `created_by`, `attempts`,
   `claimed_at`, and error. CHECKs on kind, status and outcome. No FK on
   workspace, project or creator (house policy).
@@ -362,6 +375,9 @@ Migrations `20261028100000_agent_captures` and
 `20261029100000_capture_pending_pages` are additive. The second backfills
 merge requests from agent findings as `agent` and from chat saves as
 `captured`, and hides chat-saved pages whose merge request has not merged.
+`20261117100000_chat_captures_into_agent_memory` (#82) adds `origin`, copies
+the old `chat_captures` rows in under their own ids and drops that table; it
+is not reversible.
 
 ## Configuration
 
@@ -464,8 +480,8 @@ What the run says beyond the two numbers:
   lead. A paraphrase scores lower and is missed more often.
 - **The stub cannot make the amend decision.** A section scores a median 0.445
   against its own page and 0.500 against the nearest other one, and every amend
-  threshold sums to 100% or more. Production runs the stub
-  (`EMBEDDINGS_PROVIDER=stub` in the `production` environment). For a stub
+  threshold sums to 100% or more. Production ran the stub until 2026-10-18,
+  when #257 moved it to bge-m3 (see the second production run below). For a stub
   workspace the run suggests a dedupe override of 0.78. It drops no more than
   0.92 (6.7%) and misses 23.3% of restatements instead of 40%. Amend then
   follows it down to 0.78, which on the stub is no worse than 0.80 (107.8%
@@ -504,6 +520,55 @@ It confirms the stub finding on a corpus nobody tuned against:
 
 The override is a workspace capture setting and has not been applied.
 
+**Production run of 2026-10-18** (v0.27.0, after #257 moved production to
+bge-m3 served by Ollama on the host and reindexed every branch head). Same
+command, same workspace, and the same 23 cases and 11 template headings.
+
+| Class (p5 / p50 / p95) | bge-m3, 1024-d (stored) | stub, 768-d (2026-10-17) |
+| ---------------------- | ----------------------- | ------------------------ |
+| amend                  | 0.569 / 0.668 / 0.762   | 0.128 / 0.274 / 0.405    |
+| new page               | 0.582 / 0.701 / 0.829   | 0.282 / 0.458 / 0.664    |
+| restatement            | 0.883 / 0.979 / 0.990   | 0.558 / 0.974 / 0.990    |
+| same-title new fact    | 0.620 / 0.732 / 0.800   | 0.173 / 0.299 / 0.491    |
+
+| Amend | scattered | wrong page | false amend | sum    |
+| ----- | --------- | ---------- | ----------- | ------ |
+| 0.76  | 56.5%     | 34.8%      | 34.8%       | 126.1% |
+| 0.80  | 73.9%     | 21.7%      | 21.7%       | 117.4% |
+| 0.84  | 100.0%    | 0.0%       | 0.0%        | 100.0% |
+
+| Dedupe | missed | dropped | sum   |
+| ------ | ------ | ------- | ----- |
+| 0.78   | 0.0%   | 13.0%   | 13.0% |
+| 0.84   | 0.0%   | 0.0%    | 0.0%  |
+| 0.88   | 4.3%   | 0.0%    | 4.3%  |
+| 0.92   | 17.4%  | 0.0%    | 17.4% |
+
+- **Amend now fires, but on this corpus it does worse than never amending.**
+  At 0.80, 6 of the 23 amend cases clear the threshold, against none on the
+  stub. Only one of them lands on its own page, though: the other 5 go to the
+  wrong page, and 5 unrelated pages would gain a section. The sum, 117.4%, is
+  worse than the stub's 100%, and
+  the demo corpus's ~93% was not reached. The cause is the one the demo run
+  found, only sharper. Another page outranks a section's own page in 17 of 23
+  cases (21 on the stub), and the new-page median (0.70) sits above the amend
+  median (0.67). Many RTech OMS pages are still scaffolds with placeholder
+  slots (`_заполнить_`), so what remains of a page looks like its siblings.
+  The Demo Workspace has 5 live pages and was not measured. Only from
+  0.84 up does amend stop firing, which is where the unweighted optimum lands.
+- **The 0.78 dedupe override above is now wrong.** On bge-m3 it drops 13% of
+  same-title new facts (3 cases), where 0.92 drops none. It was a stub-only
+  workaround and was never applied.
+- **Dedupe at 0.92 misses as many restatements as the stub did** (17.4%, 4
+  cases) and drops nothing. 0.84 scores no errors here, but with 23 cases that
+  is a 4-case difference, inside the noise. On the demo corpus, lowering
+  dedupe cost drops.
+
+**The defaults stay at 0.92 / 0.80.** Changing thresholds was out of scope for
+#257. Whether RTech OMS should amend at all while its pages are mostly
+template text is a separate decision. A workspace amend override of 0.84 or
+higher stops amending there.
+
 To re-run after changing the embedding model, run the same command and
 compare against these tables. Run one backtest at a time, because ArcadeDB
 runs out of memory on concurrent scans.
@@ -538,9 +603,6 @@ knowledge base on a live reply.
 
 ## Not done
 
-- **Production runs the stub.** The [production run](#calibration) shows it
-  cannot make the amend decision at any threshold. Moving production to a real
-  embedding model, and reindexing, is what would make amend work there.
 - **No integration.** An amend appends a deterministic section. It does not
   rewrite the page around the new fact. A drafter pass is the obvious next
   step.

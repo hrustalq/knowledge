@@ -1814,7 +1814,7 @@
       "method": "PATCH",
       "path": "/v1/chat/bindings/{id}",
       "tag": "chat",
-      "summary": "Change a group’s project, agent, answer mode, language, listening or automatic harvest",
+      "summary": "Change a group’s project, agent, answer mode, language, listening, automatic harvest or searchability",
       "role": "admin",
       "source": "chat-binding",
       "public": false,
@@ -1947,6 +1947,26 @@
       "summary": "Who is asking to be linked, before confirming",
       "role": null,
       "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/chat/search-settings",
+      "tag": "chat",
+      "summary": "Searchable chat (#339): whether it is available, and the retention asked for vs. applied",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/chat/search-settings",
+      "tag": "chat",
+      "summary": "Shorten how long searchable groups’ messages are kept; null inherits CHAT_SEARCH_RETENTION_DAYS",
+      "role": "admin",
+      "source": "body",
       "public": false,
       "platformAdmin": false
     },

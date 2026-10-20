@@ -31,6 +31,7 @@ import { t } from '../i18n/t.js';
 import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
 import { ChatPlatformError, type ChatAdapterContext } from './adapters/chat-adapter.types.js';
 import { hashInboundSecret } from './adapters/telegram.adapter.js';
+import { ChatMessagesService } from './chat-messages.service.js';
 import type {
   CreateChatBindingDto,
   CreateChatIntegrationDto,
@@ -62,6 +63,7 @@ export class ChatIntegrationsService {
     private readonly registry: ChatAdapterRegistry,
     private readonly agents: AgentRegistryService,
     config: ConfigService<Env, true>,
+    private readonly messages: ChatMessagesService,
   ) {
     this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
     this.apiPublicUrl = config.get('API_PUBLIC_URL', { infer: true }).replace(/\/$/, '');
@@ -323,7 +325,13 @@ export class ChatIntegrationsService {
       orderBy: { createdAt: 'asc' },
       include: SUBSCRIPTION_COUNT,
     });
-    return { bindings: rows.map(toBindingEntry), listenTtlDays: this.listenTtlDays, autoHarvest: this.autoHarvest };
+    const integration = await this.require(integrationId);
+    return {
+      bindings: rows.map(toBindingEntry),
+      listenTtlDays: this.listenTtlDays,
+      autoHarvest: this.autoHarvest,
+      search: await this.messages.settings(integration.workspaceId),
+    };
   }
 
   async requireBinding(id: string): Promise<ChatChannelBinding> {
@@ -382,6 +390,8 @@ export class ChatIntegrationsService {
     if (turningAutoOn) {
       await this.tellGroup(row, (locale) => t('chat.listen.autoOn', { count: this.autoHarvest.quietMinutes }, locale), 'error.chat.autoHarvestNoticeFailed');
     }
+    const searchSwitch = dto.searchable === undefined || dto.searchable === !!row.searchableAt ? null : dto.searchable;
+    if (searchSwitch !== null) await this.switchSearch(row, searchSwitch);
     const autoOff = dto.autoHarvest === false || !listening;
     const next = await this.prisma.chatChannelBinding.update({
       where: { id },
@@ -394,6 +404,8 @@ export class ChatIntegrationsService {
         ...(dto.listening !== undefined ? { listening: dto.listening } : {}),
         // Never a body field: whoever turns it on is who it runs as (the agent-trigger owner rule).
         ...(autoOff ? { autoHarvestBy: null, autoHarvestAt: null } : turningAutoOn ? { autoHarvestBy: actorId, autoHarvestAt: new Date() } : {}),
+        // Also never a body field: who turned it on is the caller.
+        ...(searchSwitch === true ? { searchableBy: actorId, searchableAt: new Date() } : searchSwitch === false ? { searchableBy: null, searchableAt: null } : {}),
       },
       include: SUBSCRIPTION_COUNT,
     });
@@ -416,11 +428,23 @@ export class ChatIntegrationsService {
     await this.tellGroup(row, (locale) => t('chat.listen.on', { count: this.listenTtlDays }, locale), 'error.chat.listenNoticeFailed', integration);
   }
 
+  /**
+   * Searchable chat (#339), any platform. On, the group is told first — what
+   * is kept, for how long, and that /forget works — and if the bot cannot say
+   * so, nothing is switched: the listening rule. Off, what was kept goes at once.
+   */
+  private async switchSearch(row: ChatChannelBinding, on: boolean): Promise<void> {
+    if (!on) return this.messages.purgeBinding(row.id);
+    if (!this.messages.enabled) throw new BadRequestException(t('error.chat.searchDisabled'));
+    const { retentionDays } = await this.messages.settings(row.workspaceId);
+    await this.tellGroup(row, (locale) => t('chat.search.on', { count: retentionDays.applied }, locale), 'error.chat.searchNoticeFailed');
+  }
+
   /** A notice in the group, in its language, or a 400 saying why it could not be posted — and nothing switched. */
   private async tellGroup(
     row: ChatChannelBinding,
     say: (locale: Locale) => string,
-    failed: 'error.chat.listenNoticeFailed' | 'error.chat.autoHarvestNoticeFailed',
+    failed: 'error.chat.listenNoticeFailed' | 'error.chat.autoHarvestNoticeFailed' | 'error.chat.searchNoticeFailed',
     known?: ChatIntegration,
   ): Promise<void> {
     const integration = known ?? (await this.require(row.integrationId));
@@ -496,6 +520,8 @@ function toBindingEntry(row: ChatChannelBinding & { _count: { subscriptions: num
     listening: row.listening,
     autoHarvestBy: row.autoHarvestBy,
     autoHarvestAt: row.autoHarvestAt?.toISOString() ?? null,
+    searchableBy: row.searchableBy,
+    searchableAt: row.searchableAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

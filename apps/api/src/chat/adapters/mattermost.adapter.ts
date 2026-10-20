@@ -204,6 +204,9 @@ export class MattermostAdapter implements ChatAdapter {
     if (body.context) return this.parsePress(body);
     if (body.event === 'posted') return this.parsePosted(body, botUsername);
     if (body.event === 'reaction_added') return this.parseReaction(body);
+    // #339: followed only by a searchable channel's kept copy, never answered.
+    if (body.event === 'post_edited') return this.parsePosted(body, botUsername).map((m) => ({ ...m, change: 'edited' as const }));
+    if (body.event === 'post_deleted') return this.parseDeleted(body);
     return [];
   }
 
@@ -272,6 +275,31 @@ export class MattermostAdapter implements ChatAdapter {
         threadId: root ?? (isDm ? null : post.id),
         command: cmd ? { name: CAPTURE_WORDS.has(cmd[1].toLowerCase()) ? 'capture' : cmd[1].toLowerCase(), args: '' } : null,
         action: null,
+        // An edit's time is the edit's; a post's, its creation.
+        ...(post.edit_at || post.create_at ? { at: new Date(post.edit_at || post.create_at!) } : {}),
+      },
+    ];
+  }
+
+  private parseDeleted(event: MattermostEvent): ChatInbound[] {
+    const post = parseJson<MattermostPost>(event.data?.post);
+    if (!post?.id || !post.user_id || !post.channel_id) return [];
+    return [
+      {
+        externalUserId: post.user_id,
+        externalUserName: null,
+        chatId: post.channel_id,
+        chatTitle: null,
+        isDm: event.data?.channel_type === 'D',
+        messageId: post.id,
+        text: '',
+        mentioned: false,
+        replyToBotMessageId: null,
+        threadId: null,
+        command: null,
+        action: null,
+        ...(post.delete_at ? { at: new Date(post.delete_at) } : {}),
+        change: 'deleted',
       },
     ];
   }
@@ -539,6 +567,10 @@ interface MattermostPost {
   /** Non-empty for system messages (`system_join_channel`, …). */
   type?: string;
   props?: { from_bot?: string | boolean };
+  /** Epoch milliseconds; 0 when unset. */
+  create_at?: number;
+  edit_at?: number;
+  delete_at?: number;
 }
 
 /** What the server POSTs to a button's `integration.url` (`PostActionIntegrationRequest`). */

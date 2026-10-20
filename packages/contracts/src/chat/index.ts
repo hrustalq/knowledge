@@ -188,8 +188,30 @@ export interface ChatBindingEntry {
    */
   autoHarvestBy: string | null;
   autoHarvestAt: string | null;
+  /**
+   * Searchable chat (#339): the workspace admin who turned it on, after the
+   * group was told; null = off. Any platform, independent of `listening`.
+   */
+  searchableBy: string | null;
+  searchableAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Searchable chat (#339) for one workspace: the env ceiling, what the
+ * workspace asked for, and what applies — the UI shows all three.
+ */
+export interface ChatSearchSettings {
+  /** False while CHAT_SEARCH_ENABLED is off: no binding can be made searchable. */
+  available: boolean;
+  retentionDays: {
+    /** CHAT_SEARCH_RETENTION_DAYS */
+    ceiling: number;
+    /** null = inherit the ceiling. */
+    requested: number | null;
+    applied: number;
+  };
 }
 
 /** The server's side of the automatic harvest (#340): the ceiling and the thresholds every binding gets. */
@@ -207,6 +229,7 @@ export interface ChatBindingsResponse {
   /** CHAT_LISTEN_TTL_DAYS: how long a listening group's messages are kept. */
   listenTtlDays: number;
   autoHarvest: ChatAutoHarvestLimits;
+  search: ChatSearchSettings;
 }
 
 /**

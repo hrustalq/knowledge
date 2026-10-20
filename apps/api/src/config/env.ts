@@ -914,6 +914,14 @@ export const envSchema = z.object({
   HARVEST_AUTO_QUIET_MINUTES: z.coerce.number().int().min(1).default(60),
   /** Automatic harvests one binding may run per sweeper tick (one model call each). */
   HARVEST_AUTO_MAX_PER_TICK: z.coerce.number().int().min(0).default(1),
+  /**
+   * Searchable chat (#339): the ceiling over each binding's switch. Off, no
+   * binding can be made searchable and nothing new is kept; what was kept
+   * still expires on time.
+   */
+  CHAT_SEARCH_ENABLED: boolish(true),
+  /** Days a searchable group's messages are kept, at most; a workspace may only shorten it. */
+  CHAT_SEARCH_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
 
   /**
    * Interface + API language (docs/features/18). Also the fallback whenever a

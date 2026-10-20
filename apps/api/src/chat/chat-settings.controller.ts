@@ -7,6 +7,7 @@ import type {
   ChatIntegrationSummary,
   ChatIntegrationTestResponse,
   ChatIntegrationsResponse,
+  ChatSearchSettings,
   ChatSubscriptionEntry,
   ChatSubscriptionsResponse,
 } from '@knowledge/contracts';
@@ -15,6 +16,7 @@ import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
+import { ChatMessagesService } from './chat-messages.service.js';
 import { ChatSubscriptionsService } from './chat-subscriptions.service.js';
 import {
   CreateChatBindingDto,
@@ -22,6 +24,7 @@ import {
   CreateChatSubscriptionDto,
   UpdateChatBindingDto,
   UpdateChatIntegrationDto,
+  UpdateChatSearchSettingsDto,
   UpdateChatSubscriptionDto,
 } from './chat.dto.js';
 
@@ -37,7 +40,23 @@ export class ChatSettingsController {
     private readonly integrations: ChatIntegrationsService,
     private readonly identities: ChatIdentityService,
     private readonly subscriptions: ChatSubscriptionsService,
+    private readonly messages: ChatMessagesService,
   ) {}
+
+  @Get('search-settings')
+  @Access('admin', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: 'Searchable chat (#339): whether it is available, and the retention asked for vs. applied' })
+  searchSettings(@Query('workspaceId', ParseUUIDPipe) workspaceId: string): Promise<ChatSearchSettings> {
+    return this.messages.settings(workspaceId);
+  }
+
+  @Patch('search-settings')
+  @Access('admin', 'body')
+  @ApiOperation({ summary: 'Shorten how long searchable groups’ messages are kept; null inherits CHAT_SEARCH_RETENTION_DAYS' })
+  updateSearchSettings(@Body() dto: UpdateChatSearchSettingsDto, @CurrentPrincipal() principal: Principal): Promise<ChatSearchSettings> {
+    return this.messages.setRetention(dto.workspaceId, dto.retentionDays, principal.userId);
+  }
 
   @Get('integrations')
   @Access('admin', 'query')
@@ -98,7 +117,7 @@ export class ChatSettingsController {
 
   @Patch('bindings/:id')
   @Access('admin', 'chat-binding')
-  @ApiOperation({ summary: 'Change a group’s project, agent, answer mode, language, listening or automatic harvest' })
+  @ApiOperation({ summary: 'Change a group’s project, agent, answer mode, language, listening, automatic harvest or searchability' })
   updateBinding(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateChatBindingDto,

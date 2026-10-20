@@ -20,6 +20,8 @@ const HANDSHAKE_MS = 15_000;
 const CLAIM_TTL_SEC = 3_600;
 /** Named when Time was the only socket platform; the key carries the bot's id, so kinds never collide. */
 const CLAIM_PREFIX = 'chat:time:posted:';
+/** The frames handled: a post, the harvest pin, and the edits a searchable channel follows (#339). */
+const SOCKET_EVENTS = new Set(['posted', 'reaction_added', 'post_edited', 'post_deleted']);
 
 /** The part of a websocket the supervisor uses — what a spec's fake implements. */
 export interface ChatSocket {
@@ -256,13 +258,18 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
       await this.setStatus(conn, null);
       return;
     }
-    if (frame.event !== 'posted' && frame.event !== 'reaction_added') return;
+    if (!SOCKET_EVENTS.has(frame.event ?? '')) return;
     const inbound = this.registry.socket(conn.row.kind).parseInbound({ headers: {}, body: raw }, conn.row.botUsername);
     if (!inbound.length) return;
     // A pin is claimed apart from its post, per person: the same person pinning
     // again within the claim's hour is the same request.
     const [first] = inbound;
-    const key = first.harvestReaction ? `${first.messageId}:pin:${first.externalUserId}` : first.messageId;
+    // An edit is claimed per edit, so a second edit of the same post is not a duplicate of the first.
+    const key = first.harvestReaction
+      ? `${first.messageId}:pin:${first.externalUserId}`
+      : first.change
+        ? `${first.messageId}:${first.change}:${first.at?.getTime() ?? ''}`
+        : first.messageId;
     if (!(await this.claim(`${conn.row.id}:${key}`))) return;
     for (const message of inbound) await this.answers.receive(conn.row, message);
   }

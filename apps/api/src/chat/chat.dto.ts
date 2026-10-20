@@ -5,11 +5,13 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  Min,
   ValidateIf,
 } from 'class-validator';
 import {
@@ -186,6 +188,32 @@ export class UpdateChatBindingDto {
   @IsOptional()
   @IsBoolean()
   autoHarvest?: boolean;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description:
+      'Make this group’s messages searchable (#339), as the admin who turns it on. Any platform; turning it on posts a notice in the group first (400 if it cannot), turning it off deletes what was kept.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  searchable?: boolean;
+}
+
+export class UpdateChatSearchSettingsDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    minimum: 1,
+    description: 'Days a searchable group’s messages are kept; null inherits CHAT_SEARCH_RETENTION_DAYS, and a longer value is clamped to it',
+  })
+  @ValidateIf((o: UpdateChatSearchSettingsDto) => o.retentionDays !== null)
+  @IsInt()
+  @Min(1)
+  retentionDays!: number | null;
 }
 
 export class ChatLinkCodeDto {

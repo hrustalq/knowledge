@@ -5779,6 +5779,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/chat/search-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Searchable chat (#339): whether it is available, and the retention asked for vs. applied */
+        get: operations["ChatSettingsController_searchSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Shorten how long searchable groups’ messages are kept; null inherits CHAT_SEARCH_RETENTION_DAYS */
+        patch: operations["ChatSettingsController_updateSearchSettings"];
+        trace?: never;
+    };
     "/v1/chat/integrations": {
         parameters: {
             query?: never;
@@ -5864,7 +5882,7 @@ export interface paths {
         delete: operations["ChatSettingsController_removeBinding"];
         options?: never;
         head?: never;
-        /** Change a group’s project, agent, answer mode, language, listening or automatic harvest */
+        /** Change a group’s project, agent, answer mode, language, listening, automatic harvest or searchability */
         patch: operations["ChatSettingsController_updateBinding"];
         trace?: never;
     };
@@ -8464,6 +8482,12 @@ export interface components {
             /** @description Branch name to read each page from; a page without it uses its default branch. Omitted or null: default branches */
             branch?: string | null;
         };
+        UpdateChatSearchSettingsDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description Days a searchable group’s messages are kept; null inherits CHAT_SEARCH_RETENTION_DAYS, and a longer value is clamped to it */
+            retentionDays: number | null;
+        };
         CreateChatIntegrationDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -8533,6 +8557,8 @@ export interface components {
             listening?: boolean;
             /** @description Harvest this group’s quiet threads automatically (#340), as the admin who turns it on — never anyone named in the body. Needs listening; turning listening off turns this off too. */
             autoHarvest?: boolean;
+            /** @description Make this group’s messages searchable (#339), as the admin who turns it on. Any platform; turning it on posts a notice in the group first (400 if it cannot), turning it off deletes what was kept. */
+            searchable?: boolean;
         };
         CreateChatSubscriptionDto: {
             /**
@@ -27115,6 +27141,88 @@ export interface operations {
             };
             /** @description The file was deleted after EXPORT_TTL_HOURS (details.reason export.expired) */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ChatSettingsController_searchSettings: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ChatSettingsController_updateSearchSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChatSearchSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

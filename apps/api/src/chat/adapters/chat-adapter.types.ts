@@ -76,6 +76,12 @@ export interface ChatInbound {
    * is empty: neither platform says what the message was.
    */
   harvestReaction?: boolean;
+  /**
+   * Not a new message but a change to `messageId` (#339): its new `text` and
+   * the time of the edit in `at`, or its deletion. Only a searchable group's
+   * kept copy acts on it — a change is never answered, harvested or a command.
+   */
+  change?: 'edited' | 'deleted';
 }
 
 /** A message another one quotes by replying to it. */

@@ -33,14 +33,32 @@ in the pull request that introduces them — see
   - **Retention:** messages are kept for at most `CHAT_SEARCH_RETENTION_DAYS`.
     A workspace can shorten that through `GET`/`PATCH
     /v1/chat/search-settings`.
-  - **Not searchable yet:** the indexer, search, the agents' tools and the
-    web UI arrive in the next phases.
+  - **Indexing:** the worker packs each thread into windows of at most
+    `CHAT_SEARCH_WINDOW_MESSAGES` messages, split at
+    `CHAT_SEARCH_WINDOW_GAP_MIN` minutes of silence. It indexes a window
+    once the thread has been quiet for `CHAT_SEARCH_SETTLE_MIN` minutes, or
+    once the window is full, and embeds it into its own vector index (phase
+    2). A window names no one, only `author-1`, `author-2`, and so on. An
+    edit, a delete or `/forget` re-indexes the window that held the message.
+  - **Not searchable yet:** search, the agents' tools and the web UI arrive
+    in the next phases.
 
 ### Operations
 
-- **New env vars:** `CHAT_SEARCH_ENABLED` (default `true`) and
-  `CHAT_SEARCH_RETENTION_DAYS` (default `90`). Nothing is kept until an admin
-  turns a group on.
+- **New env vars:**
+  - `CHAT_SEARCH_ENABLED` (default `true`)
+  - `CHAT_SEARCH_RETENTION_DAYS` (default `90`)
+  - `CHAT_SEARCH_WINDOW_MESSAGES` (default `20`)
+  - `CHAT_SEARCH_WINDOW_GAP_MIN` (default `30`)
+  - `CHAT_SEARCH_SETTLE_MIN` (default `10`)
+  - `CHAT_SEARCH_TICK_SEC` (default `60`)
+
+  Nothing is kept until an admin turns a group on.
+- **ArcadeDB:** the worker creates a `ChatChunk` vertex type and a second
+  `LSM_VECTOR` index (`ChatChunk[embedding]`) at boot. It is empty until a
+  group is made searchable. A change of `EMBEDDINGS_DIM` rebuilds it as it
+  does the page index, but chat windows are not re-embedded, so their
+  vectors drop out of the index until a later edit re-packs them.
 - **Migration:** `20261125100000_chat_search` adds `chat_messages`,
   `chat_chunks` (with a generated `tsvector` column and a GIN index), two
   nullable columns on `chat_channel_bindings` and one on

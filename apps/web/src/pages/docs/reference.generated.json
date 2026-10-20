@@ -244,7 +244,7 @@
       "method": "PATCH",
       "path": "/v1/ai/agents/learnings/{id}",
       "tag": "ai",
-      "summary": "Approve, edit or archive a learning. Approving or rewording an active one records the caller.",
+      "summary": "Approve, edit, archive or keep a learning. Approving or rewording an active one records the caller. Only an admin activates or archives — never the learner.",
       "role": "admin",
       "source": "agent-learning",
       "public": false,

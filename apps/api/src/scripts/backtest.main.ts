@@ -1,3 +1,4 @@
+import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { createWriteStream, readFileSync, readdirSync } from 'node:fs';
@@ -31,6 +32,11 @@ import {
   type CalibrationCase,
   type CaseScores,
 } from '../captures/capture-calibration.js';
+import { BUILT_IN_CASES, caseTexts, measure, recommend, type LabelledFinding } from '../learner/learner-calibration.js';
+import { BootstrapModule } from '../config/bootstrap.module.js';
+import { PrismaModule } from '../prisma/prisma.module.js';
+import { EmbeddingModule } from '../embedding/embedding.module.js';
+import type { AgentFinding } from '@knowledge/contracts';
 
 /**
  * Retrieval and pipeline backtest.
@@ -48,6 +54,8 @@ import {
  *   EMBEDDINGS_PROVIDER=stub EMBEDDINGS_DIM=768 make backtest ARGS="--captures --reembed"
  *                                                                     the same, for a model the workspace was not indexed with
  *   make backtest ARGS="--captures --verbose"                         … and each case's scores and nearest other page
+ *   make backtest ARGS="--learner"                                    learner cluster threshold, built-in labelled findings (#305)
+ *   make backtest ARGS="--learner --workspace <id>"                   … plus that workspace's style findings, labelled by rule
  *
  * The split is not arbitrary. **Recall needs ground truth.** The generator
  * makes its own: it issues each document's own title as a query and knows which
@@ -526,7 +534,80 @@ async function calibrateCaptures(): Promise<void> {
   process.exit(0);
 }
 
-if (flag('--captures')) {
+/** Only what the learner calibration reads: env, Postgres and the embedding provider. */
+@Module({ imports: [BootstrapModule, PrismaModule, EmbeddingModule] })
+class LearnerCalibrationModule {}
+
+/**
+ * LEARNER_CLUSTER_THRESHOLD calibration (#305): labelled findings — the
+ * built-in cases (`learner-calibration.ts`), plus, with `--workspace`, every
+ * style finding that workspace's runs recorded, labelled by its rule — are
+ * embedded with the configured provider and clustered by the learner's own
+ * `clusterFindings` at every threshold of the grid. Reads only, and needs no
+ * dismissal history: the question is how close two wordings of one mistake
+ * sit in this embedding space, which the cases answer for any model.
+ */
+async function calibrateLearner(): Promise<void> {
+  const workspaceId = option('--workspace', '');
+  const minSize = Number(option('--min-size', '3'));
+  const app = await NestFactory.createApplicationContext(LearnerCalibrationModule, { logger: false, abortOnError: false });
+  const config = app.get<ConfigService<Env, true>>(ConfigService);
+  const embedder = app.get<EmbeddingProvider>(EMBEDDING_PROVIDER);
+  const provider = config.get('EMBEDDINGS_PROVIDER', { infer: true });
+  const model = [provider, provider === 'openai-compatible' ? config.get('EMBEDDINGS_MODEL', { infer: true }) : '', `(${embedder.dimension}-d)`]
+    .filter(Boolean)
+    .join(' ');
+
+  const cases: LabelledFinding[] = [...BUILT_IN_CASES];
+  if (workspaceId) {
+    const runs = await app.get(PrismaService).agentRun.findMany({
+      where: { workspaceId, status: 'succeeded' },
+      select: { findings: true },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+    for (const run of runs) {
+      for (const f of (Array.isArray(run.findings) ? run.findings : []) as unknown as AgentFinding[]) {
+        if (f?.kind === 'style' && f.ruleId) cases.push({ label: `rule:${f.ruleId}`, kind: f.kind, title: f.title, detail: f.detail ?? '' });
+      }
+    }
+  }
+  const texts = caseTexts(cases);
+  const vectors: number[][] = [];
+  for (let i = 0; i < texts.length; i += 32) vectors.push(...(await embedder.embedBatch(texts.slice(i, i + 32))));
+  const rows = thresholdGrid(60, 96, 2).map((t) => measure(cases, vectors, t, minSize));
+  const best = recommend(rows);
+  const current = config.get('LEARNER_CLUSTER_THRESHOLD', { infer: true });
+  const pct = (share: number) => `${(share * 100).toFixed(1).padStart(5)}%`;
+
+  console.log('');
+  console.log('learner cluster threshold calibration');
+  console.log(`embeddings           ${model}`);
+  console.log(`cases                ${cases.length} (${BUILT_IN_CASES.length} built in${workspaceId ? `, ${cases.length - BUILT_IN_CASES.length} style findings from ${workspaceId}` : ''})`);
+  console.log(`labels               ${new Set(cases.map((c) => c.label)).size}, ${rows[0]?.groups ?? 0} with ${minSize}+ findings (a cluster that could qualify)`);
+  console.log('');
+  console.log('  t      pair-recall  pair-precision  mixed  absorbed  recovered');
+  for (const r of rows) {
+    const marks = `${r.threshold === best ? '  ◀' : ''}${r.threshold === current ? '  (LEARNER_CLUSTER_THRESHOLD)' : ''}`;
+    console.log(
+      `  ${r.threshold.toFixed(2)}   ${pct(r.pairRecall)}       ${pct(r.pairPrecision)}       ${String(r.mixed).padStart(3)}    ${String(r.absorbed).padStart(4)}     ${r.recovered}/${r.groups}${marks}`,
+    );
+  }
+  console.log('');
+  console.log('pair-recall     same-mistake pairs at or above t: higher clusters more of a mistake together');
+  console.log('pair-precision  pairs at or above t that are one mistake');
+  console.log('mixed           clusters holding two mistakes — a learning drafted from both. Must be 0');
+  console.log('absorbed        one-off findings swept into a cluster of the qualifying size. Must be 0');
+  console.log(`recovered       mistakes with ${minSize}+ of their findings in one cluster — a learning can be drafted`);
+  console.log(best === null ? 'No threshold avoids a mixed cluster: this model cannot separate the cases.' : `◀ the lowest threshold with nothing mixed or absorbed that recovers the most: ${best.toFixed(2)}`);
+
+  await app.close();
+  process.exit(0);
+}
+
+if (flag('--learner')) {
+  await calibrateLearner();
+} else if (flag('--captures')) {
   await calibrateCaptures();
 } else if (flag('--generate')) {
   await generate();

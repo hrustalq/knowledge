@@ -164,6 +164,28 @@ services:
     volumes:
       - ./keycloak:/opt/keycloak/data/import:ro
 
+  # Issue #305 learner, for trying it in a container. Not started by default:
+  # docker compose --profile learner up -d learner  (+ LEARNER_ENABLED=true in
+  # the root .env). Day to day `make dev-learner` runs the same entrypoint from
+  # source instead. Built from Dockerfile.api like production; the datastores
+  # are reached by their compose names, and an Ollama on the host (the bge-m3
+  # the threshold is calibrated for) through host.docker.internal.
+  learner:
+    profiles: ["learner"]
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: ["node", "dist/learner.main"]
+    init: true
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql://knowledge:knowledge@postgres:5432/knowledge
+      REDIS_URL: redis://redis:6379
+      EMBEDDINGS_BASE_URL: ${LEARNER_EMBEDDINGS_BASE_URL:-http://host.docker.internal:11434/v1}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
 volumes:
   pgdata:
   miniodata:

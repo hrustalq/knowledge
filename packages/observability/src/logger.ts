@@ -3,7 +3,7 @@ import pinoPretty from 'pino-pretty';
 import { currentTrace } from '@knowledge/observability/trace';
 
 /** Which process emitted the record. Every entrypoint sets one. */
-export type ServiceName = 'api' | 'worker' | 'mcp' | 'cli' | 'web-ssr';
+export type ServiceName = 'api' | 'worker' | 'mcp' | 'learner' | 'cli' | 'web-ssr';
 
 /** Re-exported so consumers can type a logger without depending on pino directly. */
 export type AppLogger = Logger;

@@ -11,7 +11,7 @@ import { computed, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import {
   AGENT_LEARNING_MAX_CHARS,
-  type AgentLearningSource,
+  type AgentLearningPersonSource,
   type AgentLearningSummary,
 } from '@knowledge/contracts'
 import { useApiMutation } from '@/api/queries'
@@ -38,7 +38,7 @@ const props = withDefaults(
     learning?: AgentLearningSummary | null
     /** The agent a new learning teaches; null is every agent. */
     agentKey?: string | null
-    sourceKind?: AgentLearningSource
+    sourceKind?: AgentLearningPersonSource
     sourceId?: string | null
     initialText?: string
   }>(),

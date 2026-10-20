@@ -6,6 +6,7 @@ import { AiUsageService } from './ai-usage.service.js';
 import { AiSkillsService } from './ai-skills.service.js';
 import { AgentLearningsService } from './agent-learnings.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
+import { AgentOutcomesService } from './agent-outcomes.service.js';
 
 /**
  * Provider resolution and token accounting, with no controllers and no auth
@@ -25,11 +26,13 @@ import { SourcePolicyService } from './source-policy.service.js';
  * them anywhere but through this service is how feature 17 ended up with a
  * second copy of the `<skills>` block. AgentLearningsService (#70) sits beside
  * it for the same reason: the chat turn, a mention reply and every background
- * executor render one "team guidance" block.
+ * executor render one "team guidance" block. AgentOutcomesService (#305) is
+ * Prisma-only too: the API's ledger route and the learner process's
+ * before/after check read the same counts.
  */
 @Module({
   imports: [PrismaModule],
-  providers: [AiProvidersService, AiConfigService, AiUsageService, AiSkillsService, AgentLearningsService, SourcePolicyService],
-  exports: [AiProvidersService, AiConfigService, AiUsageService, AiSkillsService, AgentLearningsService, SourcePolicyService],
+  providers: [AiProvidersService, AiConfigService, AiUsageService, AiSkillsService, AgentLearningsService, SourcePolicyService, AgentOutcomesService],
+  exports: [AiProvidersService, AiConfigService, AiUsageService, AiSkillsService, AgentLearningsService, SourcePolicyService, AgentOutcomesService],
 })
 export class AiCoreModule {}

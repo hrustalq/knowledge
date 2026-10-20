@@ -53,6 +53,10 @@ dev-web: ## Run only the SSR frontend in dev mode
 dev-worker: ## Run only the ingestion worker in watch mode (already part of 'make dev')
 	$(DEV_ENV) $(API) run dev:worker
 
+.PHONY: dev-learner
+dev-learner: ## Run the learner (#305) in watch mode; idles unless LEARNER_ENABLED=true (needs infra up)
+	$(DEV_ENV) $(API) run dev:learner
+
 .PHONY: dev-mcp
 dev-mcp: ## Run the MCP server (stdio) in watch mode (needs infra up)
 	$(DEV_ENV) $(API) run dev:mcp
@@ -122,7 +126,7 @@ verify: db-generate lint typecheck deps test ## Pre-push gate: everything in `ch
 check: lint typecheck deps test build ## Lint + typecheck + dependency rules + tests + build (CI gate)
 
 .PHONY: backtest
-backtest: ## Retrieval/pipeline backtest. ARGS="--generate --limit 120" | "--report" | "--export-feedback --workspace <id> --out fb.ndjson" | "--feedback fb.ndjson --k 10" | "--captures --workspace <id>"
+backtest: ## Retrieval/pipeline backtest. ARGS="--generate --limit 120" | "--report" | "--export-feedback --workspace <id> --out fb.ndjson" | "--feedback fb.ndjson --k 10" | "--captures --workspace <id>" | "--learner"
 	@# Runs the built output rather than the source: Node's type stripping emits
 	@# no decorator metadata, and Nest's DI needs it to construct SearchService.
 	$(API) run build

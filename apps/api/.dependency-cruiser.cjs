@@ -3,12 +3,13 @@
  * Architecture rules for @knowledge/api.
  *
  * The rules that matter most here are the *process boundaries*. This workspace
- * has three entrypoints sharing one `src` tree (CLAUDE.md: "The worker is a
+ * has several entrypoints sharing one `src` tree (CLAUDE.md: "The worker is a
  * second entrypoint of apps/api, not a separate app"):
  *
- *   main.ts        → AppModule    (HTTP: controllers, WS gateway, sweepers)
- *   worker.main.ts → WorkerModule (BullMQ processors, no HTTP)
- *   mcp.main.ts    → McpModule    (stdio JSON-RPC)
+ *   main.ts         → AppModule     (HTTP: controllers, WS gateway, sweepers)
+ *   worker.main.ts  → WorkerModule  (BullMQ processors, no HTTP)
+ *   mcp.main.ts     → McpModule     (stdio JSON-RPC)
+ *   learner.main.ts → LearnerModule (#305: a timer that proposes learnings)
  *
  * Nothing in the type system stops AppModule from importing a module that
  * transitively pulls in a BullMQ processor — and the failure is silent and
@@ -24,7 +25,7 @@
 
 /** Feature directories: everything that is not the base/leaf layer. */
 const FEATURES =
-  '^src/(activity|agents|ai|assistant|attachments|auth|avatars|collab|connectors|documents|embedding|entities|events|extraction|fulltext|glossary|graph|import|ingestion|mcp|notifications|profiles|projects|search|users|workflows|workspaces)/';
+  '^src/(activity|agents|ai|assistant|attachments|auth|avatars|collab|connectors|documents|embedding|entities|events|extraction|fulltext|glossary|graph|import|ingestion|learner|mcp|notifications|profiles|projects|search|users|workflows|workspaces)/';
 
 /** The base layer: infrastructure every feature may use, which may use none of them. */
 const LEAF = '^src/(common|config|prisma|storage|i18n|observability)/';
@@ -140,12 +141,64 @@ module.exports = {
       to: { path: '\\.sweeper\\.ts$', reachable: true },
     },
     {
+      name: 'learner-loads-no-controller',
+      comment:
+        'The learner (#305) is an application context like the worker: no HTTP layer, so a ' +
+        'controller reaching it drags in guards that need AccessService. Same rule, same reason.',
+      severity: 'error',
+      from: { path: '^src/learner/learner\\.module\\.ts$' },
+      to: { path: '\\.controller\\.ts$', reachable: true },
+    },
+    {
+      name: 'learner-loads-no-gateway',
+      comment: 'No WebSocket or collab gateway either: the learner serves nobody.',
+      severity: 'error',
+      from: { path: '^src/learner/learner\\.module\\.ts$' },
+      to: { path: '\\.gateway\\.ts$', reachable: true },
+    },
+    {
+      name: 'learner-loads-no-processor',
+      comment:
+        'A processor reachable from the learner would make it a second consumer of BullMQ jobs ' +
+        'alongside the worker. The learner reads Postgres and calls one model; it consumes no queue.',
+      severity: 'error',
+      from: { path: '^src/learner/learner\\.module\\.ts$' },
+      to: { path: '\\.processor\\.ts$', reachable: true },
+    },
+    {
+      name: 'learner-loads-no-sweeper',
+      comment:
+        'Sweepers belong to the API (or the worker). One reachable from the learner would run in a ' +
+        'third process, racing the others for the same rows. Its own clock is learner.ticker.ts, ' +
+        'which writes only proposals ("the worker generates, the API publishes").',
+      severity: 'error',
+      from: { path: '^src/learner/learner\\.module\\.ts$' },
+      to: { path: '\\.sweeper\\.ts$', reachable: true },
+    },
+    {
+      name: 'learner-loads-no-worker-module',
+      comment: 'Worker-only modules (*-worker.module.ts) belong to WorkerModule alone, as for AppModule.',
+      severity: 'error',
+      from: { path: '^src/learner/learner\\.module\\.ts$' },
+      to: { path: '-worker\\.module\\.ts$', reachable: true },
+    },
+    {
+      name: 'learner-stays-out-of-the-other-processes',
+      comment:
+        'Nothing but learner.main.ts may load the learner module or its ticker: in AppModule or ' +
+        'WorkerModule the ticker would start a second learner inside that process. The pure halves ' +
+        '(learner-derive.ts, learner-calibration.ts) are free to import — the backtest does.',
+      severity: 'error',
+      from: { path: '^src/', pathNot: '^src/(learner/|learner\\.main\\.ts$)' },
+      to: { path: '^src/learner/learner\\.(module|ticker|service)\\.ts$' },
+    },
+    {
       name: 'entrypoints-stay-separate',
       comment:
-        'worker.main.ts and mcp.main.ts must never reach AppModule — that would boot the whole ' +
-        'HTTP application inside a context that has no HTTP listener.',
+        'worker.main.ts, mcp.main.ts and learner.main.ts must never reach AppModule — that would ' +
+        'boot the whole HTTP application inside a context that has no HTTP listener.',
       severity: 'error',
-      from: { path: '^src/(worker|mcp)\\.main\\.ts$' },
+      from: { path: '^src/(worker|mcp|learner)\\.main\\.ts$' },
       to: { path: '^src/app\\.module\\.ts$', reachable: true },
     },
 
@@ -283,7 +336,7 @@ module.exports = {
       severity: 'error',
       from: {
         orphan: true,
-        pathNot: '\\.d\\.ts$|^src/(main|worker\\.main|mcp\\.main)\\.ts$|^src/scripts/',
+        pathNot: '\\.d\\.ts$|^src/(main|worker\\.main|mcp\\.main|learner\\.main)\\.ts$|^src/scripts/',
       },
       to: {},
     },

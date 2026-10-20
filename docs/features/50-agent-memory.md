@@ -577,6 +577,13 @@ To re-run after changing the embedding model, run the same command and
 compare against these tables. Run one backtest at a time, because ArcadeDB
 runs out of memory on concurrent scans.
 
+`make tune ARGS="--workspace <id>"` (#305) reads the same probes and proposes
+a workspace override for either threshold. It moves one only when the error
+sum falls on a train split and a 30 % holdout, and the costly error (a dropped
+new fact for dedupe, a false amend for amend) does not grow. It prints the
+`PATCH /v1/ai/settings` body and writes nothing. See
+[55 — Learning loop](55-learning-loop.md#make-tune).
+
 ## Verification
 
 - `test/captures.spec.ts`: dedupe outcomes, the 429 and its extras, credential

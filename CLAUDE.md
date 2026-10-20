@@ -28,6 +28,7 @@ make dev                # infra + api :3000 (Swagger /docs) + web :5173 + ingest
 make kill               # kill this repo's dev processes; kill-all also stops infra
 make dev-worker         # only the BullMQ ingestion worker (already part of `make dev`)
 make dev-mcp            # MCP server on stdio (knowledge_* tools); the API also serves them at POST /v1/mcp
+make dev-learner        # the learner (#305); idles unless LEARNER_ENABLED=true
 
 make verify             # PRE-PUSH GATE: db-generate + lint + typecheck + deps + test (no build)
 make check              # CI gate: lint + typecheck + deps + test + build
@@ -35,6 +36,7 @@ make deps               # dependency-cruiser: process boundaries, layering, cycl
 make deps-baseline      # re-record known violations (shrink-only: drops fixed ones, never adds)
 make smoke              # health-check every service
 make backtest           # retrieval/pipeline backtest. ARGS="--generate --limit 120" | "--report"
+make tune               # propose search knobs + capture thresholds from the backtest datasets; writes no setting. ARGS="--workspace <id>"
 make collab-load        # shared-draft load test against running APIs (AUTH_MODE=none, COLLAB_ENABLED=true). ARGS="--docs 50 --peers 5"
 
 make infra-up|down|logs        # docker compose: postgres, minio (+bucket init), redis, arcadedb
@@ -66,7 +68,7 @@ Three-store separation (never mix responsibilities):
 
 Write path: `POST /v1/documents` → `POST :id/uploads` (presigned PUT) → `POST .../finalize` (SHA-256 hash, dedupe, revision → `finalized`, `ingestion_jobs` row committed in the same transaction = outbox) → BullMQ job → worker pipeline → revision `indexed`. Status lifecycle: `draft → finalized → indexing → indexed | failed`.
 
-**The worker is a second entrypoint of `apps/api`, not a separate app** — `src/main.ts` (HTTP) vs `src/worker.main.ts` (`createApplicationContext(WorkerModule)`, no HTTP), alongside `src/mcp.main.ts` (third) and `src/scripts/generate-openapi.main.ts` (fourth). `IngestionModule` (producer) is imported by both; **`IngestionWorkerModule` only by the worker** — import it into `AppModule` and the API process starts consuming jobs.
+**The worker is a second entrypoint of `apps/api`, not a separate app** — `src/main.ts` (HTTP) vs `src/worker.main.ts` (`createApplicationContext(WorkerModule)`, no HTTP), alongside `src/mcp.main.ts` (third), `src/scripts/generate-openapi.main.ts` (fourth) and `src/learner.main.ts` (fifth, `createApplicationContext(LearnerModule)`: the learning-loop timer, no HTTP, no Redis). `IngestionModule` (producer) is imported by both; **`IngestionWorkerModule` only by the worker** — import it into `AppModule` and the API process starts consuming jobs.
 
 See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypoints-modules.md) for the module-split rules the dependency-cruiser configs enforce.
 
@@ -76,7 +78,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 
 | Doc                                                                         | Covers                                                              |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [01 entrypoints & modules](docs/architecture/01-entrypoints-modules.md)     | Four entrypoints, Core/Queue/API/Worker split, buildless packages   |
+| [01 entrypoints & modules](docs/architecture/01-entrypoints-modules.md)     | Five entrypoints, Core/Queue/API/Worker split, buildless packages   |
 | [02 persistence & revisions](docs/architecture/02-persistence-revisions.md) | Branches, revision DAG, compare, diff caching                       |
 | [03 ingestion](docs/architecture/03-ingestion.md)                           | Write path, embeddings providers, deterministic relations, sweepers |
 | [04 search & graph](docs/architecture/04-search-graph.md)                   | Hybrid search, BM25 fusion, inference, entity traversal             |
@@ -142,6 +144,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 52 | API reference        | `documents.kind` openapi/asyncapi; ingestion branches on kind → markdown projection + `api_operations` + revision-scoped `spec` `DESCRIBES`; `{param}` folds in `normalizeEntityKey`; slug pinned; try-it proxy is env-ceilinged, never MCP; `breakingBlocks` gates merge; synced spec changes always MR |
 | 53 | Doc quality          | Styleguide = `ai_skills` `kind='styleguide'`, project replaces workspace; `readLintViolations` drops unknown rules/ungrounded quotes, severity is the rule's; MR lint = added lines only, sweeper-triggered per head, published API-side; `lintGate` is the one predicate (fail-open); scores are append-only rows the worker writes |
 | 54 | Enterprise auth      | OIDC/SAML/LDAP providers per workspace (`platformWide` opt-in), JIT only on a verified address in `allowedDomains`; token via a 60 s fragment exchange code; `RoleSyncService` is the one non-manual membership writer; enforced SSO inside `requireRole` (`AuthPolicyService`, 30 s cache); SCIM `kscim_` is a credential, never a principal |
+| 55 | Learning loop        | Attribution columns on `agent_runs`/`ai_usage`/`answer_feedback` (no ledger table); `outcomeFor` ↔ `outcomeCaseSql` derived on read, a count below 20 runs never a rate; `learner.main.ts` (5th entrypoint, `LEARNER_ENABLED` off) clusters dismissals/MCP failures with the ACL in the query → `coach` → `proposed` `derived` rows only; derived ≤ half the budget, never displacing manual; `mcp` is in `LEARNING_TARGETS`, never `BUILT_IN_AGENT_KEYS`; `make tune` replays one search per query through `rankPool`, holdout must agree, prints PATCH bodies and writes nothing |
 | 56 | Co-editing           | One Yjs draft per (page, branch) in `collab_drafts`, never a revision; Hocuspocus embedded behind `/v1/collab` (API-only, `kt_` tickets, page permissions, per-document **reasons** not close codes); server seeds via `@knowledge/editor-schema`; publish = ordinary finalize that rebases the draft; reset moves `reset_at` + device copies carry a generation; collab mode never `setContent`; `COLLAB_ENABLED` default off; MCP draft tools are HTTP-only, passed to `buildServer` as an argument, and suggest through `CollabGateway.writeDraft` |
 | 57 | Temporal graph       | Per-revision rows stamped `validFrom/validTo/lineage` from PG (`revisionStamps`, order-free) + edge `ingestedAt/expiredAt/retractedBy`; `live` stays the current view, `asOfEdgeClause`/`asOfChunkClause` the only as-of predicates; `TemporalResolverService` (date, `rev:`, `tag:`); `knowledge_conflicts` = one guarded upsert per fingerprint (dismissed stays dismissed); propose links via `AgentFindingsService`, a merge resolves; communities withheld whole |
 | 58 | Usage analytics       | Event rows only (`page_views`, `search_queries`, `mcp_tool_calls`), every number a read-time rollup; channel resolved once by `channelFor`, class derived by `trafficClassFor` (human/assisted/agent); web reads only from the page's beacon, never `GET /content`; `reader_key` HMAC per workspace, no `user_id`; one unread/dead predicate in `read-signals.ts`; repeat searches collapse only in `searchCtesSql`; query text wrapped untrusted |

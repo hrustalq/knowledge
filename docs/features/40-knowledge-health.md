@@ -106,9 +106,17 @@ clamp lies about the configuration. Env values are defaults here, not ceilings.
 | `inactiveAfterDays`  | `PAGE_INACTIVE_AFTER_DAYS`         | `inactive` everywhere; `0` disables                 |
 | `emptyMaxChars`      | `EMPTY_PAGE_MAX_CHARS`             | `empty`                                             |
 | `trustRanking`       | `SEARCH_TRUST_RANKING`             | the search re-rank                                  |
+| `rrfK`               | — (`SEARCH_RRF_K`, 60, contracts)  | hybrid fusion (#305)                                |
+| `trustWeights`       | — (`TRUST_WEIGHTS`, contracts)     | the search re-rank, sparse per state (#305)         |
 
 `VerificationPolicyService` is the single resolver, a leaf module imported by
 documents, search and verification alike.
+
+The two search knobs default to code constants, not env vars, and are what
+`make tune` proposes. The **Search ranking** group of the settings form shows
+the fusion constant and the eight weights, each asked-for / applied / default,
+and says so when trust ranking is off and the weights change nothing
+([55](55-learning-loop.md#the-tuner)).
 
 ## On the dashboard
 
@@ -118,7 +126,8 @@ and `components/health/`:
 
 - **Tabs**, `?tab=`: **Pages**, **Settings**, since #74 **Quality** (the
   auditor's scores, [53](53-doc-quality.md)) and, since #305, **Agents**:
-  `AgentOutcomesPanel`, the learning-loop ledger from `GET /v1/agent-outcomes`.
+  `AgentOutcomesPanel`, the learning-loop ledger from `GET /v1/agent-outcomes`
+([55](55-learning-loop.md#the-ledger)).
   It is admin-only like its route, so a member's `?tab=agents` opens Pages. The
   outcome of each finding and vote is derived on read by `outcomeFor`
   (contracts) and its SQL twin `outcomeCaseSql`, which

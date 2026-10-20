@@ -62,8 +62,56 @@ in the pull request that introduces them — see
   to apply, appends the report to `logs/tune-<date>.jsonl`, and writes no
   setting. With no override, search ranks exactly as before.
 
+- The in-app docs (**Settings → Docs**) have a **Learning loop** article
+  under Administration. It covers what the Agents tab counts, how a derived
+  learning is drafted and approved, guidance for MCP agents, the search knobs
+  and `make tune`, and how to turn the learner on (#305).
+
+### Changed
+
+- Vector search now asks ArcadeDB for the nearest chunks through an HNSW index
+  (`LSM_VECTOR`) instead of downloading up to 5,000 chunk vectors and ranking
+  them in the API (#304). The workspace, the live projection and page
+  restrictions are applied inside the nearest-neighbour search, so another
+  workspace, an old revision or a hidden page can no longer take a result
+  slot, and a workspace past 5,000 chunks is no longer ranked on an arbitrary
+  subset. This covers workspace search, the assistant's and agents'
+  retrieval, capture dedupe and a published site's Ask. On a copy of the
+  local demo corpus (5,936 chunks), one read went from 71 MB and ~1.5 s p95
+  to ~18 KB and ~32 ms p95, at recall@10 0.988 against the exact ranking.
+  The capture calibration backtest and the doc-quality duplicate check now
+  read every chunk instead of stopping at 5,000.
+
 ### Operations
 
+- ArcadeDB is pinned to the `26.10.2` release by tag and digest in both
+  compose files (#304), replacing `latest`. Production runs a
+  `26.11.1-SNAPSHOT` nightly, so this moves it back one minor version, to the
+  newest release. A volume written by `26.11.1-SNAPSHOT` (build of
+  2026-10-19) and one written by `26.9.1-SNAPSHOT` both opened on `26.10.2`
+  in a test, with their data and indexes intact; back up the `arcadedata`
+  volume before deploying anyway. The deploy recreates the `arcadedb`
+  container. Locally, `make infra-up` pulls the pinned image: the old
+  `26.9.1-SNAPSHOT` rejects the filtered vector query, and search then falls
+  back to the scan.
+- The worker builds the chunk vector index on its first boot after the deploy
+  (`ensureSchema`; 6,266 vectors took 1.8 s). Until then, and whenever no
+  index of the configured dimension exists, vector search falls back to the
+  old scan. Run `make graph-live-backfill` once afterwards, so that chunks
+  written before the live flag existed stop counting as live: the local demo
+  workspace had 1,745 of them. Whether production has any is not yet known.
+- Changing `EMBEDDINGS_DIM` now drops and rebuilds the index on the worker's
+  next boot. Vectors of the old length stay stored but are never ranked, and
+  the stale sweeper re-embeds their pages as before. A wrong `EMBEDDINGS_DIM`
+  now fails every indexing job with "Vector dimension does not match index
+  dimension" instead of indexing chunks that search never finds.
+- **Rollback:** the previous app version still works on `26.10.2` and ignores
+  the index, which ArcadeDB keeps up to date. Rolling the app back **and**
+  changing `EMBEDDINGS_DIM` at once is the exception: the old worker does not
+  rebuild the index, so every chunk write fails until you run
+  ``DROP INDEX `Chunk[embedding]` `` in ArcadeDB. Rolling the image back to a
+  snapshot also works: `26.11.1-SNAPSHOT` serves the index, and
+  `26.9.1-SNAPSHOT` opens it but rejects the filtered query, so search scans.
 - New process `learner` (#305): a fifth entrypoint of the API image,
   `node dist/learner.main`, added to `docker-compose.prod.yml` under the
   compose profile `learner`. It starts only when `COMPOSE_PROFILES` names
@@ -532,19 +580,6 @@ in the pull request that introduces them — see
 
 ### Changed
 
-- Vector search now asks ArcadeDB for the nearest chunks through an HNSW index
-  (`LSM_VECTOR`) instead of downloading up to 5,000 chunk vectors and ranking
-  them in the API (#304). The workspace, the live projection and page
-  restrictions are applied inside the nearest-neighbour search, so another
-  workspace, an old revision or a hidden page can no longer take a result
-  slot, and a workspace past 5,000 chunks is no longer ranked on an arbitrary
-  subset. This covers workspace search, the assistant's and agents'
-  retrieval, capture dedupe and a published site's Ask. On a copy of the
-  local demo corpus (5,936 chunks), one read went from 71 MB and ~1.5 s p95
-  to ~18 KB and ~32 ms p95, at recall@10 0.988 against the exact ranking.
-  The capture calibration backtest and the doc-quality duplicate check now
-  read every chunk instead of stopping at 5,000.
-
 - 💾 Save on a chat bot answer now goes through agent memory (#82). *As a
   page draft* saves the answer as an `answer` capture citing the pages the
   answer cited, the same as "Save to knowledge base" in the assistant pane.
@@ -662,35 +697,6 @@ in the pull request that introduces them — see
   once your view is recorded. Read time still catches up on the next load.
 
 ### Operations
-
-- ArcadeDB is pinned to the `26.10.2` release by tag and digest in both
-  compose files (#304), replacing `latest`. Production runs a
-  `26.11.1-SNAPSHOT` nightly, so this moves it back one minor version, to the
-  newest release. A volume written by `26.11.1-SNAPSHOT` (build of
-  2026-10-19) and one written by `26.9.1-SNAPSHOT` both opened on `26.10.2`
-  in a test, with their data and indexes intact; back up the `arcadedata`
-  volume before deploying anyway. The deploy recreates the `arcadedb`
-  container. Locally, `make infra-up` pulls the pinned image: the old
-  `26.9.1-SNAPSHOT` rejects the filtered vector query, and search then falls
-  back to the scan.
-- The worker builds the chunk vector index on its first boot after the deploy
-  (`ensureSchema`; 6,266 vectors took 1.8 s). Until then, and whenever no
-  index of the configured dimension exists, vector search falls back to the
-  old scan. Run `make graph-live-backfill` once afterwards, so that chunks
-  written before the live flag existed stop counting as live: the local demo
-  workspace had 1,745 of them. Whether production has any is not yet known.
-- Changing `EMBEDDINGS_DIM` now drops and rebuilds the index on the worker's
-  next boot. Vectors of the old length stay stored but are never ranked, and
-  the stale sweeper re-embeds their pages as before. A wrong `EMBEDDINGS_DIM`
-  now fails every indexing job with "Vector dimension does not match index
-  dimension" instead of indexing chunks that search never finds.
-- **Rollback:** the previous app version still works on `26.10.2` and ignores
-  the index, which ArcadeDB keeps up to date. Rolling the app back **and**
-  changing `EMBEDDINGS_DIM` at once is the exception: the old worker does not
-  rebuild the index, so every chunk write fails until you run
-  ``DROP INDEX `Chunk[embedding]` `` in ArcadeDB. Rolling the image back to a
-  snapshot also works: `26.11.1-SNAPSHOT` serves the index, and
-  `26.9.1-SNAPSHOT` opens it but rejects the filtered query, so search scans.
 
 - After deploying #277, purge the Cloudflare cache once: asset URLs already
   cached at the edge keep the 4-hour lifetime they were stored with until then.

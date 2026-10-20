@@ -72,7 +72,9 @@ function prismaWith(messages: Array<Record<string, unknown>>) {
         .map((m) => ({ content: m.content }))[0] ?? null,
     ),
   };
-  return { answerFeedback, assistantMessage, store };
+  // The model lookup a vote makes (#305); none billed here, so unattributed.
+  const aiUsage = { findFirst: vi.fn(async () => null) };
+  return { answerFeedback, assistantMessage, aiUsage, store };
 }
 
 const thread = [

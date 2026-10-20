@@ -35,6 +35,8 @@ export interface ShareLinkSummary {
    */
   url: string | null;
   hasPassword: boolean;
+  /** Readers may download an export of the link's scope (#161). */
+  allowDownload: boolean;
   expiresAt: string | null;
   revokedAt: string | null;
   createdBy: string;
@@ -148,7 +150,33 @@ export type PublicShareResponse =
       /** True when the subtree was larger than the cap and the tree was cut short. */
       treeTruncated: boolean;
       expiresAt: string | null;
+      /** What the reader may download (#161); null when the link has download off. */
+      download: PublicShareDownloadOffer | null;
     };
+
+/** The formats a share link's reader may export the link's scope as (#161). */
+export interface PublicShareDownloadOffer {
+  /** `pdf` is false without GOTENBERG_URL — shown disabled, never hidden. */
+  formats: Record<ExportFormat, boolean>;
+  /** How long a finished file stays downloadable. */
+  ttlHours: number;
+}
+
+/**
+ * A reader's export through a share link (#161): its own shape, not
+ * `ExportJobSummary`, so no workspace, page or person id reaches the reader.
+ */
+export interface PublicShareExport {
+  id: string;
+  format: ExportFormat;
+  status: ExportStatus;
+  stage: ExportStage | null;
+  pageCount: number | null;
+  sizeBytes: number | null;
+  error: { code: ExportErrorCode; message: string } | null;
+  createdAt: string;
+  expiresAt: string | null;
+}
 
 // GET /v1/public/shares/:token/pages/:documentId
 export interface PublicSharePage {
@@ -167,6 +195,16 @@ export interface PublicSharePage {
  */
 export function publicShareAttachmentPath(token: string, attachmentId: string): string {
   return `/v1/public/shares/${encodeURIComponent(token)}/attachments/${encodeURIComponent(attachmentId)}`;
+}
+
+/** A share link's exports (#161): POST here to ask for one. */
+export function publicShareExportsPath(token: string): string {
+  return `/v1/public/shares/${encodeURIComponent(token)}/exports`;
+}
+
+/** One of a share link's exports, polled while it runs; `/download` 302s to the finished file. */
+export function publicShareExportPath(token: string, exportId: string, download = false): string {
+  return `${publicShareExportsPath(token)}/${encodeURIComponent(exportId)}${download ? '/download' : ''}`;
 }
 
 /** `{ documentId, attachmentId }` from a stored attachment path, or null for anything else. */

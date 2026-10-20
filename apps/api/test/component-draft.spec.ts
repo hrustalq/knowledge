@@ -148,7 +148,7 @@ describe('the archaeologist documenting a component', () => {
       {} as never,
       { get: () => undefined } as never,
       {} as never,
-      { promptFor: async () => '', dismissedPrompt: async () => '' } as never,
+      { promptFor: async () => ({ prompt: '', learningIds: [] }), dismissedPrompt: async () => '' } as never,
       {} as never,
       templates,
     );

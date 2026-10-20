@@ -1,5 +1,6 @@
 import type {
   Locale,
+  PublicShareDownloadOffer,
   PublicShareTreeNode,
   PublicSiteLogo,
   PublicSitePageRef,
@@ -86,6 +87,8 @@ export type PublicReaderView =
       tree: PublicShareTreeNode[]
       treeTruncated: boolean
       expiresAt: string | null
+      /** Null unless the link allows download (#161). */
+      download: PublicShareDownloadOffer | null
       page: PublicRenderedPage
     }
 

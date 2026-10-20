@@ -174,6 +174,7 @@ async function resolveShareView(url: string, ctx: PublicRenderContext): Promise<
         tree: share.tree,
         treeTruncated: share.treeTruncated,
         expiresAt: share.expiresAt,
+        download: share.download,
         page: { documentId: page.documentId, title: page.title, html: body.html, headings: body.headings, updatedAt: page.updatedAt },
       },
       status: 200,

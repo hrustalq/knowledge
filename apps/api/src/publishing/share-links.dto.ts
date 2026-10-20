@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsISO8601, IsOptional, IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
-import { SHARE_PASSWORD_MAX_CHARS, SHARE_PASSWORD_MIN_CHARS } from '@knowledge/contracts';
+import { IsBoolean, IsIn, IsISO8601, IsOptional, IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import { EXPORT_FORMATS, SHARE_PASSWORD_MAX_CHARS, SHARE_PASSWORD_MIN_CHARS, type ExportFormat } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 export class CreateShareLinkDto {
@@ -25,6 +25,11 @@ export class CreateShareLinkDto {
   @MinLength(SHARE_PASSWORD_MIN_CHARS, { message: vmsg('minLength') })
   @MaxLength(SHARE_PASSWORD_MAX_CHARS, { message: vmsg('maxLength') })
   password?: string;
+
+  @ApiPropertyOptional({ description: 'Let readers download an export of what the link shows (#161). Omitted reads as false' })
+  @IsOptional()
+  @IsBoolean()
+  allowDownload?: boolean;
 }
 
 export class UpdateShareLinkDto {
@@ -48,6 +53,11 @@ export class UpdateShareLinkDto {
   @MinLength(SHARE_PASSWORD_MIN_CHARS, { message: vmsg('minLength') })
   @MaxLength(SHARE_PASSWORD_MAX_CHARS, { message: vmsg('maxLength') })
   password?: string | null;
+
+  @ApiPropertyOptional({ description: 'Let readers download an export; turning it off ends downloads of finished files at once' })
+  @IsOptional()
+  @IsBoolean()
+  allowDownload?: boolean;
 }
 
 export class UpdatePublishingSettingsDto {
@@ -80,4 +90,11 @@ export class UnlockShareDto {
   @IsString()
   @MaxLength(SHARE_PASSWORD_MAX_CHARS, { message: vmsg('maxLength') })
   password!: string;
+}
+
+/** A share link's reader asking for an export (#161): the format only — the scope is the link's. */
+export class CreateShareExportDto {
+  @ApiProperty({ enum: EXPORT_FORMATS, description: '`zip`: markdown + attachments; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL' })
+  @IsIn(EXPORT_FORMATS)
+  format!: ExportFormat;
 }

@@ -556,9 +556,9 @@ describe('threads (Time, phase 4)', () => {
     expect(h.prisma.chatConversation.create).not.toHaveBeenCalled();
   });
 
-  it('Time gets the help with plain-word commands', async () => {
+  it.each(['time', 'mattermost'])('%s gets the help with plain-word commands', async (kind) => {
     const h = harness();
-    await h.svc.receive(time, inbound({ command: { name: 'help', args: '' } }));
+    await h.svc.receive({ ...(integration as object), kind } as never, inbound({ command: { name: 'help', args: '' } }));
     expect(h.posted).toEqual([{ kind: 'notice', text: 'chat.helpTime' }]);
   });
 });
@@ -569,12 +569,12 @@ describe('capture in a thread (#82)', () => {
   const inThread = (over: Partial<ChatInbound> = {}) =>
     inbound({ isDm: false, chatId: 'ch-1', messageId: 'cmd-1', threadId: 'root-1', mentioned: true, command: { name: 'capture', args: '' }, ...over });
 
-  it('harvests the thread as the linked editor and replies with counts and an inbox link only', async () => {
+  it.each(['time', 'mattermost'])('%s: harvests the thread as the linked editor and replies with counts and an inbox link only', async (kind) => {
     const h = harness({ binding: group });
-    await h.svc.receive(timeBot, inThread());
+    await h.svc.receive({ ...(integration as object), kind } as never, inThread());
     expect(h.adapter.fetchThread).toHaveBeenCalledWith(expect.anything(), 'ch-1', 'root-1', 'cmd-1', 200);
     expect(h.harvester.harvest).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: WS, projectId: 'p-1', platform: 'time', chatTitle: 'Platform team' }),
+      expect.objectContaining({ workspaceId: WS, projectId: 'p-1', platform: kind, chatTitle: 'Platform team' }),
       DEV_PRINCIPAL,
     );
     expect(h.posted).toEqual([{ kind: 'notice', text: 'chat.harvest.reading' }]);
@@ -708,12 +708,12 @@ describe('harvest reactions (#82, phase 4)', () => {
   const pin = (over: Partial<ChatInbound> = {}) =>
     inbound({ isDm: false, chatId: 'ch-1', messageId: 'reply-3', text: '', harvestReaction: true, ...over });
 
-  it('📌 on Time harvests the whole thread of the reacted post, answering under it', async () => {
+  it.each(['time', 'mattermost'])('📌 on %s harvests the whole thread of the reacted post, answering under it', async (kind) => {
     const h = harness({ binding: group });
-    await h.svc.receive(timeBot, pin());
+    await h.svc.receive({ ...(integration as object), kind } as never, pin());
     expect(h.adapter.fetchThread).toHaveBeenCalledWith(expect.anything(), 'ch-1', 'reply-3', null, 200);
     expect(h.adapter.postMessage).toHaveBeenCalledWith(expect.anything(), { chatId: 'ch-1', replyToMessageId: 'reply-3' }, expect.anything());
-    expect(h.harvester.harvest).toHaveBeenCalledWith(expect.objectContaining({ platform: 'time', projectId: 'p-1' }), DEV_PRINCIPAL);
+    expect(h.harvester.harvest).toHaveBeenCalledWith(expect.objectContaining({ platform: kind, projectId: 'p-1' }), DEV_PRINCIPAL);
     expect(h.edited[0]).toMatchObject({ text: 'chat.harvest.proposed chat.harvest.duplicates' });
   });
 

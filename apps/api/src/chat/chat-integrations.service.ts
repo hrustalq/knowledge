@@ -10,7 +10,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type ChatChannelBinding, type ChatIntegration } from '@prisma/client';
 import {
+  CHAT_PLATFORM_NAMES,
   chatPlatformNeedsServer,
+  type ChatAutoHarvestLimits,
   type ChatBindingEntry,
   type ChatBindingsResponse,
   type ChatIntegrationSummary,
@@ -36,8 +38,6 @@ import type {
   UpdateChatIntegrationDto,
 } from './chat.dto.js';
 
-const PLATFORM_LABEL: Record<ChatPlatformKind, string> = { telegram: 'Telegram', time: 'Time' };
-
 /**
  * Bots and the channels they answer in (issue #71) — the admin half.
  *
@@ -55,6 +55,7 @@ export class ChatIntegrationsService {
   private readonly enabled: boolean;
   private readonly allowPrivateUrls: boolean;
   private readonly listenTtlDays: number;
+  private readonly autoHarvest: ChatAutoHarvestLimits;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -67,6 +68,7 @@ export class ChatIntegrationsService {
     this.enabled = config.get('CHAT_ENABLED', { infer: true });
     this.allowPrivateUrls = config.get('CHAT_ALLOW_PRIVATE_URLS', { infer: true });
     this.listenTtlDays = config.get('CHAT_LISTEN_TTL_DAYS', { infer: true });
+    this.autoHarvest = autoHarvestLimits(config);
   }
 
   async list(workspaceId: string): Promise<ChatIntegrationsResponse> {
@@ -246,7 +248,7 @@ export class ChatIntegrationsService {
    */
   private async serverUrlFor(kind: ChatPlatformKind, raw: string | undefined): Promise<string> {
     const value = raw?.trim() ?? '';
-    const platform = PLATFORM_LABEL[kind];
+    const platform = CHAT_PLATFORM_NAMES[kind];
     if (!chatPlatformNeedsServer(kind)) {
       if (value) throw new BadRequestException(t('error.chat.serverUrlUnexpected', { platform }));
       return '';
@@ -270,7 +272,7 @@ export class ChatIntegrationsService {
       return username;
     } catch (err) {
       const reason = err instanceof ChatPlatformError ? err.message : String(err);
-      throw new BadRequestException(t('error.chat.tokenRejected', { platform: PLATFORM_LABEL[kind], reason }));
+      throw new BadRequestException(t('error.chat.tokenRejected', { platform: CHAT_PLATFORM_NAMES[kind], reason }));
     }
   }
 
@@ -321,7 +323,7 @@ export class ChatIntegrationsService {
       orderBy: { createdAt: 'asc' },
       include: SUBSCRIPTION_COUNT,
     });
-    return { bindings: rows.map(toBindingEntry), listenTtlDays: this.listenTtlDays };
+    return { bindings: rows.map(toBindingEntry), listenTtlDays: this.listenTtlDays, autoHarvest: this.autoHarvest };
   }
 
   async requireBinding(id: string): Promise<ChatChannelBinding> {
@@ -367,10 +369,20 @@ export class ChatIntegrationsService {
     }
   }
 
-  async updateBinding(id: string, dto: UpdateChatBindingDto): Promise<ChatBindingEntry> {
+  /** `actorId` is the admin making the change: turning the automatic harvest on makes them the person it runs as. */
+  async updateBinding(id: string, dto: UpdateChatBindingDto, actorId: string): Promise<ChatBindingEntry> {
     const row = await this.requireBinding(id);
     await this.assertBindingRefs(row.workspaceId, dto);
+    const listening = dto.listening ?? row.listening;
+    const turningAutoOn = dto.autoHarvest === true && !row.autoHarvestBy;
+    if (turningAutoOn && !listening) throw new BadRequestException(t('error.chat.autoHarvestNeedsListening'));
     if (dto.listening !== undefined && dto.listening !== row.listening) await this.switchListening(row, dto.listening);
+    // Told before it starts, as listening is: a group whose threads are read
+    // without anyone asking must have been told that they will be.
+    if (turningAutoOn) {
+      await this.tellGroup(row, (locale) => t('chat.listen.autoOn', { count: this.autoHarvest.quietMinutes }, locale), 'error.chat.autoHarvestNoticeFailed');
+    }
+    const autoOff = dto.autoHarvest === false || !listening;
     const next = await this.prisma.chatChannelBinding.update({
       where: { id },
       data: {
@@ -380,6 +392,8 @@ export class ChatIntegrationsService {
         ...(dto.answerMode !== undefined ? { answerMode: dto.answerMode } : {}),
         ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
         ...(dto.listening !== undefined ? { listening: dto.listening } : {}),
+        // Never a body field: whoever turns it on is who it runs as (the agent-trigger owner rule).
+        ...(autoOff ? { autoHarvestBy: null, autoHarvestAt: null } : turningAutoOn ? { autoHarvestBy: actorId, autoHarvestAt: new Date() } : {}),
       },
       include: SUBSCRIPTION_COUNT,
     });
@@ -387,7 +401,7 @@ export class ChatIntegrationsService {
   }
 
   /**
-   * Listening (#82): Telegram only, since Time's threads are fetched whole.
+   * Listening (#82): Telegram only, since Time's and Mattermost's threads are fetched whole.
    * On, the group is told first — if the bot cannot say so, nothing is kept,
    * because a group that was never told is a group being recorded. Off, what
    * was kept goes at once, not at the TTL.
@@ -399,15 +413,25 @@ export class ChatIntegrationsService {
       await this.prisma.chatBufferedMessage.deleteMany({ where: { bindingId: row.id } });
       return;
     }
+    await this.tellGroup(row, (locale) => t('chat.listen.on', { count: this.listenTtlDays }, locale), 'error.chat.listenNoticeFailed', integration);
+  }
+
+  /** A notice in the group, in its language, or a 400 saying why it could not be posted — and nothing switched. */
+  private async tellGroup(
+    row: ChatChannelBinding,
+    say: (locale: Locale) => string,
+    failed: 'error.chat.listenNoticeFailed' | 'error.chat.autoHarvestNoticeFailed',
+    known?: ChatIntegration,
+  ): Promise<void> {
+    const integration = known ?? (await this.require(row.integrationId));
     const ctx = this.context(integration);
-    if (!ctx) throw new BadRequestException(t('error.chat.listenNoticeFailed', { reason: t('error.chat.tokenRequired') }));
+    if (!ctx) throw new BadRequestException(t(failed, { reason: t('error.chat.tokenRequired') }));
     const adapter = this.registry.get(integration.kind);
-    const locale = (row.locale ?? integration.locale) as Locale;
-    const text = t('chat.listen.on', { count: this.listenTtlDays }, locale);
+    const text = say((row.locale ?? integration.locale) as Locale);
     try {
       await adapter.postMessage(ctx, { chatId: row.externalChatId }, adapter.render({ kind: 'notice', text }));
     } catch (err) {
-      throw new BadRequestException(t('error.chat.listenNoticeFailed', { reason: err instanceof ChatPlatformError ? err.message : 'unreachable' }));
+      throw new BadRequestException(t(failed, { reason: err instanceof ChatPlatformError ? err.message : 'unreachable' }));
     }
   }
 
@@ -470,7 +494,19 @@ function toBindingEntry(row: ChatChannelBinding & { _count: { subscriptions: num
     locale: (row.locale as Locale | null) ?? null,
     subscriptionCount: row._count.subscriptions,
     listening: row.listening,
+    autoHarvestBy: row.autoHarvestBy,
+    autoHarvestAt: row.autoHarvestAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** The env side of the automatic harvest (#340): the ceiling and the thresholds, as the settings page shows them. */
+export function autoHarvestLimits(config: ConfigService<Env, true>): ChatAutoHarvestLimits {
+  return {
+    available:
+      config.get('CHAT_ENABLED', { infer: true }) && config.get('HARVEST_ENABLED', { infer: true }) && config.get('HARVEST_AUTO_ENABLED', { infer: true }),
+    minMessages: config.get('HARVEST_AUTO_MIN_MESSAGES', { infer: true }),
+    quietMinutes: config.get('HARVEST_AUTO_QUIET_MINUTES', { infer: true }),
   };
 }

@@ -8,7 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { ExportJob } from '@prisma/client';
+import type { ExportJob, ShareLink } from '@prisma/client';
 import {
   EXPORT_FORMATS,
   slugifyPath,
@@ -30,7 +30,7 @@ import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { ExportProducer } from './export.producer.js';
-import { ExportScopeService } from './export-scope.service.js';
+import { ExportScopeService, type ExportScopeInput } from './export-scope.service.js';
 
 export interface CreateExportInput {
   format: ExportFormat;
@@ -87,7 +87,7 @@ export class ExportService {
       select: { workspaceId: true, title: true, archivedAt: true },
     });
     if (!doc) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
-    return this.create(principal, {
+    const row = await this.create(principal, principal.userId, {
       workspaceId: doc.workspaceId,
       scope: input.includeSubtree ? 'subtree' : 'page',
       documentId,
@@ -96,13 +96,14 @@ export class ExportService {
       archived: !!doc.archivedAt,
       ...input,
     });
+    return toExportSummary(row);
   }
 
   /** Every live page of a project, in tree order. */
   async createForProject(projectId: string, input: CreateExportInput, principal: Principal): Promise<ExportJobSummary> {
     const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true, name: true } });
     if (!project) throw new NotFoundException(t('error.project.notFound', { id: projectId }));
-    return this.create(principal, {
+    const row = await this.create(principal, principal.userId, {
       workspaceId: project.workspaceId,
       scope: 'project',
       documentId: null,
@@ -111,10 +112,61 @@ export class ExportService {
       archived: false,
       ...input,
     });
+    return toExportSummary(row);
+  }
+
+  /**
+   * A share link's reader exporting what the link shows (#161): the link's
+   * page, and its subtree when the link includes it — never more, since the
+   * scope is the link's and the pages are the ones it shows (no restricted
+   * page, whatever its creator may open). The job belongs to the link;
+   * `requested_by` keeps the creator for attribution only. The caller has
+   * already resolved the link and checked that download is on.
+   */
+  async createForShareLink(
+    share: Pick<ShareLink, 'id' | 'workspaceId' | 'documentId' | 'includeSubtree' | 'createdBy'>,
+    format: ExportFormat,
+  ): Promise<ExportJob> {
+    const doc = await this.prisma.document.findUnique({ where: { id: share.documentId }, select: { title: true, archivedAt: true } });
+    if (!doc) throw new NotFoundException(t('error.share.notFound'));
+    return this.create(
+      { shareLinkId: share.id },
+      share.createdBy,
+      {
+        workspaceId: share.workspaceId,
+        scope: share.includeSubtree ? 'subtree' : 'page',
+        documentId: share.documentId,
+        projectId: null,
+        title: doc.title,
+        archived: !!doc.archivedAt,
+        format,
+        branch: null,
+      },
+      share.id,
+    );
+  }
+
+  /**
+   * A share link's own job, or a 404: another link's job and a member's job
+   * look the same as none, and so does a subtree export once the link no
+   * longer includes the subtree. A file never holds more than the link shows now.
+   */
+  async shareLinkJob(id: string, share: Pick<ShareLink, 'id' | 'includeSubtree'>): Promise<ExportJob> {
+    const row = await this.prisma.exportJob.findUnique({ where: { id } });
+    if (!row || row.shareLinkId !== share.id || (row.scope !== 'page' && !share.includeSubtree)) {
+      throw new NotFoundException(t('error.export.notFound'));
+    }
+    return row;
+  }
+
+  /** The finished file of a share link's job: 409 while it is being made, 410 once it is gone. */
+  async shareLinkDownload(id: string, share: Pick<ShareLink, 'id' | 'includeSubtree'>): Promise<ExportDownloadResponse> {
+    return this.downloadRow(await this.shareLinkJob(id, share));
   }
 
   private async create(
-    principal: Principal,
+    requester: ExportScopeInput['requester'],
+    requestedBy: string,
     req: CreateExportInput & {
       workspaceId: string;
       scope: ExportScope;
@@ -123,13 +175,14 @@ export class ExportService {
       title: string;
       archived: boolean;
     },
-  ): Promise<ExportJobSummary> {
+    shareLinkId: string | null = null,
+  ): Promise<ExportJob> {
     if (!this.formatAvailable(req.format)) {
       throw new ConflictException({ statusCode: 409, message: t('error.export.formatUnavailable'), reason: 'export.formatUnavailable' });
     }
     // Checked before anything is queued, so a person learns now rather than
     // from a failed row; the worker checks again against what it finds.
-    const count = req.archived ? 0 : (await this.scope.documents({ ...req, requester: principal })).length;
+    const count = req.archived ? 0 : (await this.scope.documents({ ...req, requester })).length;
     if (count === 0) {
       throw new BadRequestException({ statusCode: 400, message: t('error.export.nothingToExport'), reason: 'export.nothingToExport' });
     }
@@ -154,7 +207,8 @@ export class ExportService {
         format: req.format,
         title: req.title.slice(0, 300),
         locale: currentLocale(),
-        requestedBy: principal.userId,
+        requestedBy,
+        shareLinkId,
       },
     });
     try {
@@ -167,16 +221,20 @@ export class ExportService {
         where: { id: row.id },
         data: { status: 'failed', error: { code: 'failed', message: t('error.export.failed', { detail: 'queue unavailable' }) } },
       });
-      return toExportSummary(failed);
+      return failed;
     }
-    return toExportSummary(row);
+    return row;
   }
 
-  /** The caller's own exports, newest first; an admin sees everyone's. */
+  /**
+   * The caller's own exports, newest first; an admin sees everyone's, share
+   * link readers' included (#161). A link's creator is only its jobs'
+   * attribution: what anonymous readers downloaded is not their history.
+   */
   async list(workspaceId: string, principal: Principal): Promise<ExportListResponse> {
     const all = await this.isAdmin(principal, workspaceId);
     const rows = await this.prisma.exportJob.findMany({
-      where: { workspaceId, ...(all ? {} : { requestedBy: principal.userId }) },
+      where: { workspaceId, ...(all ? {} : { requestedBy: principal.userId, shareLinkId: null }) },
       orderBy: { createdAt: 'desc' },
       take: LIST_LIMIT,
     });
@@ -189,7 +247,10 @@ export class ExportService {
 
   /** A short-lived URL to the file; 409 while it is being made, 410 once it is gone. */
   async download(id: string, principal: Principal): Promise<ExportDownloadResponse> {
-    const row = await this.visible(id, principal);
+    return this.downloadRow(await this.visible(id, principal));
+  }
+
+  private async downloadRow(row: ExportJob): Promise<ExportDownloadResponse> {
     if (row.status === 'expired' || (row.status === 'completed' && row.expiresAt && row.expiresAt <= new Date())) {
       throw new GoneException({ statusCode: 410, message: t('error.export.expired'), reason: 'export.expired' });
     }
@@ -214,7 +275,8 @@ export class ExportService {
   private async visible(id: string, principal: Principal): Promise<ExportJob> {
     const row = await this.prisma.exportJob.findUnique({ where: { id } });
     if (!row) throw new NotFoundException(t('error.export.notFound'));
-    if (row.requestedBy !== principal.userId && !(await this.isAdmin(principal, row.workspaceId))) {
+    const own = row.requestedBy === principal.userId && !row.shareLinkId;
+    if (!own && !(await this.isAdmin(principal, row.workspaceId))) {
       throw new ForbiddenException(t('error.export.notYours'));
     }
     return row;

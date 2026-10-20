@@ -211,8 +211,8 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
       getByRef: vi.fn(async (_ws: string, ref: string) => ({ ref, meta: { placeholders: [] } })),
     },
     shareLinks: {
-      create: vi.fn(async (documentId: string, input: { includeSubtree: boolean }) => ({
-        share: { id: 'sh-1', documentId, includeSubtree: input.includeSubtree, expiresAt: null, hasPassword: true },
+      create: vi.fn(async (documentId: string, input: { includeSubtree: boolean; allowDownload: boolean }) => ({
+        share: { id: 'sh-1', documentId, includeSubtree: input.includeSubtree, allowDownload: input.allowDownload, expiresAt: null, hasPassword: true },
         url: 'https://kb.example.com/s/kp_x',
         requestedExpiresAt: null,
       })),
@@ -847,12 +847,12 @@ describe('McpService over a principal', () => {
     const client = await connect(editor.mcp, p);
     const res = await client.callTool({
       name: 'knowledge_share_page',
-      arguments: { workspaceId: WS_A, documentId: doc, includeSubtree: true, password: 'hunter22' },
+      arguments: { workspaceId: WS_A, documentId: doc, includeSubtree: true, allowDownload: true, password: 'hunter22' },
     });
     expect(res.isError).toBeFalsy();
     expect(editor.shareLinks.create).toHaveBeenCalledWith(
       doc,
-      { includeSubtree: true, expiresAt: null, password: 'hunter22' },
+      { includeSubtree: true, allowDownload: true, expiresAt: null, password: 'hunter22' },
       p.userId,
     );
     const body = JSON.parse((res.content as Array<{ text: string }>)[0]!.text) as { url: string };

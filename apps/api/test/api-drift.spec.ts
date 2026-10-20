@@ -331,7 +331,7 @@ describe('the sentinel with a spec tied', () => {
         audienceScope: async (scope: unknown) => scope,
         visibleDocumentIds: async (_: unknown, ids: string[]) => new Set(ids.filter((id) => visible.includes(id))),
       } as never,
-      { promptFor: async () => '', dismissedPrompt: async () => '' } as never,
+      { promptFor: async () => ({ prompt: '', learningIds: [] }), dismissedPrompt: async () => '' } as never,
       {} as never,
       {} as never,
       apiDrift as never,

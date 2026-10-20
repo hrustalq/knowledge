@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import type { ExportScope, Locale } from '@knowledge/contracts';
 import { hasRealPath } from '../documents/documents.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -6,7 +7,7 @@ import type { PlanDocument } from '../publishing/site-build.plan.js';
 import { AccessService } from '../auth/access.service.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
-import { visibilityWhere } from '../permissions/access-scope.js';
+import { OPEN_TO_WORKSPACE, visibilityWhere } from '../permissions/access-scope.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
 
 export interface ExportScopeInput {
@@ -18,8 +19,17 @@ export interface ExportScopeInput {
    * Whose export it is: the principal on the API side, the stored
    * `requested_by` (with the job's locale) in the worker. The pages are the
    * ones that person may open, asked again when the job runs (#76).
+   *
+   * A share link's reader (#161) is nobody: the pages are the ones the link
+   * shows — nothing restricted on their chain, as `PublicSharesService` reads
+   * the tree — never what the link's creator could open.
    */
-  requester: Principal | { userId: string; locale: Locale };
+  requester: Principal | { userId: string; locale: Locale } | ShareLinkReader;
+}
+
+/** An anonymous reader exporting through a share link (#161). */
+export interface ShareLinkReader {
+  shareLinkId: string;
 }
 
 export interface ScopeDocument extends PlanDocument {
@@ -53,13 +63,10 @@ export class ExportScopeService {
    */
   async documents(input: ExportScopeInput): Promise<ScopeDocument[]> {
     const select = { id: true, parentId: true, title: true, position: true, category: true } as const;
-    const principal =
-      'mode' in input.requester
-        ? input.requester
-        : await this.access.principalFor(input.requester.userId, input.requester.locale);
-    const visible = visibilityWhere(await this.permissions.scopeFor(principal, input.workspaceId));
+    const visible = await this.visibleTo(input);
     if (input.scope === 'project') {
-      if (!input.projectId) return [];
+      // A share link names a page; it never reaches a whole project.
+      if (!input.projectId || 'shareLinkId' in input.requester) return [];
       return this.prisma.document.findMany({
         where: { workspaceId: input.workspaceId, projectId: input.projectId, archivedAt: null, ...LISTED_PAGE, AND: [visible] },
         select,
@@ -78,6 +85,13 @@ export class ExportScopeService {
       where: { workspaceId: input.workspaceId, archivedAt: null, ...LISTED_PAGE, path: { startsWith: root.path }, AND: [visible] },
       select,
     });
+  }
+
+  private async visibleTo(input: ExportScopeInput): Promise<Prisma.DocumentWhereInput> {
+    const requester = input.requester;
+    if ('shareLinkId' in requester) return OPEN_TO_WORKSPACE;
+    const principal = 'mode' in requester ? requester : await this.access.principalFor(requester.userId, requester.locale);
+    return visibilityWhere(await this.permissions.scopeFor(principal, input.workspaceId));
   }
 
   /**

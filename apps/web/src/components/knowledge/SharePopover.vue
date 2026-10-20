@@ -62,6 +62,7 @@ const data = computed(() => query.data.value as ShareLinkListResponse | undefine
 const policy = computed(() => data.value?.policy)
 
 const includeSubtree = ref(false)
+const allowDownload = ref(false)
 const expiry = ref<ShareExpiryPreset>('7d')
 const password = ref('')
 const busy = ref(false)
@@ -85,6 +86,7 @@ async function create() {
       path: { id: props.documentId },
       body: {
         includeSubtree: includeSubtree.value,
+        allowDownload: allowDownload.value,
         expiresAt: shareExpiryFor(expiry.value)?.toISOString() ?? null,
         ...(password.value ? { password: password.value } : {}),
       },
@@ -99,6 +101,17 @@ async function create() {
     toast.error(errorReason(e) === 'share.restricted' ? t('access.shareRestricted') : errorMessage(e, t))
   } finally {
     busy.value = false
+  }
+}
+
+/** Takes effect on the next request: a reader's finished file stops downloading once it is off (#161). */
+async function setDownload(id: string, on: boolean) {
+  try {
+    await api.patch('/v1/shares/{id}', { path: { id }, body: { allowDownload: on } })
+    toast.success(on ? t('share.downloadOn') : t('share.downloadOff'))
+    void queryClient.invalidateQueries({ queryKey: options.value.queryKey })
+  } catch (e) {
+    toast.error(errorMessage(e, t) || t('share.failed'))
   }
 }
 
@@ -178,6 +191,10 @@ function onOpen(next: boolean) {
             <Checkbox v-model="includeSubtree" />
             <span>{{ t('share.includeSubtree') }}</span>
           </label>
+          <label class="flex items-center gap-2">
+            <Checkbox v-model="allowDownload" />
+            <span>{{ t('share.allowDownload') }}</span>
+          </label>
           <div class="grid grid-cols-[6rem_1fr] items-center gap-2">
             <span class="text-muted-foreground">{{ t('share.expiry') }}</span>
             <Select v-model="expiry">
@@ -221,6 +238,10 @@ function onOpen(next: boolean) {
                   </span>
                 </div>
                 <p v-if="!s.url" class="text-xs text-muted-foreground">{{ t('share.notCopyable') }}</p>
+                <label class="flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
+                  <Checkbox :model-value="s.allowDownload" @update:model-value="(on) => setDownload(s.id, on === true)" />
+                  {{ t('share.downloadToggle') }}
+                </label>
               </div>
               <Button v-if="s.url" size="icon-sm" variant="ghost" :aria-label="t('share.copyLink')" @click="copyLink(s.url)">
                 <Copy class="size-3.5" />

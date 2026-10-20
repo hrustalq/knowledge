@@ -1,4 +1,4 @@
-# 59 — Chat harvest: a Telegram or Time thread, proposed as reviewed captures
+# 59 — Chat harvest: a Telegram, Time or Mattermost thread, proposed as reviewed captures
 
 Issue [#82](https://github.com/hrustalq/knowledge/issues/82), shipped as five
 PRs (#344–#347 and the one carrying this document). Before it, the only way
@@ -18,14 +18,14 @@ like any other capture. Chat itself is never indexed and never searchable.
 - **Ask for a harvest**, as a linked person with the `editor` role in the
   bound workspace:
 
-  | trigger | Time | Telegram |
+  | trigger | Time, Mattermost | Telegram |
   | --- | --- | --- |
   | a command | `capture` (or `remember`, `запомни`) inside a thread, mentioning the bot in a channel | `/capture` as a reply to the first message of the thread |
   | a private chat | — | forward the bot the messages, then `/capture` |
   | a reaction | 📌 on any message of a thread | ✍ on a kept message, where the bot is a group admin |
 
 - **What it reads:**
-  - **Time:** the whole thread, fetched by root. A command reads up to the
+  - **Time, Mattermost:** the whole thread, fetched by root. A command reads up to the
     command; a reaction reads all of it.
   - **Telegram group:** the replied-to message, then what the group (or
     forum topic) said from there up to the command, from the listening
@@ -45,6 +45,10 @@ like any other capture. Chat itself is never indexed and never searchable.
   keep its messages, masked, for `CHAT_LISTEN_TTL_DAYS` (*Keep messages for
   /capture* in Settings → Chat bots). `/forget` deletes a member's own.
 - **💾 Save** on a bot answer moved onto the same capture path (phase 1).
+- **Automatic harvest (#340).** A workspace admin can have a group that keeps
+  its messages harvested without anyone asking: each thread once it has gone
+  quiet, in the admin's name (*Harvest quiet threads automatically*). See
+  [Automatic harvest](#automatic-harvest).
 
 ## The rules
 
@@ -79,7 +83,8 @@ own capture rate limits still apply per proposal.
 
 The adapter seam (`chat-adapter.types.ts`) has two optional members:
 
-- `fetchThread(ctx, chatId, messageId, beforeMessageId, max)`: Time only.
+- `fetchThread(ctx, chatId, messageId, beforeMessageId, max)`: Time and
+  Mattermost (one adapter, #343).
   `GET /posts/:id/thread` returns the whole thread from any post in it.
   Bots', system and empty posts are left out. `beforeMessageId` is the command;
   a reaction passes null. The thread link is the root's permalink, which needs
@@ -99,7 +104,7 @@ Telegram has no thread to fetch, so `ChatBufferService` reads one instead:
   them, so the next `/capture` starts from nothing. The first forward of a
   batch gets one reply saying how to finish; the rest are kept quietly.
 
-A Time command said at the top of a channel is its own thread, and the bot
+A Time or Mattermost command said at the top of a channel is its own thread, and the bot
 says there is nothing above it to read.
 
 ### Reactions
@@ -107,7 +112,7 @@ says there is nothing above it to read.
 Both adapters set `ChatInbound.harvestReaction` and leave `text` empty, because
 neither platform says what the message was.
 
-- **Time** watches `reaction_added` for `pushpin` on the websocket.
+- **Time and Mattermost** watch `reaction_added` for `pushpin` on the websocket.
   `data.reaction` is a JSON string, as in Mattermost's `sendReactionEvent`. The
   supervisor claims `<bot>:<post>:pin:<user>`, apart from the post itself: the
   same person pinning again within the claim's hour is the same request.
@@ -251,6 +256,67 @@ A DM forward has no binding.
 Keeping needs the bot to see group messages: privacy mode off in @BotFather,
 or the bot made a group admin. ✍ needs admin either way.
 
+### Automatic harvest
+
+A request for a harvest is explicit everywhere above. #340 adds the one
+exception: a listening Telegram group whose threads are harvested by a
+sweeper, because a thread that settles something and that nobody marks is
+otherwise lost.
+
+**The switch.** `PATCH /v1/chat/bindings/:id { autoHarvest: true }`, workspace
+admin, on a binding that keeps its messages (400 otherwise). Like turning
+listening on, the bot first tells the group (`chat.listen.autoOn`), and if it
+cannot, nothing is switched. Turning listening off turns this off too.
+
+**Who it runs as.** The admin who turned it on: `chat_channel_bindings.auto_harvest_by`,
+set from the request's principal and never from the body — the
+[agent-trigger owner rule](49-agent-triggers.md#identity). Another admin
+pressing it again does not take it over; off and on again does. On every
+harvest the sweeper builds that person's principal (`principalFor`) and
+requires `admin` again, so a demoted, removed or disabled admin's switch
+harvests nothing. The harvest is the ordinary `HarvestService.harvest` as
+that person: their scope for the pages an answer may cite, their name on the
+captures, their `HARVEST_RATE_PER_HOUR`, the workspace budget.
+
+**What a thread is.** Telegram has no threads, so one listening thread is a
+group, or one forum topic of it (`chat_harvest_marks.topic_key`, `''` outside
+a topic). The sweeper reads what was kept after both the switch
+(`auto_harvest_at`) and the thread's mark: nothing said before an admin turned
+it on is read automatically.
+
+**When one is due.** `isThreadDue` (`chat-auto-harvest.sweeper.ts`) is the one
+predicate: at least `HARVEST_AUTO_MIN_MESSAGES` new kept messages, and none
+for `HARVEST_AUTO_QUIET_MINUTES`. `ChatBufferService.listenedThreads`
+returns only threads with something new since the mark, so a thread is
+harvested again only after its content changed. `created_at`, the server's
+clock, is the measure throughout, never Telegram's `sent_at`.
+
+**Once, on whichever API process.** `ChatAutoHarvestSweeper` is API-side, a
+60-second tick, never a second sweep while one runs, and on only while
+`CHAT_ENABLED`, `HARVEST_ENABLED` and `HARVEST_AUTO_ENABLED` are. Every API
+process runs it. Before the model is called, the thread's mark is moved to
+the newest message the sweep saw by one guarded statement (an insert on the
+unique key, or an update from the value it read), and only the process that
+moved it harvests. A refusal that will pass (the hourly rate, the AI budget)
+puts the mark back for the next tick. Any other outcome leaves it: a model
+failure or a switched-off `harvester` is not retried until something new is
+said.
+
+**Spend.** One harvest is one model call, booked as `AiUsageOperation 'harvest'`
+against the admin. At most `HARVEST_AUTO_MAX_PER_TICK` threads per binding
+per tick, the longest quiet first; the rest stay due for the next tick.
+
+**Nothing is posted in the group.** The manual paths reply where they were
+asked, because someone asked. Here nobody did, and a bot that speaks after
+every quiet hour is the bot talking to people who were not talking to it —
+the reason a stranger's reaction gets no reply. The group was told once, when
+the switch went on. The admin the captures are attributed to gets an inbox
+row instead (`chat.harvest.proposed`, category `job`, linking to
+`/captures`), only when something was proposed, carrying the group's name
+and the counts. Never a capture's title; the Captures inbox shows those under
+its own rules. A bot DM was rejected: the admin need not have linked an
+account, and the inbox is the per-person surface that already exists.
+
 ### Save is a capture too
 
 Phase 1 moved 💾 Save onto `CaptureService`
@@ -272,8 +338,11 @@ one save path, one dedupe and one inbox.
 - **Proposals go through agent memory.** No new `ConnectorRunItem` kinds and
   no capture runs; feature-26 run items stay pages-only.
 - **Sources are the existing chat-bot platforms.** No new connector kinds.
-- **Triggers are explicit:** a command, a forward or a reaction. The
-  automatic sweep is #340.
+- **Triggers are explicit:** a command, a forward or a reaction. The one
+  exception is the automatic harvest (#340): opt-in per group, by an admin,
+  told to the group, and in that admin's name.
+- **An automatic harvest posts nothing in the group** and tells the admin it
+  ran as, in the app's inbox (#340).
 - **Telegram threads come from an opt-in, admin-enabled buffer** with a short
   TTL, masked on write. Telegram's privacy mode means a bot otherwise sees
   only what is addressed to it.
@@ -295,7 +364,7 @@ one save path, one dedupe and one inbox.
 
 ### Chat
 
-| | Time | Telegram |
+| | Time, Mattermost | Telegram |
 | --- | --- | --- |
 | harvest | `capture` / `remember` / `запомни` in a thread; 📌 | `/capture` as a reply, or after forwards in a DM; ✍ |
 | forget | — | `/forget` |
@@ -306,7 +375,11 @@ one save path, one dedupe and one inbox.
 | route | role | |
 | --- | --- | --- |
 | `GET /v1/chat/integrations/:id/bindings` | admin | now `{ bindings, listenTtlDays }`; each binding has `listening` |
-| `PATCH /v1/chat/bindings/:id` | admin | `listening` joins the body; Telegram only, 400 otherwise or when the notice fails |
+| `PATCH /v1/chat/bindings/:id` | admin | `listening` joins the body; Telegram only, 400 otherwise or when the notice fails. `autoHarvest` (#340): needs listening, notice first, the caller becomes `autoHarvestBy` |
+
+The bindings list also carries `autoHarvest: { available, minMessages,
+quietMinutes }`, the server's ceiling and thresholds, and each binding
+`autoHarvestBy` / `autoHarvestAt`.
 
 Captures are read and decided through the existing `/v1/captures` routes;
 `CaptureInfo` has `origin`.
@@ -316,6 +389,11 @@ Captures are read and decided through the existing `/v1/captures` routes;
 - `chat-bots/ChatBindingTable.vue`: the *Keep messages for /capture* switch on
   a Telegram group. It waits on the API, since turning it on waits on the
   group notice. The setup hint says ✍ needs the bot to be an admin.
+  Under it, *Harvest quiet threads automatically* (#340), with the thresholds
+  in its hint, who it runs as (`UserChip`), and a warning when the server's
+  ceiling has it off whatever the switch says.
+- The inbox row for an automatic harvest opens `/captures`
+  (`notification-ui.ts`).
 - `captures/CaptureOriginParts.vue`: the origin in `CaptureRow.vue` and
   `MrProvenance.vue`.
 
@@ -329,6 +407,9 @@ Captures are read and decided through the existing `/v1/captures` routes;
   - `20261118100000_chat_listening_buffer` adds
     `chat_channel_bindings.listening` and `chat_buffered_messages`. Additive.
     After a final rollback, drop the table by hand.
+  - `20261120100000_chat_auto_harvest` (#340) adds the nullable
+    `chat_channel_bindings.auto_harvest_by` / `auto_harvest_at` and
+    `chat_harvest_marks`. Additive. After a final rollback, drop them by hand.
 - Env vars, all with defaults:
 
   | var | default | |
@@ -338,23 +419,34 @@ Captures are read and decided through the existing `/v1/captures` routes;
   | `HARVEST_RATE_PER_HOUR` | `10` | per person, from `harvest` usage rows |
   | `HARVEST_FORWARD_WINDOW_SEC` | `120` | a DM's forwards that make the thread |
   | `CHAT_LISTEN_TTL_DAYS` | `7` | how long a listening group's messages are kept |
+  | `HARVEST_AUTO_ENABLED` | `true` | the ceiling over every group's automatic-harvest switch |
+  | `HARVEST_AUTO_MIN_MESSAGES` | `8` | new kept messages a thread needs to be due |
+  | `HARVEST_AUTO_QUIET_MINUTES` | `60` | minutes without a new message before it is due |
+  | `HARVEST_AUTO_MAX_PER_TICK` | `1` | automatic harvests per group per minute; `0` stops the sweeper |
 
   `CHAT_CAPTURE_TIMEOUT_SECONDS` is no longer read.
 - **Telegram bots need their webhook registered again** to receive ✍: press
   **Test** on each bot in Settings → Chat bots after deploying.
 - Production cannot reach `api.telegram.org` until `TELEGRAM_API_BASE_URL`
-  points at a proxy, so Time is the first platform that can be checked there.
+  points at a proxy, so Time or Mattermost is the first platform that can be
+  checked there.
 
 ## Deliberate deferrals
 
-- No automatic harvest (#340), no chat search (#339), no new sources (Slack,
-  Teams and the rest #341, Mattermost #343, Google Drive #338).
+- No chat search (#339), no new sources (Slack,
+  Teams and the rest #341, Google Drive #338).
 - No named-entity detection, no reversible masking. A passport mentioned with
   its context word more than 20 characters (or a digit) away from the number
   is not masked.
-- The harvest runs in the delivery's continuation, with no sweeper of its own.
+- A manual harvest runs in the delivery's continuation, with no sweeper of its own.
   A deploy mid-harvest leaves the reading placeholder in the chat; the
   proposals already written stand.
+- The automatic harvest's thresholds are server-wide env, not per group, and
+  were set before there was precision data from manual harvests. A deploy
+  mid-harvest leaves the thread marked: it is harvested again once something
+  new is said in it.
+- Automatic harvest is Telegram only, since only Telegram groups keep
+  messages. Time threads would need their own record of which threads exist.
 - The forward window is per chat, not per batch: two quick batches in one
   private chat are one thread.
 
@@ -378,10 +470,27 @@ Captures are read and decided through the existing `/v1/captures` routes;
     `ChatAnswersService`: linked editor, unlinked, viewer, top of a channel,
     group and DM `/capture`, forwards, `/forget`, 📌 and ✍, and silence for
     anyone else's reaction.
-  - `chat-time.spec.ts`, `chat-telegram.spec.ts`: parsing the commands, a
-    reaction and the thread fetch against fixture shapes.
+  - `chat-mattermost.spec.ts` (run for `time` and `mattermost`),
+    `chat-telegram.spec.ts`: parsing the commands, a reaction and the thread
+    fetch against fixture shapes.
   - `chat-capture.spec.ts`, `capture-templates.spec.ts`: Save as a capture,
     and the origin in the description and in `sources:`.
-- **Not verified against a live server.** Telegram parsing is pinned to the
-  Bot API documentation, and Time's to Mattermost's `/api/v4` and websocket
-  events. #343 adds a docker Mattermost for a live check.
+  - `chat-auto-harvest.spec.ts` (#340): the due predicate, the per-binding
+    spend cap, no second sweep while one runs, the mark moved before the
+    model (a losing process harvests nothing), reading only past the mark and
+    the switch, putting the mark back on the rate limit or budget only,
+    attribution to the enabling admin re-checked as admin, nothing posted in
+    the group and an inbox row with counts; the switch (notice first, needs
+    listening, never taken over, cleared with listening).
+- The automatic harvest's SQL (`listenedThreads`) was run against a scratch
+  database with every migration applied: messages before the switch and a
+  binding not opted in are left out, and a mark at the rounded-up newest
+  `created_at` leaves nothing of that thread.
+- **Live Mattermost, once (#343).** Against a `mattermost/mattermost-preview`
+  container: the bot's token identified, its websocket greeted, a channel
+  mention, `help`, a DM `new`, the reply in the question's thread, a signed
+  button press answered with `ephemeral_text`, an edit clearing the buttons,
+  📌 handed on and ✅ ignored, `@knowledge capture` in the thread, and
+  `fetchThread` reading people's posts with the team permalink, from the root
+  and from a reply. Telegram parsing is still pinned only to the Bot API
+  documentation, and **no live Time server has been tried**.

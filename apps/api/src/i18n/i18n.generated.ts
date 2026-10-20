@@ -488,6 +488,12 @@ export type I18nTranslations = {
                 "few": string;
                 "many": string;
             };
+            "autoOn": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
         };
     };
     "connector": {
@@ -1139,6 +1145,8 @@ export type I18nTranslations = {
             "serverHostUnresolved": string;
             "listenTelegramOnly": string;
             "listenNoticeFailed": string;
+            "autoHarvestNeedsListening": string;
+            "autoHarvestNoticeFailed": string;
         };
         "group": {
             "notFound": string;

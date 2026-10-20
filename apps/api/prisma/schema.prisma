@@ -3074,31 +3074,55 @@ model ChatIntegration {
 
 /// A group or channel the bot may answer in. DMs need none.
 model ChatChannelBinding {
-  id             String   @id @default(uuid()) @db.Uuid
-  integrationId  String   @map("integration_id") @db.Uuid
-  workspaceId    String   @map("workspace_id") @db.Uuid
-  externalChatId String   @map("external_chat_id")
+  id             String    @id @default(uuid()) @db.Uuid
+  integrationId  String    @map("integration_id") @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  externalChatId String    @map("external_chat_id")
   title          String?
   /// Retrieval scope for answers here; null = the whole workspace.
-  projectId      String?  @map("project_id") @db.Uuid
+  projectId      String?   @map("project_id") @db.Uuid
   /// null = the integration's default agent.
-  agentKey       String?  @map("agent_key")
+  agentKey       String?   @map("agent_key")
   /// CHAT_ANSWER_MODES — 'mention' | 'all' | 'off'.
-  answerMode     String   @default("mention") @map("answer_mode")
+  answerMode     String    @default("mention") @map("answer_mode")
   locale         String?
   /// Keep this group's messages, masked, so a thread can be harvested (#82).
   /// Telegram only; a workspace admin turns it on, and the group is told.
-  listening      Boolean  @default(false)
-  createdBy      String?  @map("created_by") @db.Uuid
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  listening      Boolean   @default(false)
+  /// Automatic harvest (#340): the admin who turned it on, and whom its
+  /// captures are attributed to. null = off. Needs `listening`.
+  autoHarvestBy  String?   @map("auto_harvest_by") @db.Uuid
+  autoHarvestAt  DateTime? @map("auto_harvest_at") @db.Timestamptz
+  createdBy      String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   integration   ChatIntegration       @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   subscriptions ChatSubscription[]
   buffered      ChatBufferedMessage[]
+  harvestMarks  ChatHarvestMark[]
 
   @@unique([integrationId, externalChatId])
   @@map("chat_channel_bindings")
+}
+
+/// How far the automatic harvest (#340) has read one listening thread: a
+/// group, or one forum topic of it. A thread is due again only once a message
+/// newer than `harvestedThrough` has been kept. Moved by a guarded statement
+/// before the harvest runs, so two API processes never harvest one thread twice.
+model ChatHarvestMark {
+  id               String   @id @default(uuid()) @db.Uuid
+  bindingId        String   @map("binding_id") @db.Uuid
+  /// The Telegram forum topic; '' outside one (a unique key cannot hold a null).
+  topicKey         String   @default("") @map("topic_key")
+  /// `created_at` of the newest kept message the last harvest read.
+  harvestedThrough DateTime @map("harvested_through") @db.Timestamptz
+  harvestedAt      DateTime @default(now()) @map("harvested_at") @db.Timestamptz
+
+  binding ChatChannelBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+
+  @@unique([bindingId, topicKey])
+  @@map("chat_harvest_marks")
 }
 
 /// A message kept so a thread can be harvested (#82): a listening group's

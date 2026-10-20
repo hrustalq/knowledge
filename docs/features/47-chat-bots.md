@@ -488,12 +488,12 @@ not a live Time server** — the first real connection is the check.
 | `CHAT_ALLOW_PRIVATE_URLS`             | `false`                    | allow a Time server on a private/loopback address                   |
 | `CHAT_SOCKET_SYNC_MS`                 | `15000`                    | how often open Time sockets are compared with the enabled bots      |
 
-The harvest's `HARVEST_*` and `CHAT_LISTEN_TTL_DAYS` are in
+The harvest's `HARVEST_*` (including the automatic harvest's `HARVEST_AUTO_*`) and `CHAT_LISTEN_TTL_DAYS` are in
 [59](59-chat-harvest.md#operations).
 
 ## Data
 
-All eight tables are new (`chat_captures` was folded into `knowledge_captures` by #82). None of them has an FK on `workspace_id`, `user_id` or
+All nine tables are new (`chat_captures` was folded into `knowledge_captures` by #82). None of them has an FK on `workspace_id`, `user_id` or
 `created_by`, per house policy. The per-bot rows cascade with
 `chat_integrations`.
 
@@ -506,6 +506,7 @@ All eight tables are new (`chat_captures` was folded into `knowledge_captures` b
 | `chat_conversations`    | chat + asker → `assistant_threads` row                                        |
 | `chat_answers`          | the claim: status, placeholder message id, platform thread (Time), assistant message id, frozen locale |
 | `chat_buffered_messages` | masked messages a harvest may read: a listening group's, or a DM's forwards (#82; cascades with the bot and the binding) |
+| `chat_harvest_marks`    | how far the automatic harvest has read each listening thread (#340; cascades with the binding) |
 | `chat_subscriptions`    | a group's notification rule: project, folded tags, kinds, timing, cursor, next digest, last send / refusal (cascades with the binding) |
 
 `chat_answers.assistantMessageId` is what 👍/👎 key on. Votes go into

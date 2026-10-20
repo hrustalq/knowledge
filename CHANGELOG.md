@@ -182,6 +182,20 @@ in the pull request that introduces them — see
   believed then, so a relation retracted since still shows. Each response
   echoes `resolvedAsOf`. A malformed value is a 400, an unknown tag or another
   workspace's revision a 404. Page permissions apply exactly as they do now.
+- A Telegram group that keeps its messages can be harvested automatically
+  (#340). A workspace admin turns on *Harvest quiet threads automatically* on
+  the group in Settings → Chat bots, and the bot tells the group first; if it
+  cannot, the switch stays off. From then on, a thread (the group, or one
+  forum topic) is harvested once it has `HARVEST_AUTO_MIN_MESSAGES` new kept
+  messages and nothing new for `HARVEST_AUTO_QUIET_MINUTES`, and again only
+  after something new is said in it. Nothing said before the switch went on
+  is read. The captures are proposed in the name of the admin who turned it
+  on, whose admin role is checked again on every harvest. Nothing is posted
+  in the group: that admin gets an inbox notification with the counts, and
+  the captures wait in the Captures inbox. Each harvest is one `harvest`
+  model call, counted against that admin's `HARVEST_RATE_PER_HOUR`, and at
+  most `HARVEST_AUTO_MAX_PER_TICK` run per group per minute. Turning keeping
+  off turns this off too. Off by default on every group.
 - Release tags (#81): named instants such as `v2.3` that `asOf=tag:<name>`
   resolves to. `GET /v1/release-tags` (viewer), `POST /v1/release-tags`
   (editor; a duplicate name is a 409) and `DELETE /v1/release-tags/:id`
@@ -533,6 +547,17 @@ in the pull request that introduces them — see
   `HARVEST_MAX_MESSAGES` (`200`: the root and the newest replies) and
   `HARVEST_RATE_PER_HOUR` (`10` per person). The `harvester` agent appears
   under Settings → AI agents and can be switched off there. No migration.
+- Migration `20261120100000_chat_auto_harvest` adds the nullable
+  `chat_channel_bindings.auto_harvest_by` and `auto_harvest_at` columns and
+  the `chat_harvest_marks` table (#340). It is additive and survives a code
+  rollback; after a final rollback, drop the table and the two columns by
+  hand. Four env vars, each with a default, so nothing needs setting:
+  `HARVEST_AUTO_ENABLED` (`true`; `false` stops every automatic harvest
+  whatever a group's switch says, and the settings page says so),
+  `HARVEST_AUTO_MIN_MESSAGES` (`8`), `HARVEST_AUTO_QUIET_MINUTES` (`60`) and
+  `HARVEST_AUTO_MAX_PER_TICK` (`1` harvest per group per minute; `0` stops
+  the sweeper). The sweeper runs in the API, beside the chat answer sweeper,
+  only while `CHAT_ENABLED` and `HARVEST_ENABLED` are on.
 - Migration `20261117100000_chat_captures_into_agent_memory` adds a nullable
   `knowledge_captures.origin` column. It copies every `chat_captures` row into
   `knowledge_captures` under the same id, with its status, and then **drops

@@ -876,6 +876,18 @@ export const envSchema = z.object({
   HARVEST_FORWARD_WINDOW_SEC: z.coerce.number().int().min(10).default(120),
   /** Days a listening Telegram group's messages are kept, masked, for a harvest to read. */
   CHAT_LISTEN_TTL_DAYS: z.coerce.number().int().min(1).default(7),
+  /**
+   * Automatic harvest (#340): the ceiling over each binding's switch. Off, no
+   * thread is harvested by the sweeper whatever a binding asks for, and the
+   * settings page says so. HARVEST_ENABLED=false turns it off too.
+   */
+  HARVEST_AUTO_ENABLED: boolish(true),
+  /** Kept messages a listening thread needs, since its last automatic harvest, before it is due. */
+  HARVEST_AUTO_MIN_MESSAGES: z.coerce.number().int().min(2).default(8),
+  /** Minutes without a new kept message before a listening thread is due. */
+  HARVEST_AUTO_QUIET_MINUTES: z.coerce.number().int().min(1).default(60),
+  /** Automatic harvests one binding may run per sweeper tick (one model call each). */
+  HARVEST_AUTO_MAX_PER_TICK: z.coerce.number().int().min(0).default(1),
 
   /**
    * Interface + API language (docs/features/18). Also the fallback whenever a

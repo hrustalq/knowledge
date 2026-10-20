@@ -7,7 +7,8 @@
  *
  * Three tabs: **Pages** — the preset strip (each a `HealthFilter`, with its live
  * count), the narrowing row, the table and the bulk bar — **Quality**, the
- * auditor's scores (#74, phase 5), and **Settings**, the freshness policy. `?tab=` and `?filter=` are opening instructions: a
+ * auditor's scores (#74, phase 5), **Agents**, what became of each agent's
+ * output (#305, admins only, as its route is), and **Settings**, the freshness policy. `?tab=` and `?filter=` are opening instructions: a
  * notification or a doc can point at "the unowned pages", and the page starts
  * there.
  *
@@ -43,6 +44,7 @@ import HealthPreviewSheet from '@/components/health/HealthPreviewSheet.vue'
 import HealthSettings from '@/components/health/HealthSettings.vue'
 import HealthTable from '@/components/health/HealthTable.vue'
 import QualityPanel from '@/components/quality/QualityPanel.vue'
+import AgentOutcomesPanel from '@/components/health/AgentOutcomesPanel.vue'
 import {
   EMPTY_SELECTION,
   clearSelection,
@@ -73,10 +75,12 @@ const projectId = getProjectId() ?? undefined
 
 /* ------------------------------------------------------------------ tabs */
 
-type TabKey = 'pages' | 'quality' | 'settings'
+type TabKey = 'pages' | 'quality' | 'agents' | 'settings'
 const tabs = computed<PageTab<TabKey>[]>(() => [
   { key: 'pages', label: t('health.tab.pages') },
   { key: 'quality', label: t('health.tab.quality') },
+  // The ledger route is admin-only; a member's ?tab=agents falls back to Pages.
+  ...(auth.canAdminWorkspace ? [{ key: 'agents' as const, label: t('health.tab.agents') }] : []),
   { key: 'settings', label: t('health.tab.settings') },
 ])
 const tab = usePageTabs(tabs, 'pages')
@@ -301,6 +305,10 @@ const previewRow = ref<KnowledgeHealthRow | null>(null)
         :scope-label="scopeLabel"
         :can-run-agents="auth.canAdminWorkspace"
       />
+    </div>
+
+    <div v-else-if="tab === 'agents'" :id="panelId('agents')" role="tabpanel" :aria-labelledby="tabId('agents')">
+      <AgentOutcomesPanel :workspace-id="workspaceId" :project-id="projectId" :scope-label="scopeLabel" />
     </div>
 
     <div v-else :id="panelId('settings')" role="tabpanel" :aria-labelledby="tabId('settings')">

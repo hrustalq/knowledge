@@ -19,6 +19,17 @@ import { t } from '../i18n/t.js';
 
 const QUERY_MAX_CHARS = 4_000;
 const EXCERPT_MAX_CHARS = 1_000;
+/** A reply's model calls are billed just before it is written; this covers the fire-and-forget insert landing after. */
+const BILLING_SLACK_MS = 5_000;
+/** How far back a one-shot `/ask` vote looks for the caller's ask. A vote is pressed on an answer still on screen. */
+const ASK_LOOKBACK_MS = 60 * 60_000;
+
+/** Which model wrote an answer (#305). Both null when the server cannot know. */
+export interface AnswerModel {
+  providerId: string | null;
+  model: string | null;
+}
+const UNKNOWN_MODEL: AnswerModel = { providerId: null, model: null };
 
 /** What every vote carries, whichever surface it came from. */
 interface VoteInput {
@@ -38,6 +49,9 @@ export interface AnswerSignalInput {
   threadId?: string;
   messageId?: string;
   principal: Principal;
+  /** The turn's config: the harness knows exactly which model it just ran. */
+  providerId?: string | null;
+  model?: string | null;
 }
 
 /**
@@ -118,6 +132,13 @@ export class AnswerFeedbackService {
       citedDocumentIds: citedIds(sources) as object,
       confidence: message.confidence ?? Prisma.DbNull,
     };
+    // The model is the reply's, found once on the first vote: a re-vote is
+    // about the same reply, so the update leaves it alone.
+    const model = await this.modelOf({
+      workspaceId: message.thread.workspaceId,
+      threadId: message.thread.id,
+      createdAt: { lte: new Date(message.createdAt.getTime() + BILLING_SLACK_MS) },
+    });
     const row = await this.prisma.answerFeedback.upsert({
       where: { messageId_createdBy: { messageId, createdBy: principal.userId } },
       create: {
@@ -127,6 +148,7 @@ export class AnswerFeedbackService {
         messageId,
         createdBy: principal.userId,
         apiKeyId: principal.apiKey?.id ?? null,
+        ...model,
         ...fields,
       },
       update: fields,
@@ -157,11 +179,20 @@ export class AnswerFeedbackService {
     principal: Principal,
   ): Promise<AnswerFeedbackInfo> {
     this.assertEnabled();
+    // Nothing persisted names the ask, so its model is the caller's latest
+    // ask call, read from the server's own billing, never from the client.
+    const model = await this.modelOf({
+      workspaceId: input.workspaceId,
+      userId: principal.userId,
+      operation: 'ask',
+      createdAt: { gte: new Date(Date.now() - ASK_LOOKBACK_MS) },
+    });
     const row = await this.prisma.answerFeedback.create({
       data: {
         workspaceId: input.workspaceId,
         kind: 'vote',
         surface: 'ask',
+        ...model,
         rating: input.rating,
         reason: input.reason ?? null,
         comment: input.comment?.trim() || null,
@@ -238,6 +269,8 @@ export class AnswerFeedbackService {
           messageId: input.messageId ?? null,
           citedDocumentIds: citedIds(input.sources) as object,
           confidence: (input.confidence as unknown as Prisma.InputJsonValue) ?? Prisma.DbNull,
+          providerId: input.providerId ?? null,
+          model: input.model || null,
           createdBy: input.principal.userId,
           apiKeyId: input.principal.apiKey?.id ?? null,
         },
@@ -245,6 +278,25 @@ export class AnswerFeedbackService {
       .catch((e: unknown) => {
         this.logger.warn(`Answer signal not recorded (non-fatal): ${e instanceof Error ? e.message : String(e)}`);
       });
+  }
+
+  /**
+   * The model of the newest billed call matching `where` (#305). An MCP vote
+   * never asks: the answer is the external agent's, and its model is not ours
+   * to know. A failed read leaves the vote unattributed rather than unrecorded.
+   */
+  private async modelOf(where: Prisma.AiUsageWhereInput): Promise<AnswerModel> {
+    try {
+      const usage = await this.prisma.aiUsage.findFirst({
+        where,
+        orderBy: { createdAt: 'desc' },
+        select: { providerId: true, model: true },
+      });
+      return usage ? { providerId: usage.providerId, model: usage.model || null } : UNKNOWN_MODEL;
+    } catch (e) {
+      this.logger.warn(`Answer model lookup failed (non-fatal): ${e instanceof Error ? e.message : String(e)}`);
+      return UNKNOWN_MODEL;
+    }
   }
 
   /** The caller's own votes on a set of messages, for a thread read. One query. */

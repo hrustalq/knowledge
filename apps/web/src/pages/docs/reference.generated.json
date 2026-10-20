@@ -132,6 +132,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/agent-outcomes",
+      "tag": "ai",
+      "summary": "Per agent, how many findings were accepted, dismissed or are pending, and how answers were voted; optionally split by prompt hash or model. Derived on read from runs, merge requests and votes",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/ai/agents",
       "tag": "ai",
       "summary": "Effective agent roster: built-in defaults ∪ this workspace overrides",

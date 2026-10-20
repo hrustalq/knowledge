@@ -116,8 +116,15 @@ documents, search and verification alike.
 other two places a page is acted on in bulk. `pages/KnowledgeHealthPage.vue`
 and `components/health/`:
 
-- **Three tabs**, `?tab=`: **Pages**, **Settings** and, since #74,
-  **Quality** (the auditor's scores, [53](53-doc-quality.md)). The tab and the preset
+- **Tabs**, `?tab=`: **Pages**, **Settings**, since #74 **Quality** (the
+  auditor's scores, [53](53-doc-quality.md)) and, since #305, **Agents**:
+  `AgentOutcomesPanel`, the learning-loop ledger from `GET /v1/agent-outcomes`.
+  It is admin-only like its route, so a member's `?tab=agents` opens Pages. The
+  outcome of each finding and vote is derived on read by `outcomeFor`
+  (contracts) and its SQL twin `outcomeCaseSql`, which
+  `agent-outcomes.e2e-spec.ts` runs against each other in Postgres. Below
+  `AGENT_OUTCOME_MIN_RUNS` (20) runs a cell is a count ("4 of 9"), never a
+  rate. The tab and the preset
   (`?filter=`) are opening instructions, so a notification or a doc can point
   at "the unowned pages"; both are written back with `replace`, never `push`.
 - **The preset strip** is `HEALTH_FILTERS` plus _All_, each chip carrying its

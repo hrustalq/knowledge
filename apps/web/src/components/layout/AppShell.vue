@@ -15,8 +15,8 @@
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { Toaster } from '@/components/ui/sonner'
-import SearchSheet from '@/components/knowledge/SearchSheet.vue'
 import { useSidebarStore } from '@/stores/sidebar'
+import { useSearchUiStore } from '@/stores/search-ui'
 import { useAuthStore } from '@/stores/auth'
 import { useTemplatesStore } from '@/stores/templates'
 import AppSidebar from './AppSidebar.vue'
@@ -40,6 +40,21 @@ watch(
   () => templates.gallery.open,
   (open) => {
     if (open) galleryMounted.value = true
+  },
+)
+
+/**
+ * The search sheet, the same way: its filters, comboboxes and result renderer
+ * were a third of the chunks the shell preloaded on every first load (#279),
+ * for a surface nobody has opened yet.
+ */
+const SearchSheet = defineAsyncComponent(() => import('@/components/knowledge/SearchSheet.vue'))
+const searchUi = useSearchUiStore()
+const searchMounted = ref(false)
+watch(
+  () => searchUi.open,
+  (open) => {
+    if (open) searchMounted.value = true
   },
 )
 const sidebar = useSidebarStore()
@@ -179,7 +194,7 @@ watch(
         </div>
       </main>
     </div>
-    <SearchSheet />
+    <SearchSheet v-if="searchMounted" />
     <TemplateGalleryDialog v-if="galleryMounted" />
     <Toaster />
   </div>

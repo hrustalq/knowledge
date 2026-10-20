@@ -50,8 +50,13 @@ export function newTraceId(): string {
  * key stays, so a log still shows that a query token was sent. Case-insensitive
  * on the key; a malformed URL comes back with the same regex applied rather
  * than throwing, because a logging path must never fail a request.
+ *
+ * `code` and `state` are the OAuth callback pair (#297): the SSO callback and
+ * the GitHub App setup callback both arrive as `?code=…&state=…`, and a share
+ * site's `?code=` and the chat link's are single-use credentials too. Nothing
+ * uses either name for a value an operator needs to read.
  */
-const SECRET_QUERY_KEYS = /([?&](?:token|access_token|api_key)=)[^&#]*/gi;
+const SECRET_QUERY_KEYS = /([?&](?:token|access_token|api_key|code|state)=)[^&#]*/gi;
 
 export function redactUrl(url: string): string;
 export function redactUrl(url: string | undefined): string | undefined;

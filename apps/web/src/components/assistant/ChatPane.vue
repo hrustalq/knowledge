@@ -221,7 +221,7 @@ async function startNewThread() {
 
       <Button variant="ghost" size="sm" class="shrink-0" :disabled="assistant.sending" @click="startNewThread">
         <Plus class="size-3.5" />
-        <span class="hidden sm:inline">{{ t('chat.newChat') }}</span>
+        <span class="sr-only sm:not-sr-only">{{ t('chat.newChat') }}</span>
       </Button>
 
       <DropdownMenu v-if="assistant.activeThread">

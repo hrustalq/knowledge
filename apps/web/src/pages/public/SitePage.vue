@@ -238,7 +238,7 @@ async function signOut() {
             @click="askOpen = true"
           >
             <MessageCircleQuestion class="size-4" aria-hidden="true" />
-            <span class="hidden sm:inline">{{ t('siteReader.ask') }}</span>
+            <span class="sr-only sm:not-sr-only">{{ t('siteReader.ask') }}</span>
           </button>
 
           <nav v-if="site.theme.headerLinks.length" class="hidden items-center gap-4 text-sm md:flex">

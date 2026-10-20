@@ -3,11 +3,18 @@ import { BEAT_MS, createPageViewTracker, IDLE_MS, searchClickOf, TICK_MS } from 
 
 const SID = '55555555-5555-4555-8555-555555555555'
 
+const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0))
+
 function harness(noTrack = false) {
   const sent: { path: string; body: Record<string, unknown> }[] = []
-  const state = { now: 0, visible: true, ids: 0 }
+  const opened: string[] = []
+  const state = { now: 0, visible: true, ids: 0, fail: false }
   const tracker = createPageViewTracker({
-    send: (path, body) => sent.push({ path, body }),
+    send: (path, body) => {
+      sent.push({ path, body })
+      return state.fail ? Promise.reject(new Error('403 Forbidden')) : Promise.resolve()
+    },
+    opened: (id) => opened.push(id),
     visible: () => state.visible,
     now: () => state.now,
     newId: () => `v-${++state.ids}`,
@@ -22,7 +29,7 @@ function harness(noTrack = false) {
     }
   }
   const beats = () => sent.filter((s) => s.path.endsWith('/heartbeat')).map((s) => s.body.activeMs)
-  return { tracker, sent, state, pass, beats }
+  return { tracker, sent, opened, state, pass, beats }
 }
 
 describe('page-view tracker (#79)', () => {
@@ -36,6 +43,26 @@ describe('page-view tracker (#79)', () => {
     h.pass(60_000)
     expect(h.beats()).toEqual([15_000, 30_000, 45_000, 60_000])
     expect(h.sent.at(-1)?.path).toBe('/v1/analytics/views/v-1/heartbeat')
+  })
+
+  it('reports each opened view once its beacon is accepted, never for a heartbeat or a failure (#336)', async () => {
+    const h = harness()
+    h.tracker.open({ documentId: 'd-1', revisionId: null })
+    h.tracker.open({ documentId: 'd-1', revisionId: 'r-2' }) // the same view
+    h.pass(BEAT_MS * 3)
+    await flushPromises()
+    expect(h.opened).toEqual(['d-1'])
+
+    h.state.fail = true
+    h.tracker.open({ documentId: 'd-2', revisionId: null })
+    h.pass(BEAT_MS)
+    await flushPromises()
+    expect(h.opened).toEqual(['d-1'])
+
+    h.state.fail = false
+    h.tracker.open({ documentId: 'd-3', revisionId: null })
+    await flushPromises()
+    expect(h.opened).toEqual(['d-1', 'd-3'])
   })
 
   it('accrues nothing while the tab is hidden', () => {

@@ -133,8 +133,20 @@ neither platform says what the message was.
 | --- | --- |
 | `[SECRET_n]` | the credential shapes `findSecret` knows (`SECRET_PATTERNS`), first, since a token can contain a card or phone shape |
 | `[EMAIL_n]` | email addresses, case-folded for numbering |
+| `[PASSPORT_n]` | a RU passport, series and number (4 + 6 digits): after `паспорт`, `серия` or `passport` (within 20 characters, no digit between) in any common spacing — `4509 123456`, `45 09 № 123456`, `4509 номер 123456`, `4509123456`; with no such word, only the printed `45 09 123456` form |
+| `[SNILS_n]` | `112-233-445 95`, `112 233 445 95` or eleven bare digits that pass the SNILS checksum |
+| `[INN_n]` | ten or twelve bare digits that pass the INN check digits (organisation or person) |
 | `[CARD_n]` | 13–19 digits, spaces or dashes allowed, that pass Luhn |
 | `[PHONE_n]` | three-three-two-two shapes with an optional `+code` or `8`, so a date or time never fits |
+
+The table is the order the masker runs in. RU identity numbers come before
+cards and phones because bare ten or eleven digits are also a phone shape,
+and a checksum is the stronger claim: a phone number that happens to pass the
+INN or SNILS check is masked as one, which still masks it. A passport has no
+checksum, which is why it needs a context word unless it is written the way
+the passport prints it; a bare `4509 123456` is as likely an order or a batch
+number, and is left alone. Identity numbers are numbered by their digits, so
+`112-233-445 95` and `11223344595` are one `[SNILS_n]`.
 
 One masker numbers a value once, so the same address is the same placeholder
 everywhere it is used:
@@ -275,7 +287,8 @@ one save path, one dedupe and one inbox.
 - **Only a linked editor's reaction does anything.**
 - **An answer must cite a page** found under the asker's scope, or it is
   dropped.
-- **Masking is regex only.** RU identity numbers are #342.
+- **Masking is regex and checksums only.** A passport, which has no checksum,
+  needs a context word or the printed `45 09 123456` form (#342).
 - **The chat reply carries counts and a link only.**
 - **Decisions live here**, not in ADRs.
 
@@ -338,8 +351,9 @@ Captures are read and decided through the existing `/v1/captures` routes;
 
 - No automatic harvest (#340), no chat search (#339), no new sources (Slack,
   Teams and the rest #341, Google Drive #338).
-- No RU passport, SNILS or INN masking (#342), no named-entity detection, no
-  reversible masking.
+- No named-entity detection, no reversible masking. A passport mentioned with
+  its context word more than 20 characters (or a digit) away from the number
+  is not masked.
 - The harvest runs in the delivery's continuation, with no sweeper of its own.
   A deploy mid-harvest leaves the reading placeholder in the chat; the
   proposals already written stand.
@@ -350,7 +364,10 @@ Captures are read and decided through the existing `/v1/captures` routes;
 
 - Unit (`apps/api/test/`):
   - `chat-harvest.spec.ts`: the masker (each kind, stable numbering, dates
-    and non-Luhn numbers left alone, local phone shapes); `planCaptures`
+    and non-Luhn numbers left alone, local phone shapes; INN and SNILS
+    checksums, passport forms with and without context, order ids, dates, a
+    bare 4 + 6 number and 10/12 digits failing the checksum left alone, phones
+    and cards not read as identity numbers); `planCaptures`
     dropping an ungrounded term or an uncited answer; `HarvestService` with a
     capturing fake model (the prompt holds no fixture value, captures are
     written as the asker with the server origin, the rate limit is refused

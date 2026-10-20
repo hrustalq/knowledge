@@ -227,11 +227,12 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - `createI18nFor(locale)` is called **inside `createApp()`**, never at module scope, or concurrent SSR renders share a locale.
 - Use the `lib/format.ts` Intl wrappers — a locale-less `toLocale*` follows the host, which during SSR is the server: a hydration mismatch.
 - A preference the SSR pass must read before any JS runs is mirrored into a cookie (`kn_ws`, `kn_proj`, `kn_lang`, `kn_filterrail`).
-- The client's first render must use what the **server rendered with**, not what the client would pick: the locale comes from `<html lang>` (the server falls back to `Accept-Language`, which storage cannot see), and a component that renders *before* a later `onServerPrefetch` fills the store it reads (the rail's tree vs. a page's prefetch) waits for `onMounted` — the serialized state is the end of the render, not the moment it drew (#278).
+- The client's first render must use what the **server rendered with**, not what the client would pick: the locale comes from `<html lang>` (the server falls back to `Accept-Language`, which storage cannot see), and a component that renders *before* a later `onServerPrefetch` fills the store it reads (the rail's tree vs. a page's prefetch) waits for `onMounted` — the serialized state is the end of the render, not the moment it drew (#278). Data the shell needs is loaded *before* the render instead (`prefetchShell` in `entry-server.ts`, #279).
 - A map converted to hold message keys is only half the change — the render site must resolve them. A value from a known set still needs a fallback when the column is free text (`labelFor`).
 - `<img>` cannot send an `Authorization` header: authorize, then 302 to a signed URL. Cache-bust reused object keys with `?v=<updatedAt>`.
 - No favicons for third-party sites — never make a reader's browser request one.
 - `ResponsivePopover`: `HoverCard` under `(hover: hover)`, `Popover` otherwise. A link nested inside a `<button>` is invalid markup.
+- A store's in-flight dedupe keys its WeakMap by `toRaw(this)`: in dev, Pinia's devtools call every options-store action on a fresh Proxy, so `this` never matches (#279).
 - Fire-and-forget recorders (`ActivityService.record`, `AiUsageService.record`) never throw into a user request.
 - xstate wizards: invoke a child machine at the **root**, not inside a step (a step re-creates it on every entry), give it **no final state** if you may step back into it, and report both ends upward.
 

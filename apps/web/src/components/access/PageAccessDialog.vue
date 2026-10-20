@@ -118,11 +118,12 @@ async function loadCandidates() {
 
 // Each opening starts from the server's answer: last time's unsaved edit is
 // not this time's.
+// Immediate: a caller may mount this already open (TreeRowMenu, #279).
 watch(open, (isOpen) => {
   if (!isOpen) return
   tab.value = 'access-settings'
   void load()
-})
+}, { immediate: true })
 
 /* ------------------------------------------------------------ editing */
 

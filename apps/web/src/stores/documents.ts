@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { toRaw } from 'vue'
 import type {
   DocumentAncestorsResponse,
   DocumentCategory,
@@ -73,6 +74,10 @@ const INVALIDATE_WINDOW = 250
  * serializes its store into the page, so a marker for a fetch the SSR render
  * started would otherwise reach the browser describing a request that is
  * already over and will never land.
+ *
+ * Keyed by `toRaw(this)`, not `this`: in development Pinia's devtools plugin
+ * calls every action of an options store through a fresh Proxy of it, so a
+ * bare `this` never matched and each caller sent its own request (#279).
  */
 const revealing = new WeakMap<object, Map<string, Promise<DocumentTreeNode[]>>>()
 const childFetches = new WeakMap<object, Map<string, Promise<void>>>()
@@ -241,6 +246,14 @@ export const useDocumentsStore = defineStore('documents', {
     tree: [] as DocumentTreeNode[],
     treeLoaded: false,
     /**
+     * The tree was in the store before the server began rendering
+     * (entry-server's shell prefetch, #279), so everything that reads it drew
+     * its rows on the server too. Without it the rail cannot tell that case
+     * from a page's `onServerPrefetch` filling the tree in *after* the rail had
+     * drawn its skeleton (#278), and must hold the skeleton until mount.
+     */
+    treePrefetched: false,
+    /**
      * Archived pages are hidden by the API unless asked for (docs/features/39).
      * One switch for the tree and the list together — the rail shares the
      * tree, so it follows — and `rescope` is how the switch takes effect: the
@@ -362,7 +375,7 @@ export const useDocumentsStore = defineStore('documents', {
       // false. Without sharing the request the later answers land last and
       // reset `tree`/`expanded` *after* the open rows have already fetched
       // their children, stranding them open and empty.
-      const pending = treeFetches.get(this)
+      const pending = treeFetches.get(toRaw(this))
       if (pending) return pending
 
       const job = (async () => {
@@ -377,10 +390,10 @@ export const useDocumentsStore = defineStore('documents', {
         if (merged !== this.tree) this.tree = merged
         this.treeLoaded = true
       })().finally(() => {
-        treeFetches.delete(this)
+        treeFetches.delete(toRaw(this))
       })
 
-      treeFetches.set(this, job)
+      treeFetches.set(toRaw(this), job)
       return job
     },
 
@@ -390,7 +403,7 @@ export const useDocumentsStore = defineStore('documents', {
      * cheap thing to do rather than something you learn to avoid.
      */
     async fetchChildren(parentId: string, opts: { background?: boolean } = {}): Promise<void> {
-      const pending = inFlight(childFetches, this)
+      const pending = inFlight(childFetches, toRaw(this))
       const running = pending.get(parentId)
       if (running) return running
       // Fetched *and* still here is what makes re-expanding free. Fetched but
@@ -438,7 +451,11 @@ export const useDocumentsStore = defineStore('documents', {
      * tree the page may not be in our copy at all.
      */
     async revealPath(documentId: string): Promise<DocumentTreeNode[]> {
-      const pending = inFlight(revealing, this)
+      // Client-only. The rail and the breadcrumbs ask from immediate watchers,
+      // and a render does not wait for them: on the server the answer would
+      // land in the serialized state after the rows were drawn without it.
+      if (import.meta.env.SSR) return []
+      const pending = inFlight(revealing, toRaw(this))
       const running = pending.get(documentId)
       if (running) return running
 
@@ -650,16 +667,16 @@ export const useDocumentsStore = defineStore('documents', {
         this.invalidateQueued = true
         return Promise.resolve()
       }
-      const pending = invalidations.get(this)
+      const pending = invalidations.get(toRaw(this))
       if (pending) {
         clearTimeout(pending.timer)
         pending.resolve()
       }
       return new Promise<void>((resolve) => {
-        invalidations.set(this, {
+        invalidations.set(toRaw(this), {
           resolve,
           timer: setTimeout(() => {
-            invalidations.delete(this)
+            invalidations.delete(toRaw(this))
             // A drag that began inside the window: the guard above ran before
             // it started, so it is checked again here and handed to `endDrag`.
             if (this.dragging) {

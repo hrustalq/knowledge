@@ -244,6 +244,7 @@
         "domain-not-allowed": "This identity provider cannot sign in addresses on your domain.",
         "jit-disabled": "There is no account for you yet, and this provider does not create one. Ask an administrator to invite you.",
         "account-disabled": "This account is disabled.",
+        "exchange-invalid": "This sign-in link is invalid, expired or already used. Sign in again.",
         "failed": "Single sign-on is not available for this provider."
       },
       "domainEnforced": "Your organization requires single sign-on for this address, so a password cannot be used.",
@@ -3033,7 +3034,14 @@
     "displayNamePlaceholder": "Teammate",
     "initialPassword": "Initial password",
     "viaResetLink": "invite by email if empty",
-    "creating": "Creating…"
+    "creating": "Creating…",
+    "sessions": "Sessions",
+    "sessionsTitle": "Sessions of {name}",
+    "sessionsDesc": "Where {email} is signed in. A signed-out session has to log in again on its next request; API keys keep working.",
+    "sessionsNone": "No live sessions.",
+    "sessionsLoadFailed": "Could not load sessions",
+    "sessionsRevokeAll": "Sign out everywhere",
+    "sessionsRevokedAll": "Signed out of {n} session | Signed out of {n} sessions"
   },
   "glossary": {
     "title": "Glossary",

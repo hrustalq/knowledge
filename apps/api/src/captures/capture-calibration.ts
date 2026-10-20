@@ -215,7 +215,8 @@ export function thresholdGrid(from = 50, to = 98, step = 2): number[] {
   return grid;
 }
 
-function fnv(s: string): number {
+/** FNV-1a: a stable pick per id, so a re-run samples the same cases. */
+export function fnv(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);

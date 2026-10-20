@@ -7,6 +7,8 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -14,12 +16,17 @@ import {
   MaxLength,
   Min,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import {
   HEALTH_BULK_ACTIONS,
   HEALTH_BULK_MAX_IDS,
   HEALTH_FILTERS,
+  TRUST_WEIGHT_KEYS,
+  TRUST_WEIGHT_MAX,
+  TRUST_WEIGHT_MIN,
   VERIFICATION_NOTE_MAX_CHARS,
+  type TrustWeights,
   type HealthBulkAction,
   type HealthFilter,
 } from '@knowledge/contracts';
@@ -158,6 +165,24 @@ export class KnowledgeHealthSettingsQueryDto {
   workspaceId!: string;
 }
 
+/**
+ * A sparse map over TRUST_WEIGHTS (#305): a key left out keeps the code
+ * default. One loop decorates every state, so a new state in the contract is
+ * accepted here without a second list to forget.
+ */
+export class TrustWeightsDto implements Partial<Record<keyof TrustWeights, number>> {}
+for (const key of TRUST_WEIGHT_KEYS) {
+  for (const decorate of [
+    ApiPropertyOptional({ type: Number, minimum: TRUST_WEIGHT_MIN, maximum: TRUST_WEIGHT_MAX }),
+    IsOptional(),
+    IsNumber({ allowNaN: false, allowInfinity: false }),
+    Min(TRUST_WEIGHT_MIN, { message: vmsg('min') }),
+    Max(TRUST_WEIGHT_MAX, { message: vmsg('max') }),
+  ]) {
+    decorate(TrustWeightsDto.prototype, key);
+  }
+}
+
 /** Every field nullable: `null` resets that key to "inherit the env default". */
 export class UpdateKnowledgeHealthSettingsDto {
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'Days a stamp holds; 0 = never' })
@@ -192,4 +217,22 @@ export class UpdateKnowledgeHealthSettingsDto {
   @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.trustRanking !== undefined && o.trustRanking !== null)
   @IsBoolean()
   trustRanking?: boolean | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Reciprocal-rank-fusion constant; null = 60' })
+  @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.rrfK !== undefined && o.rrfK !== null)
+  @IsInt()
+  @Min(1, { message: vmsg('min') })
+  @Max(1000, { message: vmsg('max') })
+  rrfK?: number | null;
+
+  @ApiPropertyOptional({
+    type: TrustWeightsDto,
+    nullable: true,
+    description: 'Per-state search weights; a state left out keeps its default, null resets them all',
+  })
+  @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.trustWeights !== undefined && o.trustWeights !== null)
+  @IsObject()
+  @ValidateNested()
+  @Type(() => TrustWeightsDto)
+  trustWeights?: TrustWeightsDto | null;
 }

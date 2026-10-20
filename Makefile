@@ -132,6 +132,11 @@ backtest: ## Retrieval/pipeline backtest. ARGS="--generate --limit 120" | "--rep
 	$(API) run build
 	$(API) exec node dist/scripts/backtest.main.js $(ARGS)
 
+.PHONY: tune
+tune: ## Propose search knobs (rrfK, trust weights) and capture thresholds from the backtest datasets; writes no setting (#305). ARGS="--workspace <id>" | "--feedback fb.ndjson"
+	$(API) run build
+	$(API) exec node dist/scripts/backtest.main.js --tune $(ARGS)
+
 .PHONY: collab-load
 collab-load: ## Shared-draft load test against running APIs (#80). ARGS="--docs 50 --peers 5 --seconds 60 --api http://localhost:3000,http://localhost:3001"
 	$(API) exec node test/collab-load.ts $(ARGS)

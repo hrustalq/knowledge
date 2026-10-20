@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { KnowledgeHealthSettingsOverride, KnowledgeHealthSettingsValues } from '@knowledge/contracts';
+import { Prisma } from '@prisma/client';
+import type { KnowledgeHealthSettingsOverride, KnowledgeHealthSettingsValues, TrustWeights } from '@knowledge/contracts';
+import { SEARCH_RRF_K, TRUST_WEIGHTS } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -13,7 +15,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
  * it, and two of those must not import each other. The row is a sparse
  * override of the env block — `null` inherits — so an empty table reproduces
  * the env behaviour exactly, and the resolution is `COALESCE(row, env)` with no
- * clamping: env values here are defaults, not ceilings.
+ * clamping: env values here are defaults, not ceilings. The two search knobs
+ * (#305) default to code constants rather than env, and `trustWeights` merges
+ * per state, so overriding one weight leaves the others at theirs.
  */
 @Injectable()
 export class VerificationPolicyService {
@@ -29,6 +33,8 @@ export class VerificationPolicyService {
       inactiveAfterDays: this.config.get('PAGE_INACTIVE_AFTER_DAYS', { infer: true }),
       emptyMaxChars: this.config.get('EMPTY_PAGE_MAX_CHARS', { infer: true }),
       trustRanking: this.config.get('SEARCH_TRUST_RANKING', { infer: true }),
+      rrfK: SEARCH_RRF_K,
+      trustWeights: TRUST_WEIGHTS,
     };
   }
 
@@ -40,6 +46,8 @@ export class VerificationPolicyService {
       inactiveAfterDays: row?.inactiveAfterDays ?? null,
       emptyMaxChars: row?.emptyMaxChars ?? null,
       trustRanking: row?.trustRanking ?? null,
+      rrfK: row?.rrfK ?? null,
+      trustWeights: (row?.trustWeights as Partial<TrustWeights> | null) ?? null,
     };
   }
 
@@ -51,12 +59,19 @@ export class VerificationPolicyService {
       inactiveAfterDays: override.inactiveAfterDays ?? defaults.inactiveAfterDays,
       emptyMaxChars: override.emptyMaxChars ?? defaults.emptyMaxChars,
       trustRanking: override.trustRanking ?? defaults.trustRanking,
+      rrfK: override.rrfK ?? defaults.rrfK,
+      trustWeights: { ...defaults.trustWeights, ...override.trustWeights },
     };
   }
 
   /** Write the sparse row. Every key is optional; `null` resets that key to "inherit". */
   async update(workspaceId: string, patch: Partial<KnowledgeHealthSettingsOverride>): Promise<void> {
-    const data = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    const { trustWeights, ...rest } = patch;
+    const data = {
+      ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)),
+      // A JSON column spells "inherit" as SQL NULL, not as a JSON null.
+      ...(trustWeights !== undefined ? { trustWeights: trustWeights ? { ...trustWeights } : Prisma.DbNull } : {}),
+    };
     await this.prisma.knowledgeHealthSettings.upsert({
       where: { workspaceId },
       create: { workspaceId, ...data },

@@ -47,6 +47,20 @@ in the pull request that introduces them — see
   from `knowledge_search` that were downvoted. A capture dropped as a
   duplicate does not count. The key `mcp` is now reserved and cannot be used
   for a custom agent.
+- Search ranking can be tuned per workspace, and `make tune` proposes how
+  (#305). **Knowledge health → Settings** has a new **Search ranking** group:
+  the fusion constant (RRF k, default 60) and a weight for each page state
+  that trust-aware ranking multiplies scores by. Each shows what is asked for
+  and what applies; a weight left empty keeps its default, and each weight is
+  held between 0.1 and 1.25. `make tune ARGS="--workspace <id>"` replays the
+  workspace's votes (or `--feedback <file>`) and its pages' titles through
+  search once, then tries other values in memory. It proposes a change only
+  when it raises MRR on the votes, costs known-item recall@5 at most one
+  point, and also holds on a 30% holdout. It does the same for the capture
+  dedupe and amend thresholds, never accepting more dropped new facts or more
+  wrong-page amends than today. It prints the report and the `PATCH` bodies
+  to apply, appends the report to `logs/tune-<date>.jsonl`, and writes no
+  setting. With no override, search ranks exactly as before.
 
 ### Operations
 
@@ -78,6 +92,12 @@ in the pull request that introduces them — see
   with no backfill and survives a code rollback, since the previous release
   ignores the columns and never writes `derived`. After a rollback, derived learnings
   still show as proposed learnings and an admin can archive them. (#305)
+- Migration `20261124100000_search_knobs` adds two nullable columns to
+  `knowledge_health_settings`: `rrf_k` and `trust_weights`. It is additive
+  with no backfill, and null means the code default. It survives a code
+  rollback: the previous release ignores the columns and ranks with its
+  constants, so a saved override stops applying until the release returns.
+  No new env vars. (#305)
 
 ## [0.28.0] — 2026-10-20
 

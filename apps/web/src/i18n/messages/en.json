@@ -4349,7 +4349,21 @@
         "trustRanking": {
           "label": "Trust-aware ranking",
           "hint": "Multiply search scores by each page's verification state, so verified pages rank above outdated ones"
+        },
+        "rrfK": {
+          "label": "Fusion constant (RRF k)",
+          "hint": "How strongly a top rank in one search leg outweighs agreement between both legs. Lower favours the single best match, higher favours pages both legs found"
+        },
+        "trustWeights": {
+          "label": "Trust weights",
+          "hint": "What each page state multiplies a result's score by. An empty field keeps the default; Inactive applies on top of the state",
+          "inert": "Trust-aware ranking is off, so these weights change nothing until it is turned on.",
+          "range": "Each weight is between {min} and {max}."
         }
+      },
+      "ranking": {
+        "title": "Search ranking",
+        "intro": "How search orders its results. make tune measures these against your votes and proposes values; nothing here changes unless an admin saves it."
       }
     },
     "agents": {

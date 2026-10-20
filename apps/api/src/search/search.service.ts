@@ -25,9 +25,7 @@ import { loadRevisionStamps } from '../graph/revision-stamps.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
 import type { SearchDto } from './search.dto.js';
-
-/** Reciprocal-rank-fusion constant (standard k=60). */
-const RRF_K = 60;
+import { fuseHits, type SearchPool } from './ranking.js';
 
 @Injectable()
 export class SearchService {
@@ -56,8 +54,17 @@ export class SearchService {
    *
    * `caller` files the search in the analytics log (#79) and puts its id on
    * the response. Absent for a search nobody asked — the backtest replaying.
+   *
+   * `observe` hands `make tune` the candidate pool (#305): both legs and the
+   * state of every page they named, so it can re-rank the same retrieval under
+   * other knobs without searching again. Absent everywhere else.
    */
-  async search(dto: SearchDto, scope: AccessScope, caller?: AnalyticsCaller): Promise<SearchResponse> {
+  async search(
+    dto: SearchDto,
+    scope: AccessScope,
+    caller?: AnalyticsCaller,
+    observe?: (pool: SearchPool) => void,
+  ): Promise<SearchResponse> {
     const mode = dto.mode ?? 'hybrid';
     const k = dto.limit ?? 20;
     // Feature 02: with any metadata filter (category, project or tag),
@@ -143,7 +150,7 @@ export class SearchService {
     ]);
     let vectorHits = vectorHitsFirst;
     let textHits = textHitsFirst;
-    let hits = this.fuse(vectorHits, textHits, fetchK);
+    let hits = fuseHits(vectorHits, textHits, fetchK, settings.rrfK);
     let aclFiltered = 0;
 
     /**
@@ -220,26 +227,13 @@ export class SearchService {
     if (aclFiltered > 0 && kept.length < k && saturated && fetchK < maxFetch) {
       fetchK = Math.min(fetchK * 2, maxFetch);
       [[vectorHits], [textHits]] = await legs(fetchK);
-      hits = this.fuse(vectorHits, textHits, fetchK);
+      hits = fuseHits(vectorHits, textHits, fetchK, settings.rrfK);
       ({ docs, kept } = await visibleHits(hits));
       aclFiltered = hits.length - kept.length;
     }
 
-    const docIds = docs.map((d) => d.id);
-    const issues = await this.provenance.openIssueCounts(docIds);
     const docById = new Map(docs.map((d) => [d.id, d]));
-    const now = new Date();
-    const trustOf = new Map<string, DocumentTrust>();
-    for (const d of docs) {
-      const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
-      trustOf.set(d.id, {
-        status: verificationStateFor(d, headId, issues.get(d.id) ?? 0, now),
-        verifiedAt: d.verifiedAt?.toISOString() ?? null,
-        expiresAt: d.verificationExpiresAt?.toISOString() ?? null,
-        ownerId: d.ownerId,
-        inactive: isInactive(d.lastActivityAt, settings.inactiveAfterDays, now),
-      });
-    }
+    const trustOf = await this.trustOf(docs, settings.inactiveAfterDays);
 
     // Archived pages drop first, whatever the switch says: they are put away,
     // not demoted. Then the multiplicative weight, a re-sort, and only then
@@ -252,7 +246,7 @@ export class SearchService {
       .filter((h) => !states || states.has(trustOf.get(h.documentId)?.status ?? 'unverified'))
       .map((h) => {
         const trust = trustOf.get(h.documentId);
-        const weight = trustOn && trust ? trustWeight(trust.status, trust.inactive) : 1;
+        const weight = trustOn && trust ? trustWeight(trust.status, trust.inactive, settings.trustWeights) : 1;
         return { hit: h, score: h.score * weight, trust };
       });
     if (trustOn) weighted.sort((a, b) => b.score - a.score);
@@ -270,6 +264,20 @@ export class SearchService {
     if (at) await this.attachValidity(results);
 
     const recorded = record(results);
+    if (observe) {
+      // Every page either leg named, not only the fused head: another rrfK
+      // fuses a different head.
+      const pooled = await this.loadDocs([...new Set([...vectorHits, ...textHits].map((h) => h.documentId))], scope);
+      const pooledTrust = await this.trustOf(pooled, settings.inactiveAfterDays);
+      observe({
+        vectorHits,
+        textHits,
+        fetchK,
+        k,
+        trustOn,
+        pages: new Map(pooled.map((d) => [d.id, { ...pooledTrust.get(d.id)!, archived: d.archivedAt !== null }])),
+      });
+    }
 
     // Phase 4 hybrid mode: vectors find evidence, the graph expands it
     // (plan.md §12.7). Walk relation edges out from the hit documents.
@@ -350,6 +358,28 @@ export class SearchService {
     }
   }
 
+  /** What each page says about how much to trust it, by the same predicate every surface reads. */
+  private async trustOf(
+    docs: Awaited<ReturnType<SearchService['loadDocs']>>,
+    inactiveAfterDays: number,
+  ): Promise<Map<string, DocumentTrust>> {
+    const issues = await this.provenance.openIssueCounts(docs.map((d) => d.id));
+    const now = new Date();
+    return new Map(
+      docs.map((d) => {
+        const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
+        const trust: DocumentTrust = {
+          status: verificationStateFor(d, headId, issues.get(d.id) ?? 0, now),
+          verifiedAt: d.verifiedAt?.toISOString() ?? null,
+          expiresAt: d.verificationExpiresAt?.toISOString() ?? null,
+          ownerId: d.ownerId,
+          inactive: isInactive(d.lastActivityAt, inactiveAfterDays, now),
+        };
+        return [d.id, trust];
+      }),
+    );
+  }
+
   /** The PG rows the join reads, restricted to pages `scope` may open. */
   private loadDocs(docIds: string[], scope: AccessScope) {
     return this.prisma.document.findMany({
@@ -370,29 +400,6 @@ export class SearchService {
         branches: { select: { name: true, headRevisionId: true } },
       },
     });
-  }
-
-  /**
-   * Merge vector and BM25 rankings. Single-source results keep their native
-   * score (BM25 normalized to 0..1 by the max); two-source results use
-   * reciprocal rank fusion — raw cosine and BM25 scores are not comparable.
-   */
-  private fuse(vectorHits: ChunkHit[], textHits: ChunkHit[] | { chunkId: string; documentId: string; revisionId: string; text: string; headingPath: string[]; score: number }[], k: number): ChunkHit[] {
-    if (textHits.length === 0) return vectorHits.slice(0, k);
-    if (vectorHits.length === 0) {
-      const max = Math.max(...textHits.map((h) => h.score), 1e-9);
-      return textHits.slice(0, k).map((h) => ({ ...h, score: h.score / max }));
-    }
-    const fused = new Map<string, ChunkHit>();
-    const add = (list: { chunkId: string; documentId: string; revisionId: string; text: string; headingPath: string[] }[], rank: number, hit: (typeof list)[number]) => {
-      const existing = fused.get(hit.chunkId);
-      const increment = 1 / (RRF_K + rank + 1);
-      if (existing) existing.score += increment;
-      else fused.set(hit.chunkId, { ...hit, score: increment });
-    };
-    vectorHits.forEach((h, i) => add(vectorHits, i, h));
-    textHits.forEach((h, i) => add(textHits, i, h));
-    return [...fused.values()].sort((a, b) => b.score - a.score).slice(0, k);
   }
 
   /**

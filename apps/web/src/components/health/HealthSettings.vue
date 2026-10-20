@@ -13,12 +13,23 @@
  *
  * A viewer may read the policy; only an admin may save it, which is the
  * route's role too.
+ *
+ * The search-ranking group (#305) is the same contract for the two knobs
+ * `make tune` proposes: the RRF constant and the per-state trust weights,
+ * whose override is sparse per state. Their defaults are code constants.
  */
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import type { KnowledgeHealthSettingsOverride, KnowledgeHealthSettingsResponse } from '@knowledge/contracts'
+import {
+  TRUST_WEIGHT_KEYS,
+  TRUST_WEIGHT_MAX,
+  TRUST_WEIGHT_MIN,
+  type KnowledgeHealthSettingsOverride,
+  type KnowledgeHealthSettingsResponse,
+  type TrustWeights,
+} from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
@@ -48,18 +59,30 @@ const NUMERIC: readonly { key: NumericKey; unit: 'days' | 'chars'; max: number }
   { key: 'emptyMaxChars', unit: 'chars', max: 100_000 },
 ]
 
+type WeightKey = keyof TrustWeights
+const RRF_K_MAX = 1000
+
 /** The inputs: a string per numeric key (empty = inherit) and a three-way for the switch. */
-const form = reactive<Record<NumericKey, string> & { trustRanking: 'inherit' | 'on' | 'off' }>({
+const form = reactive<
+  Record<NumericKey, string> & { trustRanking: 'inherit' | 'on' | 'off'; rrfK: string; trustWeights: Record<WeightKey, string> }
+>({
   reviewIntervalDays: '',
   remindBeforeDays: '',
   inactiveAfterDays: '',
   emptyMaxChars: '',
   trustRanking: 'inherit',
+  rrfK: '',
+  trustWeights: Object.fromEntries(TRUST_WEIGHT_KEYS.map((k) => [k, ''])) as Record<WeightKey, string>,
 })
 
 function adopt(res: KnowledgeHealthSettingsResponse) {
   for (const { key } of NUMERIC) form[key] = res.override[key] === null ? '' : String(res.override[key])
   form.trustRanking = res.override.trustRanking === null ? 'inherit' : res.override.trustRanking ? 'on' : 'off'
+  form.rrfK = res.override.rrfK === null ? '' : String(res.override.rrfK)
+  for (const k of TRUST_WEIGHT_KEYS) {
+    const v = res.override.trustWeights?.[k]
+    form.trustWeights[k] = v === undefined ? '' : String(v)
+  }
 }
 watch(settings, (res) => res && adopt(res), { immediate: true })
 
@@ -70,6 +93,8 @@ const draft = computed<KnowledgeHealthSettingsOverride>(() => ({
   inactiveAfterDays: parse(form.inactiveAfterDays),
   emptyMaxChars: parse(form.emptyMaxChars),
   trustRanking: form.trustRanking === 'inherit' ? null : form.trustRanking === 'on',
+  rrfK: parse(form.rrfK),
+  trustWeights: draftWeights.value,
 }))
 function parse(raw: string): number | null {
   const trimmed = raw.trim()
@@ -78,10 +103,23 @@ function parse(raw: string): number | null {
   return Number.isInteger(n) && n >= 0 ? n : null
 }
 
+/** Only the states given a value; none at all is `null`, "inherit every default". */
+const draftWeights = computed<Partial<TrustWeights> | null>(() => {
+  const set = TRUST_WEIGHT_KEYS.flatMap((k) => {
+    const raw = form.trustWeights[k].trim()
+    return raw === '' ? [] : [[k, Number(raw)] as const]
+  })
+  return set.length ? Object.fromEntries(set) : null
+})
+const sameWeights = (a: Partial<TrustWeights> | null, b: Partial<TrustWeights> | null) =>
+  TRUST_WEIGHT_KEYS.every((k) => (a?.[k] ?? null) === (b?.[k] ?? null))
+
 const dirty = computed(() => {
   const current = settings.value?.override
   if (!current) return false
-  return (Object.keys(draft.value) as (keyof KnowledgeHealthSettingsOverride)[]).some((k) => draft.value[k] !== current[k])
+  return (Object.keys(draft.value) as (keyof KnowledgeHealthSettingsOverride)[]).some((k) =>
+    k === 'trustWeights' ? !sameWeights(draft.value.trustWeights, current.trustWeights) : draft.value[k] !== current[k],
+  )
 })
 
 function invalid(key: NumericKey, max: number): boolean {
@@ -90,7 +128,23 @@ function invalid(key: NumericKey, max: number): boolean {
   const n = Number(raw)
   return !Number.isInteger(n) || n < 0 || n > max
 }
-const anyInvalid = computed(() => NUMERIC.some(({ key, max }) => invalid(key, max)))
+const rrfKInvalid = computed(() => {
+  const raw = form.rrfK.trim()
+  if (raw === '') return false
+  const n = Number(raw)
+  return !Number.isInteger(n) || n < 1 || n > RRF_K_MAX
+})
+function weightInvalid(key: WeightKey): boolean {
+  const raw = form.trustWeights[key].trim()
+  if (raw === '') return false
+  const n = Number(raw)
+  return !Number.isFinite(n) || n < TRUST_WEIGHT_MIN || n > TRUST_WEIGHT_MAX
+}
+const anyInvalid = computed(
+  () => NUMERIC.some(({ key, max }) => invalid(key, max)) || rrfKInvalid.value || TRUST_WEIGHT_KEYS.some(weightInvalid),
+)
+const weightLabel = (key: WeightKey) => (key === 'inactive' ? t('verification.inactive') : t(`verification.state.${key}`))
+const weightOverridden = (key: WeightKey) => settings.value?.override.trustWeights?.[key] !== undefined
 
 /** What applies for a key, in words. */
 function appliesLabel(key: NumericKey, unit: 'days' | 'chars'): string {
@@ -197,6 +251,87 @@ async function save() {
         </Select>
       </div>
     </div>
+
+    <section class="space-y-2" aria-labelledby="health-ranking-title">
+      <div>
+        <h3 id="health-ranking-title" class="text-sm font-semibold">{{ t('health.settings.ranking.title') }}</h3>
+        <p class="mt-0.5 text-xs text-muted-foreground">{{ t('health.settings.ranking.intro') }}</p>
+      </div>
+
+      <div class="divide-y rounded-md border">
+        <div class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
+          <div class="min-w-0">
+            <label for="health-rrfK" class="text-sm font-medium">{{ t('health.settings.key.rrfK.label') }}</label>
+            <p class="text-xs text-muted-foreground">{{ t('health.settings.key.rrfK.hint') }}</p>
+            <p class="mt-1 text-xs">
+              <span class="text-muted-foreground">{{ t('health.settings.applies') }}</span>
+              {{ formatNumber(settings.effective.rrfK) }}
+              <span v-if="settings.override.rrfK !== null" class="ml-1 text-primary/80">{{ t('ai.overridden') }}</span>
+            </p>
+          </div>
+          <div class="space-y-1">
+            <Input
+              id="health-rrfK"
+              v-model="form.rrfK"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              :max="RRF_K_MAX"
+              step="1"
+              class="h-9"
+              :placeholder="formatNumber(settings.defaults.rrfK)"
+              :disabled="!props.canManage"
+              :aria-invalid="rrfKInvalid || undefined"
+              aria-describedby="health-rrfK-default"
+            />
+            <p id="health-rrfK-default" class="text-xs text-muted-foreground">
+              {{ t('health.settings.default', { value: formatNumber(settings.defaults.rrfK) }) }}
+            </p>
+          </div>
+        </div>
+
+        <fieldset class="space-y-3 px-4 py-3">
+          <div>
+            <legend class="text-sm font-medium">{{ t('health.settings.key.trustWeights.label') }}</legend>
+            <p class="text-xs text-muted-foreground">{{ t('health.settings.key.trustWeights.hint') }}</p>
+            <p v-if="!settings.effective.trustRanking" class="mt-1 text-xs text-muted-foreground">
+              {{ t('health.settings.key.trustWeights.inert') }}
+            </p>
+          </div>
+          <!-- Subgrid rows: a label that wraps (Russian runs long) pushes its
+               whole row of inputs down together instead of misaligning one. -->
+          <div class="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+            <div v-for="key in TRUST_WEIGHT_KEYS" :key="key" class="row-span-3 grid min-w-0 grid-rows-subgrid gap-y-1">
+              <label :for="`health-weight-${key}`" class="self-end text-xs font-medium">
+                {{ weightLabel(key) }}
+              </label>
+              <Input
+                :id="`health-weight-${key}`"
+                v-model="form.trustWeights[key]"
+                type="number"
+                inputmode="decimal"
+                :min="TRUST_WEIGHT_MIN"
+                :max="TRUST_WEIGHT_MAX"
+                step="0.05"
+                class="h-9 tabular-nums"
+                :placeholder="formatNumber(settings.defaults.trustWeights[key])"
+                :disabled="!props.canManage"
+                :aria-invalid="weightInvalid(key) || undefined"
+                :aria-describedby="`health-weight-${key}-applies`"
+              />
+              <p :id="`health-weight-${key}-applies`" class="text-xs tabular-nums">
+                <span class="text-muted-foreground">{{ t('health.settings.applies') }}</span>
+                ×{{ formatNumber(settings.effective.trustWeights[key]) }}
+                <span v-if="weightOverridden(key)" class="ml-1 text-primary/80">{{ t('ai.overridden') }}</span>
+              </p>
+            </div>
+          </div>
+          <p class="text-xs text-muted-foreground">
+            {{ t('health.settings.key.trustWeights.range', { min: formatNumber(TRUST_WEIGHT_MIN), max: formatNumber(TRUST_WEIGHT_MAX) }) }}
+          </p>
+        </fieldset>
+      </div>
+    </section>
 
     <div v-if="props.canManage" class="flex items-center gap-2">
       <Button type="submit" size="sm" :disabled="!dirty || anyInvalid || saving">

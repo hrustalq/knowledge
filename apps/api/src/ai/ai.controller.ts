@@ -575,6 +575,7 @@ export class AiController {
           ...(known ? { status: status as AgentLearningStatus } : {}),
         },
         (ids) => this.permissions.visibleDocumentIds(scope, ids),
+        scope.denied,
       ),
       promptLimit: this.learnings.promptLimit,
     };

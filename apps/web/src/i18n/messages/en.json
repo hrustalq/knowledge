@@ -2415,6 +2415,7 @@
         "archived": "Nothing archived."
       },
       "everyAgent": "Every agent",
+      "mcpTarget": "Agents over MCP (Claude Code, Cursor…)",
       "everyProject": "Every project",
       "agent": "Agent",
       "project": "Applies in",

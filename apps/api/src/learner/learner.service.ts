@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
-import type { AgentLearningArchiveCheck, AgentLearningEvidenceRef, Locale } from '@knowledge/contracts';
+import { MCP_LEARNING_TARGET, type AgentLearningArchiveCheck, type AgentLearningEvidenceRef, type Locale } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
@@ -24,6 +24,7 @@ import {
   qualifies,
   readCoachLearning,
   refKey,
+  refOf,
   targetKey,
   type DismissedFinding,
   type FoldCandidate,
@@ -54,6 +55,23 @@ interface FindingRow {
   dismissed_at: Date;
   locale: string;
 }
+
+interface McpFailureRow {
+  capture_id: string | null;
+  feedback_id: string | null;
+  project_id: string;
+  kind: string | null;
+  title: string | null;
+  detail: string | null;
+  dismissed_by: string;
+  dismissed_at: Date;
+}
+
+/**
+ * Who wrote a capture an MCP agent sent: not the in-app assistant and not a
+ * chat harvest (#82, `origin` set) — those are the platform's own agents.
+ */
+const MCP_CAPTURE_SQL = Prisma.sql`c.origin IS NULL AND COALESCE(c.session->>'client', '') NOT IN ('assistant', 'chat')`;
 
 export interface DerivationResult {
   proposed: number;
@@ -180,9 +198,95 @@ export class LearnerService {
     }));
   }
 
+  /**
+   * The `mcp` target's failures in the window (#305, phase 3), in the shape of
+   * a dismissed finding so they cluster the same way:
+   *
+   * - a capture an MCP agent sent that a person rejected in the inbox, or whose
+   *   merge request a person closed unmerged — the person is the activity row's
+   *   actor;
+   * - a downvote on an answer built from `knowledge_search` (`surface: 'mcp'`
+   *   with the search's `traceId`), its project the first cited page's.
+   *
+   * A `duplicate` capture is not here: dedupe worked, and counting it would
+   * teach agents to stop capturing. The ACL rule is the findings' rule: every
+   * page a row names — a capture's target, its payload's page ids, the page its
+   * merge request proposes, an answer's citations — exists here, is open to the
+   * whole workspace, and (but for a head-less proposed page) is listed; a
+   * capture's project is not restricted.
+   */
+  async mcpFailures(workspaceId: string, now = new Date()): Promise<DismissedFinding[]> {
+    const scope = clampToAudience(systemScope(workspaceId), await restrictedNodeIds(this.prisma, workspaceId), new Set());
+    const since = new Date(now.getTime() - this.windowDays * DAY_MS);
+    const denied = [...scope.denied];
+    const openPage = (id: Prisma.Sql, listed = true) => Prisma.sql`EXISTS (
+      SELECT 1 FROM documents d
+       WHERE d.workspace_id = ${workspaceId}::uuid AND d.id::text = ${id}
+         ${listed ? Prisma.sql`AND ${listedSql('d')}` : Prisma.empty} AND ${visibilitySql(scope, 'd')})`;
+    const idsIn = (json: Prisma.Sql) =>
+      Prisma.sql`jsonb_array_elements_text(CASE WHEN jsonb_typeof(${json}) = 'array' THEN ${json} ELSE '[]'::jsonb END)`;
+    const rows = await this.prisma.$queryRaw<McpFailureRow[]>`
+      SELECT c.id AS capture_id, NULL::uuid AS feedback_id, c.project_id, c.kind, c.title,
+             a.metadata->>'reason' AS detail, a.actor AS dismissed_by, a.created_at AS dismissed_at
+        FROM knowledge_captures c
+        CROSS JOIN LATERAL (
+              SELECT al.actor, al.created_at, al.metadata FROM activity_log al
+               WHERE al.workspace_id = c.workspace_id
+                 AND ((c.status = 'rejected' AND al.action = 'capture.rejected' AND al.subject_id = c.id)
+                   OR (c.status = 'proposed' AND al.action = 'merge-request.closed' AND al.subject_id = c.merge_request_id
+                       AND EXISTS (SELECT 1 FROM merge_requests mr WHERE mr.id = c.merge_request_id AND mr.status = 'closed')))
+               ORDER BY al.created_at DESC
+               LIMIT 1
+        ) AS a
+       WHERE c.workspace_id = ${workspaceId}::uuid
+         AND ${MCP_CAPTURE_SQL}
+         AND a.created_at >= ${since}::timestamptz
+         AND a.actor <> ''
+         ${denied.length ? Prisma.sql`AND NOT (c.project_id = ANY(${denied}::uuid[]))` : Prisma.empty}
+         AND (c.target_document_id IS NULL OR ${openPage(Prisma.sql`c.target_document_id::text`)})
+         AND (c.merge_request_id IS NULL OR EXISTS (
+               SELECT 1 FROM merge_requests mr WHERE mr.id = c.merge_request_id AND ${openPage(Prisma.sql`mr.document_id::text`, false)}))
+         AND NOT EXISTS (
+               SELECT 1 FROM (
+                 SELECT id FROM ${idsIn(Prisma.sql`c.payload->'citedDocumentIds'`)} AS x(id)
+                 UNION ALL SELECT id FROM ${idsIn(Prisma.sql`c.payload->'relatedDocumentIds'`)} AS y(id)
+                 UNION ALL SELECT c.payload->>'documentId' WHERE COALESCE(c.payload->>'documentId', '') <> ''
+               ) AS named(id)
+                WHERE NOT ${openPage(Prisma.sql`named.id`)})
+      UNION ALL
+      SELECT NULL::uuid, af.id, first_page.project_id, COALESCE(af.reason, 'other'), af.query,
+             af.comment, af.created_by::text, af.created_at
+        FROM answer_feedback af
+        CROSS JOIN LATERAL (
+              SELECT d.project_id FROM documents d
+               WHERE d.workspace_id = ${workspaceId}::uuid AND d.id::text = af.cited_document_ids->>0
+        ) AS first_page
+       WHERE af.workspace_id = ${workspaceId}::uuid
+         AND af.surface = 'mcp' AND af.kind = 'vote' AND af.rating = 'down'
+         AND COALESCE(af.trace_id, '') <> ''
+         AND af.created_at >= ${since}::timestamptz
+         AND jsonb_typeof(af.cited_document_ids) = 'array'
+         AND NOT EXISTS (SELECT 1 FROM ${idsIn(Prisma.sql`af.cited_document_ids`)} AS cited(id) WHERE NOT ${openPage(Prisma.sql`cited.id`)})
+       ORDER BY dismissed_at DESC
+       LIMIT ${MAX_FINDINGS}
+    `;
+    return rows.map((r) => ({
+      ...(r.capture_id ? { captureId: r.capture_id } : { feedbackId: r.feedback_id! }),
+      agentKey: MCP_LEARNING_TARGET,
+      projectId: r.project_id,
+      kind: r.kind ?? 'other',
+      title: r.title ?? '',
+      detail: r.detail ?? '',
+      dismissedBy: r.dismissed_by,
+      dismissedAt: r.dismissed_at,
+      // No run, so no run locale: the deployment's.
+      locale: this.locale,
+    }));
+  }
+
   async derive(workspaceId: string, now = new Date()): Promise<DerivationResult> {
     const result: DerivationResult = { proposed: 0, folded: 0, declined: 0 };
-    const findings = await this.dismissedFindings(workspaceId, now);
+    const findings = (await Promise.all([this.dismissedFindings(workspaceId, now), this.mcpFailures(workspaceId, now)])).flat();
     if (findings.length < this.t.minDismissals) return result;
 
     const groups = new Map<string, DismissedFinding[]>();
@@ -220,7 +324,7 @@ export class LearnerService {
           result.declined += 1;
           continue;
         }
-        const refs = cluster.map((f) => ({ runId: f.runId, findingIndex: f.findingIndex }));
+        const refs = cluster.map(refOf);
         const { agentKey, projectId } = cluster[0];
         // A draft saying what a proposed or active learning for the same agent
         // and project already says folds into that one.

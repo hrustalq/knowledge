@@ -1,4 +1,4 @@
-import { AGENT_LEARNING_MAX_CHARS, type AgentLearningEvidenceRef, type AgentLearningSideCounts } from '@knowledge/contracts';
+import { AGENT_LEARNING_MAX_CHARS, MCP_LEARNING_TARGET, type AgentLearningEvidenceRef, type AgentLearningSideCounts } from '@knowledge/contracts';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { cosine } from '../agents/coverage.js';
 
@@ -12,8 +12,12 @@ import { cosine } from '../agents/coverage.js';
  * for a cluster that already qualified and belongs to no existing learning.
  */
 
-/** One dismissed finding as the learner's query returns it — already past the ACL filter. */
-export interface DismissedFinding extends AgentLearningEvidenceRef {
+/**
+ * One failure as the learner's queries return it — already past the ACL
+ * filter: a dismissed finding of a built-in agent, or (agent `mcp`) an MCP
+ * agent's capture a person turned down or answer a person downvoted.
+ */
+export type DismissedFinding = AgentLearningEvidenceRef & {
   agentKey: string;
   /** The project of the first page it cites: what a derived learning is scoped to. */
   projectId: string;
@@ -24,7 +28,7 @@ export interface DismissedFinding extends AgentLearningEvidenceRef {
   dismissedAt: Date;
   /** Its run's locale, which the coach answers in. */
   locale: string;
-}
+};
 
 /** An existing learning a cluster may fold into. */
 export interface FoldCandidate {
@@ -46,7 +50,12 @@ const MAX_FINDING_CHARS = 600;
 /** Findings of one cluster shown to the coach. The rest add nothing a rule needs. */
 export const MAX_COACH_FINDINGS = 12;
 
-export const refKey = (ref: AgentLearningEvidenceRef): string => `${ref.runId}#${ref.findingIndex}`;
+export const refKey = (ref: AgentLearningEvidenceRef): string =>
+  'runId' in ref ? `${ref.runId}#${ref.findingIndex}` : 'captureId' in ref ? `capture:${ref.captureId}` : `feedback:${ref.feedbackId}`;
+
+/** Just the ref of a failure — what a learning's `evidence` stores. */
+export const refOf = (f: AgentLearningEvidenceRef): AgentLearningEvidenceRef =>
+  'runId' in f ? { runId: f.runId, findingIndex: f.findingIndex } : 'captureId' in f ? { captureId: f.captureId } : { feedbackId: f.feedbackId };
 
 /** The text a finding is embedded as — the same for the cluster and the calibration. */
 export function findingText(f: Pick<DismissedFinding, 'kind' | 'title' | 'detail'>): string {
@@ -131,7 +140,7 @@ export function foldByEvidence(cluster: readonly DismissedFinding[], candidates:
   if (!best) return { kind: 'new' };
   if (best.c.status === 'archived') return { kind: 'rejected', learningId: best.c.id };
   const have = new Set(best.c.evidence.map(refKey));
-  const added = cluster.filter((f) => !have.has(refKey(f))).map((f) => ({ runId: f.runId, findingIndex: f.findingIndex }));
+  const added = cluster.filter((f) => !have.has(refKey(f))).map(refOf);
   return { kind: 'fold', learningId: best.c.id, added };
 }
 
@@ -163,8 +172,9 @@ export function coachInput(agentKey: string, cluster: readonly DismissedFinding[
     .slice(0, MAX_COACH_FINDINGS)
     .map((f, i) => `${i + 1}. ${findingText(f).replace(/\n/g, ' — ')}`)
     .join('\n');
+  const who = agentKey === MCP_LEARNING_TARGET ? 'external agents connected over MCP (Claude Code, Cursor and others)' : agentKey;
   return (
-    `Agent: ${agentKey}\n` +
+    `Agent: ${who}\n` +
     `${cluster.length} findings of this agent, dismissed by ${new Set(cluster.map((f) => f.dismissedBy)).size} different people:\n` +
     wrapUntrusted(lines, 'coach', 'findings')
   );

@@ -202,3 +202,167 @@ describe('learner (e2e, #305)', () => {
     expect(counts.after.runs).toBe(2);
   });
 });
+
+/**
+ * #305 phase 3: the `mcp` target's failures in real PostgreSQL — the activity
+ * row that names who turned a capture down, the closed-unmerged merge request,
+ * the downvote by traceId, and the same "every named page open to the
+ * workspace" rule as findings. A duplicate capture is not a failure.
+ */
+describe('learner mcp failures (e2e, #305)', () => {
+  const WS = randomUUID();
+  const P = randomUUID();
+  const SECRET_P = randomUUID();
+  const OPEN = randomUUID();
+  const RESTRICTED = randomUUID();
+  const ALICE = randomUUID();
+  const BOB = randomUUID();
+  const now = new Date();
+  const ago = (days: number) => new Date(now.getTime() - days * 86_400_000);
+  const id = {
+    rejected: randomUUID(),
+    closed: randomUUID(),
+    duplicate: randomUUID(),
+    assistant: randomUUID(),
+    chat: randomUUID(),
+    restrictedTarget: randomUUID(),
+    restrictedCitation: randomUUID(),
+    secretProject: randomUUID(),
+    old: randomUUID(),
+    stillOpen: randomUUID(),
+    vote: randomUUID(),
+    voteNoTrace: randomUUID(),
+    voteRestricted: randomUUID(),
+    voteAssistant: randomUUID(),
+  };
+  const MR_CLOSED = randomUUID();
+  const MR_OPEN = randomUUID();
+
+  let prisma: PrismaService;
+  let learner: LearnerService;
+
+  beforeAll(async () => {
+    if (!process.env.DATABASE_URL) process.loadEnvFile('.env');
+    prisma = new PrismaService();
+    await prisma.$connect();
+    const config = { get: (key: string) => ({ LEARNER_WINDOW_DAYS: 30, I18N_DEFAULT_LOCALE: 'ru' })[key] };
+    learner = new LearnerService(prisma, {} as never, {} as never, {} as never, {} as never, {} as never, config as never);
+
+    await prisma.project.createMany({
+      data: [
+        { id: P, workspaceId: WS, name: 'e2e mcp learner' },
+        { id: SECRET_P, workspaceId: WS, name: 'e2e secret', restricted: true },
+      ],
+    });
+    await prisma.document.createMany({
+      data: [
+        { id: OPEN, workspaceId: WS, projectId: P, title: 'Open', path: `/${OPEN}/` },
+        { id: RESTRICTED, workspaceId: WS, projectId: P, title: 'Restricted', path: `/${RESTRICTED}/`, restricted: true, restrictedBy: [RESTRICTED] },
+      ],
+    });
+    const [main, src] = await Promise.all(
+      ['main', 'capture'].map((name) => prisma.documentBranch.create({ data: { documentId: OPEN, name } })),
+    );
+    const mr = (mrId: string, status: string) =>
+      prisma.mergeRequest.create({
+        data: { id: mrId, documentId: OPEN, sourceBranchId: src!.id, targetBranchId: main!.id, title: 'capture', authorId: ALICE, status, provenance: 'captured' },
+      });
+    await mr(MR_CLOSED, 'closed');
+    await mr(MR_OPEN, 'open');
+
+    const capture = (cid: string, over: Record<string, unknown> = {}) => ({
+      id: cid,
+      workspaceId: WS,
+      projectId: P,
+      kind: 'gotcha',
+      status: 'rejected',
+      title: `capture ${cid.slice(0, 4)}`,
+      payload: { body: 'b' },
+      contentHash: cid,
+      session: { client: 'claude-code' },
+      createdBy: ALICE,
+      ...over,
+    });
+    await prisma.knowledgeCapture.createMany({
+      data: [
+        capture(id.rejected),
+        capture(id.closed, { status: 'proposed', mergeRequestId: MR_CLOSED, targetDocumentId: OPEN }),
+        capture(id.stillOpen, { status: 'proposed', mergeRequestId: MR_OPEN }),
+        capture(id.duplicate, { status: 'duplicate' }),
+        capture(id.assistant, { session: { client: 'assistant' } }),
+        capture(id.chat, { session: { client: 'other' }, origin: { platform: 'telegram', chatTitle: null } }),
+        capture(id.restrictedTarget, { targetDocumentId: RESTRICTED }),
+        capture(id.restrictedCitation, { kind: 'answer', payload: { question: 'q', answer: 'a', citedDocumentIds: [OPEN, RESTRICTED] } }),
+        capture(id.secretProject, { projectId: SECRET_P }),
+        capture(id.old),
+      ] as never,
+    });
+    const rejected = (subjectId: string, actor: string, createdAt = ago(1), action = 'capture.rejected') => ({
+      workspaceId: WS,
+      actor,
+      action,
+      subjectId,
+      createdAt,
+      metadata: { reason: 'not a gotcha' },
+    });
+    await prisma.activityLog.createMany({
+      data: [
+        rejected(id.rejected, ALICE),
+        rejected(MR_CLOSED, BOB, ago(2), 'merge-request.closed'),
+        rejected(MR_OPEN, BOB, ago(2), 'merge-request.closed'),
+        rejected(id.duplicate, ALICE),
+        rejected(id.assistant, ALICE),
+        rejected(id.chat, ALICE),
+        rejected(id.restrictedTarget, ALICE),
+        rejected(id.restrictedCitation, ALICE),
+        rejected(id.secretProject, ALICE),
+        rejected(id.old, ALICE, ago(45)),
+      ],
+    });
+    const vote = (vid: string, over: Record<string, unknown> = {}) => ({
+      id: vid,
+      workspaceId: WS,
+      kind: 'vote',
+      surface: 'mcp',
+      rating: 'down',
+      reason: 'wrong',
+      query: 'how is billing rounded',
+      traceId: `trace-${vid}`,
+      citedDocumentIds: [OPEN],
+      createdBy: BOB,
+      ...over,
+    });
+    await prisma.answerFeedback.createMany({
+      data: [
+        vote(id.vote),
+        vote(id.voteNoTrace, { traceId: null }),
+        vote(id.voteRestricted, { citedDocumentIds: [OPEN, RESTRICTED] }),
+        vote(id.voteAssistant, { surface: 'assistant' }),
+      ] as never,
+    });
+  });
+
+  afterAll(async () => {
+    if (!prisma) return;
+    await prisma.answerFeedback.deleteMany({ where: { workspaceId: WS } });
+    await prisma.activityLog.deleteMany({ where: { workspaceId: WS } });
+    await prisma.knowledgeCapture.deleteMany({ where: { workspaceId: WS } });
+    await prisma.mergeRequest.deleteMany({ where: { documentId: OPEN } });
+    await prisma.documentBranch.deleteMany({ where: { documentId: OPEN } });
+    await prisma.document.deleteMany({ where: { workspaceId: WS } });
+    await prisma.project.deleteMany({ where: { workspaceId: WS } });
+    await prisma.$disconnect();
+  });
+
+  it('reads rejected captures, closed captured MRs and downvotes by traceId — and nothing else', async () => {
+    const rows = await learner.mcpFailures(WS, now);
+    const refs = rows.map((r) => ('captureId' in r ? r.captureId : 'feedbackId' in r ? r.feedbackId : 'run')).sort();
+    expect(refs).toEqual([id.rejected, id.closed, id.vote].sort());
+    expect(rows.every((r) => r.agentKey === 'mcp' && r.projectId === P && r.locale === 'ru')).toBe(true);
+    const byRef = new Map(rows.map((r) => [('captureId' in r ? r.captureId : 'feedbackId' in r ? r.feedbackId : ''), r]));
+    // Who turned it down is the activity row's actor; the reason is the detail.
+    expect(byRef.get(id.rejected)).toMatchObject({ dismissedBy: ALICE, detail: 'not a gotcha' });
+    expect(byRef.get(id.closed)).toMatchObject({ dismissedBy: BOB });
+    expect(byRef.get(id.vote)).toMatchObject({ dismissedBy: BOB, kind: 'wrong', title: 'how is billing rounded' });
+  });
+});

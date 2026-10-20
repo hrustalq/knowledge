@@ -342,6 +342,51 @@ shows their evidence. A finding is titled only when the viewer can open every
 page it cites. The rest count as "+N not visible to you", without titles. A
 flagged learning shows its before/after counts with **Archive** and **Keep**.
 
+### Learnings for MCP agents (#305, phase 3)
+
+External agents connected over MCP (Claude Code, Cursor and the rest) are a
+learning target, `mcp` (`MCP_LEARNING_TARGET`), not an agent. It is in
+`LEARNING_TARGETS`, which only learnings code reads, and not in
+`BUILT_IN_AGENT_KEYS`, so the registry, the agent UI and `resolveFor` never see
+it. A custom agent may not take the key.
+
+**Delivery.** `McpService.instructionsFor` appends the caller's active `mcp`
+learnings to `MCP_INSTRUCTIONS`, and `knowledge://skill` (plus `GET
+/v1/mcp/skill` and the `guide` prompt) gets the same list as a **Team
+guidance** section. One renderer, `renderMcpLearnings`, writes both.
+
+- Per workspace the caller reaches: workspace-wide `mcp` learnings, plus those
+  for a project it can see. A key narrowed to projects gets only those
+  projects' learnings.
+- Learnings for every agent (`agent_key` NULL) are not included. They were
+  written for the platform's own agents.
+- The budget and the derived/manual split are `choosePromptLearnings`, as for
+  any agent.
+- Instructions travel only on `initialize`, so the HTTP controller reads
+  learnings only for that message. A failed read falls back to the static
+  instructions. The stdio server reads them once at startup.
+
+**Failures.** `LearnerService.mcpFailures` feeds the same clustering as agent
+findings, under agent `mcp`:
+
+- a capture an MCP agent sent (not the assistant's, not a chat harvest) that
+  a person rejected in the inbox, or whose merge request a person closed
+  unmerged. The person is the `activity_log` actor (`capture.rejected`,
+  `merge-request.closed`), and a reject reason becomes the detail;
+- a downvote on an answer an MCP agent built from `knowledge_search`
+  (`surface = 'mcp'` with a `trace_id`), scoped to the first cited page's
+  project.
+
+A `duplicate` capture is not a failure: dedupe worked, and counting it would
+teach agents to stop capturing. The ACL rule is the findings' rule, in the
+query: every page a row names (a capture's target, the page ids in its payload,
+the page its merge request proposes, an answer's citations) is open to the
+whole workspace, and a capture's project is not restricted. Evidence stores
+`{ captureId }` or `{ feedbackId }` next to `{ runId, findingIndex }`.
+`listForViewer` titles a capture only when the viewer may see its project and
+the pages it names (the captures inbox's rule), and an answer only when the
+viewer may open every page it cites.
+
 ### Calibration
 
 `make backtest ARGS="--learner"` measures the threshold for the configured

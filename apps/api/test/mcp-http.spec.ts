@@ -10,7 +10,9 @@ import { AclGuard } from '../src/auth/acl.guard.js';
 import { READ_KEY_OK_META, type AccessSpec } from '../src/auth/access.decorator.js';
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { McpService, type McpExtras } from '../src/mcp/mcp.service.js';
-import { CAPTURE_TOOLS, WRITE_TOOLS, settleTools } from '../src/mcp/mcp-tools.js';
+import type { AgentLearning } from '@prisma/client';
+import { CAPTURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, settleTools } from '../src/mcp/mcp-tools.js';
+import { choosePromptLearnings } from '../src/ai/agent-learnings.service.js';
 import { renderSkill } from '../src/mcp/skill.js';
 import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
 import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
@@ -268,6 +270,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     learnings: {
       list: vi.fn(async (_ws: string, filter: { status?: string }) => [{ id: 'l-1', text: 'Cite the MR id', status: filter.status }]),
       create: vi.fn(async (input: { text: string; status: string }) => ({ id: 'l-2', text: input.text, status: input.status })),
+      forPrompt: vi.fn(async (): Promise<AgentLearning[]> => []),
     },
     captures: {
       capture: vi.fn(async (req: { kind: string }) => ({ captureId: 'c-1', state: 'proposed', outcome: 'new-page', kind: req.kind })),
@@ -1373,5 +1376,84 @@ describe('repo wiki tools (docs/features/46)', () => {
     });
     expect(refused.isError).toBe(true);
     expect(viewer.repoWiki.regenerate).not.toHaveBeenCalled();
+  });
+});
+
+describe('mcp learnings (#305, phase 3)', () => {
+  const BILLING = '44444444-4444-4444-8444-444444444444';
+  const OPS = '55555555-5555-4555-8555-555555555555';
+  const row = (over: Partial<AgentLearning>) => ({ workspaceId: WS_A, agentKey: 'mcp', projectId: null, sourceKind: 'manual', ...over }) as AgentLearning;
+  const rows = [
+    row({ id: 'l-ws', text: 'Pass projectIds to knowledge_search.' }),
+    row({ id: 'l-billing', projectId: BILLING, sourceKind: 'derived', text: 'Billing answers cite the tariff page.' }),
+    row({ id: 'l-ops', projectId: OPS, text: 'Ops runbooks live under /ops.' }),
+    row({ id: 'l-every', agentKey: null, text: 'Be brief.' }),
+    row({ id: 'l-reviewer', agentKey: 'reviewer', text: 'Reviewer only.' }),
+  ];
+
+  /** A service whose learnings are the real selection over `rows`, and whose caller reaches Billing and Ops. */
+  function withLearnings(projectIds: string[] | null) {
+    const s = service(accessWith('viewer'));
+    s.learnings.forPrompt.mockImplementation(async (audience: Parameters<typeof choosePromptLearnings>[1]) =>
+      choosePromptLearnings(rows, audience, 20),
+    );
+    const principal = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A, projectIds });
+    vi.spyOn(s.mcp, 'whoami').mockResolvedValue({
+      userId: principal.userId,
+      email: principal.email,
+      displayName: principal.displayName,
+      mode: 'api-key',
+      apiKey: { scope: 'read', workspaceId: WS_A, projectIds },
+      workspaces: [
+        { workspaceId: WS_A, name: 'Eng', role: 'viewer', projects: [{ projectId: BILLING, name: 'Billing' }, { projectId: OPS, name: 'Ops' }] },
+      ],
+    });
+    return { ...s, principal };
+  }
+
+  it("reach initialize's instructions over HTTP, and a project-narrowed key sees only its project's", async () => {
+    const narrowed = withLearnings([BILLING]);
+    const { client, close } = await overHttp(narrowed.mcp, narrowed.principal);
+    try {
+      const text = client.getInstructions() ?? '';
+      expect(text.startsWith(MCP_INSTRUCTIONS)).toBe(true);
+      expect(text).toContain('Team guidance');
+      expect(text).toContain('Workspace "Eng":');
+      expect(text).toContain('- Pass projectIds to knowledge_search.');
+      expect(text).toContain('- (in project "Billing") Billing answers cite the tariff page.');
+      expect(text).not.toContain('Ops runbooks');
+      // Every-agent and other agents' learnings are the platform's own agents'.
+      expect(text).not.toContain('Be brief.');
+      expect(text).not.toContain('Reviewer only.');
+    } finally {
+      await close();
+    }
+
+    const whole = withLearnings(null);
+    expect(await whole.mcp.instructionsFor(whole.principal)).toContain('(in project "Ops") Ops runbooks live under /ops.');
+  });
+
+  it('render into knowledge://skill under a Team guidance section', async () => {
+    const narrowed = withLearnings([BILLING]);
+    const md = await narrowed.mcp.skillFor(narrowed.principal);
+    expect(md).toContain('## Team guidance');
+    expect(md).toContain('### Eng\n\n- Pass projectIds to knowledge_search.\n- *In Billing:* Billing answers cite the tariff page.');
+    expect(md.indexOf('## Team guidance')).toBeLessThan(md.indexOf('## Rules'));
+    expect(md).not.toContain('Ops runbooks');
+  });
+
+  it('leave the instructions and the skill exactly as before when none applies', async () => {
+    const s = service(accessWith('viewer'));
+    const principal = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A });
+    vi.spyOn(s.mcp, 'whoami').mockResolvedValue({
+      userId: principal.userId,
+      email: principal.email,
+      displayName: principal.displayName,
+      mode: 'api-key',
+      apiKey: { scope: 'read', workspaceId: WS_A, projectIds: null },
+      workspaces: [{ workspaceId: WS_A, name: 'Eng', role: 'viewer', projects: [] }],
+    });
+    expect(await s.mcp.instructionsFor(principal)).toBe(MCP_INSTRUCTIONS);
+    expect(await s.mcp.skillFor(principal)).not.toContain('Team guidance');
   });
 });

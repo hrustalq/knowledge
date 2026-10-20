@@ -1,3 +1,4 @@
+import { HttpException } from '@nestjs/common';
 import type { McpServer, RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpToolSummary } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
@@ -147,8 +148,32 @@ function timed(tool: string, cb: ToolCallback, onCall: (call: RecordedToolCall) 
       return result;
     } catch (e) {
       finish(false, e instanceof Error ? e.constructor.name : 'unknown');
+      const envelope = toolErrorEnvelope(e);
+      if (envelope) return envelope;
       throw e;
     }
+  };
+}
+
+/**
+ * A refusal's flat extras, on the tool result as REST puts them in `details`
+ * (#300). The SDK turns a throw into its message alone, so an agent refused
+ * by enforced SSO learned neither `reason: 'ssoRequired'` nor the providers to
+ * sign in through. The message stays the first block, unchanged; an exception
+ * with no extras is still thrown and reaches the client exactly as before.
+ */
+function toolErrorEnvelope(e: unknown): { content: { type: 'text'; text: string }[]; isError: true } | null {
+  if (!(e instanceof HttpException)) return null;
+  const body = e.getResponse();
+  if (typeof body !== 'object' || body === null) return null;
+  const { statusCode: _s, error: _e, message: _m, code: _c, ...details } = body as Record<string, unknown>;
+  if (!Object.keys(details).length) return null;
+  return {
+    content: [
+      { type: 'text', text: e.message },
+      { type: 'text', text: JSON.stringify({ statusCode: e.getStatus(), message: e.message, details }) },
+    ],
+    isError: true,
   };
 }
 

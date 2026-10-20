@@ -432,6 +432,14 @@ in the pull request that introduces them — see
   so the edge's 4-hour default applied; they are now cached for a year as
   `immutable`. The HTML shells and the favicon are revalidated on every use,
   and a member's rendered page is `private, no-cache`.
+- An MCP tool call refused with structured reasons now carries them (#300).
+  Under enforced SSO, an agent's tool error said only "requires single
+  sign-on": it never got `reason: 'ssoRequired'` or the providers to sign in
+  through, which REST puts in `details`. A refused tool call now returns the
+  message as before, followed by a second text block
+  `{ statusCode, message, details }` with the same `details` REST sends. This
+  applies to every refusal that carries extras, such as a page permission's
+  `canRequestAccess`; errors without extras are unchanged.
 - `/robots.txt` on the app's own host returned the app's HTML page (#277). It
   is now plain text that keeps crawlers out of the member app and lets them
   into path-mode published sites under `/pub/`. A site's own `robots.txt` is

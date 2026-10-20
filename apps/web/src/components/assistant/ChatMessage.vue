@@ -14,7 +14,7 @@ import { useRouter } from 'vue-router'
 import { BookmarkCheck, BookmarkPlus, Check, Copy, Pencil, RotateCcw, Sparkles, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type { AssistantMessageInfo, AssistantUiBlock, CaptureResult } from '@knowledge/contracts'
-import { assistantSourceKey, isWebSource } from '@knowledge/contracts'
+import { assistantSourceHref, assistantSourceKey, isChatSource, isPageSource, isWebSource } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import GenerativeUiBlock from '@/components/knowledge/GenerativeUiBlock.vue'
@@ -90,8 +90,8 @@ function onRendered(root: HTMLElement) {
     const source = sourceByCite(props.message.sources, label)
     if (!source) return
     e.preventDefault()
-    if (isWebSource(source)) window.open(source.url, '_blank', 'noopener,noreferrer')
-    else void router.push(sourceHref(source))
+    if (isWebSource(source) || (isChatSource(source) && source.url)) window.open(assistantSourceHref(source, ''), '_blank', 'noopener,noreferrer')
+    else void router.push(isPageSource(source) ? sourceHref(source) : assistantSourceHref(source, ''))
   })
 }
 
@@ -128,7 +128,7 @@ async function copy() {
 // citation is not a page anyone here can review. Editors only — it opens a
 // merge request in the reader's name.
 const auth = useAuthStore()
-const canSave = computed(() => auth.canEdit && props.message.sources.some((s) => !isWebSource(s)))
+const canSave = computed(() => auth.canEdit && props.message.sources.some(isPageSource))
 const saving = ref(false)
 const saved = ref<CaptureResult | null>(null)
 

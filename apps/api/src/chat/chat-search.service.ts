@@ -47,6 +47,11 @@ export class ChatSearchService {
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
   ) {}
 
+  /** Whether the workspace has any searchable group at all — what decides if the tools are offered. */
+  async anySearchable(workspaceId: string): Promise<boolean> {
+    return (await this.prisma.chatChannelBinding.count({ where: { workspaceId, searchableAt: { not: null } }, take: 1 })) > 0;
+  }
+
   /** The searchable bindings of the scope's workspace this caller may read, narrowed by the query's filters. */
   async readableBindings(scope: AccessScope, filter: Pick<ChatSearchQuery, 'projectIds' | 'bindingIds'> = {}) {
     const bindings = await this.prisma.chatChannelBinding.findMany({

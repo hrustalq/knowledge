@@ -91,6 +91,9 @@ export const READ_TOOL_NAMES = new Set([
   // Community summaries for broad questions (#81). Reads the graph's
   // communities; changes nothing.
   'global_overview',
+  // Searchable groups' chat (#339). Offered only when `definitions({ chat })`
+  // asks for it, so a background agent never sees it.
+  'search_chat',
 ]);
 
 /**

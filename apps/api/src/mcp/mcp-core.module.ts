@@ -32,6 +32,7 @@ import { TemporalCoreModule } from '../temporal/temporal-core.module.js';
 import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
 import { CommunitiesCoreModule } from '../communities/communities-core.module.js';
 import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
+import { ChatSearchCoreModule } from '../chat/chat-search-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -104,6 +105,8 @@ import { McpService } from './mcp.service.js';
     ConflictsCoreModule,
     // knowledge_global_overview (#81). Controller-free.
     CommunitiesCoreModule,
+    // knowledge_search_chat (#339). Controller-free.
+    ChatSearchCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

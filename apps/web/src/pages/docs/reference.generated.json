@@ -5903,6 +5903,36 @@
       ]
     },
     {
+      "name": "knowledge_search_chat",
+      "description": "Search what people said in the team chats (Telegram, Time, Mattermost) this workspace made searchable. Returns windows of messages — masked, authors as author-1, author-2… — with the chat, platform and time span, from chats you may read only. A chat is not a page: nobody reviewed it. Prefer a page when one answers, and when you rely on a chat say which and when.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "query",
+          "optional": false
+        },
+        {
+          "name": "limit",
+          "optional": true
+        },
+        {
+          "name": "projectIds",
+          "optional": true
+        },
+        {
+          "name": "from",
+          "optional": true
+        },
+        {
+          "name": "to",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_share_page",
       "description": "Create a public, read-only link to a page (docs/features/43) that anyone with the URL can open without signing in — only when a person asked for one. includeSubtree also shares every page under it. allowDownload lets readers download it as ZIP/HTML/PDF (off unless asked for). Without expiresInDays the link never expires, which most workspaces only allow with a password. Fails with 403 when the workspace has sharing switched off. Returns the URL; revoke it from the page's Share menu.",
       "inputs": [

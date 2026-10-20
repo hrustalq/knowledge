@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { AssistantSource, SearchResult, SourceProvenance, SourceVerificationState } from '@knowledge/contracts';
-import { isWebSource, OPEN_KNOWLEDGE_ISSUE_STATUSES, verificationStateFor } from '@knowledge/contracts';
+import { isPageSource, OPEN_KNOWLEDGE_ISSUE_STATUSES, verificationStateFor } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 /**
@@ -143,14 +143,14 @@ export class ProvenanceService {
    * citation says what the reader will open, which is the head.
    */
   async decorateSources(workspaceId: string, sources: readonly AssistantSource[]): Promise<AssistantSource[]> {
-    const pages = sources.filter((s) => !isWebSource(s));
+    const pages = sources.filter(isPageSource);
     const map = await this.forDocuments(
       workspaceId,
-      pages.map((s) => (s as { documentId: string }).documentId),
+      pages.map((s) => s.documentId),
     );
     const out: AssistantSource[] = [];
     for (const s of sources) {
-      if (isWebSource(s)) {
+      if (!isPageSource(s)) {
         out.push(s);
         continue;
       }

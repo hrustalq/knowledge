@@ -1578,7 +1578,10 @@
         "curated": "Curated relation",
         "code": "Derived from code",
         "spec": "From the API spec"
-      }
+      },
+      "chatSpan": "{from} – {to}",
+      "openChat": "Open in the chat",
+      "openChatSearch": "Open chat search"
     },
     "saveToKb": {
       "label": "Save to knowledge base",
@@ -1830,7 +1833,8 @@
     "copyMessage": "Copy message",
     "copyReply": "Copy reply",
     "dictateMessage": "Dictate a message",
-    "modelDefault": "Default"
+    "modelDefault": "Default",
+    "fromChat": "From chat"
   },
   "ai": {
     "excludesCalls": "excludes {calls} with no price",
@@ -3526,6 +3530,10 @@
     "edit_draft": {
       "running": "Writing into the page",
       "done": "Wrote into the page"
+    },
+    "search_chat": {
+      "running": "Searching team chats",
+      "done": "Searched team chats"
     }
   },
   "entityType": {

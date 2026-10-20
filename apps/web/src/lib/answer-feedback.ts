@@ -12,7 +12,7 @@ import type {
   KnowledgeIssueKind,
   KnowledgeIssueSurface,
 } from '@knowledge/contracts'
-import { isWebSource } from '@knowledge/contracts'
+import { isPageSource } from '@knowledge/contracts'
 
 /** What the component is rating: a persisted reply, or a one-shot `/ask` answer the API never stored. */
 export type FeedbackTarget =
@@ -101,12 +101,12 @@ export function reportKindFor(reason: AnswerFeedbackReason | null): KnowledgeIss
   return null
 }
 
-/** The pages a down-vote may report: cited workspace pages, once each. A web source has no page to report against. */
+/** The pages a down-vote may report: cited workspace pages, once each. A web or chat source has no page to report against. */
 export function reportablePages(sources: readonly AssistantSource[]): Array<{ documentId: string; title: string; revisionId?: string }> {
   const seen = new Set<string>()
   const out: Array<{ documentId: string; title: string; revisionId?: string }> = []
   for (const s of sources) {
-    if (isWebSource(s) || seen.has(s.documentId)) continue
+    if (!isPageSource(s) || seen.has(s.documentId)) continue
     seen.add(s.documentId)
     out.push({ documentId: s.documentId, title: s.title, ...(s.revisionId ? { revisionId: s.revisionId } : {}) })
   }

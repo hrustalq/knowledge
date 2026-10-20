@@ -306,6 +306,10 @@ not. ${toolRef('knowledge_list_release_tags')} names the instants worth asking a
 For a broad question across everything ("what are our main risks?"), ${toolRef('knowledge_global_overview')}
 returns the communities of related pages closest to it, each with a summary. Read and cite the pages it names.
 
+What was said but never written down may be in a team chat a workspace made searchable:
+${toolRef('knowledge_search_chat')} returns masked windows of messages from the chats you may read. A chat is not a
+page — nobody reviewed it — so prefer a page that answers, and name the chat and the date when you rely on one.
+
 ### Repositories
 
 A codebase connector documents a repository from its code. ${toolRef('knowledge_list_connectors')} names them;

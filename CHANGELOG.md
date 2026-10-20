@@ -43,20 +43,6 @@ in the pull request that introduces them — see
 
 ### Added
 
-- Knowledge health has an **Agents** tab for workspace admins, showing what
-  became of each agent's output (#305). A finding counts as accepted when the
-  merge request it was proposed as merged, or when nobody dismissed it within
-  14 days. It counts as dismissed when a person dismissed it or closed that
-  merge request. An upvoted answer counts as accepted and a downvoted one as
-  downvoted. Everything else is pending. Each row can be split by prompt hash
-  or by model. With fewer than 20 runs a cell shows a count ("4 of 9") rather
-  than a percentage. The same figures are at `GET /v1/agent-outcomes`
-  (admin). To make the split possible, every new agent run now records its
-  provider, model, a hash of its trusted prompt (instructions, skills,
-  styleguide and learnings, never page content) and the learnings it was
-  given. Every model call made during a run records the run, and every answer
-  vote records the model that wrote the answer, where the server knows it.
-  Nothing else changes: outcomes are computed when read and never stored.
 - Chat harvests now mask Russian identity numbers before any model reads a
   thread, as they already masked emails, phones and cards. An INN (10 or 12
   digits) and a SNILS (`112-233-445 95` or eleven digits) are masked as
@@ -139,6 +125,20 @@ in the pull request that introduces them — see
   and `DELETE /v1/documents/:id/drafts/:branchId`. `POST /:id/revisions` takes
   optional `collabDraftId` and `draftSnapshot`. Revisions in API responses now
   carry `coAuthorIds`, an empty list unless they came from a shared draft.
+- Knowledge health has an **Agents** tab for workspace admins, showing what
+  became of each agent's output (#305). A finding counts as accepted when the
+  merge request it was proposed as merged, or when nobody dismissed it within
+  14 days. It counts as dismissed when a person dismissed it or closed that
+  merge request. An upvoted answer counts as accepted and a downvoted one as
+  downvoted. Everything else is pending. Each row can be split by prompt hash
+  or by model. With fewer than 20 runs a cell shows a count ("4 of 9") rather
+  than a percentage. The same figures are at `GET /v1/agent-outcomes`
+  (admin). To make the split possible, every new agent run now records its
+  provider, model, a hash of its trusted prompt (instructions, skills,
+  styleguide and learnings, never page content) and the learnings it was
+  given. Every model call made during a run records the run, and every answer
+  vote records the model that wrote the answer, where the server knows it.
+  Nothing else changes: outcomes are computed when read and never stored.
 - The editor assistant's suggestions are shared in a co-edited page (#80,
   phase 5). Everyone in the draft sees a suggestion as it is written, credited
   to the agent and to the person who asked ("Reviewer · for Ada"), and anyone
@@ -497,12 +497,6 @@ in the pull request that introduces them — see
 
 ### Operations
 
-- Migration `20261121100000_learning_ledger` adds nullable attribution
-  columns: `agent_runs.provider_id`, `model`, `prompt_hash` and
-  `learning_ids`; `ai_usage.agent_key` and `agent_run_id`;
-  `answer_feedback.provider_id` and `model`. There is no backfill, so rows
-  from before it read as unattributed. It is additive, so rolling back to the
-  previous image is safe. No new env vars. (#305)
 - After deploying #277, purge the Cloudflare cache once: asset URLs already
   cached at the edge keep the 4-hour lifetime they were stored with until then.
 
@@ -546,6 +540,12 @@ in the pull request that introduces them — see
   secret is empty, the reader key is derived from `SETTINGS_ENCRYPTION_KEY`,
   which production sets. No retention runs yet (phase 4), so the tables grow
   until then.
+- Migration `20261121100000_learning_ledger` adds nullable attribution
+  columns: `agent_runs.provider_id`, `model`, `prompt_hash` and
+  `learning_ids`; `ai_usage.agent_key` and `agent_run_id`;
+  `answer_feedback.provider_id` and `model`. There is no backfill, so rows
+  from before it read as unattributed. It is additive, so rolling back to the
+  previous image is safe. No new env vars. (#305)
 - New env var with a default: `ANALYTICS_READ_TIME_CAP_MS` (`1800000`), the
   most active read time one web view can record. No migration in #79
   phase 2.

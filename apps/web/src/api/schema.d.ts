@@ -8258,6 +8258,16 @@ export interface components {
             /** @description verify: review interval in days (see VerifyDocumentDto) */
             intervalDays?: number | null;
         };
+        TrustWeightsDto: {
+            verified?: number;
+            unverified?: number;
+            requested?: number;
+            edited?: number;
+            expired?: number;
+            flagged?: number;
+            outdated?: number;
+            inactive?: number;
+        };
         UpdateKnowledgeHealthSettingsDto: {
             /** @description Days a stamp holds; 0 = never */
             reviewIntervalDays?: number | null;
@@ -8267,6 +8277,10 @@ export interface components {
             emptyMaxChars?: number | null;
             /** @description Multiply search scores by the page's verification state */
             trustRanking?: boolean | null;
+            /** @description Reciprocal-rank-fusion constant; null = 60 */
+            rrfK?: number | null;
+            /** @description Per-state search weights; a state left out keeps its default, null resets them all */
+            trustWeights?: components["schemas"]["TrustWeightsDto"] | null;
         };
         CreateReleaseTagDto: {
             /** Format: uuid */

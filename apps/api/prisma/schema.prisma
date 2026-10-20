@@ -2607,6 +2607,11 @@ model KnowledgeHealthSettings {
   inactiveAfterDays  Int?     @map("inactive_after_days")
   emptyMaxChars      Int?     @map("empty_max_chars")
   trustRanking       Boolean? @map("trust_ranking")
+  /// #305 tuner: the reciprocal-rank-fusion constant; null is SEARCH_RRF_K.
+  rrfK               Int?     @map("rrf_k")
+  /// #305 tuner: a sparse map over TRUST_WEIGHTS — only the states it names
+  /// differ from the code default; null inherits all of them.
+  trustWeights       Json?    @map("trust_weights")
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("knowledge_health_settings")

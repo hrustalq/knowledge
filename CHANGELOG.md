@@ -40,8 +40,19 @@ in the pull request that introduces them — see
     once the window is full, and embeds it into its own vector index (phase
     2). A window names no one, only `author-1`, `author-2`, and so on. An
     edit, a delete or `/forget` re-indexes the window that held the message.
-  - **Not searchable yet:** search, the agents' tools and the web UI arrive
-    in the next phases.
+  - **Search:** `POST /v1/chat/search` (phase 3) returns matching windows
+    with the group's title, platform, time span and masked snippet. It ranks
+    meaning and words together and links to the first message where the
+    platform has links (Telegram supergroups). It returns only groups the
+    caller may read:
+    - a group bound to a project: whoever can see that project, so a
+      restricted project's chat needs a grant on it;
+    - a group bound to no project: workspace members, never guests.
+
+    Chat results are kept apart from page results. Filters by project, group
+    and time span only narrow what the caller may already read.
+  - **Not in agents or the web yet:** the agents' tools, bot answers and the
+    web UI arrive in the next phases.
 
 ### Operations
 

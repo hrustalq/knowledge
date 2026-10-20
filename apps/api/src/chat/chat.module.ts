@@ -24,6 +24,8 @@ import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
 import { ChatLinkController } from './chat-link.controller.js';
 import { ChatMessagesService } from './chat-messages.service.js';
+import { ChatSearchController } from './chat-search.controller.js';
+import { ChatSearchCoreModule } from './chat-search-core.module.js';
 import { ChatSettingsController } from './chat-settings.controller.js';
 import { ChatSocketSupervisor } from './chat-socket.supervisor.js';
 import { ChatSubscriptionSweeper } from './chat-subscription.sweeper.js';
@@ -59,6 +61,7 @@ import { HarvestService } from './harvest.service.js';
     AssistantModule,
     AssistantClientModule,
     CapturesModule,
+    ChatSearchCoreModule,
     DocumentsModule,
     EventsModule,
     FeedbackCoreModule,
@@ -69,7 +72,7 @@ import { HarvestService } from './harvest.service.js';
     SearchCoreModule,
     StorageModule,
   ],
-  controllers: [ChatWebhookController, ChatSettingsController, ChatLinkController],
+  controllers: [ChatWebhookController, ChatSettingsController, ChatLinkController, ChatSearchController],
   providers: [
     ChatAdapterRegistry,
     ChatIntegrationsService,

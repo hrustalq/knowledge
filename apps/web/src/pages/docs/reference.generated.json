@@ -1951,6 +1951,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/chat/search",
+      "tag": "chat",
+      "summary": "Search the masked messages of searchable groups the caller may read",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/chat/search-settings",
       "tag": "chat",

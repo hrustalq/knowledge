@@ -13,14 +13,14 @@ export interface SearchKnobs {
  * score (BM25 normalized to 0..1 by the max); two-source results use
  * reciprocal rank fusion — raw cosine and BM25 scores are not comparable.
  */
-export function fuseHits(vectorHits: ChunkHit[], textHits: ChunkHit[], k: number, rrfK: number): ChunkHit[] {
+export function fuseHits<T extends Pick<ChunkHit, 'chunkId' | 'score'>>(vectorHits: T[], textHits: T[], k: number, rrfK: number): T[] {
   if (textHits.length === 0) return vectorHits.slice(0, k);
   if (vectorHits.length === 0) {
     const max = Math.max(...textHits.map((h) => h.score), 1e-9);
     return textHits.slice(0, k).map((h) => ({ ...h, score: h.score / max }));
   }
-  const fused = new Map<string, ChunkHit>();
-  const add = (rank: number, hit: ChunkHit) => {
+  const fused = new Map<string, T>();
+  const add = (rank: number, hit: T) => {
     const existing = fused.get(hit.chunkId);
     const increment = 1 / (rrfK + rank + 1);
     if (existing) existing.score += increment;

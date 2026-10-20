@@ -172,6 +172,15 @@ function renderUpdates(view: ChatUpdatesView): ChatOutMessage {
 }
 
 /**
+ * A supergroup's message as `t.me/c/…`, which opens for its members. A basic
+ * group or a private chat has no message links. Stateless, so chat search
+ * (#339) links a window without an adapter.
+ */
+export function telegramMessageUrl(chatId: string, messageId: string): string | null {
+  return chatId.startsWith('-100') ? `https://t.me/c/${chatId.slice(4)}/${messageId}` : null;
+}
+
+/**
  * Telegram (issue #71, phase 1). Bot API over plain `fetch` — there is no SDK
  * here, for the reason ArcadeDB has none: the surface is five methods.
  *
@@ -363,7 +372,7 @@ export class TelegramAdapter implements ChatAdapter {
    * group or a private chat has no message links.
    */
   messageUrl(chatId: string, messageId: string): string | null {
-    return chatId.startsWith('-100') ? `https://t.me/c/${chatId.slice(4)}/${messageId}` : null;
+    return telegramMessageUrl(chatId, messageId);
   }
 
   directLink(botUsername: string | null, payload?: string): string | null {

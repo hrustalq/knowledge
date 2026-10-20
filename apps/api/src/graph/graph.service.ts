@@ -53,6 +53,8 @@ export interface StoredChunk {
  * `EMBEDDINGS_DIM` changes (see `ensureVectorIndex`).
  */
 const VECTOR_INDEX = 'Chunk[embedding]';
+/** The vertex types with a vector index: pages' chunks (#304) and chat windows (#339). Code constants, never input. */
+type VectorType = 'Chunk' | 'ChatChunk';
 /**
  * The HNSW search beam (`efSearch`), never below `k`. Measured on the demo
  * corpus (5,936 eligible bge-m3 chunks, 120 title queries, docs/architecture/
@@ -270,8 +272,8 @@ export interface WorkspaceRelationGraph {
 export class GraphService {
   private readonly logger = new Logger(GraphService.name);
 
-  /** What a reader last learned about the vector index: its dimension, or null for none (#304). */
-  private vectorIndex: { dimension: number | null; checkedAt: number } | null = null;
+  /** What a reader last learned about each type's vector index: its dimension, or null for none (#304, #339). */
+  private readonly vectorIndex = new Map<VectorType, { dimension: number | null; checkedAt: number }>();
 
   constructor(
     private readonly arcade: ArcadeClient,
@@ -370,7 +372,7 @@ export class GraphService {
    * Never throws: without the index every reader falls back to the scan, and
    * a worker that refused to boot would stop indexing altogether.
    */
-  private async ensureVectorIndex(type: 'Chunk' | 'ChatChunk', dimension: number): Promise<void> {
+  private async ensureVectorIndex(type: VectorType, dimension: number): Promise<void> {
     if (!Number.isInteger(dimension) || dimension <= 0) {
       this.logger.error(`Vector index skipped: EMBEDDINGS_DIM=${dimension} is not a positive integer.`);
       return;
@@ -391,12 +393,12 @@ export class GraphService {
     } catch (e) {
       this.logger.error(`${type} vector index unavailable, its vector search falls back: ${(e as Error).message}`);
     } finally {
-      this.vectorIndex = null;
+      this.vectorIndex.delete(type);
     }
   }
 
   /** The dimension of a type's vector index, or null when there is none. `type` is a code constant, never input. */
-  private async readVectorIndexDimension(type: 'Chunk' | 'ChatChunk' = 'Chunk'): Promise<number | null> {
+  private async readVectorIndexDimension(type: VectorType = 'Chunk'): Promise<number | null> {
     const [row] = await this.arcade.query<{ indexes?: Array<{ name?: string; dimensions?: number }> }>(
       'sql',
       `SELECT indexes FROM schema:types WHERE name = '${type}'`,
@@ -410,13 +412,14 @@ export class GraphService {
    * `VECTOR_INDEX_RECHECK_MS`, because only the worker builds the index: the
    * API learns of it within that window and scans until then.
    */
-  private async vectorIndexFits(dimension: number): Promise<boolean> {
+  private async vectorIndexFits(dimension: number, type: VectorType = 'Chunk'): Promise<boolean> {
     const now = Date.now();
-    if (!this.vectorIndex || now - this.vectorIndex.checkedAt > VECTOR_INDEX_RECHECK_MS) {
-      const found = await this.readVectorIndexDimension().catch(() => null);
-      this.vectorIndex = { dimension: found, checkedAt: now };
+    let known = this.vectorIndex.get(type);
+    if (!known || now - known.checkedAt > VECTOR_INDEX_RECHECK_MS) {
+      known = { dimension: await this.readVectorIndexDimension(type).catch(() => null), checkedAt: now };
+      this.vectorIndex.set(type, known);
     }
-    return this.vectorIndex.dimension === dimension;
+    return known.dimension === dimension;
   }
 
   /**
@@ -459,7 +462,7 @@ export class GraphService {
         .sort((a, b) => b.score - a.score);
     } catch (e) {
       this.logger.warn(`Vector index query failed, scanning instead: ${(e as Error).message}`);
-      this.vectorIndex = null;
+      this.vectorIndex.delete('Chunk');
       return null;
     }
   }
@@ -713,6 +716,38 @@ export class GraphService {
       'UPDATE ChatChunk SET chunkId = :chunkId, workspaceId = :workspaceId, bindingId = :bindingId, embedding = :embedding, writtenAt = :writtenAt UPSERT WHERE chunkId = :chunkId',
       input,
     );
+  }
+
+  /**
+   * The chat windows nearest a query, among `bindingIds` only — the bindings
+   * the caller may read, decided in PG before this runs. The binding filter
+   * is inside the HNSW walk, so an unreadable window never takes a slot; the
+   * workspace predicate leads it and is repeated outside. Empty when there is
+   * no index of the query's dimension: chat has no scan fallback, and its
+   * full-text leg still answers.
+   */
+  async nearestChatChunks(
+    workspaceId: string,
+    queryEmbedding: number[],
+    k: number,
+    bindingIds: string[],
+  ): Promise<Array<{ chunkId: string; score: number }>> {
+    if (k <= 0 || bindingIds.length === 0 || !(await this.vectorIndexFits(queryEmbedding.length, 'ChatChunk'))) return [];
+    try {
+      const rows = await this.arcade.query<{ chunkId: string; workspaceId: string; distance: number }>(
+        'sql',
+        `SELECT chunkId, workspaceId, distance FROM (SELECT expand(vector.neighbors('ChatChunk[embedding]', :queryVector, :k, { efSearch: ${Math.max(VECTOR_EF_SEARCH, Math.floor(k))}, filter: (SELECT @rid FROM ChatChunk WHERE workspaceId = :workspaceId AND bindingId IN :bindingIds) }))) WHERE workspaceId = :workspaceId`,
+        { workspaceId, bindingIds, queryVector: queryEmbedding, k: Math.floor(k) },
+      );
+      return rows
+        .filter((r) => r.workspaceId === workspaceId)
+        .map((r) => ({ chunkId: r.chunkId, score: 1 - r.distance }))
+        .sort((a, b) => b.score - a.score);
+    } catch (e) {
+      this.logger.warn(`Chat vector query failed, full text only: ${(e as Error).message}`);
+      this.vectorIndex.delete('ChatChunk');
+      return [];
+    }
   }
 
   /** Every chat window vector of a workspace, by id and write time (epoch ms) — what the reap compares with PG. */

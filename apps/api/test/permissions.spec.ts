@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import {
   canSee,
+  canSeeChat,
+  clampToAudience,
   levelOn,
   visibilityWhere,
   type AccessIdentity,
@@ -158,6 +160,55 @@ describe('canSee and visibilityWhere', () => {
 
   it('is no filter at all for a workspace with no restrictions', () => {
     expect(visibilityWhere({ ...who(), workspaceId: WS, denied: new Set(), granted: new Set() })).toEqual({});
+  });
+});
+
+// ---------------------------------------------------- a group's chat (#339)
+
+describe('canSeeChat', () => {
+  const SECRET = 'p-secret';
+  const OPEN = 'p-open';
+  const chats = [
+    { name: 'open', projectId: OPEN, projectRestricted: false },
+    { name: 'secret', projectId: SECRET, projectRestricted: true },
+    { name: 'workspace', projectId: null, projectRestricted: false },
+  ];
+  // A restricted project the caller holds no grant on is in `denied`, as `scopeFor` builds it.
+  const scopes: Record<string, AccessScope> = {
+    admin: { ...who({ bypass: true }), workspaceId: WS, denied: new Set([SECRET]), granted: new Set() },
+    member: { ...who(), workspaceId: WS, denied: new Set([SECRET]), granted: new Set() },
+    grantee: { ...who(), workspaceId: WS, denied: new Set(), granted: new Set([SECRET]) },
+    'guest granted the open project': { ...who({ guest: true, role: 'guest' }), workspaceId: WS, denied: new Set([SECRET]), granted: new Set([OPEN]) },
+    'guest granted nothing': { ...who({ guest: true, role: 'guest' }), workspaceId: WS, denied: new Set([SECRET]), granted: new Set() },
+  };
+  const expected: Record<string, string[]> = {
+    admin: ['open', 'secret', 'workspace'],
+    member: ['open', 'workspace'],
+    grantee: ['open', 'secret', 'workspace'],
+    'guest granted the open project': ['open'],
+    'guest granted nothing': [],
+  };
+
+  for (const [name, scope] of Object.entries(scopes)) {
+    it(`for ${name}`, () => {
+      expect(chats.filter((c) => canSeeChat(scope, c)).map((c) => c.name)).toEqual(expected[name]);
+    });
+  }
+
+  it('is canSee on the project row, so the two cannot drift', () => {
+    for (const scope of Object.values(scopes)) {
+      for (const c of chats.filter((x) => x.projectId)) {
+        const row = { projectId: c.projectId!, path: '', restrictedBy: c.projectRestricted ? [c.projectId!] : [] };
+        expect(canSeeChat(scope, c)).toBe(canSee(scope, row));
+      }
+    }
+  });
+
+  it('a group-turn clamp hides a restricted project’s chat even from its grantee, and from an admin', () => {
+    for (const scope of [scopes.grantee, scopes.admin]) {
+      const clamped = clampToAudience(scope, [SECRET], new Set());
+      expect(chats.filter((c) => canSeeChat(clamped, c)).map((c) => c.name)).toEqual(['open', 'workspace']);
+    }
   });
 });
 

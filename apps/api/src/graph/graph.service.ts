@@ -310,6 +310,13 @@ export class GraphService {
       'CREATE INDEX IF NOT EXISTS ON Entity (workspaceId, entityKey) UNIQUE',
       'CREATE PROPERTY Community.workspaceId IF NOT EXISTS STRING',
       'CREATE INDEX IF NOT EXISTS ON Community (workspaceId) NOTUNIQUE',
+      'CREATE VERTEX TYPE ChatChunk IF NOT EXISTS',
+      'CREATE PROPERTY ChatChunk.chunkId IF NOT EXISTS STRING',
+      'CREATE PROPERTY ChatChunk.workspaceId IF NOT EXISTS STRING',
+      'CREATE PROPERTY ChatChunk.bindingId IF NOT EXISTS STRING',
+      'CREATE PROPERTY ChatChunk.embedding IF NOT EXISTS ARRAY_OF_FLOATS',
+      'CREATE INDEX IF NOT EXISTS ON ChatChunk (chunkId) UNIQUE',
+      'CREATE INDEX IF NOT EXISTS ON ChatChunk (workspaceId) NOTUNIQUE',
     ];
     for (const s of statements) {
       try {
@@ -344,7 +351,8 @@ export class GraphService {
       );
     }
 
-    await this.ensureVectorIndex(vectorDimension);
+    await this.ensureVectorIndex('Chunk', vectorDimension);
+    await this.ensureVectorIndex('ChatChunk', vectorDimension);
   }
 
   /**
@@ -362,38 +370,38 @@ export class GraphService {
    * Never throws: without the index every reader falls back to the scan, and
    * a worker that refused to boot would stop indexing altogether.
    */
-  private async ensureVectorIndex(dimension: number): Promise<void> {
+  private async ensureVectorIndex(type: 'Chunk' | 'ChatChunk', dimension: number): Promise<void> {
     if (!Number.isInteger(dimension) || dimension <= 0) {
       this.logger.error(`Vector index skipped: EMBEDDINGS_DIM=${dimension} is not a positive integer.`);
       return;
     }
     try {
-      const current = await this.readVectorIndexDimension();
+      const current = await this.readVectorIndexDimension(type);
       if (current === dimension) return;
       if (current !== null) {
-        this.logger.warn(`Rebuilding the chunk vector index: it is for ${current} dimensions, EMBEDDINGS_DIM is ${dimension}.`);
-        await this.arcade.command('sql', `DROP INDEX \`${VECTOR_INDEX}\``);
+        this.logger.warn(`Rebuilding the ${type} vector index: it is for ${current} dimensions, EMBEDDINGS_DIM is ${dimension}.`);
+        await this.arcade.command('sql', `DROP INDEX \`${type}[embedding]\``);
       }
       const started = Date.now();
       const [row] = await this.arcade.command<{ totalIndexed?: number }>(
         'sql',
-        `CREATE INDEX IF NOT EXISTS ON Chunk (embedding) LSM_VECTOR METADATA { dimensions: ${dimension}, similarity: 'COSINE' }`,
+        `CREATE INDEX IF NOT EXISTS ON ${type} (embedding) LSM_VECTOR METADATA { dimensions: ${dimension}, similarity: 'COSINE' }`,
       );
-      this.logger.log(`Chunk vector index ready (${dimension} dimensions, ${row?.totalIndexed ?? 0} vectors, ${Date.now() - started} ms).`);
+      this.logger.log(`${type} vector index ready (${dimension} dimensions, ${row?.totalIndexed ?? 0} vectors, ${Date.now() - started} ms).`);
     } catch (e) {
-      this.logger.error(`Chunk vector index unavailable, vector search falls back to the scan: ${(e as Error).message}`);
+      this.logger.error(`${type} vector index unavailable, its vector search falls back: ${(e as Error).message}`);
     } finally {
       this.vectorIndex = null;
     }
   }
 
-  /** The dimension of the chunk vector index, or null when there is none. */
-  private async readVectorIndexDimension(): Promise<number | null> {
-    const [type] = await this.arcade.query<{ indexes?: Array<{ name?: string; dimensions?: number }> }>(
+  /** The dimension of a type's vector index, or null when there is none. `type` is a code constant, never input. */
+  private async readVectorIndexDimension(type: 'Chunk' | 'ChatChunk' = 'Chunk'): Promise<number | null> {
+    const [row] = await this.arcade.query<{ indexes?: Array<{ name?: string; dimensions?: number }> }>(
       'sql',
-      "SELECT indexes FROM schema:types WHERE name = 'Chunk'",
+      `SELECT indexes FROM schema:types WHERE name = '${type}'`,
     );
-    const index = type?.indexes?.find((i) => i.name === VECTOR_INDEX);
+    const index = row?.indexes?.find((i) => i.name === `${type}[embedding]`);
     return index && typeof index.dimensions === 'number' ? index.dimensions : null;
   }
 
@@ -692,6 +700,39 @@ export class GraphService {
    * (plan.md §6): a document id is not a capability, and a delete is the last
    * place to start trusting one.
    */
+  /**
+   * One chat window's vector (#339) — vector only: the text, the thread and
+   * every ACL fact live in PG (`chat_chunks`), which a search joins as the
+   * final say, so the vertex carries nothing a reader could show. Written before its PG row, so a crash
+   * leaves only a vector with no row — which no search returns (it joins the
+   * row) and the indexer's reap removes.
+   */
+  async upsertChatChunk(input: { workspaceId: string; bindingId: string; chunkId: string; embedding: number[]; writtenAt: number }): Promise<void> {
+    await this.arcade.command(
+      'sql',
+      'UPDATE ChatChunk SET chunkId = :chunkId, workspaceId = :workspaceId, bindingId = :bindingId, embedding = :embedding, writtenAt = :writtenAt UPSERT WHERE chunkId = :chunkId',
+      input,
+    );
+  }
+
+  /** Every chat window vector of a workspace, by id and write time (epoch ms) — what the reap compares with PG. */
+  async chatChunkIds(workspaceId: string): Promise<Array<{ chunkId: string; writtenAt: number }>> {
+    const rows = await this.arcade.query<{ chunkId?: string; writtenAt?: number }>(
+      'sql',
+      'SELECT chunkId, writtenAt FROM ChatChunk WHERE workspaceId = :workspaceId',
+      { workspaceId },
+    );
+    return rows.flatMap((r) => (typeof r.chunkId === 'string' ? [{ chunkId: r.chunkId, writtenAt: Number(r.writtenAt ?? 0) }] : []));
+  }
+
+  async deleteChatChunks(workspaceId: string, chunkIds: string[]): Promise<void> {
+    if (chunkIds.length === 0) return;
+    await this.arcade.command('sql', 'DELETE FROM ChatChunk WHERE workspaceId = :workspaceId AND chunkId IN :chunkIds', {
+      workspaceId,
+      chunkIds,
+    });
+  }
+
   async deleteDocumentGraph(workspaceId: string, documentId: string): Promise<void> {
     for (const type of ['Chunk', 'DocumentRevision', 'Document']) {
       await this.arcade.command(

@@ -922,6 +922,14 @@ export const envSchema = z.object({
   CHAT_SEARCH_ENABLED: boolish(true),
   /** Days a searchable group's messages are kept, at most; a workspace may only shorten it. */
   CHAT_SEARCH_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  /** Messages in one indexed window of a thread, at most. */
+  CHAT_SEARCH_WINDOW_MESSAGES: z.coerce.number().int().min(2).default(20),
+  /** Minutes of silence in a thread that start a new window. */
+  CHAT_SEARCH_WINDOW_GAP_MIN: z.coerce.number().int().min(1).default(30),
+  /** Minutes a thread must be quiet before its last, not yet full window is indexed. */
+  CHAT_SEARCH_SETTLE_MIN: z.coerce.number().int().min(0).default(10),
+  /** Seconds between the worker's chat indexing ticks. */
+  CHAT_SEARCH_TICK_SEC: z.coerce.number().int().min(5).default(60),
 
   /**
    * Interface + API language (docs/features/18). Also the fallback whenever a

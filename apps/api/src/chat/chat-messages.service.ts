@@ -74,29 +74,40 @@ export class ChatMessagesService {
     });
   }
 
-  /** An edit or a delete the platform reported. Only a message already kept is touched. */
+  /**
+   * An edit or a delete the platform reported. Only a message already kept is
+   * touched. The row is locked and its chunk read under the lock, so a pack
+   * committing at the same moment (`ChatIndexSweeper`) is either seen and
+   * dropped here, or sees the new text and gives up.
+   */
   async change(binding: ChatChannelBinding, inbound: ChatInbound): Promise<void> {
-    const where = { bindingId: binding.id, externalMessageId: inbound.messageId };
     await this.prisma.$transaction(async (tx) => {
-      const row = await tx.chatMessage.findUnique({ where: { bindingId_externalMessageId: where }, select: { chunkId: true } });
+      const [row] = await tx.$queryRaw<Array<{ id: string; chunk_id: string | null }>>`
+        SELECT id, chunk_id FROM chat_messages WHERE binding_id = ${binding.id}::uuid AND external_message_id = ${inbound.messageId} FOR UPDATE`;
       if (!row) return;
-      if (row.chunkId) await tx.chatChunk.deleteMany({ where: { id: row.chunkId } });
+      if (row.chunk_id) await tx.chatChunk.deleteMany({ where: { id: row.chunk_id } });
       if (inbound.change === 'deleted') {
-        await tx.chatMessage.deleteMany({ where });
+        await tx.chatMessage.delete({ where: { id: row.id } });
       } else {
-        await tx.chatMessage.updateMany({ where, data: { text: createMasker()(inbound.text), editedAt: inbound.at ?? new Date() } });
+        await tx.chatMessage.update({ where: { id: row.id }, data: { text: createMasker()(inbound.text), editedAt: inbound.at ?? new Date() } });
       }
     });
   }
 
-  /** `/forget`: everything this bot keeps for search that the person wrote, in any of its groups. */
+  /**
+   * `/forget`: everything this bot keeps for search that the person wrote, in
+   * any of its groups. The rows go first and say which chunks held them as
+   * they go, so a chunk packed while this waited on their lock goes too.
+   */
   async forget(integrationId: string, authorId: string): Promise<number> {
     return this.prisma.$transaction(async (tx) => {
-      const where = { authorId, binding: { integrationId } };
-      const held = await tx.chatMessage.findMany({ where: { ...where, chunkId: { not: null } }, select: { chunkId: true }, distinct: ['chunkId'] });
-      if (held.length) await tx.chatChunk.deleteMany({ where: { id: { in: held.map((r) => r.chunkId!) } } });
-      const { count } = await tx.chatMessage.deleteMany({ where });
-      return count;
+      const gone = await tx.$queryRaw<Array<{ chunk_id: string | null }>>`
+        DELETE FROM chat_messages m USING chat_channel_bindings b
+         WHERE b.id = m.binding_id AND b.integration_id = ${integrationId}::uuid AND m.author_id = ${authorId}
+        RETURNING m.chunk_id`;
+      const chunks = [...new Set(gone.flatMap((r) => (r.chunk_id ? [r.chunk_id] : [])))];
+      if (chunks.length) await tx.chatChunk.deleteMany({ where: { id: { in: chunks } } });
+      return gone.length;
     });
   }
 

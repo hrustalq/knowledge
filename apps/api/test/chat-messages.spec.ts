@@ -40,14 +40,19 @@ function inbound(over: Partial<ChatInbound> = {}): ChatInbound {
   };
 }
 
-function store(row: { chunkId: string | null } | null = { chunkId: 'c-1' }, settings: { chatSearchRetentionDays: number | null } | null = null) {
+/**
+ * `raw` answers every `$queryRaw` in order: the locked row for `change`, the
+ * deleted rows for `forget`. The SQL itself was run against Postgres by hand
+ * (#339 phase 2 PR); what is pinned here is what the service does with it.
+ */
+function store(raw: unknown[][] = [[{ id: 'm-1', chunk_id: 'c-1' }]], settings: { chatSearchRetentionDays: number | null } | null = null) {
+  const answers = [...raw];
   const db = {
+    $queryRaw: vi.fn(async () => answers.shift() ?? []),
     chatMessage: {
       createMany: vi.fn(async () => ({ count: 1 })),
-      findUnique: vi.fn(async () => row),
-      findMany: vi.fn(async () => [{ chunkId: 'c-1' }, { chunkId: 'c-2' }]),
-      updateMany: vi.fn(async () => ({ count: 1 })),
-      deleteMany: vi.fn(async () => ({ count: 3 })),
+      update: vi.fn(async () => ({})),
+      delete: vi.fn(async () => ({})),
     },
     chatChunk: { deleteMany: vi.fn(async () => ({ count: 1 })) },
     workspaceSettings: { findUnique: vi.fn(async () => settings), upsert: vi.fn(async () => ({})) },
@@ -82,39 +87,46 @@ describe('changes', () => {
     const { svc, db } = store();
     await svc.change(binding, inbound({ change: 'edited', text: `now ${EMAIL}` }));
     expect(db.chatChunk.deleteMany).toHaveBeenCalledWith({ where: { id: 'c-1' } });
-    const { data } = (db.chatMessage.updateMany.mock.calls[0] as unknown as [{ data: { text: string; editedAt: Date } }])[0];
+    const { where, data } = (db.chatMessage.update.mock.calls[0] as unknown as [{ where: unknown; data: { text: string; editedAt: Date } }])[0];
+    expect(where).toEqual({ id: 'm-1' });
     expect(data.text).toBe('now [EMAIL_1]');
     expect(data.editedAt).toEqual(new Date('2026-10-19T12:00:00Z'));
-    expect(db.chatMessage.deleteMany).not.toHaveBeenCalled();
+    expect(db.chatMessage.delete).not.toHaveBeenCalled();
   });
 
   it('a delete removes the row and its chunk', async () => {
     const { svc, db } = store();
     await svc.change(binding, inbound({ change: 'deleted', text: '' }));
     expect(db.chatChunk.deleteMany).toHaveBeenCalledOnce();
-    expect(db.chatMessage.deleteMany).toHaveBeenCalledWith({ where: { bindingId: 'b-1', externalMessageId: 'p-30' } });
+    expect(db.chatMessage.delete).toHaveBeenCalledWith({ where: { id: 'm-1' } });
   });
 
   it('a change to a message never kept touches nothing', async () => {
-    const { svc, db } = store(null);
+    const { svc, db } = store([[]]);
     await svc.change(binding, inbound({ change: 'edited' }));
     expect(db.chatChunk.deleteMany).not.toHaveBeenCalled();
-    expect(db.chatMessage.updateMany).not.toHaveBeenCalled();
+    expect(db.chatMessage.update).not.toHaveBeenCalled();
   });
 
-  it('/forget drops every chunk that held one of the person’s messages, then the messages', async () => {
-    const { svc, db } = store();
-    expect(await svc.forget('int-1', '42')).toBe(3);
+  it('an unpacked message is edited with no chunk to drop', async () => {
+    const { svc, db } = store([[{ id: 'm-1', chunk_id: null }]]);
+    await svc.change(binding, inbound({ change: 'edited', text: 'x' }));
+    expect(db.chatChunk.deleteMany).not.toHaveBeenCalled();
+    expect(db.chatMessage.update).toHaveBeenCalledOnce();
+  });
+
+  it('/forget drops the chunks the deleted rows were in, each once, and counts the rows', async () => {
+    const { svc, db } = store([[{ chunk_id: 'c-1' }, { chunk_id: 'c-1' }, { chunk_id: null }, { chunk_id: 'c-2' }]]);
+    expect(await svc.forget('int-1', '42')).toBe(4);
     expect(db.chatChunk.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['c-1', 'c-2'] } } });
-    expect(db.chatMessage.deleteMany).toHaveBeenCalledWith({ where: { authorId: '42', binding: { integrationId: 'int-1' } } });
   });
 });
 
 describe('retention', () => {
   it('inherits the ceiling, may shorten it, and is clamped to it', async () => {
-    expect((await store(null, null).svc.settings('ws-1')).retentionDays).toEqual({ ceiling: 90, requested: null, applied: 90 });
-    expect((await store(null, { chatSearchRetentionDays: 30 }).svc.settings('ws-1')).retentionDays.applied).toBe(30);
-    expect((await store(null, { chatSearchRetentionDays: 400 }).svc.settings('ws-1')).retentionDays).toEqual({ ceiling: 90, requested: 400, applied: 90 });
+    expect((await store([], null).svc.settings('ws-1')).retentionDays).toEqual({ ceiling: 90, requested: null, applied: 90 });
+    expect((await store([], { chatSearchRetentionDays: 30 }).svc.settings('ws-1')).retentionDays.applied).toBe(30);
+    expect((await store([], { chatSearchRetentionDays: 400 }).svc.settings('ws-1')).retentionDays).toEqual({ ceiling: 90, requested: 400, applied: 90 });
   });
 });
 

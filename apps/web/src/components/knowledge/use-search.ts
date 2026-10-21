@@ -40,6 +40,8 @@ export interface SearchHit {
   title: string
   to?: string
   href?: string
+  /** `href` leaves the app (a chat platform's link, #339): opens in a new tab. */
+  external?: boolean
   snippet: SearchSnippetPart[]
   /** Omitted where the source does not rank by a score worth showing. */
   score?: number
@@ -63,6 +65,14 @@ export interface SearchView {
 }
 
 export type SearchSource = (state: SearchSnapshot) => Promise<SearchView>
+
+/** Already-translated wording for SearchResults' idle and no-match states, where a surface searches something other than pages. */
+export interface SearchCopy {
+  idle?: string
+  idleHint?: string
+  none?: string
+  noneHint?: string
+}
 
 /**
  * Thrown by a source whose message is already what the reader should read

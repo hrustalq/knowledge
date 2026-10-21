@@ -63,8 +63,22 @@ in the pull request that introduces them — see
     - **Group answers stay inside the group's audience.** A bot answering
       in a group searches only the chats of the group's project, and never
       a restricted project's chat.
-  - **Not in the web UI yet:** the search page's Chat tab and the switch in
-    Settings → Chat bots arrive in the next phase.
+  - **In the web app** (phase 5):
+    - **Search has a Pages | Chat tab strip.** The Chat tab lists matching
+      windows with the group, platform, time span, message count and masked
+      snippet, and opens the message in Telegram where there is a link. It
+      appears only for someone who may read a searchable group; that check
+      is `GET /v1/chat/search`, under the same rules as the search itself.
+      Page results are unchanged.
+    - **Settings → Chat bots** gains a **Make searchable** switch on every
+      group, on all three platforms. It names the retention period, the
+      audience and who switched it on and when. On Telegram it also says
+      privacy mode must be off and that deletions are not followed. The page
+      also gets a **Searchable chat** retention setting that shows what the
+      workspace asked for, the deployment's ceiling and what applies.
+    - The *Keep messages for /capture* hint no longer says "never
+      searchable". It now says kept messages serve only `/capture`, and that
+      searching is the separate switch.
 
 ### Operations
 

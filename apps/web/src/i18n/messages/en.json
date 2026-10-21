@@ -2618,6 +2618,19 @@
       "pickTag": "Release tag",
       "hint": "Searches the text each page held then.",
       "superseded": "Superseded {date}"
+    },
+    "tabs": {
+      "pages": "Pages",
+      "chat": "Chat"
+    },
+    "chat": {
+      "description": "What was said in the groups made searchable, with emails, phone numbers, card numbers and secrets masked.",
+      "placeholder": "What did we decide about the billing retry?",
+      "idle": "Search what was said in team chats.",
+      "idleHint": "Only groups an admin made searchable, and only those whose project you can read. Authors show as author-1, author-2…",
+      "none": "Nothing said in chat matched.",
+      "noneHint": "Try other words. A thread becomes searchable a few minutes after it goes quiet.",
+      "messages": "{n} message | {n} message | {n} messages"
     }
   },
   "import": {
@@ -4946,7 +4959,7 @@
       "titlePlaceholder": "Name (optional)",
       "add": "Add group",
       "listen": "Keep messages for /capture",
-      "listenHint": "Kept for {days}, with emails, phone numbers, card numbers and secrets masked, so editors can harvest a thread into captures: reply /capture to its first message, or react ✍ to it. Never searchable. Needs privacy mode off in {'@'}BotFather or the bot as a group admin; ✍ works only with the bot as admin. Turning this on posts a notice in the group; turning it off deletes what is kept.",
+      "listenHint": "Kept for {days}, with emails, phone numbers, card numbers and secrets masked, so editors can harvest a thread into captures: reply /capture to its first message, or react ✍ to it. Kept only for /capture: searching this group is the separate switch below. Needs privacy mode off in {'@'}BotFather or the bot as a group admin; ✍ works only with the bot as admin. Turning this on posts a notice in the group; turning it off deletes what is kept.",
       "listenDays": "{days} day | {days} day | {days} days",
       "autoHarvest": "Harvest quiet threads automatically",
       "autoHarvestHint": "Once a thread has {messages} kept since its last harvest and has been quiet for {quiet}, the bot proposes what it settled as captures in your name, for review in Captures. Nothing is posted in the group: you get an inbox notification instead. Turning this on posts a notice in the group.",
@@ -4954,7 +4967,12 @@
       "autoHarvestQuiet": "{n} minute | {n} minute | {n} minutes",
       "autoHarvestRunsAs": "Runs as",
       "autoHarvestNeedsListening": "Needs Keep messages for /capture.",
-      "autoHarvestUnavailable": "Switched off on this server (HARVEST_AUTO_ENABLED): no thread is harvested automatically, whatever this switch says."
+      "autoHarvestUnavailable": "Switched off on this server (HARVEST_AUTO_ENABLED): no thread is harvested automatically, whatever this switch says.",
+      "searchable": "Make searchable",
+      "searchableHint": "Messages are kept for {days}, masked, and found under Search → Chat by anyone who can read this group's project (the whole workspace's members when it has none; never guests). Edits are followed; /forget deletes a person's own. Turning this on posts a notice in the group first; turning it off deletes everything kept.",
+      "searchableTelegram": "Telegram: needs privacy mode off in {'@'}BotFather or the bot as a group admin. A message deleted in Telegram stays searchable until it expires, because Telegram does not tell bots about deletions.",
+      "searchableUnavailable": "Switched off on this server (CHAT_SEARCH_ENABLED): no group can be made searchable.",
+      "searchableBy": "Made searchable by"
     },
     "card": {
       "off": "Off",
@@ -5027,6 +5045,17 @@
       "lastSent": "Last sent {when}",
       "neverSent": "Nothing sent yet",
       "refused": "The last message was refused: {error}"
+    },
+    "search": {
+      "title": "Searchable chat",
+      "intro": "How long the messages of searchable groups are kept. Each group is made searchable on its own row above.",
+      "unavailable": "Chat search is switched off on this server (CHAT_SEARCH_ENABLED=false). Nothing is kept and the Chat tab is hidden.",
+      "retention": "Keep messages for",
+      "retentionHint": "Older windows of a thread are deleted from search whole. Leave empty to use the deployment’s period.",
+      "applies": "Applies:",
+      "ceiling": "Deployment ceiling: {value}",
+      "clamped": "Longer than the deployment allows: {n} days will apply.",
+      "saved": "Retention saved."
     }
   },
   "captures": {

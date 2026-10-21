@@ -1,8 +1,9 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { ChatSearchResponse } from '@knowledge/contracts';
+import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import type { ChatSearchAvailability, ChatSearchResponse } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
+import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { ChatSearchService } from './chat-search.service.js';
 import { ChatSearchDto } from './chat.dto.js';
@@ -15,6 +16,18 @@ export class ChatSearchController {
     private readonly chat: ChatSearchService,
     private readonly permissions: PermissionService,
   ) {}
+
+  @Get()
+  @Access('viewer', 'query', { guests: true })
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: 'Whether the caller may read any searchable group — the same ACL as the search, without a query' })
+  async availability(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ChatSearchAvailability> {
+    const readable = await this.chat.readableBindings(await this.permissions.scopeFor(principal, workspaceId));
+    return { readable: readable.length > 0 };
+  }
 
   @Post()
   @HttpCode(200)

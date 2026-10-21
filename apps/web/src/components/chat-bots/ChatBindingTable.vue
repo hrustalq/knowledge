@@ -13,6 +13,9 @@
  * who turns that on: the API tells the group first, so that switch waits too.
  * The server's ceiling is shown beside the switch, not folded into it — a
  * binding that asks for it on a server that has it off says both.
+ *
+ * Any group can be made searchable (#339), separately from listening: the API
+ * tells the group first, and the row names who switched it on and when.
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -34,6 +37,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { formatDate } from '@/lib/format'
 import UserChip from '@/components/people/UserChip.vue'
 import AgentSelect from './AgentSelect.vue'
 import ChatSubscriptionEditor from './ChatSubscriptionEditor.vue'
@@ -52,6 +56,11 @@ const query = useQuery(options)
 const bindings = computed(() => (query.data.value as ChatBindingsResponse | undefined)?.bindings ?? [])
 const ttlDays = computed(() => (query.data.value as ChatBindingsResponse | undefined)?.listenTtlDays ?? 7)
 const auto = computed(() => (query.data.value as ChatBindingsResponse | undefined)?.autoHarvest ?? null)
+const search = computed(() => (query.data.value as ChatBindingsResponse | undefined)?.search ?? null)
+const searchHint = computed(() => {
+  const days = search.value?.retentionDays.applied ?? 0
+  return t('chatBots.bindings.searchableHint', { days: t('chatBots.bindings.listenDays', { days }, days) })
+})
 const autoHint = computed(() => {
   const a = auto.value
   if (!a) return ''
@@ -240,6 +249,30 @@ async function add() {
         <div v-if="kind === 'telegram' && b.autoHarvestBy" class="mt-1 flex items-center gap-1.5 pl-[1.625rem] text-xs text-muted-foreground">
           {{ t('chatBots.bindings.autoHarvestRunsAs') }}
           <UserChip :user-id="b.autoHarvestBy" size="sm" />
+        </div>
+        <label
+          v-if="search"
+          class="mt-3 flex max-w-[46rem] items-start gap-2.5"
+          :class="search.available || b.searchableAt ? 'cursor-pointer has-[:disabled]:cursor-progress' : 'cursor-not-allowed'"
+        >
+          <Checkbox
+            class="mt-0.5"
+            :model-value="!!b.searchableAt"
+            :disabled="!!switching[b.id] || (!search.available && !b.searchableAt)"
+            @update:model-value="(v) => setSwitch(b, { searchable: v === true })"
+          />
+          <span class="min-w-0">
+            <span class="block text-sm">{{ t('chatBots.bindings.searchable') }}</span>
+            <span class="block text-xs text-muted-foreground">{{ searchHint }}</span>
+            <span v-if="kind === 'telegram'" class="mt-1 block text-xs text-muted-foreground">{{ t('chatBots.bindings.searchableTelegram') }}</span>
+            <span v-if="!search.available" class="mt-1 block text-xs text-amber-700 dark:text-amber-400">{{ t('chatBots.bindings.searchableUnavailable') }}</span>
+          </span>
+        </label>
+        <!-- Outside the label, as above: the chip opens a card. -->
+        <div v-if="b.searchableBy && b.searchableAt" class="mt-1 flex flex-wrap items-center gap-1.5 pl-[1.625rem] text-xs text-muted-foreground">
+          {{ t('chatBots.bindings.searchableBy') }}
+          <UserChip :user-id="b.searchableBy" size="sm" />
+          <span>· {{ formatDate(b.searchableAt) }}</span>
         </div>
         <button
           type="button"

@@ -904,6 +904,7 @@ export type I18nTranslations = {
             "budgetWorkspace": string;
             "upstreamStatus": string;
             "upstreamError": string;
+            "flowAnswerStale": string;
             "upstreamNoCredit": string;
             "upstreamAuth": string;
             "unreachable": string;
@@ -1415,6 +1416,26 @@ export type I18nTranslations = {
                 "warning": string;
                 "caution": string;
             };
+        };
+    };
+    "flow": {
+        "captureDecision": {
+            "project": string;
+            "relatedPage": string;
+            "noLink": string;
+            "reviewer": string;
+        };
+        "markOutdated": {
+            "scope": string;
+            "scopePage": string;
+            "scopeSubtree": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "exclusions": string;
+            "reason": string;
         };
     };
     "import": {

@@ -1,5 +1,5 @@
 import { ASSISTANT_CODE_TOOL_NAMES, ASSISTANT_TASK_READ_TOOL_NAMES, ASSISTANT_TASK_TOOL_NAMES } from '@knowledge/contracts';
-import type { AnalyticsChannel, AssistantPrompt, AssistantSource, AssistantUiBlock } from '@knowledge/contracts';
+import type { AnalyticsChannel, AssistantPrompt, AssistantSource, AssistantUiBlock, FlowAnswers, FlowKey } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { Audience } from '../permissions/access-scope.js';
 
@@ -58,6 +58,12 @@ export interface AssistantToolContext {
    * or a background agent. Absent is the in-app assistant.
    */
   channel?: Extract<AnalyticsChannel, 'chat' | 'agent'>;
+  /**
+   * The question flow this turn answers a step of (#425), rebuilt by the
+   * harness from the thread's stored answers. A flow tool takes its answers
+   * from here and nowhere else — the model never relays them.
+   */
+  flow?: { flow: FlowKey; answers: FlowAnswers };
 }
 
 export interface AssistantToolResult {

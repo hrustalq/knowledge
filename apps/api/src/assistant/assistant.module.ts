@@ -19,6 +19,7 @@ import { AssistantController } from './assistant.controller.js';
 import { AiModule } from '../ai/ai.module.js';
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
+import { FlowsCoreModule } from '../flows/flows-core.module.js';
 
 // AiModule is a forwardRef because the dependency genuinely runs both ways:
 // a turn needs the workspace's AI config, and the settings page's "Test
@@ -61,6 +62,8 @@ import { TemplatesCoreModule } from '../templates/templates-core.module.js';
     PermissionsCoreModule,
     // POST /v1/assistant/lint (#74); shared with the MCP tool set.
     StyleLintModule,
+    // capture_decision / mark_outdated and the questions before them (#425).
+    FlowsCoreModule,
     forwardRef(() => AiModule),
   ],
   controllers: [AssistantController],

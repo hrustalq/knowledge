@@ -986,6 +986,10 @@ model AssistantMessage {
   // signals. Nullable so pre-feature rows and user turns read as "not assessed"
   // rather than as a level.
   confidence Json?
+  // AssistantFlowAnswer | null — a user turn that answered one step of a
+  // question flow (#425): { flow, questionId, value }. The open flow is
+  // rebuilt from these, so there is no flow state table. Nullable, no backfill.
+  answer     Json?
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   thread AssistantThread @relation(fields: [threadId], references: [id])

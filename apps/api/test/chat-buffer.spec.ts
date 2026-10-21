@@ -160,7 +160,7 @@ describe('the listening switch', () => {
     };
     const adapter = { postMessage: vi.fn(post), render: (v: unknown) => v };
     const cfg = { get: (k: string) => ({ API_PUBLIC_URL: 'https://api.test', CHAT_LISTEN_TTL_DAYS: 7 })[k] };
-    const svc = new ChatIntegrationsService(prisma as never, { get: () => adapter } as never, {} as never, cfg as never);
+    const svc = new ChatIntegrationsService(prisma as never, { get: () => adapter } as never, {} as never, cfg as never, {} as never);
     vi.spyOn(svc, 'require').mockResolvedValue({ id: 'int-1', kind, locale: 'en' } as never);
     vi.spyOn(svc, 'context').mockReturnValue({ token: 'T' } as never);
     return { svc, prisma, adapter, row };

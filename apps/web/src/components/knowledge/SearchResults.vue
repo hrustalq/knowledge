@@ -11,19 +11,23 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate, formatDateTime } from '@/lib/format'
 import VerificationBadge from '@/components/verification/VerificationBadge.vue'
-import type { SearchFailure, SearchHit, SearchView } from './use-search'
+import type { SearchCopy, SearchFailure, SearchHit, SearchView } from './use-search'
 
 const { t } = useI18n()
 
-defineProps<{
+const props = defineProps<{
   response: SearchView | null
   busy: boolean
   error: SearchFailure | null
   activeFilterCount: number
+  /** What the idle and no-match states say; page search's wording when omitted. */
+  copy?: SearchCopy
 }>()
 
-/** A router link in the app, a plain link in the reader. */
-const linkIs = (r: SearchHit) => (r.to ? RouterLink : 'a')
+const say = (k: keyof SearchCopy, fallback: string) => props.copy?.[k] ?? t(fallback)
+
+/** A router link in the app, a plain link in the reader, plain text for a hit with nowhere to go. */
+const linkIs = (r: SearchHit) => (r.to ? RouterLink : r.href ? 'a' : 'div')
 const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
 </script>
 
@@ -49,9 +53,9 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
       v-else-if="!response"
       class="flex flex-col items-center gap-1.5 py-16 text-center text-muted-foreground"
     >
-      <p class="text-sm">{{ t('search.searchEveryPage') }}</p>
+      <p class="text-sm">{{ say('idle', 'search.searchEveryPage') }}</p>
       <p class="max-w-sm text-xs leading-relaxed">
-        {{ t('search.emptyHint') }}
+        {{ say('idleHint', 'search.emptyHint') }}
       </p>
     </div>
 
@@ -60,12 +64,12 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
       class="flex flex-col items-center gap-2 py-16 text-center"
     >
       <SearchX class="size-5 text-muted-foreground" />
-      <p class="text-sm text-muted-foreground">{{ t('search.noMatches') }}</p>
+      <p class="text-sm text-muted-foreground">{{ say('none', 'search.noMatches') }}</p>
       <p v-if="activeFilterCount > 0" class="max-w-sm text-xs leading-relaxed text-muted-foreground">
         {{ t('search.narrowedBy', { n: activeFilterCount }, activeFilterCount) }}
       </p>
       <p v-else class="max-w-sm text-xs leading-relaxed text-muted-foreground">
-        {{ t('search.broaderQuery') }}
+        {{ say('noneHint', 'search.broaderQuery') }}
       </p>
       <button
         v-if="activeFilterCount > 0"
@@ -84,7 +88,10 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
             :is="linkIs(r)"
             :to="r.to"
             :href="r.to ? undefined : r.href"
-            class="block rounded-md px-2 py-3 transition-colors hover:bg-muted/60"
+            :target="r.external ? '_blank' : undefined"
+            :rel="r.external ? 'noopener noreferrer' : undefined"
+            class="block rounded-md px-2 py-3 transition-colors"
+            :class="r.to || r.href ? 'hover:bg-muted/60' : ''"
             @click="emit('navigate')"
           >
             <div class="flex items-baseline justify-between gap-3">

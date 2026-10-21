@@ -571,7 +571,9 @@
     "listenTelegramOnly": "Keeping messages for harvesting is for Telegram groups only; Time and Mattermost threads are read whole",
     "listenNoticeFailed": "The bot could not tell the group it keeps messages, so nothing is kept: {reason}",
     "autoHarvestNeedsListening": "Automatic harvest reads the messages a group keeps: turn on Keep messages first",
-    "autoHarvestNoticeFailed": "The bot could not tell the group its threads will be harvested automatically, so it stays off: {reason}"
+    "autoHarvestNoticeFailed": "The bot could not tell the group its threads will be harvested automatically, so it stays off: {reason}",
+    "searchNoticeFailed": "The bot could not tell the group its messages will be searchable, so they are not: {reason}",
+    "searchDisabled": "Searchable chat is turned off on this server (CHAT_SEARCH_ENABLED)"
   },
   "group": {
     "notFound": "Group {id} not found",

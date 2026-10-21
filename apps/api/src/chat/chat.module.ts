@@ -23,6 +23,9 @@ import { ChatCapturesService } from './chat-captures.service.js';
 import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
 import { ChatLinkController } from './chat-link.controller.js';
+import { ChatMessagesService } from './chat-messages.service.js';
+import { ChatSearchController } from './chat-search.controller.js';
+import { ChatSearchCoreModule } from './chat-search-core.module.js';
 import { ChatSettingsController } from './chat-settings.controller.js';
 import { ChatSocketSupervisor } from './chat-socket.supervisor.js';
 import { ChatSubscriptionSweeper } from './chat-subscription.sweeper.js';
@@ -47,6 +50,8 @@ import { HarvestService } from './harvest.service.js';
  * ChatAutoHarvestSweeper (#340) harvests a listening group's quiet threads
  * without anyone asking, as the admin who opted the group in — here, not in
  * the worker, for the same reason: a capture is a person's act.
+ * ChatMessagesService (#339) keeps a searchable group's messages, masked,
+ * apart from the harvest buffer.
  */
 @Module({
   imports: [
@@ -56,6 +61,7 @@ import { HarvestService } from './harvest.service.js';
     AssistantModule,
     AssistantClientModule,
     CapturesModule,
+    ChatSearchCoreModule,
     DocumentsModule,
     EventsModule,
     FeedbackCoreModule,
@@ -66,13 +72,14 @@ import { HarvestService } from './harvest.service.js';
     SearchCoreModule,
     StorageModule,
   ],
-  controllers: [ChatWebhookController, ChatSettingsController, ChatLinkController],
+  controllers: [ChatWebhookController, ChatSettingsController, ChatLinkController, ChatSearchController],
   providers: [
     ChatAdapterRegistry,
     ChatIntegrationsService,
     ChatIdentityService,
     ChatAnswersService,
     ChatBufferService,
+    ChatMessagesService,
     ChatCapturesService,
     ChatAnswerSweeper,
     ChatAutoHarvestSweeper,

@@ -1526,6 +1526,11 @@ export const ASSISTANT_TOOL_NAMES = [
   /** The page templates on offer, and one template's skeleton (issue #69). */
   'list_templates',
   'get_template',
+  /**
+   * Searchable groups' chat (#339). Read-only, offered only while the
+   * workspace has a searchable group; the conversational agents name it.
+   */
+  'search_chat',
   'ask_user',
   'request_agent_mode',
   'render_component',

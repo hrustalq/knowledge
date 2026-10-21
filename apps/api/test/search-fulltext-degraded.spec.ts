@@ -51,7 +51,7 @@ function build(fulltext: { enabled: boolean; search: (...a: unknown[]) => Promis
   const embeddings = { embed: vi.fn(async () => [0.1, 0.2]) };
   const provenance = { openIssueCounts: vi.fn(async () => new Map<string, number>()) };
   const policy = {
-    effective: vi.fn(async () => ({ reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40, trustRanking: false })),
+    effective: vi.fn(async () => ({ reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40, trustRanking: false, minCosine: 0, minCosineShare: 0 })),
   };
   const permissions = { documentFilterFor: vi.fn(async () => ({ kind: 'all' as const })) };
   const config = {
@@ -110,6 +110,18 @@ describe('SearchService with an unreachable BM25 index (#173)', () => {
     const res = await svc.search({ workspaceId: WS, query: 'q' }, ADMIN);
     expect(res.results.map((r) => r.documentId).sort()).toEqual(['kw', 'vec']);
     expect(res).not.toHaveProperty('degraded');
+  });
+
+  it('reports the same raw cosine whichever legs answered (#403)', async () => {
+    const hybrid = build({ enabled: true, search: vi.fn(async () => [hit('vec', 3), hit('kw', 2)]) });
+    const degraded = build({ enabled: true, search: vi.fn(async () => Promise.reject(new Error('down'))) });
+    const vectorOnly = build({ enabled: false, search: vi.fn(async () => []) });
+    const top = async (b: ReturnType<typeof build>) =>
+      (await b.svc.search({ workspaceId: WS, query: 'q' }, ADMIN)).results.map((r) => [r.documentId, r.vectorScore]);
+    // Fused, `vec` scores ~0.033; its cosine stays 0.9. BM25-only `kw` has none.
+    expect(await top(hybrid)).toEqual([['vec', 0.9], ['kw', undefined]]);
+    expect(await top(degraded)).toEqual([['vec', 0.9]]);
+    expect(await top(vectorOnly)).toEqual([['vec', 0.9]]);
   });
 
   it('is unchanged with FULLTEXT_PROVIDER=none', async () => {

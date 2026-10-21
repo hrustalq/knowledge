@@ -172,6 +172,15 @@ function renderUpdates(view: ChatUpdatesView): ChatOutMessage {
 }
 
 /**
+ * A supergroup's message as `t.me/c/…`, which opens for its members. A basic
+ * group or a private chat has no message links. Stateless, so chat search
+ * (#339) links a window without an adapter.
+ */
+export function telegramMessageUrl(chatId: string, messageId: string): string | null {
+  return chatId.startsWith('-100') ? `https://t.me/c/${chatId.slice(4)}/${messageId}` : null;
+}
+
+/**
  * Telegram (issue #71, phase 1). Bot API over plain `fetch` — there is no SDK
  * here, for the reason ArcadeDB has none: the surface is five methods.
  *
@@ -204,7 +213,8 @@ export class TelegramAdapter implements ChatAdapter {
     }
     if (update.callback_query) return this.parseCallback(update.callback_query);
     if (update.message_reaction) return parseReaction(update.message_reaction);
-    const msg = update.message;
+    // An edit arrives as the whole message again (#339); the Bot API never reports a deletion.
+    const msg = update.message ?? update.edited_message;
     if (!msg?.from || msg.from.is_bot || !msg.chat) return [];
     const original = (msg.text ?? msg.caption ?? '').trim();
     if (!original) return [];
@@ -240,7 +250,8 @@ export class TelegramAdapter implements ChatAdapter {
         threadId: null,
         command,
         action: null,
-        ...(msg.date ? { at: new Date(msg.date * 1000) } : {}),
+        ...(msg.date ? { at: new Date((update.edited_message ? (msg.edit_date ?? msg.date) : msg.date) * 1000) } : {}),
+        ...(update.edited_message ? { change: 'edited' as const } : {}),
         replyTo: replyTo
           ? {
               messageId: String(replyTo.message_id),
@@ -347,10 +358,11 @@ export class TelegramAdapter implements ChatAdapter {
     await this.call(ctx, 'setWebhook', {
       url,
       secret_token: secret,
-      // Only what the bot acts on: a question, a press of its own buttons, and
-      // a reaction — which Telegram sends only where the bot is a group admin.
-      // Joins and edits would be deliveries to verify and drop.
-      allowed_updates: ['message', 'callback_query', 'message_reaction'],
+      // Only what the bot acts on: a question, a press of its own buttons, a
+      // reaction — which Telegram sends only where the bot is a group admin —
+      // and an edit, which a searchable group's kept copy follows (#339).
+      // Joins would be deliveries to verify and drop.
+      allowed_updates: ['message', 'edited_message', 'callback_query', 'message_reaction'],
       drop_pending_updates: true,
     });
   }
@@ -360,7 +372,7 @@ export class TelegramAdapter implements ChatAdapter {
    * group or a private chat has no message links.
    */
   messageUrl(chatId: string, messageId: string): string | null {
-    return chatId.startsWith('-100') ? `https://t.me/c/${chatId.slice(4)}/${messageId}` : null;
+    return telegramMessageUrl(chatId, messageId);
   }
 
   directLink(botUsername: string | null, payload?: string): string | null {
@@ -496,6 +508,8 @@ interface TelegramMessage {
   forward_origin?: TelegramForwardOrigin;
   is_topic_message?: boolean;
   message_thread_id?: number;
+  /** Unix seconds; on an `edited_message` only. */
+  edit_date?: number;
 }
 
 /** MessageOrigin: `user`, `hidden_user`, `chat` or `channel`. */
@@ -536,6 +550,7 @@ interface TelegramMessageReaction {
 interface TelegramUpdate {
   update_id?: number;
   message?: TelegramMessage;
+  edited_message?: TelegramMessage;
   callback_query?: TelegramCallbackQuery;
   message_reaction?: TelegramMessageReaction;
 }

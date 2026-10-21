@@ -7,6 +7,7 @@ import { PermissionsCoreModule } from '../permissions/permissions-core.module.js
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { CommunitiesCoreModule } from '../communities/communities-core.module.js';
 import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
+import { ChatSearchCoreModule } from '../chat/chat-search-core.module.js';
 import { AssistantReadToolsService } from './assistant-read-tools.service.js';
 
 /**
@@ -21,7 +22,7 @@ import { AssistantReadToolsService } from './assistant-read-tools.service.js';
  * proposes and the API publishes (docs/features/17).
  */
 @Module({
-  imports: [PrismaModule, SearchCoreModule, DocumentsCoreModule, AuthCoreModule, TemplatesCoreModule, PermissionsCoreModule, CommunitiesCoreModule, AnalyticsCoreModule],
+  imports: [PrismaModule, SearchCoreModule, DocumentsCoreModule, AuthCoreModule, TemplatesCoreModule, PermissionsCoreModule, CommunitiesCoreModule, AnalyticsCoreModule, ChatSearchCoreModule],
   providers: [AssistantReadToolsService],
   exports: [AssistantReadToolsService],
 })

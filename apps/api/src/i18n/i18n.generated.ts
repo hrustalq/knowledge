@@ -497,6 +497,14 @@ export type I18nTranslations = {
                 "many": string;
             };
         };
+        "search": {
+            "on": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+        };
     };
     "connector": {
         "stage": {
@@ -1171,6 +1179,8 @@ export type I18nTranslations = {
             "listenNoticeFailed": string;
             "autoHarvestNeedsListening": string;
             "autoHarvestNoticeFailed": string;
+            "searchNoticeFailed": string;
+            "searchDisabled": string;
         };
         "group": {
             "notFound": string;

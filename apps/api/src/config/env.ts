@@ -213,6 +213,14 @@ export const envSchema = z.object({
   /** Kill switch for the trust re-rank in search; false restores the pre-#66 order exactly. */
   SEARCH_TRUST_RANKING: boolish(true),
   /**
+   * Absolute cosine floor for the vector leg (#401), the default of a
+   * workspace's `minCosine`. It depends on the embedding model, so the code
+   * default is 0 (none): 0.4 suits bge-m3, where off-topic queries top out
+   * near 0.37 and real questions start near 0.49, and would empty every search
+   * on the stub embedder.
+   */
+  SEARCH_MIN_COSINE: z.coerce.number().min(0).max(1).default(0),
+  /**
    * AI-readable output (issue #68): `GET /v1/documents/:id/markdown` and
    * `Accept: text/markdown` on `/content`. Kill switch — false 404s the routes
    * and `/content` stays JSON-only.
@@ -914,6 +922,22 @@ export const envSchema = z.object({
   HARVEST_AUTO_QUIET_MINUTES: z.coerce.number().int().min(1).default(60),
   /** Automatic harvests one binding may run per sweeper tick (one model call each). */
   HARVEST_AUTO_MAX_PER_TICK: z.coerce.number().int().min(0).default(1),
+  /**
+   * Searchable chat (#339): the ceiling over each binding's switch. Off, no
+   * binding can be made searchable and nothing new is kept; what was kept
+   * still expires on time.
+   */
+  CHAT_SEARCH_ENABLED: boolish(true),
+  /** Days a searchable group's messages are kept, at most; a workspace may only shorten it. */
+  CHAT_SEARCH_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  /** Messages in one indexed window of a thread, at most. */
+  CHAT_SEARCH_WINDOW_MESSAGES: z.coerce.number().int().min(2).default(20),
+  /** Minutes of silence in a thread that start a new window. */
+  CHAT_SEARCH_WINDOW_GAP_MIN: z.coerce.number().int().min(1).default(30),
+  /** Minutes a thread must be quiet before its last, not yet full window is indexed. */
+  CHAT_SEARCH_SETTLE_MIN: z.coerce.number().int().min(0).default(10),
+  /** Seconds between the worker's chat indexing ticks. */
+  CHAT_SEARCH_TICK_SEC: z.coerce.number().int().min(5).default(60),
 
   /**
    * Interface + API language (docs/features/18). Also the fallback whenever a

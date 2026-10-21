@@ -28310,6 +28310,120 @@
         ]
       }
     },
+    "/v1/chat/search-settings": {
+      "get": {
+        "operationId": "ChatSettingsController_searchSettings",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Searchable chat (#339): whether it is available, and the retention asked for vs. applied",
+        "tags": [
+          "chat"
+        ]
+      },
+      "patch": {
+        "operationId": "ChatSettingsController_updateSearchSettings",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChatSearchSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Shorten how long searchable groups’ messages are kept; null inherits CHAT_SEARCH_RETENTION_DAYS",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
     "/v1/chat/integrations": {
       "get": {
         "operationId": "ChatSettingsController_list",
@@ -28786,7 +28900,7 @@
             }
           }
         },
-        "summary": "Change a group’s project, agent, answer mode, language, listening or automatic harvest",
+        "summary": "Change a group’s project, agent, answer mode, language, listening, automatic harvest or searchability",
         "tags": [
           "chat"
         ]
@@ -29432,6 +29546,120 @@
           }
         },
         "summary": "Unlink one of my messenger accounts",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/v1/chat/search": {
+      "get": {
+        "operationId": "ChatSearchController_availability",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Whether the caller may read any searchable group — the same ACL as the search, without a query",
+        "tags": [
+          "chat"
+        ]
+      },
+      "post": {
+        "operationId": "ChatSearchController_run",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatSearchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Search the masked messages of searchable groups the caller may read",
         "tags": [
           "chat"
         ]
@@ -31133,7 +31361,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.28.0",
+    "version": "0.29.1",
     "contact": {}
   },
   "tags": [],
@@ -36165,6 +36393,16 @@
             "nullable": true,
             "description": "Reciprocal-rank-fusion constant; null = 60"
           },
+          "minCosine": {
+            "type": "number",
+            "nullable": true,
+            "description": "Absolute cosine floor for vector hits (#401); null = SEARCH_MIN_COSINE"
+          },
+          "minCosineShare": {
+            "type": "number",
+            "nullable": true,
+            "description": "Keep vector hits at or above this share of the best cosine (#401); null = 0.9"
+          },
           "trustWeights": {
             "nullable": true,
             "description": "Per-state search weights; a state left out keeps its default, null resets them all",
@@ -36623,6 +36861,25 @@
           "format"
         ]
       },
+      "UpdateChatSearchSettingsDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "retentionDays": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "description": "Days a searchable group’s messages are kept; null inherits CHAT_SEARCH_RETENTION_DAYS, and a longer value is clamped to it"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "retentionDays"
+        ]
+      },
       "CreateChatIntegrationDto": {
         "type": "object",
         "properties": {
@@ -36793,6 +37050,10 @@
           "autoHarvest": {
             "type": "boolean",
             "description": "Harvest this group’s quiet threads automatically (#340), as the admin who turns it on — never anyone named in the body. Needs listening; turning listening off turns this off too."
+          },
+          "searchable": {
+            "type": "boolean",
+            "description": "Make this group’s messages searchable (#339), as the admin who turns it on. Any platform; turning it on posts a notice in the group first (400 if it cannot), turning it off deletes what was kept."
           }
         }
       },
@@ -36901,6 +37162,53 @@
         },
         "required": [
           "code"
+        ]
+      },
+      "ChatSearchDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "projectIds": {
+            "description": "Only groups bound to these projects",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "bindingIds": {
+            "description": "Only these bound groups",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Only windows still going at or after this time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Only windows started at or before this time"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Hits to return; 10 when omitted"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "query"
         ]
       },
       "CaptureSessionDto": {

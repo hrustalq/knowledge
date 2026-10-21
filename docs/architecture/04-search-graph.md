@@ -182,6 +182,39 @@ to index for keyword search must never fail a revision that is otherwise
 retrievable. Hybrid ranking fuses the vector and BM25 orderings by **reciprocal
 rank fusion**; `mode: 'keyword'` is BM25-only.
 
+### Analyzed fields (#400)
+
+Chunk `text` keeps the `standard` analyzer and carries two multi-fields:
+`text.ru` (built-in `russian`) and `text.en` (built-in `english`), each with
+its language's stemming and stopwords. «ветки» and «ветка» meet at `ветк`,
+and «от», «при», `from` and `which` drop out.
+
+`bm25Clause` queries **one** of them, picked by the query's script: any
+Cyrillic letter sends it to `text.ru`, anything else to `text.en`. Latin tokens
+in a Russian query (`main`, `MR`) pass the Russian analyzer unchanged. Each
+analyzer drops only its own language's stopwords, so a `most_fields` sum over
+all three fields counted «от» and «при» once per field that kept them, and a
+3 200-character Docker chunk outranked the branching pages on stopwords. The
+raw `text` field is no longer queried.
+
+The match carries `minimum_should_match: '2<60%'`: a query of up to two
+analyzed terms needs all of them, a longer one 60% of them, rounded down (3
+terms → 1, 4 → 2, 10 → 6). One shared generic token (`base`) is no longer a
+hit. What it cannot do is bridge word families. The Snowball stemmer leaves
+«базироваться» as `базирова` and «база» as `баз`, so «От какой ветки
+базироваться при разработке фичи?» shares only `ветк` with the page that
+answers it, and BM25 returns nothing for it. That page reaches the answer
+through the vector leg, and cross-language matching (`feature` ↔ «фича») is
+the vector leg's job as well.
+
+An index created before #400 takes the multi-fields through the boot
+`_mapping` update, as it does `ACL_PROPERTIES`. `OpenSearchFulltextProvider.reanalyze`
+then counts rows with no `text.ru` and, if there are any, starts a background
+`_update_by_query` that rewrites them from their own `_source`. Nothing is
+re-chunked or re-embedded. Until it finishes, those rows are invisible to
+BM25. The check reads the rows rather than the mapping, so a backfill cut
+short by a restart resumes on the next boot.
+
 The read path is just as optional (#173). `SearchService.fulltextLeg` races the
 BM25 query against `FULLTEXT_TIMEOUT_MS` (default 1500). If it errors or loses
 the race, the search drops that leg and answers from vectors alone. A keyword
@@ -197,6 +230,47 @@ A failed write leaves the index behind the graph. The revision is stamped
 chunks ([03](03-ingestion.md#stale-detection-and-reindex)). Restriction stamps
 need nothing new: `AclRestampSweeper` advances `acl_stamped_version` only after
 both stores take the stamp, so a failed OpenSearch restamp is simply retried.
+
+## Relevance floor (#401)
+
+Rank fusion knows ranks, not relevance. Left alone it always fills the limit,
+and because it rewards being in both lists, a chunk at middling ranks in both
+legs beats one near the top of either: 1/77 + 1/69 is more than 1/63. On the
+prod corpus (bge-m3) that put an ADR, which matched only on `from`, second for
+«От какой ветки базироваться при разработке фичи?», above the page that
+actually answered it.
+
+`floorVectorHits` (`search/ranking.ts`) drops weak vector evidence **before**
+fusion. A vector hit is kept only if its cosine is at least `minCosine` **and**
+at least `minCosineShare` of the leg's best cosine. A chunk weak in both legs
+is gone, and a chunk weak in one leg keeps only the other leg's rank. A search
+may then return fewer than `limit` results, or none at all.
+
+- **`minCosineShare`** defaults to `SEARCH_MIN_COSINE_SHARE` (0.9, contracts).
+  It is the ranking fix and does not depend on the model. bge-m3 cosines sit in
+  a narrow band (top 0.49, rank 12 at 0.43 for that question), so ranks 3–12
+  are effectively ties, and only those near the best count as evidence.
+- **`minCosine`** defaults to `SEARCH_MIN_COSINE`, whose code default is 0
+  (off). An absolute cosine means nothing across models, and 0.4 would empty
+  every search on the stub embedder. Production sets 0.4 for bge-m3: off-topic
+  queries top out near 0.37 there, and real questions start near 0.49.
+- **The BM25 leg has no floor.** Its match already demands most of the
+  query's terms (#400), so a BM25 hit is evidence. A share-of-best floor on it
+  changed nothing measurable in the replay.
+
+Measured on 2026-10-21 by replaying prod pools through `rankPool`, with the
+BM25 leg re-asked under #400's `minimum_should_match`: 31 known-item titles, 7
+real queries and 5 off-topic ones in RTech OMS. Known-item recall@1 went from
+54.8% to 96.8% and MRR from 0.753 to 0.984, with recall@10 unchanged at 100%.
+Real queries returned 6.0 results on average instead of 10. Off-topic queries
+returned 0 instead of 10. The sample is small, so treat the direction as real
+and the magnitudes as indicative.
+
+The refill round after the permission post-filter
+([Page restrictions](#page-restrictions)) does not count a floored vector leg
+as saturated: whatever lies deeper scores lower still. `search.executed`
+records `vectorFloored`, the vector hits the floor dropped, so a backtest can
+tell a floored search from one whose legs found nothing.
 
 ## Filters are applied after ranking
 
@@ -257,12 +331,13 @@ have their fused score multiplied by `trustWeight(status, inactive)`
 inactive ×0.9), re-sorted, and only then cut to `k`. Multiplicative so the same
 factor serves RRF, cosine-only and max-normalized BM25 scores.
 
-The fusion constant and the weights are per-workspace knobs (#305): `rrfK`
-and `trustWeights` on `knowledge_health_settings`, sparse over
-`SEARCH_RRF_K` (60) and `TRUST_WEIGHTS`, and sparse per state, so overriding
+The fusion constant, the relevance floor and the weights are per-workspace
+knobs (#305, #401): `rrfK`, `minCosine`, `minCosineShare` and `trustWeights`
+on `knowledge_health_settings`, sparse over `SEARCH_RRF_K` (60),
+`SEARCH_MIN_COSINE`, `SEARCH_MIN_COSINE_SHARE` (0.9) and `TRUST_WEIGHTS`, and sparse per state, so overriding
 one weight keeps the other seven. `VerificationPolicyService` resolves them on
 the same read that resolves `trustRanking`, so they cost no extra query, and
-an empty row ranks byte-for-byte as before. `fuseHits` and the re-rank live in
+an empty row ranks as the defaults do. `floorVectorHits`, `fuseHits` and the re-rank live in
 `search/ranking.ts`, where `rankPool` replays them over a recorded
 `SearchPool`. That is how `make tune` scores thousands of knob settings
 against one search per query
@@ -394,7 +469,8 @@ audit row carries `aclBypass: true`.
 `knowledge_search`, `knowledge_find_relations`, `knowledge_impact_analysis`,
 `knowledge_trace_relation`, `knowledge_get_historical_context`. Each passes the
 caller's `AccessScope`, exactly as the REST route it mirrors does; guests may
-use `knowledge_search`.
+use `knowledge_search`. `knowledge_search_chat` is the chat path's tool (see
+*Chat search* below), read-only and guarded the same way.
 
 ## Recording searches
 
@@ -414,6 +490,30 @@ for the workspace's retention, and its query text is redacted after
 `ANALYTICS_QUERY_TEXT_DAYS`. A search with no context (the backtest replaying,
 the PR-drift candidate search) writes the JSONL line and no row. The write is
 fire-and-forget and never fails the search.
+
+## Chat search
+
+Searchable groups' chat ([feature 60](../features/60-chat-search.md)) is a
+second, separate retrieval path that shares this one's parts, not its data.
+`ChatSearchService` never touches `Chunk`, `documents` or the fulltext
+provider, and `POST /v1/search` never returns a chat window.
+
+- **Vectors:** a `ChatChunk` vertex type with its own `LSM_VECTOR` index,
+  `ChatChunk[embedding]`. `ensureVectorIndex` and `vectorIndexFits` take the
+  vertex type as an argument, so the two indexes are built, sized and rebuilt
+  on an `EMBEDDINGS_DIM` change by the same code. `nearestChatChunks` is the
+  page query's twin, pre-filtered by the same kind of RID subquery: the
+  workspace and the readable binding ids.
+- **Text:** a generated `to_tsvector('russian', text)` column on
+  `chat_chunks`, GIN-indexed and queried with `plainto_tsquery`. It is
+  Postgres, not the BM25 provider, so it works with `FULLTEXT_PROVIDER=none`.
+- **Fusion:** the same `fuseHits` RRF (k = 60) over a 4× over-fetch.
+- **ACL first.** The readable bindings are decided in Postgres before either
+  leg runs (`canSeeChat`: the binding's project under the caller's
+  `AccessScope`; a project-less binding is never shown to a guest). Both legs
+  take only those ids, and the final read joins `chat_chunks` on them again.
+  As with pages, Postgres has the final say. A vector whose row is gone is
+  never served; the indexer reaps it.
 
 ## Communities
 

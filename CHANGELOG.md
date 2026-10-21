@@ -13,6 +13,169 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.30.0] — 2026-10-21
+
+### Added
+
+- A workspace admin can make a bound Telegram, Time or Mattermost group
+  **searchable** (#339, phase 1 of the chat search milestone). This is the
+  `searchable` switch on `PATCH /v1/chat/bindings/:id`, and it is separate
+  from *Keep messages for /capture*.
+  - **Turning it on:** the bot first tells the group what it keeps, for how
+    long, and that `/forget` works. If the bot cannot post that notice,
+    nothing is switched on.
+  - **What is kept:** from then on, people's messages are kept with emails,
+    phone numbers, card numbers, ID numbers and secrets masked before
+    anything is written. Edits are followed on every platform, and deletions
+    on Time and Mattermost (Telegram never tells bots about deletions).
+  - **Turning it off:** what was kept is deleted at once. Unbinding the group
+    does the same, and `/forget` deletes the asker's own messages too.
+  - **Retention:** messages are kept for at most `CHAT_SEARCH_RETENTION_DAYS`.
+    A workspace can shorten that through `GET`/`PATCH
+    /v1/chat/search-settings`.
+  - **Indexing:** the worker packs each thread into windows of at most
+    `CHAT_SEARCH_WINDOW_MESSAGES` messages, split at
+    `CHAT_SEARCH_WINDOW_GAP_MIN` minutes of silence. It indexes a window
+    once the thread has been quiet for `CHAT_SEARCH_SETTLE_MIN` minutes, or
+    once the window is full, and embeds it into its own vector index (phase
+    2). A window names no one, only `author-1`, `author-2`, and so on. An
+    edit, a delete or `/forget` re-indexes the window that held the message.
+  - **Search:** `POST /v1/chat/search` (phase 3) returns matching windows
+    with the group's title, platform, time span and masked snippet. It ranks
+    meaning and words together and links to the first message where the
+    platform has links (Telegram supergroups). It returns only groups the
+    caller may read:
+    - a group bound to a project: whoever can see that project, so a
+      restricted project's chat needs a grant on it;
+    - a group bound to no project: workspace members, never guests.
+
+    Chat results are kept apart from page results. Filters by project, group
+    and time span only narrow what the caller may already read.
+  - **Agents and bots** (phase 4) can search the same chats through
+    `knowledge_search_chat` (MCP) and `search_chat` (the assistant).
+    - **Offered only while the workspace has a searchable group**, and only
+      to the Researcher and Author agents, which also answer in chat bots.
+      Background agents never get it.
+    - **Masked, cited and labelled.** Results are masked and wrapped as
+      untrusted, and an answer cites a chat window as its own kind of
+      source. The window opens in the messenger where the platform has
+      links, and shows the group and time span in the sources panel.
+    - **Group answers stay inside the group's audience.** A bot answering
+      in a group searches only the chats of the group's project, and never
+      a restricted project's chat.
+  - **In the web app** (phase 5):
+    - **Search has a Pages | Chat tab strip.** The Chat tab lists matching
+      windows with the group, platform, time span, message count and masked
+      snippet, and opens the message in Telegram where there is a link. It
+      appears only for someone who may read a searchable group; that check
+      is `GET /v1/chat/search`, under the same rules as the search itself.
+      Page results are unchanged.
+    - **Settings → Chat bots** gains a **Make searchable** switch on every
+      group, on all three platforms. It names the retention period, the
+      audience and who switched it on and when. On Telegram it also says
+      privacy mode must be off and that deletions are not followed. The page
+      also gets a **Searchable chat** retention setting that shows what the
+      workspace asked for, the deployment's ceiling and what applies.
+    - The *Keep messages for /capture* hint no longer says "never
+      searchable". It now says kept messages serve only `/capture`, and that
+      searching is the separate switch.
+
+### Fixed
+
+- Keyword search (`FULLTEXT_PROVIDER=opensearch`) no longer ranks pages on
+  stopwords (#400). A Russian question such as «От какой ветки базироваться
+  при разработке фичи?» matched any chunk containing «от», «при» or «какой»,
+  and an English rewrite matched an env-var table on the single word `Base`.
+  Chunk text is now indexed with Russian and English stemming and stopwords,
+  so «ветки» finds «ветка». A query of more than two words must share 60% of
+  its meaningful words (rounded down) with a chunk before the keyword leg
+  returns it.
+- Search no longer pads its results with pages that have nothing to do with
+  the question (#401). Every search used to return its full limit, so the
+  assistant cited, as sources, pages that only loosely resembled the
+  question. A page also ranked high just because both semantic and keyword
+  search listed it somewhere low, which put it above the page that actually
+  answered.
+  - A semantic match now counts only if it is close to the best one: at
+    least 0.9 of the top similarity by default.
+  - Where `SEARCH_MIN_COSINE` is set, a match must also clear that absolute
+    similarity. A question nothing in the workspace answers then comes back
+    empty.
+  - A search may now return fewer results than its limit, or none.
+  - Admins can override both values per workspace under **Knowledge health →
+    Settings → Search ranking**, and `make tune` proposes them.
+
+  On a replay of production searches, the right page came first for 97% of
+  page titles, up from 55%, and off-topic questions returned nothing instead
+  of 10 pages.
+- The assistant no longer translates or pads your question before searching
+  (#402). Asked «От какой ветки базироваться при разработке фичи?», it
+  searched `feature development which branch base from base branch develop
+  main branching strategy`, and the English words matched code and table
+  headers instead of the Russian page that answered. The search tools in the
+  app and over MCP (`knowledge_search`, `knowledge_search_chat`) now tell the
+  model to search with the user's own words and language, and to reword only
+  to resolve "it" or "that page" from earlier in the conversation.
+- Assistant answers are no longer marked **low** confidence just because
+  keyword search is on (#403). With `FULLTEXT_PROVIDER=opensearch`, every
+  answer carried a "weak retrieval" reason worth −0.2, because the check read
+  the combined ranking score (at most about 0.03) against a semantic
+  similarity threshold of 0.35. It now reads the semantic similarity of the
+  best page the answer was given, whichever search legs ran. A page only
+  keyword search found does not count either way. Search results gain an
+  optional `vectorScore`, that similarity. Confidence already stored on past
+  answers is not recomputed.
+- **Knowledge health → Settings** no longer goes blank when you type a number
+  into any field (#401). Typing into a number box handed the form a number
+  where it expected text, so the form crashed on the first keystroke and
+  nothing could be saved from it.
+
+### Operations
+
+- **New env vars:**
+  - `CHAT_SEARCH_ENABLED` (default `true`)
+  - `CHAT_SEARCH_RETENTION_DAYS` (default `90`)
+  - `CHAT_SEARCH_WINDOW_MESSAGES` (default `20`)
+  - `CHAT_SEARCH_WINDOW_GAP_MIN` (default `30`)
+  - `CHAT_SEARCH_SETTLE_MIN` (default `10`)
+  - `CHAT_SEARCH_TICK_SEC` (default `60`)
+
+  Nothing is kept until an admin turns a group on.
+- **ArcadeDB:** the worker creates a `ChatChunk` vertex type and a second
+  `LSM_VECTOR` index (`ChatChunk[embedding]`) at boot. It is empty until a
+  group is made searchable. A change of `EMBEDDINGS_DIM` rebuilds it as it
+  does the page index, but chat windows are not re-embedded, so their
+  vectors drop out of the index until a later edit re-packs them.
+- **Migration:** `20261125100000_chat_search` adds `chat_messages`,
+  `chat_chunks` (with a generated `tsvector` column and a GIN index), two
+  nullable columns on `chat_channel_bindings` and one on
+  `workspace_settings`. It is additive, so a rollback needs no down
+  migration.
+- **Telegram:** a bot reports edits only after its webhook is set again.
+  Press **Test** on each Telegram bot after deploying.
+- **Retention sweep:** the chat sweeper's one-minute tick now also purges
+  kept chat (the harvest buffer and searchable groups) while
+  `CHAT_ENABLED=false`, because a retention is a promise about rows already
+  written.
+- **Search relevance floor (#401):**
+  - **New env var:** `SEARCH_MIN_COSINE` (default `0`, off). Production
+    embeds with bge-m3 and should run `0.4`, which `.env.production.example`
+    now gives. Run `gh variable set SEARCH_MIN_COSINE --env production --body
+    0.4` before tagging, or the deploy refuses the missing key. If embeddings
+    roll back to the stub, set it back to `0`, or every search comes back
+    empty.
+  - **Migration:** `20261126100000_search_floor` adds two nullable columns to
+    `knowledge_health_settings`. It is additive and survives a code rollback.
+  - The `search.executed` backtest line gains `vectorFloored`: how many
+    vector hits the floor dropped.
+- **Keyword search backfill (#400):** on its first search after the deploy,
+  the API (or the worker) adds the ru/en fields to the OpenSearch index and
+  starts a background `_update_by_query` over the rows that lack them. Nothing
+  is re-embedded. Until it finishes, typically seconds to a few minutes, the
+  keyword leg misses older pages, and vector search still finds them. The
+  log line is `Re-analyzing <n> row(s) of <index>`. Rolling back is safe: the
+  previous image ignores the new fields.
+
 ## [0.29.1] — 2026-10-20
 
 ### Fixed
@@ -4027,7 +4190,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.29.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/hrustalq/knowledge/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/hrustalq/knowledge/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/hrustalq/knowledge/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/hrustalq/knowledge/compare/v0.27.0...v0.28.0

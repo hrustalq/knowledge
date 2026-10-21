@@ -4,7 +4,7 @@ import type { KnowledgeCapture } from '@prisma/client';
 import {
   accessRank,
   captureStateFor,
-  isWebSource,
+  isPageSource,
   type AssistantSource,
   type BulkRejectCapturesRequest,
   type BulkRejectCapturesResponse,
@@ -306,7 +306,7 @@ export class CaptureInboxService {
       select: { content: true },
     });
     const sources = (Array.isArray(message.sources) ? message.sources : []) as unknown as AssistantSource[];
-    const cited = [...new Set(sources.filter((s) => !isWebSource(s)).map((s) => (s as { documentId: string }).documentId))];
+    const cited = [...new Set(sources.filter(isPageSource).map((s) => s.documentId))];
 
     return this.captures.capture(
       {

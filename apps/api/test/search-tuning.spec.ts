@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
-import { SEARCH_RRF_K, TRUST_WEIGHTS, type FeedbackBacktestCase, type SourceVerificationState } from '@knowledge/contracts';
+import { SEARCH_MIN_COSINE_SHARE, SEARCH_RRF_K, TRUST_WEIGHTS, type FeedbackBacktestCase, type SourceVerificationState } from '@knowledge/contracts';
 import { VerificationPolicyService } from '../src/verification/verification-policy.service.js';
 import { isHoldout, tuneSearch, tuneThreshold, dedupeCost, type Replay } from '../src/search/tuning.js';
 import type { SearchPool } from '../src/search/ranking.js';
@@ -11,7 +11,7 @@ import type { CaseScores } from '../src/captures/capture-calibration.js';
  * and a proposal is only emitted when the holdout agrees with the train split.
  */
 
-const CURRENT = { rrfK: SEARCH_RRF_K, trustWeights: TRUST_WEIGHTS };
+const CURRENT = { rrfK: SEARCH_RRF_K, minCosine: 0, minCosineShare: 0, trustWeights: TRUST_WEIGHTS };
 
 function policy(row: Record<string, unknown> | null) {
   const prisma = { knowledgeHealthSettings: { findUnique: vi.fn(async () => row), upsert: vi.fn(async () => ({})) } };
@@ -21,9 +21,12 @@ function policy(row: Record<string, unknown> | null) {
 
 describe('search knobs settings', () => {
   it('an empty row, or no row, resolves to the code constants', async () => {
-    for (const row of [null, { rrfK: null, trustWeights: null }]) {
+    for (const row of [null, { rrfK: null, minCosine: null, minCosineShare: null, trustWeights: null }]) {
       const effective = await policy(row).svc.effective('ws');
       expect(effective.rrfK).toBe(SEARCH_RRF_K);
+      expect(effective.minCosineShare).toBe(SEARCH_MIN_COSINE_SHARE);
+      // SEARCH_MIN_COSINE: the stub config answers 1 for every key.
+      expect(effective.minCosine).toBe(1);
       expect(effective.trustWeights).toEqual(TRUST_WEIGHTS);
     }
   });
@@ -88,6 +91,31 @@ describe('tuneSearch', () => {
     expect(t.candidate.trustWeights.verified).toBeLessThan(1.12);
     expect(t.proposal).toBeNull();
     expect(t.reason).toMatch(/holdout MRR/);
+  });
+
+  it('proposes a floor when weak vector evidence is what outranks the answer (#401)', () => {
+    // `a` answers, first in BM25 only. `b` is second in BM25 and far behind the
+    // vector leg's best, yet both legs naming it gives 2/62 > 1/61. Trust is
+    // off, so no weight moves anything and no rrfK helps; dropping `b`'s vector
+    // evidence (share 0.8 of 0.9 = 0.72 > 0.5) does.
+    const hit = (documentId: string, score: number) => ({ documentId, chunkId: documentId, revisionId: 'r', text: '', headingPath: [], score });
+    const page = { status: 'unverified' as const, inactive: false, archived: false };
+    const cases = [...queries(false, 3), ...queries(true, 2)].map(
+      (query): Replay => ({
+        case: { workspaceId: 'ws', query, expectedDocumentIds: ['a'], rejectedDocumentIds: [] } as unknown as FeedbackBacktestCase,
+        pool: {
+          vectorHits: [hit('c', 0.9), hit('b', 0.5)],
+          textHits: [hit('a', 9), hit('b', 8)],
+          fetchK: 20,
+          k: 10,
+          trustOn: false,
+          pages: new Map(['a', 'b', 'c'].map((id) => [id, page])),
+        },
+      }),
+    );
+    const t = tuneSearch(cases, [], CURRENT, 10);
+    expect(t.proposal).toEqual({ ...CURRENT, minCosineShare: 0.8 });
+    expect(t.feedback.holdout.candidate.mrr).toBeGreaterThan(t.feedback.holdout.current.mrr);
   });
 
   it('proposes nothing without a labelled vote', () => {

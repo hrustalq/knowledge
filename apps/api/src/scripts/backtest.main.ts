@@ -10,7 +10,7 @@ import { AppModule } from '../app.module.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SearchService } from '../search/search.service.js';
 import type { SearchDto } from '../search/search.dto.js';
-import type { SearchPool } from '../search/ranking.js';
+import type { SearchKnobs, SearchPool } from '../search/ranking.js';
 import {
   amendCost,
   dedupeCost,
@@ -614,7 +614,7 @@ async function tune(): Promise<void> {
   }
   const replay = (cases: FeedbackBacktestCase[]): Replay[] => cases.map((c) => ({ case: c, pool: pools.get(c.query) ?? null }));
   const [effective, override] = await Promise.all([policy.effective(workspaceId), policy.override(workspaceId)]);
-  const searchTuning = tuneSearch(replay(feedback), replay(known), { rrfK: effective.rrfK, trustWeights: effective.trustWeights }, k);
+  const searchTuning = tuneSearch(replay(feedback), replay(known), { rrfK: effective.rrfK, minCosine: effective.minCosine, minCosineShare: effective.minCosineShare, trustWeights: effective.trustWeights }, k);
 
   const capture = await app.get(AiConfigService).captureSettings(workspaceId);
   const probes = await captureScores(app, workspaceId, Number(option('--capture-limit', '200')), false);
@@ -627,10 +627,12 @@ async function tune(): Promise<void> {
 
   // The diff, against what applies now. trustWeights replaces the stored map,
   // so the states already overridden ride along.
-  const healthPatch: { rrfK?: number; trustWeights?: Partial<TrustWeights> } = {};
+  const healthPatch: { rrfK?: number; minCosine?: number; minCosineShare?: number; trustWeights?: Partial<TrustWeights> } = {};
   const proposal = searchTuning.proposal;
   if (proposal) {
     if (proposal.rrfK !== effective.rrfK) healthPatch.rrfK = proposal.rrfK;
+    if (proposal.minCosine !== effective.minCosine) healthPatch.minCosine = proposal.minCosine;
+    if (proposal.minCosineShare !== effective.minCosineShare) healthPatch.minCosineShare = proposal.minCosineShare;
     const changed = Object.entries(proposal.trustWeights).filter(([state, v]) => v !== effective.trustWeights[state as keyof TrustWeights]);
     if (changed.length) healthPatch.trustWeights = { ...override.trustWeights, ...Object.fromEntries(changed) };
   }
@@ -638,8 +640,8 @@ async function tune(): Promise<void> {
   if (dedupe?.proposal != null) aiPatch.captureDedupeThreshold = dedupe.proposal;
   if (amend?.proposal != null) aiPatch.captureAmendThreshold = amend.proposal;
 
-  const knobs = (kn: { rrfK: number; trustWeights: TrustWeights }) =>
-    [`rrfK=${kn.rrfK}`, ...TUNED_WEIGHTS.map((s) => `${s}=${kn.trustWeights[s]}`)].join('  ');
+  const knobs = (kn: SearchKnobs) =>
+    [`rrfK=${kn.rrfK}`, `minCosine=${kn.minCosine}`, `minCosineShare=${kn.minCosineShare}`, ...TUNED_WEIGHTS.map((s) => `${s}=${kn.trustWeights[s]}`)].join('  ');
   const pct = (share: number) => `${(share * 100).toFixed(1).padStart(5)}%`;
   const threshold = (label: string, t: ThresholdTuning | null) => {
     if (!t) return console.log(`${label.padEnd(8)} skipped: ${'error' in probes ? probes.error : ''}`);

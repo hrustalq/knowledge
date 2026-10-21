@@ -14,7 +14,7 @@
 // notice per row.
 import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
-import { isWebSource } from '@knowledge/contracts'
+import { isChatSource, isPageSource, isWebSource } from '@knowledge/contracts'
 import { assistantSourceKey } from '@knowledge/contracts'
 import { useAssistantStore } from '@/stores/assistant'
 import SourceChip from './SourceChip.vue'
@@ -23,8 +23,11 @@ const { t } = useI18n()
 
 const assistant = useAssistantStore()
 
-const pages = computed(() => assistant.documentsTouched.filter((s) => !isWebSource(s)))
+const pages = computed(() => assistant.documentsTouched.filter(isPageSource))
 const web = computed(() => assistant.documentsTouched.filter(isWebSource))
+// Chat (#339) is a third promise again: said by people, kept masked and only
+// for the group's retention, never reviewed as a page is.
+const chat = computed(() => assistant.documentsTouched.filter(isChatSource))
 </script>
 
 <template>
@@ -39,7 +42,7 @@ const web = computed(() => assistant.documentsTouched.filter(isWebSource))
 
     <div class="quiet-scroll min-h-0 flex-1 overflow-y-auto p-2">
       <p
-        v-if="pages.length === 0 && web.length === 0"
+        v-if="pages.length === 0 && web.length === 0 && chat.length === 0"
         class="px-2 py-1 text-xs leading-relaxed text-muted-foreground"
       >
         {{ t('chat.noSourcesYet') }}
@@ -49,10 +52,19 @@ const web = computed(() => assistant.documentsTouched.filter(isWebSource))
         <!-- Group headings appear only once both groups can exist, so a thread
              that never left the workspace looks exactly as it did before. -->
         <section v-if="pages.length" class="mb-1">
-          <h3 v-if="web.length" class="kn-src-heading">{{ t('chat.pagesInChat') }}</h3>
+          <h3 v-if="web.length || chat.length" class="kn-src-heading">{{ t('chat.pagesInChat') }}</h3>
           <ul class="space-y-0.5">
             <li v-for="doc in pages" :key="assistantSourceKey(doc)">
               <SourceChip :source="doc" variant="row" />
+            </li>
+          </ul>
+        </section>
+
+        <section v-if="chat.length" class="mb-1">
+          <h3 class="kn-src-heading">{{ t('chat.fromChat') }}</h3>
+          <ul class="space-y-0.5">
+            <li v-for="source in chat" :key="assistantSourceKey(source)">
+              <SourceChip :source="source" variant="row" />
             </li>
           </ul>
         </section>

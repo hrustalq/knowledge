@@ -45,6 +45,17 @@ export function formatDateTime(iso: string | Date, locale?: Locale): string {
   }).format(new Date(iso))
 }
 
+/** A span of day + time; Intl collapses what both ends share ("21 Oct 2026, 08:29–08:32"). */
+export function formatDateTimeRange(from: string | Date, to: string | Date, locale?: Locale): string {
+  return dateFormat(tag(locale), {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatRange(new Date(from), new Date(to))
+}
+
 /** Day and month, dropping the year when it is the current one. */
 export function formatDayMonth(iso: string | Date, locale?: Locale): string {
   const at = new Date(iso)

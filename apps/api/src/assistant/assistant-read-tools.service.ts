@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
-import type { AssistantAskSource, DocumentTreeNode } from '@knowledge/contracts';
+import type { AssistantAskSource, AssistantChatSource, DocumentTreeNode } from '@knowledge/contracts';
+import { ChatSearchService } from '../chat/chat-search.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -12,7 +13,7 @@ import { readFrontmatterRelations, readFrontmatterTags } from '../common/relatio
 import { wrapUntrusted } from '../common/untrusted.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
-import { READ_TOOL_NAMES } from './assistant-tool-types.js';
+import { READ_TOOL_NAMES, SEARCH_QUERY_RULE } from './assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 
 /** How much of a page one read_document call returns. */
@@ -47,6 +48,28 @@ const MAX_TREE_NODES = 200;
  */
 export { READ_TOOL_NAMES };
 
+/** `search_chat` (#339), offered only by `definitions({ chat: true })`. */
+const SEARCH_CHAT_TOOL: ChatCompletionFunctionTool = {
+  type: 'function',
+  function: {
+    name: 'search_chat',
+    description:
+      'Search what people said in the team chats this workspace made searchable. Returns windows of messages ' +
+      '(masked, authors as author-1, author-2…) with the chat, its platform and when, each with a `cite` label. ' +
+      'A chat is not a page: nobody reviewed it, so say "in #chat, on <date>, someone said…" and prefer a page ' +
+      'when one answers. Use it for what was decided or discussed that may never have been written down. ' +
+      "Search with the user's own words and language — see query.",
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: SEARCH_QUERY_RULE },
+        limit: { type: 'integer', minimum: 1, maximum: 10, description: 'Max results (default 5)' },
+      },
+      required: ['query'],
+    },
+  },
+};
+
 @Injectable()
 export class AssistantReadToolsService {
   private readonly logger = new Logger(AssistantReadToolsService.name);
@@ -60,6 +83,7 @@ export class AssistantReadToolsService {
     private readonly permissions: PermissionService,
     private readonly communities: CommunitiesService,
     private readonly analytics: AnalyticsRecorder,
+    private readonly chatSearch: ChatSearchService,
   ) {}
 
   /**
@@ -78,8 +102,19 @@ export class AssistantReadToolsService {
     return { principal: ctx.principal, channel: ctx.channel ?? 'assistant' };
   }
 
-  definitions(): ChatCompletionFunctionTool[] {
+  /** True when the workspace has a searchable group (#339) — what `definitions({ chat })` waits on. */
+  async chatAvailable(workspaceId: string): Promise<boolean> {
+    return this.chatSearch.anySearchable(workspaceId);
+  }
+
+  /**
+   * `chat` (#339) adds `search_chat`, and only a person's own turn asks for
+   * it — while the workspace has a searchable group. A background agent calls
+   * this with no argument and never sees the tool.
+   */
+  definitions(opts: { chat?: boolean } = {}): ChatCompletionFunctionTool[] {
     return [
+      ...(opts.chat ? [SEARCH_CHAT_TOOL] : []),
       {
         type: 'function',
         function: {
@@ -120,11 +155,12 @@ export class AssistantReadToolsService {
             'Hybrid (semantic + keyword) search over this workspace, with one hop of knowledge-graph ' +
             'expansion. Returns matching documents with snippets plus graph-related documents. Each result ' +
             'carries a `cite` label (S1, S2, …) to end your sentences with. ' +
-            'Use it whenever the current page does not already answer the question.',
+            'Use it whenever the current page does not already answer the question. ' +
+            "Search with the user's own words and language — see query.",
           parameters: {
             type: 'object',
             properties: {
-              query: { type: 'string', description: 'Natural-language search query' },
+              query: { type: 'string', description: SEARCH_QUERY_RULE },
               limit: { type: 'integer', minimum: 1, maximum: 10, description: 'Max results (default 5)' },
             },
             required: ['query'],
@@ -275,6 +311,8 @@ export class AssistantReadToolsService {
           return await this.getTemplate(args, ctx);
         case 'global_overview':
           return await this.globalOverview(args, ctx);
+        case 'search_chat':
+          return await this.searchChat(args, ctx);
         default:
           return this.fail(`Unknown tool ${name}`);
       }
@@ -284,6 +322,56 @@ export class AssistantReadToolsService {
       this.logger.warn(`Tool ${name} rejected: ${err instanceof Error ? err.message : String(err)}`);
       return this.fail(err instanceof Error ? err.message : 'Tool execution failed');
     }
+  }
+
+  /**
+   * Searchable groups' chat (#339), under the same scope as the page tools:
+   * asked afresh per call and clamped to the turn's audience, so a bot answer
+   * in a group never cites a restricted project's chat. A project-bound turn
+   * searches that project's groups only, as `search_knowledge` does.
+   */
+  private async searchChat(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
+    const query = String(args.query ?? '')
+      .slice(0, 500)
+      .trim();
+    if (!query) return this.fail('query is required');
+    const limit = Math.min(Math.max(Math.floor(Number(args.limit)) || 5, 1), 10);
+    const { hits } = await this.chatSearch.search(await this.scopeOf(ctx), {
+      query,
+      limit,
+      ...(ctx.projectId ? { projectIds: [ctx.projectId] } : {}),
+    });
+    const sources: AssistantChatSource[] = hits.map((h) => ({
+      kind: 'chat',
+      chunkId: h.chunkId,
+      bindingId: h.bindingId,
+      title: h.chatTitle ?? h.platform,
+      url: h.url,
+      firstAt: h.firstAt,
+      lastAt: h.lastAt,
+      snippet: h.snippet,
+    }));
+    const results = hits.map((h, i) => ({
+      chat: h.chatTitle,
+      platform: h.platform,
+      from: h.firstAt,
+      to: h.lastAt,
+      messages: h.snippet,
+      ...(ctx.cite ? { cite: (sources[i].cite = ctx.cite(sources[i])) } : {}),
+    }));
+    return {
+      content: wrapUntrusted(
+        JSON.stringify(
+          results.length
+            ? { results }
+            : { results, note: 'Nothing in the searchable chats matched. Say so rather than guessing.' },
+        ),
+        'search_chat',
+        'conversation',
+      ),
+      ok: true,
+      sources,
+    };
   }
 
   private async searchKnowledge(
@@ -342,6 +430,8 @@ export class AssistantReadToolsService {
         seen.set(r.documentId, source);
         sources.push(source);
       }
+      // The page's best cosine, which a lower-ranked chunk may hold (#403).
+      if (r.vectorScore !== undefined && r.vectorScore > (source.vectorScore ?? -Infinity)) source.vectorScore = r.vectorScore;
     }
     // Owner display names for the hits, one lookup. The dev principal and
     // deleted accounts have no row, and are simply not named.

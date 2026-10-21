@@ -188,8 +188,30 @@ export interface ChatBindingEntry {
    */
   autoHarvestBy: string | null;
   autoHarvestAt: string | null;
+  /**
+   * Searchable chat (#339): the workspace admin who turned it on, after the
+   * group was told; null = off. Any platform, independent of `listening`.
+   */
+  searchableBy: string | null;
+  searchableAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Searchable chat (#339) for one workspace: the env ceiling, what the
+ * workspace asked for, and what applies — the UI shows all three.
+ */
+export interface ChatSearchSettings {
+  /** False while CHAT_SEARCH_ENABLED is off: no binding can be made searchable. */
+  available: boolean;
+  retentionDays: {
+    /** CHAT_SEARCH_RETENTION_DAYS */
+    ceiling: number;
+    /** null = inherit the ceiling. */
+    requested: number | null;
+    applied: number;
+  };
 }
 
 /** The server's side of the automatic harvest (#340): the ceiling and the thresholds every binding gets. */
@@ -202,11 +224,41 @@ export interface ChatAutoHarvestLimits {
   quietMinutes: number;
 }
 
+/**
+ * One matching window of a searchable group (#339): masked text, authors as
+ * `author-n`, never a name. Only from groups the caller may read.
+ */
+export interface ChatSearchHit {
+  chunkId: string;
+  bindingId: string;
+  chatTitle: string | null;
+  platform: ChatPlatformKind;
+  /** The binding's project; null = the whole workspace. */
+  projectId: string | null;
+  firstAt: string;
+  lastAt: string;
+  messageCount: number;
+  snippet: string;
+  /** The window's first message, where the platform has links (Telegram supergroups); else null. */
+  url: string | null;
+  score: number;
+}
+
+export interface ChatSearchResponse {
+  hits: ChatSearchHit[];
+}
+
+/** Whether the caller may read any searchable group (#339): what shows the web's Chat tab. */
+export interface ChatSearchAvailability {
+  readable: boolean;
+}
+
 export interface ChatBindingsResponse {
   bindings: ChatBindingEntry[];
   /** CHAT_LISTEN_TTL_DAYS: how long a listening group's messages are kept. */
   listenTtlDays: number;
   autoHarvest: ChatAutoHarvestLimits;
+  search: ChatSearchSettings;
 }
 
 /**

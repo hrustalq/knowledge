@@ -76,12 +76,14 @@ import { ApiSpecReadService } from '../api-specs/api-spec-read.service.js';
 import { API_CHANGE_RULE_IDS, API_SPEC_SYNTAXES, CODE_SAMPLE_LANGS, isApiSpecKind, normalizeEntityKey, type ApiSpecSyntax } from '@knowledge/contracts';
 import { ComponentDraftsService } from '../components/component-drafts.service.js';
 import { StyleLintService } from '../assistant/style-lint.service.js';
+import { SEARCH_QUERY_RULE } from '../assistant/assistant-tool-types.js';
 import { QualityService } from '../quality/quality.service.js';
 import { withAsOf } from '../graph/temporal.js';
 import { ReleaseTagsService } from '../temporal/release-tags.service.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
+import { ChatSearchService } from '../chat/chat-search.service.js';
 import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
 import { AnalyticsQueryService } from '../analytics/analytics-query.service.js';
 import { wrapUntrusted } from '../common/untrusted.js';
@@ -91,7 +93,7 @@ import { ANALYTICS_MAX_DAYS, CONFLICT_STATUSES, RELEASE_TAG_NAME_PATTERN } from 
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.29.1';
+export const MCP_SERVER_VERSION = '0.30.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -220,6 +222,7 @@ export class McpService {
     private readonly communities: CommunitiesService,
     private readonly analytics: AnalyticsRecorder,
     private readonly analyticsQuery: AnalyticsQueryService,
+    private readonly chatSearch: ChatSearchService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -291,7 +294,7 @@ export class McpService {
           'each page held then, and a result whose validTo is set has since been superseded.',
         inputSchema: {
           workspaceId: z.string().uuid(),
-          query: z.string().min(1),
+          query: z.string().min(1).describe(SEARCH_QUERY_RULE),
           limit: z.number().int().min(1).max(100).optional(),
           projectIds: z
             .array(z.string().uuid())
@@ -1557,6 +1560,38 @@ export class McpService {
       async ({ workspaceId, status, documentId }) => {
         await guard.ws(workspaceId, 'viewer');
         return this.json({ conflicts: await this.conflicts.list(await guard.scope(workspaceId), { status, documentId }) });
+      },
+    );
+
+    // Searchable groups' chat (#339): the twin of POST /v1/chat/search, under
+    // the same scope — a guest reaches only granted projects' chat. Output is
+    // what people typed in a group, so it is wrapped untrusted.
+    server.registerTool(
+      'knowledge_search_chat',
+      {
+        description:
+          'Search what people said in the team chats (Telegram, Time, Mattermost) this workspace made searchable. ' +
+          'Returns windows of messages — masked, authors as author-1, author-2… — with the chat, platform and time ' +
+          'span, from chats you may read only. A chat is not a page: nobody reviewed it. Prefer a page when one ' +
+          'answers, and when you rely on a chat say which and when.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          query: z.string().min(1).max(500).describe(SEARCH_QUERY_RULE),
+          limit: z.number().int().min(1).max(50).optional(),
+          projectIds: z.array(z.string().uuid()).max(20).optional().describe('Only chats bound to these projects'),
+          from: z.string().datetime().optional().describe('Only windows still going at or after this time'),
+          to: z.string().datetime().optional().describe('Only windows started at or before this time'),
+        },
+      },
+      async ({ workspaceId, query, limit, projectIds, from, to }) => {
+        const res = await this.chatSearch.search(await guard.pages(workspaceId), {
+          query,
+          limit: limit ?? 10,
+          ...(projectIds?.length ? { projectIds } : {}),
+          ...(from ? { from: new Date(from) } : {}),
+          ...(to ? { to: new Date(to) } : {}),
+        });
+        return { content: [{ type: 'text' as const, text: wrapUntrusted(JSON.stringify(res, null, 2), 'knowledge_search_chat', 'conversation') }] };
       },
     );
 

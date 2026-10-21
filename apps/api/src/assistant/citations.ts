@@ -1,5 +1,5 @@
 import type { AnswerCitation, AnswerSignals, AssistantSource, AssistantToolCall } from '@knowledge/contracts';
-import { assistantSourceKey, isWebSource, verificationIsStale } from '@knowledge/contracts';
+import { assistantSourceKey, isPageSource, verificationIsStale } from '@knowledge/contracts';
 import { FREE_TOOLS } from './assistant-tool-types.js';
 
 /**
@@ -258,9 +258,13 @@ export function answerSignals(input: {
 }): AnswerSignals {
   const { final, sources, trace } = input;
   const cited = sources.filter((s) => s.cite && final.citedLabels.has(s.cite));
-  const pages = cited.filter((s) => !isWebSource(s));
+  const pages = cited.filter(isPageSource);
   const staleBefore = (input.now ?? new Date()).getTime() - input.staleAfterDays * 86_400_000;
-  const scores = sources.filter((s) => !isWebSource(s) && typeof s.score === 'number').map((s) => (s as { score: number }).score);
+  // The raw cosine, never the fused `score`: RRF scores peak near 0.03 and a
+  // BM25-only search normalises its top to 1.0, so neither is on the cosine
+  // scale `lowScoreBelow` is (#403). A page only BM25 found contributes
+  // nothing, so a turn with no vector evidence at all skips the check.
+  const scores = sources.filter(isPageSource).flatMap((s) => (typeof s.vectorScore === 'number' ? [s.vectorScore] : []));
   const spent = trace.filter((c) => !FREE_TOOLS.has(c.tool)).length;
   return {
     sentences: final.sentences,

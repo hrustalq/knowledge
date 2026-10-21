@@ -4,7 +4,7 @@ import { Prisma, type ChatAnswer, type ChatChannelBinding, type ChatIntegration 
 import {
   ANSWER_FEEDBACK_REASONS,
   isLocale,
-  isWebSource,
+  assistantSourceHref,
   type AssistantMessageInfo,
   type AssistantSource,
   type ChatPlatformKind,
@@ -34,6 +34,7 @@ import { ChatBufferService, type BufferedThread } from './chat-buffer.service.js
 import { ChatCapturesService } from './chat-captures.service.js';
 import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
+import { ChatMessagesService } from './chat-messages.service.js';
 import { HarvestRefused, HarvestService, type HarvestOutcome } from './harvest.service.js';
 import { WORKSPACE_AUDIENCE } from '../permissions/access-scope.js';
 
@@ -108,6 +109,7 @@ export class ChatAnswersService {
     private readonly captures: ChatCapturesService,
     private readonly harvester: HarvestService,
     private readonly buffer: ChatBufferService,
+    private readonly messages: ChatMessagesService,
     config: ConfigService<Env, true>,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true }).replace(/\/$/, '');
@@ -163,6 +165,12 @@ export class ChatAnswersService {
     // silence, so a stray bot cannot be made to talk anywhere. `/bind` is the
     // one way in, and it checks who is asking.
     if (!inbound.isDm && !d.binding && command?.name !== 'bind') return;
+    // An edit or a delete (#339) only ever reaches a searchable group's kept
+    // copy: it is never answered, and an edited command is not run again.
+    if (inbound.change) {
+      if (d.binding) await this.messages.change(d.binding, inbound).catch((err: unknown) => this.notKept(integration.id, err));
+      return;
+    }
     // A reaction is not addressed to the bot the way a command is: from anyone
     // but a linked editor it is just a reaction, and passes in silence.
     if (inbound.harvestReaction) return userId ? this.harvest(d, userId, locale) : undefined;
@@ -177,10 +185,12 @@ export class ChatAnswersService {
         return;
       }
       if (d.binding?.listening) {
-        await this.buffer.holdGroupMessage(integration.id, d.binding, inbound).catch((err: unknown) => {
-          this.logger.warn({ msg: 'chat message not kept', integrationId: integration.id, error: String(err) });
-        });
+        await this.buffer.holdGroupMessage(integration.id, d.binding, inbound).catch((err: unknown) => this.notKept(integration.id, err));
       }
+    }
+    // Kept for search (#339), apart from the harvest buffer: its own switch, on any platform.
+    if (this.messages.enabled && d.binding?.searchableAt && !command && inbound.text) {
+      await this.messages.keep(d.binding, inbound).catch((err: unknown) => this.notKept(integration.id, err));
     }
 
     if (command) {
@@ -210,7 +220,7 @@ export class ChatAnswersService {
           return this.harvest(d, userId, locale);
         case 'forget': {
           // Anyone's right over their own messages: no link, no role.
-          const removed = await this.buffer.forget(integration.id, inbound);
+          const removed = (await this.buffer.forget(integration.id, inbound)) + (await this.messages.forget(integration.id, inbound.externalUserId));
           return this.notice(d, removed ? t('chat.forget.done', { count: removed }) : t('chat.forget.nothing'));
         }
         case 'ask':
@@ -223,6 +233,10 @@ export class ChatAnswersService {
       }
     }
     return this.question(d, userId, locale, inbound.text, inbound.mentioned || (await this.inBotThread(d)));
+  }
+
+  private notKept(integrationId: string, err: unknown): void {
+    this.logger.warn({ msg: 'chat message not kept', integrationId, error: String(err) });
   }
 
   private help(d: Delivery): string {
@@ -461,7 +475,7 @@ export class ChatAnswersService {
       sources: ordered.slice(0, this.maxSources).map((s) => ({
         ...(s.cite ? { cite: s.cite } : {}),
         title: s.title,
-        url: isWebSource(s) ? s.url : `${this.webBaseUrl}/documents/${s.documentId}`,
+        url: assistantSourceHref(s, this.webBaseUrl),
       })),
       sourcesHeading: t('chat.answer.sources'),
       full: { label: t('chat.answer.openFull'), url: `${this.webBaseUrl}/assistant?thread=${threadId}` },

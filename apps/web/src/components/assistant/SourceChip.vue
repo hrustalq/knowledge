@@ -17,18 +17,24 @@
 //
 // The mark is a letter and a hue hashed from the host rather than a favicon:
 // see lib/web-source for why the obvious answer is the wrong one.
+//
+// A third kind since #339: a window of a searchable group's chat. It is
+// neither — not a page (nobody wrote it to be read later), not the web — so it
+// gets its own icon and says when it was said, the one thing a reader needs to
+// weigh it. It opens in the messenger where the platform has a link, and in
+// chat search otherwise.
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMediaQuery } from '@vueuse/core'
-import { ExternalLink, FileText } from 'lucide-vue-next'
+import { ExternalLink, FileText, MessagesSquare } from 'lucide-vue-next'
 import type { AssistantSource } from '@knowledge/contracts'
-import { isWebSource } from '@knowledge/contracts'
+import { assistantSourceHref, isChatSource, isPageSource, isWebSource } from '@knowledge/contracts'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import UserAvatar from '@/components/merge-requests/UserAvatar.vue'
 import { displayPath, siteColor, siteInitial } from '@/lib/web-source'
-import { formatRelative } from '@/lib/format'
+import { formatDateTime, formatRelative } from '@/lib/format'
 import { citeNumber, sourceHref, verificationTone } from '@/lib/citations'
 
 const props = defineProps<{
@@ -46,9 +52,12 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const web = computed(() => (isWebSource(props.source) ? props.source : null))
-const page = computed(() => (isWebSource(props.source) ? null : props.source))
+const chat = computed(() => (isChatSource(props.source) ? props.source : null))
+const page = computed(() => (isPageSource(props.source) ? props.source : null))
+/** Where the chip leaves the product: the web page, or the chat message the platform links. */
+const external = computed(() => web.value?.url ?? chat.value?.url ?? null)
 const row = computed(() => props.variant === 'row')
-const href = computed(() => (page.value ? sourceHref(page.value) : ''))
+const href = computed(() => (page.value ? sourceHref(page.value) : assistantSourceHref(props.source, '')))
 const number = computed(() => (props.source.cite ? citeNumber(props.source.cite) : null))
 const tone = computed(() => verificationTone(page.value?.verification))
 
@@ -59,12 +68,14 @@ const tone = computed(() => verificationTone(page.value?.verification))
 const hasCard = computed(() => {
   const s = props.source
   if (isWebSource(s)) return !!(s.snippet || s.fetchedAt)
+  if (isChatSource(s)) return true
   return !!(s.revisionNumber || s.authorId || s.changedAt || s.verification || s.factClass || s.headingPath?.length || s.snippet)
 })
 
 const section = computed(() => page.value?.headingPath?.join(' › ') ?? '')
 const changed = computed(() => (page.value?.changedAt ? formatRelative(page.value.changedAt) : ''))
 const fetched = computed(() => (web.value?.fetchedAt ? formatRelative(web.value.fetchedAt) : ''))
+const said = computed(() => (chat.value ? formatRelative(chat.value.lastAt) : ''))
 
 const open = ref(false)
 const canHover = useMediaQuery('(hover: hover)')
@@ -77,8 +88,8 @@ const canHover = useMediaQuery('(hover: hover)')
   >
     <component :is="hasCard ? (canHover ? HoverCardTrigger : PopoverTrigger) : 'span'" v-bind="hasCard ? { asChild: true } : {}">
       <component
-        :is="web ? 'a' : RouterLink"
-        v-bind="web ? { href: web.url, target: '_blank', rel: 'noopener noreferrer' } : { to: href }"
+        :is="external ? 'a' : RouterLink"
+        v-bind="external ? { href: external, target: '_blank', rel: 'noopener noreferrer' } : { to: href }"
         :title="hasCard ? undefined : source.snippet"
         class="kn-source group/src"
         :class="[row ? 'kn-source-row' : 'kn-source-chip', active && 'kn-source-active']"
@@ -98,6 +109,9 @@ const canHover = useMediaQuery('(hover: hover)')
           aria-hidden="true"
           >{{ siteInitial(web.site) }}</span
         >
+        <span v-else-if="chat" class="kn-source-icon">
+          <MessagesSquare class="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover/src:text-primary" />
+        </span>
         <span v-else class="kn-source-icon">
           <FileText class="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover/src:text-primary" />
           <!-- Verification as a dot, not a word: the chip is read in a row of
@@ -111,6 +125,7 @@ const canHover = useMediaQuery('(hover: hover)')
              by a mark. In a row it gets its own line under the title; in a chip it
              trails the title, dimmed, where it reads as an attribution. -->
         <span v-if="web" class="kn-site-host">{{ web.site }}<span v-if="row" class="kn-site-path">{{ displayPath(web.url) }}</span></span>
+        <span v-else-if="chat" class="kn-site-host">{{ said }}</span>
       </component>
     </component>
 
@@ -159,6 +174,28 @@ const canHover = useMediaQuery('(hover: hover)')
         <RouterLink :to="href" class="mt-2.5 inline-flex items-center gap-1 text-xs text-primary hover:underline">
           {{ t('assistant.provenance.openPage') }}
         </RouterLink>
+      </template>
+
+      <!-- Chat: which group, when, and what was said — masked, authors unnamed. -->
+      <template v-else-if="chat">
+        <p class="flex items-start gap-2">
+          <span v-if="number" class="kn-cite-no mt-0.5">{{ number }}</span>
+          <span class="min-w-0">
+            <span class="block font-medium leading-snug">{{ chat.title }}</span>
+            <span class="block text-xs text-muted-foreground">
+              {{ t('assistant.provenance.chatSpan', { from: formatDateTime(chat.firstAt), to: formatDateTime(chat.lastAt) }) }}
+            </span>
+          </span>
+        </p>
+        <p v-if="chat.snippet" class="mt-2.5 line-clamp-4 whitespace-pre-line text-xs text-muted-foreground">{{ chat.snippet }}</p>
+        <component
+          :is="chat.url ? 'a' : RouterLink"
+          v-bind="chat.url ? { href: chat.url, target: '_blank', rel: 'noopener noreferrer' } : { to: href }"
+          class="mt-2.5 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+        >
+          <ExternalLink v-if="chat.url" class="size-3" />
+          {{ t(chat.url ? 'assistant.provenance.openChat' : 'assistant.provenance.openChatSearch') }}
+        </component>
       </template>
 
       <!-- Web: the address, and how old the reading is. -->

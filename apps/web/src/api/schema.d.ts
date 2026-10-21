@@ -5779,6 +5779,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/chat/search-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Searchable chat (#339): whether it is available, and the retention asked for vs. applied */
+        get: operations["ChatSettingsController_searchSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Shorten how long searchable groups’ messages are kept; null inherits CHAT_SEARCH_RETENTION_DAYS */
+        patch: operations["ChatSettingsController_updateSearchSettings"];
+        trace?: never;
+    };
     "/v1/chat/integrations": {
         parameters: {
             query?: never;
@@ -5864,7 +5882,7 @@ export interface paths {
         delete: operations["ChatSettingsController_removeBinding"];
         options?: never;
         head?: never;
-        /** Change a group’s project, agent, answer mode, language, listening or automatic harvest */
+        /** Change a group’s project, agent, answer mode, language, listening, automatic harvest or searchability */
         patch: operations["ChatSettingsController_updateBinding"];
         trace?: never;
     };
@@ -6001,6 +6019,24 @@ export interface paths {
         post?: never;
         /** Unlink one of my messenger accounts */
         delete: operations["ChatLinkController_unlink"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/chat/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the caller may read any searchable group — the same ACL as the search, without a query */
+        get: operations["ChatSearchController_availability"];
+        put?: never;
+        /** Search the masked messages of searchable groups the caller may read */
+        post: operations["ChatSearchController_run"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -8279,6 +8315,10 @@ export interface components {
             trustRanking?: boolean | null;
             /** @description Reciprocal-rank-fusion constant; null = 60 */
             rrfK?: number | null;
+            /** @description Absolute cosine floor for vector hits (#401); null = SEARCH_MIN_COSINE */
+            minCosine?: number | null;
+            /** @description Keep vector hits at or above this share of the best cosine (#401); null = 0.9 */
+            minCosineShare?: number | null;
             /** @description Per-state search weights; a state left out keeps its default, null resets them all */
             trustWeights?: components["schemas"]["TrustWeightsDto"] | null;
         };
@@ -8464,6 +8504,12 @@ export interface components {
             /** @description Branch name to read each page from; a page without it uses its default branch. Omitted or null: default branches */
             branch?: string | null;
         };
+        UpdateChatSearchSettingsDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description Days a searchable group’s messages are kept; null inherits CHAT_SEARCH_RETENTION_DAYS, and a longer value is clamped to it */
+            retentionDays: number | null;
+        };
         CreateChatIntegrationDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -8533,6 +8579,8 @@ export interface components {
             listening?: boolean;
             /** @description Harvest this group’s quiet threads automatically (#340), as the admin who turns it on — never anyone named in the body. Needs listening; turning listening off turns this off too. */
             autoHarvest?: boolean;
+            /** @description Make this group’s messages searchable (#339), as the admin who turns it on. Any platform; turning it on posts a notice in the group first (400 if it cannot), turning it off deletes what was kept. */
+            searchable?: boolean;
         };
         CreateChatSubscriptionDto: {
             /**
@@ -8567,6 +8615,27 @@ export interface components {
         ChatLinkCodeDto: {
             /** @description The code from the link the bot sent */
             code: string;
+        };
+        ChatSearchDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            query: string;
+            /** @description Only groups bound to these projects */
+            projectIds?: string[];
+            /** @description Only these bound groups */
+            bindingIds?: string[];
+            /**
+             * Format: date-time
+             * @description Only windows still going at or after this time
+             */
+            from?: string;
+            /**
+             * Format: date-time
+             * @description Only windows started at or before this time
+             */
+            to?: string;
+            /** @description Hits to return; 10 when omitted */
+            limit?: number;
         };
         CaptureSessionDto: {
             /** @enum {string} */
@@ -27140,6 +27209,88 @@ export interface operations {
             };
         };
     };
+    ChatSettingsController_searchSettings: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ChatSettingsController_updateSearchSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChatSearchSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     ChatSettingsController_list: {
         parameters: {
             query: {
@@ -27902,6 +28053,88 @@ export interface operations {
         requestBody?: never;
         responses: {
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ChatSearchController_availability: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ChatSearchController_run: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatSearchDto"];
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

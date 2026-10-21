@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import type { KnowledgeHealthSettingsOverride, KnowledgeHealthSettingsValues, TrustWeights } from '@knowledge/contracts';
-import { SEARCH_RRF_K, TRUST_WEIGHTS } from '@knowledge/contracts';
+import { SEARCH_MIN_COSINE_SHARE, SEARCH_RRF_K, TRUST_WEIGHTS } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -15,8 +15,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
  * it, and two of those must not import each other. The row is a sparse
  * override of the env block — `null` inherits — so an empty table reproduces
  * the env behaviour exactly, and the resolution is `COALESCE(row, env)` with no
- * clamping: env values here are defaults, not ceilings. The two search knobs
- * (#305) default to code constants rather than env, and `trustWeights` merges
+ * clamping: env values here are defaults, not ceilings. The search knobs
+ * (#305, #401) default to code constants rather than env — all but
+ * `minCosine`, whose right value depends on the embedding model — and `trustWeights` merges
  * per state, so overriding one weight leaves the others at theirs.
  */
 @Injectable()
@@ -34,6 +35,8 @@ export class VerificationPolicyService {
       emptyMaxChars: this.config.get('EMPTY_PAGE_MAX_CHARS', { infer: true }),
       trustRanking: this.config.get('SEARCH_TRUST_RANKING', { infer: true }),
       rrfK: SEARCH_RRF_K,
+      minCosine: this.config.get('SEARCH_MIN_COSINE', { infer: true }),
+      minCosineShare: SEARCH_MIN_COSINE_SHARE,
       trustWeights: TRUST_WEIGHTS,
     };
   }
@@ -47,6 +50,8 @@ export class VerificationPolicyService {
       emptyMaxChars: row?.emptyMaxChars ?? null,
       trustRanking: row?.trustRanking ?? null,
       rrfK: row?.rrfK ?? null,
+      minCosine: row?.minCosine ?? null,
+      minCosineShare: row?.minCosineShare ?? null,
       trustWeights: (row?.trustWeights as Partial<TrustWeights> | null) ?? null,
     };
   }
@@ -60,6 +65,8 @@ export class VerificationPolicyService {
       emptyMaxChars: override.emptyMaxChars ?? defaults.emptyMaxChars,
       trustRanking: override.trustRanking ?? defaults.trustRanking,
       rrfK: override.rrfK ?? defaults.rrfK,
+      minCosine: override.minCosine ?? defaults.minCosine,
+      minCosineShare: override.minCosineShare ?? defaults.minCosineShare,
       trustWeights: { ...defaults.trustWeights, ...override.trustWeights },
     };
   }

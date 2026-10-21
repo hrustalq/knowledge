@@ -726,6 +726,15 @@ export const TRUST_WEIGHT_MAX = 1.25;
  */
 export const SEARCH_RRF_K = 60;
 
+/**
+ * #401: a vector hit is fused only if its cosine is at least this share of the
+ * leg's best. Model-free, unlike the absolute floor (`SEARCH_MIN_COSINE`): on
+ * the prod corpus (bge-m3) ranks 3–12 of a question sit within 0.06 of each
+ * other, so without it a chunk at mediocre ranks in both legs outranks one near
+ * the top of either.
+ */
+export const SEARCH_MIN_COSINE_SHARE = 0.9;
+
 export function trustWeight(state: SourceVerificationState, inactive: boolean, weights: TrustWeights = TRUST_WEIGHTS): number {
   return weights[state] * (inactive ? weights.inactive : 1);
 }
@@ -840,6 +849,10 @@ export interface KnowledgeHealthSettingsValues {
   trustRanking: boolean;
   /** #305: tuned offline by `make tune`, applied by a person. */
   rrfK: number;
+  /** #401: absolute cosine floor for the vector leg; 0 = none. */
+  minCosine: number;
+  /** #401: the vector leg keeps hits at or above this share of its best cosine; 0 = none. */
+  minCosineShare: number;
   trustWeights: TrustWeights;
 }
 /** Sparse: `null` inherits. `trustWeights` is sparse per state too — it names only what differs. */
@@ -894,6 +907,8 @@ export interface SourceProvenance {
   factClass?: FactExtractor;
   /** Retrieval score of the best chunk, 0..1, when the source came from search. */
   score?: number;
+  /** Best raw cosine among the page's chunks in the vector leg; absent when only BM25 found it (#403). */
+  vectorScore?: number;
 }
 
 /**
@@ -1098,21 +1113,68 @@ export interface AssistantWebSource {
   cite?: string;
 }
 
-/** Anything an answer can cite. Discriminated by `kind`; absent means a document. */
-export type AssistantSource = AssistantAskSource | AssistantWebSource;
+/**
+ * A window of a searchable group's chat (#339), cited by an answer. Neither a
+ * page nor the open web: it opens in the messenger when the platform has a
+ * link (`url`), and otherwise is named only by its group and time span. The
+ * snippet is masked; authors are `author-n`.
+ */
+export interface AssistantChatSource {
+  kind: 'chat';
+  chunkId: string;
+  bindingId: string;
+  /** The group's title; what a citation shows. */
+  title: string;
+  /** The window's first message, where the platform has links; else null. */
+  url: string | null;
+  firstAt: string;
+  lastAt: string;
+  snippet?: string;
+  cite?: string;
+}
 
-/** True for a web citation — the one narrowing every consumer needs. */
+/** Anything an answer can cite. Discriminated by `kind`; absent means a document. */
+export type AssistantSource = AssistantAskSource | AssistantWebSource | AssistantChatSource;
+
+/** True for a web citation. */
 export function isWebSource(source: AssistantSource): source is AssistantWebSource {
   return source.kind === 'web';
 }
 
+/** True for a chat citation (#339). */
+export function isChatSource(source: AssistantSource): source is AssistantChatSource {
+  return source.kind === 'chat';
+}
+
+/**
+ * True for a page — the narrowing every page-only reader needs (provenance,
+ * feedback, verification weights). Before chat sources (#339) this was spelled
+ * `!isWebSource`, which would now let a chat window through as a page.
+ */
+export function isPageSource(source: AssistantSource): source is AssistantAskSource {
+  return source.kind === undefined || source.kind === 'document';
+}
+
 /**
  * Identity of a source, for de-duplicating a turn's citations. A document is
- * its id, a web page its URL; the two can never collide because a URL is not a
- * uuid, so one map holds both.
+ * its id, a web page its URL, a chat window `chat:<chunkId>`; none can collide
+ * with another kind, so one map holds all three.
  */
 export function assistantSourceKey(source: AssistantSource): string {
-  return isWebSource(source) ? source.url : source.documentId;
+  if (isWebSource(source)) return source.url;
+  if (isChatSource(source)) return `chat:${source.chunkId}`;
+  return source.documentId;
+}
+
+/**
+ * Where a citation opens, for a surface that renders links itself (a chat
+ * reply, a transcript). `base` prefixes the in-product paths: '' keeps them
+ * relative. A chat window with no platform link opens chat search.
+ */
+export function assistantSourceHref(source: AssistantSource, base: string): string {
+  if (isWebSource(source)) return source.url;
+  if (isChatSource(source)) return source.url ?? `${base}/search?tab=chat`;
+  return `${base}/documents/${source.documentId}`;
 }
 /** One tool execution the model performed while answering (transparency + debugging). */
 export interface AssistantToolCall {

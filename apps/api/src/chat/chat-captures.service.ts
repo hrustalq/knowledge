@@ -2,7 +2,7 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ChatIntegration } from '@prisma/client';
 import {
-  isWebSource,
+  assistantSourceHref,
   type AssistantSource,
   type CaptureOrigin,
   type CaptureResult,
@@ -76,7 +76,7 @@ export function chatTranscript(messages: readonly TranscriptMessage[], shown: Re
     if (m.role === 'user') question = m.content;
     if (m.role !== 'assistant' || !shown.has(m.id)) continue;
     const sources = (Array.isArray(m.sources) ? m.sources : []) as AssistantSource[];
-    const href = (s: AssistantSource) => (isWebSource(s) ? s.url : `/documents/${s.documentId}`);
+    const href = (s: AssistantSource) => assistantSourceHref(s, '');
     const byLabel = new Map(sources.filter((s) => s.cite).map((s) => [s.cite!.toUpperCase(), s]));
     // The space before a marker goes with it: the link brings its own.
     const answer = m.content.replace(new RegExp(`\\s*${CITE_MARKER_RE.source}`, 'gi'), (_, labels: string) =>

@@ -1578,7 +1578,10 @@
         "curated": "Curated relation",
         "code": "Derived from code",
         "spec": "From the API spec"
-      }
+      },
+      "chatSpan": "{from} – {to}",
+      "openChat": "Open in the chat",
+      "openChatSearch": "Open chat search"
     },
     "saveToKb": {
       "label": "Save to knowledge base",
@@ -1830,7 +1833,8 @@
     "copyMessage": "Copy message",
     "copyReply": "Copy reply",
     "dictateMessage": "Dictate a message",
-    "modelDefault": "Default"
+    "modelDefault": "Default",
+    "fromChat": "From chat"
   },
   "ai": {
     "excludesCalls": "excludes {calls} with no price",
@@ -2614,6 +2618,19 @@
       "pickTag": "Release tag",
       "hint": "Searches the text each page held then.",
       "superseded": "Superseded {date}"
+    },
+    "tabs": {
+      "pages": "Pages",
+      "chat": "Chat"
+    },
+    "chat": {
+      "description": "What was said in the groups made searchable, with emails, phone numbers, card numbers and secrets masked.",
+      "placeholder": "What did we decide about the billing retry?",
+      "idle": "Search what was said in team chats.",
+      "idleHint": "Only groups an admin made searchable, and only those whose project you can read. Authors show as author-1, author-2…",
+      "none": "Nothing said in chat matched.",
+      "noneHint": "Try other words. A thread becomes searchable a few minutes after it goes quiet.",
+      "messages": "{n} message | {n} message | {n} messages"
     }
   },
   "import": {
@@ -3526,6 +3543,10 @@
     "edit_draft": {
       "running": "Writing into the page",
       "done": "Wrote into the page"
+    },
+    "search_chat": {
+      "running": "Searching team chats",
+      "done": "Searched team chats"
     }
   },
   "entityType": {
@@ -4354,6 +4375,14 @@
           "label": "Fusion constant (RRF k)",
           "hint": "How strongly a top rank in one search leg outweighs agreement between both legs. Lower favours the single best match, higher favours pages both legs found"
         },
+        "minCosine": {
+          "label": "Minimum similarity",
+          "hint": "A semantic match below this cosine is not a result at all, so a question nothing answers comes back empty instead of padded. The right value depends on the embedding model: about 0.4 for bge-m3. 0 turns it off"
+        },
+        "minCosineShare": {
+          "label": "Similarity band",
+          "hint": "A semantic match counts only within this share of the best one, so pages found at middling ranks by both legs cannot outrank the best match of either. 0 turns it off"
+        },
         "trustWeights": {
           "label": "Trust weights",
           "hint": "What each page state multiplies a result's score by. An empty field keeps the default; Inactive applies on top of the state",
@@ -4938,7 +4967,7 @@
       "titlePlaceholder": "Name (optional)",
       "add": "Add group",
       "listen": "Keep messages for /capture",
-      "listenHint": "Kept for {days}, with emails, phone numbers, card numbers and secrets masked, so editors can harvest a thread into captures: reply /capture to its first message, or react ✍ to it. Never searchable. Needs privacy mode off in {'@'}BotFather or the bot as a group admin; ✍ works only with the bot as admin. Turning this on posts a notice in the group; turning it off deletes what is kept.",
+      "listenHint": "Kept for {days}, with emails, phone numbers, card numbers and secrets masked, so editors can harvest a thread into captures: reply /capture to its first message, or react ✍ to it. Kept only for /capture: searching this group is the separate switch below. Needs privacy mode off in {'@'}BotFather or the bot as a group admin; ✍ works only with the bot as admin. Turning this on posts a notice in the group; turning it off deletes what is kept.",
       "listenDays": "{days} day | {days} day | {days} days",
       "autoHarvest": "Harvest quiet threads automatically",
       "autoHarvestHint": "Once a thread has {messages} kept since its last harvest and has been quiet for {quiet}, the bot proposes what it settled as captures in your name, for review in Captures. Nothing is posted in the group: you get an inbox notification instead. Turning this on posts a notice in the group.",
@@ -4946,7 +4975,12 @@
       "autoHarvestQuiet": "{n} minute | {n} minute | {n} minutes",
       "autoHarvestRunsAs": "Runs as",
       "autoHarvestNeedsListening": "Needs Keep messages for /capture.",
-      "autoHarvestUnavailable": "Switched off on this server (HARVEST_AUTO_ENABLED): no thread is harvested automatically, whatever this switch says."
+      "autoHarvestUnavailable": "Switched off on this server (HARVEST_AUTO_ENABLED): no thread is harvested automatically, whatever this switch says.",
+      "searchable": "Make searchable",
+      "searchableHint": "Messages are kept for {days}, masked, and found under Search → Chat by anyone who can read this group's project (the whole workspace's members when it has none; never guests). Edits are followed; /forget deletes a person's own. Turning this on posts a notice in the group first; turning it off deletes everything kept.",
+      "searchableTelegram": "Telegram: needs privacy mode off in {'@'}BotFather or the bot as a group admin. A message deleted in Telegram stays searchable until it expires, because Telegram does not tell bots about deletions.",
+      "searchableUnavailable": "Switched off on this server (CHAT_SEARCH_ENABLED): no group can be made searchable.",
+      "searchableBy": "Made searchable by"
     },
     "card": {
       "off": "Off",
@@ -5019,6 +5053,17 @@
       "lastSent": "Last sent {when}",
       "neverSent": "Nothing sent yet",
       "refused": "The last message was refused: {error}"
+    },
+    "search": {
+      "title": "Searchable chat",
+      "intro": "How long the messages of searchable groups are kept. Each group is made searchable on its own row above.",
+      "unavailable": "Chat search is switched off on this server (CHAT_SEARCH_ENABLED=false): no group can be made searchable and nothing new is kept. What was kept stays searchable until it expires.",
+      "retention": "Keep messages for",
+      "retentionHint": "Older windows of a thread are deleted from search whole. Leave empty to use the deployment’s period.",
+      "applies": "Applies:",
+      "ceiling": "Deployment ceiling: {value}",
+      "clamped": "Longer than the deployment allows: {n} days will apply.",
+      "saved": "Retention saved."
     }
   },
   "captures": {

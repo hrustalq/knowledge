@@ -2,31 +2,54 @@ import type { SourceVerificationState, TrustWeights } from '@knowledge/contracts
 import { trustWeight } from '@knowledge/contracts';
 import type { ChunkHit } from '../graph/graph.service.js';
 
-/** The two knobs a workspace may override and `make tune` proposes (#305). */
+/** The knobs a workspace may override and `make tune` proposes (#305, #401). */
 export interface SearchKnobs {
   rrfK: number;
+  minCosine: number;
+  minCosineShare: number;
   trustWeights: TrustWeights;
+}
+
+/**
+ * The relevance floor (#401): the vector hits worth fusing — cosine at least
+ * `minCosine` and at least `minCosineShare` of the leg's best. Applied before
+ * fusion, so a chunk weak in both legs is gone and one weak in one leg keeps
+ * only the other's rank; a search may then return fewer than its limit. The
+ * BM25 leg needs no floor: its match already demands most of the query's
+ * terms (#400). Hits arrive best first, so the first is the leg's best.
+ */
+export function floorVectorHits<T extends Pick<ChunkHit, 'score'>>(hits: T[], knobs: Pick<SearchKnobs, 'minCosine' | 'minCosineShare'>): T[] {
+  const min = Math.max(knobs.minCosine, knobs.minCosineShare * (hits[0]?.score ?? 0));
+  return hits.filter((h) => h.score >= min);
 }
 
 /**
  * Merge vector and BM25 rankings. Single-source results keep their native
  * score (BM25 normalized to 0..1 by the max); two-source results use
  * reciprocal rank fusion — raw cosine and BM25 scores are not comparable.
+ * Every hit the vector leg found also keeps its raw cosine as `vectorScore`,
+ * the one scale that means the same whichever legs answered (#403).
  */
-export function fuseHits(vectorHits: ChunkHit[], textHits: ChunkHit[], k: number, rrfK: number): ChunkHit[] {
-  if (textHits.length === 0) return vectorHits.slice(0, k);
+export function fuseHits<T extends Pick<ChunkHit, 'chunkId' | 'score'>>(
+  vectorHits: T[],
+  textHits: T[],
+  k: number,
+  rrfK: number,
+): (T & { vectorScore?: number })[] {
+  const vector = vectorHits.map((h) => ({ ...h, vectorScore: h.score }));
+  if (textHits.length === 0) return vector.slice(0, k);
   if (vectorHits.length === 0) {
     const max = Math.max(...textHits.map((h) => h.score), 1e-9);
     return textHits.slice(0, k).map((h) => ({ ...h, score: h.score / max }));
   }
-  const fused = new Map<string, ChunkHit>();
-  const add = (rank: number, hit: ChunkHit) => {
+  const fused = new Map<string, T & { vectorScore?: number }>();
+  const add = (rank: number, hit: T & { vectorScore?: number }) => {
     const existing = fused.get(hit.chunkId);
     const increment = 1 / (rrfK + rank + 1);
     if (existing) existing.score += increment;
     else fused.set(hit.chunkId, { ...hit, score: increment });
   };
-  vectorHits.forEach((h, i) => add(i, h));
+  vector.forEach((h, i) => add(i, h));
   textHits.forEach((h, i) => add(i, h));
   return [...fused.values()].sort((a, b) => b.score - a.score).slice(0, k);
 }
@@ -52,7 +75,7 @@ export interface SearchPool {
  * `search-trust.spec.ts` replays one search through both.
  */
 export function rankPool(pool: SearchPool, knobs: SearchKnobs): string[] {
-  const weighted = fuseHits(pool.vectorHits, pool.textHits, pool.fetchK, knobs.rrfK).flatMap((h) => {
+  const weighted = fuseHits(floorVectorHits(pool.vectorHits, knobs), pool.textHits, pool.fetchK, knobs.rrfK).flatMap((h) => {
     const page = pool.pages.get(h.documentId);
     if (!page || page.archived) return [];
     const weight = pool.trustOn ? trustWeight(page.status, page.inactive, knobs.trustWeights) : 1;

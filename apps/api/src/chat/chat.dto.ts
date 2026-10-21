@@ -5,11 +5,15 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
+  IsISO8601,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   ValidateIf,
 } from 'class-validator';
 import {
@@ -186,6 +190,32 @@ export class UpdateChatBindingDto {
   @IsOptional()
   @IsBoolean()
   autoHarvest?: boolean;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description:
+      'Make this group’s messages searchable (#339), as the admin who turns it on. Any platform; turning it on posts a notice in the group first (400 if it cannot), turning it off deletes what was kept.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  searchable?: boolean;
+}
+
+export class UpdateChatSearchSettingsDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    minimum: 1,
+    description: 'Days a searchable group’s messages are kept; null inherits CHAT_SEARCH_RETENTION_DAYS, and a longer value is clamped to it',
+  })
+  @ValidateIf((o: UpdateChatSearchSettingsDto) => o.retentionDays !== null)
+  @IsInt()
+  @Min(1)
+  retentionDays!: number | null;
 }
 
 export class ChatLinkCodeDto {
@@ -257,4 +287,47 @@ export class UpdateChatSubscriptionDto {
   @ValidateIf((o: UpdateChatSubscriptionDto) => o.digestMinutes !== undefined && o.digestMinutes !== null)
   @IsIn([...CHAT_DIGEST_MINUTES])
   digestMinutes?: ChatDigestMinutes | null;
+}
+
+export class ChatSearchDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ maxLength: 500 })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500, { message: vmsg('maxLength') })
+  query!: string;
+
+  @ApiPropertyOptional({ type: [String], description: 'Only groups bound to these projects' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsUUID('all', { each: true })
+  projectIds?: string[];
+
+  @ApiPropertyOptional({ type: [String], description: 'Only these bound groups' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsUUID('all', { each: true })
+  bindingIds?: string[];
+
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Only windows still going at or after this time' })
+  @IsOptional()
+  @IsISO8601()
+  from?: string;
+
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Only windows started at or before this time' })
+  @IsOptional()
+  @IsISO8601()
+  to?: string;
+
+  @ApiPropertyOptional({ type: Number, minimum: 1, maximum: 50, description: 'Hits to return; 10 when omitted' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit?: number;
 }

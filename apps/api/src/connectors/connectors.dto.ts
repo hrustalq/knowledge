@@ -26,8 +26,10 @@ import {
   CONNECTOR_SYNC_MODES,
   DOCUMENT_CATEGORIES,
   WIKI_SECTIONS,
+  WORK_ITEM_SOURCE_KINDS,
 } from '@knowledge/contracts';
 import type {
+  WorkItemSourceKind,
   WikiSection,
   ConnectorAclMode,
   ConnectorConflictPolicy,
@@ -406,11 +408,38 @@ export class CreateConnectorWorkItemDto {
   documentId?: string;
 }
 
-/** POST /v1/connectors/:id/work-items/:workItemId/link. */
+/** PUT /v1/connectors/:id/status-map (#424): sparse, validated by the service. */
+export class PutStatusMapDto {
+  @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'string' }, description: 'Raw tracker status → open | in_progress | done | wont_do' })
+  @IsOptional()
+  @IsObject()
+  inbound?: Record<string, string>;
+
+  @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'string' }, description: 'open | in_progress | done | wont_do → raw tracker status' })
+  @IsOptional()
+  @IsObject()
+  outbound?: Record<string, string>;
+}
+
+/**
+ * POST /v1/connectors/:id/work-items/:workItemId/link: a page (feature 32), or
+ * an anchor (#424) — one of the two.
+ */
 export class LinkConnectorWorkItemDto {
-  @ApiProperty({ description: 'The page this work item is about' })
+  @ApiPropertyOptional({ description: 'The page this work item is about' })
+  @IsOptional()
   @IsUUID()
-  documentId!: string;
+  documentId?: string;
+
+  @ApiPropertyOptional({ enum: WORK_ITEM_SOURCE_KINDS, description: 'Anchor kind, with sourceId: status then syncs both ways' })
+  @IsOptional()
+  @IsIn(WORK_ITEM_SOURCE_KINDS as unknown as string[])
+  sourceKind?: WorkItemSourceKind;
+
+  @ApiPropertyOptional({ description: 'The anchored object id' })
+  @ValidateIf((o: LinkConnectorWorkItemDto) => o.sourceKind !== undefined)
+  @IsUUID()
+  sourceId?: string;
 }
 
 /**

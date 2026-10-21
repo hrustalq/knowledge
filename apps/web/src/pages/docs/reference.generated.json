@@ -2281,6 +2281,16 @@
       "platformAdmin": false
     },
     {
+      "method": "PUT",
+      "path": "/v1/connectors/{id}/status-map",
+      "tag": "connectors",
+      "summary": "Override how the tracker's statuses map onto open / in progress / done / won't do (#424)",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/connectors/{id}/sync",
       "tag": "connectors",
@@ -2296,6 +2306,16 @@
       "tag": "connectors",
       "summary": "Prove the credential and configuration reach the external system",
       "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connectors/{id}/tracker-routes",
+      "tag": "connectors",
+      "summary": "The knowledge projects that hand off to this tracker connector (#424)",
+      "role": "viewer",
       "source": "connector",
       "public": false,
       "platformAdmin": false
@@ -2344,7 +2364,7 @@
       "method": "DELETE",
       "path": "/v1/connectors/{id}/work-items/{workItemId}/link",
       "tag": "connectors",
-      "summary": "Detach a work item from its page; both sides are kept",
+      "summary": "Detach a work item from its page and anchor; sync stops, the ticket stays open",
       "role": "editor",
       "source": "connector",
       "public": false,
@@ -2354,7 +2374,17 @@
       "method": "POST",
       "path": "/v1/connectors/{id}/work-items/{workItemId}/link",
       "tag": "connectors",
-      "summary": "Attach a work item to a page, so its events can reach a workflow",
+      "summary": "Attach a work item to a page, so its events can reach a workflow, or to an anchor, so status syncs (#424)",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/work-items/{workItemId}/retry",
+      "tag": "connectors",
+      "summary": "Retry a failed status transition, or re-check an orphaned ticket (#424)",
       "role": "editor",
       "source": "connector",
       "public": false,
@@ -4581,6 +4611,76 @@
       "platformAdmin": true
     },
     {
+      "method": "DELETE",
+      "path": "/v1/projects/{id}/tracker-route",
+      "tag": "work-items",
+      "summary": "Remove the route; existing tickets keep syncing",
+      "role": "admin",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/tracker-route",
+      "tag": "work-items",
+      "summary": "The project's tracker route, or null when it has none",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/projects/{id}/tracker-route",
+      "tag": "work-items",
+      "summary": "Route the project to a tracker connector, with an optional Jira project, issue type or GitHub org board",
+      "role": "admin",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/work-items",
+      "tag": "work-items",
+      "summary": "Tickets anchored on one knowledge object; ones on pages the caller cannot open are left out",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/work-items/handoff",
+      "tag": "work-items",
+      "summary": "Create a ticket for a knowledge object in its tracker, or attach an existing one (idempotent per connector)",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/work-items/rules",
+      "tag": "work-items",
+      "summary": "The handoff rules, and the env ceiling they run under",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/work-items/rules",
+      "tag": "work-items",
+      "summary": "Turn handoff rules on or off; each creates tickets only into a project with a tracker route",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/documents/{id}/workflow-runs",
       "tag": "workflows",
@@ -5412,6 +5512,32 @@
         },
         {
           "name": "limit",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_handoff_work_item",
+      "description": "Hand a knowledge object off to the team's tracker (Jira, GitHub or GitLab): create a ticket for a reported issue, a knowledge conflict, a flagged page (\"verification\") or a page, or attach an existing ticket with `attach` (BILL-123, #45, org/repo#45 or its URL). The ticket carries a summary, a link back and a knowledge-ref footer, never page content; its status then syncs both ways. Without connectorId the",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "sourceKind",
+          "optional": false
+        },
+        {
+          "name": "sourceId",
+          "optional": false
+        },
+        {
+          "name": "connectorId",
+          "optional": true
+        },
+        {
+          "name": "attach",
           "optional": true
         }
       ]

@@ -11,15 +11,22 @@
  * **Unarchive**. Archive asks first: it is reversible, but it takes every
  * subtree with it and hides the pages from everyone.
  *
+ * **Send to tracker** (#424) hands each page off to one tracker connector —
+ * as a "check this page" ticket when it is flagged, as the page otherwise.
+ *
  * Nothing here calls the API. The bar hands a `HealthBulkRequest` up and the
  * page sends it with the ids, so the result handling (per-id errors, the
  * refetch, clearing the selection) lives next to the selection it clears.
  */
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Archive, ArchiveRestore, BadgeCheck, ChevronDown, MoreHorizontal, X } from 'lucide-vue-next'
-import type { VerificationFlag } from '@knowledge/contracts'
-import { VERIFICATION_NOTE_MAX_CHARS } from '@knowledge/contracts'
+import { useQuery } from '@tanstack/vue-query'
+import { Archive, ArchiveRestore, BadgeCheck, ChevronDown, MoreHorizontal, Send, X } from 'lucide-vue-next'
+import type { ListConnectorsResponse, VerificationFlag } from '@knowledge/contracts'
+import { VERIFICATION_NOTE_MAX_CHARS, connectorKindInfo } from '@knowledge/contracts'
+import { apiQueryOptions } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
+import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -55,6 +62,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   run: [request: HealthBulkRequest]
+  handoff: [connectorId: string]
   clear: []
 }>()
 
@@ -77,6 +85,26 @@ function submitFlag() {
   flagDialog.value = null
   const note = flagNote.value.trim()
   emit('run', { action: flag === 'outdated' ? 'outdated' : 'request', ...(note ? { note } : {}) })
+}
+
+/** Send to tracker: which connector, picked once for the whole selection. */
+const handoffOpen = ref(false)
+const handoffConnector = ref('')
+const connectorsQuery = useQuery(
+  computed(() => ({ ...apiQueryOptions('/v1/connectors', { query: { workspaceId: getWorkspaceId() } }), enabled: handoffOpen.value })),
+)
+const trackers = computed(() =>
+  ((connectorsQuery.data.value as ListConnectorsResponse | undefined)?.connectors ?? []).filter(
+    (c) => c.enabled && connectorKindInfo(c.kind)?.capabilities.tasks,
+  ),
+)
+watch(trackers, (list) => {
+  if (!list.some((c) => c.id === handoffConnector.value)) handoffConnector.value = list[0]?.id ?? ''
+})
+function submitHandoff() {
+  if (!handoffConnector.value) return
+  handoffOpen.value = false
+  emit('handoff', handoffConnector.value)
 }
 
 const archiveOpen = ref(false)
@@ -135,6 +163,11 @@ function archive() {
         <DropdownMenuItem @select="openFlag('requested')">{{ t('health.bulk.request') }}</DropdownMenuItem>
         <DropdownMenuItem @select="openFlag('outdated')">{{ t('health.bulk.outdated') }}</DropdownMenuItem>
         <DropdownMenuItem @select="emit('run', { action: 'clear' })">{{ t('health.bulk.clear') }}</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem @select="handoffOpen = true">
+          <Send class="size-3.5" />
+          {{ t('workItems.send') }}
+        </DropdownMenuItem>
         <template v-if="props.canArchive">
           <DropdownMenuSeparator />
           <DropdownMenuItem @select="archiveOpen = true">
@@ -176,6 +209,31 @@ function archive() {
         <Button :variant="flagDialog === 'outdated' ? 'destructive' : 'default'" @click="submitFlag">
           {{ flagDialog === 'outdated' ? t('verification.outdatedDialog.submit') : t('verification.requestDialog.submit') }}
         </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <Dialog v-model:open="handoffOpen">
+    <DialogContent class="max-w-md">
+      <DialogHeader>
+        <DialogTitle>{{ t('health.bulk.handoffDialog.title', { n: count }, count) }}</DialogTitle>
+        <DialogDescription>{{ t('health.bulk.handoffDialog.description') }}</DialogDescription>
+      </DialogHeader>
+      <p v-if="connectorsQuery.isPending.value" class="text-sm text-muted-foreground">{{ t('common.loading') }}</p>
+      <p v-else-if="!trackers.length" class="text-sm text-muted-foreground">{{ t('workItems.noTrackers') }}</p>
+      <div v-else class="space-y-1">
+        <Label for="health-handoff-connector" class="text-xs">{{ t('workItems.tracker') }}</Label>
+        <select
+          id="health-handoff-connector"
+          v-model="handoffConnector"
+          class="h-9 w-full rounded-md border bg-transparent px-2 text-sm focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          <option v-for="c in trackers" :key="c.id" :value="c.id">{{ c.name }}</option>
+        </select>
+      </div>
+      <DialogFooter>
+        <Button variant="ghost" @click="handoffOpen = false">{{ t('common.cancel') }}</Button>
+        <Button :disabled="!handoffConnector" @click="submitHandoff">{{ t('health.bulk.handoffDialog.submit') }}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

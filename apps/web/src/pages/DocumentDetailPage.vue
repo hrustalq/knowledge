@@ -75,6 +75,7 @@ import UsedByRail from '@/components/code/UsedByRail.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useEventsStore } from '@/stores/events'
+import { useLayoutStore } from '@/stores/layout'
 import { useTemplatesStore } from '@/stores/templates'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -82,6 +83,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
@@ -124,6 +126,7 @@ const { t } = useI18n()
 
 const route = useRoute()
 const auth = useAuthStore()
+const layout = useLayoutStore()
 const store = useDocumentsStore()
 const events = useEventsStore()
 
@@ -776,6 +779,11 @@ watch(
             <DropdownMenuItem v-if="auth.canEdit && saveAsPage" @select="saveAsOpen = true">
               <LayoutTemplate class="size-4" /> {{ t('templates.saveAs.action') }}
             </DropdownMenuItem>
+            <!-- A reader preference, not a page action (#422): it applies to
+                 every page in the app, and is remembered in a cookie. -->
+            <DropdownMenuCheckboxItem :model-value="layout.fullWidth" @update:model-value="layout.setFullWidth">
+              {{ t('documents.fullWidth') }}
+            </DropdownMenuCheckboxItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </template>

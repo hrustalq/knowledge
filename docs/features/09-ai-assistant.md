@@ -69,6 +69,11 @@ context engineering / prompt injection:
 - The response reports `toolCalls` (tool, arguments, ok) and `model` for
   transparency; every touched document surfaces in `sources`.
 
+The chat pane (not `/ask`) adds two tools that ask before they write,
+`capture_decision` and `mark_outdated`: with an argument missing they put one
+server-built question in front of the person per turn instead of running. That
+is [61 — question flows](61-question-flows.md), shared with MCP.
+
 ## Future work
 
 - ~~Autogeneration of documents from templates + graph context.~~ Shipped as

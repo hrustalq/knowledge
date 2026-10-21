@@ -1,0 +1,18 @@
+{
+  "captureDecision": {
+    "project": "Which project should this decision be filed in?",
+    "relatedPage": "Which page does it relate to?",
+    "noLink": "No link",
+    "reviewer": "Who should review it?"
+  },
+  "markOutdated": {
+    "scope": "Mark what as outdated?",
+    "scopePage": "This page only",
+    "scopeSubtree": {
+      "one": "This page and its {count} subpage",
+      "other": "This page and its {count} subpages"
+    },
+    "exclusions": "Leave any of these as they are?",
+    "reason": "Why is it outdated?"
+  }
+}

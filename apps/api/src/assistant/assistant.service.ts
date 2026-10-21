@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
   AnswerSurface,
   AssistantAskResponse,
@@ -16,6 +16,8 @@ import type {
   AssistantToolCall,
   AssistantUiBlock,
   DraftEditOp,
+  FlowAnswers,
+  FlowKey,
   PostAssistantMessageResponse,
 } from '@knowledge/contracts';
 import {
@@ -42,7 +44,8 @@ import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { AgentLearningsService } from '../ai/agent-learnings.service.js';
 import { AiPluginsService } from '../ai/ai-plugins.service.js';
-import { AssistantToolsService } from './assistant.tools.js';
+import { AssistantToolsService, FLOW_TOOLS } from './assistant.tools.js';
+import { acceptsAnswer, FLOW_TOOL, openFlow } from './flow-chain.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
 import { AgentRouterService } from '../agents/agent-router.service.js';
@@ -231,6 +234,23 @@ function workItemClause(repos: Array<{ id: string; name: string }>): string {
   );
 }
 
+/** How far back a flow's run of prompts and answers is looked for: a flow is a handful of questions, each two messages. */
+const FLOW_HISTORY = 40;
+
+/**
+ * Appended on a turn that answers a flow step (#425). The person's answer is
+ * already in the server's hands; the model's only job is to call the tool
+ * again so the next question — or the task — happens.
+ */
+function flowClause(flow: FlowKey): string {
+  const tool = FLOW_TOOL[flow];
+  return (
+    `\n\nThe user's message answers a question ${tool} asked. Call ${tool} again now, with the same arguments ` +
+    'you gave it before — the server applies their answer; never pass answers yourself. If it asks the next ' +
+    'question, end your turn; if it ran, tell them in one or two sentences what happened.'
+  );
+}
+
 interface PreparedTurn {
   mode: AssistantChatMode;
   /** The agent this turn runs as — its config carries any provider it pins. */
@@ -248,6 +268,8 @@ interface PreparedTurn {
   /** At most one question per turn — the first one asked wins, so a model that
    * calls ask_user twice cannot bury its own form under a second one. */
   prompt: AssistantPrompt | null;
+  /** The question flow this turn answers a step of (#425), or null. */
+  flow: { flow: FlowKey; answers: FlowAnswers } | null;
   /**
    * The editor's draft, with this turn's own edits applied as they land — so a
    * second `edit_draft` is checked against the page the first one left. Null
@@ -802,7 +824,23 @@ export class AssistantService {
       }
   > {
     const thread = await this.threads.getThreadOrThrow(threadId);
-    const userMessage = await this.threads.appendMessage(threadId, 'user', dto.content);
+    // A flow answer is checked against the flow rebuilt from the thread
+    // (#425) before it is stored: an older form submitted late changes nothing.
+    let flow: PreparedTurn['flow'] = null;
+    if (dto.answer) {
+      const open = openFlow(await this.threads.recentHistory(threadId, FLOW_HISTORY));
+      if (!open || !acceptsAnswer(open, dto.answer)) {
+        throw new ConflictException({
+          statusCode: 409,
+          message: t('error.assistant.flowAnswerStale'),
+          reason: 'flow-answer-stale',
+        });
+      }
+      flow = { flow: open.flow, answers: { ...open.answers, [dto.answer.questionId]: dto.answer.value } };
+    }
+    const userMessage = await this.threads.appendMessage(threadId, 'user', dto.content, {
+      ...(dto.answer ? { answer: { flow: dto.answer.flow, questionId: dto.answer.questionId, value: dto.answer.value } } : {}),
+    });
     await this.threads.autoTitle(threadId, dto.content);
 
     // Agent mode is a workspace-level switch, so it comes from the base config
@@ -856,6 +894,11 @@ export class AssistantService {
     });
 
     const turn = await this.prepareTurn(thread, dto, userMessage.id, agent, mode, principal);
+    if (flow) {
+      turn.flow = flow;
+      const system = turn.messages[0];
+      if (system?.role === 'system' && typeof system.content === 'string') system.content += flowClause(flow.flow);
+    }
     return { enabled: true, userMessage, thread, turn, call };
   }
 
@@ -962,7 +1005,7 @@ export class AssistantService {
     // One question per turn. Told plainly rather than ignored, so a model that
     // tries to ask twice stops instead of looping on a call that looks like it
     // worked and silently did nothing.
-    if (turn.prompt && (name === 'ask_user' || name === 'request_agent_mode')) {
+    if (turn.prompt && (name === 'ask_user' || name === 'request_agent_mode' || FLOW_TOOLS.has(name))) {
       return {
         content: JSON.stringify({ error: 'You already asked the user something this turn. End your turn now.' }),
         ok: false,
@@ -991,6 +1034,7 @@ export class AssistantService {
       ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
       ...(ctx.audience ? { audience: ctx.audience } : {}),
       ...(ctx.channel ? { channel: ctx.channel } : {}),
+      ...(turn.flow ? { flow: turn.flow } : {}),
     });
     if (!result.ok) turn.toolErrors++;
     for (const source of result.sources) {
@@ -1311,6 +1355,7 @@ export class AssistantService {
       uiBlocks: [],
       emittedUiBlocks: 0,
       prompt: null,
+      flow: null,
       draft: draft ? draft.markdown : null,
       labels,
       toolErrors: 0,

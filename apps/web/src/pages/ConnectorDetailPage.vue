@@ -18,7 +18,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
-import { BookOpenText, CircleAlert, GitPullRequest, Link2, RefreshCw, ScrollText, ShieldCheck, Tag } from 'lucide-vue-next'
+import { BookOpenText, CircleAlert, GitPullRequest, Link2, RefreshCw, ScrollText, Send, ShieldCheck, Tag } from 'lucide-vue-next'
 import { CHANGELOG_CONFIG_KEY, connectorKindInfo, wikiEnabled } from '@knowledge/contracts'
 import type {
   ConnectorResponse,
@@ -44,6 +44,7 @@ import ConnectorAccessMirroring from '@/components/connectors/ConnectorAccessMir
 import ConnectorReleases from '@/components/connectors/ConnectorReleases.vue'
 import ConnectorWiki from '@/components/connectors/ConnectorWiki.vue'
 import ConnectorWorkItems from '@/components/connectors/ConnectorWorkItems.vue'
+import ConnectorTrackerSettings from '@/components/connectors/ConnectorTrackerSettings.vue'
 import GithubAccessCard from '@/components/connectors/GithubAccessCard.vue'
 import ConnectorGuidanceCard from '@/components/connectors/ConnectorGuidanceCard.vue'
 import { RUN_STATUS_CLASS, RUN_STATUS_LABEL } from '@/components/connectors/connector-ui'
@@ -51,7 +52,7 @@ import { useAuthStore } from '@/stores/auth'
 import { relativeTime } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
 
-type TabKey = 'work-items' | 'wiki' | 'releases' | 'links' | 'runs' | 'access'
+type TabKey = 'work-items' | 'tracker' | 'wiki' | 'releases' | 'links' | 'runs' | 'access'
 
 const route = useRoute()
 const router = useRouter()
@@ -76,6 +77,8 @@ const tabs = computed<PageTab<TabKey>[]>(() => {
   const list: PageTab<TabKey>[] = []
   if (connector.value?.capabilities.tasks) {
     list.push({ key: 'work-items', label: t('connectors.tabWorkItems'), icon: GitPullRequest })
+    // #424: where projects hand off to and how statuses map — an admin's, like the connector.
+    if (canManage.value) list.push({ key: 'tracker', label: t('workItems.settings.tab'), icon: Send })
   }
   // The repo wiki and its release notes (docs/features/46): a codebase
   // connector's, and only once turned on — read through the same predicate the
@@ -288,6 +291,7 @@ watch(connectorId, () => {
       <ConnectorWiki v-else-if="tab === 'wiki'" :connector-id="connectorId" :can-edit="auth.canEdit" />
       <ConnectorReleases v-else-if="tab === 'releases'" :connector-id="connectorId" />
       <ConnectorAccessMirroring v-else-if="tab === 'access'" :connector-id="connectorId" />
+      <ConnectorTrackerSettings v-else-if="tab === 'tracker' && connector" :connector="connector" />
 
       <div v-else-if="tab === 'links'">
         <PageState v-if="links.isPending.value" state="loading" />

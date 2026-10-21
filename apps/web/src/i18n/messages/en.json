@@ -303,6 +303,7 @@
     "fromTemplate": "From template: {name} v{version}",
     "fromTemplateUnnamed": "From a template, v{version}",
     "moreActions": "More actions",
+    "fullWidth": "Full width",
     "asOfBanner": "As of {date}",
     "asOfBannerTag": "As of {tag}, {date}"
   },
@@ -1226,7 +1227,10 @@
           "removed": "unlinked a page from a connector"
         },
         "work-item": {
-          "created": "filed a work item from"
+          "created": "filed a work item from",
+          "handoff": "sent to a tracker",
+          "status-changed": "saw a tracker ticket change for",
+          "unlinked": "unlinked a tracker ticket from"
         }
       },
       "glossary": {
@@ -1890,6 +1894,13 @@
     "answered": "Answered",
     "sendAnswer": "Send answer",
     "answerStarred": "Answer the starred fields to continue.",
+    "suggested": "Suggested",
+    "flowStep": "Question {step} of {of}",
+    "flowChange": "Change",
+    "flowChanged": "Changed",
+    "flowDropped": "Dropped",
+    "flowSkipped": "Skipped",
+    "flowNone": "None",
     "dropTextFiles": "Drop text files to attach them to this message",
     "rename": "Rename",
     "delete": "Delete",
@@ -2084,7 +2095,8 @@
         "webhook": "A signed webhook arrives",
         "comment": {
           "mention": "The agent is mentioned in a comment"
-        }
+        },
+        "work-item.updated": "A handed-off ticket changes"
       },
       "eventHints": {
         "page": {
@@ -2100,7 +2112,8 @@
         "webhook": "Any system that can sign a request can start this agent. The delivery body reaches the model as untrusted context.",
         "comment": {
           "mention": "An editor mentions the agent in a discussion. Instead of a chat reply, it goes over that page and posts its findings in the thread when the run ends."
-        }
+        },
+        "work-item.updated": "A ticket handed off from here was closed, reopened or relabelled in its tracker (Jira, GitHub, GitLab). The run's subject is the ticket; it inherits the anchored page's project and category."
       },
       "webhook": {
         "url": "Delivery URL",
@@ -3577,6 +3590,18 @@
       "running": "Drafting a merge request",
       "done": "Drafted a merge request"
     },
+    "capture_decision": {
+      "running": "Capturing a decision",
+      "done": "Captured a decision",
+      "asked": "Asked about the decision",
+      "failed": "Couldn't capture the decision"
+    },
+    "mark_outdated": {
+      "running": "Marking pages outdated",
+      "done": "Marked pages outdated",
+      "asked": "Asked about marking pages outdated",
+      "failed": "Couldn't mark pages outdated"
+    },
     "ask_user": {
       "running": "Asking you",
       "done": "Asked you"
@@ -4044,7 +4069,8 @@
       "access.approved": "approved your access request",
       "access.denied": "declined your access request",
       "access.expired": "Your access request expired",
-      "access.granted": "gave you access"
+      "access.granted": "gave you access",
+      "work-item.closed": "closed the tracker ticket for this"
     }
   },
   "connect": {
@@ -4347,7 +4373,8 @@
       "missing-paths": "Missing code",
       "unread": "Unread",
       "dead": "Dead",
-      "archived": "Archived"
+      "archived": "Archived",
+      "handed-off": "Handed off"
     },
     "presetHint": {
       "all": "Every live page",
@@ -4424,6 +4451,11 @@
         "no-head": "no published revision to verify",
         "not-found": "page not found",
         "unknown": "refused"
+      },
+      "handoffDialog": {
+        "title": "Send {n} page to a tracker | Send {n} pages to a tracker",
+        "description": "Each page gets one ticket, with a link back here. A flagged page goes as a request to check it. A page that already has a ticket on this tracker keeps it.",
+        "submit": "Send"
       }
     },
     "toast": {
@@ -4433,7 +4465,8 @@
       "clear": "Cleared verification on {n} page | Cleared verification on {n} pages",
       "reassign": "Reassigned {n} page | Reassigned {n} pages",
       "archive": "Archived {n} page | Archived {n} pages",
-      "unarchive": "Restored {n} page | Restored {n} pages"
+      "unarchive": "Restored {n} page | Restored {n} pages",
+      "handoff": "Sent {n} page | Sent {n} pages"
     },
     "settings": {
       "title": "Freshness policy",
@@ -6247,6 +6280,101 @@
         "belowDead": "Shorter than the {n}-day dead-page window: the unread and dead lists will never match a page.",
         "clamped": "Longer than the deployment allows: {n} days will apply."
       }
+    }
+  },
+  "workItems": {
+    "send": "Send to tracker",
+    "sendTitle": "Send to tracker",
+    "sendHint": "Creates a ticket with a link back here, or attaches one that exists. Status then moves both ways.",
+    "tracker": "Tracker",
+    "attachLabel": "Existing ticket (optional)",
+    "attachPlaceholder": "BILL-123, #45 or a ticket URL",
+    "create": "Create ticket",
+    "attach": "Attach ticket",
+    "sending": "Sending…",
+    "created": "Ticket created",
+    "attached": "Ticket attached",
+    "noTrackers": "No tracker connector here yet. An admin can connect Jira, GitHub or GitLab under Connectors.",
+    "retry": "Retry syncing {key}",
+    "trackerSays": "In the tracker: {status}",
+    "status": {
+      "open": "Open",
+      "in_progress": "In progress",
+      "done": "Done",
+      "wont_do": "Won't do"
+    },
+    "sync": {
+      "synced": "In sync",
+      "pending": "Syncing",
+      "failed": "Sync failed",
+      "orphaned": "Gone from tracker"
+    },
+    "settings": {
+      "tab": "Tracker",
+      "routesTitle": "Projects that hand off here",
+      "routesHint": "A project's \"Send to tracker\" goes to this connector. Without a route, people pick a tracker each time and no rule creates tickets.",
+      "noRoutes": "No project routes here yet.",
+      "project": "Project",
+      "jiraProject": "Jira project key",
+      "issueType": "Issue type",
+      "boardUrl": "GitHub organization board (optional)",
+      "board": "Board",
+      "addRoute": "Route project here",
+      "removeRoute": "Stop routing {project} here",
+      "routeSaved": "{project} now hands off here",
+      "mapTitle": "Status map",
+      "mapHint": "How this tracker's statuses read as ours. Leave a field empty to keep the default shown in it.",
+      "outbound": "When it changes here, move the ticket to",
+      "notPushed": "not pushed",
+      "inbound": "When the tracker says",
+      "inboundDefaults": "Defaults: {list}. Tracker statuses are matched without regard to case.",
+      "trackerStatus": "Tracker status",
+      "ourStatus": "Our status",
+      "addInbound": "Add a status",
+      "mapSaved": "Status map saved",
+      "peopleTitle": "People",
+      "peopleHint": "Tracker accounts seen here, and who each one is in this workspace. Used to say who closed a ticket, and to let a mapped editor's close clear a page's flag. Nobody is assigned anything.",
+      "noPeople": "No tracker accounts seen yet.",
+      "mapPerson": "Map to member"
+    },
+    "everyTracker": "This already has a ticket on every tracker connected here.",
+    "actor": {
+      "tracker": "Tracker",
+      "rule": "Handoff rule"
+    },
+    "rules": {
+      "title": "Handoff to trackers",
+      "intro": "Hand these off to a tracker without anyone pressing Send to tracker. A ticket goes to the project's tracker route, so a project without one gets none. Each object gets one ticket, once.",
+      "saved": "Handoff rules saved",
+      "issues": {
+        "label": "Reported issues",
+        "hint": "High: a report of wrong content, or one reported by three or more people. Medium also includes stale and missing reports, and any reported twice.",
+        "options": {
+          "off": "Off",
+          "high": "High priority",
+          "medium": "Medium and high",
+          "all": "All"
+        }
+      },
+      "conflicts": {
+        "label": "Knowledge conflicts",
+        "hint": "Every open conflict between two sources.",
+        "options": {
+          "off": "Off",
+          "on": "All open conflicts"
+        }
+      },
+      "verification": {
+        "label": "Flagged pages",
+        "hint": "A page marked outdated, or also one with a check requested.",
+        "options": {
+          "off": "Off",
+          "outdated": "Outdated pages",
+          "all": "Outdated and check requested"
+        }
+      },
+      "ceiling": "This deployment creates at most {n} ticket per sweep (every ~15 s), across all workspaces. A large backlog is handed off over a few minutes. | This deployment creates at most {n} tickets per sweep (every ~15 s), across all workspaces. A large backlog is handed off over a few minutes.",
+      "stopped": "This deployment has handoff rules switched off (WORK_ITEM_AUTOCREATE_MAX_PER_TICK=0 or WORK_ITEM_SYNC_ENABLED=false). Saved rules apply once they are back on."
     }
   }
 }

@@ -26,3 +26,4 @@ export * from '@knowledge/contracts/captures';
 export * from '@knowledge/contracts/quality';
 export * from '@knowledge/contracts/observability';
 export * from '@knowledge/contracts/analytics';
+export * from '@knowledge/contracts/flows';

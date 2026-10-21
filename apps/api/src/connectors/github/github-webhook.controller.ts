@@ -12,7 +12,7 @@ import { readRepoPushDelivery, safeJson, verifyHubSignature } from '../webhook-p
 import { ConnectorProducer } from '../connector.producer.js';
 import { ConnectorsService } from '../connectors.service.js';
 import { ConnectorWorkItemsService } from '../connector-work-items.service.js';
-import { toWorkItem } from './github-issues.service.js';
+import { GithubIssuesService, toWorkItem } from './github-issues.service.js';
 import { DriftTriggerService } from '../drift/drift-trigger.service.js';
 import { readGithubMergedPullRequest, readGithubPullRequest } from '../drift/pull-request-delivery.js';
 
@@ -52,6 +52,7 @@ export class GithubWebhookController {
     private readonly workItems: ConnectorWorkItemsService,
     private readonly drift: DriftTriggerService,
     private readonly producer: ConnectorProducer,
+    private readonly github: GithubIssuesService,
   ) {
     this.secret = this.config.get('GITHUB_APP_WEBHOOK_SECRET', { infer: true }).trim();
   }
@@ -78,6 +79,9 @@ export class GithubWebhookController {
     const payload = safeJson(rawBody);
     const event = lower['x-github-event'] ?? '';
     if (!payload || !event) return { accepted: true, handled: 0 };
+
+    // A board card names an org and a content node, never a repository.
+    if (event === 'projects_v2_item') return { accepted: true, handled: await this.card(payload) };
 
     const connectors = await this.connectorsFor(payload);
     if (connectors.length === 0) return { accepted: true, handled: 0 };
@@ -111,6 +115,35 @@ export class GithubWebhookController {
     return this.connectors.forGithubDelivery(String(installationId), fullName);
   }
 
+  /**
+   * A card moved on an org board (#424): refresh the issue it shows on every
+   * connector for that issue's repository, board names included. The card's
+   * column itself is not read back — the issue's own state is the status, and
+   * the board is a view of it. Returns how many connectors took it.
+   */
+  private async card(payload: Record<string, any>): Promise<number> {
+    const item = payload.projects_v2_item;
+    const installationId = payload.installation?.id;
+    if (item?.content_type !== 'Issue' || typeof item.content_node_id !== 'string' || installationId === undefined) return 0;
+    const rows = await this.connectors.forGithubInstallation(String(installationId));
+    const any = rows.find((r) => this.github.supports(r));
+    const content = any ? await this.github.cardContent(any, item.content_node_id).catch(() => null) : null;
+    if (!content) return 0;
+    let handled = 0;
+    for (const row of await this.connectors.forGithubDelivery(String(installationId), content.repo)) {
+      try {
+        const issue = await this.github.get(row, content.number);
+        if (!issue) continue;
+        const boards = await this.github.boardsFor(row, [content.number]);
+        await this.workItems.upsertFrom(row, issue, { boards: boards.get(content.number) ?? [], actorId: senderOf(payload), announce: true });
+        handled += 1;
+      } catch (err) {
+        this.logger.warn(`projects_v2_item failed for connector ${row.id}: ${(err as Error).message}`);
+      }
+    }
+    return handled;
+  }
+
   /** Map one delivery onto our vocabulary and record it. Returns false for events we ignore. */
   private async dispatch(row: Connector, event: string, payload: Record<string, any>): Promise<boolean> {
     const action: string = typeof payload.action === 'string' ? payload.action : '';
@@ -118,7 +151,7 @@ export class GithubWebhookController {
     if (event === 'issues') {
       const type = ISSUE_ACTIONS[action];
       if (!type || !payload.issue) return false;
-      await this.workItems.applyDelivery(row, type, toWorkItem(payload.issue));
+      await this.workItems.applyDelivery(row, type, toWorkItem(payload.issue), { actorId: senderOf(payload) });
       return true;
     }
 
@@ -126,7 +159,7 @@ export class GithubWebhookController {
       // Only `created`: an edited or deleted comment has not moved the work on,
       // and a flow that fired on every edit would fire on typo fixes.
       if (action !== 'created' || !payload.issue) return false;
-      await this.workItems.applyDelivery(row, 'repo.issue.commented', toWorkItem(payload.issue));
+      await this.workItems.applyDelivery(row, 'repo.issue.commented', toWorkItem(payload.issue), { actorId: senderOf(payload) });
       return true;
     }
 
@@ -152,7 +185,9 @@ export class GithubWebhookController {
       // `toWorkItem` discriminates on a nested `pull_request` key, which a pull
       // request *payload* does not have — it is the pull request. Re-nesting the
       // one field it reads keeps a single state mapping for both shapes.
-      await this.workItems.applyDelivery(row, type, toWorkItem({ ...pr, pull_request: { merged_at: pr.merged_at } }));
+      await this.workItems.applyDelivery(row, type, toWorkItem({ ...pr, pull_request: { merged_at: pr.merged_at } }), {
+        actorId: senderOf(payload),
+      });
       return true;
     }
 
@@ -170,10 +205,9 @@ export class GithubWebhookController {
       return true;
     }
 
-    // `installation`, `installation_repositories`, `ping`, `projects_v2_item`
-    // and everything else: accepted and ignored. Board membership is read on
-    // demand in one batched GraphQL query rather than reconstructed from an
-    // event that names a card node id we would have to resolve back to an issue.
+    // `installation`, `installation_repositories`, `ping` and everything else:
+    // accepted and ignored. (`projects_v2_item` is handled before the
+    // repository lookup, in `card`.)
     return false;
   }
 
@@ -189,6 +223,15 @@ export class GithubWebhookController {
     const run = await this.connectors.queueRepoPush(row, push);
     if (run) await this.producer.enqueue(run.id, { delayMs: this.config.get('WIKI_PUSH_DEBOUNCE_MS', { infer: true }) });
   }
+}
+
+/**
+ * Who acted, as GitHub's numeric user id — the id `external_identities` keys
+ * GitHub accounts by (#76), so attribution and ACL mirroring map one account once.
+ */
+function senderOf(payload: Record<string, any>): string | null {
+  const id: unknown = payload.sender?.id;
+  return typeof id === 'number' || typeof id === 'string' ? String(id) : null;
 }
 
 const ISSUE_ACTIONS: Record<string, RepoEventType | undefined> = {

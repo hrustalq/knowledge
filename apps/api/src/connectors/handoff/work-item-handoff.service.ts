@@ -1,0 +1,321 @@
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, type Connector, type ConnectorWorkItem, type ProjectTrackerRoute } from '@prisma/client';
+import { WORK_ITEM_STATUSES } from '@knowledge/contracts';
+import type {
+  ConnectorWorkItemInfo,
+  PutTrackerRouteInput,
+  TrackerRouteInfo,
+  WorkItemHandoffInput,
+  WorkItemSourceKind,
+} from '@knowledge/contracts';
+import { ActivityService } from '../../activity/activity.service.js';
+import type { Principal } from '../../auth/principal.js';
+import { asLocale } from '../../i18n/locale.js';
+import { t } from '../../i18n/t.js';
+import { PermissionService } from '../../permissions/permission.service.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { labelFor, type TrackerAdapter } from '../adapters/tracker.js';
+import { ConnectorWorkItemsService, keyOf } from '../connector-work-items.service.js';
+import { ConnectorsService } from '../connectors.service.js';
+import { WorkItemAnchorsService, type AnchorView } from './work-item-anchors.service.js';
+
+/**
+ * Handoff (#424): give a knowledge object a ticket in a tracker, by creating
+ * one or attaching one that exists. One service behind every caller — a
+ * person's chip, a bulk action, a rule, the MCP tool — so the checks below are
+ * the checks, whoever asks.
+ *
+ * Idempotent per (connector, anchor): a second handoff returns the ticket the
+ * first one made. API-side, because it writes to somebody else's tracker in a
+ * person's name.
+ */
+@Injectable()
+export class WorkItemHandoffService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly connectors: ConnectorsService,
+    private readonly workItems: ConnectorWorkItemsService,
+    private readonly anchors: WorkItemAnchorsService,
+    private readonly permissions: PermissionService,
+    private readonly activity: ActivityService,
+  ) {}
+
+  /** Create-or-attach. The caller must be able to edit the anchor's page. */
+  async handoff(principal: Principal, input: WorkItemHandoffInput): Promise<ConnectorWorkItemInfo> {
+    const view = await this.requireAnchor(principal, input.workspaceId, input.sourceKind, input.sourceId);
+    const route = await this.prisma.projectTrackerRoute.findUnique({ where: { projectId: view.projectId } });
+    const connectorId = input.connectorId ?? route?.connectorId;
+    if (!connectorId) throw new BadRequestException(t('error.workItem.noRoute'));
+    const { row, tracker } = await this.requireTracker(input.workspaceId, connectorId);
+
+    const existing = await this.prisma.connectorWorkItem.findFirst({
+      where: { connectorId: row.id, sourceKind: view.kind, sourceId: view.id },
+    });
+    if (existing) {
+      if (input.attach && !sameTicket(tracker, row, existing, input.attach)) {
+        throw new ConflictException({
+          statusCode: 409,
+          message: t('error.workItem.anchorTaken', { key: keyOf(existing), name: row.name }),
+          reason: 'anchor-taken',
+          workItemId: existing.id,
+        });
+      }
+      return (await this.workItems.decorate([existing]))[0];
+    }
+
+    const anchor = { kind: view.kind, id: view.id };
+    let saved: ConnectorWorkItem;
+    if (input.attach) {
+      const ref = tracker.parseRef(row, input.attach);
+      if (!ref) throw new BadRequestException(t('error.workItem.badRef', { ref: input.attach, name: row.name }));
+      const issue = await tracker.getIssue(row, ref);
+      if (!issue) throw new NotFoundException(t('error.workItem.ticketNotFound', { ref: input.attach, name: row.name }));
+      const held = await this.prisma.connectorWorkItem.findUnique({
+        where: { connectorId_kind_number: { connectorId: row.id, kind: issue.kind, number: issue.number } },
+      });
+      if (held?.sourceId && (held.sourceKind !== view.kind || held.sourceId !== view.id)) {
+        throw new ConflictException({
+          statusCode: 409,
+          message: t('error.workItem.ticketTaken', { key: keyOf(held) }),
+          reason: 'ticket-taken',
+          workItemId: held.id,
+        });
+      }
+      saved = await this.workItems.upsertFrom(row, issue, { documentId: view.documentId, anchor });
+    } else {
+      saved = await this.create(view, row, tracker, route);
+    }
+    this.recordHandoff(principal.userId, row, view, saved, !!input.attach);
+    return (await this.workItems.decorate([saved]))[0];
+  }
+
+  /**
+   * A handoff rule's ticket (#424): the anchor's project route decides the
+   * tracker, and a project without one gets no ticket. No person acted, so no
+   * page level is checked; the ticket text already names a restricted page by
+   * id. Attributed to `rule:<kind>`. Returns null when there is nowhere to go.
+   */
+  async handoffByRule(view: AnchorView): Promise<ConnectorWorkItem | null> {
+    const route = await this.prisma.projectTrackerRoute.findUnique({ where: { projectId: view.projectId } });
+    if (!route) return null;
+    const row = await this.prisma.connector.findUnique({ where: { id: route.connectorId } });
+    const tracker = row?.enabled ? this.workItems.trackerOf(row) : null;
+    if (!row || !tracker) return null;
+    const saved = await this.create(view, row, tracker, route);
+    this.recordHandoff(`rule:${view.kind}`, row, view, saved, false);
+    return saved;
+  }
+
+  /**
+   * Attach an existing row to a page (feature 32) or, since #424, to an anchor.
+   * Either way the caller must be able to edit the page it lands on.
+   */
+  async link(
+    principal: Principal,
+    row: Connector,
+    workItemId: string,
+    to: { documentId?: string; sourceKind?: WorkItemSourceKind; sourceId?: string },
+  ): Promise<ConnectorWorkItemInfo> {
+    const item = await this.workItems.require(row, workItemId);
+    if (to.documentId && to.sourceKind) throw new BadRequestException(t('error.workItem.anchorOrDocument'));
+    const kind = to.sourceKind ?? 'document';
+    const id = to.sourceId ?? to.documentId;
+    if (!id) throw new BadRequestException(t('error.workItem.anchorOrDocument'));
+    const view = await this.requireAnchor(principal, row.workspaceId, kind, id);
+    // A bare page link keeps feature 32's meaning — several issues may name one
+    // page — so it sets no anchor. An explicit anchor is one ticket per object.
+    const data = to.sourceKind
+      ? { documentId: view.documentId, sourceKind: view.kind, sourceId: view.id }
+      : { documentId: view.documentId };
+    const updated = await this.save(row, () => this.prisma.connectorWorkItem.update({ where: { id: item.id }, data }));
+    return (await this.workItems.decorate([updated]))[0];
+  }
+
+  /** Stop relating the two. The ticket stays open on the tracker. */
+  async unlink(principal: Principal, row: Connector, workItemId: string): Promise<ConnectorWorkItemInfo> {
+    const before = await this.workItems.require(row, workItemId);
+    const after = await this.workItems.unlink(row, workItemId);
+    if (before.sourceKind || before.documentId) {
+      void this.activity.record({
+        workspaceId: row.workspaceId,
+        actor: principal.userId,
+        action: 'connector.work-item.unlinked',
+        ...(before.documentId ? { documentId: before.documentId } : {}),
+        subjectId: before.id,
+        metadata: { key: keyOf(before), url: before.url, sourceKind: before.sourceKind, sourceId: before.sourceId },
+      });
+    }
+    return after;
+  }
+
+  /** A person's retry after the sweeper gave up: back to pending, attempts from zero. */
+  async retry(row: Connector, workItemId: string): Promise<ConnectorWorkItemInfo> {
+    const item = await this.workItems.require(row, workItemId);
+    const { count } = await this.prisma.connectorWorkItem.updateMany({
+      where: { id: item.id, syncState: { in: ['failed', 'orphaned'] } },
+      // An orphan has nothing pending; the next reconcile decides afresh.
+      data: item.pendingStatus
+        ? { syncState: 'pending', syncAttempts: 0, nextSyncAt: null, syncError: null }
+        : { syncState: 'synced', syncAttempts: 0, nextSyncAt: null, syncError: null },
+    });
+    if (!count) {
+      throw new ConflictException({ statusCode: 409, message: t('error.workItem.notRetryable'), reason: 'not-retryable', syncState: item.syncState });
+    }
+    return (await this.workItems.decorate([await this.workItems.require(row, workItemId)]))[0];
+  }
+
+  /** The tickets on one anchor, as this caller may see them. */
+  async forAnchor(principal: Principal, workspaceId: string, kind: WorkItemSourceKind, id: string): Promise<ConnectorWorkItemInfo[]> {
+    return this.workItems.listForAnchor(await this.permissions.scopeFor(principal, workspaceId), kind, id);
+  }
+
+  // --- tracker routes ---
+
+  async route(projectId: string): Promise<TrackerRouteInfo | null> {
+    const row = await this.prisma.projectTrackerRoute.findUnique({ where: { projectId } });
+    return row ? toRouteInfo(row) : null;
+  }
+
+  /**
+   * Route a knowledge project to a tracker connector. A board URL is resolved
+   * against GitHub now, so a wrong one is refused at save time rather than
+   * failing silently on the first handoff.
+   */
+  async putRoute(projectId: string, input: PutTrackerRouteInput, actorId: string): Promise<TrackerRouteInfo> {
+    const project = await this.prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { workspaceId: true } });
+    const { row, tracker } = await this.requireTracker(project.workspaceId, input.connectorId);
+    const boardUrl = input.boardUrl?.trim() || null;
+    let board: { nodeId: string; fieldId: string } | null = null;
+    if (boardUrl) {
+      if (!tracker.resolveBoard) throw new BadRequestException(t('error.workItem.boardNeedsGithub'));
+      board = await tracker.resolveBoard(row, boardUrl);
+    }
+    const data = {
+      connectorId: row.id,
+      externalProject: input.externalProject?.trim().toUpperCase() || null,
+      issueType: input.issueType?.trim() || null,
+      boardUrl,
+      boardNodeId: board?.nodeId ?? null,
+      boardFieldId: board?.fieldId ?? null,
+      updatedBy: actorId,
+    };
+    const saved = await this.prisma.projectTrackerRoute.upsert({
+      where: { projectId },
+      create: { projectId, workspaceId: project.workspaceId, ...data },
+      update: data,
+    });
+    return toRouteInfo(saved);
+  }
+
+  /** Every project routed to one connector — the connector page's list. */
+  async routesFor(connectorId: string): Promise<TrackerRouteInfo[]> {
+    const rows = await this.prisma.projectTrackerRoute.findMany({ where: { connectorId }, orderBy: { createdAt: 'asc' } });
+    return rows.map(toRouteInfo);
+  }
+
+  /**
+   * The connector's status map override (`config.statusMap`). Sparse: what is
+   * left out inherits the tracker default, and an empty map restores it.
+   */
+  async putStatusMap(row: Connector, map: { inbound?: Record<string, string>; outbound?: Record<string, string> }): Promise<void> {
+    const inbound = Object.fromEntries(
+      Object.entries(map.inbound ?? {})
+        .map(([raw, status]) => [raw.trim().toLowerCase().slice(0, 100), status] as const)
+        .filter(([raw, status]) => raw && (WORK_ITEM_STATUSES as readonly string[]).includes(status)),
+    );
+    const outbound = Object.fromEntries(
+      Object.entries(map.outbound ?? {})
+        .filter(([status, raw]) => (WORK_ITEM_STATUSES as readonly string[]).includes(status) && raw.trim())
+        .map(([status, raw]) => [status, raw.trim().slice(0, 100)]),
+    );
+    const config = { ...((row.config as Record<string, unknown> | null) ?? {}) };
+    if (Object.keys(inbound).length || Object.keys(outbound).length) config.statusMap = { inbound, outbound };
+    else delete config.statusMap;
+    await this.prisma.connector.update({ where: { id: row.id }, data: { config: config as Prisma.InputJsonValue } });
+  }
+
+  async deleteRoute(projectId: string): Promise<void> {
+    await this.prisma.projectTrackerRoute.deleteMany({ where: { projectId } });
+  }
+
+  // --- internals ---
+
+  /** Open the ticket, record it, and put its card on the route's board. */
+  private async create(view: AnchorView, row: Connector, tracker: TrackerAdapter, route: ProjectTrackerRoute | null): Promise<ConnectorWorkItem> {
+    const text = await this.anchors.ticketText(view, asLocale(row.locale));
+    const ours = route?.connectorId === row.id ? route : null;
+    const issue = await tracker.createIssue(row, {
+      ...text,
+      labels: [labelFor(row)],
+      externalProject: ours?.externalProject ?? null,
+      issueType: ours?.issueType ?? null,
+    });
+    const anchor = { kind: view.kind, id: view.id };
+    const saved = await this.save(row, () => this.workItems.upsertFrom(row, issue, { documentId: view.documentId, anchor }));
+    if (ours?.boardNodeId && ours.boardFieldId && tracker.setBoardStatus) {
+      await tracker.setBoardStatus(row, saved, { nodeId: ours.boardNodeId, fieldId: ours.boardFieldId }, 'open');
+    }
+    return saved;
+  }
+
+  private recordHandoff(actor: string, row: Connector, view: AnchorView, saved: ConnectorWorkItem, attached: boolean): void {
+    void this.activity.record({
+      workspaceId: row.workspaceId,
+      actor,
+      action: 'connector.work-item.handoff',
+      documentId: view.documentId,
+      subjectId: saved.id,
+      metadata: { key: keyOf(saved), url: saved.url, sourceKind: view.kind, sourceId: view.id, attached, connectorId: row.id },
+    });
+  }
+
+  /**
+   * The anchor, refused the way a page is refused: a page the caller cannot
+   * open is the guard's 403/404 (never its title), and a conflict whose other
+   * page they cannot open is a plain 404.
+   */
+  private async requireAnchor(principal: Principal, workspaceId: string, kind: WorkItemSourceKind, id: string): Promise<AnchorView> {
+    const view = await this.anchors.describe(workspaceId, kind, id);
+    const notFound = () => new NotFoundException(t('error.workItem.anchorNotFound', { kind, id }));
+    if (!view) throw notFound();
+    const scope = await this.permissions.scopeFor(principal, workspaceId);
+    await this.permissions.requireLevel(scope, { type: 'document', id: view.documentId }, 'edit');
+    if (view.otherDocumentId && !(await this.permissions.visibleDocumentIds(scope, [view.otherDocumentId])).size) throw notFound();
+    return view;
+  }
+
+  private async requireTracker(workspaceId: string, connectorId: string): Promise<{ row: Connector; tracker: TrackerAdapter }> {
+    const row = await this.connectors.require(connectorId).catch(() => null);
+    if (!row || row.workspaceId !== workspaceId) throw new NotFoundException(t('error.connector.notFound', { id: connectorId }));
+    if (!row.enabled) throw new BadRequestException(t('error.workItem.connectorDisabled', { name: row.name }));
+    return { row, tracker: this.workItems.requireTracker(row) };
+  }
+
+  /** A write that would give one anchor two tickets on one connector is a 409, not a 500. */
+  private async save<T>(row: Connector, write: () => Promise<T>): Promise<T> {
+    try {
+      return await write();
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException({ statusCode: 409, message: t('error.workItem.anchorTaken', { key: '', name: row.name }), reason: 'anchor-taken' });
+      }
+      throw err;
+    }
+  }
+}
+
+function toRouteInfo(row: ProjectTrackerRoute): TrackerRouteInfo {
+  return {
+    projectId: row.projectId,
+    connectorId: row.connectorId,
+    externalProject: row.externalProject,
+    issueType: row.issueType,
+    boardUrl: row.boardUrl,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function sameTicket(tracker: TrackerAdapter, row: Connector, item: ConnectorWorkItem, attach: string): boolean {
+  const ref = tracker.parseRef(row, attach);
+  return !!ref && (ref.externalKey ? ref.externalKey === item.externalKey : ref.number === item.number);
+}

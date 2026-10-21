@@ -6,12 +6,20 @@ import type {
   ConnectorWorkItemState,
   CreateConnectorWorkItemInput,
   RepoEventType,
+  WorkItemSourceKind,
+  WorkItemStatusMap,
+  WorkItemSyncState,
 } from '@knowledge/contracts';
-import { connectorKindInfo } from '@knowledge/contracts';
+import { connectorKindInfo, workItemStatusFor } from '@knowledge/contracts';
+import { ActivityService } from '../activity/activity.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { t } from '../i18n/t.js';
+import type { AccessScope } from '../permissions/access-scope.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { GithubIssuesService, type GithubWorkItem } from './github/github-issues.service.js';
+import { statusMapFor, type TrackerAdapter, type TrackerBoard, type TrackerIssue } from './adapters/tracker.js';
+import { TrackerRegistry } from './tracker-registry.service.js';
+import { ConnectorAclService } from './connector-acl.service.js';
 
 /**
  * Work items — issues and pull requests — against a connected repository
@@ -20,8 +28,12 @@ import { GithubIssuesService, type GithubWorkItem } from './github/github-issues
  * The row is a **projection**, never the truth. Everything except `documentId`
  * is overwritten wholesale from the far side on the next read or delivery, which
  * is why there is no local edit path and why `upsertFrom` can be a blind write.
- * The one field we own is the page attachment, because that is the one fact
- * GitHub does not have.
+ * The fields we own are the page attachment and, since #424, the anchor and
+ * the outbound sync state — the facts the tracker does not have.
+ *
+ * Every read that returns rows to a caller takes an `AccessScope` (#76): a row
+ * on a page the caller cannot open is dropped, and so is a conflict-anchored
+ * row whose other page they cannot open. Never a 403, never a title.
  *
  * Kept apart from `ConnectorLinksService` for the reason the tables are apart:
  * that one answers "is this page in sync", this one answers "is this task done",
@@ -38,8 +50,11 @@ export class ConnectorWorkItemsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly github: GithubIssuesService,
+    private readonly trackers: TrackerRegistry,
     private readonly events: EventsPublisher,
+    private readonly activity: ActivityService,
+    private readonly permissions: PermissionService,
+    private readonly acl: ConnectorAclService,
   ) {}
 
   /**
@@ -50,22 +65,24 @@ export class ConnectorWorkItemsService {
    * leave a stale row on screen with no way for anyone to correct it. A GitHub
    * outage degrades to the stored projection rather than an error page.
    */
-  async list(row: Connector): Promise<ConnectorWorkItemInfo[]> {
+  async list(scope: AccessScope, row: Connector): Promise<ConnectorWorkItemInfo[]> {
     await this.refresh(row);
-    return this.stored(row.id);
+    return this.stored(scope, row.id);
   }
 
   /** Pull the far side into the stored projection; never fatal (see `list`). */
   private async refresh(row: Connector): Promise<void> {
-    this.assertSupported(row);
+    const tracker = this.requireTracker(row);
     try {
-      const fetched = await this.github.list(row);
-      const boards = await this.github.boardsFor(
-        row,
-        fetched.map((item) => item.number),
-      );
-      for (const item of fetched) {
-        await this.upsertFrom(row, item, boards.get(item.number));
+      const { items } = await tracker.listIssues(row, null);
+      const boards = tracker.boardsFor
+        ? await tracker.boardsFor(
+            row,
+            items.map((item) => item.number),
+          )
+        : new Map<number, string[]>();
+      for (const item of items) {
+        await this.upsertFrom(row, item, { boards: boards.get(item.number) });
       }
     } catch (err) {
       // Deliberately not fatal. The stored rows are still the last thing the far
@@ -87,12 +104,13 @@ export class ConnectorWorkItemsService {
    * boundary; the client drops the duplicate by id.
    */
   async page(
+    scope: AccessScope,
     row: Connector,
     opts: { limit?: number; cursor?: string } = {},
   ): Promise<{ workItems: ConnectorWorkItemInfo[]; total: number; nextCursor: string | null }> {
     const offset = opts.cursor ? Number(opts.cursor) : 0;
     if (offset === 0) await this.refresh(row);
-    else this.assertSupported(row);
+    else this.requireTracker(row);
     const limit = opts.limit ?? 50;
     const [rows, total] = await Promise.all([
       this.prisma.connectorWorkItem.findMany({
@@ -103,32 +121,72 @@ export class ConnectorWorkItemsService {
       }),
       this.prisma.connectorWorkItem.count({ where: { connectorId: row.id } }),
     ]);
+    // ponytail: hidden rows still count toward `total` and the page size, so a
+    // page can come back short; filter in SQL if restricted pages carry many tickets.
     const page = rows.slice(0, limit);
     return {
-      workItems: await this.decorate(page),
+      workItems: await this.decorate(await this.visible(scope, page)),
       total,
       nextCursor: rows.length > limit ? String(offset + limit) : null,
     };
   }
 
-  /** What is stored, without touching the network — the webhook's read path. */
-  async stored(connectorId: string): Promise<ConnectorWorkItemInfo[]> {
+  /** What is stored, without touching the network. */
+  async stored(scope: AccessScope, connectorId: string): Promise<ConnectorWorkItemInfo[]> {
     const rows = await this.prisma.connectorWorkItem.findMany({
       where: { connectorId },
       orderBy: [{ state: 'asc' }, { externalUpdatedAt: 'desc' }],
       take: 200,
     });
-    return this.decorate(rows);
+    return this.decorate(await this.visible(scope, rows));
   }
 
-  /** The work items attached to one page — the document rail's question. */
-  async listForDocument(documentId: string): Promise<ConnectorWorkItemInfo[]> {
+  /** The tickets anchored on one knowledge object — the chip's question (#424). */
+  async listForAnchor(scope: AccessScope, kind: WorkItemSourceKind, id: string): Promise<ConnectorWorkItemInfo[]> {
     const rows = await this.prisma.connectorWorkItem.findMany({
+      where: { workspaceId: scope.workspaceId, sourceKind: kind, sourceId: id },
+      orderBy: { createdAt: 'asc' },
+      take: MAX_ITEMS_PER_DOCUMENT,
+    });
+    return this.decorate(await this.visible(scope, rows));
+  }
+
+  /**
+   * The work items attached to one page. Unscoped and private: its one caller
+   * is the `task.update` step, which acts on its run's own root page.
+   */
+  private async listForDocument(documentId: string): Promise<ConnectorWorkItem[]> {
+    return this.prisma.connectorWorkItem.findMany({
       where: { documentId },
       orderBy: { externalUpdatedAt: 'desc' },
       take: MAX_ITEMS_PER_DOCUMENT,
     });
-    return this.decorate(rows);
+  }
+
+  /**
+   * The rows `scope` may see. A row's page must be visible, and a conflict
+   * anchor quotes two pages, so its other page must be too.
+   */
+  async visible(scope: AccessScope, rows: ConnectorWorkItem[]): Promise<ConnectorWorkItem[]> {
+    if (scope.bypass || rows.length === 0) return rows;
+    const conflictIds = rows.filter((r) => r.sourceKind === 'conflict' && r.sourceId).map((r) => r.sourceId as string);
+    const others = new Map<string, string>();
+    if (conflictIds.length > 0) {
+      const conflicts = await this.prisma.knowledgeConflict.findMany({
+        where: { id: { in: conflictIds } },
+        select: { id: true, bDocumentId: true },
+      });
+      for (const c of conflicts) if (c.bDocumentId) others.set(c.id, c.bDocumentId);
+    }
+    const pages = rows.flatMap((r) => [r.documentId, r.sourceId ? others.get(r.sourceId) : undefined]);
+    const visible = await this.permissions.visibleDocumentIds(
+      scope,
+      pages.filter((id): id is string => Boolean(id)),
+    );
+    return rows.filter((r) => {
+      const other = r.sourceId ? others.get(r.sourceId) : undefined;
+      return (!r.documentId || visible.has(r.documentId)) && (!other || visible.has(other));
+    });
   }
 
   /**
@@ -139,32 +197,38 @@ export class ConnectorWorkItemsService {
    * exactly what the worker is not allowed to do.
    */
   async create(row: Connector, input: CreateConnectorWorkItemInput): Promise<ConnectorWorkItemInfo> {
-    this.assertSupported(row);
+    const tracker = this.requireTracker(row);
     if (input.documentId) await this.assertDocumentInWorkspace(row, input.documentId);
 
-    const created = await this.github.create(row, input);
-    const saved = await this.upsertFrom(row, created, undefined, input.documentId ?? null);
+    const created = await tracker.createIssue(row, {
+      title: input.title,
+      lines: input.body ? [{ text: input.body }] : [],
+      labels: input.labels ?? [],
+      assignees: input.assignees,
+    });
+    const saved = await this.upsertFrom(row, created, { documentId: input.documentId ?? null });
     await this.publish(row, 'repo.issue.opened', saved);
     return (await this.decorate([saved]))[0];
   }
 
-  /** Attach a work item to a page — what makes a repo event able to reach a flow. */
-  async link(row: Connector, workItemId: string, documentId: string): Promise<ConnectorWorkItemInfo> {
-    await this.assertDocumentInWorkspace(row, documentId);
-    const existing = await this.require(row, workItemId);
-    const updated = await this.prisma.connectorWorkItem.update({
-      where: { id: existing.id },
-      data: { documentId },
-    });
-    return (await this.decorate([updated]))[0];
-  }
-
-  /** Detach, leaving both sides alone: unlinking says "stop relating these". */
+  /**
+   * Detach, leaving both sides alone: unlinking says "stop relating these".
+   * Drops the anchor too, which stops status sync; the ticket is never closed.
+   */
   async unlink(row: Connector, workItemId: string): Promise<ConnectorWorkItemInfo> {
     const existing = await this.require(row, workItemId);
     const updated = await this.prisma.connectorWorkItem.update({
       where: { id: existing.id },
-      data: { documentId: null },
+      data: {
+        documentId: null,
+        sourceKind: null,
+        sourceId: null,
+        syncState: 'synced',
+        pendingStatus: null,
+        syncError: null,
+        syncAttempts: 0,
+        nextSyncAt: null,
+      },
     });
     return (await this.decorate([updated]))[0];
   }
@@ -182,11 +246,34 @@ export class ConnectorWorkItemsService {
   async applyDelivery(
     row: Connector,
     type: RepoEventType,
-    item: GithubWorkItem,
-    boards?: string[],
+    item: TrackerIssue,
+    opts: { boards?: string[]; actorId?: string | null } = {},
   ): Promise<void> {
-    const saved = await this.upsertFrom(row, item, boards);
+    const saved = await this.upsertFrom(row, item, opts);
     await this.publish(row, type, saved);
+  }
+
+  /**
+   * A tracker delivery on the connector's own webhook (#424, Jira and GitLab).
+   * A site-wide hook reports every ticket on the site, so only one we already
+   * hold, or one carrying the handoff label, is written.
+   */
+  async applyTrackerDelivery(row: Connector, item: TrackerIssue, actorId: string | null, label: string): Promise<boolean> {
+    const held = await this.prisma.connectorWorkItem.findUnique({
+      where: { connectorId_kind_number: { connectorId: row.id, kind: item.kind, number: item.number } },
+      select: { id: true },
+    });
+    if (!held && !item.labels.includes(label)) return false;
+    await this.upsertFrom(row, item, { actorId, announce: true });
+    return true;
+  }
+
+  /**
+   * Record what a poll read (#424): the projection, and an event only when the
+   * ticket's status moved — a poll re-reads the newest ticket every time.
+   */
+  async applyPolled(row: Connector, item: TrackerIssue): Promise<ConnectorWorkItem> {
+    return this.upsertFrom(row, item, { announce: true });
   }
 
   /**
@@ -209,8 +296,9 @@ export class ConnectorWorkItemsService {
     for (const item of open.slice(0, max)) {
       try {
         const row = await this.prisma.connector.findUnique({ where: { id: item.connectorId } });
-        if (!row) continue;
-        await this.github.comment(row, item.number, body);
+        const tracker = row ? this.trackers.trackerFor(row) : null;
+        if (!row || !tracker) continue;
+        await tracker.comment(row, item, [{ text: body }]);
         commented += 1;
       } catch (err) {
         this.logger.warn(`could not comment on #${item.number}: ${(err as Error).message}`);
@@ -227,20 +315,40 @@ export class ConnectorWorkItemsService {
   // --- internals ---
 
   /**
-   * Blind upsert of the far side's state, preserving only the page attachment.
+   * Blind upsert of the far side's state, preserving what we own.
    *
-   * `documentId` is passed explicitly rather than merged, so that a refresh
-   * cannot silently drop a link and an unlink cannot be undone by the next poll.
+   * `documentId` and the anchor are passed explicitly rather than merged, so
+   * that a refresh cannot silently drop a link and an unlink cannot be undone
+   * by the next poll.
+   *
+   * On an anchored row a change of derived status is an activity row (#424),
+   * attributed to the tracker account when it maps to a person and to
+   * `tracker:<connectorId>` otherwise — never to somebody it does not map to.
+   * `announce` also publishes the matching `repo.issue.*` event, for the poll,
+   * which has no delivery of its own to announce.
    */
-  private async upsertFrom(
+  async upsertFrom(
     row: Connector,
-    item: GithubWorkItem,
-    boards?: string[],
-    documentId?: string | null,
+    item: TrackerIssue,
+    opts: {
+      boards?: string[];
+      documentId?: string | null;
+      anchor?: { kind: WorkItemSourceKind; id: string } | null;
+      actorId?: string | null;
+      announce?: boolean;
+      /** No activity row: the change was ours (an outbound transition read back). */
+      quiet?: boolean;
+    } = {},
   ): Promise<ConnectorWorkItem> {
+    const { boards, documentId, anchor } = opts;
+    const where = { connectorId_kind_number: { connectorId: row.id, kind: item.kind, number: item.number } };
+    const before = await this.prisma.connectorWorkItem.findUnique({ where });
     const shared = {
       title: item.title,
       state: item.state,
+      externalKey: item.externalKey,
+      externalStatus: item.externalStatus,
+      ...(opts.actorId !== undefined ? { externalActorId: opts.actorId } : {}),
       url: item.url,
       authorLogin: item.authorLogin,
       assigneeLogins: item.assigneeLogins,
@@ -249,9 +357,10 @@ export class ConnectorWorkItemsService {
       externalUpdatedAt: item.externalUpdatedAt ? new Date(item.externalUpdatedAt) : null,
       ...(boards ? { boards } : {}),
       ...(documentId !== undefined ? { documentId } : {}),
+      ...(anchor !== undefined ? { sourceKind: anchor?.kind ?? null, sourceId: anchor?.id ?? null } : {}),
     };
-    return this.prisma.connectorWorkItem.upsert({
-      where: { connectorId_kind_number: { connectorId: row.id, kind: item.kind, number: item.number } },
+    const saved = await this.prisma.connectorWorkItem.upsert({
+      where,
       create: {
         connectorId: row.id,
         workspaceId: row.workspaceId,
@@ -263,6 +372,91 @@ export class ConnectorWorkItemsService {
       },
       update: shared,
     });
+
+    const map = this.mapFor(row);
+    const was = before ? workItemStatusFor(before, map) : null;
+    const now = workItemStatusFor(saved, map);
+    if (before && was !== now) {
+      if (saved.sourceKind && !opts.quiet) {
+        void this.activity.record({
+          workspaceId: row.workspaceId,
+          actor: await this.actorFor(row, saved.externalActorId),
+          action: 'connector.work-item.status-changed',
+          subjectId: saved.id,
+          ...(saved.documentId ? { documentId: saved.documentId } : {}),
+          metadata: { key: keyOf(saved), from: was, to: now, externalStatus: saved.externalStatus, url: saved.url },
+        });
+      }
+      if (opts.announce) {
+        const type: RepoEventType =
+          now === 'done' || now === 'wont_do' ? 'repo.issue.closed' : was === 'done' || was === 'wont_do' ? 'repo.issue.reopened' : 'repo.issue.labeled';
+        await this.publish(row, type, saved);
+      }
+    }
+    return saved;
+  }
+
+  /**
+   * Who a tracker account is here, for attribution only: the person
+   * `external_identities` maps it to, else `tracker:<connectorId>`.
+   */
+  async actorFor(row: Connector, externalId: string | null): Promise<string> {
+    if (externalId) {
+      let mapped = await this.prisma.externalIdentity.findUnique({
+        where: { connectorId_externalId: { connectorId: row.id, externalId } },
+        select: { userId: true },
+      });
+      if (!mapped) {
+        // First sighting: record the account so an admin can map it on the
+        // connector page, and let the resolver try a linked GitHub account
+        // or a verified email first.
+        await this.prisma.externalIdentity.createMany({
+          data: [{ workspaceId: row.workspaceId, connectorId: row.id, externalId }],
+          skipDuplicates: true,
+        });
+        await this.acl.resolveIdentities(row, [externalId]).catch(() => 0);
+        mapped = await this.prisma.externalIdentity.findUnique({
+          where: { connectorId_externalId: { connectorId: row.id, externalId } },
+          select: { userId: true },
+        });
+      }
+      if (mapped?.userId) return mapped.userId;
+    }
+    return `tracker:${row.id}`;
+  }
+
+  /**
+   * The board a row's card is kept on: the tracker route of the row's page's
+   * project, when it routes to this row's connector and names a board.
+   */
+  async boardFor(item: Pick<ConnectorWorkItem, 'connectorId' | 'documentId'>): Promise<TrackerBoard | null> {
+    if (!item.documentId) return null;
+    const doc = await this.prisma.document.findUnique({ where: { id: item.documentId }, select: { projectId: true } });
+    const route = doc ? await this.prisma.projectTrackerRoute.findUnique({ where: { projectId: doc.projectId } }) : null;
+    if (!route || route.connectorId !== item.connectorId || !route.boardNodeId || !route.boardFieldId) return null;
+    return { nodeId: route.boardNodeId, fieldId: route.boardFieldId };
+  }
+
+  /** The connector's status map: its config override over its tracker's default. */
+  mapFor(row: Connector): WorkItemStatusMap {
+    return statusMapFor(row, this.trackers.trackerFor(row)?.kind ?? 'github');
+  }
+
+  /** The row's tracker, or null for a kind or host with none. */
+  trackerOf(row: Connector): TrackerAdapter | null {
+    return this.trackers.trackerFor(row);
+  }
+
+  /** The row's tracker, or the 400 the tab has always answered for a kind with none. */
+  requireTracker(row: Connector): TrackerAdapter {
+    const tracker = this.trackers.trackerFor(row);
+    if (!tracker) {
+      if (connectorKindInfo(row.kind)?.capabilities.tasks) {
+        throw new BadRequestException(t('error.connector.workItemsGithubOnly'));
+      }
+      throw new BadRequestException(t('error.connector.workItemsUnsupported', { kind: row.kind }));
+    }
+    return tracker;
   }
 
   private async publish(row: Connector, type: RepoEventType, item: ConnectorWorkItem): Promise<void> {
@@ -275,7 +469,7 @@ export class ConnectorWorkItemsService {
     });
   }
 
-  private async require(row: Connector, workItemId: string): Promise<ConnectorWorkItem> {
+  async require(row: Connector, workItemId: string): Promise<ConnectorWorkItem> {
     const found = await this.prisma.connectorWorkItem.findUnique({ where: { id: workItemId } });
     // Belongs-to check rather than a bare lookup: the id arrives from a client,
     // and `@Access` resolved the workspace from the *connector*, not from this.
@@ -303,20 +497,22 @@ export class ConnectorWorkItemsService {
     }
   }
 
-  private assertSupported(row: Connector): void {
-    if (!connectorKindInfo(row.kind)?.capabilities.tasks) {
-      throw new BadRequestException(t('error.connector.workItemsUnsupported', { kind: row.kind }));
-    }
-  }
-
-  private async decorate(rows: ConnectorWorkItem[]): Promise<ConnectorWorkItemInfo[]> {
+  async decorate(rows: ConnectorWorkItem[]): Promise<ConnectorWorkItemInfo[]> {
     const ids = [...new Set(rows.map((r) => r.documentId).filter((id): id is string => Boolean(id)))];
     const titles = new Map<string, string>();
     if (ids.length > 0) {
       const docs = await this.prisma.document.findMany({ where: { id: { in: ids } }, select: { id: true, title: true } });
       for (const doc of docs) titles.set(doc.id, doc.title);
     }
-    return rows.map((row) => toWorkItemInfo(row, row.documentId ? (titles.get(row.documentId) ?? null) : null));
+    const maps = new Map<string, WorkItemStatusMap>();
+    const connectorIds = [...new Set(rows.map((r) => r.connectorId))];
+    if (connectorIds.length > 0) {
+      const connectors = await this.prisma.connector.findMany({ where: { id: { in: connectorIds } } });
+      for (const c of connectors) maps.set(c.id, this.mapFor(c));
+    }
+    return rows.map((row) =>
+      toWorkItemInfo(row, row.documentId ? (titles.get(row.documentId) ?? null) : null, maps.get(row.connectorId)),
+    );
   }
 }
 
@@ -325,7 +521,16 @@ function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 }
 
-export function toWorkItemInfo(row: ConnectorWorkItem, documentTitle: string | null): ConnectorWorkItemInfo {
+/** `BILL-123` for Jira, `#412` for a repository tracker. */
+export function keyOf(row: Pick<ConnectorWorkItem, 'externalKey' | 'number'>): string {
+  return row.externalKey ?? `#${row.number}`;
+}
+
+export function toWorkItemInfo(
+  row: ConnectorWorkItem,
+  documentTitle: string | null,
+  map: WorkItemStatusMap = statusMapFor(null, 'github'),
+): ConnectorWorkItemInfo {
   return {
     id: row.id,
     connectorId: row.connectorId,
@@ -344,5 +549,12 @@ export function toWorkItemInfo(row: ConnectorWorkItem, documentTitle: string | n
     externalUpdatedAt: row.externalUpdatedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    key: keyOf(row),
+    sourceKind: row.sourceKind as WorkItemSourceKind | null,
+    sourceId: row.sourceId,
+    status: workItemStatusFor(row, map),
+    externalStatus: row.externalStatus,
+    syncState: row.syncState as WorkItemSyncState,
+    syncError: row.syncError,
   };
 }

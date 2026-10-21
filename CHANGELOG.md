@@ -13,6 +13,140 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.31.0] — 2026-10-21
+
+### Added
+
+- A reported issue, a knowledge conflict, a page's verification flag or a page can be handed off to a
+  GitHub repository connector as an issue (#424): `POST /v1/work-items/handoff` creates the issue, or
+  attaches an existing one (`#45`, `org/repo#45` or its URL). The issue carries the object's title, a link
+  back and a `knowledge-ref:` footer, but no page content. A restricted page is named by its id. Status
+  then moves both ways. Closing the issue resolves the report or conflict, or dismisses it if closed as
+  not planned. Resolving, dismissing or verifying here closes the issue. A conflict raised again, or a page
+  flagged again, reopens the same issue. A failed transition is retried five times, then shows its error
+  until someone retries it (`POST /v1/connectors/:id/work-items/:workItemId/retry`). Only a GitHub account
+  mapped to an editor can clear a page's flag from the tracker. No tracker action ever verifies a page.
+- `GET /v1/work-items?workspaceId&sourceKind&sourceId` lists the issues handed off for one object.
+- Handoff rules (#424) under **Knowledge health → Settings** (admins). Reported issues (high priority,
+  medium and high, or all), open conflicts, or flagged pages (outdated, or with a check requested too) are
+  handed off automatically into each project's tracker route. A project without a route gets no tickets. All
+  rules are off by default. `GET|PUT /v1/work-items/rules` reads and sets them.
+- MCP `knowledge_handoff_work_item` (editor) hands an object off or attaches an existing ticket. It is a write
+  tool, so read-only keys do not see it (#424).
+- Agent triggers can fire on **A handed-off ticket changes** (`work-item.updated`): closed, reopened or
+  relabelled in its tracker (#424).
+- A page's owner is notified when the ticket for their page, report or conflict is closed in the tracker
+  (#424). This is in the verification category, so muting verification mutes it too.
+- **Send to tracker** in the web app (#424), on every open report, every open conflict, and the verification
+  bar of a flagged page. It creates a ticket or attaches an existing one. A chip then shows the ticket's key
+  and status (`BILL-123 · In progress`) and links to the tracker. A transition that kept failing shows
+  the tracker's error with a Retry button. `/knowledge-health` gains a **Handed off** filter, the ticket under
+  each page's state, and a bulk **Send to tracker**. A tracker connector gains a **Tracker** tab, where an
+  admin can:
+  - route projects to it, with the Jira project and issue type or a GitHub board;
+  - override the status map, with the defaults shown;
+  - map the tracker accounts it has seen to members. They are mapped for attribution only; nobody is
+    assigned anything.
+- Jira Cloud connectors are trackers too (#424). A handoff creates a ticket in the tracker route's Jira project,
+  or in the connector's new **Default project key**, with the route's issue type (default `Task`). An existing
+  ticket can be attached by `BILL-123` or its browse URL. Status moves through Jira's own workflow
+  transitions. The connector's JQL is now optional: leave it empty to use Jira only as a tracker. A signed
+  Jira webhook on `/v1/connectors/:id/webhook` updates a handed-off ticket within seconds. Without one,
+  polling picks the change up.
+- GitLab repository connectors (`markdown-git`, `codebase`) are trackers too (#424), on gitlab.com or a
+  self-hosted instance whose host name contains `gitlab`, and with nested groups. Handoff opens a GitLab issue,
+  and done or won't do closes it. An existing issue can be attached by `#45`, `group/repo#45` or its URL.
+  An `Issue Hook` on the connector's webhook, checked against its secret token, updates a handed-off
+  issue at once. The Work items tab and the assistant's `task_*` tools work on GitLab connectors too.
+- A knowledge project can be routed to one tracker connector (#424): `GET|PUT|DELETE
+  /v1/projects/:id/tracker-route` sets the connector, the Jira project key and issue type, and optionally a
+  GitHub **organization** board URL. A project's handoffs go there, and a project without a route has the
+  connector picked by hand. With a board, a handed-off issue's card is added to it, and its Status column
+  follows the ticket (Todo, In Progress, Done). That write is best effort; the issue's own state is the
+  status. A user-owned board is refused, because the GitHub App cannot reach it. Moving a card on the board
+  refreshes the issue's board names in the projection.
+- The assistant can record a decision (`capture_decision`) and mark a page outdated (`mark_outdated`) in
+  Agent mode (#425). When something wide-reaching is left open, it asks instead of guessing, one question per
+  turn. For a decision that is the project, the related page and a reviewer (only when a page is linked). For
+  the outdated flag it is whether to include the subpages, which to leave alone, and why. The options come
+  from the workspace (projects, pages and members you can see), never from the model. A suggested option is
+  marked and pre-selected. A decision becomes a merge request through the same path as an MCP capture, and
+  the picked reviewer is assigned to it. Typing a message instead of answering leaves the flow, and nothing
+  is written.
+- `POST /v1/assistant/threads/:id/messages` (and its streaming twin) accepts `answer: { flow, questionId,
+  value }` beside the readable `content`. It is stored on the message and returned as `answer`. An answer to
+  anything but the open question, or the one answered last, is refused with 409 `flow-answer-stale` (#425).
+- `ask_user` options take `recommended`, at most one per field, and the tool now asks for one question per
+  form (#425).
+- In the assistant pane, a question from one of these flows shows "Question 2 of 3", and its suggested option
+  is pre-selected and focused, so accepting every suggestion is a run of Enter presses (#425). An answered
+  question collapses to one line, and the answer is drawn as an answer, not as a chat message. While the
+  next question is open, the one answered just before it has a **Change** action. A changed answer, and a
+  question it made unnecessary, stay in the transcript struck through, never silently replaced. Turns that
+  ask, and the turn reporting what the flow did, show no confidence badge, rating or reply actions. The tool
+  line reads "Asked about the decision" while it is asking, and says so when the write fails instead of
+  claiming it happened. A form answered late from another tab reloads the thread to the open question.
+- MCP `knowledge_capture_decision` no longer needs `projectId` (#425). Without it, the person is asked which
+  project, which related page and which reviewer, with the same options and the same suggested choice as in
+  the assistant pane. Over HTTP the tool returns `status: "needs_input"` with the question and
+  `answersSoFar`; the agent asks the person and calls again with `answers`. Keys it could not apply come back
+  under `ignored`. A stdio client with its own form (Claude Code, Cursor) is asked directly, and declining
+  returns `status: "cancelled"` with nothing written. The SKILL.md gains a **Questions for the person**
+  playbook.
+
+### Changed
+
+- Work-item lists (the connector's Work items tab, MCP `knowledge_list_work_items`, the assistant's `task_*`
+  tools) leave out an item attached to a page the caller cannot open (#424).
+- The Jira connector reads issues through `/rest/api/3/search/jql`. The `/rest/api/3/search` endpoint it
+  used before is deprecated on Jira Cloud. Test connection now shows Jira's approximate match count (#424).
+- Linking a work item (`POST /v1/connectors/:id/work-items/:workItemId/link`) also accepts an anchor
+  (`sourceKind` + `sourceId`), and unlinking drops it. Unlinking never closes the issue (#424).
+- An error frame on the assistant's streaming endpoint carries `details`, the same as the error body of every
+  other route (a 409's `reason`, for one). Before, the extras were dropped (#425).
+- MCP `knowledge_flag_document` with `state: "outdated"` now asks first when the page has subpages (this
+  page, or the subtree minus the pages to leave alone) or when no `note` was given, the same way (#425). A
+  page with no subpages and a `note` is flagged at once, as before. The reply lists `marked` and `failed`
+  pages instead of `verification` and `ownerId`. The flag's workspace is the page's own, whatever
+  `workspaceId` says. `state: "requested"` is unchanged.
+
+- Page text fills the content column again, on every page, the public share links and published sites
+  included (#422). In 0.30.1 paragraphs and lists stopped at about 65 characters, which left a wide screen
+  half empty beside the headings. If you prefer the narrow reading width, uncheck **Full width** in a page's
+  `⋯` menu. The choice applies to every page in the app and is remembered in this browser.
+
+### Operations
+
+- Migration `20261127100000_tracker_handoff` prepares tracker handoff (#424): new nullable columns on
+  `connector_work_items`, `connectors` and `workspace_settings`, and a new `project_tracker_routes` table.
+  It is expand-only and the previous image runs against it unchanged, so a code rollback is safe. It
+  also anchors each GitHub issue already attached to a page to that page (the most recently updated
+  one per connector and page). The page's other attached issues stay on its rail, as before.
+- Migration `20261128100000_work_item_actor` adds a nullable `connector_work_items.external_actor_id`, expand-only
+  (#424).
+- Migration `20261129100000_tracker_route_board_url` adds a nullable `project_tracker_routes.board_url`,
+  expand-only (#424).
+- Migration `20261130100000_assistant_message_answer` adds a nullable `assistant_messages.answer`, expand-only
+  with no backfill. The previous image ignores it, so a code rollback is safe (#425).
+- The GitHub App now asks for **Organization projects: write**, up from read, and the **Projects v2 item**
+  webhook event (#424). Change both on the App's settings page, then have each organization accept the new
+  permission. Until then board writes fail quietly and everything else works.
+- `WORK_ITEM_AUTOCREATE_MAX_PER_TICK` (default `20`) caps the tickets that handoff rules create per sync tick,
+  across all workspaces. `0` turns rule-driven handoff off. It has a default, so no deploy change is
+  needed (#424).
+- Tracker handoff release checklist (#424; details in `docs/features/32-connector-work-items.md` → Setup):
+  1. Set `GH_APP_WEBHOOK_SECRET` in the GitHub `production` environment. It has been empty in prod, so the
+     App webhook refused every delivery.
+  2. On the GitHub App: turn **Webhook Active** on, with URL
+     `https://knowledge.hrustalq.dev/api/v1/connectors/github/webhook` and the same secret. Raise
+     **Organization projects** to Read and write, and subscribe to **Projects v2 item**.
+  3. Have each installation accept the new permissions.
+  4. From the laptop, check that one delivery returns 202 in the App's "Recent deliveries".
+  Polling keeps everything in sync if any of this is late; the webhook only makes it faster.
+- Status sync runs in the API process every `WORK_ITEM_SYNC_TICK_MS` (default `15000`). Set
+  `WORK_ITEM_SYNC_ENABLED=false` to stop it; handoff still works. Both variables have defaults, so no
+  deploy change is needed. Sync works by polling. The GitHub App webhook only makes it faster.
+
 ## [0.30.1] — 2026-10-21
 
 ### Changed
@@ -4248,7 +4382,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.30.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/hrustalq/knowledge/compare/v0.30.1...v0.31.0
 [0.30.1]: https://github.com/hrustalq/knowledge/compare/v0.30.0...v0.30.1
 [0.30.0]: https://github.com/hrustalq/knowledge/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/hrustalq/knowledge/compare/v0.29.0...v0.29.1

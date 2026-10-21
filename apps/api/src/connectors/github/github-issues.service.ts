@@ -1,13 +1,23 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { Connector } from '@prisma/client';
+import { connectorKindInfo } from '@knowledge/contracts';
 import type {
-  ConnectorWorkItemKind,
+  WorkItemStatus,
   ConnectorWorkItemState,
   CreateConnectorWorkItemInput,
 } from '@knowledge/contracts';
 import { safeFetch } from '../../common/safe-fetch.js';
 import { t } from '../../i18n/t.js';
 import { repoHost } from '../adapters/repo-archive.js';
+import {
+  markdownBody,
+  type TrackerAdapter,
+  type TrackerBoard,
+  type TrackerBodyLine,
+  type TrackerCreateInput,
+  type TrackerIssue,
+  type TrackerRef,
+} from '../adapters/tracker.js';
 import { ConnectorsService } from '../connectors.service.js';
 import { GithubAppService } from './github-app.service.js';
 
@@ -18,6 +28,9 @@ import { GithubAppService } from './github-app.service.js';
  * here for the reason feature 30 gave: the whole surface this file needs is five
  * REST endpoints and one GraphQL query, which is less code than teaching Octokit
  * about our credential resolution.
+ *
+ * The GitHub `TrackerAdapter` (#424): the methods below the tab's own read
+ * them in the shape every tracker shares.
  *
  * Deliberately *not* a `ConnectorAdapter`. An adapter moves content — `list`,
  * `fetch`, `push`, and a `verifyWebhook` answering in `ExternalRef`s — and every
@@ -32,18 +45,8 @@ const MAX_ITEMS = 100;
 /** A board query that walks a whole backlog is a GraphQL bill. The tab shows a page. */
 const MAX_BOARD_LOOKUPS = 50;
 
-export interface GithubWorkItem {
-  kind: ConnectorWorkItemKind;
-  number: number;
-  title: string;
-  state: ConnectorWorkItemState;
-  url: string;
-  authorLogin: string | null;
-  assigneeLogins: string[];
-  labels: string[];
-  externalCreatedAt: string | null;
-  externalUpdatedAt: string | null;
-}
+/** A GitHub issue or pull request is a tracker issue with no key of its own. */
+export type GithubWorkItem = TrackerIssue;
 
 /** Where a request is going and what it may use to get there. */
 interface RepoTarget {
@@ -55,7 +58,8 @@ interface RepoTarget {
 }
 
 @Injectable()
-export class GithubIssuesService {
+export class GithubIssuesService implements TrackerAdapter {
+  readonly kind = 'github' as const;
   private readonly logger = new Logger(GithubIssuesService.name);
 
   constructor(
@@ -102,21 +106,96 @@ export class GithubIssuesService {
     return toWorkItem((await res.json()) as RawIssue);
   }
 
-  /** Add a remark to an existing item — how a flow reports back what it did. */
-  async comment(row: Connector, number: number, body: string): Promise<void> {
+  // --- TrackerAdapter (#424) ---
+
+  /**
+   * A repository connector whose remote is github.com. Read from the config
+   * without the credential, so a registry lookup costs no secret-box decrypt.
+   */
+  supports(row: Connector): boolean {
+    if (!connectorKindInfo(row.kind)?.capabilities.tasks) return false;
+    try {
+      return repoHost({ config: row.config, locale: row.locale } as never).kind === 'github';
+    } catch {
+      return false;
+    }
+  }
+
+  /** GitHub's `/issues` lists pull requests too; they are projected, never handed off. */
+  async listIssues(row: Connector, since: string | null): Promise<{ items: TrackerIssue[]; cursor: string | null }> {
     const target = await this.target(row);
-    await this.request(target, `/repos/${target.path}/issues/${number}/comments`, {
-      method: 'POST',
-      body: JSON.stringify({ body }),
+    const query = `state=all&per_page=${MAX_ITEMS}&sort=updated&direction=asc${since ? `&since=${encodeURIComponent(since)}` : ''}`;
+    const res = await this.request(target, `/repos/${target.path}/issues?${query}`);
+    const raw: unknown = await res.json();
+    const items = Array.isArray(raw) ? (raw as RawIssue[]).map(toWorkItem) : [];
+    const newest = items.reduce<string | null>(
+      (max, item) => (item.externalUpdatedAt && (!max || item.externalUpdatedAt > max) ? item.externalUpdatedAt : max),
+      since,
+    );
+    return { items, cursor: newest };
+  }
+
+  getIssue(row: Connector, ref: TrackerRef): Promise<TrackerIssue | null> {
+    return this.get(row, ref.number);
+  }
+
+  /** `#45`, `45`, `owner/repo#45` or the issue URL — on this connector's repository only. */
+  parseRef(row: Connector, text: string): TrackerRef | null {
+    let host: { owner: string; repo: string };
+    try {
+      host = repoHost({ config: row.config, locale: row.locale } as never);
+    } catch {
+      return null;
+    }
+    const m =
+      /^#?(\d+)$/.exec(text.trim()) ??
+      /^([\w.-]+)\/([\w.-]+)#(\d+)$/.exec(text.trim()) ??
+      /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/issues\/(\d+)\/?$/.exec(text.trim());
+    if (!m) return null;
+    if (m.length === 4 && (m[1].toLowerCase() !== host.owner.toLowerCase() || m[2].toLowerCase() !== host.repo.toLowerCase())) {
+      return null;
+    }
+    return { number: Number(m[m.length - 1]), externalKey: null };
+  }
+
+  createIssue(row: Connector, input: TrackerCreateInput): Promise<TrackerIssue> {
+    return this.create(row, {
+      title: input.title,
+      body: markdownBody(input.lines),
+      labels: input.labels,
+      ...(input.assignees ? { assignees: input.assignees } : {}),
     });
   }
 
-  /** Close an item, as completed or as abandoned. */
-  async close(row: Connector, number: number, reason: 'completed' | 'not_planned' = 'completed'): Promise<void> {
+  /**
+   * `open` reopens; `completed` / `not_planned` close with that reason — the
+   * raw statuses `toWorkItem` reads back. Anything else is not a GitHub status.
+   */
+  async transition(row: Connector, ref: TrackerRef, externalStatus: string): Promise<TrackerIssue | null> {
+    const body =
+      externalStatus === 'open'
+        ? { state: 'open' }
+        : externalStatus === 'completed' || externalStatus === 'not_planned'
+          ? { state: 'closed', state_reason: externalStatus }
+          : null;
+    if (!body) throw new BadRequestException(t('error.workItem.unknownStatus', { status: externalStatus }));
     const target = await this.target(row);
-    await this.request(target, `/repos/${target.path}/issues/${number}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ state: 'closed', state_reason: reason }),
+    const res = await this.request(
+      target,
+      `/repos/${target.path}/issues/${ref.number}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+      true,
+    );
+    if (res.status === 404) return null;
+    return toWorkItem((await res.json()) as RawIssue);
+  }
+
+  async comment(row: Connector, ref: TrackerRef | number, body: string | TrackerBodyLine[]): Promise<void> {
+    const target = await this.target(row);
+    const number = typeof ref === 'number' ? ref : ref.number;
+    await this.request(target, `/repos/${target.path}/issues/${number}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body: typeof body === 'string' ? body : markdownBody(body) }),
     });
   }
 
@@ -170,7 +249,95 @@ export class GithubIssuesService {
     return out;
   }
 
+  // --- Projects v2 (#424) ---
+
+  /**
+   * An org board's node id and its single-select `Status` field, from the
+   * board's URL. A user-owned board is refused: the App's
+   * `organization_projects` permission does not reach it, and a PAT that could
+   * would make the card's position depend on whose token the connector holds.
+   */
+  async resolveBoard(row: Connector, url: string): Promise<TrackerBoard> {
+    if (/^https:\/\/github\.com\/users\//i.test(url.trim())) {
+      throw new BadRequestException(t('error.workItem.userProjectBoard'));
+    }
+    const m = /^https:\/\/github\.com\/orgs\/([\w.-]+)\/projects\/(\d+)/i.exec(url.trim());
+    if (!m) throw new BadRequestException(t('error.workItem.badBoardUrl', { url }));
+    const body = await this.graphql<{ organization?: { projectV2?: { id?: string; field?: { id?: string } | null } | null } }>(
+      row,
+      `query($org: String!, $n: Int!) { organization(login: $org) { projectV2(number: $n) { id field(name: "Status") { ... on ProjectV2SingleSelectField { id } } } } }`,
+      { org: m[1], n: Number(m[2]) },
+    );
+    const project = body.organization?.projectV2;
+    if (!project?.id || !project.field?.id) throw new BadRequestException(t('error.workItem.boardNotFound', { url }));
+    return { nodeId: project.id, fieldId: project.field.id };
+  }
+
+  /**
+   * Add the issue's card to the board when it is not there yet, then set its
+   * Status to the option named for `status` (Todo / In Progress / Done, as a
+   * board created from GitHub's template names them). Best effort: a board is
+   * a view, and the issue's own state already moved.
+   */
+  async setBoardStatus(row: Connector, ref: TrackerRef, board: TrackerBoard, status: WorkItemStatus): Promise<boolean> {
+    try {
+      const target = await this.target(row);
+      const found = await this.graphql<{
+        repository?: { issue?: { id?: string; projectItems?: { nodes?: Array<{ id: string; project?: { id?: string } } | null> } } | null };
+        node?: { options?: Array<{ id: string; name: string }> } | null;
+      }>(
+        row,
+        `query($owner: String!, $repo: String!, $n: Int!, $field: ID!) {
+          repository(owner: $owner, name: $repo) { issue(number: $n) { id projectItems(first: 20) { nodes { id project { id } } } } }
+          node(id: $field) { ... on ProjectV2SingleSelectField { options { id name } } }
+        }`,
+        { owner: target.owner, repo: target.repo, n: ref.number, field: board.fieldId },
+      );
+      const issue = found.repository?.issue;
+      const option = boardOptionFor(found.node?.options ?? [], status);
+      if (!issue?.id || !option) return false;
+      let itemId = issue.projectItems?.nodes?.find((n) => n?.project?.id === board.nodeId)?.id;
+      if (!itemId) {
+        const added = await this.graphql<{ addProjectV2ItemById?: { item?: { id?: string } } }>(
+          row,
+          `mutation($p: ID!, $c: ID!) { addProjectV2ItemById(input: { projectId: $p, contentId: $c }) { item { id } } }`,
+          { p: board.nodeId, c: issue.id },
+        );
+        itemId = added.addProjectV2ItemById?.item?.id;
+      }
+      if (!itemId) return false;
+      await this.graphql(
+        row,
+        `mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) { updateProjectV2ItemFieldValue(input: { projectId: $p, itemId: $i, fieldId: $f, value: { singleSelectOptionId: $o } }) { projectV2Item { id } } }`,
+        { p: board.nodeId, i: itemId, f: board.fieldId, o: option },
+      );
+      return true;
+    } catch (err) {
+      this.logger.warn(`board status for #${ref.number} on connector ${row.id} failed: ${(err as Error).message}`);
+      return false;
+    }
+  }
+
+  /** The issue a Projects v2 card shows, when it is an issue on some repository. */
+  async cardContent(row: Connector, contentNodeId: string): Promise<{ repo: string; number: number } | null> {
+    const body = await this.graphql<{ node?: { number?: number; repository?: { nameWithOwner?: string } } | null }>(
+      row,
+      `query($id: ID!) { node(id: $id) { ... on Issue { number repository { nameWithOwner } } } }`,
+      { id: contentNodeId },
+    );
+    const node = body.node;
+    return node?.number && node.repository?.nameWithOwner ? { repo: node.repository.nameWithOwner, number: node.number } : null;
+  }
+
   // --- internals ---
+
+  private async graphql<T>(row: Connector, query: string, variables: Record<string, unknown>): Promise<T> {
+    const target = await this.target(row);
+    const res = await this.request(target, '/graphql', { method: 'POST', body: JSON.stringify({ query, variables }) });
+    const body = (await res.json()) as { data?: T; errors?: Array<{ message?: string }> };
+    if (body.errors?.length) throw new BadRequestException(body.errors.map((e) => e.message).join('; '));
+    return body.data ?? ({} as T);
+  }
 
   /**
    * Resolve owner, repo and credential once per public call.
@@ -226,14 +393,33 @@ export class GithubIssuesService {
   }
 }
 
+/** Option names per status, as GitHub's board template and common variants spell them. */
+const BOARD_OPTIONS: Record<WorkItemStatus, string[]> = {
+  open: ['todo', 'to do', 'backlog'],
+  in_progress: ['in progress', 'doing'],
+  done: ['done', 'closed'],
+  wont_do: ["won't do", 'wont do', 'done', 'closed'],
+};
+
+/** The option id for a status, first name in `BOARD_OPTIONS` order that the field has. */
+export function boardOptionFor(options: Array<{ id: string; name: string }>, status: WorkItemStatus): string | null {
+  for (const name of BOARD_OPTIONS[status]) {
+    const hit = options.find((o) => o.name.trim().toLowerCase() === name);
+    if (hit) return hit.id;
+  }
+  return null;
+}
+
 interface RawProjectNode {
   projectItems?: { nodes?: Array<{ project?: { title?: string } } | null> };
 }
 
-interface RawIssue {
+export interface RawIssue {
   number: number;
   title: string;
+  body?: string | null;
   state: string;
+  state_reason?: string | null;
   html_url: string;
   user?: { login?: string } | null;
   assignees?: Array<{ login?: string }> | null;
@@ -264,9 +450,15 @@ export function toWorkItem(raw: RawIssue): GithubWorkItem {
   return {
     kind: isPr ? 'pull-request' : 'issue',
     number: raw.number,
+    externalKey: null,
     title: raw.title,
     state,
+    // The status map's raw value: the state with GitHub's close reason folded
+    // in, since `closed` alone cannot tell done from won't-do.
+    externalStatus:
+      state === 'closed' ? (raw.state_reason === 'not_planned' ? 'not_planned' : 'completed') : state,
     url: raw.html_url,
+    body: raw.body ?? null,
     authorLogin: raw.user?.login ?? null,
     assigneeLogins: (raw.assignees ?? []).map((a) => a?.login).filter((l): l is string => Boolean(l)),
     labels: (raw.labels ?? [])

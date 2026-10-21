@@ -9,6 +9,7 @@ import { MoreHorizontal, PanelLeft, Pencil, Plus, Trash2 } from 'lucide-vue-next
 import type {
   AssistantChatAttachment,
   AssistantChatMode,
+  AssistantFlowAnswer,
   AssistantMessageInfo,
   AssistantThreadSummary,
 } from '@knowledge/contracts'
@@ -89,10 +90,16 @@ async function handleSend(payload: {
   void nextTick(() => composerEl.value?.focus())
 }
 
-/** A filled-in form goes back as an ordinary turn — the composed text is the message. */
-async function handlePromptAnswer(answer: string) {
+/**
+ * A filled-in form goes back as an ordinary turn — the composed text is the
+ * message, and a flow step's structured answer rides beside it (#425).
+ */
+async function handlePromptAnswer(text: string, answer?: AssistantFlowAnswer) {
   transcriptEl.value?.scrollToEnd()
-  await assistant.sendMessage(answer, props.documentId, { mode: assistantMode.value })
+  await assistant.sendMessage(text, props.documentId, { mode: assistantMode.value, ...(answer ? { answer } : {}) })
+  // The next question of a flow takes focus itself, so Enter answers it.
+  const next = assistant.messages.at(-1)?.prompt
+  if (next?.kind === 'form' && next.flow) return
   void nextTick(() => composerEl.value?.focus())
 }
 

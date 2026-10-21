@@ -23,7 +23,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { ArrowDown, Sparkles } from 'lucide-vue-next'
-import type { AssistantMessageInfo } from '@knowledge/contracts'
+import type { AssistantFlowAnswer, AssistantMessageInfo } from '@knowledge/contracts'
 import type { LiveTurn } from '@/stores/assistant'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -31,6 +31,7 @@ import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import GenerativeUiBlock from '@/components/knowledge/GenerativeUiBlock.vue'
 import ChatMessage from './ChatMessage.vue'
 import { decorateCitations } from '@/lib/citations'
+import { answerTurns, flowSteps } from '@/lib/flow-steps'
 import AssistantPrompt from './AssistantPrompt.vue'
 import ThinkingTrail from './ThinkingTrail.vue'
 
@@ -46,7 +47,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  answer: [string]
+  answer: [text: string, answer?: AssistantFlowAnswer]
   switchMode: [string]
   reset: [AssistantMessageInfo]
   edit: [{ message: AssistantMessageInfo; content: string }]
@@ -161,6 +162,23 @@ function questionFor(index: number): string | undefined {
     if (row?.kind === 'message' && row.message.role === 'user') return row.message.content
   }
   return undefined
+}
+
+/** Each question-flow step's answered / superseded / changeable state (#425). */
+const steps = computed(() => flowSteps(props.messages))
+const answers = computed(() => answerTurns(props.messages))
+
+function flowStepAt(index: number) {
+  const message = messageAt(index)
+  const step = message ? steps.value.get(message.id) : undefined
+  // "Change" is a new answer, so it waits for the turn in flight like any other.
+  return step && props.live ? { ...step, changeable: false } : step
+}
+
+/** The reply to a flow's last answer: the flow's outcome, still part of the Q/A rather than an answer to rate. */
+function concludesFlow(index: number): boolean {
+  const prev = index > 0 ? messageAt(index - 1) : null
+  return messageAt(index)?.role === 'assistant' && !!prev?.answer
 }
 
 /** A prompt is answerable only on the last message, and only between turns. */
@@ -350,9 +368,12 @@ defineExpose({ scrollToEnd })
                 :message="messageAt(item.index)!"
                 :prompt-active="isNewest(item.index)"
                 :prompt-answer="answerFor(item.index)"
+                :flow-step="flowStepAt(item.index)"
+                :answer-turn="answers.get(messageAt(item.index)!.id)"
+                :concludes-flow="concludesFlow(item.index)"
                 :question="questionFor(item.index)"
                 :actionable="!live"
-                @answer="emit('answer', $event)"
+                @answer="(text, answer) => emit('answer', text, answer)"
                 @switch-mode="emit('switchMode', $event)"
                 @reset="emit('reset', $event)"
                 @edit="emit('edit', $event)"

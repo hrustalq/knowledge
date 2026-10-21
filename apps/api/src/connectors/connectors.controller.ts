@@ -13,6 +13,7 @@ import type {
   ConnectorWorkItemResponse,
   ListConnectorLinksResponse,
   ListConnectorWorkItemsResponse,
+  ListTrackerRoutesResponse,
   ListConnectorRunItemsResponse,
   ListConnectorRunsResponse,
   ListConnectorsResponse,
@@ -33,6 +34,8 @@ import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorProducer } from './connector.producer.js';
 import { ConnectorsService, toRunInfo } from './connectors.service.js';
 import { GithubAccessService } from './github/github-access.service.js';
+import { WorkItemHandoffService } from './handoff/work-item-handoff.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
 import { RepoWikiService } from './repo-wiki.service.js';
 import {
@@ -48,6 +51,7 @@ import {
   CreateConnectorWorkItemDto,
   ConnectorWorkItemsQueryDto,
   LinkConnectorWorkItemDto,
+  PutStatusMapDto,
   RegenerateWikiDto,
   UpdateConnectorRunItemDto,
 } from './connectors.dto.js';
@@ -74,6 +78,8 @@ export class ConnectorsController {
     private readonly repoWiki: RepoWikiService,
     private readonly acl: ConnectorAclService,
     private readonly guidance: RepoGuidanceService,
+    private readonly handoffs: WorkItemHandoffService,
+    private readonly permissions: PermissionService,
   ) {}
 
   @Get()
@@ -420,9 +426,10 @@ export class ConnectorsController {
   async workItemList(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: ConnectorWorkItemsQueryDto,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<ListConnectorWorkItemsResponse> {
     const connector = await this.connectors.require(id);
-    return this.workItems.page(connector, query);
+    return this.workItems.page(await this.permissions.scopeFor(principal, connector.workspaceId), connector, query);
   }
 
   /**
@@ -453,24 +460,55 @@ export class ConnectorsController {
 
   @Post(':id/work-items/:workItemId/link')
   @Access('editor', 'connector')
-  @ApiOperation({ summary: 'Attach a work item to a page, so its events can reach a workflow' })
+  @ApiOperation({
+    summary: 'Attach a work item to a page, so its events can reach a workflow, or to an anchor, so status syncs (#424)',
+  })
   async workItemLink(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('workItemId', ParseUUIDPipe) workItemId: string,
     @Body() dto: LinkConnectorWorkItemDto,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<ConnectorWorkItemResponse> {
     const connector = await this.connectors.require(id);
-    return { workItem: await this.workItems.link(connector, workItemId, dto.documentId) };
+    return { workItem: await this.handoffs.link(principal, connector, workItemId, dto) };
   }
 
   @Delete(':id/work-items/:workItemId/link')
   @Access('editor', 'connector')
-  @ApiOperation({ summary: 'Detach a work item from its page; both sides are kept' })
+  @ApiOperation({ summary: 'Detach a work item from its page and anchor; sync stops, the ticket stays open' })
   async workItemUnlink(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('workItemId', ParseUUIDPipe) workItemId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ConnectorWorkItemResponse> {
+    const connector = await this.connectors.require(id);
+    return { workItem: await this.handoffs.unlink(principal, connector, workItemId) };
+  }
+
+  @Get(':id/tracker-routes')
+  @Access('viewer', 'connector')
+  @ApiOperation({ summary: 'The knowledge projects that hand off to this tracker connector (#424)' })
+  async trackerRoutes(@Param('id', ParseUUIDPipe) id: string): Promise<ListTrackerRoutesResponse> {
+    return { routes: await this.handoffs.routesFor(id) };
+  }
+
+  @Put(':id/status-map')
+  @Access('admin', 'connector')
+  @ApiOperation({ summary: "Override how the tracker's statuses map onto open / in progress / done / won't do (#424)" })
+  async statusMap(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PutStatusMapDto): Promise<ConnectorResponse> {
+    const row = await this.connectors.require(id);
+    await this.handoffs.putStatusMap(row, dto);
+    return { connector: await this.connectors.get(id) };
+  }
+
+  @Post(':id/work-items/:workItemId/retry')
+  @Access('editor', 'connector')
+  @ApiOperation({ summary: 'Retry a failed status transition, or re-check an orphaned ticket (#424)' })
+  async workItemRetry(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('workItemId', ParseUUIDPipe) workItemId: string,
   ): Promise<ConnectorWorkItemResponse> {
     const connector = await this.connectors.require(id);
-    return { workItem: await this.workItems.unlink(connector, workItemId) };
+    return { workItem: await this.handoffs.retry(connector, workItemId) };
   }
 }

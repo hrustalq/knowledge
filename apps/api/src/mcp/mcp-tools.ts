@@ -21,6 +21,7 @@ export const MCP_INSTRUCTIONS = [
   'Every search hit carries trust.status (verified | expired | edited | requested | outdated | flagged | unverified). Prefer verified pages; say so when you rely on an outdated, expired or edited one. knowledge_flag_document marks a page requested (please check) or outdated (known wrong) — verifying is a person\'s act and has no tool.',
   'To change an existing page: knowledge_create_branch → knowledge_create_revision → knowledge_create_merge_request. Do not merge your own merge request unless asked to.',
   'When the session settles something durable — a decision and why, a non-obvious gotcha, a team convention — record it with knowledge_capture_decision / knowledge_capture_note (check knowledge_find_similar first). Captures become merge requests a person reviews.',
+  'A tool that returns status "needs_input" is asking the person, not you: put its question to them with your own question tool, offer its options with the recommended one marked, then call the same tool again with the same arguments and answers. "cancelled" means the person declined and nothing was written.',
   'Graph tools take asOf (an ISO date, rev:<revisionId> or tag:<release tag>) to answer as the knowledge base stood then; knowledge_list_release_tags lists the tags.',
   'Read the knowledge://skill resource (or the "guide" prompt) for the full playbook.',
 ].join('\n');
@@ -63,6 +64,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   // Sets a page's declared verification flag (docs/features/39). There is
   // deliberately no verify tool: a stamp is a person's act.
   'knowledge_flag_document',
+  // Opens a ticket in somebody's tracker, or attaches one (#424).
+  'knowledge_handoff_work_item',
   // Puts a page in front of people outside the workspace (docs/features/43).
   'knowledge_share_page',
   // Files an access request its managers are notified of (#76, phase 5).

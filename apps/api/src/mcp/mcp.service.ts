@@ -22,6 +22,7 @@ import {
   REQUESTABLE_ACCESS_LEVELS,
   CAPTURE_KIT_CLIENTS,
   MCP_LEARNING_TARGET,
+  WORK_ITEM_SOURCE_KINDS,
   type CaptureKitClient,
 } from '@knowledge/contracts';
 import type { AiAgentChoice, CaptureKitResponse, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
@@ -38,6 +39,7 @@ import { EntitiesService } from '../entities/entities.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { AuditService } from '../auth/audit.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { WorkItemHandoffService } from '../connectors/handoff/work-item-handoff.service.js';
 import { ResourceAccessService } from '../permissions/resource-access.service.js';
 import { AccessRequestsService } from '../permissions/access-requests.service.js';
 import { HistoryService } from '../documents/history.service.js';
@@ -67,6 +69,8 @@ import { CAPTURE_TOOLS, MCP_AS_OF, MCP_INSTRUCTIONS, MCP_KNOWN_AT, MCP_SERVER_NA
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderMcpLearnings, renderSkill, type McpLearningGroup, type McpWhoami } from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
+import { flowAnswersArg, runFlow } from './flow-tools.js';
+import { FlowsService } from '../flows/flows.service.js';
 import { registerDraftTools, type McpDraftTools } from './draft-tools.js';
 import { CaptureService } from '../captures/capture.service.js';
 import { MAX_USAGE_LIMIT } from '../components/component-match.js';
@@ -94,7 +98,7 @@ import { ANALYTICS_MAX_DAYS, CONFLICT_STATUSES, RELEASE_TAG_NAME_PATTERN } from 
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.30.1';
+export const MCP_SERVER_VERSION = '0.31.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -224,6 +228,8 @@ export class McpService {
     private readonly analytics: AnalyticsRecorder,
     private readonly analyticsQuery: AnalyticsQueryService,
     private readonly chatSearch: ChatSearchService,
+    private readonly handoffs: WorkItemHandoffService,
+    private readonly flows: FlowsService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -446,17 +452,42 @@ export class McpService {
           'Set a page\'s declared verification state (docs/features/39): "requested" asks its owner to check it ' +
           '(any member), "outdated" declares it wrong (editor) and ranks it last in search until a person verifies ' +
           'or clears it. Give a note saying why. Verifying is a person\'s act and has no tool. For a problem with ' +
-          'evidence that should be checked and fixed, prefer knowledge_report_issue.',
+          'evidence that should be checked and fixed, prefer knowledge_report_issue. "outdated" asks the person first ' +
+          'when the page has subpages (this page or the subtree, minus what to leave alone) or no note was given, as ' +
+          'status "needs_input" (or a form, where the client has one).',
         inputSchema: {
           workspaceId: z.string().uuid(),
           documentId: z.string().uuid(),
           state: z.enum(VERIFICATION_FLAGS),
           note: z.string().max(VERIFICATION_NOTE_MAX_CHARS).optional().describe('Why, in plain words — shown on the page'),
+          answers: flowAnswersArg,
         },
       },
-      async ({ workspaceId, documentId, state, note }) => {
+      async ({ documentId, state, note, answers }) => {
         // The REST twins: `verification-request` is viewer, `outdated` is editor.
         await guard.doc(documentId, state === 'outdated' ? 'editor' : 'viewer');
+        // The page's own workspace, never the argument: the flow reads its subtree under that scope.
+        const workspaceId = await this.access.workspaceOfDocument(documentId);
+        if (state === 'outdated') {
+          const source = { kind: 'mcp' as const, by: principal.userId };
+          return this.json(
+            await runFlow(
+              server,
+              'knowledge_flag_document',
+              answers ?? {},
+              (given) => this.flows.markOutdated(principal, workspaceId, { documentId, ...(note ? { reason: note } : {}), source }, given),
+              ({ result, dropped }) => ({
+                documentId,
+                workspaceId,
+                state,
+                marked: result.results.filter((r) => r.ok).map((r) => r.documentId),
+                failed: result.results.filter((r) => !r.ok),
+                ...(result.subtreeTooLarge ? { subtreeTooLarge: true, hint: 'Only this page was marked; Knowledge health marks a whole large subtree.' } : {}),
+                ...(dropped.length ? { ignored: dropped } : {}),
+              }),
+            ),
+          );
+        }
         const res = await this.verification.flag(documentId, state, {
           actorId: principal.userId,
           ...(note ? { note } : {}),
@@ -693,13 +724,46 @@ export class McpService {
       async ({ connectorId, state }) => {
         await guard.connector(connectorId, 'viewer');
         const row = await this.connectors.require(connectorId);
-        const items = await this.workItems.list(row);
+        // A ticket on a page the caller cannot open is omitted, never refused (#424).
+        const items = await this.workItems.list(await guard.scope(row.workspaceId), row);
         const wanted = state ?? 'all';
         return this.json(
           items.filter((item) =>
             wanted === 'all' ? true : wanted === 'closed' ? item.state !== 'open' : item.state === 'open',
           ),
         );
+      },
+    );
+
+    // #424: hand a knowledge object off to its tracker. The handoff service
+    // checks edit on the object's page itself, on every call.
+    server.registerTool(
+      'knowledge_handoff_work_item',
+      {
+        description:
+          'Hand a knowledge object off to the team\'s tracker (Jira, GitHub or GitLab): create a ticket for a reported ' +
+          'issue, a knowledge conflict, a flagged page ("verification") or a page, or attach an existing ticket with ' +
+          '`attach` (BILL-123, #45, org/repo#45 or its URL). The ticket carries a summary, a link back and a ' +
+          'knowledge-ref footer, never page content; its status then syncs both ways. Without connectorId the ' +
+          "object's project route decides. One ticket per object per tracker: a repeat call returns the same one.",
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          sourceKind: z.enum(WORK_ITEM_SOURCE_KINDS),
+          sourceId: z.string().uuid().describe('knowledge_issues / knowledge_conflicts id, or the page id for verification and document'),
+          connectorId: z.string().uuid().optional().describe("A tracker connector; omitted = the project's route"),
+          attach: z.string().min(1).max(500).optional().describe('An existing ticket to attach instead of creating one'),
+        },
+      },
+      async ({ workspaceId, sourceKind, sourceId, connectorId, attach }) => {
+        await guard.ws(workspaceId, 'editor');
+        const workItem = await this.handoffs.handoff(principal, {
+          workspaceId,
+          sourceKind,
+          sourceId,
+          ...(connectorId ? { connectorId } : {}),
+          ...(attach ? { attach } : {}),
+        });
+        return this.json(workItem);
       },
     );
 
@@ -1919,6 +1983,7 @@ export class McpService {
 
     registerCaptureTools(server, {
       captures: this.captures,
+      flows: this.flows,
       principal,
       guard,
       workspaceOfDocument: (id) => this.access.workspaceOfDocument(id),

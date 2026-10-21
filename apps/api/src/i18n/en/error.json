@@ -273,6 +273,7 @@
     "budgetWorkspace": "This workspace's monthly AI token budget is spent. Ask a workspace admin to raise it.",
     "upstreamStatus": "The AI provider responded with an error ({status})",
     "upstreamError": "The AI provider responded with an error",
+    "flowAnswerStale": "That question has already been answered or is no longer open. Answer the newest question instead.",
     "upstreamNoCredit": "The AI provider refused the request: its account is out of credit (402). Top up the balance with the provider.",
     "upstreamAuth": "The AI provider rejected the credentials ({status}). Check the API key in AI settings.",
     "unreachable": "The AI provider is unreachable",
@@ -315,7 +316,7 @@
     "runNotFound": "Connector run {id} not found",
     "workItemNotFound": "Work item {id} is not part of this connector",
     "workItemsUnsupported": "{kind} connectors have no issues or pull requests",
-    "workItemsGithubOnly": "Work items are only available on GitHub repositories",
+    "workItemsGithubOnly": "Work items are only available on GitHub and GitLab repositories",
     "workItemsNoCredential": "This connector has no usable GitHub credential",
     "workItemsNotVisible": "not found, or the credential cannot see it",
     "workItemsRequestFailed": "GitHub refused the request ({detail})",
@@ -737,5 +738,26 @@
     "notFound": "Conflict {id} not found",
     "notOpen": "This conflict is no longer open",
     "alreadyProposed": "A fix for this conflict was already proposed"
+  },
+  "workItem": {
+    "anchorNotFound": "No {kind} {id} in this workspace",
+    "noRoute": "This project has no tracker route; pick a connector",
+    "notTracker": "Connector {name} has no tracker",
+    "connectorDisabled": "Connector {name} is disabled",
+    "badRef": "\"{ref}\" is not a ticket on {name}",
+    "ticketNotFound": "{ref} was not found on {name}, or the credential cannot see it",
+    "ticketTaken": "{key} is already handed off for another object",
+    "anchorTaken": "This object already has ticket {key} on {name}",
+    "unknownStatus": "\"{status}\" is not a status this tracker can move to",
+    "unmappedStatus": "The connector's status map has no outbound status for {status}",
+    "notRetryable": "Only a failed or orphaned work item can be retried",
+    "ticketGone": "The ticket no longer exists on the tracker",
+    "anchorOrDocument": "Give a page or an anchor, not both",
+    "jiraNoProject": "Connector {name} has no default Jira project and the tracker route names none",
+    "userProjectBoard": "Only organization boards can be used: the GitHub App cannot reach a board owned by a user",
+    "badBoardUrl": "\"{url}\" is not a GitHub organization board URL (https://github.com/orgs/<org>/projects/<n>)",
+    "boardNotFound": "No board with a Status field at {url}, or the connector cannot see it",
+    "boardNeedsGithub": "Only a GitHub connector can move cards on a GitHub board",
+    "routeConnectorWorkspace": "The connector belongs to another workspace"
   }
 }

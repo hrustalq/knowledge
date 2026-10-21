@@ -624,6 +624,7 @@ model Project {
   documents     Document[]
   glossaryTerms GlossaryTerm[]
   connectors    Connector[]
+  trackerRoute  ProjectTrackerRoute?
   site          PublishedSite?
 
   @@index([workspaceId, createdAt])
@@ -985,6 +986,10 @@ model AssistantMessage {
   // signals. Nullable so pre-feature rows and user turns read as "not assessed"
   // rather than as a level.
   confidence Json?
+  // AssistantFlowAnswer | null — a user turn that answered one step of a
+  // question flow (#425): { flow, questionId, value }. The open flow is
+  // rebuilt from these, so there is no flow state table. Nullable, no backfill.
+  answer     Json?
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   thread AssistantThread @relation(fields: [threadId], references: [id])
@@ -2042,6 +2047,10 @@ model Connector {
   /// (#338: the Drive Changes API page token). Null = never read: the next run
   /// walks the whole tree. Written only when a run finishes.
   changeCursor String?   @map("change_cursor")
+  /// Where the next work-item poll reads the tracker from (#424): an
+  /// "updated since" timestamp the tracker adapter formats. Null = never
+  /// polled. Separate from change_cursor, which belongs to the content pull.
+  taskCursor   String?   @map("task_cursor")
 
   /// Access mirroring (#76). Columns rather than `config` keys: like sync_mode
   /// they apply to every kind, and the schedule sweeper filters on them.
@@ -2071,6 +2080,7 @@ model Connector {
   codeImports           CodeImport[]
   codeFiles             CodeFile[]
   componentDeclarations ComponentDeclaration[]
+  trackerRoutes         ProjectTrackerRoute[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId, kind])
@@ -2444,6 +2454,40 @@ model ConnectorWorkItem {
   /// repo event able to reach a workflow, and it is always a deliberate act.
   documentId String? @map("document_id") @db.Uuid
 
+  /// The tracker's own citation when it is not `#<number>` — a Jira key
+  /// (`BILL-123`). Null renders as `#<number>`. For Jira, `number` holds the
+  /// site-wide issue id, which keeps (connector, kind, number) unique across
+  /// the projects one Jira connector serves (#424).
+  externalKey String? @map("external_key")
+
+  /// The anchor (#424): the knowledge object this ticket was handed off for.
+  /// WORK_ITEM_SOURCE_KINDS — 'issue' (knowledge_issues.id), 'conflict'
+  /// (knowledge_conflicts.id), 'verification' (documents.id of the flagged
+  /// page), 'document' (documents.id). Rows only, never a JSON finding. Both
+  /// null on a plain projection. No FK: the anchor table varies by kind.
+  sourceKind String? @map("source_kind")
+  sourceId   String? @map("source_id") @db.Uuid
+
+  /// The tracker's raw status ("In Progress", "not_planned"). `state` stays the
+  /// coarse projection SQL filters on; WorkItemStatus is derived from this
+  /// through the connector's status map at read time, never stored.
+  externalStatus  String?   @map("external_status")
+  /// WORK_ITEM_SYNC_STATES — 'synced' | 'pending' | 'failed' | 'orphaned'.
+  /// Every existing row is a projection with nothing to push, so 'synced'.
+  syncState       String    @default("synced") @map("sync_state")
+  /// The WorkItemStatus an outbound transition should reach; set with
+  /// sync_state = 'pending', cleared when the tracker confirms.
+  pendingStatus   String?   @map("pending_status")
+  /// The tracker's error from the last failed attempt, shown on the chip.
+  syncError       String?   @map("sync_error")
+  syncAttempts    Int       @default(0) @map("sync_attempts")
+  /// When the sweeper may try again (backoff); null = at once.
+  nextSyncAt      DateTime? @map("next_sync_at") @db.Timestamptz
+  /// The tracker account behind the last change, as the tracker names it
+  /// (GitHub numeric user id, Jira accountId). Resolved through
+  /// external_identities for attribution only; unmapped is `tracker:<connectorId>`.
+  externalActorId String?   @map("external_actor_id")
+
   externalCreatedAt DateTime? @map("external_created_at") @db.Timestamptz
   externalUpdatedAt DateTime? @map("external_updated_at") @db.Timestamptz
 
@@ -2455,9 +2499,48 @@ model ConnectorWorkItem {
   /// Webhook idempotence: a redelivered event updates the row it already wrote
   /// rather than adding a second one.
   @@unique([connectorId, kind, number])
+  /// One ticket per anchor per connector, for the anchor's lifetime: a re-raised
+  /// conflict or a re-flagged page reopens this row's ticket. NULLs are
+  /// distinct, so plain projections are unconstrained.
+  @@unique([connectorId, sourceKind, sourceId])
   @@index([connectorId, state, externalUpdatedAt])
   @@index([documentId])
+  @@index([sourceKind, sourceId])
+  @@index([syncState, nextSyncAt])
   @@map("connector_work_items")
+}
+
+/// Which tracker a knowledge project hands off to (#424). One row per project:
+/// a project without one has no rule-driven handoff, and a person picks the
+/// connector by hand. Tracker-specific targets are columns, not JSON, because
+/// each is one value a form edits and the handoff reads.
+model ProjectTrackerRoute {
+  id          String @id @default(uuid()) @db.Uuid
+  /// No FK, house policy.
+  workspaceId String @map("workspace_id") @db.Uuid
+  projectId   String @unique @map("project_id") @db.Uuid
+  connectorId String @map("connector_id") @db.Uuid
+
+  /// Jira project key ("BILL"); ignored by repo trackers, which are one repo.
+  externalProject String? @map("external_project")
+  /// Jira issue type; null = 'Task'.
+  issueType       String? @map("issue_type")
+  /// GitHub org Projects v2 board and its single-select Status field.
+  boardNodeId     String? @map("board_node_id")
+  boardFieldId    String? @map("board_field_id")
+  /// The board as a person pasted it, so the settings page can show it back.
+  boardUrl        String? @map("board_url")
+
+  updatedBy String?  @map("updated_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([connectorId])
+  @@map("project_tracker_routes")
 }
 
 /**
@@ -3477,6 +3560,13 @@ model WorkspaceSettings {
   /// #339 searchable chat: days a message is kept; null inherits
   /// CHAT_SEARCH_RETENTION_DAYS, and a value may only shorten it.
   chatSearchRetentionDays Int?     @map("chat_search_retention_days")
+  /// #424 handoff rules, each null = off, all under
+  /// WORK_ITEM_AUTOCREATE_MAX_PER_TICK. WORK_ITEM_ISSUE_RULES — off | high | medium | all.
+  workItemIssues          String?  @map("work_item_issues")
+  /// WORK_ITEM_CONFLICT_RULES — off | on.
+  workItemConflicts       String?  @map("work_item_conflicts")
+  /// WORK_ITEM_VERIFICATION_RULES — off | outdated | all.
+  workItemVerification    String?  @map("work_item_verification")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 

@@ -177,6 +177,18 @@ function expiryLine(row: KnowledgeHealthRow): string | null {
                 {{ t('health.missingPathsChip', { n: row.missingPaths.length }, row.missingPaths.length) }}
               </Badge>
             </div>
+            <!-- #424: the ticket this page was handed off as; status in words, linking out. -->
+            <a
+              v-if="row.workItem"
+              :href="row.workItem.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="mt-1 inline-flex items-center gap-1 text-xs hover:underline"
+              :class="row.workItem.syncState === 'failed' || row.workItem.syncState === 'orphaned' ? 'text-destructive' : 'text-muted-foreground'"
+            >
+              <span class="font-medium tabular-nums text-foreground">{{ row.workItem.key }}</span>
+              · {{ row.workItem.syncState === 'failed' || row.workItem.syncState === 'orphaned' ? t(`workItems.sync.${row.workItem.syncState}`) : t(`workItems.status.${row.workItem.status}`) }}
+            </a>
             <!-- The note is user or agent text: rendered as text, never as markup. -->
             <q v-if="row.verificationNote" class="mt-1 line-clamp-2 block text-xs text-muted-foreground italic" :title="row.verificationNote">
               {{ row.verificationNote }}

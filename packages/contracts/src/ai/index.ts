@@ -10,6 +10,7 @@ import type {
 import type { RelationInput } from '@knowledge/contracts/documents';
 import type { AiActionId } from '@knowledge/contracts/content';
 import type { ApiDriftSpec } from '@knowledge/contracts/api';
+import type { FlowAnswer, FlowKey } from '@knowledge/contracts/flows';
 import type { ReviewThreadAnchor } from '@knowledge/contracts/reviews';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
@@ -73,8 +74,10 @@ export interface AssistantUiBlock {
 export interface AssistantPromptOption {
   value: string;
   label: string;
-  /** One line of help under the option. */
+  /** One line of help under the option — for the recommended one, why. */
   description?: string;
+  /** The option the assistant suggests. Pre-selected, marked "Suggested". */
+  recommended?: boolean;
 }
 
 export type AssistantPromptField =
@@ -93,6 +96,15 @@ export interface AssistantFormPrompt {
   submitLabel?: string;
   /** Adds a free-text box so the user can answer outside the offered options. */
   allowOther?: boolean;
+  /**
+   * Set when the form is one step of a code-defined question flow
+   * (`@knowledge/contracts/flows`): which flow, which question, and the
+   * "Question {step} of {of}" counter. Absent on an ad hoc `ask_user` form.
+   */
+  flow?: FlowKey;
+  questionId?: string;
+  step?: number;
+  of?: number;
 }
 
 /**
@@ -107,6 +119,18 @@ export interface AssistantModeSwitchPrompt {
 }
 
 export type AssistantPrompt = AssistantFormPrompt | AssistantModeSwitchPrompt;
+
+/**
+ * A person's answer to one step of a question flow (#425), sent beside the
+ * readable `Label: value` text and stored on their message. The API rebuilds
+ * the open flow from these, so the web never parses labels back into values.
+ */
+export interface AssistantFlowAnswer {
+  flow: FlowKey;
+  questionId: string;
+  /** An option value, the ticked values of a checklist, free text, or `null` for a skipped optional question. */
+  value: FlowAnswer;
+}
 
 // ---------------------------------------------------------------------------
 // Answer feedback (docs/features/38, issue #67 phase 2)
@@ -342,6 +366,8 @@ export interface AssistantMessageInfo {
   citations: AnswerCitation[];
   /** Null for user turns and pre-feature rows; the badge is simply not drawn. */
   confidence: AnswerConfidence | null;
+  /** A user turn that answered a question-flow step (#425); null otherwise. */
+  answer?: AssistantFlowAnswer | null;
   /**
    * The caller's own vote on this answer (docs/features/38, phase 2). Present
    * only when a thread is read back — a `done` frame carries none, because a
@@ -407,6 +433,8 @@ export interface PostAssistantMessageRequest {
    * a draft nobody sent would have nowhere to land.
    */
   draft?: AssistantDraft;
+  /** This message answers a step of a question flow (#425); `content` is its readable form. */
+  answer?: AssistantFlowAnswer;
 }
 
 /** Longest draft the editor may send — a long page, not a book. The prompt still slices it. */
@@ -1545,6 +1573,12 @@ export const ASSISTANT_TOOL_NAMES = [
    * available in Ask mode too.
    */
   'edit_draft',
+  /**
+   * Question-flow tasks (#425): with an argument missing they ask the person,
+   * one question per turn, instead of guessing. Writes, so Agent mode only.
+   */
+  'capture_decision',
+  'mark_outdated',
   /** Read a connected repository (docs/features/31). Opt-in, like the web pair. */
   'code_tree',
   'code_read',
@@ -1605,6 +1639,9 @@ export const ASSISTANT_WRITE_TOOL_NAMES = [
   'create_document',
   'propose_update',
   'edit_relations',
+  /** A decision proposed as a captured page (#73), and the outdated flag on a page or subtree (#425). */
+  'capture_decision',
+  'mark_outdated',
   /**
    * These two leave the workspace (docs/features/32). Grouped with the page
    * writes because the gate is the same — `editor`, checked on execution, and
@@ -1924,6 +1961,9 @@ export const AGENT_TRIGGER_EVENTS = [
   'connector.synced',
   'webhook',
   'comment.mention',
+  // #424: a handed-off ticket closed, reopened or relabelled in its tracker —
+  // the hook for "a ticket starts agent work". Subject `issue:<workItemId>`.
+  'work-item.updated',
 ] as const;
 export type AgentTriggerEvent = (typeof AGENT_TRIGGER_EVENTS)[number];
 
@@ -1943,6 +1983,7 @@ export const AGENT_TRIGGER_EVENT_SOURCES: Record<AgentTriggerEvent, readonly str
   // Fired inline, never from the bus — see AGENT_TRIGGER_EVENTS.
   webhook: [],
   'comment.mention': [],
+  'work-item.updated': ['repo.issue.closed', 'repo.issue.reopened', 'repo.issue.labeled'],
 };
 
 /** The trigger event a bus type is heard as, or null for one no trigger listens to. */
@@ -1981,6 +2022,8 @@ export const AGENT_TRIGGER_FILTER_FIELDS: Record<AgentTriggerEvent, readonly (ke
   'connector.synced': ['connectorIds'],
   webhook: [],
   'comment.mention': ['categories'],
+  // The anchored page's category; the ticket's connector.
+  'work-item.updated': ['categories', 'connectorIds'],
 };
 
 /**

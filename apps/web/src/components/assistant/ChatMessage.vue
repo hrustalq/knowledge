@@ -11,9 +11,9 @@
 import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { BookmarkCheck, BookmarkPlus, Check, Copy, Pencil, RotateCcw, Sparkles, X } from 'lucide-vue-next'
+import { BookmarkCheck, BookmarkPlus, Check, Copy, CornerDownRight, Pencil, RotateCcw, Sparkles, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import type { AssistantMessageInfo, AssistantUiBlock, CaptureResult } from '@knowledge/contracts'
+import type { AssistantFlowAnswer, AssistantMessageInfo, AssistantUiBlock, CaptureResult } from '@knowledge/contracts'
 import { assistantSourceHref, assistantSourceKey, isChatSource, isPageSource, isWebSource } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
@@ -26,6 +26,7 @@ import { toolVocabulary } from './tool-vocabulary'
 import { citeOfEvent, decorateCitations, highlightCite, sourceByCite, sourceHref } from '@/lib/citations'
 import { api } from '@/api/client'
 import { errorMessage } from '@/api/errors'
+import { answerText, type AnswerTurn, type FlowStep } from '@/lib/flow-steps'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
@@ -40,6 +41,12 @@ const props = defineProps<{
   promptActive?: boolean
   /** The user turn that answered this message's prompt, when it has one. */
   promptAnswer?: string
+  /** Set when the prompt is a step of a question flow (#425). */
+  flowStep?: FlowStep
+  /** Set when this user turn answers a flow step: the question it answered. */
+  answerTurn?: AnswerTurn
+  /** The reply to a flow's last answer — what the flow did, not an answer to rate. */
+  concludesFlow?: boolean
   /** For a reply: the question it answered, carried into a report filed from its thumbs (docs/features/38). */
   question?: string
   /** False while a turn is in flight: rewinding under a running stream is not offered. */
@@ -47,7 +54,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  answer: [string]
+  answer: [text: string, answer?: AssistantFlowAnswer]
   switchMode: [string]
   /** Rewind to just before this message. Confirmed by whoever owns the dialog. */
   reset: [AssistantMessageInfo]
@@ -105,6 +112,37 @@ watch(activeCite, (label) => highlightCite(answerRoot, label))
 const canAct = computed(
   () => props.actionable !== false && props.streamingText === undefined && !props.message.id.startsWith('pending-'),
 )
+
+/** A turn that only asks (#425): the form is the whole point of it. */
+const asks = computed(() => props.message.role === 'assistant' && props.message.prompt?.kind === 'form')
+
+/**
+ * A question-and-answer turn: one that asks, or the one reporting what the
+ * flow did. Neither is an answer to rate, copy or score, so thumbs, confidence
+ * and the reply actions stay off — they would ask the reader to judge a
+ * question, or grade "no sources" on a turn that never searched for any.
+ */
+const qa = computed(() => asks.value || props.concludesFlow === true)
+
+/** A flow answer in words, read from the question's options rather than parsed out of the text. */
+const answerWords = computed(() => {
+  const a = props.message.answer
+  if (!a) return ''
+  return answerText(props.answerTurn?.prompt?.fields[0], a.value, {
+    skipped: t('chat.flowSkipped'),
+    none: t('chat.flowNone'),
+  })
+})
+
+/**
+ * A finished tool call in words — on a turn that asked, a flow tool asked
+ * rather than did, and a failed one says so instead of claiming it did.
+ */
+function toolDone(tool: string, ok: boolean): string {
+  const v = toolVocabulary(tool)
+  if (!ok && v.failed) return t(v.failed)
+  return t(asks.value && v.asked ? v.asked : v.done)
+}
 
 const copied = ref(false)
 let copiedTimer: ReturnType<typeof setTimeout> | null = null
@@ -189,7 +227,23 @@ function saveEdit() {
 </script>
 
 <template>
-  <article v-if="isUser" class="kn-msg flex flex-col items-end pl-10">
+  <!-- An answer to a flow step: the user's turn, but an answer, not a chat
+       message — drawn in the question card's material, the value in words.
+       No copy, edit or rewind: "Change" on the step is how it is re-answered. -->
+  <article v-if="isUser && message.answer" class="kn-msg flex justify-end pl-10">
+    <p
+      class="flex max-w-[42rem] items-start gap-2 rounded-xl border border-primary/25 bg-primary/[0.04] px-3 py-1.5 text-ui"
+      :class="answerTurn?.superseded ? 'text-muted-foreground' : ''"
+    >
+      <CornerDownRight class="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
+      <span class="min-w-0 break-words" :class="answerTurn?.superseded ? 'line-through' : ''">
+        <span v-if="answerTurn?.prompt" class="sr-only">{{ answerTurn.prompt.question }}</span>
+        {{ answerWords }}
+      </span>
+    </p>
+  </article>
+
+  <article v-else-if="isUser" class="kn-msg flex flex-col items-end pl-10">
     <!-- Editing in place: the bubble is replaced by a box the same width, so
          the turn does not move while it is being rewritten. -->
     <div v-if="editing" class="w-full max-w-[42rem] space-y-2">
@@ -262,19 +316,20 @@ function saveEdit() {
         :prompt="message.prompt"
         :active="promptActive === true"
         :answer="promptAnswer"
+        :flow-step="flowStep"
         class="max-w-[42rem]"
-        @answer="emit('answer', $event)"
+        @answer="(text, answer) => emit('answer', text, answer)"
         @switch-mode="emit('switchMode', $event)"
       />
 
       <!-- What it used, and what it read: the receipts for the answer above. -->
       <footer
-        v-if="message.toolCalls.length > 0 || message.sources.length > 0 || message.confidence"
+        v-if="message.toolCalls.length > 0 || message.sources.length > 0 || (message.confidence && !qa)"
         class="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-1"
       >
         <!-- First, because it is the one receipt that is about the answer as a
              whole; everything after it is about one step or one page. -->
-        <AnswerConfidence v-if="message.confidence" :confidence="message.confidence" />
+        <AnswerConfidence v-if="message.confidence && !qa" :confidence="message.confidence" />
         <span
           v-for="(tc, i) in message.toolCalls"
           :key="`t-${i}`"
@@ -283,7 +338,7 @@ function saveEdit() {
           :class="tc.ok ? 'text-muted-foreground' : 'text-destructive'"
         >
           <component :is="toolVocabulary(tc.tool).icon" class="size-3" />
-          {{ t(toolVocabulary(tc.tool).done) }}
+          {{ toolDone(tc.tool, tc.ok) }}
           <Check v-if="tc.ok" class="size-2.5" />
           <X v-else class="size-2.5" />
         </span>
@@ -306,7 +361,7 @@ function saveEdit() {
            copy and reset do. No edit here: rewriting a reply would leave the
            transcript claiming the model said something it did not. Reset asks
            the question again. -->
-      <div v-if="canAct" class="flex items-center gap-2">
+      <div v-if="canAct && !qa" class="flex items-center gap-2">
         <AnswerFeedback
           :target="{ kind: 'message', messageId: message.id }"
           :initial="message.feedback"

@@ -249,7 +249,9 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
   {
     kind: 'jira',
     label: 'Jira',
-    capabilities: { pull: true, push: false, webhook: true, tree: false },
+    // `tasks` since #424: a Jira connector is a tracker that knowledge objects
+    // are handed off to, with or without pulling issues in as pages.
+    capabilities: { pull: true, push: false, webhook: true, tree: false, tasks: true },
     credentialLabel: 'email:api-token',
     fields: [
       {
@@ -263,9 +265,17 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         key: 'jql',
         label: 'JQL',
         kind: 'text',
-        required: true,
+        required: false,
         placeholder: 'project = ENG AND issuetype = Epic',
-        help: 'Which issues become pages.',
+        help: 'Which issues become pages. Leave empty to use this connector only as a tracker.',
+      },
+      {
+        key: 'projectKey',
+        label: 'Default project key',
+        kind: 'text',
+        required: false,
+        placeholder: 'ENG',
+        help: "Where handed-off tickets go when the knowledge project's tracker route names no Jira project.",
       },
     ],
   },
@@ -1446,6 +1456,74 @@ export interface ConnectorWorkItemInfo {
   externalUpdatedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** How a person cites it: `BILL-123`, or `#412` for a repository tracker (#424). */
+  key: string;
+  /** The knowledge object this ticket was handed off for; both null on a plain projection. */
+  sourceKind: WorkItemSourceKind | null;
+  sourceId: string | null;
+  /** Derived through the connector's status map; never stored. */
+  status: WorkItemStatus;
+  /** The tracker's own name for the status ("In Progress"). */
+  externalStatus: string | null;
+  syncState: WorkItemSyncState;
+  /** The tracker's error from the last failed transition. */
+  syncError: string | null;
+}
+
+/** GET /v1/work-items — the work items anchored on one object, as the caller may see them. */
+export interface ListAnchorWorkItemsResponse {
+  workItems: ConnectorWorkItemInfo[];
+}
+
+/** GET|PUT /v1/projects/:id/tracker-route — where a knowledge project hands off to. */
+export interface TrackerRouteInfo {
+  projectId: string;
+  connectorId: string;
+  /** Jira project key; null on a repository tracker. */
+  externalProject: string | null;
+  /** Jira issue type; null = Task. */
+  issueType: string | null;
+  /** The GitHub org board a handed-off issue's card is kept on; null = none. */
+  boardUrl: string | null;
+  updatedAt: string;
+}
+export interface TrackerRouteResponse {
+  route: TrackerRouteInfo | null;
+}
+/** GET /v1/connectors/:id/tracker-routes */
+export interface ListTrackerRoutesResponse {
+  routes: TrackerRouteInfo[];
+}
+export interface PutTrackerRouteInput {
+  connectorId: string;
+  externalProject?: string | null;
+  issueType?: string | null;
+  boardUrl?: string | null;
+}
+
+/** GET|PUT /v1/work-items/rules — the workspace's handoff rules and the env ceiling they run under. */
+export interface WorkItemRules {
+  issues: WorkItemIssueRule | null;
+  conflicts: WorkItemConflictRule | null;
+  verification: WorkItemVerificationRule | null;
+}
+export interface WorkItemRulesResponse {
+  workspaceId: string;
+  /** What the workspace asked for; null is off. */
+  requested: WorkItemRules;
+  /** WORK_ITEM_AUTOCREATE_MAX_PER_TICK and WORK_ITEM_SYNC_ENABLED: what actually runs. */
+  ceiling: { maxPerTick: number; syncEnabled: boolean };
+}
+
+/** POST /v1/work-items/handoff — create a ticket for an anchor, or attach an existing one. */
+export interface WorkItemHandoffInput {
+  workspaceId: string;
+  sourceKind: WorkItemSourceKind;
+  sourceId: string;
+  /** Null = the anchor's project route. */
+  connectorId?: string;
+  /** `BILL-123`, `#45`, `org/repo#45` or a ticket URL: attach instead of create. */
+  attach?: string;
 }
 
 // GET /v1/connectors/:id/work-items
@@ -1468,6 +1546,166 @@ export interface CreateConnectorWorkItemInput {
   assignees?: string[];
   /** Attach the new issue to this page, so events on it can reach a workflow. */
   documentId?: string;
+}
+
+// --- tracker handoff (#424) ----------------------------------------------------
+//
+// A work item can be the ticket a knowledge object was handed off for: its
+// anchor. The tracker (Jira, GitHub, GitLab) is the task list; this side keeps
+// the link and moves status both ways.
+
+/**
+ * What a work item can be anchored on. Rows only: a JSON finding on an agent
+ * run has no id that survives, so it becomes a `knowledge_issues` row first.
+ *
+ * - `issue`        — `knowledge_issues.id`, a reported problem with a page.
+ * - `conflict`     — `knowledge_conflicts.id`, two sources disagreeing.
+ * - `verification` — `documents.id` of a page flagged `requested`/`outdated`.
+ * - `document`     — `documents.id`, the page itself.
+ */
+export const WORK_ITEM_SOURCE_KINDS = ['issue', 'conflict', 'verification', 'document'] as const;
+export type WorkItemSourceKind = (typeof WORK_ITEM_SOURCE_KINDS)[number];
+
+/**
+ * The status vocabulary every tracker is read and written through. Derived at
+ * read time from the stored raw status by `workItemStatusFor`, never stored:
+ * changing a connector's status map re-labels every row at once.
+ */
+export const WORK_ITEM_STATUSES = ['open', 'in_progress', 'done', 'wont_do'] as const;
+export type WorkItemStatus = (typeof WORK_ITEM_STATUSES)[number];
+
+/** Whether this side owes the tracker a transition. */
+export const WORK_ITEM_SYNC_STATES = ['synced', 'pending', 'failed', 'orphaned'] as const;
+export type WorkItemSyncState = (typeof WORK_ITEM_SYNC_STATES)[number];
+
+/** Outbound attempts before a pending transition becomes `failed` and waits for a person. */
+export const WORK_ITEM_SYNC_MAX_ATTEMPTS = 5;
+
+/** The trackers a `TrackerAdapter` exists for. A repo connector's host picks github or gitlab. */
+export const TRACKER_KINDS = ['github', 'gitlab', 'jira'] as const;
+export type TrackerKind = (typeof TRACKER_KINDS)[number];
+
+/**
+ * How one connector's raw statuses map onto `WorkItemStatus`, kept on
+ * `connectors.config.statusMap` as a sparse override of the tracker's default.
+ *
+ * - `inbound` — raw tracker status → ours. Keys compare case-insensitively,
+ *   because Jira status names are typed by people.
+ * - `outbound` — ours → the raw status a transition should reach. A status
+ *   with no entry cannot be pushed; the sweeper logs it rather than guess.
+ */
+export interface WorkItemStatusMap {
+  inbound: Record<string, WorkItemStatus>;
+  outbound: Partial<Record<WorkItemStatus, string>>;
+}
+
+/**
+ * Each tracker's code default. GitHub's raw status is the issue state with its
+ * close reason (`completed` / `not_planned`) folded in; GitLab only has
+ * `opened` / `closed`; Jira's are the names of a stock Jira Software workflow.
+ */
+export const DEFAULT_WORK_ITEM_STATUS_MAPS: Readonly<Record<TrackerKind, WorkItemStatusMap>> = {
+  github: {
+    inbound: { open: 'open', completed: 'done', not_planned: 'wont_do', merged: 'done', draft: 'in_progress' },
+    outbound: { open: 'open', done: 'completed', wont_do: 'not_planned' },
+  },
+  gitlab: {
+    inbound: { opened: 'open', closed: 'done' },
+    outbound: { open: 'opened', done: 'closed', wont_do: 'closed' },
+  },
+  jira: {
+    inbound: { 'to do': 'open', 'in progress': 'in_progress', done: 'done', "won't do": 'wont_do' },
+    outbound: { open: 'To Do', in_progress: 'In Progress', done: 'Done', wont_do: "Won't Do" },
+  },
+};
+
+/**
+ * Which tracker a connector row is, from its kind and repository URL — the
+ * same rule the API's tracker registry applies, for readers that cannot reach
+ * it. Null for a kind or host with no tracker.
+ */
+export function trackerKindOf(connector: { kind: string; config: unknown }): TrackerKind | null {
+  if (connector.kind === 'jira') return 'jira';
+  if (connector.kind !== 'markdown-git' && connector.kind !== 'codebase') return null;
+  const url = (connector.config as { repoUrl?: unknown } | null)?.repoUrl;
+  if (typeof url !== 'string') return null;
+  try {
+    const host = new URL(url).hostname;
+    return host === 'github.com' ? 'github' : host.includes('gitlab') ? 'gitlab' : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A connector's effective map: its sparse override layered over the tracker default. */
+export function workItemStatusMap(kind: TrackerKind, override?: Partial<WorkItemStatusMap> | null): WorkItemStatusMap {
+  const base = DEFAULT_WORK_ITEM_STATUS_MAPS[kind];
+  const inbound: Record<string, WorkItemStatus> = { ...base.inbound };
+  for (const [raw, status] of Object.entries(override?.inbound ?? {})) {
+    if ((WORK_ITEM_STATUSES as readonly string[]).includes(status)) inbound[raw.toLowerCase()] = status;
+  }
+  return { inbound, outbound: { ...base.outbound, ...(override?.outbound ?? {}) } };
+}
+
+/**
+ * The derived status of one stored work item. The raw status wins when the map
+ * knows it; otherwise the coarse `state` answers, so a row written before #424
+ * (no raw status) still reads the way it always did.
+ */
+export function workItemStatusFor(
+  row: { state: string; externalStatus: string | null },
+  map: WorkItemStatusMap,
+): WorkItemStatus {
+  const mapped = row.externalStatus ? map.inbound[row.externalStatus.toLowerCase()] : undefined;
+  if (mapped) return mapped;
+  if (row.state === 'closed' || row.state === 'merged') return 'done';
+  if (row.state === 'draft') return 'in_progress';
+  return 'open';
+}
+
+/** The coarse state a derived status projects to — what SQL filters on. */
+export function workItemStateFor(status: WorkItemStatus): ConnectorWorkItemState {
+  return status === 'done' || status === 'wont_do' ? 'closed' : 'open';
+}
+
+/**
+ * Handoff rules on `workspace_settings` (#424). Null on the row is `off`, so an
+ * empty table creates no ticket. `high` / `medium` rank a reported issue by how
+ * many people reported it (`issueRankFor`): an issue has no severity of its own.
+ */
+export const WORK_ITEM_ISSUE_RULES = ['off', 'high', 'medium', 'all'] as const;
+export type WorkItemIssueRule = (typeof WORK_ITEM_ISSUE_RULES)[number];
+export const WORK_ITEM_CONFLICT_RULES = ['off', 'on'] as const;
+export type WorkItemConflictRule = (typeof WORK_ITEM_CONFLICT_RULES)[number];
+export const WORK_ITEM_VERIFICATION_RULES = ['off', 'outdated', 'all'] as const;
+export type WorkItemVerificationRule = (typeof WORK_ITEM_VERIFICATION_RULES)[number];
+
+/**
+ * A reported issue's rank for the `work_item_issues` rule: `wrong` or three
+ * reports is high, `stale`/`missing` or two reports is medium, anything else low.
+ */
+export function issueRankFor(issue: { kind: string; reportCount: number }): 'high' | 'medium' | 'low' {
+  if (issue.kind === 'wrong' || issue.reportCount >= 3) return 'high';
+  if (issue.kind === 'stale' || issue.kind === 'missing' || issue.reportCount >= 2) return 'medium';
+  return 'low';
+}
+
+/** Whether a rule admits an issue of this rank. */
+export function issueRuleAdmits(rule: WorkItemIssueRule | null, rank: 'high' | 'medium' | 'low'): boolean {
+  if (!rule || rule === 'off') return false;
+  if (rule === 'all') return true;
+  return rule === 'medium' ? rank !== 'low' : rank === 'high';
+}
+
+/** The footer every handed-off ticket carries, which an inbound event is reconciled from. */
+export function workItemRefFooter(kind: WorkItemSourceKind, id: string): string {
+  return `knowledge-ref: ${kind}:${id}`;
+}
+
+/** Read a footer back out of a ticket body; null when absent or malformed. */
+export function parseWorkItemRef(body: string | null | undefined): { kind: WorkItemSourceKind; id: string } | null {
+  const m = /knowledge-ref:\s*(issue|conflict|verification|document):([0-9a-f-]{36})/i.exec(body ?? '');
+  return m ? { kind: m[1].toLowerCase() as WorkItemSourceKind, id: m[2].toLowerCase() } : null;
 }
 
 // --- component pages (#236) -----------------------------------------------------

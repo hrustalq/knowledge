@@ -233,10 +233,16 @@ function streamErrorPayload(err: unknown, path: string): ApiErrorPayload {
     err instanceof HttpException
       ? err.message
       : 'The assistant turn failed. Reopen the chat to see whether any of it was saved.';
+  // Flat extras ride in `details`, as ApiExceptionFilter hoists them — the pane
+  // branches on a 409's `reason` (`flow-answer-stale`, #425).
+  const body = err instanceof HttpException ? err.getResponse() : null;
+  const { statusCode: _s, error: _e, message: _m, code: _c, ...extras } =
+    body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
   return {
     statusCode: status,
     code: errorCodeForStatus(status),
     message,
+    ...(Object.keys(extras).length > 0 ? { details: extras } : {}),
     path,
     timestamp: new Date().toISOString(),
     requestId: '',

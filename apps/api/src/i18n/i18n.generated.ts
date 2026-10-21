@@ -602,6 +602,32 @@ export type I18nTranslations = {
         "googleDrive": {
             "sharedDrive": string;
         };
+        "workItem": {
+            "title": {
+                "issue": string;
+                "conflict": string;
+                "verification": string;
+                "document": string;
+            };
+            "restrictedTitle": {
+                "issue": string;
+                "conflict": string;
+                "verification": string;
+                "document": string;
+            };
+            "summary": {
+                "issue": string;
+                "conflict": string;
+                "requested": string;
+                "outdated": string;
+                "verification": string;
+                "document": string;
+            };
+            "openLink": string;
+            "reraised": string;
+            "deleted": string;
+            "closedVia": string;
+        };
     };
     "error": {
         "internal": string;
@@ -878,6 +904,7 @@ export type I18nTranslations = {
             "budgetWorkspace": string;
             "upstreamStatus": string;
             "upstreamError": string;
+            "flowAnswerStale": string;
             "upstreamNoCredit": string;
             "upstreamAuth": string;
             "unreachable": string;
@@ -1345,6 +1372,27 @@ export type I18nTranslations = {
             "notOpen": string;
             "alreadyProposed": string;
         };
+        "workItem": {
+            "anchorNotFound": string;
+            "noRoute": string;
+            "notTracker": string;
+            "connectorDisabled": string;
+            "badRef": string;
+            "ticketNotFound": string;
+            "ticketTaken": string;
+            "anchorTaken": string;
+            "unknownStatus": string;
+            "unmappedStatus": string;
+            "notRetryable": string;
+            "ticketGone": string;
+            "anchorOrDocument": string;
+            "jiraNoProject": string;
+            "userProjectBoard": string;
+            "badBoardUrl": string;
+            "boardNotFound": string;
+            "boardNeedsGithub": string;
+            "routeConnectorWorkspace": string;
+        };
     };
     "export": {
         "docx": {
@@ -1368,6 +1416,26 @@ export type I18nTranslations = {
                 "warning": string;
                 "caution": string;
             };
+        };
+    };
+    "flow": {
+        "captureDecision": {
+            "project": string;
+            "relatedPage": string;
+            "noLink": string;
+            "reviewer": string;
+        };
+        "markOutdated": {
+            "scope": string;
+            "scopePage": string;
+            "scopeSubtree": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "exclusions": string;
+            "reason": string;
         };
     };
     "import": {

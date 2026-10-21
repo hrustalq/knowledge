@@ -12,6 +12,7 @@ import { ProjectsModule } from '../projects/projects.module.js';
 import { ConnectorsCoreModule } from '../connectors/connectors-core.module.js';
 import { ConnectorQueueModule } from '../connectors/connector-queue.module.js';
 import { ConnectorWorkItemsModule } from '../connectors/connector-work-items.module.js';
+import { WorkItemHandoffModule } from '../connectors/handoff/work-item-handoff.module.js';
 import { WorkflowsModule } from '../workflows/workflows.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js';
@@ -33,6 +34,7 @@ import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
 import { CommunitiesCoreModule } from '../communities/communities-core.module.js';
 import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
 import { ChatSearchCoreModule } from '../chat/chat-search-core.module.js';
+import { FlowsCoreModule } from '../flows/flows-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -62,6 +64,7 @@ import { McpService } from './mcp.service.js';
     // issue is attributed to a person, which is the same reason workflow
     // approval is not exposed here either.
     ConnectorWorkItemsModule,
+    WorkItemHandoffModule,
     // Read/start tools only. WorkflowMaterializeModule is deliberately absent —
     // materialisation writes pages and belongs to the API process.
     WorkflowsModule,
@@ -107,6 +110,8 @@ import { McpService } from './mcp.service.js';
     CommunitiesCoreModule,
     // knowledge_search_chat (#339). Controller-free.
     ChatSearchCoreModule,
+    // The question flows behind knowledge_capture_decision / knowledge_flag_document (#425). Controller-free.
+    FlowsCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

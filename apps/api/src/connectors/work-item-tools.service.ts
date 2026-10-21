@@ -4,12 +4,12 @@ import { ASSISTANT_TASK_TOOL_NAMES, connectorKindInfo } from '@knowledge/contrac
 import type { ConnectorWorkItemInfo } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
 import { wrapUntrusted } from '../common/untrusted.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { AssistantToolContext, AssistantToolResult } from '../assistant/assistant-tool-types.js';
 import { TASK_TOOLS } from '../assistant/assistant-tool-types.js';
 import { ConnectorWorkItemsService } from './connector-work-items.service.js';
 import { ConnectorsService } from './connectors.service.js';
-import { GithubIssuesService } from './github/github-issues.service.js';
 
 /**
  * The assistant's view of the work on a connected repository (docs/features/32).
@@ -40,7 +40,7 @@ export class WorkItemToolsService {
     private readonly access: AccessService,
     private readonly connectors: ConnectorsService,
     private readonly workItems: ConnectorWorkItemsService,
-    private readonly github: GithubIssuesService,
+    private readonly permissions: PermissionService,
   ) {}
 
   /**
@@ -193,9 +193,9 @@ export class WorkItemToolsService {
     try {
       switch (name) {
         case 'task_list':
-          return await this.list(row.id, args);
+          return await this.list(row.id, args, ctx);
         case 'task_read':
-          return await this.read(row.id, args);
+          return await this.read(row.id, args, ctx);
         case 'task_create':
           return await this.create(row.id, args);
         case 'task_comment':
@@ -212,9 +212,13 @@ export class WorkItemToolsService {
 
   // --- tools ---
 
-  private async list(connectorId: string, args: Record<string, unknown>): Promise<AssistantToolResult> {
+  private async list(
+    connectorId: string,
+    args: Record<string, unknown>,
+    ctx: AssistantToolContext,
+  ): Promise<AssistantToolResult> {
     const row = await this.connectors.require(connectorId);
-    const all = await this.workItems.list(row);
+    const all = await this.workItems.list(await this.permissions.scopeFor(ctx.principal, ctx.workspaceId), row);
     const state = typeof args.state === 'string' ? args.state : 'open';
     const documentId = typeof args.documentId === 'string' ? args.documentId.trim() : '';
     const limit = clamp(args.limit, DEFAULT_LIMIT, MAX_LIMIT);
@@ -227,17 +231,28 @@ export class WorkItemToolsService {
     return this.ok('task_list', { count: items.length, items: items.map(brief) });
   }
 
-  private async read(connectorId: string, args: Record<string, unknown>): Promise<AssistantToolResult> {
+  private async read(
+    connectorId: string,
+    args: Record<string, unknown>,
+    ctx: AssistantToolContext,
+  ): Promise<AssistantToolResult> {
     const row = await this.connectors.require(connectorId);
     const number = Number(args.number);
     if (!Number.isInteger(number) || number < 1) return this.fail('number must be a positive integer');
 
-    const stored = (await this.workItems.stored(connectorId)).find((item) => item.number === number);
-    if (stored) return this.ok('task_read', brief(stored));
+    const scope = await this.permissions.scopeFor(ctx.principal, ctx.workspaceId);
+    const all = await this.prisma.connectorWorkItem.findMany({ where: { connectorId, number } });
+    if (all.length > 0) {
+      // Stored but on a page this caller cannot open: answered as not found,
+      // the same words as a ticket that does not exist (#424).
+      const [stored] = await this.workItems.decorate(await this.workItems.visible(scope, all));
+      if (!stored) return this.fail(`#${number} was not found, or the credential cannot see it`);
+      return this.ok('task_read', brief(stored));
+    }
 
     // Not in the projection: it may predate the first refresh, so ask the host
     // rather than telling the model an issue it can see does not exist.
-    const fetched = await this.github.get(row, number);
+    const fetched = await this.workItems.requireTracker(row).getIssue(row, { number, externalKey: null });
     if (!fetched) return this.fail(`#${number} was not found, or the credential cannot see it`);
     return this.ok('task_read', { ...fetched, documentId: null, documentTitle: null });
   }
@@ -267,7 +282,11 @@ export class WorkItemToolsService {
     if (!Number.isInteger(number) || number < 1) return this.fail('number must be a positive integer');
     if (!body) return this.fail('body is required');
 
-    await this.github.comment(row, number, body.slice(0, MAX_COMMENT_CHARS));
+    // The stored row carries a Jira ticket's key; a bare number is the ticket id, which Jira also takes.
+    const stored = await this.prisma.connectorWorkItem.findFirst({ where: { connectorId, number }, select: { externalKey: true } });
+    await this.workItems
+      .requireTracker(row)
+      .comment(row, { number, externalKey: stored?.externalKey ?? null }, [{ text: body.slice(0, MAX_COMMENT_CHARS) }]);
     return this.ok('task_comment', { number, posted: true });
   }
 

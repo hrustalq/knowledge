@@ -225,6 +225,20 @@ export class UpdateKnowledgeHealthSettingsDto {
   @Max(1000, { message: vmsg('max') })
   rrfK?: number | null;
 
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Absolute cosine floor for vector hits (#401); null = SEARCH_MIN_COSINE' })
+  @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.minCosine !== undefined && o.minCosine !== null)
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  @Max(1, { message: vmsg('max') })
+  minCosine?: number | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: "Keep vector hits at or above this share of the best cosine (#401); null = 0.9" })
+  @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.minCosineShare !== undefined && o.minCosineShare !== null)
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  @Max(1, { message: vmsg('max') })
+  minCosineShare?: number | null;
+
   @ApiPropertyOptional({
     type: TrustWeightsDto,
     nullable: true,

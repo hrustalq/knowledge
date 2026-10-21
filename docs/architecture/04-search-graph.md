@@ -231,6 +231,47 @@ chunks ([03](03-ingestion.md#stale-detection-and-reindex)). Restriction stamps
 need nothing new: `AclRestampSweeper` advances `acl_stamped_version` only after
 both stores take the stamp, so a failed OpenSearch restamp is simply retried.
 
+## Relevance floor (#401)
+
+Rank fusion knows ranks, not relevance. Left alone it always fills the limit,
+and because it rewards being in both lists, a chunk at middling ranks in both
+legs beats one near the top of either: 1/77 + 1/69 is more than 1/63. On the
+prod corpus (bge-m3) that put an ADR, which matched only on `from`, second for
+«От какой ветки базироваться при разработке фичи?», above the page that
+actually answered it.
+
+`floorVectorHits` (`search/ranking.ts`) drops weak vector evidence **before**
+fusion. A vector hit is kept only if its cosine is at least `minCosine` **and**
+at least `minCosineShare` of the leg's best cosine. A chunk weak in both legs
+is gone, and a chunk weak in one leg keeps only the other leg's rank. A search
+may then return fewer than `limit` results, or none at all.
+
+- **`minCosineShare`** defaults to `SEARCH_MIN_COSINE_SHARE` (0.9, contracts).
+  It is the ranking fix and does not depend on the model. bge-m3 cosines sit in
+  a narrow band (top 0.49, rank 12 at 0.43 for that question), so ranks 3–12
+  are effectively ties, and only those near the best count as evidence.
+- **`minCosine`** defaults to `SEARCH_MIN_COSINE`, whose code default is 0
+  (off). An absolute cosine means nothing across models, and 0.4 would empty
+  every search on the stub embedder. Production sets 0.4 for bge-m3: off-topic
+  queries top out near 0.37 there, and real questions start near 0.49.
+- **The BM25 leg has no floor.** Its match already demands most of the
+  query's terms (#400), so a BM25 hit is evidence. A share-of-best floor on it
+  changed nothing measurable in the replay.
+
+Measured on 2026-10-21 by replaying prod pools through `rankPool`, with the
+BM25 leg re-asked under #400's `minimum_should_match`: 31 known-item titles, 7
+real queries and 5 off-topic ones in RTech OMS. Known-item recall@1 went from
+54.8% to 96.8% and MRR from 0.753 to 0.984, with recall@10 unchanged at 100%.
+Real queries returned 6.0 results on average instead of 10. Off-topic queries
+returned 0 instead of 10. The sample is small, so treat the direction as real
+and the magnitudes as indicative.
+
+The refill round after the permission post-filter
+([Page restrictions](#page-restrictions)) does not count a floored vector leg
+as saturated: whatever lies deeper scores lower still. `search.executed`
+records `vectorFloored`, the vector hits the floor dropped, so a backtest can
+tell a floored search from one whose legs found nothing.
+
 ## Filters are applied after ranking
 
 `filters.categories` and `filters.projectIds` are resolved **post-ranking against
@@ -290,12 +331,13 @@ have their fused score multiplied by `trustWeight(status, inactive)`
 inactive ×0.9), re-sorted, and only then cut to `k`. Multiplicative so the same
 factor serves RRF, cosine-only and max-normalized BM25 scores.
 
-The fusion constant and the weights are per-workspace knobs (#305): `rrfK`
-and `trustWeights` on `knowledge_health_settings`, sparse over
-`SEARCH_RRF_K` (60) and `TRUST_WEIGHTS`, and sparse per state, so overriding
+The fusion constant, the relevance floor and the weights are per-workspace
+knobs (#305, #401): `rrfK`, `minCosine`, `minCosineShare` and `trustWeights`
+on `knowledge_health_settings`, sparse over `SEARCH_RRF_K` (60),
+`SEARCH_MIN_COSINE`, `SEARCH_MIN_COSINE_SHARE` (0.9) and `TRUST_WEIGHTS`, and sparse per state, so overriding
 one weight keeps the other seven. `VerificationPolicyService` resolves them on
 the same read that resolves `trustRanking`, so they cost no extra query, and
-an empty row ranks byte-for-byte as before. `fuseHits` and the re-rank live in
+an empty row ranks as the defaults do. `floorVectorHits`, `fuseHits` and the re-rank live in
 `search/ranking.ts`, where `rankPool` replays them over a recorded
 `SearchPool`. That is how `make tune` scores thousands of knob settings
 against one search per query

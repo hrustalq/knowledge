@@ -20,6 +20,9 @@ export const MAX_RECALL_DROP = 0.01;
 export const KNOWN_ITEM_K = 5;
 
 export const RRF_K_GRID = [10, 20, 30, 40, 60, 80, 100, 150, 200];
+/** #401: 0 is off; 0.4 suits bge-m3. Absolute cosines mean nothing across models, so the grid stays coarse. */
+export const MIN_COSINE_GRID = [0, 0.3, 0.35, 0.4, 0.45, 0.5];
+export const MIN_COSINE_SHARE_GRID = [0, 0.8, 0.85, 0.88, 0.9, 0.93, 0.95];
 /** The states the tuner moves. unverified/requested/edited stay the reference 1: scaling everything ranks nothing differently. */
 export const TUNED_WEIGHTS = ['verified', 'expired', 'flagged', 'outdated', 'inactive'] as const satisfies readonly (keyof TrustWeights)[];
 /** 0.30 … 1.25: the settings route's bounds, minus the extremes nobody should ship. */
@@ -58,6 +61,10 @@ const AXES: readonly Axis[] = [
       set: (k, v) => ({ ...k, trustWeights: { ...k.trustWeights, [state]: v } }),
     }),
   ),
+  // Last, so that where a re-order and a floor fix a split equally, the
+  // re-order wins: a floor fixes a ranking by removing a page from it.
+  { name: 'minCosine', values: MIN_COSINE_GRID, get: (k) => k.minCosine, set: (k, v) => ({ ...k, minCosine: v }) },
+  { name: 'minCosineShare', values: MIN_COSINE_SHARE_GRID, get: (k) => k.minCosineShare, set: (k, v) => ({ ...k, minCosineShare: v }) },
 ];
 
 /**

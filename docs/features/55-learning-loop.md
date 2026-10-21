@@ -245,7 +245,8 @@ Re-run the calibration when the embedding model changes.
 
 ### The knobs
 
-Four constants that were set by hand are now sparse per-workspace overrides.
+Four constants that were set by hand are now sparse per-workspace overrides,
+and #401 added the two halves of the search relevance floor.
 `null` inherits the default, and an empty override ranks and dedupes exactly
 as before.
 
@@ -253,6 +254,8 @@ as before.
 | ------------------------ | -------------------------------------------------------- | ------------------------------------------ | ----------------------------------------- |
 | `rrfK`                   | `knowledge_health_settings.rrf_k`                        | `SEARCH_RRF_K` (60, contracts)             | `fuseHits` in `SearchService`             |
 | `trustWeights`           | `knowledge_health_settings.trust_weights` (jsonb)        | `TRUST_WEIGHTS` (contracts)                | the trust re-rank, through `trustWeight`  |
+| `minCosine`              | `knowledge_health_settings.min_cosine` (#401)            | `SEARCH_MIN_COSINE` (env, 0 = off)         | `floorVectorHits`, before fusion          |
+| `minCosineShare`         | `knowledge_health_settings.min_cosine_share` (#401)      | `SEARCH_MIN_COSINE_SHARE` (0.9, contracts) | `floorVectorHits`, before fusion          |
 | `captureDedupeThreshold` | `ai_settings.capture_dedupe_threshold` (since #73/#234)  | `CAPTURE_DEDUPE_THRESHOLD` (0.92)          | capture dedupe                            |
 | `captureAmendThreshold`  | `ai_settings.capture_amend_threshold` (since #73/#234)   | `CAPTURE_AMEND_THRESHOLD` (0.8)            | capture amend, never above dedupe         |
 
@@ -272,8 +275,11 @@ seven states at their defaults, because `effective` is
 `{ ...TRUST_WEIGHTS, ...override }`. `PATCH /v1/knowledge-health/settings`
 validates each weight against `TRUST_WEIGHT_MIN`/`MAX` (0.1–1.25) and strips
 unknown keys. `trustWeights: null` resets the column to SQL NULL, not to a
-JSON `null`. `rrfK` is an integer from 1 to 1000. These knobs default to code
-constants, not env vars, so there is no env ceiling to clamp them. The web form
+JSON `null`. `rrfK` is an integer from 1 to 1000, and both floors are numbers
+from 0 to 1. These knobs default to code constants, except `minCosine`: an
+absolute cosine depends on the embedding model, so its default is the env var
+`SEARCH_MIN_COSINE`. Env is a default here, not a ceiling, so nothing clamps
+them. The web form
 still shows what is asked for, what applies and the default for each.
 
 When trust ranking is off, the weights cannot move a result. The settings
@@ -301,13 +307,18 @@ reads**:
 that receives a `SearchPool`: both legs at `fetchK` and the state of every page
 either leg named. `rankPool` (`search/ranking.ts`) re-fuses and re-weights that
 pool in memory with the same `fuseHits` the service uses. A parity case in
-`search-trust.spec.ts` replays one search through both under three knob sets.
+`search-trust.spec.ts` replays one search through both under five knob sets,
+two of them with a floor.
 ArcadeDB sees one search per query, not one per candidate, and a full grid
 costs seconds. The backtest's OOM note still applies: run one at a time.
 
 **Search descent** (`search/tuning.ts`). Coordinate descent over `rrfK`
-(`RRF_K_GRID`: 10 … 200) and the weights of `verified`, `expired`, `flagged`,
-`outdated` and `inactive` (`WEIGHT_GRID`: 0.30 … 1.25 in 0.05 steps).
+(`RRF_K_GRID`: 10 … 200), the weights of `verified`, `expired`, `flagged`,
+`outdated` and `inactive` (`WEIGHT_GRID`: 0.30 … 1.25 in 0.05 steps), and
+last the two floors (`MIN_COSINE_GRID`: 0 … 0.5, `MIN_COSINE_SHARE_GRID`:
+0 … 0.95, #401). The floors come last on purpose: where a re-order and a floor
+fix a split equally, the re-order wins, because a floor fixes a ranking by
+removing a page from it.
 `unverified`, `requested` and `edited` stay the reference 1, because scaling
 every weight ranks nothing differently. Each axis takes the best grid value,
 and only a strict improvement moves it, so a flat objective leaves the current
@@ -385,7 +396,9 @@ Contract constants: `AGENT_OUTCOME_SETTLE_DAYS` (14), `AGENT_OUTCOME_MIN_RUNS`
     `archive_proposed_at` and `archive_check`, plus `derived` in the
     `source_kind` CHECK;
   - `20261124100000_search_knobs`: `knowledge_health_settings.rrf_k` and
-    `trust_weights`.
+    `trust_weights`;
+  - `20261126100000_search_floor` (#401): `min_cosine` and
+    `min_cosine_share`.
 - **Cost.** The `coach` bills `operation = 'coach'` usage to the zeros stub.
   Findings are embedded on the fly once per pass and never stored.
 - **Calibration.** Re-run `make backtest ARGS="--learner"` when the embedding

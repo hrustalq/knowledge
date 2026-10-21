@@ -8315,6 +8315,10 @@ export interface components {
             trustRanking?: boolean | null;
             /** @description Reciprocal-rank-fusion constant; null = 60 */
             rrfK?: number | null;
+            /** @description Absolute cosine floor for vector hits (#401); null = SEARCH_MIN_COSINE */
+            minCosine?: number | null;
+            /** @description Keep vector hits at or above this share of the best cosine (#401); null = 0.9 */
+            minCosineShare?: number | null;
             /** @description Per-state search weights; a state left out keeps its default, null resets them all */
             trustWeights?: components["schemas"]["TrustWeightsDto"] | null;
         };

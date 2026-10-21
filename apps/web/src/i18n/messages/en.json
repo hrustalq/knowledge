@@ -4375,6 +4375,14 @@
           "label": "Fusion constant (RRF k)",
           "hint": "How strongly a top rank in one search leg outweighs agreement between both legs. Lower favours the single best match, higher favours pages both legs found"
         },
+        "minCosine": {
+          "label": "Minimum similarity",
+          "hint": "A semantic match below this cosine is not a result at all, so a question nothing answers comes back empty instead of padded. The right value depends on the embedding model: about 0.4 for bge-m3. 0 turns it off"
+        },
+        "minCosineShare": {
+          "label": "Similarity band",
+          "hint": "A semantic match counts only within this share of the best one, so pages found at middling ranks by both legs cannot outrank the best match of either. 0 turns it off"
+        },
         "trustWeights": {
           "label": "Trust weights",
           "hint": "What each page state multiplies a result's score by. An empty field keeps the default; Inactive applies on top of the state",

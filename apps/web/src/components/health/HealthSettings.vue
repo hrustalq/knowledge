@@ -14,9 +14,10 @@
  * A viewer may read the policy; only an admin may save it, which is the
  * route's role too.
  *
- * The search-ranking group (#305) is the same contract for the two knobs
- * `make tune` proposes: the RRF constant and the per-state trust weights,
- * whose override is sparse per state. Their defaults are code constants.
+ * The search-ranking group (#305, #401) is the same contract for the knobs
+ * `make tune` proposes: the RRF constant, the vector relevance floor and the
+ * per-state trust weights, whose override is sparse per state. Their defaults
+ * are code constants, except the absolute cosine floor (`SEARCH_MIN_COSINE`).
  */
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -60,11 +61,24 @@ const NUMERIC: readonly { key: NumericKey; unit: 'days' | 'chars'; max: number }
 ]
 
 type WeightKey = keyof TrustWeights
-const RRF_K_MAX = 1000
+/** The scalar search knobs, one row each; the bounds are the settings route's. */
+const KNOBS = [
+  { key: 'rrfK', min: 1, max: 1000, step: 1, integer: true },
+  { key: 'minCosine', min: 0, max: 1, step: 0.01, integer: false },
+  { key: 'minCosineShare', min: 0, max: 1, step: 0.01, integer: false },
+] as const
+type Knob = (typeof KNOBS)[number]
+type KnobKey = Knob['key']
 
-/** The inputs: a string per numeric key (empty = inherit) and a three-way for the switch. */
+/**
+ * The inputs: a value per numeric key (empty = inherit) and a three-way for the
+ * switch. A `type="number"` input's v-model hands back a number once typed
+ * into and the string it was given before, so every read goes through `text`.
+ */
+type Field = string | number
+const text = (v: Field) => String(v).trim()
 const form = reactive<
-  Record<NumericKey, string> & { trustRanking: 'inherit' | 'on' | 'off'; rrfK: string; trustWeights: Record<WeightKey, string> }
+  Record<NumericKey | KnobKey, Field> & { trustRanking: 'inherit' | 'on' | 'off'; trustWeights: Record<WeightKey, Field> }
 >({
   reviewIntervalDays: '',
   remindBeforeDays: '',
@@ -72,13 +86,15 @@ const form = reactive<
   emptyMaxChars: '',
   trustRanking: 'inherit',
   rrfK: '',
-  trustWeights: Object.fromEntries(TRUST_WEIGHT_KEYS.map((k) => [k, ''])) as Record<WeightKey, string>,
+  minCosine: '',
+  minCosineShare: '',
+  trustWeights: Object.fromEntries(TRUST_WEIGHT_KEYS.map((k) => [k, ''])) as Record<WeightKey, Field>,
 })
 
 function adopt(res: KnowledgeHealthSettingsResponse) {
   for (const { key } of NUMERIC) form[key] = res.override[key] === null ? '' : String(res.override[key])
   form.trustRanking = res.override.trustRanking === null ? 'inherit' : res.override.trustRanking ? 'on' : 'off'
-  form.rrfK = res.override.rrfK === null ? '' : String(res.override.rrfK)
+  for (const { key } of KNOBS) form[key] = res.override[key] === null ? '' : String(res.override[key])
   for (const k of TRUST_WEIGHT_KEYS) {
     const v = res.override.trustWeights?.[k]
     form.trustWeights[k] = v === undefined ? '' : String(v)
@@ -93,11 +109,11 @@ const draft = computed<KnowledgeHealthSettingsOverride>(() => ({
   inactiveAfterDays: parse(form.inactiveAfterDays),
   emptyMaxChars: parse(form.emptyMaxChars),
   trustRanking: form.trustRanking === 'inherit' ? null : form.trustRanking === 'on',
-  rrfK: parse(form.rrfK),
+  ...(Object.fromEntries(KNOBS.map((knob) => [knob.key, parseKnob(knob)])) as Record<KnobKey, number | null>),
   trustWeights: draftWeights.value,
 }))
-function parse(raw: string): number | null {
-  const trimmed = raw.trim()
+function parse(raw: Field): number | null {
+  const trimmed = text(raw)
   if (trimmed === '') return null
   const n = Number(trimmed)
   return Number.isInteger(n) && n >= 0 ? n : null
@@ -106,7 +122,7 @@ function parse(raw: string): number | null {
 /** Only the states given a value; none at all is `null`, "inherit every default". */
 const draftWeights = computed<Partial<TrustWeights> | null>(() => {
   const set = TRUST_WEIGHT_KEYS.flatMap((k) => {
-    const raw = form.trustWeights[k].trim()
+    const raw = text(form.trustWeights[k])
     return raw === '' ? [] : [[k, Number(raw)] as const]
   })
   return set.length ? Object.fromEntries(set) : null
@@ -123,25 +139,31 @@ const dirty = computed(() => {
 })
 
 function invalid(key: NumericKey, max: number): boolean {
-  const raw = form[key].trim()
+  const raw = text(form[key])
   if (raw === '') return false
   const n = Number(raw)
   return !Number.isInteger(n) || n < 0 || n > max
 }
-const rrfKInvalid = computed(() => {
-  const raw = form.rrfK.trim()
+function parseKnob(knob: Knob): number | null {
+  const raw = text(form[knob.key])
+  return raw === '' || knobInvalid(knob) ? null : Number(raw)
+}
+function knobInvalid({ key, min, max, integer }: Knob): boolean {
+  const raw = text(form[key])
   if (raw === '') return false
   const n = Number(raw)
-  return !Number.isInteger(n) || n < 1 || n > RRF_K_MAX
-})
+  return !(integer ? Number.isInteger(n) : Number.isFinite(n)) || n < min || n > max
+}
+/** A floor of 0 is no floor; the RRF constant is never 0. */
+const knobLabel = (value: number) => (value === 0 ? t('health.settings.off') : formatNumber(value))
 function weightInvalid(key: WeightKey): boolean {
-  const raw = form.trustWeights[key].trim()
+  const raw = text(form.trustWeights[key])
   if (raw === '') return false
   const n = Number(raw)
   return !Number.isFinite(n) || n < TRUST_WEIGHT_MIN || n > TRUST_WEIGHT_MAX
 }
 const anyInvalid = computed(
-  () => NUMERIC.some(({ key, max }) => invalid(key, max)) || rrfKInvalid.value || TRUST_WEIGHT_KEYS.some(weightInvalid),
+  () => NUMERIC.some(({ key, max }) => invalid(key, max)) || KNOBS.some(knobInvalid) || TRUST_WEIGHT_KEYS.some(weightInvalid),
 )
 const weightLabel = (key: WeightKey) => (key === 'inactive' ? t('verification.inactive') : t(`verification.state.${key}`))
 const weightOverridden = (key: WeightKey) => settings.value?.override.trustWeights?.[key] !== undefined
@@ -259,33 +281,33 @@ async function save() {
       </div>
 
       <div class="divide-y rounded-md border">
-        <div class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
+        <div v-for="knob in KNOBS" :key="knob.key" class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
           <div class="min-w-0">
-            <label for="health-rrfK" class="text-sm font-medium">{{ t('health.settings.key.rrfK.label') }}</label>
-            <p class="text-xs text-muted-foreground">{{ t('health.settings.key.rrfK.hint') }}</p>
+            <label :for="`health-${knob.key}`" class="text-sm font-medium">{{ t(`health.settings.key.${knob.key}.label`) }}</label>
+            <p class="text-xs text-muted-foreground">{{ t(`health.settings.key.${knob.key}.hint`) }}</p>
             <p class="mt-1 text-xs">
               <span class="text-muted-foreground">{{ t('health.settings.applies') }}</span>
-              {{ formatNumber(settings.effective.rrfK) }}
-              <span v-if="settings.override.rrfK !== null" class="ml-1 text-primary/80">{{ t('ai.overridden') }}</span>
+              {{ knobLabel(settings.effective[knob.key]) }}
+              <span v-if="settings.override[knob.key] !== null" class="ml-1 text-primary/80">{{ t('ai.overridden') }}</span>
             </p>
           </div>
           <div class="space-y-1">
             <Input
-              id="health-rrfK"
-              v-model="form.rrfK"
+              :id="`health-${knob.key}`"
+              v-model="form[knob.key]"
               type="number"
-              inputmode="numeric"
-              min="1"
-              :max="RRF_K_MAX"
-              step="1"
-              class="h-9"
-              :placeholder="formatNumber(settings.defaults.rrfK)"
+              :inputmode="knob.integer ? 'numeric' : 'decimal'"
+              :min="knob.min"
+              :max="knob.max"
+              :step="knob.step"
+              class="h-9 tabular-nums"
+              :placeholder="formatNumber(settings.defaults[knob.key])"
               :disabled="!props.canManage"
-              :aria-invalid="rrfKInvalid || undefined"
-              aria-describedby="health-rrfK-default"
+              :aria-invalid="knobInvalid(knob) || undefined"
+              :aria-describedby="`health-${knob.key}-default`"
             />
-            <p id="health-rrfK-default" class="text-xs text-muted-foreground">
-              {{ t('health.settings.default', { value: formatNumber(settings.defaults.rrfK) }) }}
+            <p :id="`health-${knob.key}-default`" class="text-xs text-muted-foreground">
+              {{ t('health.settings.default', { value: knobLabel(settings.defaults[knob.key]) }) }}
             </p>
           </div>
         </div>

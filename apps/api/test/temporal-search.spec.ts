@@ -77,7 +77,7 @@ function build(at: TemporalPoint | undefined) {
     { embed: vi.fn(async () => [1, 0]) } as never,
     fulltext as never,
     { openIssueCounts: vi.fn(async () => new Map()) } as never,
-    { effective: vi.fn(async () => ({ reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40, trustRanking: false })) } as never,
+    { effective: vi.fn(async () => ({ reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40, trustRanking: false, minCosine: 0, minCosineShare: 0 })) } as never,
     { documentFilterFor: vi.fn(async () => UNFILTERED) } as never,
     { get: vi.fn(() => 1000) } as never,
     { resolve: vi.fn(async () => at) } as never,

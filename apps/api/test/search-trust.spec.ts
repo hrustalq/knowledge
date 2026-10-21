@@ -4,6 +4,9 @@ import { SearchService } from '../src/search/search.service.js';
 import { rankPool, type SearchKnobs, type SearchPool } from '../src/search/ranking.js';
 import { systemScope } from '../src/permissions/access-scope.js';
 import { DEV_PRINCIPAL } from '../src/auth/principal.js';
+import { emitBacktest } from '@knowledge/observability';
+
+vi.mock('@knowledge/observability', async (actual) => ({ ...(await actual<object>()), emitBacktest: vi.fn() }));
 
 /**
  * The trust re-rank (docs/features/39): archived pages drop, a page's state
@@ -89,6 +92,9 @@ function build(
       emptyMaxChars: 40,
       trustRanking,
       rrfK: SEARCH_RRF_K,
+      // Floor off unless a case sets it: the cases above measure ranking alone.
+      minCosine: 0,
+      minCosineShare: 0,
       trustWeights: TRUST_WEIGHTS,
       ...knobs,
     })),
@@ -210,11 +216,19 @@ describe('SearchService knobs (#305)', () => {
   const text = [hit('verified', 9), hit('inactive', 8), hit('expired', 7), hit('plain', 6)];
 
   it('the pool it hands make tune re-ranks to exactly what it returned, under any knobs', async () => {
-    for (const knobs of [{}, { rrfK: 5 }, { rrfK: 200, trustWeights: { ...TRUST_WEIGHTS, verified: 0.3, outdated: 1.25 } }]) {
+    for (const knobs of [
+      {},
+      { rrfK: 5 },
+      { rrfK: 200, trustWeights: { ...TRUST_WEIGHTS, verified: 0.3, outdated: 1.25 } },
+      { minCosineShare: 0.85 },
+      { minCosine: 0.75, minCosineShare: 0.5 },
+    ]) {
       const { svc } = build(docs, vector, true, text, knobs);
       let pool = null as SearchPool | null;
       const res = await svc.search({ workspaceId: WS, query: 'q', limit: 3 }, ADMIN, undefined, (p) => (pool = p));
-      expect(rankPool(pool!, { rrfK: SEARCH_RRF_K, trustWeights: TRUST_WEIGHTS, ...knobs })).toEqual(res.results.map((r) => r.documentId));
+      expect(rankPool(pool!, { rrfK: SEARCH_RRF_K, minCosine: 0, minCosineShare: 0, trustWeights: TRUST_WEIGHTS, ...knobs })).toEqual(
+        res.results.map((r) => r.documentId),
+      );
     }
   });
 
@@ -238,5 +252,37 @@ describe('SearchService knobs (#305)', () => {
       ).results[0]!.documentId;
     expect(await fused(SEARCH_RRF_K)).toBe('inactive');
     expect(await fused(1)).toBe('plain');
+  });
+});
+
+describe('SearchService relevance floor (#401)', () => {
+  const docs = [plain, expired, inactive, outdated, verified];
+
+  it('a hit weak in both legs no longer outranks one strong in either', async () => {
+    // inactive is third in both legs: 2/63 beats 1/61 by rank fusion alone.
+    const vector = [hit('plain', 0.5), hit('expired', 0.44), hit('inactive', 0.43)];
+    const text = [hit('outdated', 9), hit('verified', 8), hit('inactive', 7)];
+    const ids = async (knobs: Partial<SearchKnobs>) =>
+      (await build(docs, vector, false, text, knobs).svc.search({ workspaceId: WS, query: 'q', limit: 5 }, ADMIN)).results.map((r) => r.documentId);
+    expect((await ids({}))[0]).toBe('inactive');
+    // Only plain is within 0.9 of the best cosine; inactive keeps its BM25
+    // rank alone, below the leader of either leg.
+    const floored = await ids({ minCosineShare: 0.9 });
+    expect(floored.slice(0, 2).sort()).toEqual(['outdated', 'plain']);
+    expect(floored).not.toContain('expired');
+    expect(floored.indexOf('inactive')).toBeGreaterThan(1);
+  });
+
+  it('a search nothing answers returns fewer than its limit, and says how much the floor dropped', async () => {
+    const vector = [hit('plain', 0.36), hit('expired', 0.35), hit('inactive', 0.34)];
+    const { svc } = build(docs, vector, false, [], { minCosine: 0.4, minCosineShare: 0.9 });
+    const res = await svc.search({ workspaceId: WS, query: 'off-topic', limit: 3, mode: 'semantic' }, ADMIN);
+    expect(res.results).toEqual([]);
+    // Told apart from a search whose legs found nothing.
+    expect(vi.mocked(emitBacktest)).toHaveBeenLastCalledWith(expect.objectContaining({ vectorHits: 3, vectorFloored: 3, fusedHits: 0 }));
+
+    const partial = build(docs, [hit('plain', 0.6), hit('expired', 0.45), hit('inactive', 0.3)], false, [], { minCosine: 0.4, minCosineShare: 0.7 });
+    const some = await partial.svc.search({ workspaceId: WS, query: 'q', limit: 3, mode: 'semantic' }, ADMIN);
+    expect(some.results.map((r) => r.documentId)).toEqual(['plain', 'expired']);
   });
 });

@@ -90,6 +90,28 @@ in the pull request that introduces them — see
   so «ветки» finds «ветка». A query of more than two words must share 60% of
   its meaningful words (rounded down) with a chunk before the keyword leg
   returns it.
+- Search no longer pads its results with pages that have nothing to do with
+  the question (#401). Every search used to return its full limit, so the
+  assistant cited, as sources, pages that only loosely resembled the
+  question. A page also ranked high just because both semantic and keyword
+  search listed it somewhere low, which put it above the page that actually
+  answered.
+  - A semantic match now counts only if it is close to the best one: at
+    least 0.9 of the top similarity by default.
+  - Where `SEARCH_MIN_COSINE` is set, a match must also clear that absolute
+    similarity. A question nothing in the workspace answers then comes back
+    empty.
+  - A search may now return fewer results than its limit, or none.
+  - Admins can override both values per workspace under **Knowledge health →
+    Settings → Search ranking**, and `make tune` proposes them.
+
+  On a replay of production searches, the right page came first for 97% of
+  page titles, up from 55%, and off-topic questions returned nothing instead
+  of 10 pages.
+- **Knowledge health → Settings** no longer goes blank when you type a number
+  into any field (#401). Typing into a number box handed the form a number
+  where it expected text, so the form crashed on the first keystroke and
+  nothing could be saved from it.
 
 ### Operations
 
@@ -118,6 +140,17 @@ in the pull request that introduces them — see
   kept chat (the harvest buffer and searchable groups) while
   `CHAT_ENABLED=false`, because a retention is a promise about rows already
   written.
+- **Search relevance floor (#401):**
+  - **New env var:** `SEARCH_MIN_COSINE` (default `0`, off). Production
+    embeds with bge-m3 and should run `0.4`, which `.env.production.example`
+    now gives. Run `gh variable set SEARCH_MIN_COSINE --env production --body
+    0.4` before tagging, or the deploy refuses the missing key. If embeddings
+    roll back to the stub, set it back to `0`, or every search comes back
+    empty.
+  - **Migration:** `20261126100000_search_floor` adds two nullable columns to
+    `knowledge_health_settings`. It is additive and survives a code rollback.
+  - The `search.executed` backtest line gains `vectorFloored`: how many
+    vector hits the floor dropped.
 - **Keyword search backfill (#400):** on its first search after the deploy,
   the API (or the worker) adds the ru/en fields to the OpenSearch index and
   starts a background `_update_by_query` over the rows that lack them. Nothing

@@ -305,7 +305,8 @@
     "moreActions": "More actions",
     "fullWidth": "Full width",
     "asOfBanner": "As of {date}",
-    "asOfBannerTag": "As of {tag}, {date}"
+    "asOfBannerTag": "As of {tag}, {date}",
+    "unplacedCommentsHint": "On the page as a whole, or on a passage that has since changed."
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -2874,6 +2875,7 @@
   },
   "rail": {
     "overview": "Overview",
+    "comments": "Comments",
     "frontmatter": "Frontmatter",
     "history": "History",
     "changes": "Changes",

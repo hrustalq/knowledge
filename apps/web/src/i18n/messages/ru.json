@@ -305,7 +305,8 @@
     "moreActions": "Ещё действия",
     "fullWidth": "Во всю ширину",
     "asOfBanner": "На {date}",
-    "asOfBannerTag": "На {tag}, {date}"
+    "asOfBannerTag": "На {tag}, {date}",
+    "unplacedCommentsHint": "К странице целиком или к фрагменту, который с тех пор изменился."
   },
   "settings": {
     "projectsHint": "Организация документов",
@@ -2874,6 +2875,7 @@
   },
   "rail": {
     "overview": "Обзор",
+    "comments": "Комментарии",
     "frontmatter": "Frontmatter",
     "history": "История",
     "changes": "Изменения",

@@ -136,33 +136,63 @@ export function anchorFromQuote(doc: PMNode, revisionId: string, raw: string): T
 }
 
 /**
- * An anchor for a range the caller already knows exactly.
+ * An anchor for a range the caller already knows exactly: a few characters a
+ * glossary decoration drew, or a whole block — a paragraph, a list item, a
+ * table row — whose node boundaries the margin control resolved (#439).
  *
  * `anchorFromQuote` searches for its text, which is right when the text is all
  * you have (a browser selection) and wrong when it is not: the first "Order" in
- * a page is usually inside "OrderHub". A glossary decoration knows precisely
- * which characters it drew, so it hands the range over instead of the words.
+ * a page is usually inside "OrderHub". And a block's DOM text is not the
+ * projection's — `<li>` and `<td>` text joins with no separator where the
+ * projection puts a space — so a list or a table quoted from the DOM never
+ * matched. Reading the quote off the projection cannot diverge from it.
  */
 export function anchorFromRange(
   doc: PMNode,
   from: number,
   to: number,
 ): { quote: string; prefix?: string; suffix?: string } | null {
-  const projection = projectDoc(doc)
-  // `lastIndexOf`, not `indexOf`: positions are not unique. A block boundary
-  // contributes a synthetic space carrying the *same* document position as the
-  // character that follows it, and the space is pushed first — so the first
-  // match is the padding and the last is the real character. Anchoring on the
-  // space shifts the quote one to the left and drops the space out of the
-  // prefix, which then resolves to nothing.
-  const start = projection.positions.lastIndexOf(from)
-  const end = projection.positions.lastIndexOf(to - 1)
-  if (start < 0 || end < start) return null
+  const { text, positions } = projectDoc(doc)
+  let start = positions.findIndex((p) => p >= from)
+  if (start < 0) return null
+  // Positions are not unique: a block boundary contributes a synthetic space
+  // carrying the *same* document position as the character that follows it,
+  // pushed first. Anchoring on that space shifts the quote one to the left and
+  // drops the space out of the prefix, which then resolves to nothing.
+  while (text[start] === ' ') start++
+  let end = start - 1
+  while (end + 1 < positions.length && positions[end + 1]! < to) end++
+  // A long block is quoted by its opening; the API refuses anything longer.
+  end = Math.min(end, start + MAX_QUOTE_CHARS - 1)
+  while (end >= start && text[end] === ' ') end--
+  if (end < start) return null
 
-  const quote = projection.text.slice(start, end + 1)
-  if (!quote) return null
-  const { prefix, suffix } = contextAround(projection.text, start, quote.length)
+  const quote = text.slice(start, end + 1)
+  const { prefix, suffix } = contextAround(text, start, quote.length)
   return { quote, ...(prefix ? { prefix } : {}), ...(suffix ? { suffix } : {}) }
+}
+
+/**
+ * The commentable block under a DOM element, as a document range: the
+ * innermost list item or table row, else the top-level block. A list item
+ * keeps to its own paragraph, so commenting on a parent does not quote every
+ * item nested under it.
+ */
+export function blockRangeAt(doc: PMNode, pos: number): { from: number; to: number } | null {
+  const $pos = doc.resolve(pos)
+  for (let depth = $pos.depth; depth > 0; depth--) {
+    const node = $pos.node(depth)
+    if (node.type.name === 'tableRow') return { from: $pos.before(depth), to: $pos.after(depth) }
+    if (node.type.name === 'listItem' || node.type.name === 'taskItem') {
+      const first = node.firstChild
+      const from = $pos.start(depth)
+      return { from, to: from + (first?.nodeSize ?? 0) }
+    }
+  }
+  if ($pos.depth > 0) return { from: $pos.before(1), to: $pos.after(1) }
+  // Between top-level blocks — a node view's outer element maps here.
+  const { node, offset } = doc.childAfter($pos.pos)
+  return node ? { from: offset, to: offset + node.nodeSize } : null
 }
 
 /**

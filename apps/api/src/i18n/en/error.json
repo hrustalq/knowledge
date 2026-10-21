@@ -737,5 +737,20 @@
     "notFound": "Conflict {id} not found",
     "notOpen": "This conflict is no longer open",
     "alreadyProposed": "A fix for this conflict was already proposed"
+  },
+  "workItem": {
+    "anchorNotFound": "No {kind} {id} in this workspace",
+    "noRoute": "This project has no tracker route; pick a connector",
+    "notTracker": "Connector {name} has no tracker",
+    "connectorDisabled": "Connector {name} is disabled",
+    "badRef": "\"{ref}\" is not a ticket on {name}",
+    "ticketNotFound": "{ref} was not found on {name}, or the credential cannot see it",
+    "ticketTaken": "{key} is already handed off for another object",
+    "anchorTaken": "This object already has ticket {key} on {name}",
+    "unknownStatus": "\"{status}\" is not a status this tracker can move to",
+    "unmappedStatus": "The connector's status map has no outbound status for {status}",
+    "notRetryable": "Only a failed or orphaned work item can be retried",
+    "ticketGone": "The ticket no longer exists on the tracker",
+    "anchorOrDocument": "Give a page or an anchor, not both"
   }
 }

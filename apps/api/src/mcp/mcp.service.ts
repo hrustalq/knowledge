@@ -693,7 +693,8 @@ export class McpService {
       async ({ connectorId, state }) => {
         await guard.connector(connectorId, 'viewer');
         const row = await this.connectors.require(connectorId);
-        const items = await this.workItems.list(row);
+        // A ticket on a page the caller cannot open is omitted, never refused (#424).
+        const items = await this.workItems.list(await guard.scope(row.workspaceId), row);
         const wanted = state ?? 'all';
         return this.json(
           items.filter((item) =>

@@ -15,7 +15,25 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- A reported issue, a knowledge conflict, a page's verification flag or a page can be handed off to a
+  GitHub repository connector as an issue (#424): `POST /v1/work-items/handoff` creates the issue, or
+  attaches an existing one (`#45`, `org/repo#45` or its URL). The issue carries the object's title, a link
+  back and a `knowledge-ref:` footer, but no page content. A restricted page is named by its id. Status
+  then moves both ways. Closing the issue resolves the report or conflict, or dismisses it if closed as
+  not planned. Resolving, dismissing or verifying here closes the issue. A conflict raised again, or a page
+  flagged again, reopens the same issue. A failed transition is retried five times, then shows its error
+  until someone retries it (`POST /v1/connectors/:id/work-items/:workItemId/retry`). Only a GitHub account
+  mapped to an editor can clear a page's flag from the tracker. No tracker action ever verifies a page.
+- `GET /v1/work-items?workspaceId&sourceKind&sourceId` lists the issues handed off for one object.
+
 ### Changed
+
+- Work-item lists (the connector's Work items tab, MCP `knowledge_list_work_items`, the assistant's `task_*`
+  tools) leave out an item attached to a page the caller cannot open (#424).
+- Linking a work item (`POST /v1/connectors/:id/work-items/:workItemId/link`) also accepts an anchor
+  (`sourceKind` + `sourceId`), and unlinking drops it. Unlinking never closes the issue (#424).
 
 - Page text fills the content column again, on every page, the public share links and published sites
   included (#422). In 0.30.1 paragraphs and lists stopped at about 65 characters, which left a wide screen
@@ -29,6 +47,11 @@ in the pull request that introduces them — see
   It is expand-only and the previous image runs against it unchanged, so a code rollback is safe. It
   also anchors each GitHub issue already attached to a page to that page (the most recently updated
   one per connector and page). The page's other attached issues stay on its rail, as before.
+- Migration `20261128100000_work_item_actor` adds a nullable `connector_work_items.external_actor_id`, expand-only
+  (#424).
+- Status sync runs in the API process every `WORK_ITEM_SYNC_TICK_MS` (default `15000`). Set
+  `WORK_ITEM_SYNC_ENABLED=false` to stop it; handoff still works. Both variables have defaults, so no
+  deploy change is needed. Sync works by polling. The GitHub App webhook only makes it faster.
 
 ## [0.30.1] — 2026-10-21
 

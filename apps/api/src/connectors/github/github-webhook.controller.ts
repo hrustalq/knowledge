@@ -118,7 +118,7 @@ export class GithubWebhookController {
     if (event === 'issues') {
       const type = ISSUE_ACTIONS[action];
       if (!type || !payload.issue) return false;
-      await this.workItems.applyDelivery(row, type, toWorkItem(payload.issue));
+      await this.workItems.applyDelivery(row, type, toWorkItem(payload.issue), { actorId: senderOf(payload) });
       return true;
     }
 
@@ -126,7 +126,7 @@ export class GithubWebhookController {
       // Only `created`: an edited or deleted comment has not moved the work on,
       // and a flow that fired on every edit would fire on typo fixes.
       if (action !== 'created' || !payload.issue) return false;
-      await this.workItems.applyDelivery(row, 'repo.issue.commented', toWorkItem(payload.issue));
+      await this.workItems.applyDelivery(row, 'repo.issue.commented', toWorkItem(payload.issue), { actorId: senderOf(payload) });
       return true;
     }
 
@@ -152,7 +152,9 @@ export class GithubWebhookController {
       // `toWorkItem` discriminates on a nested `pull_request` key, which a pull
       // request *payload* does not have — it is the pull request. Re-nesting the
       // one field it reads keeps a single state mapping for both shapes.
-      await this.workItems.applyDelivery(row, type, toWorkItem({ ...pr, pull_request: { merged_at: pr.merged_at } }));
+      await this.workItems.applyDelivery(row, type, toWorkItem({ ...pr, pull_request: { merged_at: pr.merged_at } }), {
+        actorId: senderOf(payload),
+      });
       return true;
     }
 
@@ -189,6 +191,15 @@ export class GithubWebhookController {
     const run = await this.connectors.queueRepoPush(row, push);
     if (run) await this.producer.enqueue(run.id, { delayMs: this.config.get('WIKI_PUSH_DEBOUNCE_MS', { infer: true }) });
   }
+}
+
+/**
+ * Who acted, as GitHub's numeric user id — the id `external_identities` keys
+ * GitHub accounts by (#76), so attribution and ACL mirroring map one account once.
+ */
+function senderOf(payload: Record<string, any>): string | null {
+  const id: unknown = payload.sender?.id;
+  return typeof id === 'number' || typeof id === 'string' ? String(id) : null;
 }
 
 const ISSUE_ACTIONS: Record<string, RepoEventType | undefined> = {

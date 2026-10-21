@@ -26,8 +26,10 @@ import {
   CONNECTOR_SYNC_MODES,
   DOCUMENT_CATEGORIES,
   WIKI_SECTIONS,
+  WORK_ITEM_SOURCE_KINDS,
 } from '@knowledge/contracts';
 import type {
+  WorkItemSourceKind,
   WikiSection,
   ConnectorAclMode,
   ConnectorConflictPolicy,
@@ -406,11 +408,25 @@ export class CreateConnectorWorkItemDto {
   documentId?: string;
 }
 
-/** POST /v1/connectors/:id/work-items/:workItemId/link. */
+/**
+ * POST /v1/connectors/:id/work-items/:workItemId/link: a page (feature 32), or
+ * an anchor (#424) — one of the two.
+ */
 export class LinkConnectorWorkItemDto {
-  @ApiProperty({ description: 'The page this work item is about' })
+  @ApiPropertyOptional({ description: 'The page this work item is about' })
+  @IsOptional()
   @IsUUID()
-  documentId!: string;
+  documentId?: string;
+
+  @ApiPropertyOptional({ enum: WORK_ITEM_SOURCE_KINDS, description: 'Anchor kind, with sourceId: status then syncs both ways' })
+  @IsOptional()
+  @IsIn(WORK_ITEM_SOURCE_KINDS as unknown as string[])
+  sourceKind?: WorkItemSourceKind;
+
+  @ApiPropertyOptional({ description: 'The anchored object id' })
+  @ValidateIf((o: LinkConnectorWorkItemDto) => o.sourceKind !== undefined)
+  @IsUUID()
+  sourceId?: string;
 }
 
 /**

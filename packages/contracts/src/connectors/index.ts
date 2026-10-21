@@ -1446,6 +1446,34 @@ export interface ConnectorWorkItemInfo {
   externalUpdatedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** How a person cites it: `BILL-123`, or `#412` for a repository tracker (#424). */
+  key: string;
+  /** The knowledge object this ticket was handed off for; both null on a plain projection. */
+  sourceKind: WorkItemSourceKind | null;
+  sourceId: string | null;
+  /** Derived through the connector's status map; never stored. */
+  status: WorkItemStatus;
+  /** The tracker's own name for the status ("In Progress"). */
+  externalStatus: string | null;
+  syncState: WorkItemSyncState;
+  /** The tracker's error from the last failed transition. */
+  syncError: string | null;
+}
+
+/** GET /v1/work-items — the work items anchored on one object, as the caller may see them. */
+export interface ListAnchorWorkItemsResponse {
+  workItems: ConnectorWorkItemInfo[];
+}
+
+/** POST /v1/work-items/handoff — create a ticket for an anchor, or attach an existing one. */
+export interface WorkItemHandoffInput {
+  workspaceId: string;
+  sourceKind: WorkItemSourceKind;
+  sourceId: string;
+  /** Null = the anchor's project route. */
+  connectorId?: string;
+  /** `BILL-123`, `#45`, `org/repo#45` or a ticket URL: attach instead of create. */
+  attach?: string;
 }
 
 // GET /v1/connectors/:id/work-items

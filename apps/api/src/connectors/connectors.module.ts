@@ -14,6 +14,9 @@ import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorQueueModule } from './connector-queue.module.js';
 import { ConnectorWebhookController } from './connector-webhook.controller.js';
 import { ConnectorWorkItemsModule } from './connector-work-items.module.js';
+import { WorkItemHandoffModule } from './handoff/work-item-handoff.module.js';
+import { WorkItemsController } from './handoff/work-items.controller.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { ConnectorsCoreModule } from './connectors-core.module.js';
 import { ConnectorsController } from './connectors.controller.js';
 import { GithubBrowseService } from './github/github-browse.service.js';
@@ -42,6 +45,8 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
   imports: [
     ConnectorsCoreModule,
     ConnectorWorkItemsModule,
+    WorkItemHandoffModule,
+    PermissionsCoreModule,
     ConnectorQueueModule,
     ActivityModule,
     DocumentsModule,
@@ -64,7 +69,7 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
   // ParseUuidPipe would 400 on the literal `github`. The three picker GETs on
   // GithubController need no such care — they are one segment longer than
   // anything `:id` declares.
-  controllers: [GithubWebhookController, ConnectorsController, ConnectorWebhookController, GithubController],
+  controllers: [GithubWebhookController, ConnectorsController, ConnectorWebhookController, GithubController, WorkItemsController],
   providers: [
     ConnectorConflictSweeper,
     ConnectorItemsService,

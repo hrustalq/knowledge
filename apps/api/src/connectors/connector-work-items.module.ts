@@ -1,11 +1,14 @@
 import { Module } from '@nestjs/common';
+import { ActivityCoreModule } from '../activity/activity-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { ConnectorsCoreModule } from './connectors-core.module.js';
 import { ConnectorWorkItemsService } from './connector-work-items.service.js';
 import { GithubCoreModule } from './github/github-core.module.js';
 import { GithubIssuesService } from './github/github-issues.service.js';
+import { TrackerRegistry } from './tracker-registry.service.js';
 import { WorkItemToolsService } from './work-item-tools.service.js';
 
 /**
@@ -29,8 +32,16 @@ import { WorkItemToolsService } from './work-item-tools.service.js';
  * resolution. Nothing here can write a page.
  */
 @Module({
-  imports: [PrismaModule, AuthCoreModule, EventsModule, ConnectorsCoreModule, GithubCoreModule],
-  providers: [GithubIssuesService, ConnectorWorkItemsService, WorkItemToolsService],
-  exports: [GithubIssuesService, ConnectorWorkItemsService, WorkItemToolsService],
+  imports: [
+    PrismaModule,
+    AuthCoreModule,
+    PermissionsCoreModule,
+    ActivityCoreModule,
+    EventsModule,
+    ConnectorsCoreModule,
+    GithubCoreModule,
+  ],
+  providers: [GithubIssuesService, TrackerRegistry, ConnectorWorkItemsService, WorkItemToolsService],
+  exports: [GithubIssuesService, TrackerRegistry, ConnectorWorkItemsService, WorkItemToolsService],
 })
 export class ConnectorWorkItemsModule {}

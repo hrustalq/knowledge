@@ -602,6 +602,32 @@ export type I18nTranslations = {
         "googleDrive": {
             "sharedDrive": string;
         };
+        "workItem": {
+            "title": {
+                "issue": string;
+                "conflict": string;
+                "verification": string;
+                "document": string;
+            };
+            "restrictedTitle": {
+                "issue": string;
+                "conflict": string;
+                "verification": string;
+                "document": string;
+            };
+            "summary": {
+                "issue": string;
+                "conflict": string;
+                "requested": string;
+                "outdated": string;
+                "verification": string;
+                "document": string;
+            };
+            "openLink": string;
+            "reraised": string;
+            "deleted": string;
+            "closedVia": string;
+        };
     };
     "error": {
         "internal": string;
@@ -1344,6 +1370,21 @@ export type I18nTranslations = {
             "notFound": string;
             "notOpen": string;
             "alreadyProposed": string;
+        };
+        "workItem": {
+            "anchorNotFound": string;
+            "noRoute": string;
+            "notTracker": string;
+            "connectorDisabled": string;
+            "badRef": string;
+            "ticketNotFound": string;
+            "ticketTaken": string;
+            "anchorTaken": string;
+            "unknownStatus": string;
+            "unmappedStatus": string;
+            "notRetryable": string;
+            "ticketGone": string;
+            "anchorOrDocument": string;
         };
     };
     "export": {

@@ -254,9 +254,13 @@ may then return fewer than `limit` results, or none at all.
   (off). An absolute cosine means nothing across models, and 0.4 would empty
   every search on the stub embedder. Production sets 0.4 for bge-m3: off-topic
   queries top out near 0.37 there, and real questions start near 0.49.
-- **The BM25 leg has no floor.** Its match already demands most of the
-  query's terms (#400), so a BM25 hit is evidence. A share-of-best floor on it
-  changed nothing measurable in the replay.
+- **The BM25 leg keeps `SEARCH_MIN_TEXT_SHARE`** (0.6, `ranking.ts`, #416) of its
+  best score, through `floorTextHits`. #400's match demands a share of the
+  query's terms, and on the known-item titles below that was enough. Real agent
+  questions were different: «Где в системе определяются права и роли
+  пользователей?» matched «Навигация и вкладки» on two common words at 0.52 of
+  the best BM25 score, and it reached the assistant's top 5. A constant, not a
+  workspace knob: nothing so far argues for tuning it per corpus.
 
 Measured on 2026-10-21 by replaying prod pools through `rankPool`, with the
 BM25 leg re-asked under #400's `minimum_should_match`: 31 known-item titles, 7
@@ -430,6 +434,14 @@ to every hit and returns a `related[]` of documents reachable **only** through
 the graph, each carrying the connecting edges as evidence. A result that a
 reader cannot audit back to a stated relationship is not a result they should
 act on.
+
+The agent tools do not ask for it (#416). The assistant's `search_knowledge`
+used to, and its `related[]` listed every page sharing any entity with any hit:
+26–29 pages per search on prod, about the whole workspace, roughly 9 KB of a
+14 KB tool result, none of it citable. A model walks the graph on purpose with
+`explore_document_graph` / `list_relations`. Both `search_knowledge` and MCP
+`knowledge_search` also list each page once (`firstPerPage`, its best-ranked
+chunk), and `knowledge_search` asks for 8 hits unless told otherwise.
 
 ## Provenance on results
 

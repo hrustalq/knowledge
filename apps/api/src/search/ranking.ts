@@ -14,13 +14,38 @@ export interface SearchKnobs {
  * The relevance floor (#401): the vector hits worth fusing — cosine at least
  * `minCosine` and at least `minCosineShare` of the leg's best. Applied before
  * fusion, so a chunk weak in both legs is gone and one weak in one leg keeps
- * only the other's rank; a search may then return fewer than its limit. The
- * BM25 leg needs no floor: its match already demands most of the query's
- * terms (#400). Hits arrive best first, so the first is the leg's best.
+ * only the other's rank; a search may then return fewer than its limit. Hits
+ * arrive best first, so the first is the leg's best.
  */
 export function floorVectorHits<T extends Pick<ChunkHit, 'score'>>(hits: T[], knobs: Pick<SearchKnobs, 'minCosine' | 'minCosineShare'>): T[] {
   const min = Math.max(knobs.minCosine, knobs.minCosineShare * (hits[0]?.score ?? 0));
   return hits.filter((h) => h.score >= min);
+}
+
+/**
+ * The BM25 leg's floor (#416): at least this share of the leg's best score.
+ * #400's match demands a share of the query's terms, which two common words
+ * still meet («пользователей», «роли»); on prod those sat at about half the
+ * best score while the answering chunk led its leg.
+ */
+export const SEARCH_MIN_TEXT_SHARE = 0.6;
+
+export function floorTextHits<T extends Pick<ChunkHit, 'score'>>(hits: T[]): T[] {
+  const min = SEARCH_MIN_TEXT_SHARE * (hits[0]?.score ?? 0);
+  return hits.filter((h) => h.score >= min);
+}
+
+/**
+ * One entry per page, its best-ranked chunk (#416): what a model reads. A page
+ * repeated per chunk costs its context window and adds nothing to cite.
+ */
+export function firstPerPage<T extends { documentId: string }>(hits: T[]): T[] {
+  const seen = new Set<string>();
+  return hits.filter((h) => {
+    if (seen.has(h.documentId)) return false;
+    seen.add(h.documentId);
+    return true;
+  });
 }
 
 /**
@@ -75,7 +100,7 @@ export interface SearchPool {
  * `search-trust.spec.ts` replays one search through both.
  */
 export function rankPool(pool: SearchPool, knobs: SearchKnobs): string[] {
-  const weighted = fuseHits(floorVectorHits(pool.vectorHits, knobs), pool.textHits, pool.fetchK, knobs.rrfK).flatMap((h) => {
+  const weighted = fuseHits(floorVectorHits(pool.vectorHits, knobs), floorTextHits(pool.textHits), pool.fetchK, knobs.rrfK).flatMap((h) => {
     const page = pool.pages.get(h.documentId);
     if (!page || page.archived) return [];
     const weight = pool.trustOn ? trustWeight(page.status, page.inactive, knobs.trustWeights) : 1;

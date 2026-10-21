@@ -163,11 +163,15 @@ describe('search_knowledge with a pinned project', () => {
     expect(dto).not.toHaveProperty('expandGraph');
   });
 
-  it('expands the graph as before without one', async () => {
-    const search = vi.fn(async () => ({ results: [] }));
-    await readTools({ search } as never).execute('search_knowledge', { query: 'deploy' }, { principal: DEV_PRINCIPAL, workspaceId: WS });
+  it('walks no graph without one either, and lists each page once (#416)', async () => {
+    const hit = (documentId: string, chunkId: string) => ({ documentId, chunkId, revisionId: 'r', title: documentId, snippet: chunkId, score: 1 });
+    const search = vi.fn(async () => ({ results: [hit('a', 'a1'), hit('b', 'b1'), hit('a', 'a2')] }));
+    const res = await readTools({ search } as never).execute('search_knowledge', { query: 'deploy' }, { principal: DEV_PRINCIPAL, workspaceId: WS });
     const [dto] = search.mock.calls[0] as unknown as [Record<string, unknown>];
-    expect(dto).toMatchObject({ expandGraph: { depth: 1 } });
+    expect(dto).not.toHaveProperty('expandGraph');
     expect(dto).not.toHaveProperty('filters');
+    const out = JSON.parse(res.content) as { results: { documentId: string; snippet: string }[]; related?: unknown };
+    expect(out.results.map((r) => [r.documentId, r.snippet])).toEqual([['a', 'a1'], ['b', 'b1']]);
+    expect(out).not.toHaveProperty('related');
   });
 });

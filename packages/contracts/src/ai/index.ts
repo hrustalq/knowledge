@@ -10,6 +10,7 @@ import type {
 import type { RelationInput } from '@knowledge/contracts/documents';
 import type { AiActionId } from '@knowledge/contracts/content';
 import type { ApiDriftSpec } from '@knowledge/contracts/api';
+import type { FlowKey } from '@knowledge/contracts/flows';
 import type { ReviewThreadAnchor } from '@knowledge/contracts/reviews';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
@@ -73,8 +74,10 @@ export interface AssistantUiBlock {
 export interface AssistantPromptOption {
   value: string;
   label: string;
-  /** One line of help under the option. */
+  /** One line of help under the option — for the recommended one, why. */
   description?: string;
+  /** The option the assistant suggests. Pre-selected, marked "Suggested". */
+  recommended?: boolean;
 }
 
 export type AssistantPromptField =
@@ -93,6 +96,15 @@ export interface AssistantFormPrompt {
   submitLabel?: string;
   /** Adds a free-text box so the user can answer outside the offered options. */
   allowOther?: boolean;
+  /**
+   * Set when the form is one step of a code-defined question flow
+   * (`@knowledge/contracts/flows`): which flow, which question, and the
+   * "Question {step} of {of}" counter. Absent on an ad hoc `ask_user` form.
+   */
+  flow?: FlowKey;
+  questionId?: string;
+  step?: number;
+  of?: number;
 }
 
 /**

@@ -231,3 +231,30 @@ describe('SearchService with an AccessScope', () => {
     await expect(svc.search({ workspaceId: WS, query: 'q', mode: 'semantic' }, MEMBER)).rejects.toThrow('pg down');
   });
 });
+
+describe("SearchService with groupBy: 'page' (#443)", () => {
+  const chunks = (documentId: string, n: number, top: number) =>
+    Array.from({ length: n }, (_, i) => hit(documentId, top - i * 0.001));
+
+  it("lists each page once, by its best chunk, and only then counts the limit", async () => {
+    const hits = [...chunks(OPEN, 3, 0.9), hit(OPEN2, 0.8), hit(SECRET, 0.7), hit(SECRET_CHILD, 0.6)];
+    const res = await build({ hits }).svc.search({ workspaceId: WS, query: 'text', mode: 'semantic', limit: 3, groupBy: 'page' }, ADMIN);
+    expect(res.results.map((r) => r.documentId)).toEqual([OPEN, OPEN2, SECRET]);
+    expect(res.results[0]!.chunkId).toBe(hits[0]!.chunkId);
+    expect(res.results[0]!.snippetParts).toEqual([{ text: 'text', hit: true }, { text: ` of ${OPEN}`, hit: false }]);
+  });
+
+  it('refills once when the pool names fewer pages than the limit', async () => {
+    // limit 2 fetches 6 chunks, all of one page; the doubled pull reaches the second.
+    const { svc, graph } = build({ hits: [...chunks(OPEN, 6, 0.9), hit(OPEN2, 0.5)] });
+    const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic', limit: 2, groupBy: 'page' }, ADMIN);
+    expect(res.results.map((r) => r.documentId)).toEqual([OPEN, OPEN2]);
+    expect(graph.searchChunks.mock.calls.map((c) => c[2])).toEqual([6, 12]);
+  });
+
+  it('leaves a chunk-level search as it was', async () => {
+    const res = await build({ hits: chunks(OPEN, 3, 0.9) }).svc.search({ workspaceId: WS, query: 'text', mode: 'semantic', limit: 3 }, ADMIN);
+    expect(res.results).toHaveLength(3);
+    expect(res.results.some((r) => 'snippetParts' in r)).toBe(false);
+  });
+});

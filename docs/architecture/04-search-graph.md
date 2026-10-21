@@ -441,7 +441,11 @@ used to, and its `related[]` listed every page sharing any entity with any hit:
 14 KB tool result, none of it citable. A model walks the graph on purpose with
 `explore_document_graph` / `list_relations`. Both `search_knowledge` and MCP
 `knowledge_search` also list each page once (`firstPerPage`, its best-ranked
-chunk), and `knowledge_search` asks for 8 hits unless told otherwise.
+chunk), and `knowledge_search` asks for 8 hits unless told otherwise. The app's
+search list gets the same through `groupBy: 'page'` (#443), applied inside
+`SearchService` after the trust re-sort so `limit` counts pages, together with
+highlighted `snippetParts` (docs/features/02). The backtest and `make tune` never
+pass it and keep reading chunk-level results.
 
 ## Provenance on results
 

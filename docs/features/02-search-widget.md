@@ -25,6 +25,19 @@ API can already do, plus metadata filters.
     Results render with score, snippet, category badge and attached entities;
     graph-expansion `related[]` documents render in a separate "Related via
     graph" section with the connecting edges as evidence.
+- **One row per page** (#443): the app sends `groupBy: 'page'`. `SearchService`
+  keeps each page's best-ranked chunk after the trust re-sort (`firstPerPage`)
+  and only then cuts to `limit`, so the limit counts pages. The chunk pool is
+  over-fetched 3× and refilled once (as for page restrictions) when it still
+  names fewer than `limit` pages.
+- **Highlighted snippets** (#443): with `groupBy: 'page'` each result carries
+  `snippetParts`, built by `search/snippet.ts`: a 300-character window opening
+  near the first query match, every match a `hit` run that `SearchResults.vue`
+  draws as `<mark>`. Query words are folded (NFC, case) and matched as prefixes
+  with the last two letters of a long word cut, so `сервис` marks `сервиса` and
+  back. A naive stemmer on purpose: it matches neither the BM25 analyzers nor
+  meaning, and a vector-only hit with no shared word shows no mark. `snippet`
+  stays the chunk's opening for MCP and the assistant.
 
 ## Future work
 

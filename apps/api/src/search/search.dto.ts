@@ -103,6 +103,15 @@ export class SearchDto {
   @Max(100, { message: vmsg('max') })
   limit?: number;
 
+  @ApiPropertyOptional({
+    enum: ['page'],
+    description:
+      "'page': one result per page (its best-ranked chunk), limit counting pages, each with snippetParts. Omitted: one result per chunk",
+  })
+  @IsOptional()
+  @IsIn(['page'])
+  groupBy?: 'page';
+
   @ApiPropertyOptional({ description: AS_OF_DESCRIPTION })
   @IsOptional()
   @IsString()

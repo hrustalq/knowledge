@@ -17,6 +17,15 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Search in the app (the search sheet and `/search`) listed a page once for every section that matched,
+  so one long page could take several rows and push other pages past the limit (#443). Each page now
+  appears once, showing its best-matching section, and the limit counts pages: 20 matching pages still
+  give 20 rows. The row's snippet now opens around the first matching word instead of at the section's
+  first 300 characters, and the matched words are highlighted, including other forms of the word
+  (`сервис` marks `сервиса`). A page found only by meaning shows a plain snippet with nothing marked.
+  API callers opt in with `groupBy: "page"` on `POST /v1/search`, which adds `snippetParts` to each
+  result; without it the response is unchanged, and so are MCP `knowledge_search` and the assistant's
+  `search_knowledge`.
 - The activity ledger on a profile page drew the year at a fixed small size, so on a desktop screen it
   filled under half its card and its days were hard to hover or click (#440). The year now stretches to
   the card's width, with days between 12 and 24px. On a narrow screen it still scrolls, opening on the

@@ -76,15 +76,22 @@ export interface RepoHost {
   origin: string;
   owner: string;
   repo: string;
+  /**
+   * The whole namespace path (`group/sub/repo`). GitLab nests groups, and its
+   * API addresses a project by that path; `owner`/`repo` keep the first two
+   * segments the archive routes have always used (#424).
+   */
+  path: string;
 }
 
 export function repoHost(ctx: ConnectorContext): RepoHost {
   const raw = trimBaseUrl(requireConfig(ctx.config, 'repoUrl')).replace(/\.git$/, '');
   const url = new URL(raw);
-  const [owner, repo] = url.pathname.replace(/^\/+/, '').split('/');
+  const segments = url.pathname.replace(/^\/+|\/+$/g, '').split('/');
+  const [owner, repo] = segments;
   if (!owner || !repo) throw new Error(t('error.connector.repoUrlShape', {}, ctx.locale));
   const kind = url.hostname === 'github.com' ? 'github' : url.hostname.includes('gitlab') ? 'gitlab' : 'other';
-  return { kind, origin: url.origin, owner, repo };
+  return { kind, origin: url.origin, owner, repo, path: segments.join('/') };
 }
 
 /**

@@ -70,6 +70,23 @@ export class ConnectorWebhookController {
     const rawBody = req.rawBody?.toString('utf8') ?? '';
     const lower = lowercaseKeys(headers);
 
+    // A tracker delivery (#424): a ticket changed. Written to the work-item
+    // projection, which the sync sweeper reads on its next tick. A ticket
+    // event is nothing else's business, and a Jira connector with no JQL is a
+    // tracker only, so neither goes on to start a sync.
+    const tracker = this.trackers.trackerFor(row);
+    if (tracker?.verifyWebhook && ctx.webhookSecret) {
+      const delivery = tracker.verifyWebhook(row, ctx.webhookSecret, lower, rawBody);
+      if (delivery === null) throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
+      if (delivery.item) {
+        await this.workItems.applyTrackerDelivery(row, delivery.item, delivery.actorId, labelFor(row));
+        if (row.kind !== 'jira') return { accepted: true, runId: null };
+      }
+      if (row.kind === 'jira' && !String((row.config as { jql?: unknown } | null)?.jql ?? '').trim()) {
+        return { accepted: true, runId: null };
+      }
+    }
+
     // A pull or merge request is not content moving, so it is not the
     // adapter's to verify (docs/features/35): `codebase` names no units from a delivery,
     // and `markdown-git`'s would read the missing `commits` as nothing to sync.
@@ -104,19 +121,6 @@ export class ConnectorWebhookController {
       const run = push ? await this.connectors.queueRepoPush(row, push) : null;
       if (run) await this.producer.enqueue(run.id, { delayMs: this.debounceMs });
       return { accepted: true, runId: run?.id ?? null };
-    }
-
-    // A tracker delivery (#424): a ticket changed. Written to the work-item
-    // projection, which the sync sweeper reads on its next tick. A Jira
-    // connector with no JQL is a tracker only, so nothing else happens.
-    const tracker = this.trackers.trackerFor(row);
-    if (tracker?.verifyWebhook && ctx.webhookSecret) {
-      const delivery = tracker.verifyWebhook(row, ctx.webhookSecret, lower, rawBody);
-      if (delivery === null) throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
-      if (delivery.item) await this.workItems.applyTrackerDelivery(row, delivery.item, delivery.actorId, labelFor(row));
-      if (row.kind === 'jira' && !String((row.config as { jql?: unknown } | null)?.jql ?? '').trim()) {
-        return { accepted: true, runId: null };
-      }
     }
 
     const adapter = this.connectors.adapterFor(row);

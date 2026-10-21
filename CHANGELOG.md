@@ -33,6 +33,11 @@ in the pull request that introduces them — see
   transitions. The connector's JQL is now optional: leave it empty to use Jira only as a tracker. A signed
   Jira webhook on `/v1/connectors/:id/webhook` updates a handed-off ticket within seconds. Without one,
   polling picks the change up.
+- GitLab repository connectors (`markdown-git`, `codebase`) are trackers too (#424), on gitlab.com or a
+  self-hosted instance whose host name contains `gitlab`, and with nested groups. Handoff opens a GitLab issue,
+  and done or won't do closes it. An existing issue can be attached by `#45`, `group/repo#45` or its URL.
+  An `Issue Hook` on the connector's webhook, checked against its secret token, updates a handed-off
+  issue at once. The Work items tab and the assistant's `task_*` tools work on GitLab connectors too.
 
 ### Changed
 

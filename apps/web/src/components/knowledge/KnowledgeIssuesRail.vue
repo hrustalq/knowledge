@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedbackStore } from '@/stores/feedback'
 import ReportIssueDialog from './ReportIssueDialog.vue'
+import WorkItemChips from './WorkItemChips.vue'
 
 const props = defineProps<{
   documentId: string
@@ -121,6 +122,7 @@ const statusVariant = (status: string) =>
             {{ t('knowledgeIssue.dismiss') }}
           </Button>
         </div>
+        <WorkItemChips source-kind="issue" :source-id="issue.id" :can-handoff="auth.canEdit" class="mt-2" />
       </li>
     </ul>
 

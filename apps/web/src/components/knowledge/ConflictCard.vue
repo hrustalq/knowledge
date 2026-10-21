@@ -25,6 +25,7 @@ import { formatDateTime, formatNumber, formatRelative } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import WorkItemChips from './WorkItemChips.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -161,5 +162,7 @@ async function propose() {
         {{ t('conflicts.dismiss') }}
       </Button>
     </div>
+    <!-- Handed off while open; a closed one still shows the ticket it had. -->
+    <WorkItemChips source-kind="conflict" :source-id="conflict.id" :can-handoff="isOpen && auth.canEdit" class="mt-2" />
   </article>
 </template>

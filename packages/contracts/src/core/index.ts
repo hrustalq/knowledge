@@ -773,6 +773,8 @@ export const HEALTH_FILTERS = [
   'unread',
   'dead',
   'archived',
+  // #424: pages with a ticket handed off for their flag or for the page.
+  'handed-off',
 ] as const;
 export type HealthFilter = (typeof HEALTH_FILTERS)[number];
 
@@ -807,6 +809,19 @@ export interface KnowledgeHealthRow {
   verificationNote: string | null;
   /** A component page's declared paths that match no file at the indexed head; empty otherwise. */
   missingPaths: string[];
+  /**
+   * The newest ticket handed off for this page's flag or for the page (#424);
+   * null when there is none. Several are possible across trackers; the
+   * page's own rail lists them all.
+   */
+  // The unions are WorkItemStatus / WorkItemSyncState from ./connectors, spelled
+  // out: importing them would close a contracts module cycle.
+  workItem: {
+    key: string;
+    status: 'open' | 'in_progress' | 'done' | 'wont_do';
+    syncState: 'synced' | 'pending' | 'failed' | 'orphaned';
+    url: string;
+  } | null;
 }
 
 // GET /v1/knowledge-health?workspaceId=&projectId=&filter=&ownerId=&q=&cursor=&limit=

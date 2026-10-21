@@ -13,6 +13,7 @@ import type {
   ConnectorWorkItemResponse,
   ListConnectorLinksResponse,
   ListConnectorWorkItemsResponse,
+  ListTrackerRoutesResponse,
   ListConnectorRunItemsResponse,
   ListConnectorRunsResponse,
   ListConnectorsResponse,
@@ -50,6 +51,7 @@ import {
   CreateConnectorWorkItemDto,
   ConnectorWorkItemsQueryDto,
   LinkConnectorWorkItemDto,
+  PutStatusMapDto,
   RegenerateWikiDto,
   UpdateConnectorRunItemDto,
 } from './connectors.dto.js';
@@ -481,6 +483,22 @@ export class ConnectorsController {
   ): Promise<ConnectorWorkItemResponse> {
     const connector = await this.connectors.require(id);
     return { workItem: await this.handoffs.unlink(principal, connector, workItemId) };
+  }
+
+  @Get(':id/tracker-routes')
+  @Access('viewer', 'connector')
+  @ApiOperation({ summary: 'The knowledge projects that hand off to this tracker connector (#424)' })
+  async trackerRoutes(@Param('id', ParseUUIDPipe) id: string): Promise<ListTrackerRoutesResponse> {
+    return { routes: await this.handoffs.routesFor(id) };
+  }
+
+  @Put(':id/status-map')
+  @Access('admin', 'connector')
+  @ApiOperation({ summary: "Override how the tracker's statuses map onto open / in progress / done / won't do (#424)" })
+  async statusMap(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PutStatusMapDto): Promise<ConnectorResponse> {
+    const row = await this.connectors.require(id);
+    await this.handoffs.putStatusMap(row, dto);
+    return { connector: await this.connectors.get(id) };
   }
 
   @Post(':id/work-items/:workItemId/retry')

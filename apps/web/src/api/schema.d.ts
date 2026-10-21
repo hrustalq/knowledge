@@ -3639,10 +3639,61 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Attach a work item to a page, so its events can reach a workflow */
+        /** Attach a work item to a page, so its events can reach a workflow, or to an anchor, so status syncs (#424) */
         post: operations["ConnectorsController_workItemLink"];
-        /** Detach a work item from its page; both sides are kept */
+        /** Detach a work item from its page and anchor; sync stops, the ticket stays open */
         delete: operations["ConnectorsController_workItemUnlink"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/tracker-routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The knowledge projects that hand off to this tracker connector (#424) */
+        get: operations["ConnectorsController_trackerRoutes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/status-map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Override how the tracker's statuses map onto open / in progress / done / won't do (#424) */
+        put: operations["ConnectorsController_statusMap"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/work-items/{workItemId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry a failed status transition, or re-check an orphaned ticket (#424) */
+        post: operations["ConnectorsController_workItemRetry"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3711,6 +3762,59 @@ export interface paths {
         post?: never;
         /** Disconnect the caller's GitHub account */
         delete: operations["GithubController_disconnect"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/work-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tickets anchored on one knowledge object; ones on pages the caller cannot open are left out */
+        get: operations["WorkItemsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/work-items/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a ticket for a knowledge object in its tracker, or attach an existing one (idempotent per connector) */
+        post: operations["WorkItemsController_handoff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/tracker-route": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The project's tracker route, or null when it has none */
+        get: operations["TrackerRoutesController_get"];
+        /** Route the project to a tracker connector, with an optional Jira project, issue type or GitHub org board */
+        put: operations["TrackerRoutesController_put"];
+        post?: never;
+        /** Remove the route; existing tickets keep syncing */
+        delete: operations["TrackerRoutesController_remove"];
         options?: never;
         head?: never;
         patch?: never;
@@ -7874,7 +7978,48 @@ export interface components {
         };
         LinkConnectorWorkItemDto: {
             /** @description The page this work item is about */
-            documentId: string;
+            documentId?: string;
+            /**
+             * @description Anchor kind, with sourceId: status then syncs both ways
+             * @enum {string}
+             */
+            sourceKind?: "issue" | "conflict" | "verification" | "document";
+            /** @description The anchored object id */
+            sourceId?: string;
+        };
+        PutStatusMapDto: {
+            /** @description Raw tracker status → open | in_progress | done | wont_do */
+            inbound?: {
+                [key: string]: string;
+            };
+            /** @description open | in_progress | done | wont_do → raw tracker status */
+            outbound?: {
+                [key: string]: string;
+            };
+        };
+        WorkItemHandoffDto: {
+            workspaceId: string;
+            /**
+             * @description What kind of knowledge object the ticket is for
+             * @enum {string}
+             */
+            sourceKind: "issue" | "conflict" | "verification" | "document";
+            /** @description knowledge_issues.id, knowledge_conflicts.id, or the page id for verification/document */
+            sourceId: string;
+            /** @description The tracker connector; omitted = the anchor's project route */
+            connectorId?: string;
+            /** @description Attach this existing ticket instead of creating one: BILL-123, #45, org/repo#45 or its URL */
+            attach?: string;
+        };
+        PutTrackerRouteDto: {
+            /** @description The tracker connector this project hands off to */
+            connectorId: string;
+            /** @description Jira project key (BILL); ignored by repository trackers */
+            externalProject?: string | null;
+            /** @description Jira issue type; empty is Task */
+            issueType?: string | null;
+            /** @description A GitHub organization board URL; the card follows the issue */
+            boardUrl?: string | null;
         };
         UpdateLintPolicyDto: {
             /** Format: uuid */
@@ -20719,6 +20864,131 @@ export interface operations {
             };
         };
     };
+    ConnectorsController_trackerRoutes: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectorsController_statusMap: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutStatusMapDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectorsController_workItemRetry: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                workItemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     GithubController_installations: {
         parameters: {
             query: {
@@ -20858,6 +21128,214 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkItemsController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                sourceKind: "issue" | "conflict" | "verification" | "document";
+                sourceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkItemsController_handoff: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkItemHandoffDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TrackerRoutesController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TrackerRoutesController_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutTrackerRouteDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TrackerRoutesController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -24122,7 +24600,7 @@ export interface operations {
                 workspaceId: string;
                 projectId?: string;
                 /** @description Omitted lists every live page */
-                filter?: "stale" | "unowned" | "empty" | "expired" | "edited" | "outdated" | "requested" | "flagged" | "inactive" | "missing-paths" | "unread" | "dead" | "archived";
+                filter?: "stale" | "unowned" | "empty" | "expired" | "edited" | "outdated" | "requested" | "flagged" | "inactive" | "missing-paths" | "unread" | "dead" | "archived" | "handed-off";
                 /** @description Only pages owned by this member */
                 ownerId?: string;
                 /** @description Title substring, case-insensitive */

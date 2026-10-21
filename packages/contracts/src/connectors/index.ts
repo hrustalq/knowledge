@@ -1490,6 +1490,10 @@ export interface TrackerRouteInfo {
 export interface TrackerRouteResponse {
   route: TrackerRouteInfo | null;
 }
+/** GET /v1/connectors/:id/tracker-routes */
+export interface ListTrackerRoutesResponse {
+  routes: TrackerRouteInfo[];
+}
 export interface PutTrackerRouteInput {
   connectorId: string;
   externalProject?: string | null;
@@ -1600,6 +1604,24 @@ export const DEFAULT_WORK_ITEM_STATUS_MAPS: Readonly<Record<TrackerKind, WorkIte
     outbound: { open: 'To Do', in_progress: 'In Progress', done: 'Done', wont_do: "Won't Do" },
   },
 };
+
+/**
+ * Which tracker a connector row is, from its kind and repository URL — the
+ * same rule the API's tracker registry applies, for readers that cannot reach
+ * it. Null for a kind or host with no tracker.
+ */
+export function trackerKindOf(connector: { kind: string; config: unknown }): TrackerKind | null {
+  if (connector.kind === 'jira') return 'jira';
+  if (connector.kind !== 'markdown-git' && connector.kind !== 'codebase') return null;
+  const url = (connector.config as { repoUrl?: unknown } | null)?.repoUrl;
+  if (typeof url !== 'string') return null;
+  try {
+    const host = new URL(url).hostname;
+    return host === 'github.com' ? 'github' : host.includes('gitlab') ? 'gitlab' : null;
+  } catch {
+    return null;
+  }
+}
 
 /** A connector's effective map: its sparse override layered over the tracker default. */
 export function workItemStatusMap(kind: TrackerKind, override?: Partial<WorkItemStatusMap> | null): WorkItemStatusMap {

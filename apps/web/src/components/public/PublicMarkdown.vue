@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { KN } from '@/lib/markdown/nodes'
 import { useTheme } from '@/lib/theme'
+import { mermaidConfig } from '@/lib/mermaid'
 
 const props = defineProps<{ html: string }>()
 
@@ -26,12 +27,7 @@ async function renderMermaid() {
   const blocks = [...root.querySelectorAll<HTMLElement>(`[${KN.mermaid}]`)]
   if (blocks.length === 0) return
   const { default: mermaid } = await import('mermaid')
-  mermaid.initialize({
-    startOnLoad: false,
-    securityLevel: 'strict',
-    theme: theme.isDark.value ? 'dark' : 'default',
-    fontFamily: 'inherit',
-  })
+  mermaid.initialize(mermaidConfig(theme.isDark.value))
   for (const block of blocks) {
     try {
       const { svg } = await mermaid.render(`pub-mmd-${seq++}`, block.textContent ?? '')

@@ -13,6 +13,18 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- Mermaid flowcharts showed their boxes and arrows with no text: every node name and edge label was
+  missing on the page view, in the editor, in the assistant and docs, and on share links and published
+  sites (#438). Labels are now drawn as SVG text, so they survive sanitizing. An
+  `%%{init: {"flowchart": {"htmlLabels": false}}}%%` line is no longer needed but does no harm.
+- Sequence diagrams drew every participant twice, again under the lifelines, which read as duplicate
+  entities (#438). Each participant now appears once, at the top, on every render site including export.
+  Add `%%{init: {"sequence": {"mirrorActors": true}}}%%` to a diagram to bring the bottom row back.
+
 ## [0.31.0] — 2026-10-21
 
 ### Added

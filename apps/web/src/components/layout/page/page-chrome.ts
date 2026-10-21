@@ -10,11 +10,11 @@ import { useRoute, useRouter } from 'vue-router'
  * have to re-find the title, the actions and the state on each one.
  *
  * - `prose`   — something read top to bottom. Fills the column like every
- *               other variant: the reading measure (past ~75 characters the eye
- *               loses the start of the next line) is carried by the running text
- *               itself — `--kn-text-measure` on paragraphs and lists in
- *               editor.css, the `kn-measure` utility on chrome copy — so a code
- *               box, a table or a form row beside it still gets the width.
+ *               other variant. Any reading measure is carried by the running
+ *               text itself — the `kn-measure` utility on chrome copy, and on
+ *               page content only when the reader chose the narrow measure
+ *               (#422, editor.css) — so a code box, a table or a form row beside
+ *               it still gets the width.
  * - `list`    — a roster, table or feed. Takes the whole column: a row is
  *               scanned down its left edge, not read across, so the argument
  *               for a measure does not apply, and a table given less room than

@@ -38,6 +38,8 @@
    * value chrome hints already used, and in this face (a `0` is ~0.62em, an
    * average letter ~0.46em) it sets ~85 characters a line — the top of the
    * comfortable range, chosen because a wider column must not feel cramped.
+   * Chrome copy always uses it; page content only when the reader picked the
+   * narrow measure (#422, the measure rule below).
    * Left unregistered on purpose: `ch` resolves against the font of the
    * element that uses it, so one token serves 0.95rem body and 0.875rem copy.
    */
@@ -94,14 +96,21 @@
 .markdown-body li, .kn-prose li { margin: 0.25em 0; }
 .markdown-body li > ul, .kn-prose li > ul { list-style: circle; }
 /*
- * The measure rule. Running text caps its own line length; nothing else does.
- * A list is capped as a block (bullet indent included) so its right edge lines
- * up with the paragraphs around it. Headings stay uncapped — they are short,
- * and an h2's rule reads as a section break only if it spans the column.
+ * The measure rule. Running text fills the column unless the reader chose the
+ * narrow measure (#422: `data-measure="narrow"` on the app shell, from the
+ * `kn_measure` cookie). Then running text caps its own line length and nothing
+ * else does. A list is capped as a block (bullet indent included) so its right
+ * edge lines up with the paragraphs around it. Headings stay uncapped — they are
+ * short, and an h2's rule reads as a section break only if it spans the column.
+ * The token is passed through unresolved, so `ch` still measures at the
+ * paragraph's own font.
  */
+[data-measure='narrow'] {
+  --kn-prose-measure: var(--kn-text-measure);
+}
 .markdown-body :is(p, ul, ol, blockquote, dl),
 .kn-prose :is(p, ul, ol, blockquote, dl) {
-  max-inline-size: var(--kn-text-measure);
+  max-inline-size: var(--kn-prose-measure, none);
   text-wrap: pretty;
 }
 

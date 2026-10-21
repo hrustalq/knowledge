@@ -372,9 +372,9 @@ async function signOut() {
                on; the header, rail and footer sit outside it. -->
           <main class="flex flex-1 gap-8 px-4 py-6 lg:px-8 lg:py-8">
             <article class="min-w-0 flex-1">
-              <!-- The column fills, as every in-app page does; the prose keeps
-                   its own reading measure (--kn-text-measure in editor.css), so
-                   tables and code fences beside it get the whole width. -->
+              <!-- The column fills, and so does the prose: the reading measure
+                   is an in-app reader's opt-in (#422, editor.css), and a public
+                   reader has no shell to set it on. -->
               <div>
                 <template v-if="page">
                   <h1 class="mb-1 text-3xl font-semibold tracking-tight text-balance">{{ page.title }}</h1>

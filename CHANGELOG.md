@@ -13,6 +13,15 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Changed
+
+- Page text fills the content column again, on every page, the public share links and published sites
+  included (#422). In 0.30.1 paragraphs and lists stopped at about 65 characters, which left a wide screen
+  half empty beside the headings. If you prefer the narrow reading width, uncheck **Full width** in a page's
+  `⋯` menu. The choice applies to every page in the app and is remembered in this browser.
+
 ## [0.30.1] — 2026-10-21
 
 ### Changed

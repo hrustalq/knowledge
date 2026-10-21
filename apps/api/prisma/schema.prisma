@@ -2483,6 +2483,18 @@ model ConnectorWorkItem {
   /// (GitHub numeric user id, Jira accountId). Resolved through
   /// external_identities for attribution only; unmapped is `tracker:<connectorId>`.
   externalActorId String?   @map("external_actor_id")
+  externalStatus String?   @map("external_status")
+  /// WORK_ITEM_SYNC_STATES — 'synced' | 'pending' | 'failed' | 'orphaned'.
+  /// Every existing row is a projection with nothing to push, so 'synced'.
+  syncState      String    @default("synced") @map("sync_state")
+  /// The WorkItemStatus an outbound transition should reach; set with
+  /// sync_state = 'pending', cleared when the tracker confirms.
+  pendingStatus  String?   @map("pending_status")
+  /// The tracker's error from the last failed attempt, shown on the chip.
+  syncError      String?   @map("sync_error")
+  syncAttempts   Int       @default(0) @map("sync_attempts")
+  /// When the sweeper may try again (backoff); null = at once.
+  nextSyncAt     DateTime? @map("next_sync_at") @db.Timestamptz
 
   externalCreatedAt DateTime? @map("external_created_at") @db.Timestamptz
   externalUpdatedAt DateTime? @map("external_updated_at") @db.Timestamptz

@@ -69,6 +69,8 @@ import { CAPTURE_TOOLS, MCP_AS_OF, MCP_INSTRUCTIONS, MCP_KNOWN_AT, MCP_SERVER_NA
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderMcpLearnings, renderSkill, type McpLearningGroup, type McpWhoami } from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
+import { flowAnswersArg, runFlow } from './flow-tools.js';
+import { FlowsService } from '../flows/flows.service.js';
 import { registerDraftTools, type McpDraftTools } from './draft-tools.js';
 import { CaptureService } from '../captures/capture.service.js';
 import { MAX_USAGE_LIMIT } from '../components/component-match.js';
@@ -227,6 +229,7 @@ export class McpService {
     private readonly analyticsQuery: AnalyticsQueryService,
     private readonly chatSearch: ChatSearchService,
     private readonly handoffs: WorkItemHandoffService,
+    private readonly flows: FlowsService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -449,17 +452,42 @@ export class McpService {
           'Set a page\'s declared verification state (docs/features/39): "requested" asks its owner to check it ' +
           '(any member), "outdated" declares it wrong (editor) and ranks it last in search until a person verifies ' +
           'or clears it. Give a note saying why. Verifying is a person\'s act and has no tool. For a problem with ' +
-          'evidence that should be checked and fixed, prefer knowledge_report_issue.',
+          'evidence that should be checked and fixed, prefer knowledge_report_issue. "outdated" asks the person first ' +
+          'when the page has subpages (this page or the subtree, minus what to leave alone) or no note was given, as ' +
+          'status "needs_input" (or a form, where the client has one).',
         inputSchema: {
           workspaceId: z.string().uuid(),
           documentId: z.string().uuid(),
           state: z.enum(VERIFICATION_FLAGS),
           note: z.string().max(VERIFICATION_NOTE_MAX_CHARS).optional().describe('Why, in plain words — shown on the page'),
+          answers: flowAnswersArg,
         },
       },
-      async ({ workspaceId, documentId, state, note }) => {
+      async ({ documentId, state, note, answers }) => {
         // The REST twins: `verification-request` is viewer, `outdated` is editor.
         await guard.doc(documentId, state === 'outdated' ? 'editor' : 'viewer');
+        // The page's own workspace, never the argument: the flow reads its subtree under that scope.
+        const workspaceId = await this.access.workspaceOfDocument(documentId);
+        if (state === 'outdated') {
+          const source = { kind: 'mcp' as const, by: principal.userId };
+          return this.json(
+            await runFlow(
+              server,
+              'knowledge_flag_document',
+              answers ?? {},
+              (given) => this.flows.markOutdated(principal, workspaceId, { documentId, ...(note ? { reason: note } : {}), source }, given),
+              ({ result, dropped }) => ({
+                documentId,
+                workspaceId,
+                state,
+                marked: result.results.filter((r) => r.ok).map((r) => r.documentId),
+                failed: result.results.filter((r) => !r.ok),
+                ...(result.subtreeTooLarge ? { subtreeTooLarge: true, hint: 'Only this page was marked; Knowledge health marks a whole large subtree.' } : {}),
+                ...(dropped.length ? { ignored: dropped } : {}),
+              }),
+            ),
+          );
+        }
         const res = await this.verification.flag(documentId, state, {
           actorId: principal.userId,
           ...(note ? { note } : {}),
@@ -1955,6 +1983,7 @@ export class McpService {
 
     registerCaptureTools(server, {
       captures: this.captures,
+      flows: this.flows,
       principal,
       guard,
       workspaceOfDocument: (id) => this.access.workspaceOfDocument(id),

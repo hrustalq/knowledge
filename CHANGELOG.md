@@ -86,6 +86,13 @@ in the pull request that introduces them — see
   ask, and the turn reporting what the flow did, show no confidence badge, rating or reply actions. The tool
   line reads "Asked about the decision" while it is asking, and says so when the write fails instead of
   claiming it happened. A form answered late from another tab reloads the thread to the open question.
+- MCP `knowledge_capture_decision` no longer needs `projectId` (#425). Without it, the person is asked which
+  project, which related page and which reviewer, with the same options and the same suggested choice as in
+  the assistant pane. Over HTTP the tool returns `status: "needs_input"` with the question and
+  `answersSoFar`; the agent asks the person and calls again with `answers`. Keys it could not apply come back
+  under `ignored`. A stdio client with its own form (Claude Code, Cursor) is asked directly, and declining
+  returns `status: "cancelled"` with nothing written. The SKILL.md gains a **Questions for the person**
+  playbook.
 
 ### Changed
 
@@ -97,6 +104,11 @@ in the pull request that introduces them — see
   (`sourceKind` + `sourceId`), and unlinking drops it. Unlinking never closes the issue (#424).
 - An error frame on the assistant's streaming endpoint carries `details`, the same as the error body of every
   other route (a 409's `reason`, for one). Before, the extras were dropped (#425).
+- MCP `knowledge_flag_document` with `state: "outdated"` now asks first when the page has subpages (this
+  page, or the subtree minus the pages to leave alone) or when no `note` was given, the same way (#425). A
+  page with no subpages and a `note` is flagged at once, as before. The reply lists `marked` and `failed`
+  pages instead of `verification` and `ownerId`. The flag's workspace is the page's own, whatever
+  `workspaceId` says. `state: "requested"` is unchanged.
 
 - Page text fills the content column again, on every page, the public share links and published sites
   included (#422). In 0.30.1 paragraphs and lists stopped at about 65 characters, which left a wide screen

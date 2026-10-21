@@ -11,7 +11,9 @@ Now a linked editor can ask the bot to **harvest** a thread. The platform
 masks it, the `harvester` agent proposes what the thread settled, and the API
 checks each proposal and writes the survivors as agent-memory captures
 ([feature 50](50-agent-memory.md)) in that person's name. They are reviewed
-like any other capture. Chat itself is never indexed and never searchable.
+like any other capture. A harvest never indexes chat. A group's chat is
+searchable only once an admin makes that group searchable, which is a
+separate switch with its own store and retention ([feature 60](60-chat-search.md)).
 
 ## What
 
@@ -333,8 +335,10 @@ one save path, one dedupe and one inbox.
 
 ## Decisions
 
-- **Chat is harvested, never indexed.** Searching chat is #339, blocked on the
-  vector index #304.
+- **A harvest never indexes chat.** Searching chat shipped later as its own
+  per-group switch, store and retention ([feature 60](60-chat-search.md), #339).
+  It never reads the listening buffer, and turning one on never turns on the
+  other.
 - **Proposals go through agent memory.** No new `ConnectorRunItem` kinds and
   no capture runs; feature-26 run items stay pages-only.
 - **Sources are the existing chat-bot platforms.** No new connector kinds.
@@ -433,8 +437,8 @@ Captures are read and decided through the existing `/v1/captures` routes;
 
 ## Deliberate deferrals
 
-- No chat search (#339), no new sources (Slack,
-  Teams and the rest #341, Google Drive #338).
+- No new sources (Slack, Teams and the rest #341, Google Drive #338). Chat
+  search arrived separately as [feature 60](60-chat-search.md).
 - No named-entity detection, no reversible masking. A passport mentioned with
   its context word more than 20 characters (or a digit) away from the number
   is not masked.

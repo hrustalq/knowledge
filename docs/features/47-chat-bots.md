@@ -68,7 +68,10 @@ the only read ACL, the exposure is "non-members in the group", and binding is
 an admin asserting that the group's audience is fine. The settings page says so
 next to the bindings. The *Page permissions* milestone must revisit this: answer
 only from pages every linked member can read, use a per-binding audience user,
-or send restricted answers by DM.
+or send restricted answers by DM. The clamp that exists since then (`audienceScope`) also
+governs searchable chat ([feature 60](60-chat-search.md)): an answer in a
+group can quote that group's project's chat, and never a restricted
+project's.
 
 ## The answer
 
@@ -114,6 +117,10 @@ half that the worker cannot load. So the chat answer uses the feature-21
    - **The binding's project** as a `search_knowledge` filter, pinned in the
      tool context. The graph expansion is skipped, because it walks the whole
      workspace.
+   - **`search_chat`** too, while the workspace has a searchable group
+     ([feature 60](60-chat-search.md)). It runs under the same
+     audience-clamped scope and the same project pin, so a group never sees a
+     restricted project's chat through an answer.
    - A chat-style clause: short paragraphs, no tables.
    - Its implicit feedback signal lands under the `chat` answer surface.
 8. **Settle first, then edit.** The claim is settled `pending → answered` with

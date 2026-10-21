@@ -303,6 +303,7 @@
     "fromTemplate": "Из шаблона: {name} v{version}",
     "fromTemplateUnnamed": "Из шаблона, v{version}",
     "moreActions": "Ещё действия",
+    "fullWidth": "Во всю ширину",
     "asOfBanner": "На {date}",
     "asOfBannerTag": "На {tag}, {date}"
   },

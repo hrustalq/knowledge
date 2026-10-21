@@ -336,6 +336,7 @@ app.use('*all', async (req, res) => {
       filterRail: readCookie(req.headers.cookie, 'kn_filterrail'),
       glossary: readCookie(req.headers.cookie, 'kn_glossary'),
       aiPanel: readCookie(req.headers.cookie, 'kn_aipanel'),
+      measure: readCookie(req.headers.cookie, 'kn_measure'),
       treeOpen: readCookie(req.headers.cookie, 'kn_tree'),
       workspaceId: readCookie(req.headers.cookie, 'kn_ws'),
       locale,

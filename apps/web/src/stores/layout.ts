@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { getFullWidth, setFullWidth } from '@/lib/api'
 
 /**
  * Chrome state that outlives a route but not a session.
@@ -42,6 +43,12 @@ export const useLayoutStore = defineStore('layout', {
      * because it is drawn on the first frame and this is not.
      */
     subRailOpen: {} as Record<string, boolean>,
+    /**
+     * Page text fills the column, or stops at the reading measure (#422). The
+     * one field here that persists: it is seeded from `kn_measure`, which the
+     * server read too, so both sides draw the first frame at the same width.
+     */
+    fullWidth: getFullWidth(),
   }),
   getters: {
     /**
@@ -64,6 +71,10 @@ export const useLayoutStore = defineStore('layout', {
     },
     setSubRailOpen(surface: string, open: boolean) {
       this.subRailOpen = { ...this.subRailOpen, [surface]: open }
+    },
+    setFullWidth(full: boolean) {
+      this.fullWidth = full
+      setFullWidth(full)
     },
   },
 })

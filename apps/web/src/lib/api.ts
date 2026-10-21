@@ -27,6 +27,8 @@ const FILTER_RAIL_KEY = 'kn_filterrail'
 const GLOSSARY_KEY = 'kn_glossary'
 /** Whether the editor's assistant panel is open (docs/features/34). */
 const AI_PANEL_KEY = 'kn_aipanel'
+/** Whether page text fills the column or stops at the reading measure (#422). */
+const MEASURE_KEY = 'kn_measure'
 /** Which branches of the sidebar page tree are open. */
 const TREE_OPEN_KEY = 'kn_tree'
 /**
@@ -82,6 +84,7 @@ interface SsrRequestContext {
   filterRail: string | null
   glossary: string | null
   aiPanel: string | null
+  measure: string | null
   treeOpen: string | null
   locale: Locale | null
   traceId: string | null
@@ -123,6 +126,7 @@ let clientRailOpen: string | null = null
 let clientFilterRail: string | null = null
 let clientGlossary: string | null = null
 let clientAiPanel: string | null = null
+let clientMeasure: string | null = null
 let clientTreeOpen: string | null = null
 let clientLocale: Locale | null = null
 if (!import.meta.env.SSR) {
@@ -145,6 +149,7 @@ if (!import.meta.env.SSR) {
     clientFilterRail = localStorage.getItem(FILTER_RAIL_KEY)
     clientGlossary = localStorage.getItem(GLOSSARY_KEY)
     clientAiPanel = localStorage.getItem(AI_PANEL_KEY)
+    clientMeasure = localStorage.getItem(MEASURE_KEY)
     clientTreeOpen = localStorage.getItem(TREE_OPEN_KEY)
     const storedLocale = localStorage.getItem(LANG_KEY)
     if (isLocale(storedLocale)) {
@@ -343,6 +348,30 @@ export function setAiPanelOpen(open: boolean): void {
   try {
     localStorage.setItem(AI_PANEL_KEY, value)
     document.cookie = `${AI_PANEL_KEY}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Whether page text fills the content column (#422). Server-read because it
+ * sets the width of every paragraph on the first painted frame.
+ *
+ * **Unset means full width.** The 65ch measure is the reader's opt-in, not the
+ * default: on a wide screen it left half the column empty beside the headings.
+ */
+export function getFullWidth(): boolean {
+  const raw = import.meta.env.SSR ? ssrContext()?.measure : clientMeasure
+  return raw !== 'narrow'
+}
+
+export function setFullWidth(full: boolean): void {
+  if (import.meta.env.SSR) return
+  const value = full ? 'full' : 'narrow'
+  clientMeasure = value
+  try {
+    localStorage.setItem(MEASURE_KEY, value)
+    document.cookie = `${MEASURE_KEY}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
   } catch {
     /* ignore */
   }

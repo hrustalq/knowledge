@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 import { FocusScope } from 'reka-ui'
 import { Toaster } from '@/components/ui/sonner'
 import { useSidebarStore } from '@/stores/sidebar'
+import { useLayoutStore } from '@/stores/layout'
 import { useSearchUiStore } from '@/stores/search-ui'
 import { useAuthStore } from '@/stores/auth'
 import { useTemplatesStore } from '@/stores/templates'
@@ -61,6 +62,7 @@ watch(
   },
 )
 const sidebar = useSidebarStore()
+const layout = useLayoutStore()
 const crumbs = useCrumbs()
 
 /**
@@ -130,6 +132,7 @@ function skipToMain() {
     :class="sidebar.resizing ? 'kn-resizing' : ''"
     :style="{ '--kn-rail-w': sidebar.widthPx, '--kn-chrome-h': chromeHeight }"
     :data-rail-open="railOpen"
+    :data-measure="layout.fullWidth ? undefined : 'narrow'"
   >
     <!-- First in tab order. Off-canvas rather than `sr-only` until focused, so
          it slides in on the first Tab instead of popping into the layout. -->

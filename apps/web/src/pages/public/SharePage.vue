@@ -79,7 +79,7 @@ const date = (iso: string) => formatDate(iso, props.state.locale)
 
     <!-- The in-app shape: a rail flush with the left edge, a content column
          that fills the rest, and the outline as a third column where there is
-         room. The prose keeps its own measure (--kn-text-measure). -->
+         room. The prose fills it too; the narrow measure is in-app only (#422). -->
     <div v-else-if="share" class="flex">
       <nav
         v-if="rows.length"

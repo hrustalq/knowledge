@@ -7363,6 +7363,14 @@ export interface components {
             /** @description The template this new page started from. The turn is told the draft is a skeleton to fill in; a ref the workspace cannot resolve is ignored. */
             template?: components["schemas"]["AssistantDraftTemplateDto"];
         };
+        AssistantFlowAnswerDto: {
+            /** @enum {string} */
+            flow: "capture-decision" | "mark-outdated";
+            /** @example project */
+            questionId: string;
+            /** @description An option value, the ticked values of a checklist, free text, or null to skip an optional question */
+            value: (string | string[]) | null;
+        };
         PostAssistantMessageDto: {
             /** @example Draft a short onboarding page for new hires */
             content: string;
@@ -7387,6 +7395,8 @@ export interface components {
             skillIds?: string[];
             /** @description The author's working copy, sent from the editor. Grounds the turn in it instead of the published page and offers edit_draft, whose edits stream back as draft-edit frames and are never saved server-side. */
             draft?: components["schemas"]["AssistantDraftDto"];
+            /** @description Set when this message answers the open step of a question flow (#425); `content` is the readable form the transcript shows. An answer to anything but the open question (or the one answered last) is a 409. */
+            answer?: components["schemas"]["AssistantFlowAnswerDto"];
         };
         UpdateAiSettingsDto: {
             /** Format: uuid */

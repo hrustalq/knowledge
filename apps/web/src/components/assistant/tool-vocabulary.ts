@@ -2,7 +2,7 @@
 // and the finished transcript can never label the same call differently.
 import {
   FileCode2, FilePlus2, FileText, FolderTree, Globe, LayoutList, LayoutPanelTop, LayoutTemplate, Link, ListTree, MessageCircleQuestion, Network,
-  CircleDot, MessageSquarePlus, MessagesSquare, PenLine, Search, SearchCode, SquarePen, TicketPlus, Wand2, Wrench,
+  CircleDot, FileClock, Gavel, MessageSquarePlus, MessagesSquare, PenLine, Search, SearchCode, SquarePen, TicketPlus, Wand2, Wrench,
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -12,6 +12,10 @@ interface ToolVocabulary {
   running: string
   /** Message key: past tense, for a call in the finished record. */
   done: string
+  /** Message key for a question-flow tool (#425) whose call ended on a question rather than doing the thing. */
+  asked?: string
+  /** Message key for a failed call, where `done` would claim it happened. */
+  failed?: string
 }
 
 const TOOLS: Record<string, ToolVocabulary> = {
@@ -37,6 +41,22 @@ const TOOLS: Record<string, ToolVocabulary> = {
   // mistake one for the other.
   edit_draft: { icon: PenLine, running: 'tool.edit_draft.running', done: 'tool.edit_draft.done' },
   ask_user: { icon: MessageCircleQuestion, running: 'tool.ask_user.running', done: 'tool.ask_user.done' },
+  // #425. Flow tools: a call missing what it needs asks instead of writing, so
+  // the record has a third verb — "asked about it" is not "did it".
+  capture_decision: {
+    icon: Gavel,
+    running: 'tool.capture_decision.running',
+    done: 'tool.capture_decision.done',
+    asked: 'tool.capture_decision.asked',
+    failed: 'tool.capture_decision.failed',
+  },
+  mark_outdated: {
+    icon: FileClock,
+    running: 'tool.mark_outdated.running',
+    done: 'tool.mark_outdated.done',
+    asked: 'tool.mark_outdated.asked',
+    failed: 'tool.mark_outdated.failed',
+  },
   request_agent_mode: { icon: Wand2, running: 'tool.request_agent_mode.running', done: 'tool.request_agent_mode.done' },
   // docs/features/25. Two verbs, not one: "searched the web" and "read a page"
   // are different amounts of trust to have spent, and the trail is the only

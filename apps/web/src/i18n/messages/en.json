@@ -1894,6 +1894,13 @@
     "answered": "Answered",
     "sendAnswer": "Send answer",
     "answerStarred": "Answer the starred fields to continue.",
+    "suggested": "Suggested",
+    "flowStep": "Question {step} of {of}",
+    "flowChange": "Change",
+    "flowChanged": "Changed",
+    "flowDropped": "Dropped",
+    "flowSkipped": "Skipped",
+    "flowNone": "None",
     "dropTextFiles": "Drop text files to attach them to this message",
     "rename": "Rename",
     "delete": "Delete",
@@ -3582,6 +3589,18 @@
     "propose_update": {
       "running": "Drafting a merge request",
       "done": "Drafted a merge request"
+    },
+    "capture_decision": {
+      "running": "Capturing a decision",
+      "done": "Captured a decision",
+      "asked": "Asked about the decision",
+      "failed": "Couldn't capture the decision"
+    },
+    "mark_outdated": {
+      "running": "Marking pages outdated",
+      "done": "Marked pages outdated",
+      "asked": "Asked about marking pages outdated",
+      "failed": "Couldn't mark pages outdated"
     },
     "ask_user": {
       "running": "Asking you",

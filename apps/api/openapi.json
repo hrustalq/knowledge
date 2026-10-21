@@ -34237,6 +34237,42 @@
           "markdown"
         ]
       },
+      "AssistantFlowAnswerDto": {
+        "type": "object",
+        "properties": {
+          "flow": {
+            "type": "string",
+            "enum": [
+              "capture-decision",
+              "mark-outdated"
+            ]
+          },
+          "questionId": {
+            "type": "string",
+            "example": "project"
+          },
+          "value": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "description": "An option value, the ticked values of a checklist, free text, or null to skip an optional question"
+          }
+        },
+        "required": [
+          "flow",
+          "questionId",
+          "value"
+        ]
+      },
       "PostAssistantMessageDto": {
         "type": "object",
         "properties": {
@@ -34291,6 +34327,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/AssistantDraftDto"
+              }
+            ]
+          },
+          "answer": {
+            "description": "Set when this message answers the open step of a question flow (#425); `content` is the readable form the transcript shows. An answer to anything but the open question (or the one answered last) is a 409.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AssistantFlowAnswerDto"
               }
             ]
           }

@@ -433,6 +433,8 @@ export interface PostAssistantMessageRequest {
    * a draft nobody sent would have nowhere to land.
    */
   draft?: AssistantDraft;
+  /** This message answers a step of a question flow (#425); `content` is its readable form. */
+  answer?: AssistantFlowAnswer;
 }
 
 /** Longest draft the editor may send — a long page, not a book. The prompt still slices it. */

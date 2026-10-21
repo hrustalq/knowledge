@@ -15,6 +15,7 @@ import type {
   AssistantChatMode,
   AssistantDraft,
   AssistantDraftEdit,
+  AssistantFlowAnswer,
   AssistantMessageInfo,
   AssistantPrompt,
   AssistantSource,
@@ -394,6 +395,8 @@ export const useAssistantStore = defineStore('assistant', {
         documentRefs?: string[]
         skillIds?: string[]
         agentKey?: string
+        /** Set when the message answers a step of a question flow (#425). */
+        answer?: AssistantFlowAnswer
       } = {},
     ) {
       if (!this.activeThread) await this.newThread(documentId)
@@ -413,6 +416,7 @@ export const useAssistantStore = defineStore('assistant', {
         citations: [],
         confidence: null,
         createdAt: new Date().toISOString(),
+        ...(opts.answer ? { answer: opts.answer } : {}),
       }
       this.messages.push(placeholder)
 
@@ -428,6 +432,7 @@ export const useAssistantStore = defineStore('assistant', {
         // '' means "follow the mode" — the server's own default, so it is
         // simply not sent rather than encoded as an empty string.
         ...(opts.agentKey ? { agentKey: opts.agentKey } : {}),
+        ...(opts.answer ? { answer: opts.answer } : {}),
       }
 
       const abort = markRaw(new AbortController())
@@ -496,6 +501,9 @@ export const useAssistantStore = defineStore('assistant', {
                 this.error = frame.error.message
                 this.live = null
                 this.messages = this.messages.filter((m) => m.id !== placeholder.id)
+                // An older form answered late (another tab moved the flow on):
+                // the thread on disk shows which question is actually open.
+                if (frame.error.details?.reason === 'flow-answer-stale') void this.reloadActive()
                 break
             }
           },

@@ -22,6 +22,7 @@ import {
   REQUESTABLE_ACCESS_LEVELS,
   CAPTURE_KIT_CLIENTS,
   MCP_LEARNING_TARGET,
+  WORK_ITEM_SOURCE_KINDS,
   type CaptureKitClient,
 } from '@knowledge/contracts';
 import type { AiAgentChoice, CaptureKitResponse, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
@@ -38,6 +39,7 @@ import { EntitiesService } from '../entities/entities.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { AuditService } from '../auth/audit.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { WorkItemHandoffService } from '../connectors/handoff/work-item-handoff.service.js';
 import { ResourceAccessService } from '../permissions/resource-access.service.js';
 import { AccessRequestsService } from '../permissions/access-requests.service.js';
 import { HistoryService } from '../documents/history.service.js';
@@ -224,6 +226,7 @@ export class McpService {
     private readonly analytics: AnalyticsRecorder,
     private readonly analyticsQuery: AnalyticsQueryService,
     private readonly chatSearch: ChatSearchService,
+    private readonly handoffs: WorkItemHandoffService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -701,6 +704,38 @@ export class McpService {
             wanted === 'all' ? true : wanted === 'closed' ? item.state !== 'open' : item.state === 'open',
           ),
         );
+      },
+    );
+
+    // #424: hand a knowledge object off to its tracker. The handoff service
+    // checks edit on the object's page itself, on every call.
+    server.registerTool(
+      'knowledge_handoff_work_item',
+      {
+        description:
+          'Hand a knowledge object off to the team\'s tracker (Jira, GitHub or GitLab): create a ticket for a reported ' +
+          'issue, a knowledge conflict, a flagged page ("verification") or a page, or attach an existing ticket with ' +
+          '`attach` (BILL-123, #45, org/repo#45 or its URL). The ticket carries a summary, a link back and a ' +
+          'knowledge-ref footer, never page content; its status then syncs both ways. Without connectorId the ' +
+          "object's project route decides. One ticket per object per tracker: a repeat call returns the same one.",
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          sourceKind: z.enum(WORK_ITEM_SOURCE_KINDS),
+          sourceId: z.string().uuid().describe('knowledge_issues / knowledge_conflicts id, or the page id for verification and document'),
+          connectorId: z.string().uuid().optional().describe("A tracker connector; omitted = the project's route"),
+          attach: z.string().min(1).max(500).optional().describe('An existing ticket to attach instead of creating one'),
+        },
+      },
+      async ({ workspaceId, sourceKind, sourceId, connectorId, attach }) => {
+        await guard.ws(workspaceId, 'editor');
+        const workItem = await this.handoffs.handoff(principal, {
+          workspaceId,
+          sourceKind,
+          sourceId,
+          ...(connectorId ? { connectorId } : {}),
+          ...(attach ? { attach } : {}),
+        });
+        return this.json(workItem);
       },
     );
 

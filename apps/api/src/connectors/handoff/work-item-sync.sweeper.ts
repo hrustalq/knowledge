@@ -10,6 +10,7 @@ import { labelFor, type TrackerAdapter, type TrackerIssue } from '../adapters/tr
 import { ConnectorWorkItemsService, keyOf } from '../connector-work-items.service.js';
 import { TrackerRegistry } from '../tracker-registry.service.js';
 import { WorkItemAnchorsService } from './work-item-anchors.service.js';
+import { WorkItemRulesService } from './work-item-rules.service.js';
 import { afterFailure, syncDecision } from './work-item-sync.js';
 
 /** Outbound transitions per tick: a tracker's rate limit is shared with every other caller. */
@@ -26,7 +27,8 @@ const RECONCILE_BATCH = 500;
  * exception (feature 32). Three passes per tick, never two ticks at once:
  *
  * 1. **Poll** one tracker connector that has anchored tickets — the guaranteed
- *    inbound path. A webhook only gets the same row written sooner.
+ *    inbound path. A webhook only gets the same row written sooner. Then the
+ *    **rules** hand off what they admit, under the per-tick ceiling.
  * 2. **Reconcile** anchored rows: `syncDecision` picks the newer side. A closed
  *    ticket resolves its anchor; a resolved (or re-raised) anchor marks its row
  *    `pending`.
@@ -48,6 +50,7 @@ export class WorkItemSyncSweeper implements OnModuleInit, OnModuleDestroy {
     private readonly trackers: TrackerRegistry,
     private readonly workItems: ConnectorWorkItemsService,
     private readonly anchors: WorkItemAnchorsService,
+    private readonly rules: WorkItemRulesService,
     config: ConfigService<Env, true>,
   ) {
     this.tickMs = config.get('WORK_ITEM_SYNC_TICK_MS', { infer: true });
@@ -73,6 +76,7 @@ export class WorkItemSyncSweeper implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     try {
       await this.step('poll', () => this.poll());
+      await this.step('rules', async () => void (await this.rules.autoCreate()));
       await this.step('reconcile', () => this.reconcile());
       await this.step('push', () => this.push());
     } finally {
@@ -172,7 +176,7 @@ export class WorkItemSyncSweeper implements OnModuleInit, OnModuleDestroy {
       if (!decision) continue;
       if (decision.direction === 'inbound') {
         const actor = await this.workItems.actorFor(connector, item.externalActorId);
-        await this.anchors.resolve(connector, item, decision.status, actor);
+        if (await this.anchors.resolve(connector, item, decision.status, actor)) await this.anchors.notifyClosed(item, actor);
       } else {
         await this.prisma.connectorWorkItem.updateMany({
           where: { id: item.id, syncState: 'synced' },

@@ -12,6 +12,7 @@ import { ProjectsModule } from '../projects/projects.module.js';
 import { ConnectorsCoreModule } from '../connectors/connectors-core.module.js';
 import { ConnectorQueueModule } from '../connectors/connector-queue.module.js';
 import { ConnectorWorkItemsModule } from '../connectors/connector-work-items.module.js';
+import { WorkItemHandoffModule } from '../connectors/handoff/work-item-handoff.module.js';
 import { WorkflowsModule } from '../workflows/workflows.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js';
@@ -62,6 +63,7 @@ import { McpService } from './mcp.service.js';
     // issue is attributed to a person, which is the same reason workflow
     // approval is not exposed here either.
     ConnectorWorkItemsModule,
+    WorkItemHandoffModule,
     // Read/start tools only. WorkflowMaterializeModule is deliberately absent —
     // materialisation writes pages and belongs to the API process.
     WorkflowsModule,

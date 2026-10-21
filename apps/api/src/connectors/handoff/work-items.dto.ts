@@ -1,6 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
-import { WORK_ITEM_SOURCE_KINDS, type WorkItemSourceKind } from '@knowledge/contracts';
+import {
+  WORK_ITEM_CONFLICT_RULES,
+  WORK_ITEM_ISSUE_RULES,
+  WORK_ITEM_SOURCE_KINDS,
+  WORK_ITEM_VERIFICATION_RULES,
+  type WorkItemConflictRule,
+  type WorkItemIssueRule,
+  type WorkItemSourceKind,
+  type WorkItemVerificationRule,
+} from '@knowledge/contracts';
 import { vmsg } from '../../common/validation.js';
 
 /** POST /v1/work-items/handoff (#424). */
@@ -68,4 +77,33 @@ export class PutTrackerRouteDto {
   @IsString()
   @MaxLength(300, { message: vmsg('maxLength') })
   boardUrl?: string | null;
+}
+
+/** GET /v1/work-items/rules */
+export class WorkItemRulesQueryDto {
+  @ApiProperty()
+  @IsUUID()
+  workspaceId!: string;
+}
+
+/** PUT /v1/work-items/rules — each null or `off` is off. */
+export class PutWorkItemRulesDto {
+  @ApiProperty()
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ type: String, enum: WORK_ITEM_ISSUE_RULES, nullable: true, description: 'Reported issues to hand off: by rank, or all' })
+  @IsOptional()
+  @IsIn(WORK_ITEM_ISSUE_RULES as unknown as string[])
+  issues?: WorkItemIssueRule | null;
+
+  @ApiPropertyOptional({ type: String, enum: WORK_ITEM_CONFLICT_RULES, nullable: true })
+  @IsOptional()
+  @IsIn(WORK_ITEM_CONFLICT_RULES as unknown as string[])
+  conflicts?: WorkItemConflictRule | null;
+
+  @ApiPropertyOptional({ type: String, enum: WORK_ITEM_VERIFICATION_RULES, nullable: true, description: 'outdated pages only, or every flagged page' })
+  @IsOptional()
+  @IsIn(WORK_ITEM_VERIFICATION_RULES as unknown as string[])
+  verification?: WorkItemVerificationRule | null;
 }

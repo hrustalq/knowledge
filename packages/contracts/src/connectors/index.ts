@@ -1501,6 +1501,20 @@ export interface PutTrackerRouteInput {
   boardUrl?: string | null;
 }
 
+/** GET|PUT /v1/work-items/rules — the workspace's handoff rules and the env ceiling they run under. */
+export interface WorkItemRules {
+  issues: WorkItemIssueRule | null;
+  conflicts: WorkItemConflictRule | null;
+  verification: WorkItemVerificationRule | null;
+}
+export interface WorkItemRulesResponse {
+  workspaceId: string;
+  /** What the workspace asked for; null is off. */
+  requested: WorkItemRules;
+  /** WORK_ITEM_AUTOCREATE_MAX_PER_TICK and WORK_ITEM_SYNC_ENABLED: what actually runs. */
+  ceiling: { maxPerTick: number; syncEnabled: boolean };
+}
+
 /** POST /v1/work-items/handoff — create a ticket for an anchor, or attach an existing one. */
 export interface WorkItemHandoffInput {
   workspaceId: string;

@@ -103,6 +103,29 @@ export class AgentTriggerListener implements OnModuleInit {
       };
     }
 
+    // A ticket moved in its tracker (#424): the subject is the work item, and
+    // the page it is anchored on, if any, lends it a project and category.
+    if (kind === 'work-item.updated') {
+      if (!event.subjectId) return null;
+      const item = await this.prisma.connectorWorkItem.findUnique({
+        where: { id: event.subjectId },
+        select: { id: true, connectorId: true, documentId: true },
+      });
+      if (!item) return null;
+      const connector = await this.connector(event.workspaceId, item.connectorId);
+      if (!connector) return null;
+      const page = item.documentId ? await this.page(event.workspaceId, item.documentId) : null;
+      return {
+        workspaceId: event.workspaceId,
+        event: { type: kind, source: event.type, subjectId: item.id, ...(page ? { documentId: page.id } : {}) },
+        subjectKey: `issue:${item.id}`,
+        projectId: page?.projectId ?? connector.projectId,
+        category: page?.category ?? null,
+        connectorId: connector.id,
+        repoConnector: REPO_CONNECTOR_KINDS.has(connector.kind),
+      };
+    }
+
     if (!event.documentId) return null;
     const page = await this.page(event.workspaceId, event.documentId);
     if (!page) return null;

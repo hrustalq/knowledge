@@ -1227,7 +1227,10 @@
           "removed": "unlinked a page from a connector"
         },
         "work-item": {
-          "created": "filed a work item from"
+          "created": "filed a work item from",
+          "handoff": "sent to a tracker",
+          "status-changed": "saw a tracker ticket change for",
+          "unlinked": "unlinked a tracker ticket from"
         }
       },
       "glossary": {
@@ -2085,7 +2088,8 @@
         "webhook": "A signed webhook arrives",
         "comment": {
           "mention": "The agent is mentioned in a comment"
-        }
+        },
+        "work-item.updated": "A handed-off ticket changes"
       },
       "eventHints": {
         "page": {
@@ -2101,7 +2105,8 @@
         "webhook": "Any system that can sign a request can start this agent. The delivery body reaches the model as untrusted context.",
         "comment": {
           "mention": "An editor mentions the agent in a discussion. Instead of a chat reply, it goes over that page and posts its findings in the thread when the run ends."
-        }
+        },
+        "work-item.updated": "A ticket handed off from here was closed, reopened or relabelled in its tracker (Jira, GitHub, GitLab). The run's subject is the ticket; it inherits the anchored page's project and category."
       },
       "webhook": {
         "url": "Delivery URL",
@@ -4045,7 +4050,8 @@
       "access.approved": "approved your access request",
       "access.denied": "declined your access request",
       "access.expired": "Your access request expired",
-      "access.granted": "gave you access"
+      "access.granted": "gave you access",
+      "work-item.closed": "closed the tracker ticket for this"
     }
   },
   "connect": {
@@ -6312,6 +6318,44 @@
       "noPeople": "No tracker accounts seen yet.",
       "mapPerson": "Map to member"
     },
-    "everyTracker": "This already has a ticket on every tracker connected here."
+    "everyTracker": "This already has a ticket on every tracker connected here.",
+    "actor": {
+      "tracker": "Tracker",
+      "rule": "Handoff rule"
+    },
+    "rules": {
+      "title": "Handoff to trackers",
+      "intro": "Hand these off to a tracker without anyone pressing Send to tracker. A ticket goes to the project's tracker route, so a project without one gets none. Each object gets one ticket, once.",
+      "saved": "Handoff rules saved",
+      "issues": {
+        "label": "Reported issues",
+        "hint": "High: a report of wrong content, or one reported by three or more people. Medium also includes stale and missing reports, and any reported twice.",
+        "options": {
+          "off": "Off",
+          "high": "High priority",
+          "medium": "Medium and high",
+          "all": "All"
+        }
+      },
+      "conflicts": {
+        "label": "Knowledge conflicts",
+        "hint": "Every open conflict between two sources.",
+        "options": {
+          "off": "Off",
+          "on": "All open conflicts"
+        }
+      },
+      "verification": {
+        "label": "Flagged pages",
+        "hint": "A page marked outdated, or also one with a check requested.",
+        "options": {
+          "off": "Off",
+          "outdated": "Outdated pages",
+          "all": "Outdated and check requested"
+        }
+      },
+      "ceiling": "This deployment creates at most {n} ticket per sweep (every ~15 s), across all workspaces. A large backlog is handed off over a few minutes. | This deployment creates at most {n} tickets per sweep (every ~15 s), across all workspaces. A large backlog is handed off over a few minutes.",
+      "stopped": "This deployment has handoff rules switched off (WORK_ITEM_AUTOCREATE_MAX_PER_TICK=0 or WORK_ITEM_SYNC_ENABLED=false). Saved rules apply once they are back on."
+    }
   }
 }

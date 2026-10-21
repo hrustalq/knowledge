@@ -83,28 +83,27 @@ export class WorkItemHandoffService {
       }
       saved = await this.workItems.upsertFrom(row, issue, { documentId: view.documentId, anchor });
     } else {
-      const text = await this.anchors.ticketText(view, asLocale(row.locale));
-      const issue = await tracker.createIssue(row, {
-        ...text,
-        labels: [labelFor(row)],
-        externalProject: route?.connectorId === row.id ? route.externalProject : null,
-        issueType: route?.connectorId === row.id ? route.issueType : null,
-      });
-      saved = await this.save(row, () => this.workItems.upsertFrom(row, issue, { documentId: view.documentId, anchor }));
-      if (route?.connectorId === row.id && route.boardNodeId && route.boardFieldId && tracker.setBoardStatus) {
-        await tracker.setBoardStatus(row, saved, { nodeId: route.boardNodeId, fieldId: route.boardFieldId }, 'open');
-      }
+      saved = await this.create(view, row, tracker, route);
     }
-
-    void this.activity.record({
-      workspaceId: row.workspaceId,
-      actor: principal.userId,
-      action: 'connector.work-item.handoff',
-      documentId: view.documentId,
-      subjectId: saved.id,
-      metadata: { key: keyOf(saved), url: saved.url, sourceKind: view.kind, sourceId: view.id, attached: !!input.attach, connectorId: row.id },
-    });
+    this.recordHandoff(principal.userId, row, view, saved, !!input.attach);
     return (await this.workItems.decorate([saved]))[0];
+  }
+
+  /**
+   * A handoff rule's ticket (#424): the anchor's project route decides the
+   * tracker, and a project without one gets no ticket. No person acted, so no
+   * page level is checked; the ticket text already names a restricted page by
+   * id. Attributed to `rule:<kind>`. Returns null when there is nowhere to go.
+   */
+  async handoffByRule(view: AnchorView): Promise<ConnectorWorkItem | null> {
+    const route = await this.prisma.projectTrackerRoute.findUnique({ where: { projectId: view.projectId } });
+    if (!route) return null;
+    const row = await this.prisma.connector.findUnique({ where: { id: route.connectorId } });
+    const tracker = row?.enabled ? this.workItems.trackerOf(row) : null;
+    if (!row || !tracker) return null;
+    const saved = await this.create(view, row, tracker, route);
+    this.recordHandoff(`rule:${view.kind}`, row, view, saved, false);
+    return saved;
   }
 
   /**
@@ -240,6 +239,35 @@ export class WorkItemHandoffService {
   }
 
   // --- internals ---
+
+  /** Open the ticket, record it, and put its card on the route's board. */
+  private async create(view: AnchorView, row: Connector, tracker: TrackerAdapter, route: ProjectTrackerRoute | null): Promise<ConnectorWorkItem> {
+    const text = await this.anchors.ticketText(view, asLocale(row.locale));
+    const ours = route?.connectorId === row.id ? route : null;
+    const issue = await tracker.createIssue(row, {
+      ...text,
+      labels: [labelFor(row)],
+      externalProject: ours?.externalProject ?? null,
+      issueType: ours?.issueType ?? null,
+    });
+    const anchor = { kind: view.kind, id: view.id };
+    const saved = await this.save(row, () => this.workItems.upsertFrom(row, issue, { documentId: view.documentId, anchor }));
+    if (ours?.boardNodeId && ours.boardFieldId && tracker.setBoardStatus) {
+      await tracker.setBoardStatus(row, saved, { nodeId: ours.boardNodeId, fieldId: ours.boardFieldId }, 'open');
+    }
+    return saved;
+  }
+
+  private recordHandoff(actor: string, row: Connector, view: AnchorView, saved: ConnectorWorkItem, attached: boolean): void {
+    void this.activity.record({
+      workspaceId: row.workspaceId,
+      actor,
+      action: 'connector.work-item.handoff',
+      documentId: view.documentId,
+      subjectId: saved.id,
+      metadata: { key: keyOf(saved), url: saved.url, sourceKind: view.kind, sourceId: view.id, attached, connectorId: row.id },
+    });
+  }
 
   /**
    * The anchor, refused the way a page is refused: a page the caller cannot

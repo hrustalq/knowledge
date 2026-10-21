@@ -27,6 +27,16 @@ in the pull request that introduces them — see
   until someone retries it (`POST /v1/connectors/:id/work-items/:workItemId/retry`). Only a GitHub account
   mapped to an editor can clear a page's flag from the tracker. No tracker action ever verifies a page.
 - `GET /v1/work-items?workspaceId&sourceKind&sourceId` lists the issues handed off for one object.
+- Handoff rules (#424) under **Knowledge health → Settings** (admins). Reported issues (high priority,
+  medium and high, or all), open conflicts, or flagged pages (outdated, or with a check requested too) are
+  handed off automatically into each project's tracker route. A project without a route gets no tickets. All
+  rules are off by default. `GET|PUT /v1/work-items/rules` reads and sets them.
+- MCP `knowledge_handoff_work_item` (editor) hands an object off or attaches an existing ticket. It is a write
+  tool, so read-only keys do not see it (#424).
+- Agent triggers can fire on **A handed-off ticket changes** (`work-item.updated`): closed, reopened or
+  relabelled in its tracker (#424).
+- A page's owner is notified when the ticket for their page, report or conflict is closed in the tracker
+  (#424). This is in the verification category, so muting verification mutes it too.
 - **Send to tracker** in the web app (#424), on every open report, every open conflict, and the verification
   bar of a flagged page. It creates a ticket or attaches an existing one. A chip then shows the ticket's key
   and status (`BILL-123 · In progress`) and links to the tracker. A transition that kept failing shows
@@ -84,6 +94,9 @@ in the pull request that introduces them — see
 - The GitHub App now asks for **Organization projects: write**, up from read, and the **Projects v2 item**
   webhook event (#424). Change both on the App's settings page, then have each organization accept the new
   permission. Until then board writes fail quietly and everything else works.
+- `WORK_ITEM_AUTOCREATE_MAX_PER_TICK` (default `20`) caps the tickets that handoff rules create per sync tick,
+  across all workspaces. `0` turns rule-driven handoff off. It has a default, so no deploy change is
+  needed (#424).
 - Status sync runs in the API process every `WORK_ITEM_SYNC_TICK_MS` (default `15000`). Set
   `WORK_ITEM_SYNC_ENABLED=false` to stop it; handoff still works. Both variables have defaults, so no
   deploy change is needed. Sync works by polling. The GitHub App webhook only makes it faster.

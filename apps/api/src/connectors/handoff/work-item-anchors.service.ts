@@ -9,6 +9,7 @@ import { ConflictsService } from '../../conflicts/conflicts.service.js';
 import { asLocale } from '../../i18n/locale.js';
 import { t } from '../../i18n/t.js';
 import { PermissionService } from '../../permissions/permission.service.js';
+import { NotificationsService } from '../../notifications/notifications.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { VerificationService } from '../../verification/verification.service.js';
 import type { TrackerBodyLine } from '../adapters/tracker.js';
@@ -53,6 +54,7 @@ export class WorkItemAnchorsService {
     private readonly activity: ActivityService,
     private readonly access: AccessService,
     private readonly permissions: PermissionService,
+    private readonly notifications: NotificationsService,
     config: ConfigService<Env, true>,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
@@ -187,6 +189,33 @@ export class WorkItemAnchorsService {
       return this.verification.clearFlag(row.sourceId, person, via);
     }
     return false;
+  }
+
+  /**
+   * Tell the page's owner that the ticket for their object closed in the
+   * tracker — only on a close, never on a status step, and never the person
+   * who closed it. Filed under the anchored page, in the verification category.
+   */
+  async notifyClosed(row: ConnectorWorkItem, actor: string): Promise<void> {
+    if (!row.documentId) return;
+    const page = await this.prisma.document.findUnique({
+      where: { id: row.documentId },
+      select: { workspaceId: true, title: true, ownerId: true, verifiedBy: true },
+    });
+    const owner = page?.ownerId ?? page?.verifiedBy;
+    if (!page || !owner || owner === actor) return;
+    void this.notifications.notify({
+      workspaceId: page.workspaceId,
+      userIds: [owner],
+      type: 'work-item.closed',
+      reason: 'owner',
+      actor,
+      documentId: row.documentId,
+      subjectType: 'document',
+      subjectId: row.documentId,
+      title: page.title,
+      metadata: { key: keyOf(row), url: row.url, sourceKind: row.sourceKind },
+    });
   }
 
   // --- internals ---

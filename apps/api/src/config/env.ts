@@ -797,6 +797,12 @@ export const envSchema = z.object({
   WORK_ITEM_SYNC_ENABLED: boolish(true),
   /** The sweeper's tick; one tracker connector is polled per tick. */
   WORK_ITEM_SYNC_TICK_MS: z.coerce.number().int().min(1_000).default(15_000),
+  /**
+   * Ceiling on tickets the handoff rules (workspace settings) create in one
+   * tick, across all workspaces. A rule turned on over a backlog of 500 open
+   * reports drains it at this pace instead of filing 500 tickets at once.
+   */
+  WORK_ITEM_AUTOCREATE_MAX_PER_TICK: z.coerce.number().int().min(0).default(20),
 
   /** Live tracked-entity updates over WebSocket (/v1/events/ws). */
   LIVE_WS_ENABLED: boolish(true),

@@ -1924,6 +1924,9 @@ export const AGENT_TRIGGER_EVENTS = [
   'connector.synced',
   'webhook',
   'comment.mention',
+  // #424: a handed-off ticket closed, reopened or relabelled in its tracker —
+  // the hook for "a ticket starts agent work". Subject `issue:<workItemId>`.
+  'work-item.updated',
 ] as const;
 export type AgentTriggerEvent = (typeof AGENT_TRIGGER_EVENTS)[number];
 
@@ -1943,6 +1946,7 @@ export const AGENT_TRIGGER_EVENT_SOURCES: Record<AgentTriggerEvent, readonly str
   // Fired inline, never from the bus — see AGENT_TRIGGER_EVENTS.
   webhook: [],
   'comment.mention': [],
+  'work-item.updated': ['repo.issue.closed', 'repo.issue.reopened', 'repo.issue.labeled'],
 };
 
 /** The trigger event a bus type is heard as, or null for one no trigger listens to. */
@@ -1981,6 +1985,8 @@ export const AGENT_TRIGGER_FILTER_FIELDS: Record<AgentTriggerEvent, readonly (ke
   'connector.synced': ['connectorIds'],
   webhook: [],
   'comment.mention': ['categories'],
+  // The anchored page's category; the ticket's connector.
+  'work-item.updated': ['categories', 'connectorIds'],
 };
 
 /**

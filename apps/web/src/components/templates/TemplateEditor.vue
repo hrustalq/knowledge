@@ -251,8 +251,8 @@ async function save() {
         <Textarea id="kn-tpl-description" v-model="description" rows="2" maxlength="1000" />
       </div>
       <div v-if="mode === 'create'" class="space-y-1.5">
-        <Label>{{ t('templates.fields.scope') }}</Label>
-        <RadioGroup v-model="scope" class="gap-2">
+        <Label id="kn-tpl-scope-label">{{ t('templates.fields.scope') }}</Label>
+        <RadioGroup v-model="scope" class="gap-2" aria-labelledby="kn-tpl-scope-label">
           <label class="flex items-start gap-2 text-sm" :class="!canProject && 'opacity-60'">
             <RadioGroupItem value="project" :disabled="!canProject" class="mt-0.5" />
             <span>{{ t('templates.scope.projectNamed', { project: activeProjectName }) }}</span>
@@ -275,9 +275,9 @@ async function save() {
 
     <section class="grid gap-4 sm:grid-cols-2">
       <div class="space-y-1.5">
-        <Label>{{ t('templates.fields.category') }}</Label>
+        <Label for="kn-tpl-category">{{ t('templates.fields.category') }}</Label>
         <Select v-model="category">
-          <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+          <SelectTrigger id="kn-tpl-category" class="w-full"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem v-for="c in DOCUMENT_CATEGORIES" :key="c" :value="c">{{ t(`category.${c}`) }}</SelectItem>
           </SelectContent>
@@ -303,9 +303,20 @@ async function save() {
       </div>
       <div class="space-y-1.5">
         <Label>{{ t('templates.fields.relations') }}</Label>
-        <div v-for="(r, i) in relations" :key="i" class="grid grid-cols-[10rem_minmax(0,1fr)_auto] gap-2">
+        <!-- Below sm the type takes its own line: a fixed 10rem beside the key
+             leaves the key a few characters on a phone. -->
+        <div
+          v-for="(r, i) in relations"
+          :key="i"
+          class="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[10rem_minmax(0,1fr)_auto]"
+        >
           <Select :model-value="r.type" @update:model-value="relations[i] = { ...r, type: String($event) }">
-            <SelectTrigger class="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger
+              class="col-span-2 h-8 w-full text-xs sm:col-span-1"
+              :aria-label="t('editor.relationTypeLabel', { n: i + 1 })"
+            >
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem v-for="type in AUTHORABLE_RELATION_TYPES" :key="type" :value="type">{{ type }}</SelectItem>
             </SelectContent>

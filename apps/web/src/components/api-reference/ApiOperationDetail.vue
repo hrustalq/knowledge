@@ -146,7 +146,7 @@ function toggleResponse(r: ResponseView) {
                   <p v-if="p.enumValues.length" class="mt-1.5 flex flex-wrap gap-1">
                     <code v-for="v in p.enumValues" :key="v" class="kn-op-chip">{{ v }}</code>
                   </p>
-                  <p v-if="p.example" class="mt-1.5 text-[0.8rem] text-muted-foreground">
+                  <p v-if="p.example" class="mt-1.5 text-ui text-muted-foreground">
                     {{ t('apiRef.exampleLabel') }} <code class="kn-op-chip">{{ p.example }}</code>
                   </p>
                 </div>
@@ -184,7 +184,7 @@ function toggleResponse(r: ResponseView) {
                     @click="toggleResponse(r)"
                   >
                     <span class="min-w-0 flex-1 text-start">{{ r.description || t('apiRef.noDescription') }}</span>
-                    <span v-if="!openResponses.has(r.status)" class="font-mono text-[0.75rem] text-muted-foreground">{{ r.contents.map((c) => c.mediaType).join(', ') }}</span>
+                    <span v-if="!openResponses.has(r.status)" class="font-mono text-xs text-muted-foreground">{{ r.contents.map((c) => c.mediaType).join(', ') }}</span>
                     <ChevronDown class="kn-op-chevron size-4" aria-hidden="true" />
                   </button>
                   <p v-else>{{ r.description || t('apiRef.noDescription') }}</p>
@@ -202,8 +202,8 @@ function toggleResponse(r: ResponseView) {
             <h4 class="kn-op-section-title">{{ t('apiRef.messages') }}<span class="kn-op-count">{{ view.messages.length }}</span></h4>
             <div class="kn-op-pad divide-y">
               <div v-for="(m, i) in view.messages" :key="i" class="space-y-2 py-3 first:pt-0 last:pb-0">
-                <p class="text-[0.92rem] font-semibold">{{ m.name ?? t('apiRef.message', { n: i + 1 }) }}</p>
-                <p v-if="m.summary" class="text-[0.875rem] text-muted-foreground">{{ m.summary }}</p>
+                <p class="text-sm font-semibold">{{ m.name ?? t('apiRef.message', { n: i + 1 }) }}</p>
+                <p v-if="m.summary" class="text-sm text-muted-foreground">{{ m.summary }}</p>
                 <MarkdownView v-if="m.description" :markdown="m.description" />
                 <ApiMediaContent :document="document" :contents="[{ mediaType: t('apiRef.payload'), schema: m.payload, example: undefined }]" />
               </div>
@@ -292,7 +292,7 @@ function toggleResponse(r: ResponseView) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 1.5rem;
-  font-size: 0.82rem;
+  font-size: var(--kn-text-ui);
 }
 .kn-op-meta > div {
   display: flex;
@@ -310,7 +310,7 @@ function toggleResponse(r: ResponseView) {
 }
 .kn-op-meta code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8rem;
+  font-size: var(--kn-text-ui);
   color: var(--foreground);
 }
 .kn-op-iconbtn {
@@ -364,7 +364,7 @@ function toggleResponse(r: ResponseView) {
   border-radius: 999px;
   background: color-mix(in oklab, var(--kn-accent) 16%, transparent);
   font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
-  font-size: 0.7rem;
+  font-size: var(--kn-text-micro);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: color-mix(in oklab, var(--kn-accent) 65%, var(--foreground));
@@ -377,7 +377,7 @@ function toggleResponse(r: ResponseView) {
    name, its type and where it travels; the description column the prose. */
 .kn-op-table {
   padding-inline: 1.25rem;
-  font-size: 0.875rem;
+  font-size: var(--kn-text-sm);
 }
 .kn-op-thead,
 .kn-op-row {
@@ -391,7 +391,7 @@ function toggleResponse(r: ResponseView) {
 }
 .kn-op-thead {
   padding-bottom: 0.4rem;
-  font-size: 0.75rem;
+  font-size: var(--kn-text-xs);
   font-weight: 500;
   color: var(--muted-foreground);
 }
@@ -401,13 +401,13 @@ function toggleResponse(r: ResponseView) {
 }
 .kn-op-key {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.86rem;
+  font-size: var(--kn-text-sm);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 .kn-op-required {
   font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
-  font-size: 0.72rem;
+  font-size: var(--kn-text-caption);
   font-weight: 600;
   letter-spacing: 0;
   color: color-mix(in oklab, var(--kn-panel-caution) 75%, var(--foreground));
@@ -415,7 +415,7 @@ function toggleResponse(r: ResponseView) {
 .kn-op-type {
   margin-top: 0.15rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.78rem;
+  font-size: var(--kn-text-xs);
   color: color-mix(in oklab, var(--foreground) 72%, var(--card));
   overflow-wrap: anywhere;
 }
@@ -433,7 +433,7 @@ function toggleResponse(r: ResponseView) {
   border-radius: 4px;
   background: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.76rem;
+  font-size: var(--kn-text-xs);
   color: var(--foreground);
 }
 .kn-op-response-toggle {

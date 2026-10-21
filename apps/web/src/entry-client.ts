@@ -1,6 +1,7 @@
 import type { StateTree } from 'pinia'
 import { createApp } from './main'
-import { getProjectId, setActiveProject } from './lib/api'
+import { ensureLocaleMessages } from './i18n'
+import { getLocale, getProjectId, setActiveProject } from './lib/api'
 import { useProjectsStore } from './stores/projects'
 
 declare global {
@@ -9,7 +10,10 @@ declare global {
   }
 }
 
-const { app, router, pinia } = createApp()
+const { app, router, pinia, i18n } = createApp()
+// Only the language the server rendered with (`<html lang>`, via getLocale) is
+// fetched, alongside the route's own chunks rather than after them.
+const messagesReady = ensureLocaleMessages(i18n, getLocale())
 
 if (window.__PINIA__) {
   pinia.state.value = window.__PINIA__
@@ -20,6 +24,6 @@ if (window.__PINIA__) {
   if (projects.loaded && projects.activeId !== getProjectId()) setActiveProject(projects.activeId)
 }
 
-router.isReady().then(() => {
+Promise.all([router.isReady(), messagesReady]).then(() => {
   app.mount('#app')
 })

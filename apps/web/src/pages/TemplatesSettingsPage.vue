@@ -56,6 +56,7 @@ import {
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import TemplateEditor from '@/components/templates/TemplateEditor.vue'
 import TemplateHistory from '@/components/templates/TemplateHistory.vue'
+import { PageTabs, panelId, tabId, type PageTab } from '@/components/layout/page'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -91,6 +92,10 @@ const detail = ref<TemplateDetail | null>(null)
 const detailError = ref<string | null>(null)
 const editing = ref(false)
 const tab = ref<'shape' | 'history'>('shape')
+const tabs = computed<PageTab<'shape' | 'history'>[]>(() => [
+  { key: 'shape', label: t('templates.settings.shape') },
+  { key: 'history', label: t('templates.history.title') },
+])
 const busy = ref(false)
 const confirmReset = ref(false)
 
@@ -205,6 +210,9 @@ const offered = computed(() => !!selected.value && selected.value.enabled && !se
 <template>
   <!-- Bleed out of the settings column's padding so the rail sits flush, as /settings/projects does. -->
   <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 lg:flex-row">
+    <!-- The rail and the template's name carry the page visually; the route
+         still needs the one h1 its h2s sit under. -->
+    <h1 class="sr-only">{{ t('nav.templates') }}</h1>
     <div
       class="flex h-80 shrink-0 flex-col border-b bg-background lg:sticky lg:top-0 lg:h-[calc(100vh-5.75rem)] lg:w-72 lg:self-start lg:border-r lg:border-b-0"
     >
@@ -225,7 +233,7 @@ const offered = computed(() => !!selected.value && selected.value.enabled && !se
           <Skeleton v-for="i in 6" :key="i" class="mx-1 my-2 h-6" />
         </template>
         <template v-for="group in groups" v-else :key="group.scope">
-          <p class="text-muted-foreground px-2 pt-3 pb-1 text-[11px] font-semibold tracking-wider uppercase">
+          <p class="text-muted-foreground px-2 pt-3 pb-1 text-caption font-semibold tracking-wider uppercase">
             {{ scopeLabel(group.scope) }}
           </p>
           <RouterLink
@@ -239,9 +247,9 @@ const offered = computed(() => !!selected.value && selected.value.enabled && !se
             <span v-if="tpl.icon" class="w-4 shrink-0 text-center text-sm leading-none" aria-hidden="true">{{ tpl.icon }}</span>
             <LayoutTemplate v-else class="text-muted-foreground size-4 shrink-0" />
             <span class="min-w-0 flex-1 truncate">{{ tpl.name }}</span>
-            <span v-if="tpl.archivedAt" class="text-muted-foreground shrink-0 text-[11px]">{{ t('templates.settings.archived') }}</span>
-            <span v-else-if="!tpl.enabled" class="text-muted-foreground shrink-0 text-[11px]">{{ t('templates.settings.hidden') }}</span>
-            <span v-else-if="tpl.customized" class="text-muted-foreground shrink-0 text-[11px]">{{ t('templates.settings.customized') }}</span>
+            <span v-if="tpl.archivedAt" class="text-muted-foreground shrink-0 text-caption">{{ t('templates.settings.archived') }}</span>
+            <span v-else-if="!tpl.enabled" class="text-muted-foreground shrink-0 text-caption">{{ t('templates.settings.hidden') }}</span>
+            <span v-else-if="tpl.customized" class="text-muted-foreground shrink-0 text-caption">{{ t('templates.settings.customized') }}</span>
           </RouterLink>
         </template>
         <p v-if="templates.loaded && !groups.length" class="text-muted-foreground px-2 py-6 text-center text-sm">
@@ -339,66 +347,56 @@ const offered = computed(() => !!selected.value && selected.value.enabled && !se
         />
 
         <template v-else>
-          <div class="mb-4 flex gap-1 border-b" role="tablist">
-            <button
-              v-for="id in ['shape', 'history'] as const"
-              :key="id"
-              type="button"
-              role="tab"
-              class="kn-tpl-tab"
-              :aria-selected="tab === id"
-              @click="tab = id"
-            >
-              {{ id === 'shape' ? t('templates.settings.shape') : t('templates.history.title') }}
-            </button>
-          </div>
+          <PageTabs v-model="tab" :tabs="tabs" :label="selected.name" class="mb-4" />
 
-          <template v-if="tab === 'shape'">
-            <p v-if="detailError" class="text-sm">{{ detailError }}</p>
-            <div v-else-if="!detail" class="space-y-3">
-              <Skeleton class="h-5 w-1/3" />
-              <Skeleton class="h-40 w-full" />
-            </div>
-            <div v-else class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
-              <div class="kn-tpl-preview min-w-0 rounded-md border px-5 py-4">
-                <MarkdownView :markdown="detail.body" />
+          <div :id="panelId(tab)" role="tabpanel" :aria-labelledby="tabId(tab)">
+            <template v-if="tab === 'shape'">
+              <p v-if="detailError" class="text-sm">{{ detailError }}</p>
+              <div v-else-if="!detail" class="space-y-3">
+                <Skeleton class="h-5 w-1/3" />
+                <Skeleton class="h-40 w-full" />
               </div>
-              <dl class="space-y-4 text-sm">
-                <div v-if="detail.meta.titlePattern">
-                  <dt class="text-muted-foreground mb-1 text-xs font-medium">{{ t('templates.fields.titlePattern') }}</dt>
-                  <dd class="font-mono text-xs">{{ detail.meta.titlePattern }}</dd>
+              <div v-else class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
+                <div class="kn-tpl-preview min-w-0 rounded-md border px-5 py-4">
+                  <MarkdownView :markdown="detail.body" />
                 </div>
-                <div>
-                  <dt class="text-muted-foreground mb-1 text-xs font-medium">{{ t('templates.fields.placeholders') }}</dt>
-                  <dd v-if="!detail.meta.placeholders.length" class="text-muted-foreground text-xs">
-                    {{ t('templates.placeholders.none') }}
-                  </dd>
-                  <dd v-for="p in detail.meta.placeholders" :key="p.name" class="flex items-baseline gap-2 py-0.5">
-                    <code class="text-xs">{{ p.name }}</code>
-                    <span class="text-muted-foreground text-xs">
-                      {{ t(`templates.placeholderKind.${p.kind}`) }}<template v-if="p.required"> · {{ t('templates.gallery.required') }}</template>
-                    </span>
-                  </dd>
-                </div>
-                <div v-if="detail.tags.length">
-                  <dt class="text-muted-foreground mb-1 text-xs font-medium">{{ t('templates.fields.tags') }}</dt>
-                  <dd class="flex flex-wrap gap-1">
-                    <Badge v-for="tag in detail.tags" :key="tag" variant="outline" class="font-normal">{{ tag }}</Badge>
-                  </dd>
-                </div>
-                <div v-if="detail.relations.length">
-                  <dt class="text-muted-foreground mb-1 text-xs font-medium">{{ t('templates.fields.relations') }}</dt>
-                  <dd v-for="(r, i) in detail.relations" :key="i" class="font-mono text-xs">{{ r.type }} → {{ r.target }}</dd>
-                </div>
-                <div v-if="detail.meta.aiInstructions">
-                  <dt class="text-muted-foreground mb-1 text-xs font-medium">{{ t('templates.fields.aiInstructions') }}</dt>
-                  <dd class="text-xs whitespace-pre-line">{{ detail.meta.aiInstructions }}</dd>
-                </div>
-              </dl>
-            </div>
-          </template>
+                <dl class="space-y-4 text-sm">
+                  <div v-if="detail.meta.titlePattern">
+                    <dt class="text-muted-foreground mb-1 text-xs font-medium">{{ t('templates.fields.titlePattern') }}</dt>
+                    <dd class="font-mono text-xs">{{ detail.meta.titlePattern }}</dd>
+                  </div>
+                  <div>
+                    <dt class="text-muted-foreground mb-1 text-xs font-medium">{{ t('templates.fields.placeholders') }}</dt>
+                    <dd v-if="!detail.meta.placeholders.length" class="text-muted-foreground text-xs">
+                      {{ t('templates.placeholders.none') }}
+                    </dd>
+                    <dd v-for="p in detail.meta.placeholders" :key="p.name" class="flex items-baseline gap-2 py-0.5">
+                      <code class="text-xs">{{ p.name }}</code>
+                      <span class="text-muted-foreground text-xs">
+                        {{ t(`templates.placeholderKind.${p.kind}`) }}<template v-if="p.required"> · {{ t('templates.gallery.required') }}</template>
+                      </span>
+                    </dd>
+                  </div>
+                  <div v-if="detail.tags.length">
+                    <dt class="text-muted-foreground mb-1 text-xs font-medium">{{ t('templates.fields.tags') }}</dt>
+                    <dd class="flex flex-wrap gap-1">
+                      <Badge v-for="tag in detail.tags" :key="tag" variant="outline" class="font-normal">{{ tag }}</Badge>
+                    </dd>
+                  </div>
+                  <div v-if="detail.relations.length">
+                    <dt class="text-muted-foreground mb-1 text-xs font-medium">{{ t('templates.fields.relations') }}</dt>
+                    <dd v-for="(r, i) in detail.relations" :key="i" class="font-mono text-xs">{{ r.type }} → {{ r.target }}</dd>
+                  </div>
+                  <div v-if="detail.meta.aiInstructions">
+                    <dt class="text-muted-foreground mb-1 text-xs font-medium">{{ t('templates.fields.aiInstructions') }}</dt>
+                    <dd class="text-xs whitespace-pre-line">{{ detail.meta.aiInstructions }}</dd>
+                  </div>
+                </dl>
+              </div>
+            </template>
 
-          <TemplateHistory v-else :template="selected" />
+            <TemplateHistory v-else :template="selected" />
+          </div>
         </template>
       </template>
     </div>
@@ -425,7 +423,7 @@ const offered = computed(() => !!selected.value && selected.value.enabled && !se
   gap: 0.5rem;
   border-radius: calc(var(--radius) - 2px);
   padding: 0.375rem 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--kn-text-sm);
   transition: background-color 120ms;
 }
 .kn-tpl-rail-row:hover {
@@ -438,18 +436,6 @@ const offered = computed(() => !!selected.value && selected.value.enabled && !se
 }
 .kn-tpl-rail-row[data-muted]:not([data-selected]) {
   color: var(--muted-foreground);
-}
-.kn-tpl-tab {
-  margin-bottom: -1px;
-  border-bottom: 2px solid transparent;
-  padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.kn-tpl-tab[aria-selected='true'] {
-  border-color: var(--primary);
-  color: var(--foreground);
-  font-weight: 500;
 }
 .kn-tpl-preview :deep(h1) {
   font-size: 1.375rem;

@@ -2,8 +2,9 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { renderToString } from 'vue/server-renderer'
 import type { Pinia } from 'pinia'
 import type { Router } from 'vue-router'
-import type { Locale } from '@knowledge/contracts'
+import { DEFAULT_LOCALE, type Locale } from '@knowledge/contracts'
 import { createApp } from './main'
+import { ensureLocaleMessages } from './i18n'
 import { useAuthStore } from './stores/auth'
 import { useDocumentsStore } from './stores/documents'
 import { useProjectsStore } from './stores/projects'
@@ -82,10 +83,13 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     traceId: ctx.traceId ?? null,
   }
   return ssrCtx.run(request, async () => {
-    const { app, router, pinia } = createApp()
+    const { app, router, pinia, i18n } = createApp()
 
+    // The request's catalog only (cached after the first render that asks).
+    const messagesReady = ensureLocaleMessages(i18n, request.locale ?? DEFAULT_LOCALE)
     await router.push(url)
     await router.isReady()
+    await messagesReady
     await prefetchShell(router, pinia, request)
 
     const html = await renderToString(app)

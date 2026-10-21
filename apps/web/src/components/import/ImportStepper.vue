@@ -53,7 +53,7 @@ const state = computed(() =>
         "
       >
         <span
-          class="flex size-5 shrink-0 items-center justify-center rounded-full border text-[0.6875rem] font-medium tabular-nums transition-colors duration-200"
+          class="flex size-5 shrink-0 items-center justify-center rounded-full border text-caption font-medium tabular-nums transition-colors duration-200"
           :class="
             step.done
               ? 'border-primary bg-primary text-primary-foreground'

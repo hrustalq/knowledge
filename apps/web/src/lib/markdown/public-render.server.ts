@@ -87,6 +87,7 @@ export function renderPublicMarkdown(markdown: string, options: PublicRenderOpti
 
   const headings = assignHeadingIds(host, options.idPrefix ?? '')
   wrapTables(host, doc)
+  focusScrollers(host)
   rewriteLinks(host, doc, options)
   rewriteImages(host, options)
   renderFiles(host, doc, options)
@@ -121,6 +122,15 @@ function wrapTables(root: HTMLElement, doc: Document) {
     table.replaceWith(wrap)
     wrap.append(table)
   }
+}
+
+/**
+ * A code block or a wide table scrolls sideways, and a scroller with nothing
+ * focusable inside cannot be scrolled from the keyboard — so it takes a tab
+ * stop, as MarkdownView does for the same blocks in the app.
+ */
+function focusScrollers(root: HTMLElement) {
+  for (const el of root.querySelectorAll('pre:not([tabindex]), .kn-table-scroll')) el.setAttribute('tabindex', '0')
 }
 
 /** Replace an element with its children: the text stays, the link goes. */

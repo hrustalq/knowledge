@@ -212,7 +212,7 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="min-w-0">
             <div class="flex items-center gap-2">
-              <CircleCheck v-if="plugin.status === 'connected'" class="size-4 shrink-0 text-emerald-600" />
+              <CircleCheck v-if="plugin.status === 'connected'" class="size-4 shrink-0 text-panel-tip-ink" />
               <CircleX v-else-if="plugin.status === 'error'" class="text-destructive size-4 shrink-0" />
               <CircleDashed v-else class="text-muted-foreground size-4 shrink-0" />
               <button class="font-medium" :disabled="!canManage" @click="openEdit(plugin)">{{ plugin.name }}</button>

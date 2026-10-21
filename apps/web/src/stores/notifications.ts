@@ -27,6 +27,12 @@ export const useNotificationsStore = defineStore('notifications', {
     unreadCount: 0,
     counts: emptyCounts(),
     loaded: false,
+    /**
+     * Why the first page failed, or null. Kept apart from `entries` so a failed
+     * load is never drawn as an empty inbox: "No notifications" tells the reader
+     * nothing is waiting, when all we know is that we could not ask.
+     */
+    error: null as unknown,
     /** In-flight fetch, so the bell and the panel share one request. */
     pending: null as Promise<void> | null,
     nextCursor: null as string | null,
@@ -76,9 +82,15 @@ export const useNotificationsStore = defineStore('notifications', {
         this.nextCursor = res.nextCursor
         this.unreadCount = res.unreadCount
         this.counts = { ...emptyCounts(), ...res.counts }
+        this.error = null
         this.loaded = true
-      } catch {
-        this.entries = []
+      } catch (error) {
+        // A failed next page keeps the rows already on screen; the button that
+        // asked for it is still there to ask again.
+        if (!cursor) {
+          this.entries = []
+          this.error = error
+        }
         this.loaded = true
       }
     },

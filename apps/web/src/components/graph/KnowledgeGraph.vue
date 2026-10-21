@@ -398,6 +398,10 @@ function resize() {
   else wake()
 }
 
+/** A fallback link: off-screen until it holds focus, then a chip in the corner. */
+const FOCUS_REVEAL =
+  'sr-only focus:not-sr-only focus:block focus:max-w-72 focus:truncate focus:rounded-md focus:border focus:bg-card focus:px-2.5 focus:py-1.5 focus:text-sm focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring'
+
 /* ------------------------------------------------------------------- paint */
 
 // Display face, per the system's rule that Sora sets headings and diagram
@@ -821,7 +825,7 @@ const operationNodes = computed(() => projection.value.nodes.filter((n) => n.kin
       ref="canvasEl"
       tabindex="0"
       role="application"
-      class="size-full cursor-grab touch-none outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      class="size-full cursor-grab touch-none outline-none focus-visible:ring-3 focus-visible:ring-ring"
       :aria-label="t('graph.canvasLabel', { nodes: projection.nodes.length, edges: projection.edges.length })"
       :aria-describedby="`${uid}-help`"
       @pointerdown="onPointerDown"
@@ -836,13 +840,16 @@ const operationNodes = computed(() => projection.value.nodes.filter((n) => n.kin
     <p :id="`${uid}-help`" class="sr-only">{{ t('graph.keyboardHelp') }}</p>
 
     <!-- The graph must never be the only route to a page (PRODUCT.md). Real
-         links, off-screen, so Tab and a screen reader reach every node. -->
-    <ul class="sr-only">
+         links, off-screen, so Tab and a screen reader reach every node — and
+         each one surfaces in the corner while it holds focus, because a Tab
+         stop a sighted keyboard user cannot see is a stop that loses them.
+         Every collapsed row is zero-height, so the focused one lands at the top. -->
+    <ul class="absolute top-2 left-2 z-20">
       <li v-for="n in documentNodes" :key="n.id">
-        <a :href="`/documents/${n.id}`" @click.prevent="emit('open', n.id)">{{ n.label }}</a>
+        <a :href="`/documents/${n.id}`" :class="FOCUS_REVEAL" @click.prevent="emit('open', n.id)">{{ n.label }}</a>
       </li>
       <li v-for="n in operationNodes" :key="n.id">
-        <button type="button" @click="emit('open-operation', n.id)">{{ n.label }}</button>
+        <button type="button" :class="FOCUS_REVEAL" @click="emit('open-operation', n.id)">{{ n.label }}</button>
       </li>
     </ul>
 
@@ -861,14 +868,14 @@ const operationNodes = computed(() => projection.value.nodes.filter((n) => n.kin
         class="pointer-events-none absolute z-10 max-w-60 rounded-lg border bg-card/95 px-2.5 py-2 shadow-[0_16px_48px_-12px] shadow-foreground/20 backdrop-blur-sm dark:shadow-black/60"
         :style="cardStyle"
       >
-        <p class="truncate font-display text-[0.8rem] font-semibold leading-tight">{{ focusNode.label }}</p>
-        <p class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[0.68rem] text-muted-foreground">
+        <p class="truncate text-ui font-semibold leading-tight">{{ focusNode.label }}</p>
+        <p class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-caption text-muted-foreground">
           <span class="rounded-full border px-1.5 py-px">
             {{ focusNode.kind === 'document' ? t('graph.kindPage') : (focusNode.entityType ?? t('graph.kindEntity')) }}
           </span>
           <span>{{ t('graph.linkCount', { n: focusNode.degree ?? 0 }, focusNode.degree ?? 0) }}</span>
         </p>
-        <p v-if="cardRelations.length" class="mt-1 truncate font-mono text-[0.64rem] text-muted-foreground/80">
+        <p v-if="cardRelations.length" class="mt-1 truncate font-mono text-micro text-muted-foreground">
           {{ cardRelations.map(([type, n]) => (n > 1 ? `${type} ×${n}` : type)).join(' · ') }}
         </p>
       </div>

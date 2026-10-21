@@ -33,7 +33,7 @@ body {
   margin: 0 0 1.25rem;
   padding: 0;
   list-style: none;
-  font-size: 0.8125rem;
+  font-size: var(--kn-text-ui);
   color: var(--muted-foreground);
 }
 .kn-export-crumbs li + li::before { content: '/'; margin-right: 0.35rem; opacity: 0.6; }
@@ -41,7 +41,7 @@ body {
 
 .kn-export-cover { margin-bottom: 2rem; }
 .kn-export-title { font-size: 2rem; font-weight: 700; line-height: 1.2; margin: 0 0 0.4rem; }
-.kn-export-meta { margin: 0; font-size: 0.875rem; color: var(--muted-foreground); }
+.kn-export-meta { margin: 0; font-size: var(--kn-text-sm); color: var(--muted-foreground); }
 
 .kn-export-page-title { font-size: 1.9rem; font-weight: 700; line-height: 1.2; margin: 0 0 1rem; }
 
@@ -62,7 +62,7 @@ body {
   margin-top: 2.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
-  font-size: 0.875rem;
+  font-size: var(--kn-text-sm);
 }
 .kn-export-pager a { color: var(--primary); text-decoration: none; }
 .kn-export-pager a:hover { text-decoration: underline; }

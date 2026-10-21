@@ -274,7 +274,7 @@ function lone(c: ApiSpecChange): string | null {
   padding: 0.85rem 1rem;
   border: 1px solid var(--border);
   border-radius: 10px;
-  font-size: 0.875rem;
+  font-size: var(--kn-text-sm);
   color: var(--muted-foreground);
 }
 .kn-chg-none svg {
@@ -299,7 +299,7 @@ function lone(c: ApiSpecChange): string | null {
   border: 1px solid color-mix(in oklab, var(--sev) 35%, var(--border));
   border-radius: 999px;
   background: transparent;
-  font-size: 0.8125rem;
+  font-size: var(--kn-text-ui);
   font-weight: 500;
   color: var(--muted-foreground);
   cursor: pointer;
@@ -344,7 +344,7 @@ function lone(c: ApiSpecChange): string | null {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.8rem;
+  font-size: var(--kn-text-ui);
   font-weight: 600;
   color: color-mix(in oklab, var(--sev) 72%, var(--foreground));
 }
@@ -383,7 +383,7 @@ function lone(c: ApiSpecChange): string | null {
 }
 .kn-chg-rule {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--kn-text-sm);
   font-weight: 500;
   line-height: 1.45;
   color: var(--foreground);
@@ -394,11 +394,11 @@ function lone(c: ApiSpecChange): string | null {
   align-items: baseline;
   gap: 0.25rem 0.65rem;
   margin: 0.2rem 0 0;
-  font-size: 0.82rem;
+  font-size: var(--kn-text-ui);
 }
 .kn-chg-subject {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8rem;
+  font-size: var(--kn-text-ui);
   font-weight: 600;
   color: var(--foreground);
   overflow-wrap: anywhere;
@@ -409,7 +409,7 @@ function lone(c: ApiSpecChange): string | null {
   align-items: center;
   gap: 0.35rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.78rem;
+  font-size: var(--kn-text-xs);
   color: color-mix(in oklab, var(--foreground) 78%, var(--card));
 }
 .kn-chg-values del {
@@ -426,7 +426,7 @@ function lone(c: ApiSpecChange): string | null {
 }
 .kn-chg-severity {
   margin-top: 0.1rem;
-  font-size: 0.75rem;
+  font-size: var(--kn-text-xs);
   font-weight: 600;
   white-space: nowrap;
   color: color-mix(in oklab, var(--sev) 72%, var(--foreground));
@@ -451,7 +451,7 @@ function lone(c: ApiSpecChange): string | null {
   align-items: center;
   gap: 0.45rem;
   margin: 0 0 0.35rem;
-  font-size: 0.8rem;
+  font-size: var(--kn-text-ui);
   font-weight: 600;
   color: var(--foreground);
 }
@@ -470,7 +470,7 @@ function lone(c: ApiSpecChange): string | null {
   min-width: 0;
 }
 .kn-chg-page {
-  font-size: 0.85rem;
+  font-size: var(--kn-text-sm);
   color: var(--primary);
   text-underline-offset: 2px;
   overflow-wrap: anywhere;
@@ -480,7 +480,7 @@ function lone(c: ApiSpecChange): string | null {
 }
 .kn-chg-rel {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.7rem;
+  font-size: var(--kn-text-caption);
   letter-spacing: 0.02em;
   color: var(--muted-foreground);
 }

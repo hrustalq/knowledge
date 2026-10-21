@@ -32,14 +32,14 @@ const props = withDefaults(
 )
 
 const BOX: Record<string, string> = {
-  xs: 'size-5 rounded-[6px] text-[9px]',
-  sm: 'size-7 rounded-md text-[11px]',
+  xs: 'size-5 rounded-[6px] text-micro',
+  sm: 'size-7 rounded-md text-caption',
   md: 'size-9 rounded-lg text-sm',
   lg: 'size-14 rounded-xl text-lg',
 }
 /** The emoji, not the box, carries the size: a glyph at 9px is a smudge. */
 const GLYPH: Record<string, string> = {
-  xs: 'text-[11px]',
+  xs: 'text-caption',
   sm: 'text-base',
   md: 'text-xl',
   lg: 'text-3xl',

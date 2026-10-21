@@ -216,7 +216,7 @@ const isActive = computed(() => projectId.value === projects.activeId)
         </section>
         <section v-else class="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
           {{ t('project.noDescription') }}
-          <RouterLink :to="`/settings/projects/${project.projectId}`" class="text-primary hover:underline">
+          <RouterLink :to="`/settings/projects/${project.projectId}`" class="text-primary underline underline-offset-2">
             {{ t('project.addOne') }}
           </RouterLink>
         </section>

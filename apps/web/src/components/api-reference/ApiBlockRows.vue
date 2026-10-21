@@ -28,8 +28,8 @@ const where = (raw: string) => {
       <ApiTone :tone="statusTone(r.code)" class="self-start">{{ r.code || '—' }}</ApiTone>
       <span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-0.5 leading-normal">
         <span v-if="r.description">{{ r.description }}</span>
-        <code v-if="r.body" class="kn-api-dim font-mono text-[0.8rem]">{{ r.body }}</code>
-        <span v-for="x in r.extras" :key="x.label" class="kn-api-dim text-[0.8rem]">{{ x.label }}: {{ x.value }}</span>
+        <code v-if="r.body" class="kn-api-dim font-mono text-ui">{{ r.body }}</code>
+        <span v-for="x in r.extras" :key="x.label" class="kn-api-dim text-ui">{{ x.label }}: {{ x.value }}</span>
       </span>
     </li>
   </ul>

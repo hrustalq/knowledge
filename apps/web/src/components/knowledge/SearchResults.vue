@@ -110,7 +110,7 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
                 <Badge
                   v-if="r.supersededAt"
                   variant="outline"
-                  class="shrink-0 gap-1 text-[10px] font-normal text-muted-foreground"
+                  class="shrink-0 gap-1 text-caption font-normal text-muted-foreground"
                   :title="formatDateTime(r.supersededAt)"
                 >
                   <History class="size-3" aria-hidden="true" />
@@ -133,7 +133,7 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
               </template>
             </p>
             <div v-if="r.badges.length" class="mt-1.5 flex flex-wrap gap-1">
-              <Badge v-for="b in r.badges" :key="b.key" variant="secondary" class="text-[10px]">
+              <Badge v-for="b in r.badges" :key="b.key" variant="secondary" class="text-caption">
                 {{ b.label }}
               </Badge>
             </div>
@@ -143,7 +143,7 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
 
       <template v-if="response.related.length">
         <h3
-          class="mt-6 mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+          class="mt-6 mb-1 text-caption font-semibold uppercase tracking-wider text-muted-foreground"
         >
           {{ t('search.relatedViaGraph') }}
         </h3>
@@ -160,7 +160,7 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
                   {{ t('count.hops', { n: r.distance }, r.distance) }}
                 </span>
               </div>
-              <p class="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+              <p class="mt-0.5 truncate font-mono text-caption text-muted-foreground">
                 {{ t('search.via', { path: r.via }) }}
               </p>
             </RouterLink>

@@ -83,6 +83,8 @@ describe('web i18n message keys', () => {
     const literals = new Set(Array.from(source.matchAll(/['"`]([a-zA-Z][\w-]*(?:\.[\w-]+)+)['"`]/g), (m) => m[1]!))
     const prefixes = [
       ...Array.from(source.matchAll(/`([a-zA-Z][\w-]*(?:\.[\w-]+)*\.?)\$\{/g), (m) => m[1]!),
+      // `` `notifications.event['${type}']` `` — a quoted segment, for flat keys that hold dots
+      ...Array.from(source.matchAll(/`([a-zA-Z][\w-]*(?:\.[\w-]+)*)\['\$\{/g), (m) => `${m[1]!}.`),
       ...Array.from(source.matchAll(/['"]([a-zA-Z][\w-]*(?:\.[\w-]+)*\.)['"]\s*\+/g), (m) => m[1]!),
       ...Array.from(source.matchAll(/labelFor\([^,]*,\s*'([^']+)'/g), (m) => `${m[1]!}.`),
     ]

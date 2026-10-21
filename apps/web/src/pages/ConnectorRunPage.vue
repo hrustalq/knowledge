@@ -32,7 +32,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { ArrowLeft, FileStack, Loader2 } from 'lucide-vue-next'
+import { ArrowLeft, FileStack, Loader2, PanelLeft } from 'lucide-vue-next'
 import {
   allowedRunEvents,
   type ConnectorItemEventType,
@@ -48,6 +48,7 @@ import { apiQueryOptions } from '@/api/queries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import AiEmptyState from '@/components/ai/AiEmptyState.vue'
 import ParseProgress from '@/components/import/ParseProgress.vue'
 import ConnectorItemReview from '@/components/connectors/ConnectorItemReview.vue'
@@ -131,6 +132,14 @@ watch(items, (list) => {
 })
 
 const selected = computed(() => items.value.find((i) => i.id === selectedId.value) ?? null)
+
+/** Small screens only: the tree lives in a sheet rather than beside the review (AssistantPage). */
+const treeOpen = ref(false)
+
+function pickFromSheet(id: string) {
+  selectedId.value = id
+  treeOpen.value = false
+}
 
 const detailQuery = useQuery(
   computed(() => ({
@@ -342,6 +351,18 @@ const showRing = computed(() => items.value.length === 0 && run.value !== null &
           {{ t('connectors.backToRuns') }}
         </Button>
         <h1 class="truncate text-base font-semibold tracking-tight">{{ t('connectors.runTitle') }}</h1>
+        <!-- Below lg a fixed tree column would leave the review a sliver, so the
+             tree moves into a sheet opened from here. -->
+        <Button
+          v-if="items.length"
+          variant="outline"
+          size="sm"
+          class="shrink-0 lg:hidden"
+          @click="treeOpen = true"
+        >
+          <PanelLeft class="size-4" aria-hidden="true" />
+          {{ t('connectors.itemCount', { count: items.length }, items.length) }}
+        </Button>
       </div>
 
       <div v-if="run" class="flex flex-wrap items-center gap-2 text-xs">
@@ -357,7 +378,7 @@ const showRing = computed(() => items.value.length === 0 && run.value !== null &
         <span v-if="run.phase" class="text-muted-foreground">{{ t(PHASE_LABEL[run.phase]) }}</span>
         <span class="text-muted-foreground">·</span>
         <span class="text-muted-foreground">{{ t(`connectors.mode.${run.mode}`) }}</span>
-        <span v-if="run.awaitingReview > 0" class="font-medium text-amber-600 dark:text-amber-500">
+        <span v-if="run.awaitingReview > 0" class="font-medium text-panel-warning-ink">
           {{ t('connectors.awaitingReview', { count: run.awaitingReview }, run.awaitingReview) }}
         </span>
       </div>
@@ -379,7 +400,7 @@ const showRing = computed(() => items.value.length === 0 && run.value !== null &
         <!-- The tree keeps a fixed column: it is the index of the run, and a
              pane that resized as branches arrived would move every row under
              the pointer. -->
-        <div class="flex w-80 shrink-0 flex-col border-r xl:w-96">
+        <div class="hidden w-80 shrink-0 flex-col border-r lg:flex xl:w-96">
           <ConnectorRunTree
             :items="items"
             :selected-id="selectedId"
@@ -456,5 +477,22 @@ const showRing = computed(() => items.value.length === 0 && run.value !== null &
         </Button>
       </div>
     </footer>
+
+    <Sheet v-model:open="treeOpen">
+      <SheetContent side="left" class="w-80 max-w-[85vw] p-0">
+        <SheetHeader class="sr-only">
+          <SheetTitle>{{ t('connectors.itemCount', { count: items.length }, items.length) }}</SheetTitle>
+        </SheetHeader>
+        <ConnectorRunTree
+          :items="items"
+          :selected-id="selectedId"
+          :busy-ids="busyIds"
+          :can-manage="canManage"
+          :truncated="itemsData?.truncated ?? false"
+          @select="pickFromSheet"
+          @event="itemEvent"
+        />
+      </SheetContent>
+    </Sheet>
   </div>
 </template>

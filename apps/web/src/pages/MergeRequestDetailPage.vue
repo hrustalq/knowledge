@@ -11,7 +11,7 @@
 // Overview is one timeline. State changes come from the activity log, threads
 // from the review API, and they are sorted together — see MrActivityFeed.
 import { useI18n } from 'vue-i18n'
-import { computed, ref } from 'vue'
+import { computed, ref, type WritableComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { warnMentionedWithoutAccess } from '@/components/access/mention-access'
 import { useMembers } from '@/components/merge-requests/use-members'
@@ -49,6 +49,7 @@ import CommentComposer from '@/components/merge-requests/CommentComposer.vue'
 import { matchAnchoredThreads } from '@/components/merge-requests/thread-anchors'
 import { mrIcon } from '@/components/merge-requests/mr-ui'
 import UserChip from '@/components/people/UserChip.vue'
+import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/components/layout/page'
 
 const { t } = useI18n()
 
@@ -69,11 +70,12 @@ const queryClient = useQueryClient()
 const auth = useAuthStore()
 const id = computed(() => String(route.params.id))
 
-const tab = computed<Tab>(() =>
-  visibleTabs.value.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'overview',
-)
+// A getter, not the computed itself: `pageTabs` is declared below, beside the
+// counts it reads. Annotated because those counts come from queries `tab`
+// enables, which TypeScript would otherwise chase in a circle.
+const tab: WritableComputedRef<Tab> = usePageTabs<Tab>((): readonly PageTab<Tab>[] => pageTabs.value, 'overview')
 function setTab(next: Tab) {
-  void router.replace({ query: { ...route.query, tab: next === 'overview' ? undefined : next } })
+  tab.value = next
 }
 
 // --- queries -----------------------------------------------------------------
@@ -183,6 +185,10 @@ const tabCounts = computed<Partial<Record<Tab, number>>>(() => ({
   changes: diff.value?.hunks.length || undefined,
   api: apiChanges.value?.diff?.changes.length || undefined,
 }))
+
+const pageTabs = computed<PageTab<Tab>[]>(() =>
+  visibleTabs.value.map((key) => ({ key, label: t(TAB_LABELS[key]), count: tabCounts.value[key] })),
+)
 
 // --- title/description inline editing (GitLab-style) -------------------------
 const editing = ref(false)
@@ -366,8 +372,14 @@ function refresh() {
 
       <!-- inline title/description editor -->
       <div v-else class="space-y-2 rounded-lg border bg-card p-3">
-        <Input v-model="editTitle" :placeholder="t('mr.titlePlaceholder')" />
-        <Textarea v-model="editDescription" rows="4" :placeholder="t('mr.descriptionPlaceholder')" class="font-mono text-sm" />
+        <Input v-model="editTitle" :placeholder="t('mr.titlePlaceholder')" :aria-label="t('mr.titlePlaceholder')" />
+        <Textarea
+          v-model="editDescription"
+          rows="4"
+          :placeholder="t('mr.descriptionPlaceholder')"
+          :aria-label="t('mr.descriptionPlaceholder')"
+          class="font-mono text-sm"
+        />
         <div class="flex gap-2">
           <Button size="sm" :disabled="updateMr.isPending.value || !editTitle.trim()" @click="saveEdit">{{ t('common.save') }}</Button>
           <Button size="sm" variant="ghost" :disabled="updateMr.isPending.value" @click="editing = false">{{ t('common.cancel') }}</Button>
@@ -407,34 +419,9 @@ function refresh() {
          which is what lets it stick. -->
     <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
       <div class="min-w-0 space-y-4">
-        <!-- tabs -->
-        <div class="flex gap-0.5 overflow-x-auto border-b" role="tablist">
-          <button
-            v-for="tabId in visibleTabs"
-            :key="tabId"
-            role="tab"
-            :aria-selected="tab === tabId"
-            class="flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors"
-            :class="tab === tabId
-              ? 'border-primary font-medium text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'"
-            @click="setTab(tabId)"
-          >
-            {{ t(TAB_LABELS[tabId]) }}
-            <!-- Circle at one digit, stadium at two: a fixed height and a
-                 min-width the padding cannot undercut. The count belongs to
-                 the tab, so it takes the tab's state rather than staying grey
-                 next to an active label. -->
-            <span
-              v-if="tabCounts[tabId]"
-              class="inline-grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[0.6875rem] font-semibold tabular-nums"
-              :class="tab === tabId
-                ? 'bg-primary/15 text-primary'
-                : 'bg-muted text-foreground/85'"
-            >{{ tabCounts[tabId] }}</span>
-          </button>
-        </div>
+        <PageTabs v-model="tab" :tabs="pageTabs" :label="t('mr.tabsLabel')" />
 
+        <div :id="panelId(tab)" role="tabpanel" :aria-labelledby="tabId(tab)" class="space-y-4">
         <!-- overview: description, then one timeline -->
         <template v-if="tab === 'overview'">
           <!-- The merge widget's box, not a Card: a Card's own 1.5rem inset
@@ -498,8 +485,8 @@ function refresh() {
           <template v-else-if="diff">
             <p class="text-xs text-muted-foreground">
               {{ t('mr.comparingAgainst') }} <span class="font-mono">{{ mr.sourceBranch }}</span>
-              — <span class="text-emerald-600">+{{ diff.summary.additions }}</span>
-              <span class="text-red-600">−{{ diff.summary.deletions }}</span>
+              — <span class="text-panel-tip-ink">+{{ diff.summary.additions }}</span>
+              <span class="text-panel-caution-ink">−{{ diff.summary.deletions }}</span>
             </p>
             <div v-if="pendingAnchor" class="rounded-lg border bg-card p-3">
               <p class="mb-2 text-xs font-medium">
@@ -551,7 +538,7 @@ function refresh() {
               <div v-else class="space-y-1">
                 <p class="mb-1 text-xs text-muted-foreground">{{ t('mr.source', { name: diff.structural.source }) }}</p>
                 <p v-for="(c, i) in diff.structural.changes" :key="i" class="font-mono text-xs">
-                  <span :class="c.kind === 'added' ? 'text-green-600' : c.kind === 'removed' ? 'text-red-600' : 'text-amber-600'">{{ t(`mr.change${c.kind[0].toUpperCase()}${c.kind.slice(1)}`) }}</span>
+                  <span :class="c.kind === 'added' ? 'text-panel-tip-ink' : c.kind === 'removed' ? 'text-panel-caution-ink' : 'text-panel-warning-ink'">{{ t(`mr.change${c.kind[0].toUpperCase()}${c.kind.slice(1)}`) }}</span>
                   {{ c.path || t('mr.root') }}
                 </p>
               </div>
@@ -586,18 +573,18 @@ function refresh() {
                 <CardHeader><CardTitle class="text-sm">{{ t('mr.entities') }}</CardTitle></CardHeader>
                 <CardContent class="space-y-1 text-sm">
                   <p v-if="semantic.entities.added.length === 0 && semantic.entities.removed.length === 0" class="text-muted-foreground">{{ t('mr.noEntityChanges') }}</p>
-                  <p v-for="e in semantic.entities.added" :key="`a-${e}`" class="font-mono text-xs text-green-600">+ {{ e }}</p>
-                  <p v-for="e in semantic.entities.removed" :key="`r-${e}`" class="font-mono text-xs text-red-600">− {{ e }}</p>
+                  <p v-for="e in semantic.entities.added" :key="`a-${e}`" class="font-mono text-xs text-panel-tip-ink">+ {{ e }}</p>
+                  <p v-for="e in semantic.entities.removed" :key="`r-${e}`" class="font-mono text-xs text-panel-caution-ink">− {{ e }}</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader><CardTitle class="text-sm">{{ t('mr.relations') }}</CardTitle></CardHeader>
                 <CardContent class="space-y-1 text-sm">
                   <p v-if="semantic.relations.added.length === 0 && semantic.relations.removed.length === 0" class="text-muted-foreground">{{ t('mr.noRelationChanges') }}</p>
-                  <p v-for="(r, i) in semantic.relations.added" :key="`a-${i}`" class="font-mono text-xs text-green-600">
+                  <p v-for="(r, i) in semantic.relations.added" :key="`a-${i}`" class="font-mono text-xs text-panel-tip-ink">
                     + {{ r.type }} → {{ r.targetKey }} <span class="text-muted-foreground">({{ r.extractor }}, {{ r.confidence }})</span>
                   </p>
-                  <p v-for="(r, i) in semantic.relations.removed" :key="`r-${i}`" class="font-mono text-xs text-red-600">
+                  <p v-for="(r, i) in semantic.relations.removed" :key="`r-${i}`" class="font-mono text-xs text-panel-caution-ink">
                     − {{ r.type }} → {{ r.targetKey }} <span class="text-muted-foreground">({{ r.extractor }}, {{ r.confidence }})</span>
                   </p>
                 </CardContent>
@@ -613,6 +600,7 @@ function refresh() {
               </CardContent>
             </Card>
           </template>
+        </div>
         </div>
       </div>
 

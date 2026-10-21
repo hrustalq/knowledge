@@ -54,16 +54,16 @@ const origin = computed(() => capture.value?.origin ?? null)
       <CaptureOriginParts v-if="origin" :origin="origin" />
       <template v-if="repo">
         <span aria-hidden="true">·</span>
-        <code class="font-mono text-[0.6875rem] text-foreground/80" :title="session?.repo">{{ repo }}</code>
+        <code class="font-mono text-caption text-foreground/80" :title="session?.repo">{{ repo }}</code>
       </template>
       <template v-if="session?.branch">
         <span aria-hidden="true">·</span>
-        <code class="max-w-56 truncate font-mono text-[0.6875rem]" :title="session.branch">{{ session.branch }}</code>
+        <code class="max-w-56 truncate font-mono text-caption" :title="session.branch">{{ session.branch }}</code>
       </template>
       <template v-if="session?.sessionId">
         <span aria-hidden="true">·</span>
         <span :title="session.sessionId">
-          {{ t('mr.provenance.session') }} <code class="font-mono text-[0.6875rem]">{{ session.sessionId.slice(0, 8) }}</code>
+          {{ t('mr.provenance.session') }} <code class="font-mono text-caption">{{ session.sessionId.slice(0, 8) }}</code>
         </span>
       </template>
       <RouterLink

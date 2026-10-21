@@ -10,7 +10,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Plus } from 'lucide-vue-next'
+import { Bot, Plus } from 'lucide-vue-next'
 import type { ChatIntegrationsResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/api/queries'
 import { getWorkspaceId } from '@/lib/api'
@@ -56,17 +56,14 @@ function refresh() {
       <template v-else-if="data">
         <p
           v-if="!data.enabled"
-          class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+          class="rounded-md border kn-callout-warning px-3 py-2 text-sm"
         >
           {{ t('chatBots.ceilingOff') }}
         </p>
         <div v-if="data.integrations.length" class="flex flex-col gap-5">
           <ChatIntegrationCard v-for="bot in data.integrations" :key="bot.id" :bot="bot" @changed="refresh" />
         </div>
-        <div v-else class="max-w-xl rounded-xl border border-dashed px-5 py-6">
-          <p class="text-sm font-medium">{{ t('chatBots.empty.title') }}</p>
-          <p class="mt-1 text-sm text-muted-foreground">{{ t('chatBots.empty.body') }}</p>
-        </div>
+        <PageState v-else state="empty" :icon="Bot" :title="t('chatBots.empty.title')" :description="t('chatBots.empty.body')" />
         <ChatSearchSettings v-if="data.integrations.length" :workspace-id="getWorkspaceId()" />
       </template>
     </template>

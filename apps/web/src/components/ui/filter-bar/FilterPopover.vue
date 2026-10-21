@@ -111,7 +111,7 @@ const { t } = useI18n()
           v-model="search"
           auto-focus
           :placeholder="searchPlaceholder ?? t('common.filterPlaceholder')"
-          class="placeholder:text-muted-foreground h-9 w-full bg-transparent pr-3 pl-9 text-[13px] outline-none"
+          class="placeholder:text-muted-foreground h-9 w-full bg-transparent pr-3 pl-9 text-ui outline-none"
         />
       </div>
 
@@ -125,7 +125,7 @@ const { t } = useI18n()
           <ComboboxGroup>
             <ComboboxLabel
               v-if="group"
-              class="text-muted-foreground px-2 pt-1.5 pb-1 text-[11px] font-semibold tracking-wider uppercase"
+              class="text-muted-foreground px-2 pt-1.5 pb-1 text-caption font-semibold tracking-wider uppercase"
             >
               {{ group }}
             </ComboboxLabel>
@@ -134,13 +134,13 @@ const { t } = useI18n()
               :key="item.value"
               :value="item.value"
               :text-value="item.label"
-              class="data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground group/item flex h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-[13px] outline-none select-none"
+              class="data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground group/item flex h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-ui outline-none select-none"
             >
               <component :is="item.icon" v-if="item.icon" class="text-muted-foreground size-3.5 shrink-0" />
               <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
               <span
                 v-if="item.meta !== undefined"
-                class="text-muted-foreground shrink-0 text-[11px] tabular-nums"
+                class="text-muted-foreground shrink-0 text-caption tabular-nums"
               >{{ item.meta }}</span>
               <ComboboxItemIndicator class="shrink-0">
                 <Check class="size-3.5" />

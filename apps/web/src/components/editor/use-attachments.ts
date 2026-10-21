@@ -27,6 +27,24 @@ export interface UploadTask {
 
 const ACCEPTED = new Set<string>(ATTACHMENT_CONTENT_TYPES)
 
+/**
+ * Names a camera, the OS or the clipboard made up: a screen reader announcing
+ * "Screenshot 2026-10-21 at 10.22.33.png" is worse than announcing nothing.
+ */
+const GENERATED_NAME =
+  /^(?:image|img|pasted(?:[\s_-]?image)?|clipboard|screenshot|screen[\s_-]?shot|снимок(?:[\s_]экрана)?|photo|dsc|pxl|untitled|frame|capture)?[\s\d_.:()@,+-]*(?:at|в)?[\s\d_.:()@,+-]*$|^[0-9a-f_-]{8,}$/i
+
+/**
+ * The alt an upload starts with. There is no alt editor in the page yet, so a
+ * generated name becomes `""` (decorative) and an authored one is read as
+ * words — "release-flow.png" → "release flow".
+ */
+function altFromFilename(filename: string): string {
+  const stem = filename.replace(/\.[a-z0-9]{2,5}$/i, '').trim()
+  if (!stem || GENERATED_NAME.test(stem)) return ''
+  return stem.replace(/[\s_-]+/g, ' ').trim()
+}
+
 export function useAttachments(resolveDocumentId: () => Promise<string | null>) {
   const { t } = useI18n()
 
@@ -93,7 +111,7 @@ export function useAttachments(resolveDocumentId: () => Promise<string | null>) 
         editor
           .chain()
           .focus()
-          .setImage({ src: attachment.url, alt: attachment.filename })
+          .setImage({ src: attachment.url, alt: altFromFilename(attachment.filename) })
           .run()
       } else {
         editor

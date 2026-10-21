@@ -24,6 +24,7 @@ import { formatDateTime } from '@/lib/format'
 import { useCopy } from '@/lib/use-copy'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { confirm } from '@/components/ui/confirm'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { PageState } from '@/components/layout/page'
@@ -78,7 +79,14 @@ async function check(d: SsoDomainView, manual = false) {
 }
 
 async function setEnforced(d: SsoDomainView, enforced: boolean) {
-  if (enforced && !window.confirm(t('security.domains.enforceConfirm', { domain: d.domain }))) return
+  if (enforced) {
+    const ok = await confirm({
+      title: t('security.domains.enforceTitle', { domain: d.domain }),
+      description: t('security.domains.enforceBody'),
+      action: t('security.domains.enforce'),
+    })
+    if (!ok) return
+  }
   try {
     await update.mutateAsync({ path: { ...path, domain: d.domain }, body: { enforced } })
     toast.success(t(enforced ? 'security.domains.enforcedOn' : 'security.domains.enforcedOff', { domain: d.domain }))
@@ -98,8 +106,13 @@ async function setProvider(d: SsoDomainView, value: unknown) {
 }
 
 async function confirmRemove(d: SsoDomainView) {
-  // A native confirm keeps this one destructive action from needing its own dialog state.
-  if (!window.confirm(t('security.domains.removeConfirm', { domain: d.domain }))) return
+  const ok = await confirm({
+    title: t('security.domains.removeTitle', { domain: d.domain }),
+    description: t('security.domains.removeBody'),
+    action: t('security.domains.remove'),
+    destructive: true,
+  })
+  if (!ok) return
   try {
     await remove.mutateAsync({ path: { ...path, domain: d.domain } })
     toast.success(t('security.domains.removed'))

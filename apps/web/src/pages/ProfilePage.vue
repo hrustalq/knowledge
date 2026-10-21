@@ -22,6 +22,7 @@ import {
   MessageSquare,
   Pencil,
   ShieldCheck,
+  UserX,
   X,
 } from 'lucide-vue-next'
 import type {
@@ -36,6 +37,7 @@ import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageState } from '@/components/layout/page'
 import UserAvatar from '@/components/merge-requests/UserAvatar.vue'
 import RailSection from '@/components/knowledge/RailSection.vue'
 import ActivityLedger from '@/components/profile/ActivityLedger.vue'
@@ -155,12 +157,9 @@ const rail = ref<Record<string, boolean>>({ pages: true, open: false, access: fa
       </div>
     </header>
 
-    <p
-      v-else-if="profileQuery.isError.value"
-      class="rounded-lg border border-dashed px-4 py-8 text-sm text-muted-foreground"
-    >
-      {{ t('profile.notFound') }}
-    </p>
+    <!-- Empty, not error: the usual cause is a link to someone outside this
+         workspace, which is nothing to go looking for a fault over. -->
+    <PageState v-else-if="profileQuery.isError.value" state="empty" :icon="UserX" :title="t('profile.notFound')" />
 
     <template v-else-if="profile">
       <header class="flex flex-wrap items-start gap-4">
@@ -201,7 +200,7 @@ const rail = ref<Record<string, boolean>>({ pages: true, open: false, access: fa
                the 46rem measure. -->
           <section class="min-w-0 rounded-xl border bg-card p-4 lg:p-5">
             <div class="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-              <h2 class="font-display text-[15px] font-semibold tracking-tight">
+              <h2 class="font-display text-base font-semibold tracking-tight">
                 {{
                   calendar
                     ? t('profile.ledger.heading', { n: calendar.total })
@@ -252,7 +251,7 @@ const rail = ref<Record<string, boolean>>({ pages: true, open: false, access: fa
 
           <section class="min-w-0">
             <div class="mb-3 flex flex-wrap items-center gap-2">
-              <h2 class="font-display text-[15px] font-semibold tracking-tight">
+              <h2 class="font-display text-base font-semibold tracking-tight">
                 {{ t('profile.activity.heading') }}
               </h2>
               <!-- The narrowing states itself in words. A filter you cannot
@@ -306,7 +305,7 @@ const rail = ref<Record<string, boolean>>({ pages: true, open: false, access: fa
                     aria-hidden="true"
                   />
                   <span class="min-w-0 flex-1 truncate">{{ page.title }}</span>
-                  <span class="shrink-0 text-[11px] text-muted-foreground tabular-nums">{{
+                  <span class="shrink-0 text-caption text-muted-foreground tabular-nums">{{
                     page.authored ? t('profile.pages.authored') : t('profile.pages.revisions', { n: page.revisions })
                   }}</span>
                 </RouterLink>
@@ -314,7 +313,7 @@ const rail = ref<Record<string, boolean>>({ pages: true, open: false, access: fa
             </ul>
             <p
               v-if="profile.pageCount > profile.pages.length"
-              class="mt-2 px-1.5 text-[11px] text-muted-foreground"
+              class="mt-2 px-1.5 text-caption text-muted-foreground"
             >
               {{ t('profile.pages.more', { n: profile.pageCount - profile.pages.length }) }}
             </p>

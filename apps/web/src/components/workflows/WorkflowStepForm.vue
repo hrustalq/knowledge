@@ -160,7 +160,7 @@ const promptPlaceholder = computed(() =>
         <component :is="kindMeta?.icon" class="text-muted-foreground size-4 shrink-0" />
         <div class="min-w-0">
           <p class="truncate text-sm font-medium">{{ step.title || step.id }}</p>
-          <p class="text-muted-foreground truncate font-mono text-[11px]">{{ step.id }}</p>
+          <p class="text-muted-foreground truncate font-mono text-caption">{{ step.id }}</p>
         </div>
       </div>
       <Button
@@ -181,7 +181,7 @@ const promptPlaceholder = computed(() =>
           v-for="(issue, i) in myIssues"
           :key="i"
           class="flex gap-1.5 text-xs leading-snug"
-          :class="issue.severity === 'error' ? 'text-destructive' : 'text-amber-600 dark:text-amber-500'"
+          :class="issue.severity === 'error' ? 'text-destructive' : 'text-panel-warning-ink'"
         >
           <span aria-hidden="true">•</span>{{ issue.message }}
         </li>
@@ -200,7 +200,7 @@ const promptPlaceholder = computed(() =>
       <!-- Kind: a segmented row, not four stacked cards. It is chosen once. -->
       <div class="space-y-1.5">
         <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.form.does') }}</span>
-        <div class="bg-muted/50 grid grid-cols-4 gap-0.5 rounded-md p-0.5">
+        <div class="bg-muted/50 grid grid-cols-2 gap-0.5 rounded-md p-0.5 sm:grid-cols-4">
           <button
             v-for="kind in STEP_KINDS"
             :key="kind.value"
@@ -208,7 +208,7 @@ const promptPlaceholder = computed(() =>
             :disabled="!canManage"
             :aria-pressed="step.kind === kind.value"
             :title="t(kind.hint)"
-            class="focus-visible:ring-ring flex flex-col items-center gap-1 rounded px-1 py-1.5 text-[10px] leading-tight transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60"
+            class="focus-visible:ring-ring flex flex-col items-center gap-1 rounded px-1 py-1.5 text-xs leading-tight sm:text-micro transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60"
             :class="
               step.kind === kind.value
                 ? 'bg-background text-foreground shadow-xs font-medium'
@@ -220,7 +220,7 @@ const promptPlaceholder = computed(() =>
             <span class="text-center">{{ t(kind.short) }}</span>
           </button>
         </div>
-        <p class="text-muted-foreground text-[11px] leading-snug">{{ kindMeta ? t(kindMeta.hint) : '' }}</p>
+        <p class="text-muted-foreground text-caption leading-snug">{{ kindMeta ? t(kindMeta.hint) : '' }}</p>
       </div>
 
       <label v-if="isAi" class="block space-y-1.5">
@@ -232,7 +232,7 @@ const promptPlaceholder = computed(() =>
           :placeholder="promptPlaceholder"
           @update:model-value="(v) => patch({ prompt: { ...step.prompt, user: String(v) } })"
         />
-        <span class="text-muted-foreground block text-[11px] leading-snug">
+        <span class="text-muted-foreground block text-caption leading-snug">
           {{ t('workflow.form.promptHint') }}
         </span>
       </label>
@@ -258,7 +258,7 @@ const promptPlaceholder = computed(() =>
               />
               <span class="text-xs font-medium">{{ option.label }}</span>
             </span>
-            <span class="text-muted-foreground mt-0.5 block pl-3.5 text-[11px] leading-snug">
+            <span class="text-muted-foreground mt-0.5 block pl-3.5 text-caption leading-snug">
               {{ option.hint }}
             </span>
           </button>
@@ -294,7 +294,7 @@ const promptPlaceholder = computed(() =>
             </Select>
           </label>
         </div>
-        <p class="text-muted-foreground text-[11px] leading-snug">
+        <p class="text-muted-foreground text-caption leading-snug">
           {{ t('workflow.form.nestingHint') }}
         </p>
         <label v-if="canTemplate" class="block space-y-1.5">
@@ -312,7 +312,7 @@ const promptPlaceholder = computed(() =>
               </SelectItem>
             </SelectContent>
           </Select>
-          <span class="text-muted-foreground block text-[11px] leading-snug">
+          <span class="text-muted-foreground block text-caption leading-snug">
             {{ t('workflow.form.templateHint') }}
           </span>
         </label>
@@ -330,7 +330,7 @@ const promptPlaceholder = computed(() =>
             :disabled="!canManage"
             @update:model-value="(v) => patch({ maxItems: Number(v) || undefined })"
           />
-          <span class="text-muted-foreground text-[11px]">{{ t('workflow.form.maxItemsHint') }}</span>
+          <span class="text-muted-foreground text-caption">{{ t('workflow.form.maxItemsHint') }}</span>
         </div>
       </label>
 
@@ -360,14 +360,14 @@ const promptPlaceholder = computed(() =>
             </Button>
           </li>
         </ul>
-        <p v-else class="text-muted-foreground text-[11px]">{{ t('workflow.form.nothingAfter') }}</p>
+        <p v-else class="text-muted-foreground text-caption">{{ t('workflow.form.nothingAfter') }}</p>
 
         <Select
           v-if="canManage && addable.length"
           model-value=""
           @update:model-value="(v) => v && patch({ next: [...step.next, String(v)] })"
         >
-          <SelectTrigger class="h-8 w-full text-xs">
+          <SelectTrigger class="h-8 w-full text-xs" :aria-label="t('workflow.connectStep')">
             <SelectValue :placeholder="t('workflow.connectStep')" />
           </SelectTrigger>
           <SelectContent>
@@ -376,7 +376,7 @@ const promptPlaceholder = computed(() =>
             </SelectItem>
           </SelectContent>
         </Select>
-        <p class="text-muted-foreground text-[11px]">{{ t('workflow.form.dragHint') }}</p>
+        <p class="text-muted-foreground text-caption">{{ t('workflow.form.dragHint') }}</p>
       </div>
     </div>
   </div>

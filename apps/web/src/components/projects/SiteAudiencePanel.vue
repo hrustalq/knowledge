@@ -10,8 +10,11 @@
  *
  * The visitor secret is shown once, in this component's memory, right after
  * it is made; leaving the tab forgets it, as it should. Replacing or clearing
- * it signs every visitor out, so both ask a second time, inline (no
- * browser confirm(), as elsewhere in settings).
+ * it signs every visitor out, so both ask a second time, inline beside the
+ * secret they act on — the same inline step as deleting the site
+ * (SiteSettingsPage). A yes/no that has nothing beside it to point at goes
+ * through `confirm()` (components/ui/confirm) instead; nothing here uses a
+ * browser confirm().
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -165,10 +168,10 @@ const linkExample = computed(() => `${props.site.url}/…?${SITE_VISITOR_TOKEN_P
 </script>
 
 <template>
-  <div class="max-w-3xl space-y-8">
+  <div class="space-y-8">
     <section class="space-y-3">
-      <p class="text-sm text-muted-foreground">{{ t('site.audience.intro') }}</p>
-      <p class="text-sm text-muted-foreground">{{ t('site.audience.membersHint') }}</p>
+      <p class="kn-measure text-sm text-muted-foreground">{{ t('site.audience.intro') }}</p>
+      <p class="kn-measure text-sm text-muted-foreground">{{ t('site.audience.membersHint') }}</p>
 
       <PageState v-if="query.isPending.value" state="loading" :rows="2" row-class="h-10" />
       <ul v-else-if="data?.rules.length" class="divide-y rounded-md border">
@@ -201,7 +204,7 @@ const linkExample = computed(() => `${props.site.url}/…?${SITE_VISITOR_TOKEN_P
       </ul>
       <p v-else class="text-sm text-muted-foreground">{{ t('site.audience.none') }}</p>
 
-      <form v-if="canManage" class="space-y-3 rounded-md border p-4" @submit.prevent="save">
+      <form v-if="canManage" class="max-w-3xl space-y-3 rounded-md border p-4" @submit.prevent="save">
         <p class="text-sm font-medium">{{ editing ? t('site.audience.editing') : t('site.audience.add') }}</p>
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="block space-y-1">
@@ -240,11 +243,11 @@ const linkExample = computed(() => `${props.site.url}/…?${SITE_VISITOR_TOKEN_P
 
     <section v-if="data" class="space-y-3">
       <h2 class="text-sm font-semibold">{{ t('site.audience.visitorAuth') }}</h2>
-      <p class="text-sm text-muted-foreground">{{ t('site.audience.visitorAuthIntro', { minutes: data.sessionTtlMinutes }) }}</p>
+      <p class="kn-measure text-sm text-muted-foreground">{{ t('site.audience.visitorAuthIntro', { minutes: data.sessionTtlMinutes }) }}</p>
 
       <p
         v-if="!data.visitorAuth.canStore"
-        class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+        class="rounded-md border kn-callout-warning px-3 py-2 text-sm"
       >
         {{ t('site.audience.visitorNoKey') }}
       </p>

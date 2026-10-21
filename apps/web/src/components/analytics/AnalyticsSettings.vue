@@ -84,17 +84,17 @@ async function save() {
   <PageState v-if="query.isPending.value" state="loading" :rows="3" row-class="h-12" />
   <PageState v-else-if="query.isError.value" state="error" :error="query.error.value" />
 
-  <form v-else-if="settings" class="max-w-2xl space-y-5" @submit.prevent="save">
+  <form v-else-if="settings" class="space-y-5" @submit.prevent="save">
     <div>
       <h2 class="text-base font-semibold">{{ t('analytics.settings.title') }}</h2>
-      <p class="mt-0.5 text-sm text-muted-foreground">{{ t('analytics.settings.intro') }}</p>
+      <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('analytics.settings.intro') }}</p>
     </div>
 
     <div class="divide-y rounded-md border">
       <div class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
         <div class="min-w-0">
           <span class="text-sm font-medium">{{ t('analytics.settings.recording.label') }}</span>
-          <p class="text-xs text-muted-foreground">{{ t('analytics.settings.recording.hint') }}</p>
+          <p class="kn-measure text-xs text-muted-foreground">{{ t('analytics.settings.recording.hint') }}</p>
           <p class="mt-1 text-xs">
             <span class="text-muted-foreground">{{ t('analytics.settings.applies') }}</span>
             {{ onOff(settings.effective.enabled) }}

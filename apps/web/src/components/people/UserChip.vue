@@ -13,14 +13,15 @@
  * A hover card on a touch device is a card nobody can open. So the trigger
  * carries both: a HoverCard under `(hover: hover)`, and a tap-driven Popover
  * otherwise — the same two-surface split `ui/popover/ResponsivePopover.vue`
- * makes, for the same reason. `useMediaQuery` reads false during SSR, which is
- * the popover branch; both are closed at hydration and the trigger markup is
- * identical either way, so there is nothing to mismatch.
+ * makes, for the same reason. The server renders the popover branch, whose
+ * trigger is a `<button>` where the hover branch's is a link, so the hover
+ * query waits for mount (`useHydratedMediaQuery`) and hydration sees the same
+ * element the server wrote.
  *
  * The card is mounted only while open, and `UserCard` only fetches then.
  */
 import { computed, ref } from 'vue'
-import { useMediaQuery } from '@vueuse/core'
+import { useHydratedMediaQuery } from '@/lib/use-hydrated'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import UserAvatar from '@/components/merge-requests/UserAvatar.vue'
@@ -52,7 +53,7 @@ const label = computed(
 const avatar = computed(() => member.value?.avatarUrl ?? null)
 
 const open = ref(false)
-const canHover = useMediaQuery('(hover: hover)')
+const canHover = useHydratedMediaQuery('(hover: hover)')
 </script>
 
 <template>

@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import AiEmptyState from '@/components/ai/AiEmptyState.vue'
+import { PageState } from '@/components/layout/page'
 import { getWorkspaceId } from '@/lib/api'
 import { relativeTime } from '@/lib/api'
 import ConnectorSetupDialog from './ConnectorSetupDialog.vue'
@@ -81,7 +82,7 @@ async function confirmRemove(connector: ConnectorSummary) {
 /** Tri-state, driven off the last run — the AiProvidersSection status dot. */
 function statusIcon(connector: ConnectorSummary) {
   const status = connector.lastRun?.status
-  if (status === 'succeeded') return { icon: CircleCheck, class: 'text-emerald-500' }
+  if (status === 'succeeded') return { icon: CircleCheck, class: 'text-panel-tip' }
   if (status === 'failed' || status === 'partial') return { icon: CircleX, class: 'text-destructive' }
   return { icon: CircleDashed, class: 'text-muted-foreground' }
 }
@@ -101,6 +102,14 @@ function statusIcon(connector: ConnectorSummary) {
     <div v-if="query.isPending.value" class="space-y-2">
       <Skeleton v-for="i in 2" :key="i" class="h-24 w-full" />
     </div>
+
+    <!-- A failed list is not an empty one: "no connections yet" would invite
+         adding one that may already exist. -->
+    <PageState v-else-if="query.isError.value" state="error" :error="query.error.value">
+      <template #actions>
+        <Button size="sm" variant="outline" @click="query.refetch()">{{ t('common.retry') }}</Button>
+      </template>
+    </PageState>
 
     <AiEmptyState
       v-else-if="!connectors.length"
@@ -150,7 +159,9 @@ function statusIcon(connector: ConnectorSummary) {
             </p>
           </div>
 
-          <div class="flex shrink-0 items-center gap-1.5">
+          <!-- Wraps rather than holding one line: five actions in Russian run
+               wider than a phone-width card. -->
+          <div class="flex min-w-0 flex-wrap items-center gap-1.5">
             <Button
               v-if="connector.capabilities.pull && connector.direction !== 'push'"
               size="sm"
@@ -189,7 +200,13 @@ function statusIcon(connector: ConnectorSummary) {
             >
               <Settings2 class="size-3.5" />
             </Button>
-            <Button v-if="canManage" size="sm" variant="ghost" @click="confirmRemove(connector)">
+            <Button
+              v-if="canManage"
+              size="sm"
+              variant="ghost"
+              :aria-label="t('common.deleteNamed', { name: connector.name })"
+              @click="confirmRemove(connector)"
+            >
               <Trash2 class="text-destructive size-3.5" />
             </Button>
           </div>

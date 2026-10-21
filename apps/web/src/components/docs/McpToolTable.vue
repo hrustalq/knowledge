@@ -45,7 +45,7 @@ const shown = computed(() => {
           <span
             v-for="input in tool.inputs"
             :key="input.name"
-            class="rounded border bg-muted/50 px-1.5 py-0.5 font-mono text-[11px]"
+            class="rounded border bg-muted/50 px-1.5 py-0.5 font-mono text-caption"
             :class="input.optional ? 'text-muted-foreground' : 'text-foreground'"
             :title="input.optional ? t('docs.optionalInput') : t('docs.requiredInput')"
           >

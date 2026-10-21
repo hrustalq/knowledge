@@ -135,7 +135,7 @@ function requestCreate() {
           v-model="search"
           auto-focus
           :placeholder="searchPlaceholder ?? t('common.searchIn', { label: label.toLowerCase() })"
-          class="placeholder:text-muted-foreground h-9 w-full bg-transparent pr-3 pl-9 text-[13px] outline-none"
+          class="placeholder:text-muted-foreground h-9 w-full bg-transparent pr-3 pl-9 text-ui outline-none"
         />
       </div>
 
@@ -155,14 +155,14 @@ function requestCreate() {
           :value="option.value"
           :text-value="option.label"
           :disabled="option.disabled"
-          class="text-sidebar-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[state=checked]:text-primary group/item flex h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-[13px] outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[state=checked]:font-medium"
+          class="text-sidebar-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[state=checked]:text-primary group/item flex h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-ui outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[state=checked]:font-medium"
         >
           <slot name="option" :option="option">
             <span class="min-w-0 flex-1 truncate">{{ option.label }}</span>
           </slot>
           <span
             v-if="option.meta"
-            class="text-muted-foreground group-data-[highlighted]/item:text-accent-foreground/70 shrink-0 text-[11px] tabular-nums"
+            class="text-muted-foreground group-data-[highlighted]/item:text-accent-foreground/70 shrink-0 text-caption tabular-nums"
           >{{ option.meta }}</span>
           <ComboboxItemIndicator class="shrink-0">
             <Check class="size-3.5" />
@@ -173,7 +173,7 @@ function requestCreate() {
       <div v-if="createLabel" class="border-border/70 shrink-0 border-t p-1">
         <button
           type="button"
-          class="text-muted-foreground hover:bg-accent hover:text-primary focus-visible:bg-accent focus-visible:text-primary group/create flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] transition-colors outline-none"
+          class="text-muted-foreground hover:bg-accent hover:text-primary focus-visible:bg-accent focus-visible:text-primary group/create flex h-8 w-full items-center gap-2 rounded-md px-2 text-ui transition-colors outline-none"
           @click="requestCreate"
         >
           <span

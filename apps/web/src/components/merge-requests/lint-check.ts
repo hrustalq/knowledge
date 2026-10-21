@@ -52,13 +52,13 @@ export function lintCheckView(check: MergeRequestCheckInfo | null): LintCheckVie
     case 'running':
       return { icon: ScanText, tone: 'text-sky-500 animate-pulse', label: 'mr.lint.running', unresolved: 0 }
     case 'passed':
-      return { icon: CheckCircle2, tone: 'text-emerald-500', label: 'mr.lint.passed', unresolved: 0 }
+      return { icon: CheckCircle2, tone: 'text-panel-tip', label: 'mr.lint.passed', unresolved: 0 }
     case 'failed': {
       const c = check.counts ?? { error: 0, warning: 0, suggestion: 0 }
       const n = c.error + c.warning + c.suggestion
       return {
         icon: c.error > 0 ? AlertCircle : AlertTriangle,
-        tone: c.error > 0 ? 'text-red-500' : 'text-amber-500',
+        tone: c.error > 0 ? 'text-panel-caution' : 'text-panel-warning',
         label: 'mr.lint.failed',
         args: { n },
         count: n,
@@ -66,7 +66,7 @@ export function lintCheckView(check: MergeRequestCheckInfo | null): LintCheckVie
       }
     }
     case 'error':
-      return { icon: AlertTriangle, tone: 'text-amber-500', label: `mr.lint.reason.${check.reason ?? 'run-failed'}`, unresolved: 0 }
+      return { icon: AlertTriangle, tone: 'text-panel-warning', label: `mr.lint.reason.${check.reason ?? 'run-failed'}`, unresolved: 0 }
     case 'skipped':
       return { icon: CircleSlash, tone: 'text-muted-foreground/60', label: `mr.lint.reason.${check.reason ?? 'superseded'}`, unresolved: 0 }
   }

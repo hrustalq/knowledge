@@ -14,12 +14,14 @@ export function createApp() {
   const pinia = createPinia()
   const router = createRouter()
   // Per app instance, never module scope: two concurrent SSR renders would
-  // otherwise share `locale` (docs/features/18).
-  app.use(createI18nFor(getLocale()))
+  // otherwise share `locale` (docs/features/18). Its catalog arrives async:
+  // each entry awaits ensureLocaleMessages(i18n, …) before rendering/mounting.
+  const i18n = createI18nFor(getLocale())
+  app.use(i18n)
   app.use(pinia)
   app.use(router)
   app.use(VueQueryPlugin, { queryClient: createQueryClient() })
   installAuthGuard(router, pinia)
   installViewTransitions(router)
-  return { app, router, pinia }
+  return { app, router, pinia, i18n }
 }

@@ -39,11 +39,11 @@ const inLabel = (where: string) => (te(`apiLink.in.${where}`) ? t(`apiLink.in.${
 
 <template>
   <section class="kn-api-live" contenteditable="false" :aria-label="t('apiLink.live.label')">
-    <p v-if="missing || isError" class="kn-api-live-row flex items-start gap-2 text-[0.875rem] leading-relaxed text-muted-foreground">
+    <p v-if="missing || isError" class="kn-api-live-row flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
       <AlertTriangle class="mt-1 size-3.5 shrink-0 text-[color-mix(in_oklab,var(--kn-panel-warning)_75%,var(--foreground))]" />
       <span class="min-w-0">
         {{ isError ? t('apiLink.live.failed') : t('apiLink.live.gone') }}
-        <code class="font-mono text-[0.82rem] text-foreground [overflow-wrap:anywhere]">{{ entityKey }}</code>
+        <code class="font-mono text-ui text-foreground [overflow-wrap:anywhere]">{{ entityKey }}</code>
       </span>
     </p>
 
@@ -53,7 +53,7 @@ const inLabel = (where: string) => (te(`apiLink.in.${where}`) ? t(`apiLink.in.${
     </div>
 
     <template v-else>
-      <p v-if="view.summary || view.deprecated" class="kn-api-live-row flex flex-wrap items-baseline gap-x-2 text-[0.9rem] leading-relaxed text-[color-mix(in_oklab,var(--foreground)_80%,var(--card))]">
+      <p v-if="view.summary || view.deprecated" class="kn-api-live-row flex flex-wrap items-baseline gap-x-2 text-sm leading-relaxed text-[color-mix(in_oklab,var(--foreground)_80%,var(--card))]">
         <span class="sr-only">{{ t('apiLink.live.spec') }}:</span>
         <span v-if="view.summary">{{ view.summary }}</span>
         <ApiTone v-if="view.deprecated" tone="warning" size="sm">{{ t('apiRef.deprecated') }}</ApiTone>

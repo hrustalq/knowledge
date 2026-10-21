@@ -209,7 +209,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
       <Sparkles class="size-4 shrink-0 text-primary" />
       <div class="min-w-0 flex-1 leading-tight">
         <p class="text-sm font-semibold">{{ t('assistant.askAi') }}</p>
-        <p class="truncate text-[11px] text-muted-foreground">{{ t('assistant.aboutAndRelated', { title }) }}</p>
+        <p class="truncate text-caption text-muted-foreground">{{ t('assistant.aboutAndRelated', { title }) }}</p>
       </div>
       <Button variant="ghost" size="icon-xs" :aria-label="t('assistant.closeChat')" @click="open = false">
         <X class="size-3.5" />
@@ -243,7 +243,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
               </div>
               <span
                 v-if="m.accepted?.includes(s.term)"
-                class="flex shrink-0 items-center gap-1 pt-0.5 text-xs text-emerald-600"
+                class="flex shrink-0 items-center gap-1 pt-0.5 text-xs text-panel-tip-ink"
               >
                 <Check class="size-3.5" /> {{ t('common.added') }}
               </span>
@@ -265,7 +265,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
               :key="s.documentId"
               :to="`/documents/${s.documentId}`"
               :title="s.snippet"
-              class="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+              class="rounded-md border px-2 py-0.5 text-caption text-muted-foreground transition-colors hover:border-primary hover:text-primary"
             >
               {{ s.title }}
             </RouterLink>
@@ -299,7 +299,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
         :key="p.label"
         type="button"
         :disabled="busy"
-        class="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+        class="rounded-md border px-2 py-0.5 text-caption text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
         @click="ask(p.prompt)"
       >
         {{ p.label }}
@@ -308,7 +308,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
         v-if="canBuildGlossary"
         type="button"
         :disabled="busy"
-        class="flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+        class="flex items-center gap-1 rounded-md border px-2 py-0.5 text-caption text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
         :title="t('assistant.buildGlossaryHint')"
         @click="buildGlossary"
       >
@@ -322,6 +322,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
         v-model="question"
         :disabled="busy"
         :placeholder="t('assistant.askPlaceholder')"
+        :aria-label="t('assistant.askPlaceholder')"
         class="min-w-0 flex-1"
       />
       <Button type="submit" size="icon-sm" :disabled="busy || !question.trim()" :aria-label="t('assistant.send')">

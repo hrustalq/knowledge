@@ -68,7 +68,7 @@ const hasTrail = computed(
 </script>
 
 <template>
-  <div class="space-y-2 text-[13px]">
+  <div class="space-y-2 text-ui">
     <!-- Status line: always present, always specific about the current step. -->
     <div class="flex items-center gap-2 text-muted-foreground">
       <template v-if="live.stopped">
@@ -82,7 +82,7 @@ const hasTrail = computed(
       <button
         v-if="hasTrail"
         type="button"
-        class="ml-auto inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        class="ml-auto inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-caption transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         :aria-expanded="expanded"
         @click="expanded = !expanded"
       >
@@ -96,7 +96,7 @@ const hasTrail = computed(
       <Transition name="tool-swap" mode="out-in">
         <span
           :key="latestKey"
-          class="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-[11px]"
+          class="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-caption"
           :class="
             latest.running
               ? 'border-primary/40 bg-primary/5 text-primary'
@@ -108,7 +108,7 @@ const hasTrail = computed(
           <component :is="toolVocabulary(latest.tool).icon" class="size-3" />
           {{ latest.running ? t(toolVocabulary(latest.tool).running) : t(toolVocabulary(latest.tool).done) }}
           <span v-if="latest.running" class="tool-pulse" aria-hidden="true" />
-          <Check v-else-if="latest.ok" class="size-3 text-emerald-500" />
+          <Check v-else-if="latest.ok" class="size-3 text-panel-tip" />
           <X v-else class="size-3" />
         </span>
       </Transition>
@@ -122,12 +122,12 @@ const hasTrail = computed(
           <span
             v-for="(tc, j) in step.toolCalls"
             :key="j"
-            class="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-[11px]"
+            class="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-caption"
             :class="tc.ok ? 'text-muted-foreground' : 'border-destructive/40 text-destructive'"
           >
             <component :is="toolVocabulary(tc.tool).icon" class="size-3" />
             {{ t(toolVocabulary(tc.tool).done) }}
-            <Check v-if="tc.ok" class="size-3 text-emerald-500" />
+            <Check v-if="tc.ok" class="size-3 text-panel-tip" />
             <X v-else class="size-3" />
           </span>
         </div>
@@ -139,18 +139,18 @@ const hasTrail = computed(
           <span
             v-for="(tc, j) in current.finished"
             :key="`done-${j}`"
-            class="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-[11px]"
+            class="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-caption"
             :class="tc.ok ? 'text-muted-foreground' : 'border-destructive/40 text-destructive'"
           >
             <component :is="toolVocabulary(tc.tool).icon" class="size-3" />
             {{ t(toolVocabulary(tc.tool).done) }}
-            <Check v-if="tc.ok" class="size-3 text-emerald-500" />
+            <Check v-if="tc.ok" class="size-3 text-panel-tip" />
             <X v-else class="size-3" />
           </span>
           <span
             v-for="(tool, j) in current.running"
             :key="`run-${j}`"
-            class="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-2 py-0.5 text-[11px] text-primary"
+            class="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-2 py-0.5 text-caption text-primary"
           >
             <component :is="toolVocabulary(tool).icon" class="size-3" />
             {{ t(toolVocabulary(tool).running) }}

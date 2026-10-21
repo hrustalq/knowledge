@@ -176,7 +176,7 @@ function openAndWatch(url: string | null) {
           v-for="account in installations"
           :key="account.installationId"
           type="button"
-          class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors"
+          class="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors"
           :class="
             account.installationId === selected
               ? 'border-primary bg-primary/10 text-foreground'
@@ -197,7 +197,7 @@ function openAndWatch(url: string | null) {
 
         <button
           type="button"
-          class="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-full border border-dashed px-2.5 py-1 text-xs"
+          class="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border border-dashed px-2.5 py-1 text-xs"
           @click="openAndWatch(state.installUrl)"
         >
           <Plus class="size-3" />

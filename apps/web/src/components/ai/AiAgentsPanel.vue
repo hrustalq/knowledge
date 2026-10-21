@@ -428,12 +428,13 @@ async function remove(agent: AiAgentSummary) {
           </TableCell>
           <TableCell>
             <span class="text-xs">{{ agent.providerName ?? t('ai.agents.routed', { purpose: agent.purpose }) }}</span>
-            <span class="text-muted-foreground block font-mono text-[11px]">{{ t('count.tools', { n: agent.tools.length }, agent.tools.length) }}</span>
+            <span class="text-muted-foreground block font-mono text-caption">{{ t('count.tools', { n: agent.tools.length }, agent.tools.length) }}</span>
           </TableCell>
           <TableCell>
             <Checkbox
               :model-value="agent.enabled"
               :disabled="!canManage"
+              :aria-label="t('common.enableNamed', { name: agent.name })"
               @update:model-value="toggle(agent, $event === true)"
             />
           </TableCell>
@@ -496,7 +497,7 @@ async function remove(agent: AiAgentSummary) {
           <DialogDescription>{{ t('ai.agents.pickConnectorHint') }}</DialogDescription>
         </DialogHeader>
         <Select v-model="runConnectorId">
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger :aria-label="t('connectors.pickConnector')"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem v-for="r in repositories" :key="r.id" :value="r.id">
               {{ r.name }} <span class="text-muted-foreground">· {{ r.config.repoUrl }}</span>
@@ -606,7 +607,7 @@ async function remove(agent: AiAgentSummary) {
                   :key="kind"
                   type="button"
                   :aria-pressed="form.scheduleKind === kind"
-                  class="focus-visible:ring-ring/50 flex-1 rounded-[5px] px-2 py-1 text-sm transition-colors outline-none focus-visible:ring-3 sm:flex-none sm:px-3"
+                  class="focus-visible:ring-ring flex-1 rounded-[5px] px-2 py-1 text-sm transition-colors outline-none focus-visible:ring-3 sm:flex-none sm:px-3"
                   :class="
                     form.scheduleKind === kind
                       ? 'bg-background text-foreground ring-border font-medium ring-1'

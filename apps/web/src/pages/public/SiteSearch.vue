@@ -94,7 +94,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
   >
     <Search class="size-4 shrink-0" aria-hidden="true" />
     <span class="hidden flex-1 text-left sm:inline">{{ t('siteReader.search') }}</span>
-    <kbd class="hidden rounded border bg-muted px-1.5 font-mono text-[10px] sm:inline">/</kbd>
+    <kbd class="hidden rounded border bg-muted px-1.5 font-mono text-micro sm:inline">/</kbd>
   </button>
 
   <SearchSheetFrame

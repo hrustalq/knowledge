@@ -60,7 +60,7 @@ async function removeLink(linkId: string) {
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       <Select v-model="selected">
-        <SelectTrigger class="w-64"><SelectValue :placeholder="t('connectors.pickConnector')" /></SelectTrigger>
+        <SelectTrigger class="w-64" :aria-label="t('connectors.pickConnector')"><SelectValue :placeholder="t('connectors.pickConnector')" /></SelectTrigger>
         <SelectContent>
           <SelectItem v-for="c in connectors" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
         </SelectContent>

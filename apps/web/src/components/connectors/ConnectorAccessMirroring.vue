@@ -149,13 +149,13 @@ const unmapped = computed(() => acl.value?.identities.filter((i) => !i.userId).l
   <div v-else-if="acl" class="space-y-6 text-sm">
     <section class="space-y-3">
       <div>
-        <h2 class="font-medium">{{ t('connectors.acl.title') }}</h2>
+        <h2 id="kn-acl-mode-label" class="font-medium">{{ t('connectors.acl.title') }}</h2>
         <p class="text-muted-foreground text-xs">
           {{ acl.perItem ? t('connectors.acl.introPerItem') : t('connectors.acl.introAudience') }}
         </p>
       </div>
 
-      <RadioGroup v-model="mode" class="gap-2">
+      <RadioGroup v-model="mode" class="gap-2" aria-labelledby="kn-acl-mode-label">
         <label
           v-for="m in CONNECTOR_ACL_MODES"
           :key="m"
@@ -198,7 +198,7 @@ const unmapped = computed(() => acl.value?.identities.filter((i) => !i.userId).l
         </div>
       </div>
 
-      <p v-if="acl.mode !== 'off' && mode === 'off'" class="text-xs text-amber-700 dark:text-amber-400">
+      <p v-if="acl.mode !== 'off' && mode === 'off'" class="text-xs text-panel-warning-ink">
         {{ t('connectors.acl.offWarning') }}
       </p>
 

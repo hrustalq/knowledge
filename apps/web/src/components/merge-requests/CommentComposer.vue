@@ -173,7 +173,7 @@ function cancel() {
 
   <form v-else data-kn-editor-shell class="space-y-2" @submit.prevent="submit()">
     <div
-      class="overflow-hidden rounded-md border bg-card shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/25"
+      class="overflow-hidden rounded-md border bg-card shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring"
     >
       <RichEditor
         ref="editorEl"

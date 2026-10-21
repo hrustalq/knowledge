@@ -1212,6 +1212,11 @@ onBeforeUnmount(() => {
   <div class="kn-page-editor" :data-ai-open="aiOpen ? 'true' : 'false'">
     <div class="kn-page-column">
       <header class="kn-page-head">
+        <!-- The page's visible title is a field, not a heading, so the route's
+             one h1 is spoken only. -->
+        <h1 class="sr-only">
+          {{ title.trim() || (isEdit ? t('editor.editing') : t('editor.newPage')) }}
+        </h1>
         <div class="kn-page-crumb">
           <!-- Before a load the project is the sidebar's, not the page's. -->
           <strong v-if="!loadError">{{ projectName }}</strong>
@@ -1396,8 +1401,9 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- The assistant opens on the right edge, after the page in reading and
-         tab order. The slot's width is what animates, on the rail's curve, so
-         the page column narrows in the same motion as the panel arrives. -->
+         tab order. The slot's width snaps (a width transition re-lays out the
+         whole ProseMirror document every frame); the panel inside it slides
+         in with a transform, and on close the width holds until it is out. -->
     <div class="kn-ai-slot" :inert="!aiOpen || undefined">
       <EditorAiPanel
         v-if="aiMounted"
@@ -1440,7 +1446,7 @@ onBeforeUnmount(() => {
         <AlertDialogFooter class="sm:flex-wrap">
           <AlertDialogCancel class="sm:mr-auto" @click="pendingLeave = null">{{ t('editor.keepEditing') }}</AlertDialogCancel>
           <AlertDialogAction
-            class="bg-destructive text-white hover:bg-destructive/90"
+            variant="destructive"
             @click="discardAndLeave"
           >
             {{ t('editor.discardChangesAction') }}
@@ -1467,7 +1473,7 @@ onBeforeUnmount(() => {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{{ t('editor.keepEditing') }}</AlertDialogCancel>
-          <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="discardDraft">
+          <AlertDialogAction variant="destructive" @click="discardDraft">
             {{ t('editor.collab.discard.confirm') }}
           </AlertDialogAction>
         </AlertDialogFooter>

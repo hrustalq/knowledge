@@ -43,6 +43,16 @@
   --sidebar-foreground: oklch(0.28 0.02 265);
   --sidebar-border: oklch(0.912 0.008 85);
   --sidebar-accent: oklch(0.93 0.008 85);
+  /* The UI type ramp below body text, as plain properties so editor.css and
+     scoped styles (and the export renderer, which has no Tailwind) can read
+     it; style.css's @theme turns the same values into text-* utilities.
+     Prose keeps its own ramp in editor.css (0.95rem body, rem headings, em
+     code); these are for chrome around it. Never below micro. */
+  --kn-text-micro: 0.625rem;   /* 10px: kbd hints, count badges, avatar initials, chart ticks */
+  --kn-text-caption: 0.6875rem; /* 11px: metadata lines, timestamps, dense captions */
+  --kn-text-xs: 0.75rem;        /* 12px: labels, chips, table heads (Tailwind text-xs) */
+  --kn-text-ui: 0.8125rem;      /* 13px: dense controls, list rows, rail and menu items */
+  --kn-text-sm: 0.875rem;       /* 14px: default control and secondary text (text-sm) */
 }
 
 .dark {
@@ -60,11 +70,16 @@
   --muted-foreground: oklch(0.68 0.015 262);
   --accent: oklch(0.27 0.03 266);
   --accent-foreground: oklch(0.9 0.02 268);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
+  /* Lifted, not darkened: the token is read as text far more often than as a
+     fill (text-destructive on the page and on cards, 6.4:1 / 6.0:1). A fill
+     dims it to 60% so white text on it still clears 6.4:1. */
+  --destructive: oklch(0.69 0.17 25);
+  --destructive-foreground: oklch(0.69 0.17 25);
   --border: oklch(0.27 0.015 265);
   --input: oklch(0.27 0.015 265);
-  --ring: oklch(0.55 0.1 268);
+  /* Full strength is the focus indicator: 4.8:1 on the page, 4.5:1 on a card,
+     3.8:1 on an accent wash. */
+  --ring: oklch(0.6 0.11 268);
   --sidebar: oklch(0.14 0.012 265);
   --sidebar-foreground: oklch(0.86 0.01 265);
   --sidebar-border: oklch(0.24 0.015 265);

@@ -210,11 +210,11 @@ async function save() {
   <PageState v-if="query.isPending.value" state="loading" :rows="5" row-class="h-12" />
   <PageState v-else-if="query.isError.value" state="error" :error="query.error.value" />
 
-  <form v-else-if="settings" class="max-w-2xl space-y-5" @submit.prevent="save">
+  <form v-else-if="settings" class="space-y-5" @submit.prevent="save">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 class="text-base font-semibold">{{ t('health.settings.title') }}</h2>
-        <p class="mt-0.5 text-sm text-muted-foreground">{{ t('health.settings.intro') }}</p>
+        <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('health.settings.intro') }}</p>
       </div>
       <Badge v-if="!props.canManage" variant="outline">{{ t('health.settings.readOnly') }}</Badge>
     </div>
@@ -223,7 +223,7 @@ async function save() {
       <div v-for="{ key, unit, max } in NUMERIC" :key="key" class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
         <div class="min-w-0">
           <label :for="`health-${key}`" class="text-sm font-medium">{{ t(`health.settings.key.${key}.label`) }}</label>
-          <p class="text-xs text-muted-foreground">{{ t(`health.settings.key.${key}.hint`) }}</p>
+          <p class="kn-measure text-xs text-muted-foreground">{{ t(`health.settings.key.${key}.hint`) }}</p>
           <p class="mt-1 text-xs">
             <span class="text-muted-foreground">{{ t('health.settings.applies') }}</span>
             {{ appliesLabel(key, unit) }}
@@ -254,7 +254,7 @@ async function save() {
       <div class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
         <div class="min-w-0">
           <span class="text-sm font-medium">{{ t('health.settings.key.trustRanking.label') }}</span>
-          <p class="text-xs text-muted-foreground">{{ t('health.settings.key.trustRanking.hint') }}</p>
+          <p class="kn-measure text-xs text-muted-foreground">{{ t('health.settings.key.trustRanking.hint') }}</p>
           <p class="mt-1 text-xs">
             <span class="text-muted-foreground">{{ t('health.settings.applies') }}</span>
             {{ trustApplies }}
@@ -277,14 +277,14 @@ async function save() {
     <section class="space-y-2" aria-labelledby="health-ranking-title">
       <div>
         <h3 id="health-ranking-title" class="text-sm font-semibold">{{ t('health.settings.ranking.title') }}</h3>
-        <p class="mt-0.5 text-xs text-muted-foreground">{{ t('health.settings.ranking.intro') }}</p>
+        <p class="kn-measure mt-0.5 text-xs text-muted-foreground">{{ t('health.settings.ranking.intro') }}</p>
       </div>
 
       <div class="divide-y rounded-md border">
         <div v-for="knob in KNOBS" :key="knob.key" class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
           <div class="min-w-0">
             <label :for="`health-${knob.key}`" class="text-sm font-medium">{{ t(`health.settings.key.${knob.key}.label`) }}</label>
-            <p class="text-xs text-muted-foreground">{{ t(`health.settings.key.${knob.key}.hint`) }}</p>
+            <p class="kn-measure text-xs text-muted-foreground">{{ t(`health.settings.key.${knob.key}.hint`) }}</p>
             <p class="mt-1 text-xs">
               <span class="text-muted-foreground">{{ t('health.settings.applies') }}</span>
               {{ knobLabel(settings.effective[knob.key]) }}
@@ -315,7 +315,7 @@ async function save() {
         <fieldset class="space-y-3 px-4 py-3">
           <div>
             <legend class="text-sm font-medium">{{ t('health.settings.key.trustWeights.label') }}</legend>
-            <p class="text-xs text-muted-foreground">{{ t('health.settings.key.trustWeights.hint') }}</p>
+            <p class="kn-measure text-xs text-muted-foreground">{{ t('health.settings.key.trustWeights.hint') }}</p>
             <p v-if="!settings.effective.trustRanking" class="mt-1 text-xs text-muted-foreground">
               {{ t('health.settings.key.trustWeights.inert') }}
             </p>

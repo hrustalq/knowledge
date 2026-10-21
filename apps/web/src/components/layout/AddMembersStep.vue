@@ -106,7 +106,7 @@ async function add() {
       <div class="space-y-1.5">
         <Label
           for="add-members-step-role"
-          class="text-muted-foreground block text-[11px] font-semibold tracking-wider uppercase"
+          class="text-muted-foreground block text-caption font-semibold tracking-wider uppercase"
         >
           {{ t('access.role') }}
         </Label>

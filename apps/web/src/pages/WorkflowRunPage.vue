@@ -17,6 +17,7 @@ import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { relativeTime } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
+import { confirm } from '@/components/ui/confirm'
 import { Skeleton } from '@/components/ui/skeleton'
 import WorkflowMap from '@/components/workflows/WorkflowMap.vue'
 import WorkflowNodePanel from '@/components/workflows/WorkflowNodePanel.vue'
@@ -136,7 +137,17 @@ async function persistDraft(draft: WorkflowNodeDraft) {
 }
 
 async function sendRunEvent(type: WorkflowRunEventType) {
-  if (type === 'CANCEL' && !confirm(t('workflow.cancelRunConfirm'))) return
+  if (type === 'CANCEL') {
+    const ok = await confirm({
+      title: t('workflow.cancelRunTitle'),
+      description: t('workflow.cancelRunBody'),
+      action: t('workflow.cancelRunAction'),
+      // Two buttons both reading "Cancel" would be a guess.
+      cancel: t('workflow.keepRunning'),
+      destructive: true,
+    })
+    if (!ok) return
+  }
   try {
     await runEvent.mutateAsync({ path: { id: runId.value }, body: { type } })
     await query.refetch()
@@ -166,7 +177,7 @@ const RUN_ACTION = {
           <h1 class="mt-1 truncate text-lg font-semibold">{{ data.run.definitionName }}</h1>
           <p
             v-if="data.run.nodeStats.awaitingReview"
-            class="mt-1 text-sm font-medium text-amber-600 dark:text-amber-500"
+            class="mt-1 text-sm font-medium text-panel-warning-ink"
           >
             {{ t('count.cards', { n: data.run.nodeStats.awaitingReview }, data.run.nodeStats.awaitingReview) }}
             {{ t('workflow.waitingForYou') }}

@@ -19,6 +19,7 @@ import {
   type FilterField,
 } from '@/components/ui/filter-bar'
 import { Autocomplete } from '@/components/ui/autocomplete'
+import { PageState } from '@/components/layout/page'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -190,29 +191,33 @@ watch(starting, (open) => {
       <Skeleton v-for="i in 4" :key="i" class="h-20 w-full" />
     </div>
 
-    <div
+    <!-- A failed list is not an empty one: "no runs yet" would invite starting
+         a run that may already be going. -->
+    <PageState v-else-if="query.isError.value" state="error" :error="query.error.value">
+      <template #actions>
+        <Button size="sm" variant="outline" @click="query.refetch()">{{ t('common.retry') }}</Button>
+      </template>
+    </PageState>
+
+    <PageState
       v-else-if="visible.length === 0"
-      class="text-muted-foreground flex flex-col items-center gap-3 rounded-lg border border-dashed py-14 text-center"
+      state="empty"
+      :icon="Workflow"
+      :title="runs.length ? t('workflow.list.noRunsMatch') : t('workflow.list.noRunsYet')"
+      :description="
+        runs.length
+          ? t('workflow.clearFilterToSeeRest')
+          : store.runnable.length
+            ? t('workflow.list.startFromHere')
+            : t('workflow.list.noneConfigured')
+      "
     >
-      <Workflow class="size-8 opacity-40" />
-      <div>
-        <p class="text-foreground text-sm font-medium">
-          {{ runs.length ? t('workflow.list.noRunsMatch') : t('workflow.list.noRunsYet') }}
-        </p>
-        <p class="mx-auto mt-1 max-w-md text-sm">
-          <template v-if="runs.length">{{ t('workflow.clearFilterToSeeRest') }}</template>
-          <template v-else-if="store.runnable.length">
-            {{ t('workflow.list.startFromHere') }}
-          </template>
-          <template v-else>
-            {{ t('workflow.list.noneConfigured') }}
-          </template>
-        </p>
-      </div>
-      <RouterLink v-if="!store.runnable.length" to="/settings/workflows">
-        <Button size="sm" variant="outline">{{ t('workflow.openSettings') }}</Button>
-      </RouterLink>
-    </div>
+      <template v-if="!store.runnable.length" #actions>
+        <Button as-child size="sm" variant="outline">
+          <RouterLink to="/settings/workflows">{{ t('workflow.openSettings') }}</RouterLink>
+        </Button>
+      </template>
+    </PageState>
 
     <ul v-else class="space-y-2">
       <li v-for="run in visible" :key="run.id">

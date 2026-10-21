@@ -19,6 +19,7 @@ import { RouterLink } from 'vue-router'
 import { activityKindFor, type ActivityEntry, type ActivityKind, type ListActivityResponse } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageState } from '@/components/layout/page'
 import { activityKindStyle } from '@/lib/activity-kinds'
 import { api } from '@/api'
 import { getWorkspaceId } from '@/lib/api'
@@ -141,15 +142,19 @@ function title(entry: ActivityEntry): string {
       <Skeleton v-for="i in 4" :key="i" class="h-9 w-full" />
     </div>
 
-    <p v-else-if="failed" class="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
-      {{ t('profile.activity.failed') }}
-    </p>
+    <PageState v-else-if="failed" state="error" :description="t('profile.activity.failed')">
+      <template #actions>
+        <Button size="sm" variant="outline" @click="reload">{{ t('common.retry') }}</Button>
+      </template>
+    </PageState>
 
     <!-- Two different emptinesses, and they mean different things: nothing in
          this window at all, versus nothing of the kind being filtered for. -->
-    <p v-else-if="days.length === 0" class="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
-      {{ kind ? t('profile.activity.emptyKind') : t('profile.activity.empty') }}
-    </p>
+    <PageState
+      v-else-if="days.length === 0"
+      state="empty"
+      :title="kind ? t('profile.activity.emptyKind') : t('profile.activity.empty')"
+    />
 
     <ol v-else class="space-y-6">
       <li v-for="day in days" :key="day.date">

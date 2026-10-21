@@ -26,7 +26,7 @@
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useMediaQuery } from '@vueuse/core'
+import { useHydratedMediaQuery } from '@/lib/use-hydrated'
 import { ExternalLink, FileText, MessagesSquare } from 'lucide-vue-next'
 import type { AssistantSource } from '@knowledge/contracts'
 import { assistantSourceHref, isChatSource, isPageSource, isWebSource } from '@knowledge/contracts'
@@ -78,7 +78,7 @@ const fetched = computed(() => (web.value?.fetchedAt ? formatRelative(web.value.
 const said = computed(() => (chat.value ? formatRelative(chat.value.lastAt) : ''))
 
 const open = ref(false)
-const canHover = useMediaQuery('(hover: hover)')
+const canHover = useHydratedMediaQuery('(hover: hover)')
 </script>
 
 <template>
@@ -231,7 +231,7 @@ const canHover = useMediaQuery('(hover: hover)')
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 0.125rem 0.5rem;
-  font-size: 11px;
+  font-size: var(--kn-text-caption);
   color: var(--muted-foreground);
 }
 .kn-source-chip:hover,
@@ -246,7 +246,7 @@ const canHover = useMediaQuery('(hover: hover)')
   align-items: flex-start;
   border-radius: 0.375rem;
   padding: 0.375rem 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--kn-text-sm);
   flex-wrap: wrap;
 }
 .kn-source-row:hover,
@@ -270,7 +270,7 @@ const canHover = useMediaQuery('(hover: hover)')
   padding: 0 0.25rem;
   border-radius: 999px;
   border: 1px solid var(--border);
-  font-size: 9px;
+  font-size: var(--kn-text-micro);
   font-weight: 600;
   line-height: 1;
   color: var(--muted-foreground);
@@ -303,11 +303,11 @@ const canHover = useMediaQuery('(hover: hover)')
   opacity: 0.6;
 }
 [data-tone='ok'] .kn-verify-dot {
-  background: var(--color-emerald-500, #10b981);
+  background: var(--kn-panel-tip);
   opacity: 1;
 }
 [data-tone='warn'] .kn-verify-dot {
-  background: var(--color-amber-500, #f59e0b);
+  background: var(--kn-panel-warning);
   opacity: 1;
 }
 [data-tone='bad'] .kn-verify-dot {
@@ -322,7 +322,7 @@ const canHover = useMediaQuery('(hover: hover)')
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 0.125rem 0.5rem;
-  font-size: 11px;
+  font-size: var(--kn-text-caption);
   color: var(--foreground);
 }
 
@@ -337,20 +337,20 @@ const canHover = useMediaQuery('(hover: hover)')
   height: 0.875rem;
   border-radius: 0.1875rem;
   color: #fff;
-  font-size: 8px;
+  font-size: var(--kn-text-micro);
   font-weight: 700;
   line-height: 1;
 }
 .kn-source-row .kn-site-mark {
   width: 1.125rem;
   height: 1.125rem;
-  font-size: 10px;
+  font-size: var(--kn-text-micro);
 }
 
 .kn-site-host {
   flex-shrink: 0;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: var(--kn-text-caption);
 }
 .kn-source-chip .kn-site-host {
   /* Dimmed against the title it attributes, and it never wins the truncation
@@ -361,7 +361,7 @@ const canHover = useMediaQuery('(hover: hover)')
   flex-basis: 100%;
   min-width: 0;
   margin-left: 1.625rem;
-  font-size: 11px;
+  font-size: var(--kn-text-caption);
   /* One line. A wrapped URL in a 18rem rail turns every web citation into a
      three-line block and the titles stop being the thing you read. */
   overflow: hidden;

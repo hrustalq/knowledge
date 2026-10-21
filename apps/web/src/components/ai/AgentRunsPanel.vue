@@ -323,7 +323,7 @@ const severityClass = (f: AgentFinding) =>
   f.severity === 'error'
     ? 'text-destructive dark:text-destructive-foreground'
     : f.severity === 'warning'
-      ? 'text-amber-600 dark:text-amber-500'
+      ? 'text-panel-warning-ink'
       : 'text-muted-foreground'
 </script>
 
@@ -365,7 +365,7 @@ const severityClass = (f: AgentFinding) =>
             :aria-label="t(`ai.runs.status.${run.status}`)"
             :class="[
               run.status === 'failed' && 'text-destructive dark:text-destructive-foreground',
-              run.status === 'succeeded' && 'text-emerald-600 dark:text-emerald-500',
+              run.status === 'succeeded' && 'text-panel-tip-ink',
               run.status === 'running' && 'animate-spin',
             ]"
           />
@@ -401,7 +401,7 @@ const severityClass = (f: AgentFinding) =>
                  text from the executor, so it resolves through labelFor and
                  falls back to itself rather than rendering a message key. -->
             <span v-if="run.status === 'running' && run.stage" class="mt-1.5 flex items-center gap-2">
-              <span class="text-muted-foreground text-[11px]">{{ labelFor(t, 'ai.runs.stage', run.stage) }}</span>
+              <span class="text-muted-foreground text-caption">{{ labelFor(t, 'ai.runs.stage', run.stage) }}</span>
               <span v-if="run.progress !== null" class="bg-muted h-1 w-20 overflow-hidden rounded-full">
                 <span
                   class="bg-primary block h-full rounded-full transition-[width] duration-500"
@@ -418,7 +418,7 @@ const severityClass = (f: AgentFinding) =>
              warned is still a run that succeeded — putting it in the row would
              read as a failure. -->
         <ul v-if="expanded === run.id && run.warnings.length" class="space-y-1 border-t px-3 py-2">
-          <li v-for="(w, i) in run.warnings" :key="i" class="flex gap-2 text-[11px] text-amber-600 dark:text-amber-500">
+          <li v-for="(w, i) in run.warnings" :key="i" class="flex gap-2 text-caption text-panel-warning-ink">
             <TriangleAlert class="mt-0.5 size-3 shrink-0" />
             <span>{{ w }}</span>
           </li>
@@ -457,7 +457,7 @@ const severityClass = (f: AgentFinding) =>
                   v-for="(id, n) in f.documentIds"
                   :key="id"
                   :to="`/documents/${id}`"
-                  class="text-primary text-[11px] hover:underline"
+                  class="text-primary text-caption hover:underline"
                 >
                   {{ f.documentTitles[n] ?? id }}
                 </RouterLink>
@@ -476,7 +476,7 @@ const severityClass = (f: AgentFinding) =>
               <RouterLink
                 v-if="f.mergeRequestId"
                 :to="`/merge-requests/${f.mergeRequestId}`"
-                class="text-primary inline-flex items-center gap-1 text-[11px] hover:underline"
+                class="text-primary inline-flex items-center gap-1 text-caption hover:underline"
               >
                 <GitPullRequest class="size-3" /> {{ t('ai.runs.viewProposal') }}
               </RouterLink>
@@ -516,7 +516,7 @@ const severityClass = (f: AgentFinding) =>
               <RouterLink
                 v-if="f.termId"
                 :to="`/settings/glossary?term=${f.termId}`"
-                class="text-primary inline-flex items-center gap-1 text-[11px] hover:underline"
+                class="text-primary inline-flex items-center gap-1 text-caption hover:underline"
               >
                 <BookA class="size-3" /> {{ t('ai.runs.viewTerm') }}
               </RouterLink>
@@ -541,7 +541,7 @@ const severityClass = (f: AgentFinding) =>
                 <OctagonAlert v-else class="size-3.5" />
                 {{ t('ai.runs.markOutdated') }}
               </Button>
-              <span v-else-if="f.flaggedAt" class="text-muted-foreground text-[11px]">
+              <span v-else-if="f.flaggedAt" class="text-muted-foreground text-caption">
                 {{ t('ai.runs.outdatedMarked') }}
               </span>
               <Button
@@ -557,7 +557,7 @@ const severityClass = (f: AgentFinding) =>
               <RouterLink
                 v-else-if="f.learningId"
                 to="/settings/ai/learnings"
-                class="text-primary inline-flex items-center gap-1 text-[11px] hover:underline"
+                class="text-primary inline-flex items-center gap-1 text-caption hover:underline"
               >
                 <GraduationCap class="size-3" /> {{ t('ai.runs.learningProposed') }}
               </RouterLink>
@@ -619,7 +619,7 @@ const severityClass = (f: AgentFinding) =>
               :maxlength="AGENT_LEARNING_MAX_CHARS"
               :placeholder="t('ai.runs.rememberWhyPlaceholder')"
             />
-            <span class="text-muted-foreground block text-[11px]">{{ t('ai.runs.rememberWhyHint') }}</span>
+            <span class="text-muted-foreground block text-caption">{{ t('ai.runs.rememberWhyHint') }}</span>
           </label>
           <label v-if="dismissForm.learning.trim()" class="flex items-center gap-2 text-sm">
             <Checkbox

@@ -13,6 +13,7 @@ import { useInfiniteScroll, useVirtualList } from '@vueuse/core'
 import { Plus } from 'lucide-vue-next'
 import type { ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { errorMessage } from '@/api/errors'
 import type { ScopeCreated } from '@/lib/scopes'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
@@ -111,6 +112,15 @@ async function onCreated(created: ScopeCreated) {
       <div v-if="roster.isPending.value" class="space-y-1.5 p-2">
         <Skeleton v-for="i in 5" :key="i" class="h-8 w-full" />
       </div>
+      <!-- A failed roster is not an empty one: "no projects yet" would invite
+           creating one that already exists. PageState's block is sized for a
+           page, not a 16rem rail, so this is its sentence and retry at rail
+           scale. -->
+      <div v-else-if="roster.isError.value && projects.length === 0" role="alert" class="space-y-2 p-3 text-xs">
+        <p class="font-medium text-destructive">{{ t('page.errorTitle') }}</p>
+        <p class="text-muted-foreground">{{ errorMessage(roster.error.value, t) }}</p>
+        <Button size="sm" variant="outline" @click="roster.refetch()">{{ t('common.retry') }}</Button>
+      </div>
       <p v-else-if="projects.length === 0" class="p-3 text-xs text-muted-foreground">
         {{ t('project.noneYet') }}
       </p>
@@ -130,6 +140,9 @@ async function onCreated(created: ScopeCreated) {
                 class="size-1.5 shrink-0 rounded-full"
                 :class="p.projectId === store.activeId ? 'bg-primary' : 'bg-muted-foreground/30'"
                 :title="p.projectId === store.activeId ? t('projects.active') : undefined"
+                :role="p.projectId === store.activeId ? 'img' : undefined"
+                :aria-label="p.projectId === store.activeId ? t('projects.active') : undefined"
+                :aria-hidden="p.projectId === store.activeId ? undefined : 'true'"
               />
               <span class="min-w-0 flex-1 truncate">{{ p.name }}</span>
               <span class="shrink-0 text-xs text-muted-foreground">{{ p.documentCount }}</span>

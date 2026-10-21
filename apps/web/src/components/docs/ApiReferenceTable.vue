@@ -67,7 +67,7 @@ function accessClass(label: string): string {
     <div class="flex flex-wrap gap-1">
       <button
         type="button"
-        class="rounded-full border px-2.5 py-0.5 text-xs transition-colors"
+        class="rounded-md border px-2.5 py-0.5 text-xs transition-colors"
         :class="tag === null ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent'"
         @click="tag = null"
       >
@@ -77,7 +77,7 @@ function accessClass(label: string): string {
         v-for="name in tags"
         :key="name"
         type="button"
-        class="rounded-full border px-2.5 py-0.5 text-xs transition-colors"
+        class="rounded-md border px-2.5 py-0.5 text-xs transition-colors"
         :class="tag === name ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent'"
         @click="tag = name"
       >
@@ -99,7 +99,7 @@ function accessClass(label: string): string {
             {{ endpoint.method }}
           </span>
           <span class="font-mono text-xs break-all">{{ endpoint.path }}</span>
-          <span class="ml-auto shrink-0 text-[11px] whitespace-nowrap" :class="accessClass(accessLabel(endpoint))">
+          <span class="ml-auto shrink-0 text-caption whitespace-nowrap" :class="accessClass(accessLabel(endpoint))">
             {{ accessLabel(endpoint) }}
           </span>
         </div>

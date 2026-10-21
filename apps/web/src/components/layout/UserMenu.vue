@@ -55,7 +55,7 @@ async function logout() {
       />
       <span class="sr-only text-left leading-tight sm:not-sr-only sm:block">
         <span class="block max-w-32 truncate text-xs font-medium">{{ auth.me.displayName }}</span>
-        <span class="block text-[10px] text-muted-foreground">{{ roleLabel }}</span>
+        <span class="block text-caption text-muted-foreground">{{ roleLabel }}</span>
       </span>
       <span class="sr-only">, {{ t('nav.accountMenu') }}</span>
       <ChevronDown class="hidden size-3.5 shrink-0 text-muted-foreground sm:block" aria-hidden="true" />

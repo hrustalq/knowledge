@@ -46,7 +46,7 @@ async function onRevoke(id: string) {
       <div class="min-w-0 flex-1">
         <p class="truncate">
           {{ device(s) }}
-          <span v-if="s.current" class="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
+          <span v-if="s.current" class="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-caption font-medium text-primary">
             {{ t('profileSettings.sessions.current') }}
           </span>
         </p>

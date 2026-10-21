@@ -11,17 +11,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { getLocale, setLocale } from '@/lib/api'
+import { ensureLocaleMessages } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 
 /** Endonyms: a language is named in itself, never translated (docs/features/18). */
 const LABELS: Record<Locale, string> = { en: 'English', ru: 'Русский' }
 
-const { t, locale } = useI18n()
+const i18n = useI18n()
+const { t, locale } = i18n
 const auth = useAuthStore()
 const active = computed(() => (locale.value as Locale) ?? getLocale())
 
 async function choose(next: Locale) {
   if (next === active.value) return
+  // The catalog first: switching before it arrives draws raw keys.
+  await ensureLocaleMessages(i18n, next)
   setLocale(next)
   locale.value = next
   document.documentElement.lang = next

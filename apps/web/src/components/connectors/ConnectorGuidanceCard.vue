@@ -49,7 +49,7 @@ async function run() {
       </Button>
     </div>
     <p class="text-muted-foreground text-xs">{{ t('connectors.guidance.body') }}</p>
-    <p class="text-muted-foreground mt-2 font-mono text-[11px] leading-relaxed">{{ GUIDANCE_FILE_PATTERNS.join(' · ') }}</p>
+    <p class="text-muted-foreground mt-2 font-mono text-caption leading-relaxed">{{ GUIDANCE_FILE_PATTERNS.join(' · ') }}</p>
 
     <p class="mt-3 text-sm">
       <template v-if="imported.length">

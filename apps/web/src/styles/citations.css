@@ -22,7 +22,7 @@
   border: 1px solid var(--border);
   background: var(--background);
   color: var(--muted-foreground);
-  font-size: 9px;
+  font-size: var(--kn-text-micro);
   font-weight: 600;
   line-height: 1;
   cursor: pointer;

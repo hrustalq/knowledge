@@ -148,19 +148,19 @@ function countLabel(c: SchemaCount): string {
 }
 .kn-schema-name {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.86rem;
+  font-size: var(--kn-text-sm);
   font-weight: 600;
   color: var(--foreground);
   overflow-wrap: anywhere;
 }
 .kn-schema-type {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8rem;
+  font-size: var(--kn-text-ui);
   color: color-mix(in oklab, var(--kn-accent, var(--foreground)) 55%, var(--foreground));
   overflow-wrap: anywhere;
 }
 .kn-schema-req {
-  font-size: 0.75rem;
+  font-size: var(--kn-text-xs);
   font-weight: 600;
   color: color-mix(in oklab, var(--kn-panel-caution) 75%, var(--foreground));
 }
@@ -168,13 +168,13 @@ function countLabel(c: SchemaCount): string {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.78rem;
+  font-size: var(--kn-text-xs);
   color: var(--muted-foreground);
 }
 .kn-schema-desc {
   margin-top: 0.15rem;
   padding-left: 1.4rem;
-  font-size: 0.85rem;
+  font-size: var(--kn-text-sm);
   line-height: 1.5;
   color: color-mix(in oklab, var(--foreground) 78%, var(--card));
 }
@@ -190,7 +190,7 @@ function countLabel(c: SchemaCount): string {
   border-radius: 4px;
   background: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.76rem;
+  font-size: var(--kn-text-xs);
   color: var(--foreground);
 }
 @media (prefers-reduced-motion: reduce) {

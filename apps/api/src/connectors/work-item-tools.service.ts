@@ -10,7 +10,6 @@ import type { AssistantToolContext, AssistantToolResult } from '../assistant/ass
 import { TASK_TOOLS } from '../assistant/assistant-tool-types.js';
 import { ConnectorWorkItemsService } from './connector-work-items.service.js';
 import { ConnectorsService } from './connectors.service.js';
-import { GithubIssuesService } from './github/github-issues.service.js';
 
 /**
  * The assistant's view of the work on a connected repository (docs/features/32).
@@ -41,7 +40,6 @@ export class WorkItemToolsService {
     private readonly access: AccessService,
     private readonly connectors: ConnectorsService,
     private readonly workItems: ConnectorWorkItemsService,
-    private readonly github: GithubIssuesService,
     private readonly permissions: PermissionService,
   ) {}
 
@@ -254,7 +252,7 @@ export class WorkItemToolsService {
 
     // Not in the projection: it may predate the first refresh, so ask the host
     // rather than telling the model an issue it can see does not exist.
-    const fetched = await this.github.get(row, number);
+    const fetched = await this.workItems.requireTracker(row).getIssue(row, { number, externalKey: null });
     if (!fetched) return this.fail(`#${number} was not found, or the credential cannot see it`);
     return this.ok('task_read', { ...fetched, documentId: null, documentTitle: null });
   }
@@ -284,7 +282,11 @@ export class WorkItemToolsService {
     if (!Number.isInteger(number) || number < 1) return this.fail('number must be a positive integer');
     if (!body) return this.fail('body is required');
 
-    await this.github.comment(row, number, body.slice(0, MAX_COMMENT_CHARS));
+    // The stored row carries a Jira ticket's key; a bare number is the ticket id, which Jira also takes.
+    const stored = await this.prisma.connectorWorkItem.findFirst({ where: { connectorId, number }, select: { externalKey: true } });
+    await this.workItems
+      .requireTracker(row)
+      .comment(row, { number, externalKey: stored?.externalKey ?? null }, [{ text: body.slice(0, MAX_COMMENT_CHARS) }]);
     return this.ok('task_comment', { number, posted: true });
   }
 

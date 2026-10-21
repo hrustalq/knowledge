@@ -317,7 +317,7 @@
     "runNotFound": "Запуск синхронизации {id} не найден",
     "workItemNotFound": "Задача {id} не относится к этому коннектору",
     "workItemsUnsupported": "У коннекторов типа {kind} нет задач и пул-реквестов",
-    "workItemsGithubOnly": "Задачи доступны только для репозиториев GitHub",
+    "workItemsGithubOnly": "Задачи доступны только для репозиториев GitHub и GitLab",
     "workItemsNoCredential": "У этого коннектора нет пригодных учётных данных GitHub",
     "workItemsNotVisible": "не найдено или недоступно для этих учётных данных",
     "workItemsRequestFailed": "GitHub отклонил запрос ({detail})",

@@ -95,6 +95,8 @@ const NOTIFIED_VERIFICATION_TYPES: readonly string[] = [
   'document.verification-expiring',
   'document.verification-expired',
   'document.owner-changed',
+  // #424: the ticket an object of yours was handed off as closed in the tracker.
+  'work-item.closed',
 ];
 
 /**

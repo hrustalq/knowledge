@@ -63,6 +63,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   // Sets a page's declared verification flag (docs/features/39). There is
   // deliberately no verify tool: a stamp is a person's act.
   'knowledge_flag_document',
+  // Opens a ticket in somebody's tracker, or attaches one (#424).
+  'knowledge_handoff_work_item',
   // Puts a page in front of people outside the workspace (docs/features/43).
   'knowledge_share_page',
   // Files an access request its managers are notified of (#76, phase 5).

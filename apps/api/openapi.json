@@ -18794,6 +18794,120 @@
         ]
       }
     },
+    "/v1/work-items/rules": {
+      "get": {
+        "operationId": "WorkItemsController_getRules",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The handoff rules, and the env ceiling they run under",
+        "tags": [
+          "work-items"
+        ]
+      },
+      "put": {
+        "operationId": "WorkItemsController_putRules",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutWorkItemRulesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Turn handoff rules on or off; each creates tickets only into a project with a tracker route",
+        "tags": [
+          "work-items"
+        ]
+      }
+    },
     "/v1/work-items": {
       "get": {
         "operationId": "WorkItemsController_list",
@@ -34884,7 +34998,8 @@
               "merge-request.opened",
               "connector.synced",
               "webhook",
-              "comment.mention"
+              "comment.mention",
+              "work-item.updated"
             ]
           }
         },
@@ -35759,6 +35874,46 @@
             "description": "open | in_progress | done | wont_do → raw tracker status"
           }
         }
+      },
+      "PutWorkItemRulesDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "issues": {
+            "type": "string",
+            "enum": [
+              "off",
+              "high",
+              "medium",
+              "all"
+            ],
+            "nullable": true,
+            "description": "Reported issues to hand off: by rank, or all"
+          },
+          "conflicts": {
+            "type": "string",
+            "enum": [
+              "off",
+              "on"
+            ],
+            "nullable": true
+          },
+          "verification": {
+            "type": "string",
+            "enum": [
+              "off",
+              "outdated",
+              "all"
+            ],
+            "nullable": true,
+            "description": "outdated pages only, or every flagged page"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
       },
       "WorkItemHandoffDto": {
         "type": "object",

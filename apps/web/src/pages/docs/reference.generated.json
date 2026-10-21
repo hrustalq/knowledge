@@ -4662,6 +4662,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/work-items/rules",
+      "tag": "work-items",
+      "summary": "The handoff rules, and the env ceiling they run under",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/work-items/rules",
+      "tag": "work-items",
+      "summary": "Turn handoff rules on or off; each creates tickets only into a project with a tracker route",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/documents/{id}/workflow-runs",
       "tag": "workflows",
       "summary": "Runs rooted at this page, plus the workflows that may be started against it",
@@ -5492,6 +5512,32 @@
         },
         {
           "name": "limit",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_handoff_work_item",
+      "description": "Hand a knowledge object off to the team's tracker (Jira, GitHub or GitLab): create a ticket for a reported issue, a knowledge conflict, a flagged page (\"verification\") or a page, or attach an existing ticket with `attach` (BILL-123, #45, org/repo#45 or its URL). The ticket carries a summary, a link back and a knowledge-ref footer, never page content; its status then syncs both ways. Without connectorId the",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "sourceKind",
+          "optional": false
+        },
+        {
+          "name": "sourceId",
+          "optional": false
+        },
+        {
+          "name": "connectorId",
+          "optional": true
+        },
+        {
+          "name": "attach",
           "optional": true
         }
       ]

@@ -16,6 +16,7 @@ import { ConnectorWebhookController } from './connector-webhook.controller.js';
 import { ConnectorWorkItemsModule } from './connector-work-items.module.js';
 import { WorkItemHandoffModule } from './handoff/work-item-handoff.module.js';
 import { WorkItemsController } from './handoff/work-items.controller.js';
+import { WorkItemSyncSweeper } from './handoff/work-item-sync.sweeper.js';
 import { TrackerRoutesController } from './handoff/tracker-routes.controller.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { ConnectorsCoreModule } from './connectors-core.module.js';
@@ -73,6 +74,8 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
   controllers: [GithubWebhookController, ConnectorsController, ConnectorWebhookController, GithubController, WorkItemsController, TrackerRoutesController],
   providers: [
     ConnectorConflictSweeper,
+    // #424: API-only, here rather than in WorkItemHandoffModule (which MCP imports).
+    WorkItemSyncSweeper,
     ConnectorItemsService,
     ConnectorItemAiService,
     // API-only: both exist to serve a person clicking through the picker.

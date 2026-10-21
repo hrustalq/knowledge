@@ -442,6 +442,11 @@ export class ConnectorWorkItemsService {
     return statusMapFor(row, this.trackers.trackerFor(row)?.kind ?? 'github');
   }
 
+  /** The row's tracker, or null for a kind or host with none. */
+  trackerOf(row: Connector): TrackerAdapter | null {
+    return this.trackers.trackerFor(row);
+  }
+
   /** The row's tracker, or the 400 the tab has always answered for a kind with none. */
   requireTracker(row: Connector): TrackerAdapter {
     const tracker = this.trackers.trackerFor(row);

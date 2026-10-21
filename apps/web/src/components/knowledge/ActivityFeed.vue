@@ -104,6 +104,9 @@ function label(e: ActivityEntry): string {
  * their own key rather than a user id.
  */
 function actor(e: ActivityEntry): string {
+  // #424: a tracker account nobody here is mapped to, or a handoff rule — never a person.
+  if (e.actor.startsWith('tracker:')) return t('workItems.actor.tracker')
+  if (e.actor.startsWith('rule:')) return t('workItems.actor.rule')
   return nameOf(e.actor)
 }
 

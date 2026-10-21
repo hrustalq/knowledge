@@ -9,13 +9,14 @@ import { ConnectorWorkItemsModule } from '../connector-work-items.module.js';
 import { ConnectorsCoreModule } from '../connectors-core.module.js';
 import { WorkItemAnchorsService } from './work-item-anchors.service.js';
 import { WorkItemHandoffService } from './work-item-handoff.service.js';
-import { WorkItemSyncSweeper } from './work-item-sync.sweeper.js';
+import { WorkItemRulesService } from './work-item-rules.service.js';
+import { NotificationsCoreModule } from '../../notifications/notifications-core.module.js';
 
 /**
- * Tracker handoff (#424): the handoff service and the sync sweeper.
- * API-only — imported by `ConnectorsModule` and nothing the worker loads —
- * because the sweeper writes to trackers and resolves reports in a person's
- * name, and two processes running it would double every transition.
+ * Tracker handoff (#424): the handoff, anchor and rules services, controller-
+ * free so the MCP surface can call them too. The sync sweeper is NOT here: it
+ * is provided by `ConnectorsModule`, which only the API process loads, so the
+ * stdio MCP server importing this module does not start a second sweeper.
  */
 @Module({
   imports: [
@@ -27,8 +28,9 @@ import { WorkItemSyncSweeper } from './work-item-sync.sweeper.js';
     VerificationCoreModule,
     ConnectorsCoreModule,
     ConnectorWorkItemsModule,
+    NotificationsCoreModule,
   ],
-  providers: [WorkItemAnchorsService, WorkItemHandoffService, WorkItemSyncSweeper],
-  exports: [WorkItemAnchorsService, WorkItemHandoffService],
+  providers: [WorkItemAnchorsService, WorkItemHandoffService, WorkItemRulesService],
+  exports: [WorkItemAnchorsService, WorkItemHandoffService, WorkItemRulesService],
 })
 export class WorkItemHandoffModule {}

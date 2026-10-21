@@ -43,6 +43,7 @@ import HealthBulkBar from '@/components/health/HealthBulkBar.vue'
 import HealthFilters from '@/components/health/HealthFilters.vue'
 import HealthPreviewSheet from '@/components/health/HealthPreviewSheet.vue'
 import HealthSettings from '@/components/health/HealthSettings.vue'
+import WorkItemRulesSettings from '@/components/health/WorkItemRulesSettings.vue'
 import HealthTable from '@/components/health/HealthTable.vue'
 import QualityPanel from '@/components/quality/QualityPanel.vue'
 import AgentOutcomesPanel from '@/components/health/AgentOutcomesPanel.vue'
@@ -346,6 +347,8 @@ const previewRow = ref<KnowledgeHealthRow | null>(null)
 
     <div v-else :id="panelId('settings')" role="tabpanel" :aria-labelledby="tabId('settings')">
       <HealthSettings :can-manage="auth.canAdminWorkspace" />
+      <!-- #424: an admin's, as its route is. -->
+      <WorkItemRulesSettings v-if="auth.canAdminWorkspace" class="mt-10" />
     </div>
 
     <HealthPreviewSheet :row="previewRow" @close="previewRow = null" />

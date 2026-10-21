@@ -3767,6 +3767,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/work-items/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The handoff rules, and the env ceiling they run under */
+        get: operations["WorkItemsController_getRules"];
+        /** Turn handoff rules on or off; each creates tickets only into a project with a tracker route */
+        put: operations["WorkItemsController_putRules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/work-items": {
         parameters: {
             query?: never;
@@ -7645,7 +7663,7 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            event: "page.merged" | "page.indexed" | "merge-request.opened" | "connector.synced" | "webhook" | "comment.mention";
+            event: "page.merged" | "page.indexed" | "merge-request.opened" | "connector.synced" | "webhook" | "comment.mention" | "work-item.updated";
         };
         StartAgentRunDto: {
             /** Format: uuid */
@@ -7996,6 +8014,21 @@ export interface components {
             outbound?: {
                 [key: string]: string;
             };
+        };
+        PutWorkItemRulesDto: {
+            workspaceId: string;
+            /**
+             * @description Reported issues to hand off: by rank, or all
+             * @enum {string|null}
+             */
+            issues?: "off" | "high" | "medium" | "all" | null;
+            /** @enum {string|null} */
+            conflicts?: "off" | "on" | null;
+            /**
+             * @description outdated pages only, or every flagged page
+             * @enum {string|null}
+             */
+            verification?: "off" | "outdated" | "all" | null;
         };
         WorkItemHandoffDto: {
             workspaceId: string;
@@ -21126,6 +21159,88 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkItemsController_getRules: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkItemsController_putRules: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutWorkItemRulesDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {

@@ -4348,7 +4348,8 @@
       "missing-paths": "Missing code",
       "unread": "Unread",
       "dead": "Dead",
-      "archived": "Archived"
+      "archived": "Archived",
+      "handed-off": "Handed off"
     },
     "presetHint": {
       "all": "Every live page",
@@ -4425,6 +4426,11 @@
         "no-head": "no published revision to verify",
         "not-found": "page not found",
         "unknown": "refused"
+      },
+      "handoffDialog": {
+        "title": "Send {n} page to a tracker | Send {n} pages to a tracker",
+        "description": "Each page gets one ticket, with a link back here. A flagged page goes as a request to check it. A page that already has a ticket on this tracker keeps it.",
+        "submit": "Send"
       }
     },
     "toast": {
@@ -4434,7 +4440,8 @@
       "clear": "Cleared verification on {n} page | Cleared verification on {n} pages",
       "reassign": "Reassigned {n} page | Reassigned {n} pages",
       "archive": "Archived {n} page | Archived {n} pages",
-      "unarchive": "Restored {n} page | Restored {n} pages"
+      "unarchive": "Restored {n} page | Restored {n} pages",
+      "handoff": "Sent {n} page | Sent {n} pages"
     },
     "settings": {
       "title": "Freshness policy",
@@ -6249,5 +6256,62 @@
         "clamped": "Longer than the deployment allows: {n} days will apply."
       }
     }
+  },
+  "workItems": {
+    "send": "Send to tracker",
+    "sendTitle": "Send to tracker",
+    "sendHint": "Creates a ticket with a link back here, or attaches one that exists. Status then moves both ways.",
+    "tracker": "Tracker",
+    "attachLabel": "Existing ticket (optional)",
+    "attachPlaceholder": "BILL-123, #45 or a ticket URL",
+    "create": "Create ticket",
+    "attach": "Attach ticket",
+    "sending": "Sending…",
+    "created": "Ticket created",
+    "attached": "Ticket attached",
+    "noTrackers": "No tracker connector here yet. An admin can connect Jira, GitHub or GitLab under Connectors.",
+    "retry": "Retry syncing {key}",
+    "trackerSays": "In the tracker: {status}",
+    "status": {
+      "open": "Open",
+      "in_progress": "In progress",
+      "done": "Done",
+      "wont_do": "Won't do"
+    },
+    "sync": {
+      "synced": "In sync",
+      "pending": "Syncing",
+      "failed": "Sync failed",
+      "orphaned": "Gone from tracker"
+    },
+    "settings": {
+      "tab": "Tracker",
+      "routesTitle": "Projects that hand off here",
+      "routesHint": "A project's \"Send to tracker\" goes to this connector. Without a route, people pick a tracker each time and no rule creates tickets.",
+      "noRoutes": "No project routes here yet.",
+      "project": "Project",
+      "jiraProject": "Jira project key",
+      "issueType": "Issue type",
+      "boardUrl": "GitHub organization board (optional)",
+      "board": "Board",
+      "addRoute": "Route project here",
+      "removeRoute": "Stop routing {project} here",
+      "routeSaved": "{project} now hands off here",
+      "mapTitle": "Status map",
+      "mapHint": "How this tracker's statuses read as ours. Leave a field empty to keep the default shown in it.",
+      "outbound": "When it changes here, move the ticket to",
+      "notPushed": "not pushed",
+      "inbound": "When the tracker says",
+      "inboundDefaults": "Defaults: {list}. Tracker statuses are matched without regard to case.",
+      "trackerStatus": "Tracker status",
+      "ourStatus": "Our status",
+      "addInbound": "Add a status",
+      "mapSaved": "Status map saved",
+      "peopleTitle": "People",
+      "peopleHint": "Tracker accounts seen here, and who each one is in this workspace. Used to say who closed a ticket, and to let a mapped editor's close clear a page's flag. Nobody is assigned anything.",
+      "noPeople": "No tracker accounts seen yet.",
+      "mapPerson": "Map to member"
+    },
+    "everyTracker": "This already has a ticket on every tracker connected here."
   }
 }

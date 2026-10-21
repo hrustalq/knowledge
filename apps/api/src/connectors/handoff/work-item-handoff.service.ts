@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type Connector, type ConnectorWorkItem, type ProjectTrackerRoute } from '@prisma/client';
+import { WORK_ITEM_STATUSES } from '@knowledge/contracts';
 import type {
   ConnectorWorkItemInfo,
   PutTrackerRouteInput,
@@ -205,6 +206,33 @@ export class WorkItemHandoffService {
       update: data,
     });
     return toRouteInfo(saved);
+  }
+
+  /** Every project routed to one connector — the connector page's list. */
+  async routesFor(connectorId: string): Promise<TrackerRouteInfo[]> {
+    const rows = await this.prisma.projectTrackerRoute.findMany({ where: { connectorId }, orderBy: { createdAt: 'asc' } });
+    return rows.map(toRouteInfo);
+  }
+
+  /**
+   * The connector's status map override (`config.statusMap`). Sparse: what is
+   * left out inherits the tracker default, and an empty map restores it.
+   */
+  async putStatusMap(row: Connector, map: { inbound?: Record<string, string>; outbound?: Record<string, string> }): Promise<void> {
+    const inbound = Object.fromEntries(
+      Object.entries(map.inbound ?? {})
+        .map(([raw, status]) => [raw.trim().toLowerCase().slice(0, 100), status] as const)
+        .filter(([raw, status]) => raw && (WORK_ITEM_STATUSES as readonly string[]).includes(status)),
+    );
+    const outbound = Object.fromEntries(
+      Object.entries(map.outbound ?? {})
+        .filter(([status, raw]) => (WORK_ITEM_STATUSES as readonly string[]).includes(status) && raw.trim())
+        .map(([status, raw]) => [status, raw.trim().slice(0, 100)]),
+    );
+    const config = { ...((row.config as Record<string, unknown> | null) ?? {}) };
+    if (Object.keys(inbound).length || Object.keys(outbound).length) config.statusMap = { inbound, outbound };
+    else delete config.statusMap;
+    await this.prisma.connector.update({ where: { id: row.id }, data: { config: config as Prisma.InputJsonValue } });
   }
 
   async deleteRoute(projectId: string): Promise<void> {

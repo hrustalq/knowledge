@@ -19,6 +19,7 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { statusMapFor, type TrackerAdapter, type TrackerBoard, type TrackerIssue } from './adapters/tracker.js';
 import { TrackerRegistry } from './tracker-registry.service.js';
+import { ConnectorAclService } from './connector-acl.service.js';
 
 /**
  * Work items — issues and pull requests — against a connected repository
@@ -53,6 +54,7 @@ export class ConnectorWorkItemsService {
     private readonly events: EventsPublisher,
     private readonly activity: ActivityService,
     private readonly permissions: PermissionService,
+    private readonly acl: ConnectorAclService,
   ) {}
 
   /**
@@ -400,10 +402,24 @@ export class ConnectorWorkItemsService {
    */
   async actorFor(row: Connector, externalId: string | null): Promise<string> {
     if (externalId) {
-      const mapped = await this.prisma.externalIdentity.findUnique({
+      let mapped = await this.prisma.externalIdentity.findUnique({
         where: { connectorId_externalId: { connectorId: row.id, externalId } },
         select: { userId: true },
       });
+      if (!mapped) {
+        // First sighting: record the account so an admin can map it on the
+        // connector page, and let the resolver try a linked GitHub account
+        // or a verified email first.
+        await this.prisma.externalIdentity.createMany({
+          data: [{ workspaceId: row.workspaceId, connectorId: row.id, externalId }],
+          skipDuplicates: true,
+        });
+        await this.acl.resolveIdentities(row, [externalId]).catch(() => 0);
+        mapped = await this.prisma.externalIdentity.findUnique({
+          where: { connectorId_externalId: { connectorId: row.id, externalId } },
+          select: { userId: true },
+        });
+      }
       if (mapped?.userId) return mapped.userId;
     }
     return `tracker:${row.id}`;

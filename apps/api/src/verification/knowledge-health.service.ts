@@ -15,7 +15,16 @@ import type {
   SourceVerificationState,
   VerificationFlag,
 } from '@knowledge/contracts';
-import { HEALTH_FILTERS, isInactive, OPEN_KNOWLEDGE_ISSUE_STATUSES } from '@knowledge/contracts';
+import {
+  HEALTH_FILTERS,
+  isInactive,
+  OPEN_KNOWLEDGE_ISSUE_STATUSES,
+  trackerKindOf,
+  workItemStatusFor,
+  workItemStatusMap,
+  type WorkItemStatusMap,
+  type WorkItemSyncState,
+} from '@knowledge/contracts';
 import { DocumentsService } from '../documents/documents.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { visibilitySql, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
@@ -128,10 +137,11 @@ export class KnowledgeHealthService {
       access,
       page.map((r) => r.id),
     );
+    const tickets = await this.ticketsFor(page.map((r) => r.id));
     const last = page[page.length - 1];
     return {
       workspaceId,
-      rows: page.map((r) => this.toRow(r, trails.get(r.id) ?? '', settings, now)),
+      rows: page.map((r) => ({ ...this.toRow(r, trails.get(r.id) ?? '', settings, now), workItem: tickets.get(r.id) ?? null })),
       nextCursor:
         hasMore && last
           ? encodeCursor({ v: sort === 'title' ? last.title : last.last_activity_at.toISOString(), id: last.id })
@@ -281,7 +291,33 @@ export class KnowledgeHealthService {
     `;
   }
 
-  private toRow(r: HealthSqlRow, breadcrumb: string, settings: KnowledgeHealthSettingsValues, now: Date): KnowledgeHealthRow {
+  /**
+   * The newest ticket per page handed off for its flag or the page itself
+   * (#424). Rows only already-visible pages reach, so no scope of its own.
+   */
+  private async ticketsFor(ids: string[]): Promise<Map<string, NonNullable<KnowledgeHealthRow['workItem']>>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.connectorWorkItem.findMany({
+      where: { sourceKind: { in: ['verification', 'document'] }, sourceId: { in: ids } },
+      orderBy: { createdAt: 'desc' },
+      include: { connector: { select: { kind: true, config: true } } },
+    });
+    const out = new Map<string, NonNullable<KnowledgeHealthRow['workItem']>>();
+    for (const row of rows) {
+      if (!row.sourceId || out.has(row.sourceId)) continue;
+      const kind = trackerKindOf(row.connector) ?? 'github';
+      const override = (row.connector.config as { statusMap?: Partial<WorkItemStatusMap> } | null)?.statusMap ?? null;
+      out.set(row.sourceId, {
+        key: row.externalKey ?? `#${row.number}`,
+        status: workItemStatusFor(row, workItemStatusMap(kind, override)),
+        syncState: row.syncState as WorkItemSyncState,
+        url: row.url,
+      });
+    }
+    return out;
+  }
+
+  private toRow(r: HealthSqlRow, breadcrumb: string, settings: KnowledgeHealthSettingsValues, now: Date): Omit<KnowledgeHealthRow, 'workItem'> {
     return {
       documentId: r.id,
       projectId: r.project_id,
@@ -337,6 +373,10 @@ export function healthFilterSql(
       return Prisma.sql`${live} AND (r.status IN ('expired', 'outdated') OR ${inactive})`;
     case 'missing-paths':
       return Prisma.sql`${live} AND cardinality(r.missing_paths) > 0`;
+    case 'handed-off':
+      return Prisma.sql`${live} AND EXISTS (
+        SELECT 1 FROM connector_work_items w
+         WHERE w.source_kind IN ('verification', 'document') AND w.source_id = r.id)`;
     // The same clause the project dashboard lists (#79), from `read-signals.ts`.
     case 'unread':
     case 'dead':

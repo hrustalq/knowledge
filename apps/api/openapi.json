@@ -18268,7 +18268,7 @@
             }
           }
         },
-        "summary": "Attach a work item to a page, so its events can reach a workflow",
+        "summary": "Attach a work item to a page, so its events can reach a workflow, or to an anchor, so status syncs (#424)",
         "tags": [
           "connectors"
         ]
@@ -18331,7 +18331,196 @@
             }
           }
         },
-        "summary": "Detach a work item from its page; both sides are kept",
+        "summary": "Detach a work item from its page and anchor; sync stops, the ticket stays open",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/tracker-routes": {
+      "get": {
+        "operationId": "ConnectorsController_trackerRoutes",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The knowledge projects that hand off to this tracker connector (#424)",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/status-map": {
+      "put": {
+        "operationId": "ConnectorsController_statusMap",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutStatusMapDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Override how the tracker's statuses map onto open / in progress / done / won't do (#424)",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/work-items/{workItemId}/retry": {
+      "post": {
+        "operationId": "ConnectorsController_workItemRetry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workItemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Retry a failed status transition, or re-check an orphaned ticket (#424)",
         "tags": [
           "connectors"
         ]
@@ -18602,6 +18791,321 @@
         "summary": "Disconnect the caller's GitHub account",
         "tags": [
           "connectors"
+        ]
+      }
+    },
+    "/v1/work-items": {
+      "get": {
+        "operationId": "WorkItemsController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sourceKind",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "issue",
+                "conflict",
+                "verification",
+                "document"
+              ]
+            }
+          },
+          {
+            "name": "sourceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Tickets anchored on one knowledge object; ones on pages the caller cannot open are left out",
+        "tags": [
+          "work-items"
+        ]
+      }
+    },
+    "/v1/work-items/handoff": {
+      "post": {
+        "operationId": "WorkItemsController_handoff",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkItemHandoffDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a ticket for a knowledge object in its tracker, or attach an existing one (idempotent per connector)",
+        "tags": [
+          "work-items"
+        ]
+      }
+    },
+    "/v1/projects/{id}/tracker-route": {
+      "get": {
+        "operationId": "TrackerRoutesController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The project's tracker route, or null when it has none",
+        "tags": [
+          "work-items"
+        ]
+      },
+      "put": {
+        "operationId": "TrackerRoutesController_put",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutTrackerRouteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Route the project to a tracker connector, with an optional Jira project, issue type or GitHub org board",
+        "tags": [
+          "work-items"
+        ]
+      },
+      "delete": {
+        "operationId": "TrackerRoutesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove the route; existing tickets keep syncing",
+        "tags": [
+          "work-items"
         ]
       }
     },
@@ -23655,7 +24159,8 @@
                 "missing-paths",
                 "unread",
                 "dead",
-                "archived"
+                "archived",
+                "handed-off"
               ]
             }
           },
@@ -31361,7 +31866,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.29.1",
+    "version": "0.30.1",
     "contact": {}
   },
   "tags": [],
@@ -35219,10 +35724,102 @@
           "documentId": {
             "type": "string",
             "description": "The page this work item is about"
+          },
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "issue",
+              "conflict",
+              "verification",
+              "document"
+            ],
+            "description": "Anchor kind, with sourceId: status then syncs both ways"
+          },
+          "sourceId": {
+            "type": "string",
+            "description": "The anchored object id"
+          }
+        }
+      },
+      "PutStatusMapDto": {
+        "type": "object",
+        "properties": {
+          "inbound": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Raw tracker status → open | in_progress | done | wont_do"
+          },
+          "outbound": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "open | in_progress | done | wont_do → raw tracker status"
+          }
+        }
+      },
+      "WorkItemHandoffDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "issue",
+              "conflict",
+              "verification",
+              "document"
+            ],
+            "description": "What kind of knowledge object the ticket is for"
+          },
+          "sourceId": {
+            "type": "string",
+            "description": "knowledge_issues.id, knowledge_conflicts.id, or the page id for verification/document"
+          },
+          "connectorId": {
+            "type": "string",
+            "description": "The tracker connector; omitted = the anchor's project route"
+          },
+          "attach": {
+            "type": "string",
+            "description": "Attach this existing ticket instead of creating one: BILL-123, #45, org/repo#45 or its URL"
           }
         },
         "required": [
-          "documentId"
+          "workspaceId",
+          "sourceKind",
+          "sourceId"
+        ]
+      },
+      "PutTrackerRouteDto": {
+        "type": "object",
+        "properties": {
+          "connectorId": {
+            "type": "string",
+            "description": "The tracker connector this project hands off to"
+          },
+          "externalProject": {
+            "type": "string",
+            "nullable": true,
+            "description": "Jira project key (BILL); ignored by repository trackers"
+          },
+          "issueType": {
+            "type": "string",
+            "nullable": true,
+            "description": "Jira issue type; empty is Task"
+          },
+          "boardUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "A GitHub organization board URL; the card follows the issue"
+          }
+        },
+        "required": [
+          "connectorId"
         ]
       },
       "UpdateLintPolicyDto": {

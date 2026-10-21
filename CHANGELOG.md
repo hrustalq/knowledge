@@ -27,6 +27,16 @@ in the pull request that introduces them — see
   until someone retries it (`POST /v1/connectors/:id/work-items/:workItemId/retry`). Only a GitHub account
   mapped to an editor can clear a page's flag from the tracker. No tracker action ever verifies a page.
 - `GET /v1/work-items?workspaceId&sourceKind&sourceId` lists the issues handed off for one object.
+- **Send to tracker** in the web app (#424), on every open report, every open conflict, and the verification
+  bar of a flagged page. It creates a ticket or attaches an existing one. A chip then shows the ticket's key
+  and status (`BILL-123 · In progress`) and links to the tracker. A transition that kept failing shows
+  the tracker's error with a Retry button. `/knowledge-health` gains a **Handed off** filter, the ticket under
+  each page's state, and a bulk **Send to tracker**. A tracker connector gains a **Tracker** tab, where an
+  admin can:
+  - route projects to it, with the Jira project and issue type or a GitHub board;
+  - override the status map, with the defaults shown;
+  - map the tracker accounts it has seen to members. They are mapped for attribution only; nobody is
+    assigned anything.
 - Jira Cloud connectors are trackers too (#424). A handoff creates a ticket in the tracker route's Jira project,
   or in the connector's new **Default project key**, with the route's issue type (default `Task`). An existing
   ticket can be attached by `BILL-123` or its browse URL. Status moves through Jira's own workflow

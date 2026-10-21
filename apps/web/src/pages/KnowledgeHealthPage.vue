@@ -31,6 +31,7 @@ import type {
   KnowledgeHealthRow,
   KnowledgeHealthSummaryResponse,
 } from '@knowledge/contracts'
+import { api } from '@/api/client'
 import { apiMutationOptions, apiQueryOptions } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { getProjectId, getWorkspaceId } from '@/lib/api'
@@ -236,6 +237,37 @@ async function runBulk(request: HealthBulkRequest) {
   }
 }
 
+/**
+ * Send to tracker (#424), one handoff per page — the route is per anchor, and
+ * a flagged page goes as its flag. Sequential: a tracker's rate limit is
+ * shared, and a sweep of 50 pages is a minute, not a burst.
+ */
+const handingOff = ref(false)
+async function runHandoff(connectorId: string) {
+  const picked = rows.value.filter((r) => selection.value.ids.has(r.documentId))
+  if (!picked.length || handingOff.value) return
+  handingOff.value = true
+  const failed: Array<{ title: string; reason: string }> = []
+  for (const row of picked) {
+    try {
+      await api.post('/v1/work-items/handoff', {
+        body: { workspaceId, sourceKind: row.verificationFlag ? 'verification' : 'document', sourceId: row.documentId, connectorId },
+      })
+    } catch (e) {
+      failed.push({ title: row.title, reason: errorMessage(e, t) })
+    }
+  }
+  const ok = picked.length - failed.length
+  if (ok > 0) toast.success(t('health.toast.handoff', { n: ok }, ok))
+  for (const f of failed.slice(0, FAILURE_TOASTS)) toast.error(t('health.bulk.failed', f))
+  const rest = failed.length - FAILURE_TOASTS
+  if (rest > 0) toast.error(t('health.bulk.failedMore', { n: rest }, rest))
+  handingOff.value = false
+  onClear()
+  void queryClient.invalidateQueries({ queryKey: ['/v1/knowledge-health'] })
+  void queryClient.invalidateQueries({ queryKey: ['/v1/knowledge-health/summary'] })
+}
+
 /* --------------------------------------------------------------- preview */
 
 const previewRow = ref<KnowledgeHealthRow | null>(null)
@@ -273,9 +305,10 @@ const previewRow = ref<KnowledgeHealthRow | null>(null)
       <HealthBulkBar
         v-if="selection.ids.size > 0"
         :count="selection.ids.size"
-        :busy="bulk.isPending.value"
+        :busy="bulk.isPending.value || handingOff"
         :can-archive="auth.canAdminWorkspace"
         @run="runBulk"
+        @handoff="runHandoff"
         @clear="onClear"
       />
 

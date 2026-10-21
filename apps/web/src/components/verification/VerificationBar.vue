@@ -52,6 +52,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import OwnerPicker from './OwnerPicker.vue'
+import WorkItemChips from '@/components/knowledge/WorkItemChips.vue'
 import { INTERVAL_CHOICES, flagSourceWho, intervalFromKey, intervalKey, verificationDotClass } from './verification-ui'
 
 const props = defineProps<{ detail: DocumentDetailResponse }>()
@@ -247,6 +248,9 @@ const archivedBy = computed(() => nameOf(doc.value.archivedBy))
     </p>
     <!-- The note is user or agent text: rendered as text, never as markup. -->
     <q v-if="note" class="line-clamp-3 text-xs leading-snug text-muted-foreground italic" :title="note">{{ note }}</q>
+    <!-- #424: a flagged page can be handed off as a "check this page" ticket;
+         the ticket stays shown after the flag clears, until it is unlinked. -->
+    <WorkItemChips source-kind="verification" :source-id="id" :can-handoff="auth.canEdit && !!doc.verificationFlag" class="pt-1" />
 
     <div class="flex flex-wrap items-center gap-1 pt-1.5">
       <OwnerPicker :owner-id="doc.ownerId ?? null" :can-edit="auth.canEdit" :disabled="busy" @change="setOwner" />

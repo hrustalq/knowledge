@@ -14,6 +14,35 @@ const ACL_PROPERTIES = {
   aclRestricted: { type: 'boolean' },
 };
 
+/**
+ * #400: chunk text keeps the raw `standard` field and gains Russian and
+ * English analysis (stemming, stopwords) as multi-fields. Built-in analyzers
+ * need no index settings, so an existing index takes them through the same
+ * additive `_mapping` update, and `reanalyze` backfills its rows in place.
+ */
+const TEXT_PROPERTIES = {
+  text: {
+    type: 'text',
+    fields: { ru: { type: 'text', analyzer: 'russian' }, en: { type: 'text', analyzer: 'english' } },
+  },
+};
+
+/** #400: rows written before the analyzed fields existed. */
+const UNANALYZED = JSON.stringify({ query: { bool: { must_not: [{ exists: { field: 'text.ru' } }] } } });
+
+/**
+ * #400: the BM25 clause. The query's script picks one analyzed field, because
+ * each analyzer drops only its own language's stopwords: summed over several
+ * fields, «от» and «при» counted once per field that kept them. Latin tokens
+ * in a Russian query (`main`, `MR`) pass the Russian analyzer unchanged. Up to
+ * two terms need every term, longer queries 60% of them (rounded down), so
+ * one shared generic token (`base`) no longer makes a hit.
+ */
+export function bm25Clause(query: string) {
+  const field = /\p{Script=Cyrillic}/u.test(query) ? 'text.ru' : 'text.en';
+  return { match: { [field]: { query, minimum_should_match: '2<60%' } } };
+}
+
 /** Valid-time stamps (#81), added to an existing index by the same mapping update. */
 const VALIDITY_PROPERTIES = {
   validFrom: { type: 'long' },
@@ -57,7 +86,7 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
               chunkId: { type: 'keyword' },
               index: { type: 'integer' },
               headingPath: { type: 'keyword' },
-              text: { type: 'text' },
+              ...TEXT_PROPERTIES,
               ...ACL_PROPERTIES,
             },
           },
@@ -71,11 +100,12 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
         const mapped = await fetch(`${this.baseUrl}/${this.index}/_mapping`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ properties: { ...ACL_PROPERTIES, ...VALIDITY_PROPERTIES } }),
+          body: JSON.stringify({ properties: { ...TEXT_PROPERTIES, ...ACL_PROPERTIES, ...VALIDITY_PROPERTIES } }),
         });
         if (!mapped.ok) {
           throw new Error(`OpenSearch mapping update failed (${mapped.status}): ${(await mapped.text()).slice(0, 300)}`);
         }
+        await this.reanalyze();
       }
     })().catch((err: unknown) => {
       // Any failure, an HTTP error or a thrown fetch, leaves nothing cached: the next call retries (#330).
@@ -83,6 +113,36 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
       throw err;
     });
     return this.ready;
+  }
+
+  /**
+   * #400: rows indexed before the analyzed fields existed lack `text.ru`, so
+   * BM25 cannot find them. Rewrite them from their own `_source`, with nothing
+   * re-chunked or re-embedded, as a background task. Keyed on the rows rather
+   * than the mapping, so a backfill that failed or was cut short by a restart
+   * resumes on the next boot. Two processes booting together may both start
+   * one; the second only rewrites rows again.
+   */
+  private async reanalyze(): Promise<void> {
+    const missing = await fetch(`${this.baseUrl}/${this.index}/_count`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: UNANALYZED,
+    });
+    if (!missing.ok) throw new Error(`OpenSearch count failed (${missing.status}): ${(await missing.text()).slice(0, 300)}`);
+    const { count } = (await missing.json()) as { count?: number };
+    if (!count) return;
+    const res = await fetch(
+      `${this.baseUrl}/${this.index}/_update_by_query?conflicts=proceed&refresh=true&wait_for_completion=false`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: UNANALYZED,
+      },
+    );
+    if (!res.ok) throw new Error(`OpenSearch reanalyze failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+    const { task } = (await res.json()) as { task?: string };
+    this.logger.log(`Re-analyzing ${count} row(s) of ${this.index} for ru/en search fields (task ${task})`);
   }
 
   async indexRevisionChunks(
@@ -242,7 +302,7 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
         size: k,
         query: {
           bool: {
-            must: [{ match: { text: { query } } }],
+            must: [bm25Clause(query)],
             // Mandatory server-side workspace predicate (plan.md §6).
             filter,
             must_not: mustNot,

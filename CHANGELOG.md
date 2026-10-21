@@ -38,6 +38,13 @@ in the pull request that introduces them — see
   and done or won't do closes it. An existing issue can be attached by `#45`, `group/repo#45` or its URL.
   An `Issue Hook` on the connector's webhook, checked against its secret token, updates a handed-off
   issue at once. The Work items tab and the assistant's `task_*` tools work on GitLab connectors too.
+- A knowledge project can be routed to one tracker connector (#424): `GET|PUT|DELETE
+  /v1/projects/:id/tracker-route` sets the connector, the Jira project key and issue type, and optionally a
+  GitHub **organization** board URL. A project's handoffs go there, and a project without a route has the
+  connector picked by hand. With a board, a handed-off issue's card is added to it, and its Status column
+  follows the ticket (Todo, In Progress, Done). That write is best effort; the issue's own state is the
+  status. A user-owned board is refused, because the GitHub App cannot reach it. Moving a card on the board
+  refreshes the issue's board names in the projection.
 
 ### Changed
 
@@ -62,6 +69,11 @@ in the pull request that introduces them — see
   one per connector and page). The page's other attached issues stay on its rail, as before.
 - Migration `20261128100000_work_item_actor` adds a nullable `connector_work_items.external_actor_id`, expand-only
   (#424).
+- Migration `20261129100000_tracker_route_board_url` adds a nullable `project_tracker_routes.board_url`,
+  expand-only (#424).
+- The GitHub App now asks for **Organization projects: write**, up from read, and the **Projects v2 item**
+  webhook event (#424). Change both on the App's settings page, then have each organization accept the new
+  permission. Until then board writes fail quietly and everything else works.
 - Status sync runs in the API process every `WORK_ITEM_SYNC_TICK_MS` (default `15000`). Set
   `WORK_ITEM_SYNC_ENABLED=false` to stop it; handoff still works. Both variables have defaults, so no
   deploy change is needed. Sync works by polling. The GitHub App webhook only makes it faster.

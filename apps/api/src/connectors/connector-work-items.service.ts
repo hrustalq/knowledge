@@ -17,7 +17,7 @@ import { t } from '../i18n/t.js';
 import type { AccessScope } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { statusMapFor, type TrackerAdapter, type TrackerIssue } from './adapters/tracker.js';
+import { statusMapFor, type TrackerAdapter, type TrackerBoard, type TrackerIssue } from './adapters/tracker.js';
 import { TrackerRegistry } from './tracker-registry.service.js';
 
 /**
@@ -407,6 +407,18 @@ export class ConnectorWorkItemsService {
       if (mapped?.userId) return mapped.userId;
     }
     return `tracker:${row.id}`;
+  }
+
+  /**
+   * The board a row's card is kept on: the tracker route of the row's page's
+   * project, when it routes to this row's connector and names a board.
+   */
+  async boardFor(item: Pick<ConnectorWorkItem, 'connectorId' | 'documentId'>): Promise<TrackerBoard | null> {
+    if (!item.documentId) return null;
+    const doc = await this.prisma.document.findUnique({ where: { id: item.documentId }, select: { projectId: true } });
+    const route = doc ? await this.prisma.projectTrackerRoute.findUnique({ where: { projectId: doc.projectId } }) : null;
+    if (!route || route.connectorId !== item.connectorId || !route.boardNodeId || !route.boardFieldId) return null;
+    return { nodeId: route.boardNodeId, fieldId: route.boardFieldId };
   }
 
   /** The connector's status map: its config override over its tracker's default. */

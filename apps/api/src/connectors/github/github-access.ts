@@ -43,8 +43,9 @@ export const GITHUB_PERMISSION_REQUIREMENTS: readonly PermissionRequirement[] = 
   { name: 'pull_requests', level: 'write', purpose: 'drift-check' },
   // Which merged pull requests carry a breaking label, for release notes (feature 46).
   { name: 'pull_requests', level: 'read', purpose: 'changelog' },
-  // Board membership on the work items tab — decoration, never required.
-  { name: 'organization_projects', level: 'read', purpose: 'boards' },
+  // Board membership on the work items tab, and since #424 the Status field a
+  // handed-off issue's board card is moved through — best effort, never required.
+  { name: 'organization_projects', level: 'write', purpose: 'boards' },
   // Access mirroring reads a private repository's collaborators (metadata)
   // and its teams' members, which is an organisation permission (#76).
   { name: 'metadata', level: 'read', purpose: 'acl' },
@@ -62,6 +63,8 @@ export const GITHUB_EVENT_REQUIREMENTS: readonly EventRequirement[] = [
   // A published release is what writes its release notes page (feature 46).
   { name: 'release', purpose: 'changelog' },
   { name: 'release', purpose: 'repo-events' },
+  // A card moved on an org board refreshes the issue it is a view of (#424).
+  { name: 'projects_v2_item', purpose: 'boards' },
 ];
 
 const RANK: Record<GithubGrantLevel, number> = { read: 1, write: 2, admin: 3 };

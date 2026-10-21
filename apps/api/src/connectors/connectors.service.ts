@@ -124,6 +124,17 @@ export class ConnectorsService {
    * Crosses workspaces on purpose: the same installation can be recorded by two
    * workspaces, and an issue moving on that repository is news to both.
    */
+  /**
+   * Every enabled connector on one App installation — for a delivery that
+   * names no repository (a Projects v2 card, #424).
+   */
+  async forGithubInstallation(installationId: string): Promise<Connector[]> {
+    return this.prisma.connector.findMany({
+      where: { enabled: true, config: { path: [GITHUB_INSTALLATION_CONFIG_KEY], equals: installationId } },
+      take: 50,
+    });
+  }
+
   async forGithubDelivery(installationId: string, repoFullName: string): Promise<Connector[]> {
     const rows = await this.prisma.connector.findMany({
       where: {

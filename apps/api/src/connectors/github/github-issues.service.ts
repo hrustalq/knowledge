@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { Connector } from '@prisma/client';
 import { connectorKindInfo } from '@knowledge/contracts';
 import type {
+  WorkItemStatus,
   ConnectorWorkItemState,
   CreateConnectorWorkItemInput,
 } from '@knowledge/contracts';
@@ -11,6 +12,7 @@ import { repoHost } from '../adapters/repo-archive.js';
 import {
   markdownBody,
   type TrackerAdapter,
+  type TrackerBoard,
   type TrackerBodyLine,
   type TrackerCreateInput,
   type TrackerIssue,
@@ -247,7 +249,95 @@ export class GithubIssuesService implements TrackerAdapter {
     return out;
   }
 
+  // --- Projects v2 (#424) ---
+
+  /**
+   * An org board's node id and its single-select `Status` field, from the
+   * board's URL. A user-owned board is refused: the App's
+   * `organization_projects` permission does not reach it, and a PAT that could
+   * would make the card's position depend on whose token the connector holds.
+   */
+  async resolveBoard(row: Connector, url: string): Promise<TrackerBoard> {
+    if (/^https:\/\/github\.com\/users\//i.test(url.trim())) {
+      throw new BadRequestException(t('error.workItem.userProjectBoard'));
+    }
+    const m = /^https:\/\/github\.com\/orgs\/([\w.-]+)\/projects\/(\d+)/i.exec(url.trim());
+    if (!m) throw new BadRequestException(t('error.workItem.badBoardUrl', { url }));
+    const body = await this.graphql<{ organization?: { projectV2?: { id?: string; field?: { id?: string } | null } | null } }>(
+      row,
+      `query($org: String!, $n: Int!) { organization(login: $org) { projectV2(number: $n) { id field(name: "Status") { ... on ProjectV2SingleSelectField { id } } } } }`,
+      { org: m[1], n: Number(m[2]) },
+    );
+    const project = body.organization?.projectV2;
+    if (!project?.id || !project.field?.id) throw new BadRequestException(t('error.workItem.boardNotFound', { url }));
+    return { nodeId: project.id, fieldId: project.field.id };
+  }
+
+  /**
+   * Add the issue's card to the board when it is not there yet, then set its
+   * Status to the option named for `status` (Todo / In Progress / Done, as a
+   * board created from GitHub's template names them). Best effort: a board is
+   * a view, and the issue's own state already moved.
+   */
+  async setBoardStatus(row: Connector, ref: TrackerRef, board: TrackerBoard, status: WorkItemStatus): Promise<boolean> {
+    try {
+      const target = await this.target(row);
+      const found = await this.graphql<{
+        repository?: { issue?: { id?: string; projectItems?: { nodes?: Array<{ id: string; project?: { id?: string } } | null> } } | null };
+        node?: { options?: Array<{ id: string; name: string }> } | null;
+      }>(
+        row,
+        `query($owner: String!, $repo: String!, $n: Int!, $field: ID!) {
+          repository(owner: $owner, name: $repo) { issue(number: $n) { id projectItems(first: 20) { nodes { id project { id } } } } }
+          node(id: $field) { ... on ProjectV2SingleSelectField { options { id name } } }
+        }`,
+        { owner: target.owner, repo: target.repo, n: ref.number, field: board.fieldId },
+      );
+      const issue = found.repository?.issue;
+      const option = boardOptionFor(found.node?.options ?? [], status);
+      if (!issue?.id || !option) return false;
+      let itemId = issue.projectItems?.nodes?.find((n) => n?.project?.id === board.nodeId)?.id;
+      if (!itemId) {
+        const added = await this.graphql<{ addProjectV2ItemById?: { item?: { id?: string } } }>(
+          row,
+          `mutation($p: ID!, $c: ID!) { addProjectV2ItemById(input: { projectId: $p, contentId: $c }) { item { id } } }`,
+          { p: board.nodeId, c: issue.id },
+        );
+        itemId = added.addProjectV2ItemById?.item?.id;
+      }
+      if (!itemId) return false;
+      await this.graphql(
+        row,
+        `mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) { updateProjectV2ItemFieldValue(input: { projectId: $p, itemId: $i, fieldId: $f, value: { singleSelectOptionId: $o } }) { projectV2Item { id } } }`,
+        { p: board.nodeId, i: itemId, f: board.fieldId, o: option },
+      );
+      return true;
+    } catch (err) {
+      this.logger.warn(`board status for #${ref.number} on connector ${row.id} failed: ${(err as Error).message}`);
+      return false;
+    }
+  }
+
+  /** The issue a Projects v2 card shows, when it is an issue on some repository. */
+  async cardContent(row: Connector, contentNodeId: string): Promise<{ repo: string; number: number } | null> {
+    const body = await this.graphql<{ node?: { number?: number; repository?: { nameWithOwner?: string } } | null }>(
+      row,
+      `query($id: ID!) { node(id: $id) { ... on Issue { number repository { nameWithOwner } } } }`,
+      { id: contentNodeId },
+    );
+    const node = body.node;
+    return node?.number && node.repository?.nameWithOwner ? { repo: node.repository.nameWithOwner, number: node.number } : null;
+  }
+
   // --- internals ---
+
+  private async graphql<T>(row: Connector, query: string, variables: Record<string, unknown>): Promise<T> {
+    const target = await this.target(row);
+    const res = await this.request(target, '/graphql', { method: 'POST', body: JSON.stringify({ query, variables }) });
+    const body = (await res.json()) as { data?: T; errors?: Array<{ message?: string }> };
+    if (body.errors?.length) throw new BadRequestException(body.errors.map((e) => e.message).join('; '));
+    return body.data ?? ({} as T);
+  }
 
   /**
    * Resolve owner, repo and credential once per public call.
@@ -301,6 +391,23 @@ export class GithubIssuesService implements TrackerAdapter {
     }
     return res;
   }
+}
+
+/** Option names per status, as GitHub's board template and common variants spell them. */
+const BOARD_OPTIONS: Record<WorkItemStatus, string[]> = {
+  open: ['todo', 'to do', 'backlog'],
+  in_progress: ['in progress', 'doing'],
+  done: ['done', 'closed'],
+  wont_do: ["won't do", 'wont do', 'done', 'closed'],
+};
+
+/** The option id for a status, first name in `BOARD_OPTIONS` order that the field has. */
+export function boardOptionFor(options: Array<{ id: string; name: string }>, status: WorkItemStatus): string | null {
+  for (const name of BOARD_OPTIONS[status]) {
+    const hit = options.find((o) => o.name.trim().toLowerCase() === name);
+    if (hit) return hit.id;
+  }
+  return null;
 }
 
 interface RawProjectNode {

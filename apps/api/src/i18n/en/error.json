@@ -752,6 +752,11 @@
     "notRetryable": "Only a failed or orphaned work item can be retried",
     "ticketGone": "The ticket no longer exists on the tracker",
     "anchorOrDocument": "Give a page or an anchor, not both",
-    "jiraNoProject": "Connector {name} has no default Jira project and the tracker route names none"
+    "jiraNoProject": "Connector {name} has no default Jira project and the tracker route names none",
+    "userProjectBoard": "Only organization boards can be used: the GitHub App cannot reach a board owned by a user",
+    "badBoardUrl": "\"{url}\" is not a GitHub organization board URL (https://github.com/orgs/<org>/projects/<n>)",
+    "boardNotFound": "No board with a Status field at {url}, or the connector cannot see it",
+    "boardNeedsGithub": "Only a GitHub connector can move cards on a GitHub board",
+    "routeConnectorWorkspace": "The connector belongs to another workspace"
   }
 }

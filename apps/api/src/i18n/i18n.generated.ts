@@ -1386,6 +1386,11 @@ export type I18nTranslations = {
             "ticketGone": string;
             "anchorOrDocument": string;
             "jiraNoProject": string;
+            "userProjectBoard": string;
+            "badBoardUrl": string;
+            "boardNotFound": string;
+            "boardNeedsGithub": string;
+            "routeConnectorWorkspace": string;
         };
     };
     "export": {

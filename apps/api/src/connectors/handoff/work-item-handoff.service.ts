@@ -1,6 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, type Connector, type ConnectorWorkItem } from '@prisma/client';
-import type { ConnectorWorkItemInfo, WorkItemHandoffInput, WorkItemSourceKind } from '@knowledge/contracts';
+import { Prisma, type Connector, type ConnectorWorkItem, type ProjectTrackerRoute } from '@prisma/client';
+import type {
+  ConnectorWorkItemInfo,
+  PutTrackerRouteInput,
+  TrackerRouteInfo,
+  WorkItemHandoffInput,
+  WorkItemSourceKind,
+} from '@knowledge/contracts';
 import { ActivityService } from '../../activity/activity.service.js';
 import type { Principal } from '../../auth/principal.js';
 import { asLocale } from '../../i18n/locale.js';
@@ -84,6 +90,9 @@ export class WorkItemHandoffService {
         issueType: route?.connectorId === row.id ? route.issueType : null,
       });
       saved = await this.save(row, () => this.workItems.upsertFrom(row, issue, { documentId: view.documentId, anchor }));
+      if (route?.connectorId === row.id && route.boardNodeId && route.boardFieldId && tracker.setBoardStatus) {
+        await tracker.setBoardStatus(row, saved, { nodeId: route.boardNodeId, fieldId: route.boardFieldId }, 'open');
+      }
     }
 
     void this.activity.record({
@@ -160,6 +169,48 @@ export class WorkItemHandoffService {
     return this.workItems.listForAnchor(await this.permissions.scopeFor(principal, workspaceId), kind, id);
   }
 
+  // --- tracker routes ---
+
+  async route(projectId: string): Promise<TrackerRouteInfo | null> {
+    const row = await this.prisma.projectTrackerRoute.findUnique({ where: { projectId } });
+    return row ? toRouteInfo(row) : null;
+  }
+
+  /**
+   * Route a knowledge project to a tracker connector. A board URL is resolved
+   * against GitHub now, so a wrong one is refused at save time rather than
+   * failing silently on the first handoff.
+   */
+  async putRoute(projectId: string, input: PutTrackerRouteInput, actorId: string): Promise<TrackerRouteInfo> {
+    const project = await this.prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { workspaceId: true } });
+    const { row, tracker } = await this.requireTracker(project.workspaceId, input.connectorId);
+    const boardUrl = input.boardUrl?.trim() || null;
+    let board: { nodeId: string; fieldId: string } | null = null;
+    if (boardUrl) {
+      if (!tracker.resolveBoard) throw new BadRequestException(t('error.workItem.boardNeedsGithub'));
+      board = await tracker.resolveBoard(row, boardUrl);
+    }
+    const data = {
+      connectorId: row.id,
+      externalProject: input.externalProject?.trim().toUpperCase() || null,
+      issueType: input.issueType?.trim() || null,
+      boardUrl,
+      boardNodeId: board?.nodeId ?? null,
+      boardFieldId: board?.fieldId ?? null,
+      updatedBy: actorId,
+    };
+    const saved = await this.prisma.projectTrackerRoute.upsert({
+      where: { projectId },
+      create: { projectId, workspaceId: project.workspaceId, ...data },
+      update: data,
+    });
+    return toRouteInfo(saved);
+  }
+
+  async deleteRoute(projectId: string): Promise<void> {
+    await this.prisma.projectTrackerRoute.deleteMany({ where: { projectId } });
+  }
+
   // --- internals ---
 
   /**
@@ -195,6 +246,17 @@ export class WorkItemHandoffService {
       throw err;
     }
   }
+}
+
+function toRouteInfo(row: ProjectTrackerRoute): TrackerRouteInfo {
+  return {
+    projectId: row.projectId,
+    connectorId: row.connectorId,
+    externalProject: row.externalProject,
+    issueType: row.issueType,
+    boardUrl: row.boardUrl,
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 function sameTicket(tracker: TrackerAdapter, row: Connector, item: ConnectorWorkItem, attach: string): boolean {

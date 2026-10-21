@@ -97,6 +97,20 @@ export const READ_TOOL_NAMES = new Set([
 ]);
 
 /**
+ * What a search tool's `query` is (#402), for every search a model can call:
+ * search_knowledge, search_chat and their MCP twins. Left unsaid, models
+ * translate a Russian question into English and pad it with keywords, and the
+ * English terms then match code identifiers and table headers through BM25.
+ * A prompt, not enforcement — #400 and #401 make retrieval hold up whatever
+ * query arrives; this only stops the model from making it worse.
+ */
+export const SEARCH_QUERY_RULE =
+  "The user's question in their own words and language. Do not translate it, do not turn it into a list of " +
+  'keywords, and do not add synonyms or English terms: pages match on the words they are written in, so a ' +
+  'reworded query finds pages that share a stray word instead of the answer. Reword only to replace a ' +
+  'reference to earlier in the conversation ("it", "that page") with what it names.';
+
+/**
  * Tools that do not count against the turn's tool budget.
  *
  * The budget bounds *work* — searches, reads, graph walks, writes. Asking the

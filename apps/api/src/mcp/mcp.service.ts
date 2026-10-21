@@ -76,6 +76,7 @@ import { ApiSpecReadService } from '../api-specs/api-spec-read.service.js';
 import { API_CHANGE_RULE_IDS, API_SPEC_SYNTAXES, CODE_SAMPLE_LANGS, isApiSpecKind, normalizeEntityKey, type ApiSpecSyntax } from '@knowledge/contracts';
 import { ComponentDraftsService } from '../components/component-drafts.service.js';
 import { StyleLintService } from '../assistant/style-lint.service.js';
+import { SEARCH_QUERY_RULE } from '../assistant/assistant-tool-types.js';
 import { QualityService } from '../quality/quality.service.js';
 import { withAsOf } from '../graph/temporal.js';
 import { ReleaseTagsService } from '../temporal/release-tags.service.js';
@@ -293,7 +294,7 @@ export class McpService {
           'each page held then, and a result whose validTo is set has since been superseded.',
         inputSchema: {
           workspaceId: z.string().uuid(),
-          query: z.string().min(1),
+          query: z.string().min(1).describe(SEARCH_QUERY_RULE),
           limit: z.number().int().min(1).max(100).optional(),
           projectIds: z
             .array(z.string().uuid())
@@ -1575,7 +1576,7 @@ export class McpService {
           'answers, and when you rely on a chat say which and when.',
         inputSchema: {
           workspaceId: z.string().uuid(),
-          query: z.string().min(1).max(500),
+          query: z.string().min(1).max(500).describe(SEARCH_QUERY_RULE),
           limit: z.number().int().min(1).max(50).optional(),
           projectIds: z.array(z.string().uuid()).max(20).optional().describe('Only chats bound to these projects'),
           from: z.string().datetime().optional().describe('Only windows still going at or after this time'),

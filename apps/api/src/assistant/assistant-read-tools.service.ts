@@ -13,7 +13,7 @@ import { readFrontmatterRelations, readFrontmatterTags } from '../common/relatio
 import { wrapUntrusted } from '../common/untrusted.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
-import { READ_TOOL_NAMES } from './assistant-tool-types.js';
+import { READ_TOOL_NAMES, SEARCH_QUERY_RULE } from './assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 
 /** How much of a page one read_document call returns. */
@@ -57,11 +57,12 @@ const SEARCH_CHAT_TOOL: ChatCompletionFunctionTool = {
       'Search what people said in the team chats this workspace made searchable. Returns windows of messages ' +
       '(masked, authors as author-1, author-2…) with the chat, its platform and when, each with a `cite` label. ' +
       'A chat is not a page: nobody reviewed it, so say "in #chat, on <date>, someone said…" and prefer a page ' +
-      'when one answers. Use it for what was decided or discussed that may never have been written down.',
+      'when one answers. Use it for what was decided or discussed that may never have been written down. ' +
+      "Search with the user's own words and language — see query.",
     parameters: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Natural-language search query' },
+        query: { type: 'string', description: SEARCH_QUERY_RULE },
         limit: { type: 'integer', minimum: 1, maximum: 10, description: 'Max results (default 5)' },
       },
       required: ['query'],
@@ -154,11 +155,12 @@ export class AssistantReadToolsService {
             'Hybrid (semantic + keyword) search over this workspace, with one hop of knowledge-graph ' +
             'expansion. Returns matching documents with snippets plus graph-related documents. Each result ' +
             'carries a `cite` label (S1, S2, …) to end your sentences with. ' +
-            'Use it whenever the current page does not already answer the question.',
+            'Use it whenever the current page does not already answer the question. ' +
+            "Search with the user's own words and language — see query.",
           parameters: {
             type: 'object',
             properties: {
-              query: { type: 'string', description: 'Natural-language search query' },
+              query: { type: 'string', description: SEARCH_QUERY_RULE },
               limit: { type: 'integer', minimum: 1, maximum: 10, description: 'Max results (default 5)' },
             },
             required: ['query'],

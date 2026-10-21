@@ -22,6 +22,14 @@ in the pull request that introduces them — see
   half empty beside the headings. If you prefer the narrow reading width, uncheck **Full width** in a page's
   `⋯` menu. The choice applies to every page in the app and is remembered in this browser.
 
+### Operations
+
+- Migration `20261127100000_tracker_handoff` prepares tracker handoff (#424): new nullable columns on
+  `connector_work_items`, `connectors` and `workspace_settings`, and a new `project_tracker_routes` table.
+  It is expand-only and the previous image runs against it unchanged, so a code rollback is safe. It
+  also anchors each GitHub issue already attached to a page to that page (the most recently updated
+  one per connector and page). The page's other attached issues stay on its rail, as before.
+
 ## [0.30.1] — 2026-10-21
 
 ### Changed

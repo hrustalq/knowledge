@@ -35,10 +35,6 @@ const emit = defineEmits<{ select: [string | null] }>()
 
 const { t } = useI18n()
 
-/** Cell 11px, gap 3px — the column pitch every label aligns to. */
-const PITCH = 14
-const CELL = 11
-
 interface Cell {
   date: string
   total: number
@@ -107,7 +103,6 @@ const rows = computed<Cell[][]>(() => {
 })
 
 const weekCount = computed(() => rows.value[0]?.length ?? 0)
-const gridWidth = computed(() => weekCount.value * PITCH - (PITCH - CELL))
 
 /** A label at each column where the month changes, positioned on the pitch. */
 const monthLabels = computed(() => {
@@ -258,10 +253,11 @@ function toggle(cell: Cell) {
 }
 
 /**
- * Open on the present. A year of cells is wider than the column at every
- * breakpoint, and the end of the scroll is where the interesting part is —
- * arriving at January would make the page look empty for a person who has
- * been working all autumn.
+ * Open on the present. When the card is too narrow for a year at the minimum
+ * cell size the grid scrolls, and the end of the scroll is where the
+ * interesting part is — arriving at January would make the page look empty
+ * for a person who has been working all autumn. When the year fits there is
+ * nothing to scroll and this does nothing.
  */
 function scrollToEnd() {
   const el = scroller.value
@@ -281,92 +277,95 @@ const cellLabel = (cell: Cell) =>
 
 <template>
   <div data-kn-ledger class="relative">
-    <!-- The weekday axis is pinned OUTSIDE the scroller. Inside it, scrolling
-         to the present (which is where this opens) carried Mon/Wed/Fri off the
-         left edge and left the grid with no vertical axis at all — the one
-         reading position the component is guaranteed to start in. -->
-    <div class="flex gap-2">
-      <div class="flex shrink-0 flex-col gap-0.75 pt-8" aria-hidden="true">
-        <span
-          v-for="(label, i) in weekdayLabels"
-          :key="i"
-          class="flex items-center text-micro leading-none text-muted-foreground"
-          :style="{ height: `${CELL}px` }"
-        >{{ label }}</span>
-      </div>
+    <!-- Cell size is CSS, not a measurement (`.kn-ledger` in style.css): a
+         container query fits the year to this box's width, so the server and
+         the first client render agree and a resize needs no script. A loading
+         ledger sizes for a full year so the swatches do not jump. The readout
+         stays outside this box: a size container is a stacking context, and
+         the readout has to paint over whatever follows the ledger. -->
+    <div class="kn-ledger" :style="{ '--kn-weeks': weekCount || 53 }">
+      <!-- The weekday axis is pinned OUTSIDE the scroller. Inside it, scrolling
+           to the present (which is where this opens) carried Mon/Wed/Fri off the
+           left edge and left the grid with no vertical axis at all — the one
+           reading position the component is guaranteed to start in. Its top
+           padding is the month header's height (h-4.5), so row 0 is Monday. -->
+      <div class="flex gap-2">
+        <div class="flex w-(--kn-axis) shrink-0 flex-col gap-(--kn-gap) pt-4.5" aria-hidden="true">
+          <span
+            v-for="(label, i) in weekdayLabels"
+            :key="i"
+            class="flex h-(--kn-cell) items-center text-micro leading-none text-muted-foreground"
+          >{{ label }}</span>
+        </div>
 
-      <div ref="scroller" class="kn-ledger-scroll min-w-0 flex-1 overflow-x-auto pb-1">
-        <div :style="{ width: `${gridWidth}px` }">
-          <div class="relative h-4.5">
-            <span
-              v-for="m in monthLabels"
-              :key="m.week"
-              class="absolute top-0 text-micro leading-none text-muted-foreground"
-              :style="{ left: `${m.week * PITCH}px` }"
-            >{{ m.label }}</span>
-          </div>
+        <div ref="scroller" class="kn-ledger-scroll min-w-0 flex-1 overflow-x-auto pb-1">
+          <div class="kn-ledger-grid">
+            <div class="relative h-4.5">
+              <span
+                v-for="m in monthLabels"
+                :key="m.week"
+                class="absolute top-0 text-micro leading-none text-muted-foreground"
+                :style="{ left: `calc(var(--kn-pitch) * ${m.week})` }"
+              >{{ m.label }}</span>
+            </div>
 
-          <div
-            role="grid"
-            :aria-label="t('profile.ledger.gridLabel')"
-            :aria-busy="loading || undefined"
-            class="flex flex-col gap-[3px]"
-            :class="loading ? 'opacity-50' : ''"
-          >
-            <div v-for="(row, r) in rows" :key="r" role="row" class="flex gap-[3px]">
-              <button
-                v-for="cell in row"
-                :key="cell.date"
-                role="gridcell"
-                type="button"
-                :data-date="cell.date"
-                :tabindex="isTabStop(cell) ? 0 : -1"
-                :disabled="cell.filler"
-                :aria-selected="selected === cell.date"
-                :aria-label="cell.filler ? undefined : cellLabel(cell)"
-                :aria-hidden="cell.filler || undefined"
-                class="kn-ledger-cell"
-                :class="[
-                  cell.filler ? 'kn-ledger-cell--filler' : '',
-                  cell.step === 0 ? 'kn-ledger-cell--empty' : '',
-                  selected === cell.date ? 'kn-ledger-cell--on' : '',
-                ]"
-                :style="{
-                  '--kn-step': cell.step,
-                  '--kn-week': cell.week,
-                  width: `${CELL}px`,
-                  height: `${CELL}px`,
-                }"
-                @click="toggle(cell)"
-                @keydown="onKeydown(cell, $event)"
-                @mouseenter="show(cell, $event)"
-                @mouseleave="hide"
-                @focus="show(cell, $event); focused = cell.date"
-                @blur="hide"
-              />
+            <div
+              role="grid"
+              :aria-label="t('profile.ledger.gridLabel')"
+              :aria-busy="loading || undefined"
+              class="flex flex-col gap-(--kn-gap)"
+              :class="loading ? 'opacity-50' : ''"
+            >
+              <div v-for="(row, r) in rows" :key="r" role="row" class="flex gap-(--kn-gap)">
+                <button
+                  v-for="cell in row"
+                  :key="cell.date"
+                  role="gridcell"
+                  type="button"
+                  :data-date="cell.date"
+                  :tabindex="isTabStop(cell) ? 0 : -1"
+                  :disabled="cell.filler"
+                  :aria-selected="selected === cell.date"
+                  :aria-label="cell.filler ? undefined : cellLabel(cell)"
+                  :aria-hidden="cell.filler || undefined"
+                  class="kn-ledger-cell"
+                  :class="[
+                    cell.filler ? 'kn-ledger-cell--filler' : '',
+                    cell.step === 0 ? 'kn-ledger-cell--empty' : '',
+                    selected === cell.date ? 'kn-ledger-cell--on' : '',
+                  ]"
+                  :style="{ '--kn-step': cell.step, '--kn-week': cell.week }"
+                  @click="toggle(cell)"
+                  @keydown="onKeydown(cell, $event)"
+                  @mouseenter="show(cell, $event)"
+                  @mouseleave="hide"
+                  @focus="show(cell, $event); focused = cell.date"
+                  @blur="hide"
+                />
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Legend. The ramp is the only place the steps are named, so it carries
-         the same five swatches the grid draws, in order. -->
-    <div class="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 text-caption text-muted-foreground">
-      <span v-if="calendar">{{
-        t('profile.ledger.busiest', { n: calendar.busiestDay })
-      }}</span>
-      <span class="ml-auto flex items-center gap-1.5">
-        {{ t('profile.ledger.less') }}
-        <span
-          v-for="step in [0, 1, 2, 3, 4]"
-          :key="step"
-          class="kn-ledger-cell kn-ledger-cell--static"
-          :class="step === 0 ? 'kn-ledger-cell--empty' : ''"
-          :style="{ '--kn-step': step, width: '11px', height: '11px' }"
-        />
-        {{ t('profile.ledger.more') }}
-      </span>
+      <!-- Legend. The ramp is the only place the steps are named, so it carries
+           the same five swatches the grid draws, in order. -->
+      <div class="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 text-caption text-muted-foreground">
+        <span v-if="calendar">{{
+          t('profile.ledger.busiest', { n: calendar.busiestDay })
+        }}</span>
+        <span class="ml-auto flex items-center gap-1.5">
+          {{ t('profile.ledger.less') }}
+          <span
+            v-for="step in [0, 1, 2, 3, 4]"
+            :key="step"
+            class="kn-ledger-cell kn-ledger-cell--static"
+            :class="step === 0 ? 'kn-ledger-cell--empty' : ''"
+            :style="{ '--kn-step': step }"
+          />
+          {{ t('profile.ledger.more') }}
+        </span>
+      </div>
     </div>
 
     <!-- Readout: one card, driven by hover *and* focus. -->

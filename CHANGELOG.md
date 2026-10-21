@@ -17,6 +17,11 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- The activity ledger on a profile page drew the year at a fixed small size, so on a desktop screen it
+  filled under half its card and its days were hard to hover or click (#440). The year now stretches to
+  the card's width, with days between 12 and 24px. On a narrow screen it still scrolls, opening on the
+  current week. The Mon / Wed / Fri labels were one row too low (Mon sat beside Tuesday) and now line
+  up with their rows.
 - Mermaid flowcharts showed their boxes and arrows with no text: every node name and edge label was
   missing on the page view, in the editor, in the assistant and docs, and on share links and published
   sites (#438). Labels are now drawn as SVG text, so they survive sanitizing. An

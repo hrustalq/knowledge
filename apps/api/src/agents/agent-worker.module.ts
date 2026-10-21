@@ -10,6 +10,7 @@ import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { AssistantReadToolsModule } from '../assistant/assistant-read-tools.module.js';
 import { WebResearchModule } from '../assistant/web-research.module.js';
 import { CodeResearchModule } from '../connectors/code-research/code-research.module.js';
+import { ConnectorWorkItemsModule } from '../connectors/connector-work-items.module.js';
 import { ComponentsCoreModule } from '../components/components-core.module.js';
 import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
@@ -82,6 +83,8 @@ import { AgentTriggerListener } from './agent-trigger.listener.js';
     ComponentsCoreModule,
     // The arbiter records the conflicts it finds (#81).
     ConflictsCoreModule,
+    // The scribe reads the ticket it answers through its tracker (#433).
+    ConnectorWorkItemsModule,
     // The surveyor (docs/features/38, phase 4) embeds the questions answers
     // failed on, to cluster them — the same provider the ingestion worker
     // indexes with, so a question and the chunk that would answer it share a

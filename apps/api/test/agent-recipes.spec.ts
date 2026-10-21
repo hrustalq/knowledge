@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { AgentTrigger, AiAgent } from '@prisma/client';
-import { AGENT_RECIPES, AGENT_RECIPE_KEYS, BUILT_IN_AGENT_KEYS, nextScheduledRun } from '@knowledge/contracts';
+import { AGENT_RECIPES, AGENT_RECIPE_KEYS, BUILT_IN_AGENT_KEYS, agentTriggerEventsFor, nextScheduledRun } from '@knowledge/contracts';
 import { AgentRecipesService } from '../src/ai/agent-recipes.service.js';
 import { AiAgentsService } from '../src/ai/ai-agents.service.js';
 import { AgentTriggersService } from '../src/ai/agent-triggers.service.js';
-import { RUNNABLE_AGENTS } from '../src/agents/agent.executor.js';
+import { RUNNABLE_AGENTS, isTriggerableAgent } from '../src/agents/agent.executor.js';
 import { BUILT_IN_AGENT_DEFAULTS } from '../src/agents/built-in-agents.js';
 import {
   DIGEST_DEFAULT_DAYS,
@@ -133,7 +133,12 @@ describe('the recipe catalogue', () => {
       const recipe = AGENT_RECIPES[key];
       expect(recipe.key).toBe(key);
       expect(BUILT_IN_AGENT_KEYS).toContain(recipe.agentKey);
-      expect(RUNNABLE_AGENTS.has(recipe.agentKey)).toBe(true);
+      // A schedule needs a Run-able agent; a trigger only one a trigger may start (#433).
+      if (recipe.schedule) expect(RUNNABLE_AGENTS.has(recipe.agentKey)).toBe(true);
+      if (recipe.trigger) {
+        expect(isTriggerableAgent(recipe.agentKey)).toBe(true);
+        expect(agentTriggerEventsFor(recipe.agentKey)).toContain(recipe.trigger.event);
+      }
     }
   });
 

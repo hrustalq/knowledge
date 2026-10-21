@@ -1,13 +1,13 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Connector, ConnectorWorkItem } from '@prisma/client';
+import { Prisma, type Connector, type ConnectorWorkItem } from '@prisma/client';
 import { parseWorkItemRef, workItemStateFor, workItemStatusFor, type WorkItemStatus } from '@knowledge/contracts';
 import type { Env } from '../../config/env.js';
 import { asLocale } from '../../i18n/locale.js';
 import { t } from '../../i18n/t.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { labelFor, type TrackerAdapter, type TrackerIssue } from '../adapters/tracker.js';
-import { ConnectorWorkItemsService, keyOf } from '../connector-work-items.service.js';
+import { ConnectorWorkItemsService, keyOf, labelTriggersSql } from '../connector-work-items.service.js';
 import { TrackerRegistry } from '../tracker-registry.service.js';
 import { WorkItemAnchorsService } from './work-item-anchors.service.js';
 import { WorkItemRulesService } from './work-item-rules.service.js';
@@ -94,7 +94,8 @@ export class WorkItemSyncSweeper implements OnModuleInit, OnModuleDestroy {
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT c.id FROM connectors c
        WHERE c.enabled
-         AND EXISTS (SELECT 1 FROM connector_work_items w WHERE w.connector_id = c.id AND w.source_kind IS NOT NULL)
+         AND (EXISTS (SELECT 1 FROM connector_work_items w WHERE w.connector_id = c.id AND w.source_kind IS NOT NULL)
+              OR EXISTS (${labelTriggersSql(Prisma.sql`c.workspace_id`, Prisma.sql`c.id`)}))
          AND NOT EXISTS (SELECT 1 FROM connector_runs r WHERE r.connector_id = c.id AND r.status IN ('queued', 'running'))
        ORDER BY c.id`;
     if (rows.length === 0) return;
@@ -123,7 +124,7 @@ export class WorkItemSyncSweeper implements OnModuleInit, OnModuleDestroy {
       orderBy: { updatedAt: 'desc' },
       take: 200,
     });
-    const { items, cursor } = await tracker.listIssues(row, since, watched);
+    const { items, cursor } = await tracker.listIssues(row, since, watched, await this.workItems.watchLabels(row));
     for (const item of items) {
       const saved = await this.workItems.applyPolled(row, item);
       if (!saved.sourceKind) await this.adopt(row, saved, item);

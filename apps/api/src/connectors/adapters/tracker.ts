@@ -78,12 +78,15 @@ export interface TrackerAdapter {
    * change first so a cursor can advance past them. `cursor` is what to pass
    * next time; it never moves backwards. `watch` names the anchored tickets, for
    * a tracker too big to list whole (a Jira site): it lists those plus the
-   * handoff label. A repository tracker lists the repository and ignores it.
+   * handoff label. A repository tracker lists the repository and ignores it,
+   * and `labels` likewise: the labels a Jira site is searched by, the handoff
+   * label and those ticket triggers filter on (#433).
    */
   listIssues(
     row: Connector,
     since: string | null,
     watch?: TrackerRef[],
+    labels?: string[],
   ): Promise<{ items: TrackerIssue[]; cursor: string | null }>;
   /** Null when the ticket is gone or the credential cannot see it. */
   getIssue(row: Connector, ref: TrackerRef): Promise<TrackerIssue | null>;

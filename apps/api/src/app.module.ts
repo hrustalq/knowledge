@@ -24,6 +24,7 @@ import { CollabModule } from './collab/collab.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 import { ConnectorsModule } from './connectors/connectors.module.js';
 import { DriftModule } from './connectors/drift/drift.module.js';
+import { ScribePublishModule } from './connectors/handoff/scribe-publish.module.js';
 import { LintModule } from './documents/lint/lint.module.js';
 import { AiModule } from './ai/ai.module.js';
 import { GlossaryModule } from './glossary/glossary.module.js';
@@ -79,6 +80,7 @@ import { ChatModule } from './chat/chat.module.js';
     ConnectorsModule,
     // Publishes finished drift checks (docs/features/35); API-only, sweeper.
     DriftModule,
+    ScribePublishModule,
     // The merge request style lint (#74): trigger, publisher, routes. API-only.
     LintModule,
     GlossaryModule,

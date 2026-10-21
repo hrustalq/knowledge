@@ -7592,6 +7592,8 @@ export interface components {
             connectorIds?: string[] | null;
             /** @description Only this branch. Absent, a page.indexed trigger hears the default branch only. */
             branch?: string | null;
+            /** @description Only tickets carrying one of these labels, case-insensitive (work-item.updated). Answered once per ticket. */
+            labels?: string[] | null;
             /** @description Enabling makes the caller the owner the runs execute as. Off unless sent. */
             enabled?: boolean;
             /** @description Minutes before the same subject may fire this trigger again; 0 turns it off. Defaults to AGENT_TRIGGER_COOLDOWN_MINUTES. */
@@ -7669,6 +7671,8 @@ export interface components {
             connectorIds?: string[] | null;
             /** @description Only this branch. Absent, a page.indexed trigger hears the default branch only. */
             branch?: string | null;
+            /** @description Only tickets carrying one of these labels, case-insensitive (work-item.updated). Answered once per ticket. */
+            labels?: string[] | null;
             /** @description Enabling makes the caller the owner the runs execute as. Off unless sent. */
             enabled?: boolean;
             /** @description Minutes before the same subject may fire this trigger again; 0 turns it off. Defaults to AGENT_TRIGGER_COOLDOWN_MINUTES. */
@@ -18358,7 +18362,7 @@ export interface operations {
                 "Accept-Language"?: "en" | "ru";
             };
             path: {
-                recipe: "weekly-digest" | "freshness-sweep" | "glossary-suggester";
+                recipe: "weekly-digest" | "freshness-sweep" | "glossary-suggester" | "docs-from-tickets";
             };
             cookie?: never;
         };

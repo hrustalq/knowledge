@@ -26,6 +26,7 @@ extends in [21](21-agent-mentions.md).
 | Event triggers             | `agent_triggers` rows start runs when a page is merged or indexed, an MR or PR opens, a sync ends | 2     |
 | Webhook and mention        | A signed POST, or `@agent` in a discussion, starts a run                                          | 3     |
 | Digest agent and recipes   | A `digest` built-in, and one-press setups for three common jobs                                   | 4     |
+| Ticket triggers and scribe | A labelled tracker ticket starts a `scribe` run; its drafts open as MRs, linked on the ticket (#433) | —  |
 | Learnings and dismiss      | Person-approved corrections reach prompts; a dismissed finding is not re-reported                 | 5     |
 | Repo guidance import       | `AGENTS.md`, `CLAUDE.md` and friends become disabled, reviewable skills                           | 6     |
 | UI validation              | An `/impeccable` pass over every surface above                                                    | 7     |
@@ -47,6 +48,7 @@ cannot disagree about what "a merge request was opened" means.
 | `connector.synced`     | `connector.run.succeeded`                         | connectorIds                      | `connector:<id>`   |
 | `webhook`              | — fired inline by `AgentWebhookController`        | —                                 | `webhook:<delivery>` |
 | `comment.mention`      | — fired inline by `MentionRepliesService`         | categories                        | `doc:<id>`         |
+| `work-item.updated`    | `repo.issue.opened`, `.closed`, `.reopened`, `.labeled` | categories, connectorIds, labels | `issue:<workItemId>` |
 
 `page.indexed` rather than `document.updated`: the latter fires on every
 autosave of a draft, the former once per revision that reached the index.
@@ -61,7 +63,8 @@ field the event has no dimension for would never match, so the API drops it
 rather than storing a trigger that silently never fires. `agentTriggerEventsFor`
 narrows the picker per agent: the archaeologist reads one repository, so it is
 offered only `merge-request.opened` and `connector.synced`, and only a
-page-scoped agent is offered `comment.mention`.
+page-scoped agent is offered `comment.mention`. The scribe is offered only
+`work-item.updated`.
 
 `connector.run.succeeded` carries no `documentId`. The listener treats it as a
 workspace-scoped subject (`connector:<id>`), which `WorkflowTriggerService`
@@ -81,15 +84,17 @@ covered by `apps/api/test/agent-trigger.service.spec.ts`.
 | 1     | The trigger is enabled (off on creation)                               | `disabled`          |
 | 2     | The event passes `matchesTrigger` (type, project, filter)              | `filter`            |
 | 3     | There is an owner to run as                                           | `no-owner`          |
-| 4     | The agent is enabled, has a `background` surface, is in `RUNNABLE_AGENTS` | `agent-unavailable` |
+| 4     | The agent is enabled, has a `background` surface, passes `isTriggerableAgent` | `agent-unavailable` |
 | 5     | A connector-scoped agent's event names a repository                    | `no-scope`          |
-| 6     | The subject is new to this trigger (revision, delivery id)             | `already-seen`      |
-| 7     | The owner and workspace are within budget                              | `budget`            |
-| 8     | No run of this agent is pending or running for the subject             | `in-flight`         |
-| 9     | The cooldown for (trigger, subject) has passed                         | `cooldown`          |
-| 10    | Fewer than `AGENT_TRIGGER_MAX_ACTIVE` triggered runs are in flight     | `cap`               |
+| 6     | The subject is new to this trigger (created after it)                  | `already-seen`      |
+| 7     | The owner can open the event's page, if it names one (#433)            | `no-access`         |
+| 8     | The subject is new to this trigger (revision, delivery id, a labelled ticket) | `already-seen` |
+| 9     | The owner and workspace are within budget                              | `budget`            |
+| 10    | No run of this agent is pending or running for the subject             | `in-flight`         |
+| 11    | The cooldown for (trigger, subject) has passed                         | `cooldown`          |
+| 12    | Fewer than `AGENT_TRIGGER_MAX_ACTIVE` triggered runs are in flight     | `cap`               |
 
-The revision and delivery dedupe, guards 8–10 and the insert run under
+The revision, delivery and ticket dedupe, guards 10–12 and the insert run under
 `pg_advisory_xact_lock(hashtext('agent-trigger:<workspaceId>'))`, so two events
 landing together cannot both pass them. The processor checks the budget again,
 as it does for every run.
@@ -227,7 +232,7 @@ A quiet period produces a summary with no draft and no model call. The first
 finding carries a `draft`, and the existing **Create page** path publishes it as
 the person who presses it, in the workspace's first project.
 
-`AGENT_RECIPES` in contracts holds three setups, applied by
+`AGENT_RECIPES` in contracts holds four setups, applied by
 `POST /v1/ai/agents/recipes/:recipe/apply` through `AgentRecipesService`:
 
 | Recipe               | Agent      | Schedule           | Trigger            |
@@ -235,6 +240,7 @@ the person who presses it, in the workspace's first project.
 | `weekly-digest`      | digest     | Mondays 09:00      | —                  |
 | `freshness-sweep`    | curator    | Mondays 08:00      | `connector.synced` |
 | `glossary-suggester` | glossarist | —                  | `page.merged`      |
+| `docs-from-tickets`  | scribe     | —                  | `work-item.updated`, labels `docs` |
 
 A recipe writes through `AiAgentsService.update` and
 `AgentTriggersService.create`, so new-trigger defaults live in one place.
@@ -243,6 +249,53 @@ agent so an admin can turn it on. Applying again keeps any schedule the agent
 already has and any trigger for the same (agent, event). The response's
 `created` says what this press wrote. Notes are written in the applier's
 language and schedules in the browser's timezone.
+
+## Ticket triggers and the scribe
+
+Direction (b) of [32](32-connector-work-items.md) (#433): a ticket filed in a
+connected tracker asks the knowledge base for documentation, and gets merge
+requests back.
+
+- **What fires.** A `work-item.updated` trigger with a `labels` filter matches
+  a ticket carrying one of the labels, case-insensitively. The tracker side
+  announces `repo.issue.opened` when a ticket is first seen (GitHub's webhook,
+  or any tracker's poll) and `repo.issue.labeled` when a poll sees its labels
+  change. `occurredAt` is the ticket's last update, so a ticket labelled before
+  the trigger was created is not news.
+- **Once per ticket.** A label-filtered trigger starts at most one run per
+  (trigger, ticket), for good, whatever its cooldown (`answersOnce`). A ticket
+  closed after its merge request merged does not draft again. A trigger with no
+  label filter keeps the cooldown rule.
+- **Seen at all.** A Jira site is searched by label, not listed whole. The poll
+  and the connector webhook therefore accept the handoff label **and** every
+  label an enabled ticket trigger covering that connector filters on
+  (`ConnectorWorkItemsService.watchLabels`). The poll also visits a connector
+  that has such a trigger and no handed-off ticket yet. Both read one SQL
+  spelling, `labelTriggersSql`.
+- **Access.** Guard 7 refuses a ticket anchored on a page the trigger's owner
+  cannot open. It applies to every event that names a page.
+- **The run.** `scribe` is a built-in background agent with read tools, in
+  `TICKET_SCOPED_AGENT_KEYS`: no Run button, no schedule, triggers only. The
+  executor reads the ticket live through `TrackerAdapter.getIssue`; its body is
+  never stored here. It shows the ticket to the model only inside
+  `wrapUntrusted(…, 'task')`, searches as the owner clamped to the workspace
+  audience, and answers with at most three drafts (`agents/scribe.ts`,
+  `readScribeDrafts`). An update must cite a page the run can read, else it is
+  dropped. A body shorter than a page is dropped. Every draft cites the ticket
+  as a source.
+- **Publishing.** `ScribePublishSweeper` (API-only, `ScribePublishModule`)
+  claims a finished run by stamping `input.publishedAt`, re-checks the owner's
+  editor role, and opens each draft through `AgentFindingsService`:
+  `proposePage` for a new page, `propose` with the draft body for an update. No
+  second model call is made. Each is a merge request with `provenance: 'agent'`
+  and the ticket link in its description. It then leaves **one** comment on the
+  ticket listing the links, and none when nothing opened. A new page goes beside
+  the ticket's anchored page, else to the project whose tracker route matches
+  the Jira key (or the connector's only route), else to the connector's
+  destination.
+
+Pick a label other than the connector's handoff label: tickets the knowledge
+base itself opens carry that one.
 
 ## Learnings
 

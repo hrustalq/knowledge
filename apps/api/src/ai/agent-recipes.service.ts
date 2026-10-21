@@ -23,6 +23,7 @@ const RECIPE_NOTES: Record<AgentRecipeKey, string | null> = {
   'weekly-digest': null,
   'freshness-sweep': 'agent.recipe.freshnessSweepNote',
   'glossary-suggester': 'agent.recipe.glossarySuggesterNote',
+  'docs-from-tickets': null,
 };
 
 /**
@@ -93,7 +94,7 @@ export class AgentRecipesService {
         triggers.push(
           await this.triggers.create(
             recipe.agentKey,
-            { workspaceId, event: recipe.trigger.event, note, enabled: false },
+            { workspaceId, event: recipe.trigger.event, ...recipe.trigger.filter, note, enabled: false },
             userId,
           ),
         );

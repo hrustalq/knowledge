@@ -287,6 +287,16 @@ export type I18nTranslations = {
         "harvesterDesc": string;
         "coach": string;
         "coachDesc": string;
+        "scribe": string;
+        "scribeDesc": string;
+        "scribeRun": {
+            "noTicket": string;
+            "ticketGone": string;
+            "noModel": string;
+            "summary": string;
+            "ticketComment": string;
+            "ticketCommentEnd": string;
+        };
         "charting": {
             "disabled": string;
             "unchanged": string;

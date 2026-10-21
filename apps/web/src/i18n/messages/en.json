@@ -2100,7 +2100,7 @@
         "comment": {
           "mention": "The agent is mentioned in a comment"
         },
-        "work-item.updated": "A handed-off ticket changes"
+        "work-item.updated": "A tracker ticket opens or changes"
       },
       "eventHints": {
         "page": {
@@ -2136,6 +2136,9 @@
       "allProjects": "All projects",
       "categories": "Page categories",
       "categoriesPlaceholder": "guide, runbook — empty means any",
+      "labels": "Ticket labels",
+      "labelsPlaceholder": "docs, needs-docs — empty means any ticket",
+      "labelsHint": "A ticket carrying one of these starts one run, once — later changes to it start nothing.",
       "connectors": "Connectors",
       "anyConnector": "None ticked means any connector.",
       "branch": "Branch",
@@ -2180,6 +2183,10 @@
       "glossarySuggester": {
         "title": "Glossary suggester",
         "desc": "Each time a page is merged, the glossarist proposes the terms it defines."
+      },
+      "docsFromTickets": {
+        "title": "Docs from tickets",
+        "desc": "A tracker ticket labelled docs gets its pages drafted by the scribe, as merge requests, with a comment on the ticket linking them."
       }
     },
     "tabRuns": "Runs",

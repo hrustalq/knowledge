@@ -25,6 +25,7 @@ import {
   buildPageRefResolver,
   builtInTemplateRef,
   isAuthorableRelationType,
+  isTicketScopedAgent,
   type PageRefResolver,
   type QualityDimensionScores,
   type QualityDuplicate,
@@ -153,6 +154,8 @@ import {
   type DigestFacts,
   type DigestHighlight,
 } from './digest.js';
+import { TrackerRegistry } from '../connectors/tracker-registry.service.js';
+import { MAX_SCRIBE_PAGES, SCRIBE_OUTPUT_CONTRACT, readScribeDrafts, scribeCitedIds, scribePrompt } from './scribe.js';
 
 /**
  * Agents with a background executor. Exported so the API can refuse a run at
@@ -171,6 +174,14 @@ export const RUNNABLE_AGENTS = new Set([
   'arbiter',
   'atlas',
 ]);
+
+/**
+ * Agents a trigger may start: the runnable ones, plus those whose only input
+ * is the event that starts them (#433) — no Run button, no schedule.
+ */
+export function isTriggerableAgent(key: string): boolean {
+  return RUNNABLE_AGENTS.has(key) || isTicketScopedAgent(key);
+}
 
 /** A page id the model named is checked against the database only if it could be one. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -288,6 +299,7 @@ export class AgentExecutor {
     private readonly apiDrift: ApiDriftService,
     private readonly compare: CompareService,
     private readonly conflicts: ConflictsService,
+    private readonly trackers: TrackerRegistry,
   ) {}
 
   /**
@@ -453,6 +465,9 @@ export class AgentExecutor {
         return this.arbitrate(run, agent, principal, report);
       case 'atlas':
         return this.chart(run, agent, principal, report);
+      // Not in RUNNABLE_AGENTS: only a `work-item.updated` trigger names a ticket (#433).
+      case 'scribe':
+        return this.scribe(run, agent, principal, report);
       // Deliberately not in RUNNABLE_AGENTS (docs/features/35): that set offers
       // the Run button and feeds the schedule sweeper, and a sentinel run with
       // neither a pull request nor a report has nothing to check. Only
@@ -2616,6 +2631,87 @@ ${page.markdown}`, files);
     return {
       summary: t('agent.coverage.summary', { ...counts, judged, findings: findings.length }),
       findings: findings.slice(0, MAX_FINDINGS),
+    };
+  }
+
+  // ------------------------------------------------------------------- scribe
+
+  /**
+   * The scribe (#433): the documentation a tracker ticket asks for. The ticket
+   * is read live through its tracker — its body is never stored here — and
+   * shown to the model only wrapped untrusted. The model searches as the run's
+   * owner and answers with page drafts; `ScribePublishSweeper` opens each as a
+   * merge request on the API side and comments the links on the ticket.
+   */
+  private async scribe(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const input = (run.input ?? {}) as AgentRunInput;
+    const workItemId = input.event?.type === 'work-item.updated' ? input.event.subjectId : undefined;
+    if (!workItemId) throw new Error(t('agent.scribeRun.noTicket'));
+
+    await report({ stage: 'reading', progress: 0.05 });
+    const item = await this.prisma.connectorWorkItem.findFirst({ where: { id: workItemId, workspaceId: run.workspaceId } });
+    const row = item
+      ? await this.prisma.connector.findFirst({ where: { id: item.connectorId, workspaceId: run.workspaceId } })
+      : null;
+    const tracker = row ? this.trackers.trackerFor(row) : null;
+    const issue = item && row && tracker ? await tracker.getIssue(row, item) : null;
+    if (!item || !issue) return { summary: t('agent.scribeRun.ticketGone'), findings: [] };
+    const ticket = {
+      key: item.externalKey ?? `#${item.number}`,
+      title: issue.title,
+      url: issue.url,
+      labels: issue.labels,
+      body: issue.body,
+    };
+
+    const blocking = agent.missing.filter((capability) => capability !== 'tools');
+    if (!agent.config.enabled || blocking.length > 0) {
+      return { summary: t('agent.scribeRun.noModel', { key: ticket.key }), findings: [] };
+    }
+
+    await report({ stage: 'thinking', progress: 0.2 });
+    const call = { config: agent.config, userId: run.createdBy, operation: 'agent' as const, locale: run.locale as Locale };
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: `${agent.instructions}\n\n${SCRIBE_OUTPUT_CONTRACT}${await this.guidance(run, agent)}` },
+      { role: 'user', content: runBrief(input) + scribePrompt(ticket) },
+    ];
+    const raw = agent.missing.includes('tools')
+      ? await this.client.chat(call, messages, { json: true })
+      : (
+          await this.client.runWithTools(
+            call,
+            messages,
+            this.readTools.definitions(),
+            (name, args) => this.readTools.execute(name, args, this.toolCtx(run, principal)),
+            { jsonFinalRound: true },
+          )
+        ).content;
+    const parsed = safeJson(raw);
+
+    // A page to rewrite must be one the run may read: one query over whatever
+    // the model named, under the same scope its searches ran with.
+    const cited = scribeCitedIds(parsed).filter((id) => UUID.test(id));
+    const scope = await this.runScope(run, principal);
+    const known = new Map(
+      cited.length
+        ? (
+            await this.prisma.document.findMany({
+              where: { id: { in: cited }, workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
+              select: { id: true, title: true },
+            })
+          ).map((d) => [d.id, d.title])
+        : [],
+    );
+    const { summary, findings } = readScribeDrafts(parsed, known, ticket);
+    return {
+      summary:
+        summary ?? t('agent.scribeRun.summary', { key: ticket.key, count: findings.length, max: MAX_SCRIBE_PAGES }),
+      findings,
     };
   }
 

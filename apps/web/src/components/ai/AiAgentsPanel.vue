@@ -12,6 +12,7 @@ import {
   AGENT_SCHEDULE_TICK_MINUTES,
   ASSISTANT_TOOL_NAMES,
   isConnectorScopedAgent,
+  isTicketScopedAgent,
   nextScheduledRun,
   type AgentScheduleKind,
   type AiAgentSummary,
@@ -680,7 +681,12 @@ async function remove(agent: AiAgentSummary) {
             </div>
           </div>
 
-          <AgentTriggersEditor v-if="editing?.runnable" :agent="editing" />
+          <!-- A ticket-scoped agent (#433) has no Run button and no schedule: a
+               trigger is the only way it starts. -->
+          <AgentTriggersEditor
+            v-if="editing && (editing.runnable || isTicketScopedAgent(editing.key))"
+            :agent="editing"
+          />
         </form>
 
         <DialogFooter class="gap-2">

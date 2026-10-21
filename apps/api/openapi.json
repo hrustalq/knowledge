@@ -14370,7 +14370,8 @@
               "enum": [
                 "weekly-digest",
                 "freshness-sweep",
-                "glossary-suggester"
+                "glossary-suggester",
+                "docs-from-tickets"
               ],
               "type": "string"
             }
@@ -34869,6 +34870,14 @@
             "nullable": true,
             "description": "Only this branch. Absent, a page.indexed trigger hears the default branch only."
           },
+          "labels": {
+            "nullable": true,
+            "description": "Only tickets carrying one of these labels, case-insensitive (work-item.updated). Answered once per ticket.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "enabled": {
             "type": "boolean",
             "description": "Enabling makes the caller the owner the runs execute as. Off unless sent."
@@ -35023,6 +35032,14 @@
             "type": "string",
             "nullable": true,
             "description": "Only this branch. Absent, a page.indexed trigger hears the default branch only."
+          },
+          "labels": {
+            "nullable": true,
+            "description": "Only tickets carrying one of these labels, case-insensitive (work-item.updated). Answered once per ticket.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "enabled": {
             "type": "boolean",

@@ -270,6 +270,16 @@
   "harvesterDesc": "Reads a chat thread somebody asked to keep and proposes what it settled as captures for review.",
   "coach": "Coach",
   "coachDesc": "Drafts a proposed learning for an agent from findings people kept dismissing. Runs in the learner process; an admin approves every one before any agent is told it.",
+  "scribe": "Scribe",
+  "scribeDesc": "Drafts the pages a tracker ticket asks for and opens each as a merge request, with a comment on the ticket linking them. Started by a trigger on a labelled ticket.",
+  "scribeRun": {
+    "noTicket": "The scribe was started without a ticket; only a work-item trigger can start it.",
+    "ticketGone": "The ticket is gone, or the connector can no longer read it; nothing was drafted.",
+    "noModel": "No model is configured for the scribe, so {key} was not answered.",
+    "summary": "Proposed {count} of at most {max} pages for {key}.",
+    "ticketComment": "The knowledge base drafted this for review:",
+    "ticketCommentEnd": "Each is a merge request; nothing is published until a person merges it."
+  },
   "charting": {
     "disabled": "Community summaries are off on this server (COMMUNITY_SUMMARIES_ENABLED).",
     "unchanged": "The graph has not changed since the last summaries; nothing rebuilt.",

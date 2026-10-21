@@ -148,6 +148,8 @@ export interface SearchExecutedEvent extends BacktestEventBase {
   trustApplied?: boolean;
   /** Fused hits dropped by the page-permission post-filter (#76), so restricted recall can be measured. */
   aclFiltered?: number;
+  /** Vector hits under the relevance floor (#401), so a floored search is told apart from an empty one. */
+  vectorFloored: number;
   /** Legs that failed or timed out (#173), so a vector-only answer is not scored as a hybrid one. */
   degraded?: string[];
   /** The `asOf` a search was run at (#81), as given; absent for a search of now. */

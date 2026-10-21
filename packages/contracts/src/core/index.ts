@@ -726,6 +726,15 @@ export const TRUST_WEIGHT_MAX = 1.25;
  */
 export const SEARCH_RRF_K = 60;
 
+/**
+ * #401: a vector hit is fused only if its cosine is at least this share of the
+ * leg's best. Model-free, unlike the absolute floor (`SEARCH_MIN_COSINE`): on
+ * the prod corpus (bge-m3) ranks 3–12 of a question sit within 0.06 of each
+ * other, so without it a chunk at mediocre ranks in both legs outranks one near
+ * the top of either.
+ */
+export const SEARCH_MIN_COSINE_SHARE = 0.9;
+
 export function trustWeight(state: SourceVerificationState, inactive: boolean, weights: TrustWeights = TRUST_WEIGHTS): number {
   return weights[state] * (inactive ? weights.inactive : 1);
 }
@@ -840,6 +849,10 @@ export interface KnowledgeHealthSettingsValues {
   trustRanking: boolean;
   /** #305: tuned offline by `make tune`, applied by a person. */
   rrfK: number;
+  /** #401: absolute cosine floor for the vector leg; 0 = none. */
+  minCosine: number;
+  /** #401: the vector leg keeps hits at or above this share of its best cosine; 0 = none. */
+  minCosineShare: number;
   trustWeights: TrustWeights;
 }
 /** Sparse: `null` inherits. `trustWeights` is sparse per state too — it names only what differs. */

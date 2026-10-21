@@ -25,7 +25,7 @@ import { loadRevisionStamps } from '../graph/revision-stamps.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
 import type { SearchDto } from './search.dto.js';
-import { fuseHits, type SearchPool } from './ranking.js';
+import { floorVectorHits, fuseHits, type SearchPool } from './ranking.js';
 
 @Injectable()
 export class SearchService {
@@ -150,7 +150,14 @@ export class SearchService {
     ]);
     let vectorHits = vectorHitsFirst;
     let textHits = textHitsFirst;
-    let hits = fuseHits(vectorHits, textHits, fetchK, settings.rrfK);
+    // The relevance floor (#401) drops weak vector evidence before fusion.
+    let vectorFloored = 0;
+    const fuse = () => {
+      const floored = floorVectorHits(vectorHits, settings);
+      vectorFloored = vectorHits.length - floored.length;
+      return fuseHits(floored, textHits, fetchK, settings.rrfK);
+    };
+    let hits = fuse();
     let aclFiltered = 0;
 
     /**
@@ -178,6 +185,7 @@ export class SearchService {
         vectorHits: vectorHits.length,
         fulltextHits: textHits.length,
         fusedHits: hits.length,
+        vectorFloored,
         trustApplied: trustOn,
         ...(acl.kind !== 'all' ? { aclFiltered } : {}),
         ...(degraded.length ? { degraded } : {}),
@@ -221,13 +229,14 @@ export class SearchService {
 
     // One refill round (#76): the post-filter dropped hits, left fewer than k,
     // and a leg came back full — so it had more to give. Bounded by
-    // SEARCH_ACL_MAX_FETCH, and only ever once.
+    // SEARCH_ACL_MAX_FETCH, and only ever once. A vector leg the floor cut is
+    // not full: whatever lies deeper scores lower still (#401).
     const maxFetch = this.config.get('SEARCH_ACL_MAX_FETCH', { infer: true });
-    const saturated = vectorHits.length >= fetchK || textHits.length >= fetchK;
+    const saturated = (vectorHits.length >= fetchK && vectorFloored === 0) || textHits.length >= fetchK;
     if (aclFiltered > 0 && kept.length < k && saturated && fetchK < maxFetch) {
       fetchK = Math.min(fetchK * 2, maxFetch);
       [[vectorHits], [textHits]] = await legs(fetchK);
-      hits = fuseHits(vectorHits, textHits, fetchK, settings.rrfK);
+      hits = fuse();
       ({ docs, kept } = await visibleHits(hits));
       aclFiltered = hits.length - kept.length;
     }

@@ -2,10 +2,25 @@ import type { SourceVerificationState, TrustWeights } from '@knowledge/contracts
 import { trustWeight } from '@knowledge/contracts';
 import type { ChunkHit } from '../graph/graph.service.js';
 
-/** The two knobs a workspace may override and `make tune` proposes (#305). */
+/** The knobs a workspace may override and `make tune` proposes (#305, #401). */
 export interface SearchKnobs {
   rrfK: number;
+  minCosine: number;
+  minCosineShare: number;
   trustWeights: TrustWeights;
+}
+
+/**
+ * The relevance floor (#401): the vector hits worth fusing — cosine at least
+ * `minCosine` and at least `minCosineShare` of the leg's best. Applied before
+ * fusion, so a chunk weak in both legs is gone and one weak in one leg keeps
+ * only the other's rank; a search may then return fewer than its limit. The
+ * BM25 leg needs no floor: its match already demands most of the query's
+ * terms (#400). Hits arrive best first, so the first is the leg's best.
+ */
+export function floorVectorHits<T extends Pick<ChunkHit, 'score'>>(hits: T[], knobs: Pick<SearchKnobs, 'minCosine' | 'minCosineShare'>): T[] {
+  const min = Math.max(knobs.minCosine, knobs.minCosineShare * (hits[0]?.score ?? 0));
+  return hits.filter((h) => h.score >= min);
 }
 
 /**
@@ -52,7 +67,7 @@ export interface SearchPool {
  * `search-trust.spec.ts` replays one search through both.
  */
 export function rankPool(pool: SearchPool, knobs: SearchKnobs): string[] {
-  const weighted = fuseHits(pool.vectorHits, pool.textHits, pool.fetchK, knobs.rrfK).flatMap((h) => {
+  const weighted = fuseHits(floorVectorHits(pool.vectorHits, knobs), pool.textHits, pool.fetchK, knobs.rrfK).flatMap((h) => {
     const page = pool.pages.get(h.documentId);
     if (!page || page.archived) return [];
     const weight = pool.trustOn ? trustWeight(page.status, page.inactive, knobs.trustWeights) : 1;

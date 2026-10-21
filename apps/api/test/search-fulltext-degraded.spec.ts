@@ -51,7 +51,7 @@ function build(fulltext: { enabled: boolean; search: (...a: unknown[]) => Promis
   const embeddings = { embed: vi.fn(async () => [0.1, 0.2]) };
   const provenance = { openIssueCounts: vi.fn(async () => new Map<string, number>()) };
   const policy = {
-    effective: vi.fn(async () => ({ reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40, trustRanking: false })),
+    effective: vi.fn(async () => ({ reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40, trustRanking: false, minCosine: 0, minCosineShare: 0 })),
   };
   const permissions = { documentFilterFor: vi.fn(async () => ({ kind: 'all' as const })) };
   const config = {

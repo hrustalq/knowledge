@@ -213,6 +213,14 @@ export const envSchema = z.object({
   /** Kill switch for the trust re-rank in search; false restores the pre-#66 order exactly. */
   SEARCH_TRUST_RANKING: boolish(true),
   /**
+   * Absolute cosine floor for the vector leg (#401), the default of a
+   * workspace's `minCosine`. It depends on the embedding model, so the code
+   * default is 0 (none): 0.4 suits bge-m3, where off-topic queries top out
+   * near 0.37 and real questions start near 0.49, and would empty every search
+   * on the stub embedder.
+   */
+  SEARCH_MIN_COSINE: z.coerce.number().min(0).max(1).default(0),
+  /**
    * AI-readable output (issue #68): `GET /v1/documents/:id/markdown` and
    * `Accept: text/markdown` on `/content`. Kill switch — false 404s the routes
    * and `/content` stays JSON-only.

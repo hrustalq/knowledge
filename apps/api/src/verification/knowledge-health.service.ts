@@ -35,6 +35,7 @@ import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { VerificationPolicyService } from './verification-policy.service.js';
 import { VerificationService } from './verification.service.js';
+import type { FlagOptions } from './verification.service.js';
 
 export type HealthSort = 'activity' | 'title';
 
@@ -54,6 +55,8 @@ export interface HealthBulkInput {
   ownerId?: string | null;
   note?: string;
   intervalDays?: number | null;
+  /** `request` / `outdated` only: who the flag is from (an MCP caller); the acting person when omitted. */
+  source?: FlagOptions['source'];
 }
 
 /** One page as the dashboard's SQL sees it. */
@@ -210,10 +213,10 @@ export class KnowledgeHealthService {
         await this.verification.verify(documentId, actorId, { intervalDays: input.intervalDays });
         return;
       case 'request':
-        await this.verification.requestVerification(documentId, { actorId, note: input.note });
+        await this.verification.requestVerification(documentId, { actorId, note: input.note, source: input.source });
         return;
       case 'outdated':
-        await this.verification.markOutdated(documentId, { actorId, note: input.note });
+        await this.verification.markOutdated(documentId, { actorId, note: input.note, source: input.source });
         return;
       case 'clear':
         await this.verification.clear(documentId, actorId);

@@ -34,6 +34,7 @@ import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
 import { CommunitiesCoreModule } from '../communities/communities-core.module.js';
 import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
 import { ChatSearchCoreModule } from '../chat/chat-search-core.module.js';
+import { FlowsCoreModule } from '../flows/flows-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -109,6 +110,8 @@ import { McpService } from './mcp.service.js';
     CommunitiesCoreModule,
     // knowledge_search_chat (#339). Controller-free.
     ChatSearchCoreModule,
+    // The question flows behind knowledge_capture_decision / knowledge_flag_document (#425). Controller-free.
+    FlowsCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

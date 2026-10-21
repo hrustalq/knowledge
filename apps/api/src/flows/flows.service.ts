@@ -30,6 +30,7 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SearchService } from '../search/search.service.js';
 import { KnowledgeHealthService } from '../verification/knowledge-health.service.js';
+import type { FlagOptions } from '../verification/verification.service.js';
 
 /**
  * One call of a flow-bearing task: either the question to ask next, or the
@@ -62,6 +63,8 @@ export interface MarkOutdatedArgs {
   documentId: string;
   /** Given → the reason question is answered already. */
   reason?: string;
+  /** Who the flag is recorded as coming from; the acting person when omitted. */
+  source?: FlagOptions['source'];
 }
 
 export interface MarkOutdatedResult {
@@ -190,7 +193,7 @@ export class FlowsService {
       ...(answers.scope === FLOW_SCOPE_SUBTREE ? descendants.map((d) => d.value).filter((id) => !excluded.has(id)) : []),
     ];
     const note = typeof answers.reason === 'string' ? answers.reason : undefined;
-    const { results } = await this.health.bulk(scope, { action: 'outdated', documentIds, ...(note ? { note } : {}) }, principal.userId);
+    const { results } = await this.health.bulk(scope, { action: 'outdated', documentIds, ...(note ? { note } : {}), ...(args.source ? { source: args.source } : {}) }, principal.userId);
     return { status: 'done', answers, dropped, result: { results, subtreeTooLarge } };
   }
 

@@ -16,10 +16,13 @@ import {
 import type { Principal } from '../auth/principal.js';
 import type { AccessScope } from '../permissions/access-scope.js';
 import type { CaptureService } from '../captures/capture.service.js';
+import type { FlowsService } from '../flows/flows.service.js';
+import { flowAnswersArg, runFlow } from './flow-tools.js';
 
 /** What the capture tools need from `McpService.buildServer`: the caller, its guards and the reply shape. */
 export interface CaptureToolDeps {
   captures: CaptureService;
+  flows: FlowsService;
   principal: Principal;
   guard: {
     captureWs(workspaceId: string): Promise<void>;
@@ -69,36 +72,40 @@ export function registerCaptureTools(server: McpServer, deps: CaptureToolDeps): 
     {
       description:
         'Record a decision made in this session — what was chosen, why, and what was ruled out — so the next person or ' +
-        `agent finds the reasoning, not just the code. ${PROPOSES}`,
+        `agent finds the reasoning, not just the code. ${PROPOSES} Without projectId it asks the person where the ` +
+        'decision belongs — project, related page, reviewer — as status "needs_input" (or a form, where the client has one).',
       inputSchema: {
         workspaceId: z.string().uuid(),
-        projectId: z.string().uuid(),
+        projectId: z.string().uuid().optional().describe('Omit to let the person pick the project, a related page and a reviewer'),
         title: text(CAPTURE_TITLE_MAX_CHARS).describe('The decision as a short statement, e.g. "Use RRF to fuse vector and BM25 search"'),
         context: text(20_000).describe('The problem and the forces at play'),
         decision: text(20_000).describe('What was decided and why'),
         consequences: z.string().max(20_000).optional().describe('What follows from it, good and bad'),
         alternatives: list('Options considered and why each was not chosen'),
-        relatedDocumentIds: ids('Pages this decision relates to'),
+        relatedDocumentIds: ids('Pages this decision relates to; without projectId, offered first as the related page'),
         session,
+        answers: flowAnswersArg,
       },
     },
-    async ({ workspaceId, projectId, title, context, decision, consequences, alternatives, relatedDocumentIds, session: s }) => {
+    async ({ workspaceId, projectId, title, context, decision, consequences, alternatives, relatedDocumentIds, session: s, answers }) => {
       await guard.captureWs(workspaceId);
+      const args = {
+        title,
+        context,
+        decision,
+        ...(consequences ? { consequences } : {}),
+        ...(alternatives ? { alternatives } : {}),
+        ...(projectId ? { projectId } : {}),
+        ...(relatedDocumentIds ? { relatedDocumentIds } : {}),
+        session: s as CaptureSession,
+      };
       return run(() =>
-        captures.capture(
-          {
-            kind: 'decision',
-            workspaceId,
-            projectId,
-            title,
-            context,
-            decision,
-            ...(consequences ? { consequences } : {}),
-            ...(alternatives ? { alternatives } : {}),
-            ...(relatedDocumentIds ? { relatedDocumentIds } : {}),
-            session: s as CaptureSession,
-          },
-          principal,
+        runFlow(
+          server,
+          'knowledge_capture_decision',
+          answers ?? {},
+          (given) => deps.flows.captureDecision(principal, workspaceId, args, given),
+          (done) => ({ ...done.result, ...(done.dropped.length ? { ignored: done.dropped } : {}) }),
         ),
       );
     },

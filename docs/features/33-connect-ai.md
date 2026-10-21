@@ -43,6 +43,10 @@ to, nothing to leak between callers, nothing lost on restart or across API
 replicas. The cost is no server push, so `GET` (the SSE stream) answers 405 —
 the spec allows it and every client tested falls back. Building a server is a
 map insert per tool; it does not show up next to the tool call it serves.
+It also means no HTTP caller can be **elicited** (the server cannot send a
+request back), so the question flows of [61](61-question-flows.md) answer
+`status: "needs_input"` over HTTP and the agent asks the person itself; only a
+stdio client that declares `elicitation` gets a form.
 
 **Two transports, one tool set, one guard.** `McpService.buildServer(principal)`
 is the only place tools are registered. Every tool resolves its target to a

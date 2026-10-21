@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import type { Connector, ConnectorWorkItem } from '@prisma/client';
+import { Prisma, type Connector, type ConnectorWorkItem } from '@prisma/client';
 import type {
   ConnectorWorkItemInfo,
   ConnectorWorkItemKind,
@@ -17,9 +17,24 @@ import { t } from '../i18n/t.js';
 import type { AccessScope } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { statusMapFor, type TrackerAdapter, type TrackerBoard, type TrackerIssue } from './adapters/tracker.js';
+import { labelFor, statusMapFor, type TrackerAdapter, type TrackerBoard, type TrackerIssue } from './adapters/tracker.js';
 import { TrackerRegistry } from './tracker-registry.service.js';
 import { ConnectorAclService } from './connector-acl.service.js';
+
+/**
+ * The enabled label-filtered ticket triggers (#433) that cover a connector:
+ * one spelling, read by the poll (which connectors to visit) and by
+ * `watchLabels` (which tickets to accept), so the two cannot disagree. A
+ * trigger naming no connectors covers every one in its workspace.
+ */
+export function labelTriggersSql(workspaceId: Prisma.Sql, connectorId: Prisma.Sql): Prisma.Sql {
+  return Prisma.sql`
+    SELECT t.filter -> 'labels' AS labels FROM agent_triggers t
+     WHERE t.workspace_id = ${workspaceId} AND t.enabled AND t.event = 'work-item.updated'
+       AND jsonb_typeof(t.filter -> 'labels') = 'array'
+       AND (jsonb_typeof(t.filter -> 'connectorIds') IS DISTINCT FROM 'array'
+            OR t.filter -> 'connectorIds' @> jsonb_build_array(${connectorId}::text))`;
+}
 
 /**
  * Work items — issues and pull requests — against a connected repository
@@ -258,19 +273,34 @@ export class ConnectorWorkItemsService {
    * A site-wide hook reports every ticket on the site, so only one we already
    * hold, or one carrying the handoff label, is written.
    */
-  async applyTrackerDelivery(row: Connector, item: TrackerIssue, actorId: string | null, label: string): Promise<boolean> {
+  async applyTrackerDelivery(row: Connector, item: TrackerIssue, actorId: string | null, labels: string[]): Promise<boolean> {
     const held = await this.prisma.connectorWorkItem.findUnique({
       where: { connectorId_kind_number: { connectorId: row.id, kind: item.kind, number: item.number } },
       select: { id: true },
     });
-    if (!held && !item.labels.includes(label)) return false;
+    const watched = new Set(labels.map((l) => l.toLowerCase()));
+    if (!held && !item.labels.some((l) => watched.has(l.toLowerCase()))) return false;
     await this.upsertFrom(row, item, { actorId, announce: true });
     return true;
   }
 
   /**
+   * The labels a poll or a site-wide delivery accepts a ticket by: the handoff
+   * label, and every label an enabled ticket trigger covering this connector
+   * filters on (#433). Without the second half a Jira ticket carrying only
+   * `docs` is never listed, and its trigger never hears it.
+   */
+  async watchLabels(row: Connector): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ label: string }>>`
+      SELECT DISTINCT jsonb_array_elements_text(x.labels) AS label
+        FROM (${labelTriggersSql(Prisma.sql`${row.workspaceId}::uuid`, Prisma.sql`${row.id}`)}) x`;
+    return [...new Set([labelFor(row), ...rows.map((r) => r.label)])];
+  }
+
+  /**
    * Record what a poll read (#424): the projection, and an event only when the
-   * ticket's status moved — a poll re-reads the newest ticket every time.
+   * ticket is new, or its status or labels moved — a poll re-reads the newest
+   * ticket every time.
    */
   async applyPolled(row: Connector, item: TrackerIssue): Promise<ConnectorWorkItem> {
     return this.upsertFrom(row, item, { announce: true });
@@ -325,7 +355,8 @@ export class ConnectorWorkItemsService {
    * attributed to the tracker account when it maps to a person and to
    * `tracker:<connectorId>` otherwise — never to somebody it does not map to.
    * `announce` also publishes the matching `repo.issue.*` event, for the poll,
-   * which has no delivery of its own to announce.
+   * which has no delivery of its own to announce: a ticket first seen is
+   * `opened`, and a relabelled one `labeled` — what a ticket trigger hears (#433).
    */
   async upsertFrom(
     row: Connector,
@@ -376,6 +407,9 @@ export class ConnectorWorkItemsService {
     const map = this.mapFor(row);
     const was = before ? workItemStatusFor(before, map) : null;
     const now = workItemStatusFor(saved, map);
+    if (opts.announce && (!before || (was === now && labelsMoved(before.labels, saved.labels)))) {
+      await this.publish(row, before ? 'repo.issue.labeled' : 'repo.issue.opened', saved);
+    }
     if (before && was !== now) {
       if (saved.sourceKind && !opts.quiet) {
         void this.activity.record({
@@ -557,4 +591,10 @@ export function toWorkItemInfo(
     syncState: row.syncState as WorkItemSyncState,
     syncError: row.syncError,
   };
+}
+
+/** Whether two stored label lists differ as sets. */
+function labelsMoved(a: unknown, b: unknown): boolean {
+  const set = (v: unknown) => [...new Set(Array.isArray(v) ? v.map(String) : [])].sort().join('\n');
+  return set(a) !== set(b);
 }

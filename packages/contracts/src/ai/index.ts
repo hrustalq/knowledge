@@ -1324,6 +1324,8 @@ export const BUILT_IN_AGENT_KEYS = [
    * Run only by the learner process, never from the Run button.
    */
   'coach',
+  /** Drafts pages a tracker ticket asks for, as merge requests (#433). Started only by a `work-item.updated` trigger. */
+  'scribe',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -1338,6 +1340,16 @@ export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 export const CONNECTOR_SCOPED_AGENT_KEYS = ['archaeologist'] as const;
 export function isConnectorScopedAgent(key: string): boolean {
   return (CONNECTOR_SCOPED_AGENT_KEYS as readonly string[]).includes(key);
+}
+
+/**
+ * Agents whose run is about one tracker ticket (#433): the trigger's
+ * `work-item.updated` event is their only input, so they have no Run button
+ * and no schedule — a run with no ticket would have nothing to read.
+ */
+export const TICKET_SCOPED_AGENT_KEYS = ['scribe'] as const;
+export function isTicketScopedAgent(key: string): boolean {
+  return (TICKET_SCOPED_AGENT_KEYS as readonly string[]).includes(key);
 }
 
 /**
@@ -1961,8 +1973,8 @@ export const AGENT_TRIGGER_EVENTS = [
   'connector.synced',
   'webhook',
   'comment.mention',
-  // #424: a handed-off ticket closed, reopened or relabelled in its tracker —
-  // the hook for "a ticket starts agent work". Subject `issue:<workItemId>`.
+  // #424: a ticket opened, closed, reopened or relabelled in its tracker —
+  // the hook for "a ticket starts agent work" (#433). Subject `issue:<workItemId>`.
   'work-item.updated',
 ] as const;
 export type AgentTriggerEvent = (typeof AGENT_TRIGGER_EVENTS)[number];
@@ -1983,7 +1995,7 @@ export const AGENT_TRIGGER_EVENT_SOURCES: Record<AgentTriggerEvent, readonly str
   // Fired inline, never from the bus — see AGENT_TRIGGER_EVENTS.
   webhook: [],
   'comment.mention': [],
-  'work-item.updated': ['repo.issue.closed', 'repo.issue.reopened', 'repo.issue.labeled'],
+  'work-item.updated': ['repo.issue.opened', 'repo.issue.closed', 'repo.issue.reopened', 'repo.issue.labeled'],
 };
 
 /** The trigger event a bus type is heard as, or null for one no trigger listens to. */
@@ -2007,6 +2019,14 @@ export interface AgentTriggerFilter {
   categories?: string[];
   connectorIds?: string[];
   branch?: string;
+  /**
+   * `work-item.updated` only (#433): the ticket carries at least one of these
+   * labels, compared case-insensitively. A label-filtered trigger treats the
+   * ticket as a request and answers it once — one run per (trigger, ticket),
+   * for good — and the tracker poll watches these labels too, so a Jira
+   * ticket carrying only `docs` is seen at all.
+   */
+  labels?: string[];
 }
 
 /**
@@ -2022,8 +2042,8 @@ export const AGENT_TRIGGER_FILTER_FIELDS: Record<AgentTriggerEvent, readonly (ke
   'connector.synced': ['connectorIds'],
   webhook: [],
   'comment.mention': ['categories'],
-  // The anchored page's category; the ticket's connector.
-  'work-item.updated': ['categories', 'connectorIds'],
+  // The anchored page's category; the ticket's connector and labels.
+  'work-item.updated': ['categories', 'connectorIds', 'labels'],
 };
 
 /**
@@ -2035,6 +2055,7 @@ export const AGENT_TRIGGER_FILTER_FIELDS: Record<AgentTriggerEvent, readonly (ke
  */
 export function agentTriggerEventsFor(agentKey: string): readonly AgentTriggerEvent[] {
   if (isConnectorScopedAgent(agentKey)) return ['merge-request.opened', 'connector.synced'];
+  if (isTicketScopedAgent(agentKey)) return ['work-item.updated'];
   return isPageScopedAgent(agentKey) ? AGENT_TRIGGER_EVENTS : AGENT_TRIGGER_EVENTS.filter((e) => e !== 'comment.mention');
 }
 
@@ -2104,7 +2125,7 @@ export interface ListAgentTriggersResponse {
  * Applying is idempotent: a schedule the agent already has, or a trigger it
  * already has for the event, is kept as it is, never overwritten.
  */
-export const AGENT_RECIPE_KEYS = ['weekly-digest', 'freshness-sweep', 'glossary-suggester'] as const;
+export const AGENT_RECIPE_KEYS = ['weekly-digest', 'freshness-sweep', 'glossary-suggester', 'docs-from-tickets'] as const;
 export type AgentRecipeKey = (typeof AGENT_RECIPE_KEYS)[number];
 
 export interface AgentRecipe {
@@ -2112,7 +2133,7 @@ export interface AgentRecipe {
   agentKey: BuiltInAgentKey;
   /** A time-of-day schedule, in the timezone the person applying it sends (UTC without one). */
   schedule?: { kind: Exclude<AgentScheduleKind, 'interval'>; time: string; weekdays?: number[] };
-  trigger?: { event: AgentTriggerEvent };
+  trigger?: { event: AgentTriggerEvent; filter?: AgentTriggerFilter };
 }
 
 export const AGENT_RECIPES: Record<AgentRecipeKey, AgentRecipe> = {
@@ -2130,6 +2151,12 @@ export const AGENT_RECIPES: Record<AgentRecipeKey, AgentRecipe> = {
   },
   /** The glossarist on every merge, scoped to the merged page. */
   'glossary-suggester': { key: 'glossary-suggester', agentKey: 'glossarist', trigger: { event: 'page.merged' } },
+  /** The scribe on every tracker ticket labelled `docs` (#433). */
+  'docs-from-tickets': {
+    key: 'docs-from-tickets',
+    agentKey: 'scribe',
+    trigger: { event: 'work-item.updated', filter: { labels: ['docs'] } },
+  },
 };
 
 // POST /v1/ai/agents/recipes/:recipe/apply

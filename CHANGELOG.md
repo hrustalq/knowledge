@@ -15,8 +15,26 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- A ticket in a connected tracker can now ask the knowledge base for documentation (#433). Give an
+  "A tracker ticket opens or changes" agent trigger a **Ticket labels** filter (for example `docs`), or
+  apply the new **Docs from tickets** recipe, and turn it on. A matching ticket on GitHub, GitLab or Jira
+  then starts the new **Scribe** agent once. The Scribe reads the ticket, searches the pages its owner can
+  open, and proposes up to three new or rewritten pages. Each proposal is a merge request that links back
+  to the ticket, and the ticket gets one comment listing them. Nothing is published until someone merges
+  it. The trigger starts nothing for a ticket attached to a page its owner cannot open, or for a ticket
+  labelled before the trigger existed. Jira tickets carrying only the trigger's label are now picked up as
+  well, not just those with the connector's handoff label.
+
 ### Changed
 
+- Agent triggers on tracker tickets (`work-item.updated`, now labelled "A tracker ticket opens or
+  changes") also fire when a ticket is first seen, and when a poll sees a Jira or GitLab ticket's labels
+  change. Before, they fired only when a ticket was
+  closed or reopened, or (on GitHub) relabelled (#433).
+- An agent trigger now starts nothing when its owner cannot open the page the event is about. Before,
+  it started a run that then skipped the page (#433).
 - A page's actions now sit in a bar directly under the breadcrumbs, as in Confluence, instead of sharing
   a row with the title (#441). The bar stays in place while the page scrolls. It shows labels when it is
   wide and icons when it is narrow (an open sidebar narrows it too), and every button keeps its name for

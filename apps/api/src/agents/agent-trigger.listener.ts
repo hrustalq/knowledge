@@ -103,13 +103,15 @@ export class AgentTriggerListener implements OnModuleInit {
       };
     }
 
-    // A ticket moved in its tracker (#424): the subject is the work item, and
-    // the page it is anchored on, if any, lends it a project and category.
+    // A ticket opened or moved in its tracker (#424, #433): the subject is the
+    // work item, and the page it is anchored on, if any, lends it a project and
+    // category. Its labels are what a label filter reads; its last change is
+    // when it became news, so a ticket labelled before the trigger existed is not.
     if (kind === 'work-item.updated') {
       if (!event.subjectId) return null;
       const item = await this.prisma.connectorWorkItem.findUnique({
         where: { id: event.subjectId },
-        select: { id: true, connectorId: true, documentId: true },
+        select: { id: true, connectorId: true, documentId: true, labels: true, externalUpdatedAt: true },
       });
       if (!item) return null;
       const connector = await this.connector(event.workspaceId, item.connectorId);
@@ -123,6 +125,8 @@ export class AgentTriggerListener implements OnModuleInit {
         category: page?.category ?? null,
         connectorId: connector.id,
         repoConnector: REPO_CONNECTOR_KINDS.has(connector.kind),
+        labels: Array.isArray(item.labels) ? item.labels.filter((l): l is string => typeof l === 'string') : [],
+        ...(item.externalUpdatedAt ? { occurredAt: item.externalUpdatedAt } : {}),
       };
     }
 

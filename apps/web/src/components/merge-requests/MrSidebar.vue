@@ -203,12 +203,12 @@ const revisionRows = computed(() =>
           {{ p === 'details' ? t('common.details') : t('mr.aiCheck') }}
           <span
             v-if="p === 'ai' && aiCounts"
-            class="grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] tabular-nums"
+            class="grid h-4 min-w-4 place-items-center rounded-full px-1 text-micro tabular-nums"
             :class="aiCounts.errors > 0
-              ? 'bg-red-500/15 text-red-600'
+              ? 'bg-panel-caution/15 text-panel-caution-ink'
               : aiCounts.issues > 0
-                ? 'bg-amber-500/15 text-amber-600'
-                : 'bg-emerald-500/15 text-emerald-600'"
+                ? 'bg-panel-warning/15 text-panel-warning-ink'
+                : 'bg-panel-tip/15 text-panel-tip-ink'"
             :aria-label="aiCounts.issues > 0 ? t('count.findings', { n: aiCounts.issues }, aiCounts.issues) : t('mr.passed')"
           >
             <template v-if="aiCounts.issues > 0">{{ aiCounts.issues }}</template>
@@ -270,7 +270,7 @@ const revisionRows = computed(() =>
           <div class="flex items-center gap-2">
             <h3 class="text-xs font-medium text-muted-foreground">
               {{ t('mr.reviewers') }}
-              <span v-if="mr.reviewers.length > 0" class="text-muted-foreground/70">
+              <span v-if="mr.reviewers.length > 0" class="text-muted-foreground">
                 · {{ mr.reviewers.length }}
               </span>
             </h3>
@@ -292,7 +292,7 @@ const revisionRows = computed(() =>
               <UserChip :user-id="id" size="sm" class="min-w-0" />
               <span
                 v-if="mr.approvedBy.includes(id)"
-                class="ml-auto flex items-center gap-0.5 text-[11px] text-emerald-600"
+                class="ml-auto flex items-center gap-0.5 text-caption text-panel-tip-ink"
               >
                 <Check class="size-3" /> {{ t('mr.approvedShort') }}
               </span>
@@ -334,12 +334,12 @@ const revisionRows = computed(() =>
             <div v-for="row in revisionRows" :key="row.label" class="flex items-baseline gap-2 text-xs">
               <dt class="shrink-0 text-muted-foreground">{{ row.label }}</dt>
               <dd class="ml-auto flex min-w-0 items-baseline gap-1.5">
-                <span v-if="row.branch" class="truncate font-mono text-[11px] text-muted-foreground">
+                <span v-if="row.branch" class="truncate font-mono text-caption text-muted-foreground">
                   {{ row.branch }}
                 </span>
                 <RouterLink
                   :to="`/documents/${mr.documentId}?tab=revisions`"
-                  class="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-primary transition-colors hover:bg-accent"
+                  class="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-caption text-primary transition-colors hover:bg-accent"
                 >{{ row.id.slice(0, 8) }}</RouterLink>
               </dd>
             </div>

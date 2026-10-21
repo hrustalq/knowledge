@@ -25,7 +25,7 @@ const projects = useProjectsStore()
 <template>
   <div class="absolute inset-0 z-0 flex flex-col">
     <div class="flex h-7 shrink-0 items-center justify-between px-4">
-      <h2 class="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+      <h2 class="text-muted-foreground text-caption font-semibold tracking-wider uppercase">
         {{ t('nav.projects') }}
       </h2>
       <button
@@ -40,7 +40,7 @@ const projects = useProjectsStore()
       </button>
     </div>
 
-    <div class="sidebar-scroll mt-1 min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+    <div class="quiet-scroll mt-1 min-h-0 flex-1 overflow-y-auto px-2 pb-4">
       <div v-if="!projects.loaded" class="space-y-1.5 px-1 pt-1">
         <Skeleton v-for="i in 4" :key="i" class="h-8 w-full" />
       </div>
@@ -75,7 +75,7 @@ const projects = useProjectsStore()
 
             <span class="min-w-0 flex-1 truncate">{{ p.name }}</span>
 
-            <span class="text-muted-foreground shrink-0 text-[11px] tabular-nums">
+            <span class="text-muted-foreground shrink-0 text-caption tabular-nums">
               {{ p.documentCount }}
             </span>
             <ChevronRight

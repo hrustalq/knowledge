@@ -13,6 +13,64 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.30.1] — 2026-10-21
+
+### Changed
+
+- Pages fill the content column. This covers the public site and share pages, `/conflicts` and several
+  settings pages, which used to sit in a narrow centred box (#418). Running text keeps a readable line
+  length of about 65 characters. Headings, tables, code and diagrams use the full width.
+- Scrollbars are thin, and they are fainter inside dialogs, popovers, rails and code panels. Tab rows and
+  breadcrumbs hide the bar and fade at the edge where there is more to scroll (#418).
+- The web app downloads only the active language's text, so the first page load is about half the size.
+  Switching language fetches the other one (#418). The graph, revision history and API reference on a page
+  load when they are opened.
+- Confirmations use the app's own dialog instead of the browser's `confirm()` box. Tabs behave the same on
+  every page, and the arrow keys move between them (#418).
+- Sidebar, settings rail, filter rail and editor AI panel slide without easing the page width; the page
+  content moves once (#418).
+- MCP `knowledge_search` returns at most 8 hits when the caller sets no
+  `limit` (it was 20), and lists each page once, with its best-matching
+  passage (#416). An agent that relied on 20 hits per call passes
+  `limit: 20` explicitly. Even then, a page matched in several passages
+  appears once, so it may get fewer entries than it asked for.
+
+### Fixed
+
+- Notifications read as sentences ("edited this page") instead of raw event types like
+  `revision.finalized`. The activity feed labels 47 actions it used to print as codes, such as
+  `document.archived` (#418).
+- On a phone, every page load no longer hydrates with a mismatch. The assistant page and user chips no
+  longer mismatch at desktop width either (#418).
+- A list that fails to load shows an error with a Retry button instead of "nothing here yet". This covers
+  notifications, merge requests, workflows, projects and connectors (#418).
+- Accessibility (#418):
+  - Error text is readable in dark mode (it was about 1.9:1).
+  - Focus rings meet 3:1.
+  - The mobile menu traps focus and closes on Escape.
+  - There is a skip link, and every page, public ones included, has a main landmark.
+  - Unlabelled buttons, selects, checkboxes and inputs are named.
+  - Muted timestamps and inline links meet contrast.
+  - Status dots carry a text label.
+  - Code blocks and wide tables can be scrolled from the keyboard.
+  - Buttons get a 44 px hit area on touch screens.
+- Verification state no longer uses the indexing dot's colours. It shows as a small diamond, so "outdated"
+  can't be mistaken for "indexing" (#418).
+- Headings h2–h4 render at their intended weights. Only 600 and 700 were being loaded, so they all looked
+  like h1 (#418).
+- The assistant and MCP agents no longer read unrelated pages with every
+  search (#416). In production, each assistant search added 26–29 pages that
+  only shared an entity with a hit, about the whole workspace and
+  roughly 9 KB of a 14 KB result, none of them citable. A page also appeared
+  once per matching passage, and a page that shared just two common words
+  with the question could still reach the top 5 («Навигация и вкладки» for
+  «Где в системе определяются права и роли пользователей?»).
+  - The assistant's search no longer attaches graph-related pages. It still
+    walks the graph when it chooses to, through its relation tools.
+  - Each page appears once per search, in both the assistant and MCP.
+  - A keyword match far below the best keyword match no longer counts. This
+    applies to every hybrid and keyword search, the web search page included.
+
 ## [0.30.0] — 2026-10-21
 
 ### Added
@@ -4190,7 +4248,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.30.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.30.1...HEAD
+[0.30.1]: https://github.com/hrustalq/knowledge/compare/v0.30.0...v0.30.1
 [0.30.0]: https://github.com/hrustalq/knowledge/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/hrustalq/knowledge/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/hrustalq/knowledge/compare/v0.28.0...v0.29.0

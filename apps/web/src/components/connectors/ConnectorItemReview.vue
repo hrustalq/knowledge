@@ -161,10 +161,10 @@ defineExpose({
       </div>
 
       <div v-if="compare && view === 'diff'" class="h-full overflow-y-auto px-6 py-6 lg:px-10">
-        <div class="mx-auto max-w-4xl space-y-4">
+        <div class="space-y-4">
           <header>
             <h2 class="font-medium">{{ title }}</h2>
-            <p class="text-muted-foreground text-sm">{{ t('connectors.diffCaption') }}</p>
+            <p class="kn-measure text-muted-foreground text-sm">{{ t('connectors.diffCaption') }}</p>
           </header>
           <DiffView :compare="compare" />
         </div>
@@ -307,20 +307,20 @@ defineExpose({
       <!-- What the conversion could not carry. Never swallowed. -->
       <section
         v-if="item.warnings.length"
-        class="border-b border-amber-500/25 bg-amber-500/5 p-4 text-sm dark:border-amber-400/20"
+        class="border-b kn-callout-warning p-4 text-sm"
       >
-        <p class="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300">
+        <p class="flex items-center gap-2 font-medium text-panel-warning-ink">
           <AlertTriangle class="size-4 shrink-0" aria-hidden="true" />
           {{ t('connectors.thingsToCheck', { count: item.warnings.length }, item.warnings.length) }}
         </p>
-        <ul class="mt-2 space-y-1.5 text-amber-900/90 dark:text-amber-100/80">
+        <ul class="mt-2 space-y-1.5 text-panel-warning-ink">
           <li v-for="w in item.warnings.slice(0, 2)" :key="w" class="flex gap-2">
             <span class="mt-2 size-1 shrink-0 rounded-full bg-current opacity-60" aria-hidden="true" />
             <span>{{ w }}</span>
           </li>
         </ul>
         <Collapse :open="warningsOpen" :unmount="false">
-          <ul class="space-y-1.5 text-amber-900/90 dark:text-amber-100/80">
+          <ul class="space-y-1.5 text-panel-warning-ink">
             <li v-for="w in item.warnings.slice(2)" :key="w" class="flex gap-2 pt-1.5">
               <span class="mt-2 size-1 shrink-0 rounded-full bg-current opacity-60" aria-hidden="true" />
               <span>{{ w }}</span>
@@ -330,7 +330,7 @@ defineExpose({
         <button
           v-if="item.warnings.length > 2"
           type="button"
-          class="mt-2 flex items-center gap-1 text-xs font-medium text-amber-700 underline-offset-4 hover:underline dark:text-amber-300"
+          class="mt-2 flex items-center gap-1 text-xs font-medium text-panel-warning-ink underline-offset-4 hover:underline"
           @click="warningsOpen = !warningsOpen"
         >
           {{ warningsOpen ? t('editor.showFewer') : t('editor.showAll', { n: item.warnings.length }) }}
@@ -370,7 +370,7 @@ defineExpose({
             <FileText class="size-3.5" aria-hidden="true" />
             {{ t('connectors.showOriginalConversion') }}
           </summary>
-          <pre class="text-muted-foreground mt-2 max-h-80 overflow-auto rounded-md border bg-muted/40 p-2 text-[11px] whitespace-pre-wrap">{{ incoming }}</pre>
+          <pre class="text-muted-foreground mt-2 max-h-80 overflow-auto rounded-md border bg-muted/40 p-2 text-caption whitespace-pre-wrap">{{ incoming }}</pre>
         </details>
       </section>
     </aside>
@@ -394,7 +394,7 @@ defineExpose({
 /* A spec (#78) as written: the spec editor page's type, unwrapped. */
 .kn-spec-text {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.82rem;
+  font-size: var(--kn-text-ui);
   line-height: 1.6;
   white-space: pre;
   tab-size: 2;

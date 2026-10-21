@@ -134,7 +134,7 @@ function open(threadId: string) {
               >
                 {{ threadLabel(thread) }}
               </span>
-              <span class="truncate text-[11px] text-muted-foreground">{{ relativeTime(thread.updatedAt) }}</span>
+              <span class="truncate text-caption text-muted-foreground">{{ relativeTime(thread.updatedAt) }}</span>
             </button>
 
             <!-- Row actions stay hidden until the row is hovered or the menu
@@ -166,7 +166,7 @@ function open(threadId: string) {
       </ul>
     </div>
 
-    <div v-if="assistant.threadsLoading && assistant.threadsLoaded" class="px-3 pb-1 text-[11px] text-muted-foreground">
+    <div v-if="assistant.threadsLoading && assistant.threadsLoaded" class="px-3 pb-1 text-caption text-muted-foreground">
       {{ t('chat.loadingMore') }}
     </div>
 

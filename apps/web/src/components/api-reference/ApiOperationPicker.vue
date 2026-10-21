@@ -106,7 +106,7 @@ function select(value: unknown) {
           auto-focus
           :aria-label="t('apiLink.search')"
           :placeholder="t('apiLink.placeholder')"
-          class="placeholder:text-muted-foreground h-10 w-full bg-transparent pr-9 pl-9 text-[13px] outline-none"
+          class="placeholder:text-muted-foreground h-10 w-full bg-transparent pr-9 pl-9 text-ui outline-none"
         />
         <Loader2
           v-if="searching"
@@ -130,7 +130,7 @@ function select(value: unknown) {
             <ApiEndpoint :method="op.method" :path="op.path" :protocol="op.protocol" class="flex-1" />
             <ApiTone v-if="op.deprecated" tone="warning" variant="text">{{ t('apiRef.deprecated') }}</ApiTone>
           </span>
-          <span class="text-muted-foreground flex min-w-0 gap-1.5 pl-[3.875rem] text-[11.5px] leading-snug">
+          <span class="text-muted-foreground flex min-w-0 gap-1.5 pl-[3.875rem] text-caption leading-snug">
             <span v-if="op.summary" class="min-w-0 truncate">{{ op.summary }}</span>
             <span v-if="op.summary" aria-hidden="true">·</span>
             <span class="shrink-0 truncate">{{ op.specTitle }}</span>

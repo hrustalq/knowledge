@@ -110,10 +110,10 @@ export const NODE_STATUS_ICON: Record<WorkflowNodeStatus, Component> = {
 export const NODE_STATUS_CLASS: Record<WorkflowNodeStatus, string> = {
   pending: 'text-muted-foreground',
   running: 'text-primary',
-  'awaiting-review': 'text-amber-600 dark:text-amber-500',
-  approved: 'text-emerald-600 dark:text-emerald-500',
+  'awaiting-review': 'text-panel-warning-ink',
+  approved: 'text-panel-tip-ink',
   materializing: 'text-primary',
-  materialized: 'text-emerald-600 dark:text-emerald-500',
+  materialized: 'text-panel-tip-ink',
   rejected: 'text-muted-foreground',
   skipped: 'text-muted-foreground',
   failed: 'text-destructive',
@@ -143,9 +143,9 @@ export const RUN_STATUS_ICON: Record<WorkflowRunStatus, Component> = {
 export const RUN_STATUS_CLASS: Record<WorkflowRunStatus, string> = {
   pending: 'text-muted-foreground',
   running: 'text-primary',
-  'awaiting-review': 'text-amber-600 dark:text-amber-500',
+  'awaiting-review': 'text-panel-warning-ink',
   paused: 'text-muted-foreground',
-  completed: 'text-emerald-600 dark:text-emerald-500',
+  completed: 'text-panel-tip-ink',
   failed: 'text-destructive',
   cancelled: 'text-muted-foreground',
 }

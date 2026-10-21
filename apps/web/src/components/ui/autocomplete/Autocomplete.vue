@@ -399,7 +399,7 @@ const listId = useId()
       :for="listId + '-input'"
       :class="hideLabel
         ? 'sr-only'
-        : 'block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'"
+        : 'block text-caption font-semibold uppercase tracking-wider text-muted-foreground'"
     >
       {{ label }}
     </label>
@@ -422,7 +422,7 @@ const listId = useId()
         :disabled="disabled || (!load && isEmptyRoster)"
         :class="bare
           ? 'h-6 w-full bg-transparent pr-6 text-xs outline-none placeholder:text-muted-foreground disabled:opacity-50'
-          : 'h-8 w-full rounded-md border bg-background pl-8 pr-7 text-xs outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/50 disabled:opacity-50'"
+          : 'h-8 w-full rounded-md border bg-background pl-8 pr-7 text-xs outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring disabled:opacity-50'"
         @input="query = ($event.target as HTMLInputElement).value"
         @focus="onFocus"
         @blur="onBlur"
@@ -537,7 +537,7 @@ const listId = useId()
 
     <!-- Static mode only. An async control says the same thing inside its open
          list, and rendering both would print the hint twice. -->
-    <p v-if="!load && isEmptyRoster && emptyHint" class="text-[11px] leading-snug text-muted-foreground">
+    <p v-if="!load && isEmptyRoster && emptyHint" class="text-caption leading-snug text-muted-foreground">
       {{ emptyHint }}
     </p>
 

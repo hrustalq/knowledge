@@ -7,7 +7,6 @@ export { default as PageState } from './PageState.vue'
 export { default as PageScrollList } from './PageScrollList.vue'
 
 export {
-  PAGE_MEASURE,
   isCanvas,
   panelId,
   tabId,

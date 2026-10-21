@@ -281,20 +281,20 @@ const replyTarget = computed(() =>
              is the comment's first line. Review threads only. -->
         <span
           v-if="ruleId"
-          class="shrink-0 truncate rounded bg-muted px-1 py-px font-mono text-[11px] text-muted-foreground"
+          class="shrink-0 truncate rounded bg-muted px-1 py-px font-mono text-caption text-muted-foreground"
           :title="t('mr.lint.ruleChip', { rule: ruleId })"
         >
           {{ ruleId }}
         </span>
         <span
           v-if="thread.resolved"
-          class="flex shrink-0 items-center gap-1 whitespace-nowrap text-emerald-600 dark:text-emerald-400"
+          class="flex shrink-0 items-center gap-1 whitespace-nowrap text-panel-tip-ink"
         >
           <CheckCircle2 class="size-3.5" /> {{ t('mr.resolvedBadge') }}
         </span>
         <span
           v-if="outdated"
-          class="flex shrink-0 items-center gap-1 whitespace-nowrap text-amber-600 dark:text-amber-400"
+          class="flex shrink-0 items-center gap-1 whitespace-nowrap text-panel-warning-ink"
           :title="t('mr.anchorOutdated')"
         >
           <History class="size-3.5" /> {{ t('mr.outdatedBadge') }}
@@ -538,7 +538,7 @@ const replyTarget = computed(() =>
         <AlertDialogFooter>
           <AlertDialogCancel @click="deleting = null">{{ t('mr.keepIt') }}</AlertDialogCancel>
           <AlertDialogAction
-            class="bg-destructive text-white hover:bg-destructive/90"
+            variant="destructive"
             @click="confirmDelete"
           >
             {{ t('common.delete') }}

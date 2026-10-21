@@ -114,9 +114,11 @@ function actionLabel(a: string): string {
 
     <PageState v-if="log.isPending.value" state="loading" :rows="4" row-class="h-9" />
     <PageState v-else-if="log.isError.value" state="error" :error="log.error.value" />
-    <p v-else-if="!entries.length" class="rounded-xl border border-dashed px-5 py-6 text-sm text-muted-foreground">
-      {{ action === ALL ? t('security.audit.empty') : t('security.audit.emptyFiltered') }}
-    </p>
+    <PageState
+      v-else-if="!entries.length"
+      state="empty"
+      :title="action === ALL ? t('security.audit.empty') : t('security.audit.emptyFiltered')"
+    />
     <div v-else class="min-w-0 overflow-x-auto rounded-xl border">
       <Table>
         <TableHeader>

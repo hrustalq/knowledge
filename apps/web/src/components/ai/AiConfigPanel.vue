@@ -238,7 +238,7 @@ const externalCeiling = computed(() => settings.value?.externalAiActions.ceiling
         <label class="block space-y-1.5 sm:col-span-2 xl:col-span-1">
           <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
             {{ t('ai.provider') }}
-            <span v-if="overridden('provider')" class="text-primary/70">{{ t('ai.overridden') }}</span>
+            <span v-if="overridden('provider')" class="text-primary">{{ t('ai.overridden') }}</span>
           </span>
           <Select v-model="form.provider" :disabled="!canManage">
             <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
@@ -250,14 +250,14 @@ const externalCeiling = computed(() => settings.value?.externalAiActions.ceiling
         <label class="block space-y-1.5">
           <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
             {{ t('ai.baseUrl') }}
-            <span v-if="overridden('baseUrl')" class="text-primary/70">{{ t('ai.overridden') }}</span>
+            <span v-if="overridden('baseUrl')" class="text-primary">{{ t('ai.overridden') }}</span>
           </span>
           <Input v-model="form.baseUrl" :disabled="!canManage" :placeholder="t('ai.providerDefault')" />
         </label>
         <label class="block space-y-1.5">
           <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
             {{ t('ai.model') }}
-            <span v-if="overridden('model')" class="text-primary/70">{{ t('ai.overridden') }}</span>
+            <span v-if="overridden('model')" class="text-primary">{{ t('ai.overridden') }}</span>
           </span>
           <Input v-model="form.model" :disabled="!canManage" :placeholder="t('ai.providerDefault')" />
         </label>
@@ -266,7 +266,7 @@ const externalCeiling = computed(() => settings.value?.externalAiActions.ceiling
       <div class="space-y-1.5 xl:max-w-[66%]">
         <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
           {{ t('ai.apiKey') }}
-          <span v-if="overridden('apiKey')" class="text-primary/70">{{ t('ai.overridden') }}</span>
+          <span v-if="overridden('apiKey')" class="text-primary">{{ t('ai.overridden') }}</span>
         </span>
         <div class="flex items-center gap-2">
           <Input
@@ -350,7 +350,7 @@ const externalCeiling = computed(() => settings.value?.externalAiActions.ceiling
         />
         <span class="text-sm leading-snug">
           {{ t('aiSettings.externalActions.label') }}
-          <span v-if="overridden('externalAiActions')" class="text-primary/70 ml-1.5 text-xs">
+          <span v-if="overridden('externalAiActions')" class="text-primary ml-1.5 text-xs">
             {{ t('ai.overridden') }}
           </span>
           <span class="text-muted-foreground mt-0.5 block text-xs">
@@ -371,7 +371,7 @@ const externalCeiling = computed(() => settings.value?.externalAiActions.ceiling
         <label class="block space-y-1.5">
           <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
             {{ t('ai.extractionMinConfidence') }}
-            <span v-if="overridden('extractionMinConfidence')" class="text-primary/70">
+            <span v-if="overridden('extractionMinConfidence')" class="text-primary">
               {{ t('ai.overridden') }}
             </span>
           </span>
@@ -384,7 +384,7 @@ const externalCeiling = computed(() => settings.value?.externalAiActions.ceiling
         <label class="block space-y-1.5">
           <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
             {{ t('ai.extractionMaxChunks') }}
-            <span v-if="overridden('extractionMaxChunks')" class="text-primary/70">
+            <span v-if="overridden('extractionMaxChunks')" class="text-primary">
               {{ t('ai.overridden') }}
             </span>
           </span>
@@ -405,7 +405,7 @@ const externalCeiling = computed(() => settings.value?.externalAiActions.ceiling
         <label class="block space-y-1.5">
           <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
             {{ t('ai.qualityAuditDays') }}
-            <span v-if="settings?.qualityAudit.source === 'db'" class="text-primary/70">{{ t('ai.overridden') }}</span>
+            <span v-if="settings?.qualityAudit.source === 'db'" class="text-primary">{{ t('ai.overridden') }}</span>
           </span>
           <Input
             v-model="form.qualityAuditDays"
@@ -485,7 +485,7 @@ const externalCeiling = computed(() => settings.value?.externalAiActions.ceiling
       <p
         v-if="testResult"
         class="flex items-center gap-1.5 text-xs"
-        :class="testResult.ok ? 'text-emerald-600' : 'text-destructive'"
+        :class="testResult.ok ? 'text-panel-tip-ink' : 'text-destructive'"
       >
         <CircleCheck v-if="testResult.ok" class="size-3.5 shrink-0" />
         <CircleX v-else class="size-3.5 shrink-0" />

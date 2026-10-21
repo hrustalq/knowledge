@@ -411,7 +411,7 @@ defineExpose({ scrollToEnd })
         v-if="!pinned && rows.length > 0"
         variant="outline"
         size="sm"
-        class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full shadow-md backdrop-blur-lg"
+        class="absolute bottom-4 left-1/2 -translate-x-1/2 shadow-md"
         @click="scrollToEnd('smooth')"
       >
         <ArrowDown class="size-3.5" />

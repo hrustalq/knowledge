@@ -303,7 +303,7 @@ async function signOut() {
 
       <p
         v-if="!site.version.isDefault && currentVersion"
-        class="border-b bg-amber-500/10 px-4 py-2 text-center text-sm text-amber-900 dark:text-amber-200"
+        class="kn-callout-warning border-b px-4 py-2 text-center text-sm"
       >
         {{ t('siteReader.outdatedVersion', { name: site.version.name }) }}
         <a :href="versionHref(currentVersion)" class="font-medium underline">{{ t('siteReader.toCurrent') }}</a>
@@ -330,7 +330,7 @@ async function signOut() {
           </div>
           <div
             ref="railScroll"
-            class="sidebar-scroll kn-tree-window min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-4"
+            class="quiet-scroll kn-tree-window min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-4"
             :style="{ '--kn-tree-shift': `${shift}px` }"
             :data-windowed="shift > 0"
           >
@@ -338,6 +338,24 @@ async function signOut() {
               <SiteTreeNode v-for="node in topLevel" :key="node.documentId" :node="node" :depth="0" :href="hrefOf" />
             </ul>
           </div>
+          <!-- The header's links only fit the header from `md`; below it the
+               drawer is the one place a phone reader can reach them. -->
+          <ul
+            v-if="site.theme.headerLinks.length"
+            class="shrink-0 space-y-px border-t border-sidebar-border px-2 py-3 md:hidden"
+          >
+            <li v-for="link in site.theme.headerLinks" :key="link.url">
+              <a
+                :href="link.url"
+                rel="noopener noreferrer"
+                target="_blank"
+                class="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              >
+                <span class="min-w-0 truncate">{{ link.label }}</span>
+                <ExternalLink class="size-3 shrink-0" aria-hidden="true" />
+              </a>
+            </li>
+          </ul>
         </nav>
         <!-- Without JavaScript the scrim is a link back out of `:target`. -->
         <a
@@ -350,10 +368,14 @@ async function signOut() {
         />
 
         <div class="flex min-w-0 flex-1 flex-col">
-          <div class="flex flex-1 gap-10 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
+          <!-- The landmark a reader (and a screen reader's "skip to main") lands
+               on; the header, rail and footer sit outside it. -->
+          <main class="flex flex-1 gap-8 px-4 py-6 lg:px-8 lg:py-8">
             <article class="min-w-0 flex-1">
-              <!-- The measure, not the window, sets the width of the prose. -->
-              <div class="mx-auto max-w-[46rem]">
+              <!-- The column fills, as every in-app page does; the prose keeps
+                   its own reading measure (--kn-text-measure in editor.css), so
+                   tables and code fences beside it get the whole width. -->
+              <div>
                 <template v-if="page">
                   <h1 class="mb-1 text-3xl font-semibold tracking-tight text-balance">{{ page.title }}</h1>
                   <p v-if="page.updatedAt" class="mb-8 text-xs text-muted-foreground">
@@ -412,10 +434,10 @@ async function signOut() {
                 </ul>
               </div>
             </aside>
-          </div>
+          </main>
 
           <footer v-if="site.theme.footerText" class="border-t">
-            <p class="px-4 py-6 text-sm whitespace-pre-line text-muted-foreground sm:px-8 lg:px-12">
+            <p class="kn-measure px-4 py-6 text-sm whitespace-pre-line text-muted-foreground lg:px-8">
               {{ site.theme.footerText }}
             </p>
           </footer>

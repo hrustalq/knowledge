@@ -65,7 +65,7 @@ function useSampleLang() {
     <div :id="strip?.panelId(current.lang)" :key="current.lang" role="tabpanel" :aria-labelledby="strip?.tabId(current.lang)" class="kn-fade-swap">
       <ApiCode :code="current.source" :lang="GRAMMAR[current.lang]" :label="LABELS[current.lang]" />
     </div>
-    <p v-if="current.origin === 'spec'" class="text-[0.8rem] text-muted-foreground">
+    <p v-if="current.origin === 'spec'" class="text-ui text-muted-foreground">
       {{ current.label ? t('apiSamples.fromSpecLabelled', { label: current.label }) : t('apiSamples.fromSpec') }}
     </p>
   </div>

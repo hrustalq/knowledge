@@ -183,11 +183,11 @@ const bodyId = computed(() => `kn-capture-${c.value.captureId}`)
           <CaptureOriginParts v-if="c.origin" :origin="c.origin" />
           <template v-if="repo">
             <span aria-hidden="true">·</span>
-            <code class="font-mono text-[0.6875rem]" :title="c.session.repo">{{ repo }}</code>
+            <code class="font-mono text-caption" :title="c.session.repo">{{ repo }}</code>
           </template>
           <template v-if="c.session.branch">
             <span aria-hidden="true">·</span>
-            <code class="max-w-48 truncate font-mono text-[0.6875rem]" :title="c.session.branch">{{ c.session.branch }}</code>
+            <code class="max-w-48 truncate font-mono text-caption" :title="c.session.branch">{{ c.session.branch }}</code>
           </template>
           <template v-if="projectName">
             <span aria-hidden="true">·</span>
@@ -209,7 +209,7 @@ const bodyId = computed(() => `kn-capture-${c.value.captureId}`)
             >
               <KeyRound class="size-3 shrink-0" aria-hidden="true" />
               <span class="max-w-40 truncate">{{ c.apiKey.name }}</span>
-              <code class="font-mono text-[0.6875rem]">{{ c.apiKey.prefix }}…</code>
+              <code class="font-mono text-caption">{{ c.apiKey.prefix }}…</code>
               <span v-if="c.apiKey.revoked" class="text-destructive">{{ t('captures.key.revoked') }}</span>
             </component>
           </template>
@@ -281,7 +281,7 @@ const bodyId = computed(() => `kn-capture-${c.value.captureId}`)
     <div class="mt-2 pl-7">
       <button
         type="button"
-        class="inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+        class="inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring"
         :aria-expanded="open"
         :aria-controls="bodyId"
         @click="open = !open"
@@ -309,7 +309,7 @@ const bodyId = computed(() => `kn-capture-${c.value.captureId}`)
               <div v-if="note.appliesTo?.length">
                 <dt>{{ t('captures.field.appliesTo') }}</dt>
                 <dd class="flex flex-wrap gap-1">
-                  <code v-for="p in note.appliesTo" :key="p" class="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.6875rem]">{{ p }}</code>
+                  <code v-for="p in note.appliesTo" :key="p" class="rounded bg-muted px-1.5 py-0.5 font-mono text-caption">{{ p }}</code>
                 </dd>
               </div>
             </template>
@@ -346,7 +346,7 @@ const bodyId = computed(() => `kn-capture-${c.value.captureId}`)
             <div v-if="c.session.files?.length">
               <dt>{{ t('captures.field.files') }}</dt>
               <dd class="flex flex-wrap gap-1">
-                <code v-for="f in c.session.files" :key="f" class="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.6875rem]">{{ f }}</code>
+                <code v-for="f in c.session.files" :key="f" class="rounded bg-muted px-1.5 py-0.5 font-mono text-caption">{{ f }}</code>
               </dd>
             </div>
           </dl>
@@ -373,7 +373,7 @@ const bodyId = computed(() => `kn-capture-${c.value.captureId}`)
 
 <style scoped>
 .kn-capture-body dt {
-  font-size: 0.75rem;
+  font-size: var(--kn-text-xs);
   font-weight: 500;
   color: var(--muted-foreground);
 }

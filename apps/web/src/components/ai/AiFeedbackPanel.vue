@@ -166,7 +166,7 @@ function kindOf(e: AnswerFeedbackListEntry): string {
         </Button>
       </div>
       <Select v-if="kind === '' || kind === 'vote'" :model-value="reason || ANY" @update:model-value="onReason">
-        <SelectTrigger class="h-8 w-44 text-xs"><SelectValue :placeholder="t('ai.feedback.anyReason')" /></SelectTrigger>
+        <SelectTrigger class="h-8 w-44 text-xs" :aria-label="t('ai.feedback.reasonFilter')"><SelectValue :placeholder="t('ai.feedback.anyReason')" /></SelectTrigger>
         <SelectContent>
           <SelectItem :value="ANY">{{ t('ai.feedback.anyReason') }}</SelectItem>
           <SelectItem v-for="r in ANSWER_FEEDBACK_REASONS" :key="r" :value="r">{{ labelFor(t, 'assistant.feedback.reason', r) }}</SelectItem>
@@ -207,9 +207,9 @@ function kindOf(e: AnswerFeedbackListEntry): string {
                 </TableCell>
                 <TableCell class="whitespace-nowrap align-top">
                   <span class="inline-flex items-center gap-1.5">
-                    <ThumbsUp v-if="e.kind === 'vote' && e.rating === 'up'" class="size-3.5 text-emerald-600" />
+                    <ThumbsUp v-if="e.kind === 'vote' && e.rating === 'up'" class="size-3.5 text-panel-tip-ink" />
                     <ThumbsDown v-else-if="e.kind === 'vote'" class="text-destructive size-3.5" />
-                    <TriangleAlert v-else-if="e.kind === 'low-confidence'" class="size-3.5 text-amber-600" />
+                    <TriangleAlert v-else-if="e.kind === 'low-confidence'" class="size-3.5 text-panel-warning-ink" />
                     <CircleHelp v-else class="text-muted-foreground size-3.5" />
                     <span>{{ kindOf(e) }}</span>
                   </span>

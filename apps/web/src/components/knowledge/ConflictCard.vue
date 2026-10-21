@@ -104,7 +104,7 @@ async function propose() {
             <span v-if="currentDocumentId" class="ml-1">{{ t('conflicts.says') }}</span>
           </template>
         </figcaption>
-        <blockquote class="border-l border-muted-foreground/45 pl-2.5 text-[0.82rem] leading-relaxed break-words text-foreground">
+        <blockquote class="kn-measure border-l border-muted-foreground/45 pl-2.5 text-ui leading-relaxed break-words text-foreground">
           {{ side.quote }}
         </blockquote>
       </figure>
@@ -119,17 +119,17 @@ async function propose() {
           <span class="ml-1 font-mono">{{ code.headSha.slice(0, 7) }}</span>
           <span class="ml-1">{{ t('conflicts.changes') }}</span>
         </figcaption>
-        <ul class="border-l border-muted-foreground/45 pl-2.5 font-mono text-[0.75rem] leading-relaxed break-all text-foreground">
+        <ul class="border-l border-muted-foreground/45 pl-2.5 font-mono text-xs leading-relaxed break-all text-foreground">
           <li v-for="path in code.paths.slice(0, 6)" :key="path">{{ path }}</li>
           <li v-if="code.paths.length > 6" class="font-sans text-muted-foreground">{{ t('conflicts.morePaths', { n: code.paths.length - 6 }) }}</li>
         </ul>
       </figure>
     </div>
 
-    <p class="mt-2.5 text-xs leading-relaxed break-words text-muted-foreground">{{ conflict.explanation }}</p>
+    <p class="kn-measure mt-2.5 text-xs leading-relaxed break-words text-muted-foreground">{{ conflict.explanation }}</p>
 
-    <p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-      <Badge v-if="!isOpen" variant="outline" class="text-[10px] font-normal">{{ t(`conflicts.status.${conflict.status}`) }}</Badge>
+    <p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-muted-foreground">
+      <Badge v-if="!isOpen" variant="outline" class="text-caption font-normal">{{ t(`conflicts.status.${conflict.status}`) }}</Badge>
       <span :title="formatDateTime(conflict.detectedAt)">{{ t('conflicts.found', { when: formatRelative(conflict.detectedAt) }) }}</span>
       <span v-if="conflict.kind === 'doc-doc'">· {{ t('conflicts.confidence', { value: formatNumber(Math.round(conflict.confidence * 100)) }) }}</span>
       <RouterLink

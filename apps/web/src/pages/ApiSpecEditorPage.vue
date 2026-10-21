@@ -237,9 +237,9 @@ async function saveRevision(documentId: string): Promise<string> {
           wrap="off"
           :aria-invalid="issues.length > 0 || undefined"
           :aria-describedby="issues.length ? 'spec-issues' : 'spec-hint'"
-          class="min-h-[30rem] resize-y overflow-x-auto font-mono text-[0.82rem] leading-relaxed whitespace-pre [tab-size:2]"
+          class="min-h-[30rem] resize-y overflow-x-auto font-mono text-ui leading-relaxed whitespace-pre [tab-size:2]"
         />
-        <p v-if="!issues.length" id="spec-hint" class="text-[0.8rem] text-muted-foreground">
+        <p v-if="!issues.length" id="spec-hint" class="text-ui text-muted-foreground">
           {{ editId ? t('apiSpecEditor.kindFixed') : t('apiSpecEditor.hint') }}
         </p>
       </div>
@@ -248,7 +248,7 @@ async function saveRevision(documentId: string): Promise<string> {
         <p class="font-medium text-destructive">{{ t('apiSpecEditor.invalid', { n: issues.length }, issues.length) }}</p>
         <ul class="space-y-1">
           <li v-for="(i, n) in issues" :key="n" class="flex flex-wrap gap-x-2">
-            <code v-if="i.path" class="font-mono text-[0.78rem] text-muted-foreground">{{ i.path }}</code>
+            <code v-if="i.path" class="font-mono text-xs text-muted-foreground">{{ i.path }}</code>
             <span>{{ i.message }}</span>
           </li>
         </ul>

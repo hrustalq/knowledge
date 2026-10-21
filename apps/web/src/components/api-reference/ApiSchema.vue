@@ -71,14 +71,14 @@ provide<SchemaTreeState>(SCHEMA_TREE, {
 <template>
   <div class="kn-schema min-w-0">
     <div class="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-      <code class="font-mono text-[0.82rem] font-medium text-[color-mix(in_oklab,var(--foreground)_80%,var(--card))]">{{ type }}</code>
+      <code class="font-mono text-ui font-medium text-[color-mix(in_oklab,var(--foreground)_80%,var(--card))]">{{ type }}</code>
       <button v-if="openable.length" type="button" class="kn-schema-all" :aria-pressed="allOpen" @click="setAll(!allOpen)">
         <component :is="allOpen ? ChevronsDownUp : ChevronsUpDown" class="size-3.5" aria-hidden="true" />
         {{ allOpen ? t('apiRef.collapseAll') : t('apiRef.expandAll') }}
       </button>
     </div>
     <ApiSchemaTree v-if="nodes.length" :nodes="nodes" path="" />
-    <p v-else class="text-[0.85rem] text-muted-foreground">{{ t('apiRef.schema.noFields') }}</p>
+    <p v-else class="text-sm text-muted-foreground">{{ t('apiRef.schema.noFields') }}</p>
   </div>
 </template>
 
@@ -90,7 +90,7 @@ provide<SchemaTreeState>(SCHEMA_TREE, {
   height: 1.75rem;
   padding-inline: 0.5rem;
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: var(--kn-text-ui);
   color: var(--muted-foreground);
   transition: background-color 120ms ease-out, color 120ms ease-out;
 }

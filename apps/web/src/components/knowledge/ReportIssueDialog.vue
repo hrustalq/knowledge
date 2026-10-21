@@ -136,7 +136,7 @@ async function submit() {
             type="url"
             maxlength="2000"
             :placeholder="t('knowledgeIssue.urlPlaceholder')"
-            class="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/25"
+            class="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring"
           />
         </label>
 

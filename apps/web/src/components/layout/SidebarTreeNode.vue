@@ -11,17 +11,21 @@ import TreeBranch from '@/components/tree/TreeBranch.vue'
 import TreeRow from '@/components/tree/TreeRow.vue'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { statusDot } from '@/lib/api'
+import { labelFor } from '@/lib/labels'
 import { useTreeDndRow } from '@/components/knowledge/tree-dnd'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useSidebarStore } from '@/stores/sidebar'
 import TreeRowMenu from '@/components/knowledge/TreeRowMenu.vue'
 import { TREE_INDENT, TreeWindowKey } from '@/lib/tree-window'
-import { needsAttention, verificationDotClass } from '@/components/verification/verification-ui'
+import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@/components/verification/verification-ui'
 
 defineOptions({ name: 'SidebarTreeNode' })
 const { t } = useI18n()
 const props = defineProps<{ node: TreeNode; depth: number; activeId: string | null }>()
+
+/** The lifecycle dot's name: colour alone is not a state a screen reader can read. */
+const statusLabel = computed(() => labelFor(t, 'revisionStatus', props.node.headRevisionStatus ?? 'draft'))
 
 const store = useDocumentsStore()
 const sidebar = useSidebarStore()
@@ -151,7 +155,9 @@ const dnd = useTreeDndRow({
         <span
           class="size-1.5 rounded-full"
           :class="statusDot(node.headRevisionStatus)"
-          :title="node.headRevisionStatus ?? 'draft'"
+          role="img"
+          :aria-label="statusLabel"
+          :title="statusLabel"
         />
       </template>
       <template #link="link">
@@ -180,8 +186,7 @@ const dnd = useTreeDndRow({
            the title on the link carries the reason. -->
       <span
         v-if="attention && !archived"
-        class="size-1.5 shrink-0 rounded-full"
-        :class="verificationDotClass(node.verification)"
+        :class="[VERIFICATION_MARK_CLASS, verificationDotClass(node.verification)]"
         role="img"
         :aria-label="t(`verification.state.${node.verification}`)"
         :title="t(`verification.state.${node.verification}`)"
@@ -202,7 +207,9 @@ const dnd = useTreeDndRow({
         v-if="hasChildren"
         class="size-1.5 shrink-0 rounded-full"
         :class="[statusDot(node.headRevisionStatus), auth.canEdit ? 'group-focus-within:hidden group-hover:hidden group-has-[[data-state=open]]:hidden' : '']"
-        :title="node.headRevisionStatus ?? 'draft'"
+        role="img"
+        :aria-label="statusLabel"
+        :title="statusLabel"
       />
     </TreeRow>
     <TreeBranch v-if="hasChildren" :open="open" :child-count="node.childCount" :loaded="node.children.length > 0">

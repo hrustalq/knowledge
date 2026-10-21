@@ -383,6 +383,17 @@ describe('McpService over a principal', () => {
     expect(tools.find((t) => t.name === 'knowledge_document_component')?.annotations?.readOnlyHint).toBe(false);
   });
 
+  it('knowledge_search asks for 8 hits by default and lists each page once (#416)', async () => {
+    const svc = service(accessWith('viewer'));
+    const hit = (documentId: string, chunkId: string) => ({ documentId, chunkId, revisionId: 'r', title: documentId, snippet: chunkId, score: 1 });
+    svc.search.search.mockResolvedValueOnce({ results: [hit('a', 'a1'), hit('b', 'b1'), hit('a', 'a2')] } as never);
+    const client = await connect(svc.mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
+    const res = await client.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'deploy' } });
+    expect(svc.search.search).toHaveBeenCalledWith(expect.objectContaining({ limit: 8 }), expect.anything(), expect.anything());
+    const body = JSON.parse((res.content as { text: string }[])[0]!.text) as { results: { chunkId: string }[] };
+    expect(body.results.map((r) => r.chunkId)).toEqual(['a1', 'b1']);
+  });
+
   it('drafts a component as its caller, and refuses a viewer (#236)', async () => {
     const editor = service(accessWith('editor'));
     const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });

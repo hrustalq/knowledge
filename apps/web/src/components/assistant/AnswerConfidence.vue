@@ -7,7 +7,7 @@
 // why each one can be a plain sentence.
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMediaQuery } from '@vueuse/core'
+import { useHydratedMediaQuery } from '@/lib/use-hydrated'
 import { ShieldCheck, ShieldAlert, ShieldQuestion, ShieldOff } from 'lucide-vue-next'
 import type { AnswerConfidence } from '@knowledge/contracts'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -17,7 +17,7 @@ const props = defineProps<{ confidence: AnswerConfidence }>()
 
 const { t } = useI18n()
 const open = ref(false)
-const canHover = useMediaQuery('(hover: hover)')
+const canHover = useHydratedMediaQuery('(hover: hover)')
 
 const icon = computed(() => {
   switch (props.confidence.level) {
@@ -49,7 +49,7 @@ const percent = computed(() => Math.round(props.confidence.score * 100))
       </p>
       <ul v-if="confidence.reasons.length" class="mt-2 space-y-1 text-muted-foreground">
         <li v-for="r in confidence.reasons" :key="r.key" class="flex gap-2">
-          <span aria-hidden="true" :class="r.key === 'verified-sources' ? 'text-emerald-500' : 'text-amber-500'">•</span>
+          <span aria-hidden="true" :class="r.key === 'verified-sources' ? 'text-panel-tip' : 'text-panel-warning'">•</span>
           <span>{{ t(`assistant.confidence.reason.${r.key}`, { n: r.value }) }}</span>
         </li>
       </ul>
@@ -66,7 +66,7 @@ const percent = computed(() => Math.round(props.confidence.score * 100))
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 0.125rem 0.5rem;
-  font-size: 11px;
+  font-size: var(--kn-text-caption);
   color: var(--muted-foreground);
   transition: color 120ms ease-out, border-color 120ms ease-out;
 }
@@ -79,10 +79,10 @@ const percent = computed(() => Math.round(props.confidence.score * 100))
 /* The level colours the glyph only. The pill stays quiet: a loud red badge
    under every weak answer would teach readers to stop reading badges. */
 .kn-confidence[data-level='high'] > svg {
-  color: var(--color-emerald-500, #10b981);
+  color: var(--kn-panel-tip);
 }
 .kn-confidence[data-level='medium'] > svg {
-  color: var(--color-amber-500, #f59e0b);
+  color: var(--kn-panel-warning);
 }
 .kn-confidence[data-level='low'] > svg,
 .kn-confidence[data-level='none'] > svg {

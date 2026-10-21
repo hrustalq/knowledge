@@ -190,8 +190,8 @@ async function save() {
         </div>
 
         <div class="space-y-1.5">
-          <Label>{{ t('templates.fields.scope') }}</Label>
-          <RadioGroup v-model="scope" class="gap-2">
+          <Label id="kn-sat-scope-label">{{ t('templates.fields.scope') }}</Label>
+          <RadioGroup v-model="scope" class="gap-2" aria-labelledby="kn-sat-scope-label">
             <label class="flex items-start gap-2 text-sm" :class="!canProject && 'opacity-60'">
               <RadioGroupItem value="project" :disabled="!canProject" class="mt-0.5" />
               <span>
@@ -212,9 +212,9 @@ async function save() {
         </div>
 
         <div class="space-y-1.5">
-          <Label>{{ t('templates.fields.category') }}</Label>
+          <Label for="kn-sat-category">{{ t('templates.fields.category') }}</Label>
           <Select v-model="category">
-            <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+            <SelectTrigger id="kn-sat-category" class="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="c in DOCUMENT_CATEGORIES" :key="c" :value="c">{{ t(`category.${c}`) }}</SelectItem>
             </SelectContent>

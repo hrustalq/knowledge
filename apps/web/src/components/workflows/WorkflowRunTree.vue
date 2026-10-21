@@ -82,11 +82,11 @@ const wantsYou = (node: WorkflowRunNodeInfo) => node.status === 'awaiting-review
         />
         <span class="min-w-0 flex-1">
           <span
-            class="block truncate text-[13px] leading-snug"
+            class="block truncate text-ui leading-snug"
             :class="wantsYou(node) ? 'font-medium' : ''"
             >{{ label(node) }}</span
           >
-          <span class="text-muted-foreground block truncate text-[11px]">
+          <span class="text-muted-foreground block truncate text-caption">
             {{ stepTitle(node.stepId) }}
             <template v-if="!wantsYou(node)"> · {{ t(NODE_STATUS_LABEL[node.status]) }}</template>
           </span>
@@ -94,7 +94,7 @@ const wantsYou = (node: WorkflowRunNodeInfo) => node.status === 'awaiting-review
         <!-- The one thing worth a color: this card is waiting on you. -->
         <span
           v-if="wantsYou(node)"
-          class="mt-1 size-1.5 shrink-0 rounded-full bg-amber-500"
+          class="mt-1 size-1.5 shrink-0 rounded-full bg-panel-warning"
           :title="t('workflow.waitingForReview')"
         />
       </button>

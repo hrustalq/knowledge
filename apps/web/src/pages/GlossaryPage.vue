@@ -415,7 +415,7 @@ watch(highlighted, (id) => {
          links to neither. Shown here so it can be fixed, not just endured. -->
     <div
       v-if="contested.length"
-      class="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+      class="space-y-1 rounded-md border kn-callout-warning p-3 text-sm"
     >
       <p class="font-medium">{{ t('glossary.ambiguousTitle') }}</p>
       <p v-for="clash in contested" :key="clash.spelling" class="text-muted-foreground">
@@ -517,7 +517,7 @@ watch(highlighted, (id) => {
           <div class="space-y-1">
             <span class="text-muted-foreground text-xs font-medium">{{ t('glossary.definition') }}</span>
             <div
-              class="focus-within:border-ring focus-within:ring-ring/25 overflow-hidden rounded-md border bg-card shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:ring-3"
+              class="focus-within:border-ring focus-within:ring-ring overflow-hidden rounded-md border bg-card shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:ring-3"
             >
               <RichEditor
                 ref="definitionEl"

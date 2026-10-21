@@ -214,7 +214,7 @@ async function startNewThread() {
 
       <div class="min-w-0 flex-1">
         <h1 class="truncate text-sm font-semibold">{{ title }}</h1>
-        <p class="truncate text-[11px] text-muted-foreground">
+        <p class="truncate text-caption text-muted-foreground">
           {{ t('chat.headerHint') }}
         </p>
       </div>

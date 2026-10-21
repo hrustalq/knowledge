@@ -5,7 +5,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
 import { History } from 'lucide-vue-next'
-import type { ConnectorRunInfo, ListConnectorRunsResponse, ListConnectorsResponse } from '@knowledge/contracts'
+import type { ListConnectorRunsResponse, ListConnectorsResponse } from '@knowledge/contracts'
 import { apiInfiniteQueryOptions, apiQueryOptions } from '@/api/queries'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import AiEmptyState from '@/components/ai/AiEmptyState.vue'
 import { PageScrollList } from '@/components/layout/page'
 import { getWorkspaceId, relativeTime } from '@/lib/api'
-import { PHASE_LABEL, RUN_STATUS_LABEL } from './connector-ui'
+import { PHASE_LABEL, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from './connector-ui'
 
 defineProps<{ canManage: boolean }>()
 
@@ -45,19 +45,13 @@ const runs = computed(() =>
 function loadMore() {
   if (runsQuery.hasNextPage.value && !runsQuery.isFetchingNextPage.value) void runsQuery.fetchNextPage()
 }
-
-function statusVariant(status: ConnectorRunInfo['status']) {
-  if (status === 'failed') return 'destructive'
-  if (status === 'partial') return 'outline'
-  return 'secondary'
-}
 </script>
 
 <template>
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       <Select v-model="selected">
-        <SelectTrigger class="w-64"><SelectValue :placeholder="t('connectors.pickConnector')" /></SelectTrigger>
+        <SelectTrigger class="w-64" :aria-label="t('connectors.pickConnector')"><SelectValue :placeholder="t('connectors.pickConnector')" /></SelectTrigger>
         <SelectContent>
           <SelectItem v-for="c in connectors" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
         </SelectContent>
@@ -89,14 +83,24 @@ function statusVariant(status: ConnectorRunInfo['status']) {
       <div class="p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex flex-wrap items-center gap-2">
-            <Badge :variant="statusVariant(run.status)">{{ t(RUN_STATUS_LABEL[run.status]) }}</Badge>
+            <!-- Drawn as the run page draws it, from connector-ui's one mapping:
+                 the colour is on the icon, so a succeeded run reads as one here too. -->
+            <Badge variant="secondary" class="gap-1.5">
+              <component
+                :is="RUN_STATUS_ICON[run.status]"
+                class="size-3.5"
+                :class="[RUN_STATUS_CLASS[run.status], run.status === 'running' && 'animate-spin']"
+                aria-hidden="true"
+              />
+              {{ t(RUN_STATUS_LABEL[run.status]) }}
+            </Badge>
             <span class="text-sm">{{ t(`connectors.direction${run.direction === 'push' ? 'Push' : 'Pull'}`) }}</span>
             <span class="text-muted-foreground text-xs">{{ t(`connectors.trigger.${run.trigger}`) }}</span>
             <!-- Which part of the work it is in — distinct from status, since a
                  run can be paused while discovering (docs/features/26). -->
             <span v-if="run.phase" class="text-muted-foreground text-xs">· {{ t(PHASE_LABEL[run.phase]) }}</span>
             <!-- The one count worth a colour: this run is waiting on a person. -->
-            <Badge v-if="run.awaitingReview > 0" variant="outline" class="border-amber-500/40 text-amber-700 dark:text-amber-400">
+            <Badge v-if="run.awaitingReview > 0" variant="outline" class="border-panel-warning/40 text-panel-warning-ink">
               {{ t('connectors.awaitingReview', { count: run.awaitingReview }, run.awaitingReview) }}
             </Badge>
           </div>

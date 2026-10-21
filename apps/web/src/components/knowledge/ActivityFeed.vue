@@ -21,12 +21,14 @@ import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useInfiniteScroll, useVirtualList } from '@vueuse/core'
-import { ChevronRight } from 'lucide-vue-next'
+import { ChevronRight, History } from 'lucide-vue-next'
 import type { ActivityEntry, ListActivityResponse } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId, relativeTime } from '@/lib/api'
+import { useHydratedMediaQuery } from '@/lib/use-hydrated'
 import { useEventsStore } from '@/stores/events'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageState } from '@/components/layout/page'
 import UserChip from '@/components/people/UserChip.vue'
 import { useMembers } from '@/components/merge-requests/use-members'
 import { isRealAccount } from '@/components/merge-requests/mr-ui'
@@ -51,6 +53,13 @@ const props = withDefaults(
 
 /** Row height must match the markup below — the virtualizer positions by it. */
 const ROW_HEIGHT = 34
+/**
+ * Below `sm` a row takes two lines: who and what on the first, the page on the
+ * second. On one line the verb kept its width and the page — the object of
+ * the sentence — was cut to a few letters.
+ */
+const compact = useHydratedMediaQuery('(max-width: 639.98px)')
+const rowHeight = computed(() => (compact.value ? 54 : ROW_HEIGHT))
 
 const entries = ref<ActivityEntry[]>([])
 const loaded = ref(false)
@@ -62,7 +71,7 @@ const capped = computed(() => props.limit !== undefined)
 const open = ref(!props.collapsible)
 
 const { list, containerProps, wrapperProps } = useVirtualList(entries, {
-  itemHeight: ROW_HEIGHT,
+  itemHeight: () => rowHeight.value,
   overscan: 10,
 })
 
@@ -223,6 +232,10 @@ watch(() => events.revision, () => void refreshHead())
       <div v-if="!loaded" class="space-y-2">
         <Skeleton v-for="i in 3" :key="i" class="h-8 w-full" />
       </div>
+      <!-- The uncapped workspace feed is the whole of /activity, so its
+           emptiness is the page's; scoped to a page or project, or capped in a
+           transcript, the feed is a widget and a line is the right size. -->
+      <PageState v-else-if="entries.length === 0 && !documentId && !projectId && !limit" state="empty" :icon="History" :title="t('activity.empty')" />
       <p v-else-if="entries.length === 0" class="text-sm text-muted-foreground">{{ t('activity.empty') }}</p>
       <template v-else>
         <!-- Capped mode drops the virtualizer's container/wrapper bindings, and
@@ -236,8 +249,8 @@ watch(() => events.revision, () => void refreshHead())
             <div
               v-for="{ data: e, index } in visible"
               :key="e.id ?? index"
-              class="flex items-baseline gap-2 rounded-md px-2 text-sm hover:bg-muted/50"
-              :style="{ height: `${ROW_HEIGHT}px` }"
+              class="flex flex-wrap content-center items-baseline gap-x-2 gap-y-0.5 rounded-md px-2 text-sm hover:bg-muted/50 sm:flex-nowrap"
+              :style="{ height: `${rowHeight}px` }"
             >
               <UserChip
                 v-if="isPerson(e)"
@@ -246,11 +259,11 @@ watch(() => events.revision, () => void refreshHead())
                 class="max-w-[9rem] shrink-0 font-medium"
               />
               <span v-else class="shrink-0 font-medium">{{ actor(e) }}</span>
-              <span class="shrink-0 text-muted-foreground">{{ label(e) }}</span>
+              <span class="min-w-0 truncate text-muted-foreground sm:shrink-0 sm:overflow-visible">{{ label(e) }}</span>
               <RouterLink
                 v-if="e.documentId"
                 :to="`/documents/${e.documentId}`"
-                class="truncate font-medium hover:underline"
+                class="order-last basis-full truncate font-medium hover:underline sm:order-none sm:basis-auto"
               >
                 {{ title(e) }}
               </RouterLink>

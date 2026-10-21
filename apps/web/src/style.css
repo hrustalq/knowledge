@@ -29,9 +29,34 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent: var(--sidebar-accent);
+  /* The panel ramp (editor.css) as utilities: the colours a new state takes,
+     since emerald/amber/red are spoken for by the indexing dot. */
+  --color-panel-note: var(--kn-panel-note);
+  --color-panel-tip: var(--kn-panel-tip);
+  --color-panel-important: var(--kn-panel-important);
+  --color-panel-warning: var(--kn-panel-warning);
+  --color-panel-caution: var(--kn-panel-caution);
+  /* The ramp is tuned as a rule and a glyph (3:1), not as text: light warning
+     is 3.6:1 on the page. `-ink` pulls each hue 30% toward the foreground, so
+     it darkens in light and lightens in dark from one declaration — every ink
+     clears 5.2:1 on the page and on its own 10% wash in both themes. */
+  --color-panel-note-ink: color-mix(in oklab, var(--kn-panel-note) 70%, var(--foreground));
+  --color-panel-tip-ink: color-mix(in oklab, var(--kn-panel-tip) 70%, var(--foreground));
+  --color-panel-important-ink: color-mix(in oklab, var(--kn-panel-important) 70%, var(--foreground));
+  --color-panel-warning-ink: color-mix(in oklab, var(--kn-panel-warning) 70%, var(--foreground));
+  --color-panel-caution-ink: color-mix(in oklab, var(--kn-panel-caution) 70%, var(--foreground));
   /* Per-glyph fallback: Latin from Sora, Cyrillic from Manrope (Sora has no
      Cyrillic). See index.html. */
   --font-display: "Sora", "Manrope", ui-sans-serif, system-ui, sans-serif;
+  /* The UI ramp between Tailwind's xs and the prose body (tokens.css holds
+     the values): text-micro 10px, text-caption 11px, text-xs 12px,
+     text-ui 13px, text-sm 14px. Arbitrary text-[…px] sizes are drift. */
+  --text-micro: var(--kn-text-micro);
+  --text-micro--line-height: 0.875rem;
+  --text-caption: var(--kn-text-caption);
+  --text-caption--line-height: 1rem;
+  --text-ui: var(--kn-text-ui);
+  --text-ui--line-height: 1.25rem;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -40,7 +65,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
   }
   body {
     @apply bg-background text-foreground antialiased;
@@ -50,59 +75,175 @@
   }
 }
 
-/* Thin, quiet scrollbar for the navigation rail and popover lists */
-.sidebar-scroll,
-.quiet-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklch, var(--sidebar-foreground) 25%, transparent) transparent;
+/*
+ * The app-chrome warning box (a setting that will not apply, a ceiling that is
+ * off) in the panel ramp's warning hue — the same amber a `> [!WARNING]`
+ * callout spends in prose, and not the indexing dot's. Colour only: each call
+ * site keeps its own radius, padding and type size.
+ */
+@utility kn-callout-warning {
+  @apply border-panel-warning/45 bg-panel-warning/10 text-panel-warning-ink;
 }
 
 /*
- * The page scroller, and the sub-rail's.
- *
- * <main> shipped the browser's own scrollbar: wide, and painted in a grey that
- * belongs to no design system — in dark mode the brightest thing on the screen,
- * running the full height of a surface whose whole argument is that nothing
- * competes with the text. It gets what the rail and the popover lists already
- * had, one step further: thin, drawn from the foreground token so it is correct
- * in both themes by construction, and inset so the thumb reads as a slim pill
- * with air around it rather than a bar wedged against the edge of the page.
- *
- * Both mechanisms are declared because they do not overlap: Firefox reads
- * `scrollbar-width`/`scrollbar-color`, WebKit and Blink read the pseudo-
- * elements and ignore the properties.
+ * The reading measure for chrome text — a page subtitle, a section intro, a
+ * hint under a heading. The same token the document prose uses (editor.css),
+ * so a description and the page it describes wrap at the same line length.
+ * The container around it still fills the column; only the text stops.
  */
-main,
-.kn-subrail-inner,
-.kn-widget-rail {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklch, var(--foreground) 22%, transparent) transparent;
+@utility kn-measure {
+  max-inline-size: var(--kn-text-measure);
+  text-wrap: pretty;
 }
-main::-webkit-scrollbar,
-.kn-subrail-inner::-webkit-scrollbar,
-.kn-widget-rail::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+
+/*
+ * Touch hit area for every button size. A 24px or 32px button is right for a
+ * mouse and too small for a thumb, so on a coarse pointer an invisible layer
+ * centred on the button grows it to at least 44px square — the drawn button,
+ * and so the desktop layout, does not change. In the components layer so a
+ * button that is itself `absolute` or `fixed` keeps that position.
+ */
+@layer components {
+  @media (pointer: coarse) {
+    .kn-hit {
+      position: relative;
+    }
+    .kn-hit::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 100%;
+      height: 100%;
+      min-width: 44px;
+      min-height: 44px;
+      transform: translate(-50%, -50%);
+    }
+  }
 }
-main::-webkit-scrollbar-track,
-.kn-subrail-inner::-webkit-scrollbar-track,
-.kn-widget-rail::-webkit-scrollbar-track {
-  background: transparent;
+
+/*
+ * Scrollbars: one system, three scenarios.
+ *
+ * The browser's own bar is 15px of grey that belongs to no design system, and
+ * Chrome's `scrollbar-width: thin` is still 11px — a lot to spend inside a
+ * 26rem rail widget, a popover list or a two-line code panel, where it was
+ * often the widest thing in the box. So:
+ *
+ *   default   every scroller: an 8px track, a 4px pill inset in it, drawn from
+ *             the foreground token so it is right on both grounds; it fattens
+ *             to 6px under the pointer, the one moment precision matters.
+ *   compact   dialogs, sheets, popovers, menus, listboxes, the rails, code
+ *             panels, and anything opting in with .quiet-scroll: a 6px track
+ *             and a fainter pill that firms up while the box is hovered or
+ *             holds focus. Faint, never invisible — on a long list the thumb is
+ *             the only sign there is more. It only sets custom properties, which
+ *             inherit, so every scroller inside a compact box is compact too.
+ *   strip     .kn-scroll-strip, horizontal strips only (tabs, breadcrumbs,
+ *             chip rows): no bar at all, and an edge fade on whichever side
+ *             still has content, so hiding the bar never hides the "more".
+ *
+ * Firefox reads only the standard properties; Blink (121+) stops reading the
+ * pseudo-elements on any element where the standard ones are set, and
+ * `scrollbar-color` inherits. So the standard pair is fenced off to the engines
+ * that cannot draw the pseudo-elements — set it anywhere else and Chrome falls
+ * back to its 11px bar for that whole subtree.
+ */
+@layer base {
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--kn-thumb, color-mix(in oklch, var(--foreground) 22%, transparent)) transparent;
+    }
+  }
+  ::-webkit-scrollbar {
+    width: var(--kn-sb-size, 8px);
+    height: var(--kn-sb-size, 8px);
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    /* The transparent border plus `content-box` is what insets the thumb —
+       there is no padding property that reaches a scrollbar part. */
+    border: var(--kn-sb-inset, 2px) solid transparent;
+    background-clip: content-box;
+    background-color: var(--kn-thumb, color-mix(in oklch, var(--foreground) 22%, transparent));
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    border-width: calc(var(--kn-sb-inset, 2px) - 1px);
+    background-color: color-mix(in oklch, var(--foreground) 40%, transparent);
+  }
 }
-main::-webkit-scrollbar-thumb,
-.kn-subrail-inner::-webkit-scrollbar-thumb,
-.kn-widget-rail::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  /* The transparent border plus `content-box` is what insets the thumb — there
-     is no padding property that reaches a scrollbar part. */
-  border: 3px solid transparent;
-  background-clip: content-box;
-  background-color: color-mix(in oklch, var(--foreground) 22%, transparent);
+
+@layer components {
+  :where(
+    .quiet-scroll, .kn-subrail-inner, .kn-widget-rail,
+    pre, [role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']
+  ) {
+    --kn-sb-size: 6px;
+    --kn-sb-inset: 1px;
+    --kn-thumb: color-mix(in oklch, var(--foreground) 15%, transparent);
+  }
+  :where(
+    .quiet-scroll, .kn-subrail-inner, .kn-widget-rail,
+    pre, [role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']
+  ):is(:hover, :focus-within) {
+    --kn-thumb: color-mix(in oklch, var(--foreground) 28%, transparent);
+  }
 }
-main::-webkit-scrollbar-thumb:hover,
-.kn-subrail-inner::-webkit-scrollbar-thumb:hover,
-.kn-widget-rail::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in oklch, var(--foreground) 38%, transparent);
+
+/*
+ * The strip variant. The fade is a scroll-driven animation of two registered
+ * lengths, so each edge fades only while there is content past it, and a strip
+ * that fits has no timeline and no fade. Where scroll timelines are missing
+ * (Firefox today) the bar stays — the default thin one — because a hidden bar
+ * with no fade would hide the "more" along with it.
+ */
+@property --kn-strip-l {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --kn-strip-r {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes kn-strip-edges {
+  0% {
+    --kn-strip-l: 0px;
+    --kn-strip-r: 2rem;
+  }
+  10% {
+    --kn-strip-l: 2rem;
+  }
+  90% {
+    --kn-strip-r: 2rem;
+  }
+  100% {
+    --kn-strip-l: 2rem;
+    --kn-strip-r: 0px;
+  }
+}
+@utility kn-scroll-strip {
+  @supports (animation-timeline: scroll()) {
+    scrollbar-width: none;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--kn-strip-l),
+      #000 calc(100% - var(--kn-strip-r)),
+      transparent
+    );
+    animation: kn-strip-edges linear both;
+    animation-timeline: scroll(self inline);
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
 }
 
 /*
@@ -216,16 +357,17 @@ main::-webkit-scrollbar-thumb:hover,
 }
 
 /*
- * The two halves of the collapse. The gap closes the column while the rail
- * slides out over it, both on one curve, so the gap's right edge and the rail's
- * right edge occupy the same x on every frame: the content is uncovered rather
- * than shoved. The rail keeps its width throughout — nothing inside it reflows
- * while it travels, which is the whole reason this is two elements and not one
- * animated width.
+ * The two halves of the collapse. The rail slides; the gap does not. The gap
+ * is the content column's edge, and an animated width there re-lays out the
+ * whole page (every line of a long document re-wrapping) on every frame of the
+ * travel. So it snaps on the first frame: closing, the content lands behind
+ * the still-opaque rail and the rail slides off it — uncovered, not shoved;
+ * opening, the room is made at once and the rail slides into it. The rail
+ * keeps its width throughout — nothing inside it reflows while it travels,
+ * which is the whole reason this is two elements and not one animated width.
  */
 .kn-rail-gap {
   width: var(--kn-rail-w);
-  transition: width var(--rail-duration) var(--pane-ease);
 }
 .kn-rail {
   width: var(--kn-rail-w);
@@ -731,10 +873,22 @@ body.kn-tree-dragging a {
      * does today — a popover added inside one would need to be portalled.
      */
     clip-path: inset(0);
-    transition: width var(--rail-duration) var(--pane-ease);
+    /*
+     * The column's width snaps rather than animates — an animated width
+     * re-lays out the content beside it on every frame. Opening, it takes its
+     * room at once and the inner slides in; closing, it holds its room until
+     * the inner has slid out, then lets go.
+     */
+    transition-property: width; transition-duration: 0s; transition-delay: var(--rail-duration);
+  }
+  .kn-subrail[data-open='true'] {
+    transition: none;
   }
   .kn-subrail[data-open='false'] {
     width: 0;
+  }
+  .kn-subrail[data-open='false'] .kn-subrail-inner {
+    transform: translateX(-100%);
   }
   .kn-subrail-inner {
     /* Sticky and self-scrolling: the content column scrolls inside <main>, the
@@ -749,6 +903,7 @@ body.kn-tree-dragging a {
     position: sticky;
     top: 0;
     width: var(--kn-subrail-w, 14rem);
+    transition: transform var(--rail-duration) var(--pane-ease);
     height: calc(100vh - var(--kn-chrome-h, 5.75rem));
     overflow-y: auto;
     border-bottom: 0;
@@ -762,7 +917,9 @@ body.kn-tree-dragging a {
  * standing still.
  */
 @media (prefers-reduced-motion: reduce) {
-  .kn-subrail {
+  .kn-subrail,
+  .kn-subrail[data-open='false'],
+  .kn-subrail-inner {
     transition: none;
   }
 }
@@ -1017,7 +1174,7 @@ body.kn-tree-dragging a {
 }
 .kn-graph-btn:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--ring) 50%, transparent);
+  box-shadow: inset 0 0 0 2px var(--ring);
 }
 
 /*
@@ -1075,10 +1232,10 @@ body.kn-tree-dragging a {
   transform: scale(1.12);
 }
 .kn-range:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 .kn-range:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1090,8 +1247,8 @@ body.kn-tree-dragging a {
 
 /* ------------------------------------------------------- filters rail ---
  * The pages index's filter rail, built the way the shell's navigation rail is
- * built: a spacer whose *width* animates, beside a panel that is out of flow
- * and *transforms* into the room the spacer opens.
+ * built: a spacer that opens the room at once, beside a panel that is out of
+ * flow and *transforms* into it.
  *
  * Two elements rather than one animated width, for two reasons. The panel keeps
  * its width throughout, so the facets do not visibly squeeze on the way out.
@@ -1102,9 +1259,10 @@ body.kn-tree-dragging a {
  * It is a right-hand rail, so the travel is mirrored. Below the shell's hinge
  * the spacer stays closed and the panel simply floats over the content.
  */
+/* The spacer snaps, as the app rail's does (see .kn-rail-gap): an animated
+   width re-lays out the list beside it every frame. The panel still travels. */
 .kn-filters-gap {
   width: var(--kn-filters-w);
-  transition: width var(--rail-duration) var(--pane-ease);
 }
 .kn-filters {
   width: var(--kn-filters-w);
@@ -1169,7 +1327,7 @@ body.kn-tree-dragging a {
   outline: none;
   box-shadow:
     inset 0 0 0 1px var(--background),
-    0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+    0 0 0 3px var(--ring);
 }
 /* Selected: a ring in the accent, held until the day is released. */
 .kn-ledger-cell--on {
@@ -1206,22 +1364,9 @@ body.kn-tree-dragging a {
   }
 }
 
-/* Horizontal scroller: themed, because an unstyled scrollbar is a browser
-   default that belongs to no design system. */
-.kn-ledger-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-.kn-ledger-scroll::-webkit-scrollbar {
-  height: 8px;
-}
-.kn-ledger-scroll::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background-color: var(--border);
-}
-.kn-ledger-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
+/* The ledger's horizontal scroller takes the default scrollbar (see
+   "Scrollbars" near the top of this file): the bar is the cue that older
+   weeks sit to the left. */
 
 @media (prefers-reduced-motion: reduce) {
   /* The swap stays perceptible — the cells still arrive, they just arrive
@@ -1258,7 +1403,7 @@ body.kn-tree-dragging a {
 }
 .kn-strip-seg:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 /* When one kind is picked, the others recede rather than vanish: the shape of
    the whole year stays legible while one part of it is being read. */
@@ -1274,7 +1419,7 @@ body.kn-tree-dragging a {
 .kn-year {
   border-radius: 6px;
   padding: 0.2rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--kn-text-xs);
   font-variant-numeric: tabular-nums;
   color: var(--muted-foreground);
   transition:
@@ -1287,7 +1432,7 @@ body.kn-tree-dragging a {
 }
 .kn-year:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 .kn-year--on,
 .kn-year--on:hover {

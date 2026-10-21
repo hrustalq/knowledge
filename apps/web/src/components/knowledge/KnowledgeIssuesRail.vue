@@ -101,7 +101,7 @@ const statusVariant = (status: string) =>
         </div>
         <p class="mt-1 whitespace-pre-wrap break-words text-xs">{{ issue.detail }}</p>
         <p v-if="lastNote(issue)" class="mt-1 text-xs text-muted-foreground">{{ lastNote(issue) }}</p>
-        <p class="mt-1.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+        <p class="mt-1.5 flex flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
           <span>{{ relativeTime(issue.createdAt) }}</span>
           <span v-if="issue.reportCount > 1">· {{ t('knowledgeIssue.reportCount', { n: issue.reportCount }, issue.reportCount) }}</span>
           <RouterLink

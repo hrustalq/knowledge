@@ -197,7 +197,7 @@ onMounted(load)
       <!-- What arrives -->
       <section class="min-w-0 rounded-xl border bg-card">
         <div class="border-b px-5 py-3.5">
-          <h2 class="font-display text-[15px] font-semibold tracking-tight">
+          <h2 class="font-display text-base font-semibold tracking-tight">
             {{ t('notifications.categoriesTitle') }}
           </h2>
           <p class="mt-0.5 text-xs text-muted-foreground">{{ t('notifications.categoriesHint') }}</p>
@@ -257,7 +257,7 @@ onMounted(load)
       <!-- What the caller follows: the rule that adds things, then the things -->
       <section class="min-w-0 rounded-xl border bg-card">
         <div class="border-b px-5 py-3.5">
-          <h2 class="font-display text-[15px] font-semibold tracking-tight">
+          <h2 class="font-display text-base font-semibold tracking-tight">
             {{ t('notifications.watchingTitle') }}
           </h2>
           <p class="mt-0.5 text-xs text-muted-foreground">{{ t('notifications.watchingHint') }}</p>

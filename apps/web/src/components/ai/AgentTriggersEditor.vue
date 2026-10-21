@@ -302,7 +302,7 @@ function scopeLabel(trigger: AgentTriggerSummary): string {
           <p :class="trigger.webhook.secretSet ? 'text-muted-foreground' : 'text-destructive dark:text-destructive-foreground'">
             {{ trigger.webhook.secretSet ? t('ai.triggers.webhook.secretSet') : t('ai.triggers.webhook.noSecret') }}
           </p>
-          <div v-if="revealed?.id === trigger.id" class="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
+          <div v-if="revealed?.id === trigger.id" class="space-y-1 rounded-md border kn-callout-warning p-2">
             <p>{{ t('ai.triggers.webhook.rotated') }}</p>
             <p class="flex items-center gap-1">
               <code class="bg-background min-w-0 break-all rounded px-1 py-0.5 font-mono">{{ revealed.secret }}</code>

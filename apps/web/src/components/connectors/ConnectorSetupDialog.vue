@@ -361,7 +361,7 @@ function startOver() {
 
       <!-- The flow's length is a fact about the system being connected, so the
            stepper is built from the chosen kind's own steps. -->
-      <ImportStepper :current="current" :steps="labels" :label="t('connectors.steps')" class="overflow-x-auto pb-1" />
+      <ImportStepper :current="current" :steps="labels" :label="t('connectors.steps')" class="kn-scroll-strip overflow-x-auto pb-1" />
 
       <div class="min-h-52 py-1">
         <!-- 1 · Name and system ------------------------------------------->
@@ -517,7 +517,7 @@ function startOver() {
         <!-- Destination ---------------------------------------------------->
         <div v-else-if="state === 'destination'" class="space-y-4">
           <div v-if="context?.testDetail" class="flex items-center gap-2 text-sm">
-            <Check class="size-4 text-emerald-600 dark:text-emerald-500" />
+            <Check class="size-4 text-panel-tip-ink" />
             <span>{{ t('connectors.connected', { detail: context.testDetail }) }}</span>
           </div>
 

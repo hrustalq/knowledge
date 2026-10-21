@@ -43,7 +43,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
 
       <DialogClose
         v-if="!hideClose"
-        class="text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring/50 absolute top-4 right-4 grid size-7 place-items-center rounded-md transition-colors outline-none focus-visible:ring-3 disabled:pointer-events-none"
+        class="text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring absolute top-4 right-4 grid size-7 place-items-center rounded-md transition-colors outline-none focus-visible:ring-3 disabled:pointer-events-none"
       >
         <X class="size-4" />
         <span class="sr-only">{{ t('common.close') }}</span>

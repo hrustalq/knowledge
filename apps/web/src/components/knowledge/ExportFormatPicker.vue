@@ -19,8 +19,8 @@ const { t } = useI18n()
 
 <template>
   <fieldset class="space-y-2">
-    <legend class="mb-1 text-sm font-medium">{{ t('export.formatLabel') }}</legend>
-    <RadioGroup v-model="format" class="gap-2">
+    <legend id="kn-export-format-label" class="mb-1 text-sm font-medium">{{ t('export.formatLabel') }}</legend>
+    <RadioGroup v-model="format" class="gap-2" aria-labelledby="kn-export-format-label">
       <Label
         v-for="f in EXPORT_FORMATS"
         :key="f"

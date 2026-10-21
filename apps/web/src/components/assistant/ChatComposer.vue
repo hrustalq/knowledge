@@ -9,7 +9,14 @@
 // shell-style history recall.
 import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
-import { onKeyStroke, useDropZone, useFileDialog, useSpeechRecognition, useTextareaAutosize } from '@vueuse/core'
+import {
+  onKeyStroke,
+  useDropZone,
+  useFileDialog,
+  useMounted,
+  useSpeechRecognition,
+  useTextareaAutosize,
+} from '@vueuse/core'
 import { CornerDownLeft, FileText, Mic, MicOff, Paperclip, SendHorizontal, Square, Upload, X } from 'lucide-vue-next'
 import type { AssistantChatAttachment, AssistantChatMode } from '@knowledge/contracts'
 import { ASSISTANT_MESSAGE_MAX_CHARS } from '@knowledge/contracts'
@@ -140,11 +147,16 @@ const { isOverDropZone } = useDropZone(dropZoneEl, { onDrop: (files) => void add
 // rather than appended, so dictation slots into a partially-typed message.
 // Hidden entirely when unsupported (Firefox etc.) instead of failing on click.
 const {
-  isSupported: voiceSupported,
+  isSupported: speechSupported,
   isListening,
   result: voiceResult,
   toggle: toggleVoice,
 } = useSpeechRecognition({ continuous: false, interimResults: false })
+// The server has no SpeechRecognition, so it never renders the button; the
+// client's setup already knows the browser has one. Holding it until mount
+// keeps the first client render equal to the server's.
+const mounted = useMounted()
+const voiceSupported = computed(() => mounted.value && speechSupported.value)
 
 watch(voiceResult, (text) => {
   if (!text) return
@@ -260,7 +272,7 @@ function send() {
     <div class="mx-auto w-full max-w-4xl">
       <div
         ref="dropZoneEl"
-        class="relative rounded-xl border bg-card shadow-sm transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/25"
+        class="relative rounded-xl border bg-card shadow-sm transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring"
         :class="isOverDropZone ? 'border-primary ring-3 ring-primary/25' : ''"
       >
         <!-- Drop target feedback covers the dock so the whole box is the target. -->
@@ -277,7 +289,7 @@ function send() {
           <span
             v-for="(d, i) in appliedDocs"
             :key="`doc-${d.documentId}`"
-            class="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 py-0.5 pr-1 pl-2 text-[11px] text-primary"
+            class="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 py-0.5 pr-1 pl-2 text-caption text-primary"
           >
             <FileText class="size-3 shrink-0" />
             <span class="truncate">{{ d.title }}</span>
@@ -293,7 +305,7 @@ function send() {
           <span
             v-for="(a, i) in attachments"
             :key="`${a.filename}-${i}`"
-            class="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-muted py-0.5 pr-1 pl-2 text-[11px] text-muted-foreground"
+            class="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-muted py-0.5 pr-1 pl-2 text-caption text-muted-foreground"
           >
             <Paperclip class="size-3 shrink-0" />
             <span class="truncate">{{ a.filename }}</span>
@@ -373,7 +385,7 @@ function send() {
               <!-- Ask / Agent: the one control that changes what the assistant
                    is allowed to do, so it names the consequence, not itself. -->
               <div
-                class="ml-1 inline-flex rounded-full border bg-muted/60 p-0.5 text-[11px]"
+                class="ml-1 inline-flex rounded-md border bg-muted/60 p-0.5 text-caption"
                 role="radiogroup"
                 :aria-label="t('chat.assistantMode')"
               >
@@ -383,7 +395,7 @@ function send() {
                       type="button"
                       role="radio"
                       :aria-checked="mode === 'ask'"
-                      class="rounded-full px-2.5 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                      class="rounded-sm px-2.5 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
                       :class="mode === 'ask' ? 'bg-background font-medium text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
                       @click="mode = 'ask'"
                     >
@@ -399,7 +411,7 @@ function send() {
                       role="radio"
                       :aria-checked="mode === 'agent'"
                       :disabled="!canEdit"
-                      class="rounded-full px-2.5 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:opacity-50"
+                      class="rounded-sm px-2.5 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:opacity-50"
                       :class="mode === 'agent' ? 'bg-primary font-medium text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
                       @click="mode = 'agent'"
                     >
@@ -421,14 +433,14 @@ function send() {
                  limit is visible while there is still time to act on it. -->
             <span
               v-if="showCount"
-              class="ml-auto pr-1 text-[11px] tabular-nums"
+              class="ml-auto pr-1 text-caption tabular-nums"
               :class="tooLong ? 'text-destructive' : 'text-muted-foreground'"
             >
               {{ formatNumber(draft.length) }} / {{ formatNumber(ASSISTANT_MESSAGE_MAX_CHARS) }}
             </span>
 
             <span
-              class="hidden items-center gap-1 pr-1 text-[11px] text-muted-foreground @lg:inline-flex"
+              class="hidden items-center gap-1 pr-1 text-caption text-muted-foreground @lg:inline-flex"
               :class="showCount ? '' : 'ml-auto'"
             >
               <CornerDownLeft class="size-3" />

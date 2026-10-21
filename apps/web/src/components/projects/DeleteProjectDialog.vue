@@ -18,11 +18,12 @@
  * only by the client that asked for it. The counts shown for it are the
  * argument: "12 pages" and "340 stored files" are different sentences.
  *
- * A dialog rather than `confirm()` — the precedent set in WorkflowSettingsPage:
- * this is workspace-shaping, the sentence explaining what actually happens is
- * too long to fit in a native confirm, and a native confirm cannot be
- * translated with the rest of the product. The string it replaced said "this
- * cannot be undone", which was also the opposite of the truth.
+ * A dialog of its own rather than `confirm()` (components/ui/confirm), the
+ * yes/no every other confirmation in the app goes through: this is
+ * workspace-shaping, and what it has to ask — a destination, the counts, a
+ * typed name — does not fit a title and one sentence. The native confirm it
+ * replaced said "this cannot be undone", which was also the opposite of the
+ * truth.
  *
  * The impact list carries no links. Every scope-shaped destination
  * (/settings/glossary, /settings/connectors) reads the *active* project, so a
@@ -260,7 +261,7 @@ async function confirm() {
 
         <!-- The choice itself. Move is first and preselected; the destructive
              option is reachable but never the default. -->
-        <RadioGroup v-if="!empty" v-model="mode" class="gap-2">
+        <RadioGroup v-if="!empty" v-model="mode" class="gap-2" :aria-label="t('project.delete.pickFirst')">
           <div class="space-y-2 rounded-md border p-3" :class="mode === 'move' ? 'border-primary' : ''">
             <label class="flex items-start gap-2.5">
               <RadioGroupItem value="move" class="mt-0.5" />
@@ -272,7 +273,7 @@ async function confirm() {
 
             <div v-if="mode === 'move'" class="space-y-1.5 pl-6">
               <Select v-model="target">
-                <SelectTrigger class="w-full">
+                <SelectTrigger class="w-full" :aria-label="t('project.delete.destinationPlaceholder')">
                   <SelectValue :placeholder="t('project.delete.destinationPlaceholder')" />
                 </SelectTrigger>
                 <SelectContent>
@@ -348,7 +349,7 @@ async function confirm() {
         <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
         <AlertDialogAction
           v-if="!blocked"
-          class="bg-destructive text-white hover:bg-destructive/90"
+          variant="destructive"
           :disabled="!ready || working"
           @click.prevent="confirm"
         >

@@ -36,11 +36,11 @@ const { t } = useI18n()
           <DialogDescription class="sr-only">{{ subtitle || t('graph.lightboxHint') }}</DialogDescription>
         </div>
         <slot name="actions" />
-        <kbd class="hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[0.65rem] text-muted-foreground sm:inline-block">
+        <kbd class="hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-micro text-muted-foreground sm:inline-block">
           Esc
         </kbd>
         <DialogClose
-          class="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          class="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-3 focus-visible:ring-ring"
           :aria-label="t('common.close')"
         >
           <X class="size-4" />

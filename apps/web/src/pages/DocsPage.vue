@@ -96,9 +96,9 @@ function isCurrent(article: DocArticle): boolean {
               >
                 <span class="flex items-baseline gap-2">
                   <span class="min-w-0 flex-1 truncate">{{ match.article.title }}</span>
-                  <span class="shrink-0 text-[11px] text-muted-foreground">{{ match.count }}</span>
+                  <span class="shrink-0 text-caption text-muted-foreground">{{ match.count }}</span>
                 </span>
-                <span v-if="match.excerpt" class="mt-0.5 block line-clamp-2 text-[11px] text-muted-foreground">
+                <span v-if="match.excerpt" class="mt-0.5 block line-clamp-2 text-caption text-muted-foreground">
                   {{ match.excerpt }}
                 </span>
               </RouterLink>
@@ -106,7 +106,7 @@ function isCurrent(article: DocArticle): boolean {
                 <li v-for="heading in match.headings" :key="heading.id">
                   <RouterLink
                     :to="`/settings/docs/${match.article.slug}#${heading.id}`"
-                    class="block truncate border-l py-1 pr-3 pl-6 text-[11px] text-muted-foreground hover:border-primary hover:text-foreground"
+                    class="block truncate border-l py-1 pr-3 pl-6 text-caption text-muted-foreground hover:border-primary hover:text-foreground"
                   >
                     {{ heading.text }}
                   </RouterLink>
@@ -118,7 +118,7 @@ function isCurrent(article: DocArticle): boolean {
 
         <template v-else>
           <div v-for="section in grouped" :key="section.name" class="py-1">
-            <p class="px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <p class="px-3 pt-2 pb-1 text-caption font-semibold tracking-wide text-muted-foreground uppercase">
               {{ section.name }}
             </p>
             <ul>

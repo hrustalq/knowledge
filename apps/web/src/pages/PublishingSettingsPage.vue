@@ -122,16 +122,16 @@ async function revoke(id: string) {
       <PageState v-if="settingsQuery.isPending.value" state="loading" :rows="2" row-class="h-14" />
       <PageState v-else-if="settingsQuery.isError.value" state="error" :error="settingsQuery.error.value" />
 
-      <form v-else-if="settings" class="max-w-2xl space-y-3" @submit.prevent="save">
+      <form v-else-if="settings" class="space-y-3" @submit.prevent="save">
         <p
           v-if="!settings.ceiling.sharingEnabled"
-          class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+          class="rounded-md border kn-callout-warning px-3 py-2 text-sm"
         >
           {{ t('publishing.ceilingOff') }}
         </p>
         <p
           v-if="!settings.ceiling.sitesEnabled"
-          class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+          class="rounded-md border kn-callout-warning px-3 py-2 text-sm"
         >
           {{ t('publishing.sitesCeilingOff') }}
         </p>
@@ -139,7 +139,7 @@ async function revoke(id: string) {
           <div v-for="k in KEYS" :key="k.key" class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
             <div class="min-w-0">
               <span class="text-sm font-medium">{{ t(k.label) }}</span>
-              <p class="text-xs text-muted-foreground">{{ t(k.hint) }}</p>
+              <p class="kn-measure text-xs text-muted-foreground">{{ t(k.hint) }}</p>
               <p class="mt-1 text-xs text-muted-foreground">
                 {{ t('publishing.applies', { value: settings.effective[k.key] ? t('publishing.on') : t('publishing.off') }) }}
               </p>

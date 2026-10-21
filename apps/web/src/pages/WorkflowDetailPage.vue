@@ -139,14 +139,16 @@ async function remove() {
     <div v-else class="space-y-6">
       <header class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
-          <h1 class="font-display flex min-w-0 items-center gap-2 text-2xl font-bold tracking-tight">
+          <div class="flex min-w-0 items-center gap-2">
             <span
               class="size-2 shrink-0 rounded-full"
-              :class="workflow.enabled ? 'bg-emerald-500' : 'bg-muted-foreground/40'"
+              :class="workflow.enabled ? 'bg-panel-tip' : 'bg-muted-foreground/40'"
+              role="img"
+              :aria-label="workflow.enabled ? t('workflow.settings.availableToRun') : t('workflow.settings.retired')"
               :title="workflow.enabled ? t('workflow.settings.availableToRun') : t('workflow.settings.retired')"
             />
-            <span class="min-w-0 truncate">{{ workflow.name }}</span>
-          </h1>
+            <h1 class="font-display min-w-0 truncate text-2xl font-bold tracking-tight">{{ workflow.name }}</h1>
+          </div>
           <p v-if="workflow.description" class="text-muted-foreground mt-1.5 max-w-2xl text-sm leading-relaxed">
             {{ workflow.description }}
           </p>

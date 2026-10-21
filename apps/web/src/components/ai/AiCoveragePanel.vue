@@ -210,7 +210,7 @@ const SIGNAL_KINDS = ['vote', 'low-confidence', 'no-answer'] as const
       <p v-else class="text-muted-foreground text-sm">{{ latest.summary || latest.error || t('ai.runs.noSummary') }}</p>
 
       <ul v-if="latest.warnings.length" class="space-y-1">
-        <li v-for="(w, i) in latest.warnings" :key="i" class="flex gap-2 text-[11px] text-amber-600">
+        <li v-for="(w, i) in latest.warnings" :key="i" class="flex gap-2 text-caption text-panel-warning-ink">
           <TriangleAlert class="mt-0.5 size-3 shrink-0" />
           <span>{{ w }}</span>
         </li>
@@ -251,20 +251,20 @@ const SIGNAL_KINDS = ['vote', 'low-confidence', 'no-answer'] as const
             <li v-for="q in f.coverage!.questions" :key="q" class="text-muted-foreground truncate">“{{ q }}”</li>
           </ul>
 
-          <p v-if="f.documentIds.length" class="flex flex-wrap gap-1 text-[11px]">
+          <p v-if="f.documentIds.length" class="flex flex-wrap gap-1 text-caption">
             <RouterLink v-for="(id, n) in f.documentIds" :key="id" :to="`/documents/${id}`" class="text-primary hover:underline">
               {{ f.documentTitles[n] ?? id }}
             </RouterLink>
           </p>
 
           <div class="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
-            <span class="text-muted-foreground text-[11px]">
+            <span class="text-muted-foreground text-caption">
               {{ t(`ai.coverage.recommendation.${f.coverage!.recommendation}`) }}
             </span>
             <RouterLink
               v-if="f.mergeRequestId"
               :to="`/merge-requests/${f.mergeRequestId}`"
-              class="text-primary inline-flex items-center gap-1 text-[11px] hover:underline"
+              class="text-primary inline-flex items-center gap-1 text-caption hover:underline"
             >
               <GitPullRequest class="size-3" /> {{ t('ai.runs.viewProposal') }}
             </RouterLink>
@@ -305,7 +305,7 @@ const SIGNAL_KINDS = ['vote', 'low-confidence', 'no-answer'] as const
           <DialogDescription>{{ t('ai.agents.pickConnectorHint') }}</DialogDescription>
         </DialogHeader>
         <Select v-model="pickConnectorId">
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger :aria-label="t('connectors.pickConnector')"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem v-for="r in repositories" :key="r.id" :value="r.id">
               {{ r.name }} <span class="text-muted-foreground">· {{ r.config.repoUrl }}</span>

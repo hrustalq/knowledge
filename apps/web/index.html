@@ -14,17 +14,20 @@
          Loaded without blocking the first paint (#279): the faces only dress
          headings, and display=swap already draws them in the fallback first.
          A print stylesheet does not block rendering, so it is fetched as one
-         and switched to all media once it has loaded. -->
+         and switched to all media once it has loaded.
+         The weight axis is requested as a range (600..700), not two static
+         cuts: headings use 620 and 650 (editor.css), which only render as
+         asked from a variable face — two static files would snap them. -->
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Manrope:wght@600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@600..700&family=Manrope:wght@600..700&display=swap"
       media="print"
       onload="this.media='all'"
     />
     <noscript>
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Manrope:wght@600;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Sora:wght@600..700&family=Manrope:wght@600..700&display=swap"
       />
     </noscript>
     <script>

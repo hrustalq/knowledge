@@ -101,7 +101,7 @@ const lowlight = createLowlight({ bash, go, javascript, json, python, xml })
     </div>
     <pre
       tabindex="0"
-      class="kn-code-pre overflow-auto border px-3.5 py-3 font-mono text-[0.8rem] leading-[1.65]"
+      class="kn-code-pre overflow-auto border px-3.5 py-3 font-mono text-ui leading-[1.65]"
       :class="[wrap && 'whitespace-pre-wrap [overflow-wrap:anywhere]', caption !== undefined ? 'rounded-b-lg border-t-0' : 'rounded-lg']"
       :style="{ maxHeight }"
       :aria-label="label ?? caption"
@@ -109,7 +109,7 @@ const lowlight = createLowlight({ bash, go, javascript, json, python, xml })
     <button
       v-if="copyable && caption === undefined"
       type="button"
-      class="kn-code-copy absolute top-2 right-2 flex h-7 items-center gap-1.5 rounded-md border bg-card px-2 text-[0.75rem] font-medium text-muted-foreground shadow-xs transition-[opacity,color,background-color] duration-150 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+      class="kn-code-copy absolute top-2 right-2 flex h-7 items-center gap-1.5 rounded-md border bg-card px-2 text-xs font-medium text-muted-foreground shadow-xs transition-[opacity,color,background-color] duration-150 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
       :data-state="copyState"
       :title="copyState === 'failed' ? t('apiSamples.copyFailed') : undefined"
       @click="copy(code)"
@@ -127,8 +127,6 @@ const lowlight = createLowlight({ bash, go, javascript, json, python, xml })
   font-variant-ligatures: none;
   color: var(--foreground);
   background: color-mix(in oklab, var(--foreground) 4%, var(--card));
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
 }
 .kn-code-pre::selection,
 .kn-code-pre ::selection {
@@ -153,7 +151,7 @@ const lowlight = createLowlight({ bash, go, javascript, json, python, xml })
   border: 1px solid var(--border);
   border-radius: 8px 8px 0 0;
   background: color-mix(in oklab, var(--foreground) 7%, var(--card));
-  font-size: 0.76rem;
+  font-size: var(--kn-text-xs);
   color: color-mix(in oklab, var(--foreground) 70%, var(--card));
 }
 .kn-code-strip-copy {
@@ -164,7 +162,7 @@ const lowlight = createLowlight({ bash, go, javascript, json, python, xml })
   height: 1.75rem;
   padding-inline: 0.6rem;
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: var(--kn-text-ui);
   font-weight: 500;
   color: var(--foreground);
   transition: background-color 120ms ease-out, color 120ms ease-out;

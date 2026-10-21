@@ -171,7 +171,7 @@ function expiryLine(row: KnowledgeHealthRow): string | null {
               <Badge
                 v-if="row.missingPaths.length > 0 && !row.archivedAt"
                 variant="outline"
-                class="text-amber-700 dark:text-amber-400"
+                class="text-panel-warning-ink"
                 :title="row.missingPaths.join('\n')"
               >
                 {{ t('health.missingPathsChip', { n: row.missingPaths.length }, row.missingPaths.length) }}

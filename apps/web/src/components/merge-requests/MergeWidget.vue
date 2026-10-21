@@ -238,13 +238,13 @@ function toggleDraft() {
     <!-- readiness checklist (open MRs) -->
     <div v-if="isOpen" class="space-y-2 border-b px-4 py-3 text-sm">
       <p class="flex items-center gap-2" :class="mr.isDraft ? 'text-muted-foreground' : ''">
-        <CircleDashed v-if="mr.isDraft" class="size-4 text-amber-500" />
-        <Check v-else class="size-4 text-emerald-500" />
+        <CircleDashed v-if="mr.isDraft" class="size-4 text-panel-warning" />
+        <Check v-else class="size-4 text-panel-tip" />
         <span v-if="mr.isDraft">{{ t('mr.markedDraft') }}</span>
         <span v-else>{{ t('mr.readyNotDraft') }}</span>
       </p>
       <p class="flex items-center gap-2">
-        <ThumbsUp class="size-4" :class="mr.approvedBy.length > 0 ? 'text-emerald-500' : 'text-muted-foreground/60'" />
+        <ThumbsUp class="size-4" :class="mr.approvedBy.length > 0 ? 'text-panel-tip' : 'text-muted-foreground/60'" />
         <span v-if="mr.approvedBy.length > 0">
           {{ t('mr.approvedBy', { names: mr.approvedBy.map((a) => actorLabel(a)).join(', ') }) }}
         </span>
@@ -261,7 +261,7 @@ function toggleDraft() {
         </Button>
       </p>
       <p class="flex items-center gap-2">
-        <MessageSquare class="size-4" :class="unresolvedThreads > 0 ? 'text-amber-500' : 'text-muted-foreground/60'" />
+        <MessageSquare class="size-4" :class="unresolvedThreads > 0 ? 'text-panel-warning' : 'text-muted-foreground/60'" />
         <span v-if="unresolvedThreads > 0">
           {{ t('count.unresolvedThreads', { n: unresolvedThreads }, unresolvedThreads) }}
         </span>
@@ -283,7 +283,7 @@ function toggleDraft() {
           </span>
         </template>
         <template v-else-if="lintHold === 'blocking'">
-          <span class="font-medium text-[color:var(--kn-panel-caution)]">
+          <span class="font-medium text-panel-caution">
             · {{ t('mr.lint.blocking', { n: lintGate!.blockingCount }, lintGate!.blockingCount) }}
           </span>
           <span v-if="lintGate?.blocked" class="text-muted-foreground">— {{ t('mr.lint.blocksMerge') }}</span>
@@ -322,9 +322,9 @@ function toggleDraft() {
         <FileWarning
           v-if="api.breaking > 0"
           class="size-4 shrink-0"
-          :class="api.blocked ? 'text-[color:var(--kn-panel-caution)]' : 'text-amber-500'"
+          :class="api.blocked ? 'text-panel-caution' : 'text-panel-warning'"
         />
-        <Check v-else class="size-4 shrink-0 text-emerald-500" />
+        <Check v-else class="size-4 shrink-0 text-panel-tip" />
         <span v-if="api.breaking === 0" class="text-muted-foreground">{{ t('mr.api.noneBreaking') }}</span>
         <span v-else class="min-w-0">
           <button type="button" class="font-medium underline-offset-2 hover:underline" @click="emit('reviewApi')">

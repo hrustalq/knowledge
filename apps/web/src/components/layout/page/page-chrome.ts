@@ -2,19 +2,19 @@ import { computed, toValue, type Component, type MaybeRefOrGetter, type Writable
 import { useRoute, useRouter } from 'vue-router'
 
 /**
- * The page layer's vocabulary: four shapes, one measure each.
+ * The page layer's vocabulary: four shapes.
  *
  * Every route in this app except the auth cards is one of these four, and the
  * variant is the only thing a page has to declare about its own geometry. The
  * point is not tidiness — it is that a reader crossing thirty routes should not
  * have to re-find the title, the actions and the state on each one.
  *
- * - `prose`   — something read top to bottom. Capped at the 46rem measure the
- *               document renderer already uses, so a page *about* prose and a
- *               page *of* prose have the same line length. This is the one cap
- *               in the system, and it is a reading measure rather than a layout
- *               preference: past ~75 characters the eye loses the start of the
- *               next line.
+ * - `prose`   — something read top to bottom. Fills the column like every
+ *               other variant: the reading measure (past ~75 characters the eye
+ *               loses the start of the next line) is carried by the running text
+ *               itself — `--kn-text-measure` on paragraphs and lists in
+ *               editor.css, the `kn-measure` utility on chrome copy — so a code
+ *               box, a table or a form row beside it still gets the width.
  * - `list`    — a roster, table or feed. Takes the whole column: a row is
  *               scanned down its left edge, not read across, so the argument
  *               for a measure does not apply, and a table given less room than
@@ -28,22 +28,6 @@ import { useRoute, useRouter } from 'vue-router'
  *               have to agree and until now nothing checked.
  */
 export type PageVariant = 'prose' | 'list' | 'detail' | 'canvas'
-
-/**
- * The measure cap per variant, as a class rather than a token, because Tailwind
- * has to see the literal string to emit it.
- *
- * Only prose is capped. The other three are bounded by something real already —
- * a rail, the viewport, or the content's own columns — and a max-width there is
- * a second constraint fighting the true one, which shows up as a page hugging
- * the left of a wide display beside a band of nothing.
- */
-export const PAGE_MEASURE: Record<PageVariant, string> = {
-  prose: 'max-w-[46rem]',
-  list: '',
-  detail: '',
-  canvas: '',
-}
 
 /** Whether this variant hands its scroll to something inside the page. */
 export function isCanvas(variant: PageVariant): boolean {
@@ -63,12 +47,15 @@ export interface PageTab<K extends string = string> {
  * Tab and panel ids are derived rather than passed, so a consumer wiring
  * `aria-controls` cannot disagree with the strip about what the panel is
  * called. Both halves import these from here.
+ *
+ * `scope` is for a strip that repeats on one page — one per bot card — where
+ * the bare key would mint the same id twice. A page-level strip omits it.
  */
-export function tabId(key: string): string {
-  return `kn-tab-${key}`
+export function tabId(key: string, scope?: string): string {
+  return `kn-tab-${scope ? `${scope}-` : ''}${key}`
 }
-export function panelId(key: string): string {
-  return `kn-panel-${key}`
+export function panelId(key: string, scope?: string): string {
+  return `kn-panel-${scope ? `${scope}-` : ''}${key}`
 }
 
 /**

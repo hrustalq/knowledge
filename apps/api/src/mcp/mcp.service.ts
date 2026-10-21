@@ -33,6 +33,7 @@ import { CompareService } from '../documents/compare.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { MergeRequestThreadsService } from '../documents/merge-request-threads.service.js';
 import { SearchService } from '../search/search.service.js';
+import { firstPerPage } from '../search/ranking.js';
 import { EntitiesService } from '../entities/entities.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { AuditService } from '../auth/audit.service.js';
@@ -93,7 +94,7 @@ import { ANALYTICS_MAX_DAYS, CONFLICT_STATUSES, RELEASE_TAG_NAME_PATTERN } from 
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.30.0';
+export const MCP_SERVER_VERSION = '0.30.1';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -295,7 +296,7 @@ export class McpService {
         inputSchema: {
           workspaceId: z.string().uuid(),
           query: z.string().min(1).describe(SEARCH_QUERY_RULE),
-          limit: z.number().int().min(1).max(100).optional(),
+          limit: z.number().int().min(1).max(100).optional().describe('Max hits before one-per-page (default 8)'),
           projectIds: z
             .array(z.string().uuid())
             .max(20)
@@ -325,7 +326,7 @@ export class McpService {
           {
             workspaceId,
             query,
-            limit: limit ?? 20,
+            limit: limit ?? 8,
             ...(asOf ? { asOf } : {}),
             ...(knownAt ? { knownAt } : {}),
             ...(Object.keys(filters).length ? { filters } : {}),
@@ -338,7 +339,8 @@ export class McpService {
         // knowledge_feedback.
         return this.json({
           ...res,
-          results: await this.provenance.decorateResults(workspaceId, res.results),
+          // One entry per page (#416): an agent pays for every repeated chunk.
+          results: await this.provenance.decorateResults(workspaceId, firstPerPage(res.results)),
           traceId: currentTrace()?.traceId ?? newTraceId(),
         });
       },

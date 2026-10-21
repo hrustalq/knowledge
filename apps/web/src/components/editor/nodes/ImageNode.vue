@@ -46,7 +46,18 @@ function startResize(event: PointerEvent, side: 'left' | 'right') {
     :data-selected="selected"
     :style="{ '--kn-image-width': width }"
   >
-    <img :src="src" :alt="node.attrs.alt ?? ''" :title="node.attrs.title ?? undefined" draggable="false" />
+    <!-- Lazy and off the main thread: a long page's images below the fold
+         neither compete with the text for bandwidth nor block a frame to
+         decode. No intrinsic size to reserve space with — markdown stores none
+         (only an authored `width`), so see editor-schema's ResizableImage. -->
+    <img
+      :src="src"
+      :alt="node.attrs.alt ?? ''"
+      :title="node.attrs.title ?? undefined"
+      loading="lazy"
+      decoding="async"
+      draggable="false"
+    />
     <template v-if="editor.isEditable">
       <span class="kn-image-grip" data-side="left" @pointerdown="startResize($event, 'left')" />
       <span class="kn-image-grip" data-side="right" @pointerdown="startResize($event, 'right')" />

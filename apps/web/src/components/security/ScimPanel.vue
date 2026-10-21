@@ -23,6 +23,7 @@ import { getWorkspaceId } from '@/lib/api'
 import { formatDateTime, formatRelative } from '@/lib/format'
 import CopyBlock from '@/components/connect/CopyBlock.vue'
 import { Button } from '@/components/ui/button'
+import { confirm } from '@/components/ui/confirm'
 import { Input } from '@/components/ui/input'
 import { PageState } from '@/components/layout/page'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -69,8 +70,13 @@ async function create() {
 }
 
 async function confirmRevoke(token: ScimTokenView) {
-  // A native confirm keeps this one destructive action from needing its own dialog state.
-  if (!window.confirm(t('security.scim.revokeConfirm', { name: token.name }))) return
+  const ok = await confirm({
+    title: t('security.scim.revokeTitle', { name: token.name }),
+    description: t('security.scim.revokeBody'),
+    action: t('security.scim.revoke'),
+    destructive: true,
+  })
+  if (!ok) return
   try {
     await revoke.mutateAsync({ path: { ...path, tokenId: token.id } })
     if (fresh.value?.token.id === token.id) fresh.value = null

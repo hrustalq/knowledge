@@ -209,7 +209,7 @@ function clearAll() {
 
 <template>
   <div
-    class="flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border bg-background px-2 py-1 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50"
+    class="flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border bg-background px-2 py-1 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring"
   >
     <Search class="size-3.5 shrink-0 text-muted-foreground" />
 

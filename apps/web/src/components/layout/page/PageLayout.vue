@@ -8,9 +8,8 @@
  * decisions, slightly differently, and a reader crossing them had to re-find
  * the title, the actions and the state on every route.
  *
- * So this owns exactly the decisions that are the same on every page — the
- * measure, where the head sits, where a sub-rail sits, where a detail rail
- * sits, and which of the two scroll contracts applies — and nothing about what
+ * So this owns exactly the decisions that are the same on every page — where
+ * the head sits, where a sub-rail sits, where a detail rail sits, and which of the two scroll contracts applies — and nothing about what
  * a given page contains.
  *
  * **The two scroll contracts.** A `canvas` page owns the viewport and scrolls
@@ -35,7 +34,7 @@
 import { computed, useSlots, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import PageHeader from './PageHeader.vue'
-import { PAGE_MEASURE, isCanvas, type PageVariant } from './page-chrome'
+import { isCanvas, type PageVariant } from './page-chrome'
 
 const props = withDefaults(
   defineProps<{
@@ -44,17 +43,8 @@ const props = withDefaults(
     subtitle?: string
     /** Chrome-strip sizing for a canvas route's head. See PageHeader. */
     dense?: boolean
-    /**
-     * Opt out of the variant's measure.
-     *
-     * For a shell that hosts child routes rather than content of its own — the
-     * settings surface is the only one today. Capping there would cap its
-     * children too, and they are the ones that know whether they are a form or
-     * a table.
-     */
-    measure?: boolean
   }>(),
-  { variant: 'list', title: undefined, subtitle: undefined, dense: false, measure: true },
+  { variant: 'list', title: undefined, subtitle: undefined, dense: false },
 )
 
 /*
@@ -110,14 +100,6 @@ const columnClass = computed(() => {
   const parts = ['flex min-h-0 min-w-0 flex-1 flex-col']
   // A canvas lays itself out; anything else gets the standard block rhythm.
   if (!canvas.value) parts.push(hasSubRail.value ? 'gap-4 px-4 py-6 lg:px-8' : 'gap-4')
-  /*
-   * A cap, where there is one, is centred — the auto margins absorb the free
-   * space `max-width` refuses, which is how DESIGN.md already describes prose:
-   * capped *and* centred. Only `prose` carries one; every other variant fills
-   * its column, because this system spends the width it is given.
-   */
-  const measure = props.measure ? PAGE_MEASURE[props.variant] : ''
-  if (measure) parts.push(measure, 'mx-auto')
   return parts.join(' ')
 })
 

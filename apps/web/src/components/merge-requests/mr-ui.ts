@@ -11,9 +11,9 @@ import { formatDateTime, formatRelative } from '@/lib/format'
  */
 export function mrIcon(mr: Pick<MergeRequestInfo, 'status' | 'isDraft'>): { icon: Component; class: string; label: string } {
   if (mr.status === 'merged') return { icon: GitMerge, class: 'text-violet-500', label: 'mr.state.merged' }
-  if (mr.status === 'closed') return { icon: GitPullRequestClosed, class: 'text-red-500', label: 'mr.state.closed' }
+  if (mr.status === 'closed') return { icon: GitPullRequestClosed, class: 'text-panel-caution', label: 'mr.state.closed' }
   if (mr.isDraft) return { icon: GitPullRequestDraft, class: 'text-muted-foreground', label: 'mr.state.draft' }
-  return { icon: GitPullRequestArrow, class: 'text-emerald-500', label: 'mr.state.open' }
+  return { icon: GitPullRequestArrow, class: 'text-panel-tip', label: 'mr.state.open' }
 }
 
 /** The AUTH_MODE=none principal, in both spellings it reaches the client as. */

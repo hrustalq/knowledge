@@ -13,14 +13,14 @@
  * table of contents).
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { Subject, Subscription, animationFrameScheduler, auditTime, distinctUntilChanged, merge } from 'rxjs'
+import { Subject, Subscription, animationFrameScheduler, auditTime, distinctUntilChanged, filter, merge } from 'rxjs'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import type { Editor as CoreEditor } from '@tiptap/core'
 import { Placeholder } from '@tiptap/extensions'
-import { createLowlight, common } from 'lowlight'
 import { IMAGE_OPTIONS, baseExtensions } from '@knowledge/editor-schema'
+import { createEditorLowlight, highlightMissingLanguages } from './lowlight'
 import {
   AtSign,
   Bot,
@@ -261,7 +261,8 @@ function onPointerDownOutside(event: PointerEvent) {
   if (within && (within === host || within.contains(host) || host.contains(within))) return
   active.value = false
 }
-const lowlight = createLowlight(common)
+// A small grammar set up front; the rest of `common` loads when a block names it.
+const lowlight = createEditorLowlight()
 
 /** Guards the two-way binding: never re-parse markdown this component just produced. */
 let lastEmitted = ''
@@ -728,6 +729,18 @@ onMounted(() => {
         emitMarkdown(serializeKept(instance))
       }
     }),
+  )
+
+  // A block naming a grammar outside the eager set (on load, from a peer, or
+  // typed into the language field) pulls in the rest; settled, it is a no-op.
+  highlightMissingLanguages(instance, lowlight)
+  subscriptions.add(
+    editorStreams(instance)
+      .transaction$.pipe(
+        filter(({ transaction }) => transaction.docChanged),
+        auditTime(300),
+      )
+      .subscribe(() => highlightMissingLanguages(instance, lowlight)),
   )
 
   syncCommentAnchors()

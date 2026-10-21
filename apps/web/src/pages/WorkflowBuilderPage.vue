@@ -64,6 +64,7 @@ import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkflowsStore } from '@/stores/workflows'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { confirm } from '@/components/ui/confirm'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -285,7 +286,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 // amount of undo recovers, because the arrangement was never sent anywhere.
 onBeforeRouteLeave(() => {
   if (!dirty.value) return true
-  return window.confirm(t('workflow.builder.leaveUnsaved'))
+  return confirm({
+    title: t('workflow.builder.leaveUnsavedTitle'),
+    description: t('workflow.builder.leaveUnsavedBody'),
+    action: t('workflow.builder.leave'),
+    destructive: true,
+  })
 })
 
 function addStep(kind: WorkflowStepKind) {
@@ -365,11 +371,13 @@ function applyProposal(proposal: { graph: WorkflowGraph; name: string | null; de
          back, and a third one inside the pane would only be in the way. -->
     <header class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-2 lg:px-4">
       <template v-if="draft">
+        <!-- The name is an editable field, so the route's h1 is spoken only. -->
+        <h1 class="sr-only">{{ draft.name || t('workflow.name') }}</h1>
         <Input
           v-model="draft.name"
           :disabled="!canManage"
           :aria-label="t('workflow.name')"
-          class="focus-visible:border-input h-8 min-w-0 max-w-64 flex-1 border-transparent bg-transparent px-1 text-[15px] font-semibold shadow-none focus-visible:px-2"
+          class="focus-visible:border-input h-8 min-w-0 max-w-64 flex-1 border-transparent bg-transparent px-1 text-base font-semibold shadow-none focus-visible:px-2"
         />
 
         <label class="text-muted-foreground hidden items-center gap-1.5 text-xs sm:flex">
@@ -499,7 +507,7 @@ function applyProposal(proposal: { graph: WorkflowGraph; name: string | null; de
           <component
             :is="issue.severity === 'error' ? CircleAlert : TriangleAlert"
             class="mt-px size-3.5 shrink-0"
-            :class="issue.severity === 'error' ? 'text-destructive' : 'text-amber-600 dark:text-amber-500'"
+            :class="issue.severity === 'error' ? 'text-destructive' : 'text-panel-warning-ink'"
           />
           <span class="min-w-0 flex-1 leading-snug">{{ issue.message }}</span>
         </button>

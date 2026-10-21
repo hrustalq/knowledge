@@ -37,15 +37,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     <button
       id="global-search-trigger"
       type="button"
-      class="relative h-8 w-full max-w-sm rounded-md border bg-muted/40 pl-8 pr-10 text-left text-sm text-muted-foreground outline-none transition-colors hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+      class="relative h-8 w-full max-w-sm rounded-md border bg-muted/40 pl-8 pr-10 text-left text-sm text-muted-foreground outline-none transition-colors max-sm:pr-3 hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring"
       aria-haspopup="dialog"
       :aria-label="t('nav.searchPages')"
       @click="searchUi.openSearch()"
     >
       <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
-      {{ t('nav.searchPagesPlaceholder') }}
+      <span class="block truncate">{{ t('nav.searchPagesPlaceholder') }}</span>
       <kbd
-        class="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 font-mono text-[10px] sm:block"
+        class="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 font-mono text-micro sm:block"
       >/</kbd>
     </button>
 

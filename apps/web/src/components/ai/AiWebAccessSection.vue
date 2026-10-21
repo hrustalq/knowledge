@@ -197,7 +197,7 @@ async function check() {
                 {{ t('ai.web.fromEnv') }}
               </Badge>
             </span>
-            <span class="mt-0.5 block text-[13px] leading-relaxed text-muted-foreground">
+            <span class="mt-0.5 block text-ui leading-relaxed text-muted-foreground">
               {{ t(`ai.web.mode.${mode}.body`) }}
             </span>
           </span>
@@ -231,7 +231,7 @@ async function check() {
             <li v-for="policy in policies" :key="policy.id" class="flex items-center gap-3 px-3 py-2">
               <span class="min-w-0 flex-1">
                 <span class="font-mono text-sm">{{ policy.pattern }}</span>
-                <span v-if="refines(policy)" class="ml-2 text-[11px] text-muted-foreground">
+                <span v-if="refines(policy)" class="ml-2 text-caption text-muted-foreground">
                   {{ t('ai.web.refines', { pattern: refines(policy)!.pattern }) }}
                 </span>
                 <span v-if="policy.note" class="block truncate text-xs text-muted-foreground">{{ policy.note }}</span>
@@ -314,7 +314,7 @@ async function check() {
               <Plus class="size-3.5" /> {{ t('common.add') }}
             </Button>
           </form>
-          <p class="text-[11px] leading-relaxed text-muted-foreground">{{ t('ai.web.patternHint') }}</p>
+          <p class="text-caption leading-relaxed text-muted-foreground">{{ t('ai.web.patternHint') }}</p>
         </div>
 
         <!-- Dry run. Named, because otherwise it is a third full-width input
@@ -412,7 +412,7 @@ async function check() {
   gap: 0.5rem;
   border-radius: 0.5rem;
   padding: 0.5rem 0.75rem;
-  font-size: 0.8125rem;
+  font-size: var(--kn-text-ui);
   line-height: 1.5;
 }
 .kn-clamp {
@@ -442,7 +442,7 @@ async function check() {
   display: block;
   margin-top: 0.125rem;
   opacity: 0.85;
-  font-size: 0.75rem;
+  font-size: var(--kn-text-xs);
 }
 
 /* Two-state switch for the row being added. A checkbox labelled "allow" would
@@ -455,7 +455,7 @@ async function check() {
 }
 .kn-seg button {
   padding: 0.25rem 0.625rem;
-  font-size: 0.75rem;
+  font-size: var(--kn-text-xs);
   color: var(--muted-foreground);
   transition: background-color 120ms ease-out, color 120ms ease-out;
 }

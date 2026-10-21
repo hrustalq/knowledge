@@ -68,14 +68,14 @@ export const ITEM_STATUS_ICON: Record<ConnectorRunItemStatus, Component> = {
 export const ITEM_STATUS_CLASS: Record<ConnectorRunItemStatus, string> = {
   discovered: 'text-muted-foreground',
   fetching: 'text-primary',
-  staged: 'text-amber-600 dark:text-amber-500',
-  approved: 'text-emerald-600 dark:text-emerald-500',
+  staged: 'text-panel-warning-ink',
+  approved: 'text-panel-tip-ink',
   applying: 'text-primary',
-  applied: 'text-emerald-600 dark:text-emerald-500',
-  // Deliberately the quietest state in the set. On a second sync almost every
-  // row is `unchanged`, and a wall of coloured ticks would bury the two rows
-  // that actually changed.
-  unchanged: 'text-muted-foreground/70',
+  applied: 'text-panel-tip-ink',
+  // Deliberately uncoloured. On a second sync almost every row is `unchanged`,
+  // and a wall of coloured ticks would bury the two rows that actually
+  // changed. Muted rather than dimmed: the label still has to read.
+  unchanged: 'text-muted-foreground',
   skipped: 'text-muted-foreground',
   rejected: 'text-muted-foreground',
   failed: 'text-destructive',
@@ -102,10 +102,10 @@ export const ACTION_ICON: Record<ConnectorItemAction, Component> = {
 }
 
 export const ACTION_CLASS: Record<ConnectorItemAction, string> = {
-  create: 'text-emerald-600 dark:text-emerald-500',
+  create: 'text-panel-tip-ink',
   update: 'text-primary',
   unchanged: 'text-muted-foreground',
-  conflict: 'text-amber-600 dark:text-amber-500',
+  conflict: 'text-panel-warning-ink',
 }
 
 export const RUN_STATUS_LABEL: Record<ConnectorRunStatus, string> = {
@@ -134,9 +134,9 @@ export const RUN_STATUS_CLASS: Record<ConnectorRunStatus, string> = {
   queued: 'text-muted-foreground',
   running: 'text-primary',
   paused: 'text-muted-foreground',
-  'awaiting-review': 'text-amber-600 dark:text-amber-500',
-  succeeded: 'text-emerald-600 dark:text-emerald-500',
-  partial: 'text-amber-600 dark:text-amber-500',
+  'awaiting-review': 'text-panel-warning-ink',
+  succeeded: 'text-panel-tip-ink',
+  partial: 'text-panel-warning-ink',
   failed: 'text-destructive',
   cancelled: 'text-muted-foreground',
 }

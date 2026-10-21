@@ -221,6 +221,9 @@ const questionPoints = computed(() => (agents.value?.questionSeries ?? []).map((
       </div>
 
       <div v-else :id="panelId(tab)" role="tabpanel" :aria-labelledby="tabId(tab)" class="mt-5 min-w-0">
+        <!-- The panel's lists title themselves h3, as they do under a project's
+             h2; the tab is that level here, spoken rather than drawn twice. -->
+        <h2 class="sr-only">{{ t(`analytics.tabs.${tab}`) }}</h2>
         <PageState v-if="current.isPending.value" state="loading" :rows="4" row-class="h-14" />
         <PageState v-else-if="current.isError.value" state="error" :error="current.error.value" />
 

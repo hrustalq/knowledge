@@ -72,7 +72,7 @@ function onKeydown(event: KeyboardEvent) {
       ref="list"
       role="tablist"
       :aria-label="label"
-      class="relative -mb-px flex min-w-0 overflow-x-auto [scrollbar-width:none]"
+      class="kn-scroll-strip relative -mb-px flex min-w-0 overflow-x-auto"
       @keydown="onKeydown"
     >
       <button
@@ -85,9 +85,9 @@ function onKeydown(event: KeyboardEvent) {
         :aria-selected="tab.id === active"
         :aria-controls="panelId(tab.id)"
         :tabindex="tab.id === active ? 0 : -1"
-        class="kn-tab flex shrink-0 items-center gap-1.5 border-b-2 whitespace-nowrap transition-colors duration-150 outline-none focus-visible:rounded-t-sm focus-visible:ring-3 focus-visible:ring-ring/50"
+        class="kn-tab flex shrink-0 items-center gap-1.5 border-b-2 whitespace-nowrap transition-colors duration-150 outline-none focus-visible:rounded-t-sm focus-visible:ring-3 focus-visible:ring-ring"
         :class="[
-          size === 'sm' ? 'px-2.5 pt-1 pb-1.5 text-[0.8rem]' : 'px-3 pt-1.5 pb-2 text-[0.85rem]',
+          size === 'sm' ? 'px-2.5 pt-1 pb-1.5 text-ui' : 'px-3 pt-1.5 pb-2 text-sm',
           tab.id === active ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
           tab.id === active && !bar ? 'border-primary' : 'border-transparent',
         ]"
@@ -96,7 +96,7 @@ function onKeydown(event: KeyboardEvent) {
         {{ tab.label }}
         <span
           v-if="tab.count"
-          class="grid h-[1.1rem] min-w-[1.1rem] place-items-center rounded-full px-1 text-[0.7rem] leading-none font-medium tabular-nums transition-colors duration-150"
+          class="grid h-[1.1rem] min-w-[1.1rem] place-items-center rounded-full px-1 text-micro leading-none font-medium tabular-nums transition-colors duration-150"
           :class="tab.id === active ? 'bg-primary/12 text-primary' : 'bg-muted text-muted-foreground'"
         >{{ tab.count }}</span>
         <span v-if="tab.dot" class="size-1.5 rounded-full bg-[color-mix(in_oklab,var(--kn-panel-tip)_80%,var(--foreground))]" aria-hidden="true" />

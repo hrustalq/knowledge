@@ -197,13 +197,14 @@ function saveEdit() {
         ref="editEl"
         v-model="draft"
         rows="3"
-        class="w-full resize-y rounded-2xl border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/25"
+        :aria-label="t('chat.editMessage')"
+        class="w-full resize-y rounded-2xl border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring"
         @keydown.esc.prevent="editing = false"
         @keydown.enter.meta.prevent="saveEdit"
         @keydown.enter.ctrl.prevent="saveEdit"
       />
       <div class="flex items-center justify-end gap-2">
-        <p class="mr-auto text-[11px] text-muted-foreground">{{ t('chat.savingRestarts') }}</p>
+        <p class="mr-auto text-caption text-muted-foreground">{{ t('chat.savingRestarts') }}</p>
         <Button variant="ghost" size="sm" @click="editing = false">{{ t('common.cancel') }}</Button>
         <Button size="sm" :disabled="!draft.trim()" @click="saveEdit">{{ t('common.save') }}</Button>
       </div>
@@ -218,7 +219,7 @@ function saveEdit() {
 
       <div v-if="canAct" class="kn-msg-actions mt-1 flex items-center gap-0.5">
         <button type="button" class="kn-msg-action" :aria-label="copied ? t('common.copied') : t('chat.copyMessage')" @click="copy">
-          <Check v-if="copied" class="size-3.5 text-emerald-500" />
+          <Check v-if="copied" class="size-3.5 text-panel-tip" />
           <Copy v-else class="size-3.5" />
         </button>
         <button type="button" class="kn-msg-action" :aria-label="t('chat.editMessage')" :title="t('chat.edit')" @click="startEdit">
@@ -278,7 +279,7 @@ function saveEdit() {
           v-for="(tc, i) in message.toolCalls"
           :key="`t-${i}`"
           :title="tc.arguments"
-          class="inline-flex items-center gap-1 text-[11px]"
+          class="inline-flex items-center gap-1 text-caption"
           :class="tc.ok ? 'text-muted-foreground' : 'text-destructive'"
         >
           <component :is="toolVocabulary(tc.tool).icon" class="size-3" />
@@ -314,7 +315,7 @@ function saveEdit() {
         />
         <div class="kn-msg-actions flex items-center gap-0.5">
           <button type="button" class="kn-msg-action" :aria-label="copied ? t('common.copied') : t('chat.copyReply')" @click="copy">
-            <Check v-if="copied" class="size-3.5 text-emerald-500" />
+            <Check v-if="copied" class="size-3.5 text-panel-tip" />
             <Copy v-else class="size-3.5" />
           </button>
           <button

@@ -75,7 +75,7 @@ spacing:
   block-nested: "0.85rem"
   gutter: "1rem"
   gutter-wide: "2rem"
-  measure: "46rem"
+  measure: "65ch"
   rail: "16rem"
   topbar: "3.5rem"
 components:
@@ -226,10 +226,21 @@ A two-temperature palette: warm neutrals (hue 85°) for every ground, cool indig
 
 ### Signal
 
-- **Signal Red** — destructive actions only.
+- **Signal Red** — destructive actions only. In dark mode it is re-declared light
+  enough to read as text (`text-destructive` passes 4.5:1 on page and card), so
+  error copy never needs a per-site dark patch.
 - Emerald / amber / red at Tailwind's 500 step carry the indexing lifecycle dot:
   emerald = indexed, amber (pulsing) = indexing or finalized, red = failed, muted at
   40% = draft.
+- **The panel ramp as UI colour.** Every other state — verification, run and stage
+  status, diff add/remove, confidence, warnings — takes its hue from the panel ramp,
+  exposed to Tailwind as `panel-{note,tip,important,warning,caution}`. Each has an
+  `-ink` step (mixed 30% toward the foreground) for text, because a raw panel hue
+  is a fill, not an ink: light warning is 3.6:1 as text, its ink 5.3:1. A warning
+  box is the `kn-callout-warning` utility, never a hand-mixed amber.
+- **Verification is a diamond, not a dot.** Trust state sits in the same tree row
+  as the lifecycle dot, so its mark is a small diamond in the panel ramp — shape,
+  not just hue, tells the two apart.
 
 ### Named Rules
 
@@ -249,7 +260,8 @@ lifecycle. Do not borrow them for emphasis, decoration, or a second meaning of
 
 ## Typography
 
-**Display Font:** Sora (600, 700), with `ui-sans-serif, system-ui, sans-serif`
+**Display Font:** Sora (variable, 600–700), with Manrope (600–700) behind it for
+Cyrillic, then `ui-sans-serif, system-ui, sans-serif`
 **Body Font:** the system sans stack (`ui-sans-serif, system-ui, sans-serif`)
 **Code Font:** `ui-monospace, SFMono-Regular, monospace`
 
@@ -268,10 +280,29 @@ long as they keep reading.
 - **Title** (Sora ~620, 1.12rem): h3.
 - **Subtitle** (Sora ~620, 1rem, in Ink Muted): h4 — the one heading level that
   steps _down_ in color rather than up in size.
-- **Body** (system sans, 0.95rem, 1.7): all prose, capped at a 46rem measure.
+- **Body** (system sans, 0.95rem, 1.7): all prose; running text stops at the
+  65ch text measure (see Layout).
 - **Label** (system sans, 0.75rem, 500): chips, metadata, rail previews, kbd hints.
 - **Code** (mono, 0.86em, ligatures disabled inline): inline code sits on an 8%
   current-color wash; blocks sit on a 5% foreground-over-card panel with a rule.
+
+### UI Ramp
+
+Interface text outside prose uses five steps, declared as `--kn-text-*` in
+`styles/tokens.css` (the export renderer inlines that file without Tailwind) and
+mapped to `text-micro / caption / xs / ui / sm` utilities:
+
+- **micro** (10px / 0.875rem): kbd hints, count badges, avatar initials, chart and
+  heatmap ticks, graph labels, caret name tags. Nothing is ever smaller.
+- **caption** (11px / 1rem): metadata lines, timestamps, dense captions, small
+  status badges.
+- **xs** (12px): labels, chips, table heads.
+- **ui** (13px / 1.25rem): dense controls, list rows, rail and menu items.
+- **sm** (14px): default control and secondary text.
+
+An arbitrary `text-[…]` size is drift; pick a step. `cn()` registers the three
+custom steps with tailwind-merge, which otherwise reads `text-caption` as a colour
+and drops it.
 
 ### Named Rules
 
@@ -284,10 +315,10 @@ prevent.
 **The Display-Is-Structure Rule.** Sora is for headings and diagram labels. It never
 sets body copy, button text, or UI labels.
 
-**The Loaded-Weight Rule.** Only the weights actually requested from the font
-provider may be specified. The stylesheet currently asks for 650 and 620 while
-loading 600 and 700, so those headings silently snap to a neighbour — either widen
-the font request or move to the loaded steps; do not add more phantom weights.
+**The Loaded-Weight Rule.** Only weights the font request actually covers may be
+specified. Sora and Manrope are requested as the `600..700` variable range, so the
+h2 650 / h3 620 steps render as written; a weight outside that range silently snaps
+to a neighbour — widen the request first.
 
 ## Layout
 
@@ -302,8 +333,9 @@ collapsible column; below it the same component becomes an off-canvas drawer ove
 table columns). `md`, `xl` and `2xl` are used only incidentally — this is a
 two-breakpoint system in practice, and new work should stay inside it.
 
-Prose is capped at a 46rem measure and centred; the page rail of collapsible widgets
-lives _outside_ that measure, never inside it. Vertical rhythm in documents is a
+Every content region fills the column inside the shell's gutters — the public
+reader and share pages included; the page rail of collapsible widgets sits beside
+the column, never inside it. Vertical rhythm in documents is a
 single block gap of 1.5rem, dropping to 0.85rem for blocks nested inside a panel,
 column or expand — so a callout does not inherit page-level air and inflate.
 
@@ -312,9 +344,22 @@ panel authored for a full-width page stays inside its card instead of spilling.
 
 ### Named Rules
 
-**The Measure Rule.** Prose never exceeds 46rem. Anything that wants the full column
-— a revision table, a diff, a graph — is not prose and belongs in a rail widget or a
-maximized dialog.
+**The Measure Rule.** Containers never cap their width; the reading measure
+belongs to running text. Paragraphs, lists and quotes stop at `--kn-text-measure`
+(65ch) in the shared prose stylesheet, and chrome copy (subtitles, intros, hints)
+uses the `kn-measure` utility. Headings and their rules, tables, code, diagrams,
+cards and form rows take the full width beside it. Cap a field, not a form; cap a
+form, not a page. The only centred, capped blocks are dialogs, auth cards and
+empty states.
+
+**The Quiet Scrollbar Rule.** Scrollbars are chrome and follow the Hairline Rule's
+restraint. Every scroller gets an 8px track with a 4px foreground-tinted pill.
+Compact surfaces — dialogs, popovers, menus, rails, code panels — get a 6px track
+with a fainter pill that firms up on hover or focus: faint, never invisible. Only
+horizontal strips (tabs, breadcrumbs, chip rows) hide the bar, and only together
+with an edge fade on whichever side still has content (`kn-scroll-strip`), so
+hiding the bar never hides that there is more. A region that scrolls but holds
+nothing focusable takes `tabindex="0"` so the keyboard can scroll it.
 
 **The Two Modes Rule.** A route is either a _document_ (the content column grows,
 `<main>` scrolls, chrome padding applies) or a _fill surface_ (the route owns the
@@ -378,7 +423,8 @@ Controls are never pill-shaped.
 - **Primary:** Indigo Ink on paper-white text, hover to 90% opacity.
 - **Ghost / Outline / Secondary:** ghost is transparent until hover, when it takes
   the Indigo Wash surface; outline adds the hairline and a _Seated_ shadow.
-- **Focus:** a 3px ring at 50% of the ring token plus a border shift — never an
+- **Focus:** a 3px ring at full strength of the ring token (≥3:1 against page,
+  card and accent in both themes) plus a border shift — never an
   outline-only or color-only cue.
 - **Invalid:** `aria-invalid` drives a destructive-tinted ring, so validation state
   is a real attribute, not a class.
@@ -489,7 +535,8 @@ human authorship.
   shadow only when the element genuinely floats.
 - **Do** express prose in the shared stylesheet so the reader and the editor stay
   pixel-identical.
-- **Do** cap prose at the 46rem measure and put anything wider in a rail widget or a
+- **Do** let containers fill the column and cap running text at the 65ch measure;
+  put anything that needs more than the column in a rail widget or a
   maximized dialog.
 - **Do** pair every motion with a `prefers-reduced-motion` branch that keeps the
   change perceptible — a 120ms crossfade, not a jump cut.

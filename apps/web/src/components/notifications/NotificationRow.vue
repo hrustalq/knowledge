@@ -53,7 +53,7 @@ function open() {
 <template>
   <button
     type="button"
-    class="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+    class="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
     :class="unread ? 'bg-primary/[0.04]' : ''"
     :title="formatDateTime(entry.createdAt)"
     @click="open"
@@ -65,7 +65,7 @@ function open() {
         <span class="truncate text-sm" :class="unread ? 'font-medium text-foreground' : 'text-muted-foreground'">
           {{ entry.title ?? t('notifications.untitled') }}
         </span>
-        <span v-if="repeats" class="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+        <span v-if="repeats" class="shrink-0 text-micro tabular-nums text-muted-foreground">
           ×{{ repeats }}
         </span>
       </span>
@@ -83,7 +83,7 @@ function open() {
          what makes an inbox scannable, and stacking it would leave that width
          empty. The popover keeps it off the row entirely (`compact`) — there is
          no room there for a second column. -->
-    <span v-if="!compact" class="mt-0.5 shrink-0 text-[11px] text-muted-foreground/80 tabular-nums">
+    <span v-if="!compact" class="mt-0.5 shrink-0 text-caption text-muted-foreground tabular-nums">
       {{ formatRelative(entry.createdAt) }}
     </span>
 

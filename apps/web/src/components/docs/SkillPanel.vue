@@ -67,7 +67,7 @@ const counts = computed(() => ({
                 : t('docs.copySkill')
           }}
         </Button>
-        <p class="mt-1.5 text-center text-[11px] text-muted-foreground">~{{ sizeOf(skillText) }}</p>
+        <p class="mt-1.5 text-center text-caption text-muted-foreground">~{{ sizeOf(skillText) }}</p>
       </div>
 
       <div class="flex flex-col rounded-lg border p-4">
@@ -92,19 +92,19 @@ const counts = computed(() => ({
 
     <p
       v-if="skill.state.value === 'failed' || bundle.state.value === 'failed'"
-      class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+      class="rounded-md border kn-callout-warning px-3 py-2 text-xs"
     >
       {{ t('docs.copyFailedHint') }}
     </p>
 
     <div class="overflow-hidden rounded-lg border">
       <div class="flex items-center justify-between border-b bg-muted/50 px-3 py-1.5">
-        <span class="font-mono text-[11px] text-muted-foreground">SKILL.md</span>
-        <button type="button" class="text-[11px] text-muted-foreground hover:text-foreground" @click="expanded = !expanded">
+        <span class="font-mono text-caption text-muted-foreground">SKILL.md</span>
+        <button type="button" class="text-caption text-muted-foreground hover:text-foreground" @click="expanded = !expanded">
           {{ expanded ? t('docs.showLess') : t('docs.showAll') }}
         </button>
       </div>
-      <pre class="max-h-96 overflow-auto px-3 py-2 text-[11px] leading-relaxed"><code>{{ preview }}</code></pre>
+      <pre class="max-h-96 overflow-auto px-3 py-2 text-caption leading-relaxed"><code>{{ preview }}</code></pre>
     </div>
   </div>
 </template>

@@ -352,7 +352,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
   <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-5">
     <div>
       <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('connect.title') }}</h1>
-      <p class="mt-1 max-w-3xl text-sm text-muted-foreground">{{ t('connect.subtitle') }}</p>
+      <p class="kn-measure mt-1 text-sm text-muted-foreground">{{ t('connect.subtitle') }}</p>
     </div>
 
     <div v-if="loading" class="grid gap-5">
@@ -364,7 +364,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
       <!-- The endpoint: the one value every client config below contains. -->
       <section class="min-w-0 rounded-xl border bg-card px-5 py-4">
         <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 class="font-display text-[15px] font-semibold tracking-tight">{{ t('connect.endpoint.title') }}</h2>
+          <h2 class="font-display text-base font-semibold tracking-tight">{{ t('connect.endpoint.title') }}</h2>
           <span class="text-xs text-muted-foreground">
             {{ t('connect.endpoint.meta', { version: connection.version, tools: connection.tools.length }) }}
           </span>
@@ -375,7 +375,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
 
       <!-- Step 1 ---------------------------------------------------------- -->
       <section class="min-w-0 rounded-xl border bg-card">
-        <h2 class="flex items-center gap-2.5 border-b px-5 py-3.5 font-display text-[15px] font-semibold tracking-tight">
+        <h2 class="flex items-center gap-2.5 border-b px-5 py-3.5 font-display text-base font-semibold tracking-tight">
           <span class="kn-step">1</span>{{ t('connect.keys.title') }}
         </h2>
 
@@ -422,7 +422,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
                 </Select>
               </div>
             </div>
-            <p class="text-[11px] text-muted-foreground">{{ t(`connect.keys.scopeHint.${form.scope}`) }}</p>
+            <p class="text-caption text-muted-foreground">{{ t(`connect.keys.scopeHint.${form.scope}`) }}</p>
 
             <!-- Where a capture key may propose. Toggles rather than a
                  multi-select: a workspace has a handful of projects, and seeing
@@ -434,7 +434,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
                   v-for="p in pinProjects"
                   :key="p.projectId"
                   type="button"
-                  class="rounded-full border px-2.5 py-0.5 text-xs transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  class="rounded-md border px-2.5 py-0.5 text-xs transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring"
                   :class="form.projectIds.includes(p.projectId)
                     ? 'border-primary/40 bg-primary/10 text-primary'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground'"
@@ -444,7 +444,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
                   {{ p.name }}
                 </button>
               </div>
-              <p class="text-[11px] text-muted-foreground">
+              <p class="text-caption text-muted-foreground">
                 {{ form.projectIds.length
                   ? t('connect.keys.projectsPinned', { n: form.projectIds.length }, form.projectIds.length)
                   : t('connect.keys.projectsAll') }}
@@ -458,8 +458,8 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
             </div>
 
             <!-- The one and only sighting of the value. -->
-            <div v-if="fresh" class="grid gap-2 rounded-lg border border-dashed border-amber-500/50 bg-amber-500/5 p-3">
-              <p class="flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
+            <div v-if="fresh" class="grid gap-2 rounded-lg border border-dashed kn-callout-warning p-3">
+              <p class="flex items-start gap-2 text-xs text-panel-warning-ink">
                 <TriangleAlert class="size-3.5 shrink-0 translate-y-0.5" aria-hidden="true" />
                 <span>{{ t('connect.keys.onceOnly', { name: fresh.key.name }) }}</span>
               </p>
@@ -483,12 +483,12 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
                     <Badge v-if="k.workspaceId" variant="outline">{{ workspaceName(k.workspaceId) }}</Badge>
                     <Badge v-for="id in k.projectIds ?? []" :key="id" variant="outline" class="font-normal">{{ projectName(id) }}</Badge>
                   </div>
-                  <p class="mt-0.5 text-[11px] text-muted-foreground">
+                  <p class="mt-0.5 text-caption text-muted-foreground">
                     <code class="font-mono">{{ k.prefix }}…</code>
                     · {{ k.lastUsedAt ? t('connect.keys.lastUsed', { when: formatRelative(k.lastUsedAt) }) : t('connect.keys.neverUsed') }}
                     · {{ k.expiresAt ? t('connect.keys.expires', { when: formatDate(k.expiresAt) }) : t('connect.keys.noExpiry') }}
                     <template v-if="capturesOf(k)">
-                      · <RouterLink :to="capturesOf(k)!" class="text-primary hover:underline">{{ t('connect.keys.captures') }}</RouterLink>
+                      · <RouterLink :to="capturesOf(k)!" class="text-primary underline underline-offset-2">{{ t('connect.keys.captures') }}</RouterLink>
                     </template>
                   </p>
                 </div>
@@ -503,12 +503,12 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
 
       <!-- Step 2 ---------------------------------------------------------- -->
       <section class="min-w-0 rounded-xl border bg-card">
-        <h2 class="flex items-center gap-2.5 border-b px-5 py-3.5 font-display text-[15px] font-semibold tracking-tight">
+        <h2 class="flex items-center gap-2.5 border-b px-5 py-3.5 font-display text-base font-semibold tracking-tight">
           <span class="kn-step">2</span>{{ t('connect.clients.title') }}
         </h2>
 
         <!-- Hand-rolled tab strip (no tab library in this app). -->
-        <div role="tablist" class="flex gap-1 overflow-x-auto border-b px-3 py-2">
+        <div role="tablist" class="kn-scroll-strip flex gap-1 overflow-x-auto border-b px-3 py-2">
           <button
             v-for="c in clients"
             :key="c.id"
@@ -526,16 +526,16 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
         <div v-if="client" role="tabpanel" class="grid gap-3 px-5 py-4">
           <p class="text-xs text-muted-foreground">
             {{ t(`connect.clients.notes.${client.note}`) }}
-            <a :href="client.docs" target="_blank" rel="noopener noreferrer" class="ml-1 inline-flex items-center gap-0.5 text-primary hover:underline">
+            <a :href="client.docs" target="_blank" rel="noopener noreferrer" class="ml-1 inline-flex items-center gap-0.5 text-primary underline underline-offset-2">
               {{ t('connect.clients.docs') }}<ExternalLink class="size-3" aria-hidden="true" />
             </a>
           </p>
 
           <CopyBlock v-if="client.usesEnv" :code="exportLine" :label="t('connect.clients.step.env')" />
           <CopyBlock v-if="client.command" :code="client.command" :label="t('connect.clients.step.command')" />
-          <p v-if="client.command" class="text-[11px] text-muted-foreground">{{ t('connect.clients.orEdit') }}</p>
+          <p v-if="client.command" class="text-caption text-muted-foreground">{{ t('connect.clients.orEdit') }}</p>
           <CopyBlock :code="client.config.code" :label="client.config.path" :secret="!client.usesEnv && !!fresh" />
-          <p v-if="needsKey && !client.usesEnv && client.id !== 'vscode' && !fresh" class="text-[11px] text-amber-700 dark:text-amber-400">
+          <p v-if="needsKey && !client.usesEnv && client.id !== 'vscode' && !fresh" class="text-caption text-panel-warning-ink">
             {{ t('connect.clients.placeholder') }}
           </p>
         </div>
@@ -543,7 +543,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
 
       <!-- Step 3 ---------------------------------------------------------- -->
       <section class="min-w-0 rounded-xl border bg-card">
-        <h2 class="flex items-center gap-2.5 border-b px-5 py-3.5 font-display text-[15px] font-semibold tracking-tight">
+        <h2 class="flex items-center gap-2.5 border-b px-5 py-3.5 font-display text-base font-semibold tracking-tight">
           <span class="kn-step">3</span>{{ t('connect.skill.title') }}
         </h2>
         <div class="grid gap-3 px-5 py-4">
@@ -559,8 +559,8 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
           </div>
 
           <CopyBlock v-if="client?.skillDir" :code="skillInstallCommand(skillUrl, client.skillDir, needsKey)" :label="t('connect.skill.installFor', { client: client.name, path: `${client.skillDir}/${SKILL_NAME}/SKILL.md` })" />
-          <p v-else-if="client" class="text-[11px] text-muted-foreground">{{ t('connect.skill.noSkillDir', { client: client.name }) }}</p>
-          <p class="text-[11px] text-muted-foreground">{{ t('connect.skill.alsoServed') }}</p>
+          <p v-else-if="client" class="text-caption text-muted-foreground">{{ t('connect.skill.noSkillDir', { client: client.name }) }}</p>
+          <p class="text-caption text-muted-foreground">{{ t('connect.skill.alsoServed') }}</p>
 
           <CopyBlock v-if="showSkill && skill" :code="skill" label="SKILL.md" />
         </div>
@@ -568,7 +568,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
 
       <!-- Step 4 ---------------------------------------------------------- -->
       <section class="min-w-0 rounded-xl border bg-card">
-        <h2 class="flex items-center gap-2.5 border-b px-5 py-3.5 font-display text-[15px] font-semibold tracking-tight">
+        <h2 class="flex items-center gap-2.5 border-b px-5 py-3.5 font-display text-base font-semibold tracking-tight">
           <span class="kn-step">4</span>{{ t('connect.capture.title') }}
         </h2>
 
@@ -588,7 +588,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
               {{ kitName(id) }}
             </button>
           </div>
-          <p v-if="client && !client.captureKit" class="text-[11px] text-muted-foreground">
+          <p v-if="client && !client.captureKit" class="text-caption text-muted-foreground">
             {{ t('connect.capture.noKit', { client: client.name }) }}
           </p>
         </div>
@@ -623,7 +623,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
                 <li v-for="file in kit.files" :key="file.path" class="min-w-0">
                   <button
                     type="button"
-                    class="flex w-full min-w-0 items-start gap-3 px-3 py-2.5 text-left transition-colors outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+                    class="flex w-full min-w-0 items-start gap-3 px-3 py-2.5 text-left transition-colors outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring"
                     :aria-expanded="openFile === file.path"
                     @click="toggleFile(file)"
                   >
@@ -637,7 +637,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
                         <code class="truncate font-mono text-xs font-medium">{{ file.path }}</code>
                         <Badge v-if="file.mode === 'merge'" variant="outline" class="font-normal">{{ t('connect.capture.merged') }}</Badge>
                       </span>
-                      <span class="mt-0.5 block text-[11px] text-muted-foreground">
+                      <span class="mt-0.5 block text-caption text-muted-foreground">
                         {{ t(`connect.capture.files.${captureKitFileRole(file)}`) }}
                       </span>
                     </span>
@@ -654,9 +654,9 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
               </ul>
             </div>
 
-            <p class="text-[11px] text-muted-foreground">
+            <p class="text-caption text-muted-foreground">
               {{ t('connect.capture.footnote', { version: kit.version }) }}
-              <RouterLink to="/captures" class="ml-1 text-primary hover:underline">{{ t('connect.capture.review') }}</RouterLink>
+              <RouterLink to="/captures" class="ml-1 text-primary underline underline-offset-2">{{ t('connect.capture.review') }}</RouterLink>
             </p>
           </template>
         </div>
@@ -664,7 +664,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
 
       <!-- Plain HTTP for tools that fetch URLs instead of speaking MCP. ------ -->
       <section class="min-w-0 rounded-xl border bg-card px-5 py-4">
-        <h2 class="flex items-center gap-2 font-display text-[15px] font-semibold tracking-tight">
+        <h2 class="flex items-center gap-2 font-display text-base font-semibold tracking-tight">
           <FileText class="size-4 text-muted-foreground" aria-hidden="true" />{{ t('connect.llms.title') }}
         </h2>
         <p class="mt-0.5 max-w-3xl text-xs text-muted-foreground">{{ t('connect.llms.hint') }}</p>
@@ -676,14 +676,14 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
 
       <!-- What the credential gets. ------------------------------------------ -->
       <section class="min-w-0 rounded-xl border bg-card px-5 py-4">
-        <h2 class="font-display text-[15px] font-semibold tracking-tight">{{ t('connect.tools.title') }}</h2>
+        <h2 class="font-display text-base font-semibold tracking-tight">{{ t('connect.tools.title') }}</h2>
         <p class="mt-0.5 text-xs text-muted-foreground">{{ t('connect.tools.hint') }}</p>
         <div class="mt-3 grid gap-4 md:grid-cols-2">
           <div v-for="group in [{ key: 'read', tools: readTools }, { key: 'write', tools: writeTools }]" :key="group.key" class="min-w-0">
             <h3 class="text-xs font-medium text-muted-foreground">{{ t(`connect.tools.${group.key}`, { n: group.tools.length }) }}</h3>
             <ul class="mt-1.5 space-y-1.5">
               <li v-for="tool in group.tools" :key="tool.name" class="min-w-0 text-xs">
-                <code class="font-mono text-[11px] font-medium">{{ tool.name }}</code>
+                <code class="font-mono text-caption font-medium">{{ tool.name }}</code>
                 <p class="line-clamp-2 text-muted-foreground">{{ tool.description }}</p>
               </li>
               <li v-if="!group.tools.length" class="text-xs text-muted-foreground">{{ t('connect.tools.noneForKey') }}</li>
@@ -701,7 +701,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
-          <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="revoke">
+          <AlertDialogAction variant="destructive" @click="revoke">
             {{ t('connect.keys.revoke') }}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -719,7 +719,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
   border-radius: 9999px;
   background: color-mix(in oklab, var(--primary) 12%, transparent);
   color: var(--primary);
-  font-size: 0.75rem;
+  font-size: var(--kn-text-xs);
   font-weight: 600;
 }
 </style>

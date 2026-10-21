@@ -19,7 +19,7 @@ import { labelFor } from '@/lib/labels'
 import { hasWorkingCopy } from '@/lib/working-copy'
 import { readFrontmatter } from '@/lib/page-source'
 import { usePageView } from '@/lib/use-page-view'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import {
@@ -91,12 +91,9 @@ import ExportDialog from '@/components/knowledge/ExportDialog.vue'
 import { PageLayout, PageRail, PageState } from '@/components/layout/page'
 import TocRail from '@/components/knowledge/TocRail.vue'
 import DocumentCanvas from '@/components/knowledge/DocumentCanvas.vue'
-import ApiReferenceView from '@/components/api-reference/ApiReferenceView.vue'
 import ApiOperationIndex from '@/components/api-reference/ApiOperationIndex.vue'
 import { useApiReference } from '@/components/api-reference/use-api-reference'
-import RevisionsView from '@/components/knowledge/RevisionsView.vue'
 import MergeRequestList from '@/components/merge-requests/MergeRequestList.vue'
-import GraphView from '@/components/knowledge/GraphView.vue'
 import GraphLightbox from '@/components/graph/GraphLightbox.vue'
 import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
 import WorkflowRail from '@/components/workflows/WorkflowRail.vue'
@@ -114,6 +111,14 @@ import RequestAccessCard from '@/components/access/RequestAccessCard.vue'
 import { warnMentionedWithoutAccess } from '@/components/access/mention-access'
 import { useMembers } from '@/components/merge-requests/use-members'
 import VerificationBar from '@/components/verification/VerificationBar.vue'
+
+// Behind a widget, a dialog or a spec page only: a reader of an ordinary page
+// never needs the force layout, the revision table or the API reference, so
+// none of them rides in this page's chunk. SSR still renders them (it awaits
+// async components), and hydration waits for the chunk before it adopts the DOM.
+const ApiReferenceView = defineAsyncComponent(() => import('@/components/api-reference/ApiReferenceView.vue'))
+const RevisionsView = defineAsyncComponent(() => import('@/components/knowledge/RevisionsView.vue'))
+const GraphView = defineAsyncComponent(() => import('@/components/knowledge/GraphView.vue'))
 
 const { t } = useI18n()
 

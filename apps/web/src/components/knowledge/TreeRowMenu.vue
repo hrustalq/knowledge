@@ -84,7 +84,7 @@ const documents = useDocumentsStore()
       <button
         v-bind="$attrs"
         type="button"
-        class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid size-5 shrink-0 place-items-center rounded disabled:opacity-40 data-[state=open]:grid data-[state=open]:opacity-100"
+        class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground relative grid size-5 shrink-0 place-items-center rounded after:absolute after:-inset-0.5 disabled:opacity-40 data-[state=open]:grid data-[state=open]:opacity-100"
         :aria-label="t('tree.dnd.rowMenu', { title })"
       >
         <MoreHorizontal class="size-3.5" />

@@ -15,9 +15,9 @@
  * (@PlatformAdmin on UsersController) — hiding the tab just stops offering a
  * door that cannot open, and keeps the nav at one Access row for everybody.
  *
- * Tabs are hand-rolled against `usePageTabs`, the same strip the merge-request
- * and AI pages use: `?tab=` is an opening instruction, replaced rather than
- * pushed, so Back does not walk every tab you tried on the way here.
+ * Tabs are the shared PageTabs strip over `usePageTabs`, as on the
+ * merge-request and AI pages: `?tab=` is an opening instruction, replaced
+ * rather than pushed, so Back does not walk every tab you tried on the way here.
  */
 import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -39,6 +39,7 @@ import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocompl
 import { Badge } from '@/components/ui/badge'
 import UserChip from '@/components/people/UserChip.vue'
 import { Button } from '@/components/ui/button'
+import { confirm } from '@/components/ui/confirm'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
@@ -68,7 +69,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { usePageTabs, type PageTab } from '@/components/layout/page/page-chrome'
+import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/components/layout/page'
 import AccessRoles from '@/components/access/AccessRoles.vue'
 import AccessAccounts from '@/components/access/AccessAccounts.vue'
 import AccessGroups from '@/components/access/AccessGroups.vue'
@@ -296,7 +297,12 @@ async function assignRole(userIds: string[], role: WorkspaceRole) {
 const isManaged = (m: WorkspaceMemberEntry) => m.source !== 'manual'
 
 async function takeOver(member: WorkspaceMemberEntry) {
-  if (!window.confirm(t('access.source.takeOverConfirm', { name: member.displayName }))) return
+  const ok = await confirm({
+    title: t('access.source.takeOverTitle', { name: member.displayName }),
+    description: t('access.source.takeOverBody'),
+    action: t('access.source.takeOver'),
+  })
+  if (!ok) return
   await patchMember(member, { convertToManual: true })
 }
 
@@ -345,136 +351,119 @@ const tab = usePageTabs(tabs, 'members')
       <Badge v-else-if="!canManage" variant="outline">{{ t('access.readOnly') }}</Badge>
     </div>
 
-    <div class="flex gap-0.5 overflow-x-auto border-b" role="tablist">
-      <button
-        v-for="def in tabs"
-        :key="def.key"
-        role="tab"
-        :aria-selected="tab === def.key"
-        class="focus-visible:ring-ring rounded-t-sm border-b-2 px-3 py-2 text-sm whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none"
-        :class="
-          tab === def.key
-            ? 'border-primary text-primary font-medium'
-            : 'text-muted-foreground hover:text-foreground hover:border-border border-transparent'
-        "
-        @click="tab = def.key"
-      >
-        {{ def.label }}
-        <span v-if="def.count != null" class="text-muted-foreground ml-1 text-xs tabular-nums">
-          {{ def.count }}
-        </span>
-      </button>
-    </div>
+    <PageTabs v-model="tab" :tabs="tabs" :label="t('access.title')" />
 
-    <!-- Members ------------------------------------------------------------ -->
-    <template v-if="tab === 'members'">
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
-        <FilterBar v-model="filters" :fields="filterFields" />
-        <p class="text-muted-foreground text-xs tabular-nums">
-          {{ t('documents.ofMembers', { shown: visibleMembers.length, total: t('count.members', { n: members.length }, members.length) }) }}
+    <div :id="panelId(tab)" role="tabpanel" :aria-labelledby="tabId(tab)" class="space-y-4">
+      <!-- Members ------------------------------------------------------------ -->
+      <template v-if="tab === 'members'">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+          <FilterBar v-model="filters" :fields="filterFields" />
+          <p class="text-muted-foreground text-xs tabular-nums">
+            {{ t('documents.ofMembers', { shown: visibleMembers.length, total: t('count.members', { n: members.length }, members.length) }) }}
+          </p>
+        </div>
+
+        <div v-if="loadingMembers" class="space-y-2">
+          <Skeleton v-for="i in 3" :key="i" class="h-10 w-full" />
+        </div>
+        <p v-else-if="members.length === 0" class="text-muted-foreground py-10 text-center text-sm">
+          {{ t('access.noMembersVisible') }}
         </p>
+        <p v-else-if="visibleMembers.length === 0" class="text-muted-foreground py-10 text-center text-sm">
+          {{ t('access.noMembersMatch') }}
+        </p>
+
+        <Table v-else>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{{ t('access.member') }}</TableHead>
+            <TableHead>{{ t('access.role') }}</TableHead>
+            <TableHead>{{ t('access.trustedOperator') }}</TableHead>
+            <TableHead class="text-right">{{ t('access.actions') }}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="member in visibleMembers" :key="member.userId">
+            <TableCell>
+              <div class="flex items-center gap-1.5">
+                <UserChip :user-id="member.userId" :name="member.displayName" class="font-medium" />
+                <Badge v-if="member.disabled" variant="destructive">{{ t('access.disabled') }}</Badge>
+                <TooltipProvider v-if="isManaged(member)" :delay-duration="300">
+                  <Tooltip>
+                    <TooltipTrigger as-child>
+                      <Badge variant="secondary" tabindex="0">{{ t(`access.source.${member.source}`) }}</Badge>
+                    </TooltipTrigger>
+                    <TooltipContent class="max-w-xs">{{ t('access.source.managedHint') }}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div class="text-muted-foreground pl-[1.875rem] text-xs">{{ member.email }}</div>
+            </TableCell>
+            <TableCell>
+              <Select
+                v-if="canManage && !isManaged(member)"
+                :model-value="member.role"
+                @update:model-value="patchMember(member, { role: $event as string })"
+              >
+                <SelectTrigger size="sm" class="text-sm" :aria-label="t('access.roleFor', { name: member.displayName })">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="r in ROLES" :key="r" :value="r">{{ r }}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Badge v-else variant="outline">{{ member.role }}</Badge>
+            </TableCell>
+            <TableCell>
+              <Checkbox
+                v-if="canManage && !isManaged(member)"
+                :model-value="member.trustedOperator"
+                :aria-label="t('access.trustedOperatorFor', { name: member.displayName })"
+                @update:model-value="patchMember(member, { trustedOperator: $event === true })"
+              />
+              <span v-else class="text-muted-foreground text-sm">{{ member.trustedOperator ? t('common.yes') : t('common.no') }}</span>
+            </TableCell>
+            <TableCell class="text-right">
+              <div v-if="canManage" class="flex justify-end gap-1.5">
+                <Button v-if="isManaged(member)" size="sm" variant="outline" @click="takeOver(member)">
+                  {{ t('access.source.takeOver') }}
+                </Button>
+                <Button size="sm" variant="destructive" @click="removeMember(member)">{{ t('access.remove') }}</Button>
+              </div>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+        </Table>
+      </template>
+
+      <!-- Roles: the same roster, read as a ladder of what each rung grants. -->
+      <div v-else-if="tab === 'roles'">
+        <div v-if="loadingMembers" class="space-y-2">
+          <Skeleton v-for="i in 3" :key="i" class="h-24 w-full" />
+        </div>
+        <AccessRoles
+          v-else
+          :members="members"
+          :roles="ROLES"
+          :can-manage="canManage"
+          @assign="assignRole"
+        />
       </div>
 
-      <div v-if="loadingMembers" class="space-y-2">
-        <Skeleton v-for="i in 3" :key="i" class="h-10 w-full" />
-      </div>
-      <p v-else-if="members.length === 0" class="text-muted-foreground py-10 text-center text-sm">
-        {{ t('access.noMembersVisible') }}
-      </p>
-      <p v-else-if="visibleMembers.length === 0" class="text-muted-foreground py-10 text-center text-sm">
-        {{ t('access.noMembersMatch') }}
-      </p>
-
-      <Table v-else>
-      <TableHeader>
-        <TableRow>
-          <TableHead>{{ t('access.member') }}</TableHead>
-          <TableHead>{{ t('access.role') }}</TableHead>
-          <TableHead>{{ t('access.trustedOperator') }}</TableHead>
-          <TableHead class="text-right">{{ t('access.actions') }}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        <TableRow v-for="member in visibleMembers" :key="member.userId">
-          <TableCell>
-            <div class="flex items-center gap-1.5">
-              <UserChip :user-id="member.userId" :name="member.displayName" class="font-medium" />
-              <Badge v-if="member.disabled" variant="destructive">{{ t('access.disabled') }}</Badge>
-              <TooltipProvider v-if="isManaged(member)" :delay-duration="300">
-                <Tooltip>
-                  <TooltipTrigger as-child>
-                    <Badge variant="secondary" tabindex="0">{{ t(`access.source.${member.source}`) }}</Badge>
-                  </TooltipTrigger>
-                  <TooltipContent class="max-w-xs">{{ t('access.source.managedHint') }}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div class="text-muted-foreground pl-[1.875rem] text-xs">{{ member.email }}</div>
-          </TableCell>
-          <TableCell>
-            <Select
-              v-if="canManage && !isManaged(member)"
-              :model-value="member.role"
-              @update:model-value="patchMember(member, { role: $event as string })"
-            >
-              <SelectTrigger size="sm" class="text-sm" :aria-label="t('access.roleFor', { name: member.displayName })">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="r in ROLES" :key="r" :value="r">{{ r }}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Badge v-else variant="outline">{{ member.role }}</Badge>
-          </TableCell>
-          <TableCell>
-            <Checkbox
-              v-if="canManage && !isManaged(member)"
-              :model-value="member.trustedOperator"
-              :aria-label="t('access.trustedOperatorFor', { name: member.displayName })"
-              @update:model-value="patchMember(member, { trustedOperator: $event === true })"
-            />
-            <span v-else class="text-muted-foreground text-sm">{{ member.trustedOperator ? t('common.yes') : t('common.no') }}</span>
-          </TableCell>
-          <TableCell class="text-right">
-            <div v-if="canManage" class="flex justify-end gap-1.5">
-              <Button v-if="isManaged(member)" size="sm" variant="outline" @click="takeOver(member)">
-                {{ t('access.source.takeOver') }}
-              </Button>
-              <Button size="sm" variant="destructive" @click="removeMember(member)">{{ t('access.remove') }}</Button>
-            </div>
-          </TableCell>
-        </TableRow>
-      </TableBody>
-      </Table>
-    </template>
-
-    <!-- Roles: the same roster, read as a ladder of what each rung grants. -->
-    <div v-else-if="tab === 'roles'">
-      <div v-if="loadingMembers" class="space-y-2">
-        <Skeleton v-for="i in 3" :key="i" class="h-24 w-full" />
-      </div>
-      <AccessRoles
-        v-else
+      <!-- Groups: what page and project restrictions grant to. -->
+      <AccessGroups
+        v-else-if="tab === 'groups'"
+        :workspace-id="selected"
         :members="members"
-        :roles="ROLES"
         :can-manage="canManage"
-        @assign="assignRole"
       />
+
+      <!-- Requests: access asked for, decided by whoever manages the page. -->
+      <AccessRequests v-else-if="tab === 'requests'" :workspace-id="selected" />
+
+      <!-- Accounts: the platform layer. Only rendered where it can be used. -->
+      <AccessAccounts v-else-if="tab === 'accounts' && canSeeAccounts" />
     </div>
-
-    <!-- Groups: what page and project restrictions grant to. -->
-    <AccessGroups
-      v-else-if="tab === 'groups'"
-      :workspace-id="selected"
-      :members="members"
-      :can-manage="canManage"
-    />
-
-    <!-- Requests: access asked for, decided by whoever manages the page. -->
-    <AccessRequests v-else-if="tab === 'requests'" :workspace-id="selected" />
-
-    <!-- Accounts: the platform layer. Only rendered where it can be used. -->
-    <AccessAccounts v-else-if="tab === 'accounts' && canSeeAccounts" />
 
     <Dialog v-model:open="addOpen">
       <DialogContent class="sm:max-w-md">
@@ -495,7 +484,7 @@ const tab = usePageTabs(tabs, 'members')
           <div class="space-y-1.5">
             <Label
               for="add-role"
-              class="text-muted-foreground block text-[11px] font-semibold tracking-wider uppercase"
+              class="text-muted-foreground block text-caption font-semibold tracking-wider uppercase"
             >
               {{ t('access.role') }}
             </Label>

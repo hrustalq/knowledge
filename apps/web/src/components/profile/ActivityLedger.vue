@@ -206,7 +206,12 @@ const lastActive = computed(() => {
 function isTabStop(cell: Cell): boolean {
   if (cell.filler) return false
   if (focused.value) return cell.date === focused.value
-  if (props.selected) return cell.date === props.selected
+  // A selection outside the window (a stale `?day=`) names no cell, and a grid
+  // with no tab stop is a grid the keyboard cannot enter.
+  const cal = props.calendar
+  if (props.selected && cal && props.selected >= cal.from && props.selected <= cal.to) {
+    return cell.date === props.selected
+  }
   return cell.date === lastActive.value
 }
 
@@ -285,7 +290,7 @@ const cellLabel = (cell: Cell) =>
         <span
           v-for="(label, i) in weekdayLabels"
           :key="i"
-          class="flex items-center text-[10px] leading-none text-muted-foreground"
+          class="flex items-center text-micro leading-none text-muted-foreground"
           :style="{ height: `${CELL}px` }"
         >{{ label }}</span>
       </div>
@@ -296,7 +301,7 @@ const cellLabel = (cell: Cell) =>
             <span
               v-for="m in monthLabels"
               :key="m.week"
-              class="absolute top-0 text-[10px] leading-none text-muted-foreground"
+              class="absolute top-0 text-micro leading-none text-muted-foreground"
               :style="{ left: `${m.week * PITCH}px` }"
             >{{ m.label }}</span>
           </div>
@@ -347,7 +352,7 @@ const cellLabel = (cell: Cell) =>
 
     <!-- Legend. The ramp is the only place the steps are named, so it carries
          the same five swatches the grid draws, in order. -->
-    <div class="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] text-muted-foreground">
+    <div class="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 text-caption text-muted-foreground">
       <span v-if="calendar">{{
         t('profile.ledger.busiest', { n: calendar.busiestDay })
       }}</span>
@@ -377,11 +382,11 @@ const cellLabel = (cell: Cell) =>
           <p class="text-xs font-medium">
             {{ t('profile.ledger.cellCount', { n: active.total }) }}
           </p>
-          <p class="mt-0.5 text-[11px] text-muted-foreground">
+          <p class="mt-0.5 text-caption text-muted-foreground">
             {{ (locale, formatDate(`${active.date}T00:00:00.000Z`)) }}
           </p>
           <ul v-if="readoutKinds.length" class="mt-2 space-y-1">
-            <li v-for="k in readoutKinds" :key="k.kind" class="flex items-center gap-1.5 text-[11px]">
+            <li v-for="k in readoutKinds" :key="k.kind" class="flex items-center gap-1.5 text-caption">
               <span class="size-1.5 shrink-0 rounded-full" :style="{ backgroundColor: k.color }" />
               <span class="text-muted-foreground">{{ t(k.labelKey) }}</span>
               <span class="ml-auto font-medium tabular-nums">{{ k.n }}</span>

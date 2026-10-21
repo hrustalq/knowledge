@@ -53,7 +53,7 @@ const url = computed(() =>
        centred, which left the letter riding high in the circle. -->
   <span
     class="grid shrink-0 select-none place-items-center overflow-hidden rounded-full leading-none font-medium text-white"
-    :class="size === 'sm' ? 'size-5 text-[9px]' : 'size-7 text-[11px]'"
+    :class="size === 'sm' ? 'size-5 text-micro' : 'size-7 text-caption'"
     :style="{
       backgroundColor: ai ? 'var(--kn-panel-important)' : url ? 'transparent' : avatarColor(userId),
     }"

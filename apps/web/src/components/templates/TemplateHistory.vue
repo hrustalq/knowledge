@@ -149,7 +149,10 @@ function versionLine(v: TemplateVersionInfo): string {
         <div class="flex flex-wrap items-center gap-2 text-sm">
           <span class="text-muted-foreground">{{ t('templates.history.compare', { version: selected }) }}</span>
           <Select :model-value="against === null ? '' : String(against)" @update:model-value="against = Number($event)">
-            <SelectTrigger class="h-8 w-28 text-xs"><SelectValue :placeholder="t('templates.history.pick')" /></SelectTrigger>
+            <SelectTrigger
+              class="h-8 w-28 text-xs"
+              :aria-label="t('templates.history.compare', { version: selected })"
+            ><SelectValue :placeholder="t('templates.history.pick')" /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="v in others" :key="v.version" :value="String(v.version)">
                 {{ t('templates.version', { version: v.version }) }}
@@ -180,7 +183,7 @@ function versionLine(v: TemplateVersionInfo): string {
   border-radius: calc(var(--radius) - 2px);
   padding: 0.375rem 0.625rem;
   text-align: left;
-  font-size: 0.875rem;
+  font-size: var(--kn-text-sm);
   transition: background-color 120ms;
 }
 .kn-tpl-version:hover {

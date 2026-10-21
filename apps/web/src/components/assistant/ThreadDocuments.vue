@@ -35,7 +35,7 @@ const chat = computed(() => assistant.documentsTouched.filter(isChatSource))
     <!-- h-14 to land on the same divider line as the rail and the chat header. -->
     <header class="flex h-14 shrink-0 flex-col justify-center border-b px-4">
       <h2 class="text-sm font-semibold">{{ t('chat.sourcesTitle') }}</h2>
-      <p class="truncate text-[11px] text-muted-foreground">
+      <p class="truncate text-caption text-muted-foreground">
         {{ t('chat.sourcesHint') }}
       </p>
     </header>
@@ -79,7 +79,7 @@ const chat = computed(() => assistant.documentsTouched.filter(isChatSource))
           <!-- Said once, at the foot of the group it applies to. The single
                most likely wrong assumption about this pane is that reading a
                page here added it to the workspace. -->
-          <p class="mt-2 px-2 text-[11px] leading-relaxed text-muted-foreground/80">
+          <p class="mt-2 px-2 text-caption leading-relaxed text-muted-foreground">
             {{ t('chat.webNotSaved') }}
           </p>
         </section>
@@ -92,7 +92,7 @@ const chat = computed(() => assistant.documentsTouched.filter(isChatSource))
 .kn-src-heading {
   padding: 0.375rem 0.5rem 0.25rem;
   color: var(--muted-foreground);
-  font-size: 0.6875rem;
+  font-size: var(--kn-text-caption);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;

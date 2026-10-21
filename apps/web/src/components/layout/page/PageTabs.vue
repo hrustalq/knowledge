@@ -2,13 +2,13 @@
 /**
  * The one tab strip.
  *
- * Four pages hand-rolled this — `/settings/ai`, `/settings/connectors`,
- * `/notifications` and the merge-request detail — and two of them are close
- * enough to byte-identical that one carries the comment "Same shell as
- * AiSettingsPage" above its copy. None of the four was operable from a
+ * The underline strips that used to be hand-rolled — `/settings/connectors`,
+ * `/settings/security`, `/settings/access`, `/notifications`, the
+ * merge-request detail, a project's site settings and the bot card — all draw
+ * it here now. None of the copies was operable from a
  * keyboard: `role="tablist"` was present, but `aria-controls`, the matching
  * `role="tabpanel"` and arrow-key movement were not, so the same accessibility
- * defect shipped five times over.
+ * defect shipped once per copy.
  *
  * What this adds on top of the incumbent look, which is otherwise unchanged:
  *
@@ -35,6 +35,8 @@ const props = defineProps<{
   tabs: readonly PageTab<K>[]
   /** Names the tablist for a screen reader — required, it is a landmark-ish role. */
   label: string
+  /** Only for a strip that repeats on one page; see `tabId` in page-chrome.ts. */
+  scope?: string
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [K] }>()
@@ -68,7 +70,7 @@ function onKeydown(event: KeyboardEvent) {
   event.preventDefault()
   const key = props.tabs[to].key
   emit('update:modelValue', key)
-  void nextTick(() => document.getElementById(tabId(key))?.focus())
+  void nextTick(() => document.getElementById(tabId(key, props.scope))?.focus())
 }
 </script>
 
@@ -76,19 +78,19 @@ function onKeydown(event: KeyboardEvent) {
   <div
     role="tablist"
     :aria-label="label"
-    class="flex gap-0.5 overflow-x-auto border-b"
+    class="kn-scroll-strip flex gap-0.5 overflow-x-auto border-b"
     @keydown="onKeydown"
   >
     <button
       v-for="tab in tabs"
-      :id="tabId(tab.key)"
+      :id="tabId(tab.key, scope)"
       :key="tab.key"
       type="button"
       role="tab"
       :aria-selected="modelValue === tab.key"
-      :aria-controls="panelId(tab.key)"
+      :aria-controls="panelId(tab.key, scope)"
       :tabindex="modelValue === tab.key ? 0 : -1"
-      class="flex shrink-0 items-center gap-1.5 rounded-t-sm border-b-2 px-3 py-2 text-sm whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      class="flex shrink-0 items-center gap-1.5 rounded-t-sm border-b-2 px-3 py-2 text-sm whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring"
       :class="
         modelValue === tab.key
           ? 'border-primary font-medium text-primary'
@@ -99,10 +101,13 @@ function onKeydown(event: KeyboardEvent) {
       <component :is="tab.icon" v-if="tab.icon" class="size-3.5 shrink-0" aria-hidden="true" />
       {{ tab.label }}
       <!-- `null` is "not loaded yet" and draws nothing; 0 is a fact worth
-           showing, so it is not folded into falsiness. -->
+           showing, so it is not folded into falsiness. The count belongs to
+           the tab, so it takes the tab's state rather than staying grey next
+           to an active label. -->
       <span
         v-if="tab.count !== null && tab.count !== undefined"
-        class="rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground"
+        class="rounded-full px-1.5 text-xs tabular-nums"
+        :class="modelValue === tab.key ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'"
       >
         {{ tab.count }}
       </span>

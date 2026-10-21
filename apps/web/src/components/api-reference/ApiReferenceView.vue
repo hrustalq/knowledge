@@ -83,7 +83,7 @@ onBeforeUnmount(() => spy?.disconnect())
   <PageState v-else-if="!spec" state="loading" :rows="1" row-class="h-96" />
   <div v-else ref="root" class="space-y-8">
     <header class="max-w-[46rem] space-y-3">
-      <dl class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8rem] text-muted-foreground">
+      <dl class="flex flex-wrap items-center gap-x-4 gap-y-1 text-ui text-muted-foreground">
         <div class="flex gap-1.5">
           <dt class="sr-only">{{ t('apiRef.format') }}</dt>
           <dd class="font-medium text-foreground">{{ t(`apiRef.kind.${spec.kind}`) }} {{ spec.specVersion }}</dd>
@@ -95,25 +95,23 @@ onBeforeUnmount(() => spy?.disconnect())
         <div class="tabular-nums">{{ t('apiRef.operationCount', { n: count }, count) }}</div>
       </dl>
       <MarkdownView v-if="description" :markdown="description" />
-      <dl v-if="servers.length" class="flex flex-wrap items-baseline gap-x-2 gap-y-1.5 text-[0.85rem]">
+      <dl v-if="servers.length" class="flex flex-wrap items-baseline gap-x-2 gap-y-1.5 text-sm">
         <dt class="text-muted-foreground">{{ t('apiRef.servers') }}</dt>
-        <dd v-for="s in servers" :key="s"><code class="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[0.8rem]">{{ s }}</code></dd>
+        <dd v-for="s in servers" :key="s"><code class="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-ui">{{ s }}</code></dd>
       </dl>
     </header>
 
-    <div v-if="count === 0" class="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
-      {{ indexing ? t('apiRef.indexing') : t('apiRef.empty') }}
-    </div>
+    <PageState v-if="count === 0" state="empty" :title="indexing ? t('apiRef.indexing') : t('apiRef.empty')" />
     <template v-else>
       <ApiOperationIndex :state="state" inline class="lg:hidden" />
       <section v-for="(g, gi) in state.groups.value" :key="g.tag ?? ''" class="space-y-3">
         <div class="flex items-end gap-3 border-b pb-2">
           <h2 class="min-w-0 flex-1 font-display text-[1.35rem] font-semibold tracking-[-0.015em]">
             {{ tagLabel(g.tag) }}
-            <span class="ml-1 font-sans text-[0.85rem] font-normal text-muted-foreground tabular-nums">{{ g.operations.length }}</span>
+            <span class="ml-1 font-sans text-sm font-normal text-muted-foreground tabular-nums">{{ g.operations.length }}</span>
           </h2>
           <!-- Once, on the first group: it opens or closes every card on the page. -->
-          <Button v-if="gi === 0 && count > 1" variant="ghost" size="sm" class="h-7 shrink-0 text-[0.8rem] text-muted-foreground" @click="state.setAll(!state.allOpen.value)">
+          <Button v-if="gi === 0 && count > 1" variant="ghost" size="sm" class="h-7 shrink-0 text-ui text-muted-foreground" @click="state.setAll(!state.allOpen.value)">
             <component :is="state.allOpen.value ? ChevronsDownUp : ChevronsUpDown" />
             {{ state.allOpen.value ? t('apiRef.collapseAll') : t('apiRef.expandAll') }}
           </Button>

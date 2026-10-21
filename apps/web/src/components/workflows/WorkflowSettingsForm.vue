@@ -66,7 +66,7 @@ function toggleCategory(category: string, on: boolean) {
   <div class="flex min-h-0 flex-col">
     <header v-if="!bare" class="shrink-0 border-b px-4 py-3">
       <p class="text-sm font-medium">{{ t('workflow.thisWorkflow') }}</p>
-      <p class="text-muted-foreground text-[11px]">{{ t('workflow.selectStep') }}</p>
+      <p class="text-muted-foreground text-caption">{{ t('workflow.selectStep') }}</p>
     </header>
 
     <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
@@ -91,7 +91,7 @@ function toggleCategory(category: string, on: boolean) {
           />
           <span class="min-w-0">
             <span class="block text-xs font-medium">{{ t('workflow.whenSomeoneAsks') }}</span>
-            <span class="text-muted-foreground block text-[11px] leading-snug">
+            <span class="text-muted-foreground block text-caption leading-snug">
               {{ t('workflow.settings.manualHint') }}
             </span>
           </span>
@@ -104,7 +104,7 @@ function toggleCategory(category: string, on: boolean) {
           />
           <span class="min-w-0">
             <span class="block text-xs font-medium">{{ t('workflow.onItsOwn') }}</span>
-            <span class="text-muted-foreground block text-[11px] leading-snug">
+            <span class="text-muted-foreground block text-caption leading-snug">
               {{ t('workflow.settings.autoHint') }}
             </span>
           </span>
@@ -120,7 +120,7 @@ function toggleCategory(category: string, on: boolean) {
               :disabled="!canManage"
               @update:model-value="(v) => toggleEvent(event, Boolean(v))"
             />
-            <span class="font-mono text-[11px]">{{ event }}</span>
+            <span class="font-mono text-caption">{{ event }}</span>
           </label>
         </div>
 
@@ -132,9 +132,9 @@ function toggleCategory(category: string, on: boolean) {
               :disabled="!canManage"
               @update:model-value="(v) => toggleEvent(event, Boolean(v))"
             />
-            <span class="font-mono text-[11px]">{{ event }}</span>
+            <span class="font-mono text-caption">{{ event }}</span>
           </label>
-          <p class="text-muted-foreground text-[11px]">{{ t('workflow.settings.repoHint') }}</p>
+          <p class="text-muted-foreground text-caption">{{ t('workflow.settings.repoHint') }}</p>
         </div>
         <div class="space-y-1.5">
           <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.settings.onlyFor') }}</span>
@@ -145,10 +145,10 @@ function toggleCategory(category: string, on: boolean) {
                 :disabled="!canManage"
                 @update:model-value="(v) => toggleCategory(c, Boolean(v))"
               />
-              <span class="text-[11px]">{{ t(`category.${c}`) }}</span>
+              <span class="text-caption">{{ t(`category.${c}`) }}</span>
             </label>
           </div>
-          <p class="text-muted-foreground text-[11px]">{{ t('workflow.settings.everyCategory') }}</p>
+          <p class="text-muted-foreground text-caption">{{ t('workflow.settings.everyCategory') }}</p>
         </div>
       </div>
 

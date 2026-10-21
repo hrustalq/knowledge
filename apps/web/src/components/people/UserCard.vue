@@ -93,11 +93,11 @@ const stats = computed(() => {
     </div>
 
     <div v-if="role || disabled" class="flex flex-wrap items-center gap-1.5">
-      <Badge v-if="role" variant="secondary" class="text-[10px]">{{ t(`role.${role}`) }}</Badge>
-      <Badge v-if="profile?.isAdmin" variant="secondary" class="text-[10px]">
+      <Badge v-if="role" variant="secondary" class="text-caption">{{ t(`role.${role}`) }}</Badge>
+      <Badge v-if="profile?.isAdmin" variant="secondary" class="text-caption">
         {{ t('people.platformAdmin') }}
       </Badge>
-      <Badge v-if="disabled" variant="outline" class="text-[10px] text-destructive">
+      <Badge v-if="disabled" variant="outline" class="text-caption text-destructive">
         {{ t('people.disabled') }}
       </Badge>
     </div>

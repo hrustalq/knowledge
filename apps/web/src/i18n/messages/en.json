@@ -60,6 +60,7 @@
     "required": "required",
     "removeNamed": "Remove {name}",
     "deleteNamed": "Delete {name}",
+    "enableNamed": "Enable {name}",
     "noMatches": "No matches",
     "filterPlaceholder": "Filter…",
     "searchPlaceholder": "Search…",
@@ -71,6 +72,13 @@
     "errorTitle": "This did not load",
     "forbiddenTitle": "You do not have access to this",
     "forbiddenHint": "Ask a workspace admin for a role that can see it."
+  },
+  "revisionStatus": {
+    "draft": "Draft",
+    "finalized": "Finalized",
+    "indexing": "Indexing",
+    "indexed": "Indexed",
+    "failed": "Indexing failed"
   },
   "nav": {
     "toggleSidebar": "Toggle navigation",
@@ -164,7 +172,9 @@
     "apiReference": "API reference",
     "security": "Security",
     "releases": "Releases",
-    "conflicts": "Contradictions"
+    "conflicts": "Contradictions",
+    "skipToContent": "Skip to content",
+    "navigation": "Navigation"
   },
   "role": {
     "guest": "Guest",
@@ -661,6 +671,8 @@
     "workItemLinkedPage": "Linked page",
     "workItemTitlePlaceholder": "What needs doing",
     "workItemBodyPlaceholder": "Context for whoever picks this up",
+    "workItemTitleLabel": "Title",
+    "workItemBodyLabel": "Description",
     "workItemState": {
       "open": "Open",
       "closed": "Closed",
@@ -995,12 +1007,14 @@
     },
     "builder": {
       "serverAccepts": "The server accepts this graph.",
-      "leaveUnsaved": "Leave without saving? The canvas has changes that have not been sent anywhere.",
+      "leaveUnsavedTitle": "Leave without saving?",
+      "leaveUnsavedBody": "The canvas has changes that have not been sent anywhere.",
       "openInspector": "Step settings",
       "seeRuns": "See runs",
       "deleteTitle": "Delete “{name}”?",
       "deleteBody": "Pages this workflow already published stay where they are. Runs still in flight will stop it being deleted.",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "leave": "Leave"
     },
     "wizard": {
       "title": "New workflow",
@@ -1092,7 +1106,10 @@
     "failedN": "{n} failed",
     "publishedOf": "{done}/{total} published",
     "waitingForYou": "waiting for you",
-    "cancelRunConfirm": "Cancel this run? Steps still queued will be skipped.",
+    "cancelRunTitle": "Cancel this run?",
+    "cancelRunBody": "Steps still queued will be skipped.",
+    "cancelRunAction": "Cancel run",
+    "keepRunning": "Keep running",
     "promptPlaceholderGenerate": "List the use cases this entity takes part in.",
     "promptPlaceholderDraft": "Write the API endpoint specification for this use case."
   },
@@ -1107,7 +1124,14 @@
           "deleted": "deleted a comment on"
         },
         "verified": "verified",
-        "unverified": "removed the verification of"
+        "unverified": "removed the verification of",
+        "archived": "archived",
+        "unarchived": "restored from the archive",
+        "owner-changed": "changed the owner of",
+        "outdated": "marked outdated",
+        "verification-requested": "asked to verify",
+        "verification-cleared": "cleared the verification flag on",
+        "verification-expired": "verification lapsed on"
       },
       "revision": {
         "finalized": "published a revision of"
@@ -1136,14 +1160,27 @@
           "created": "commented on a merge request on",
           "resolved": "resolved a review thread on",
           "deleted": "deleted a review comment on"
-        }
+        },
+        "lint-override": "overrode the lint gate on a merge request on"
       },
       "ai": {
         "agent": {
           "created": "created an agent",
           "updated": "updated an agent",
           "deleted": "deleted an agent",
-          "reset": "reset an agent"
+          "reset": "reset an agent",
+          "learning": {
+            "created": "added an agent learning",
+            "updated": "updated an agent learning"
+          },
+          "recipe": {
+            "applied": "applied an agent recipe"
+          },
+          "trigger": {
+            "created": "added an agent trigger",
+            "updated": "updated an agent trigger",
+            "deleted": "removed an agent trigger"
+          }
         },
         "plugin": {
           "created": "connected a plugin",
@@ -1158,10 +1195,23 @@
         "skill": {
           "created": "created a skill",
           "updated": "updated a skill",
-          "deleted": "deleted a skill"
+          "deleted": "deleted a skill",
+          "imported": "imported a skill"
         },
         "settings": {
           "updated": "updated AI settings"
+        },
+        "lint-policy": {
+          "updated": "changed the lint policy"
+        },
+        "sourcePolicy": {
+          "created": "added a web source policy",
+          "updated": "updated a web source policy",
+          "deleted": "removed a web source policy"
+        },
+        "styleguide": {
+          "updated": "updated a styleguide",
+          "deleted": "removed a styleguide"
         }
       },
       "attachment": {
@@ -1174,6 +1224,9 @@
         "deleted": "removed a connector",
         "link": {
           "removed": "unlinked a page from a connector"
+        },
+        "work-item": {
+          "created": "filed a work item from"
         }
       },
       "glossary": {
@@ -1200,13 +1253,16 @@
         "deleted": "deleted a workflow"
       },
       "workflow-node": {
-        "materialized": "published a workflow step as"
+        "materialized": "published a workflow step as",
+        "awaiting-review": "sent a workflow step for review on"
       },
       "workflow-run": {
         "started": "started a workflow run",
         "paused": "paused a workflow run",
         "resumed": "resumed a workflow run",
-        "cancelled": "cancelled a workflow run"
+        "cancelled": "cancelled a workflow run",
+        "completed": "finished a workflow run on",
+        "failed": "had a workflow run fail on"
       },
       "knowledge-issue": {
         "reported": "reported a problem with",
@@ -1218,6 +1274,44 @@
         "created": "shared a public link to",
         "updated": "changed a public link to",
         "revoked": "revoked a public link to"
+      },
+      "agent": {
+        "trigger": {
+          "fired": "started an agent run on"
+        }
+      },
+      "site": {
+        "created": "created a published site",
+        "updated": "updated a published site",
+        "deleted": "deleted a published site",
+        "published": "published a site",
+        "unpublished": "unpublished a site",
+        "audience": {
+          "updated": "changed who can read a site",
+          "removed": "removed a site audience"
+        },
+        "domain": {
+          "added": "added a custom domain",
+          "verified": "verified a custom domain",
+          "removed": "removed a custom domain"
+        },
+        "version": {
+          "created": "created a site version",
+          "updated": "updated a site version",
+          "rebuilt": "rebuilt a site version",
+          "deleted": "deleted a site version"
+        },
+        "visitorSecret": {
+          "rotated": "replaced a site visitor password",
+          "cleared": "removed a site visitor password"
+        }
+      },
+      "template": {
+        "created": "created a template",
+        "updated": "updated a template",
+        "archived": "archived a template",
+        "unarchived": "restored a template",
+        "reset": "reset a template to its default"
       }
     },
     "loading": "Loading activity…",
@@ -1268,6 +1362,7 @@
     "plainRemark": "A remark. Nothing to resolve.",
     "startThread": "Start thread",
     "reply": "Reply",
+    "tabsLabel": "Merge request sections",
     "tabOverview": "Overview",
     "tabReview": "Review",
     "tabChanges": "Changes",
@@ -2375,6 +2470,7 @@
       "exported": "Dataset downloaded",
       "datasetVotes": "{count} vote usable as a test case | {count} votes usable as test cases",
       "anyReason": "Any reason",
+      "reasonFilter": "Reason",
       "anySurface": "Any surface",
       "emptyTitle": "No feedback yet",
       "emptyBody": "Votes under assistant replies, answers the harness scored weak and reports on pages land here. Nothing matches the current filters.",
@@ -3042,7 +3138,8 @@
       "scim": "SCIM",
       "managedHint": "Managed by single sign-on: sign-ins set this role from the identity provider. Take it over to edit it by hand.",
       "takeOver": "Manage manually",
-      "takeOverConfirm": "Manage {name} by hand? Sign-ins will stop changing their role here."
+      "takeOverTitle": "Manage {name} by hand?",
+      "takeOverBody": "Sign-ins will stop changing their role here."
     }
   },
   "users": {
@@ -5750,7 +5847,8 @@
       "edit": "Edit",
       "remove": "Remove",
       "removed": "Provider removed",
-      "removeConfirm": "Remove {name}? People who signed in with it are signed out, and their link to it is forgotten.",
+      "removeTitle": "Remove {name}?",
+      "removeBody": "People who signed in with it are signed out, and their link to it is forgotten.",
       "enabled": "Enabled",
       "disabledBadge": "Disabled",
       "platformWide": "Platform-wide",
@@ -5827,7 +5925,8 @@
       "added": "Mapped “{group}”",
       "replaced": "Changed the role for “{group}”",
       "removed": "Mapping removed",
-      "removeConfirm": "Remove the mapping for “{group}”? Roles it granted stay until people sign in again.",
+      "removeTitle": "Remove the mapping for “{group}”?",
+      "removeBody": "Roles it granted stay until people sign in again.",
       "remove": "Remove",
       "empty": "No groups mapped yet. Without a mapping, sign-ins get the provider’s role for new members, if it has one.",
       "providerGone": "removed provider",
@@ -5848,7 +5947,7 @@
       "scimHint": "A SCIM group's mapping applies at once to everyone in it. Provisioned people in no mapped group get the default role from the Provisioning tab.",
       "scimBadge": "SCIM",
       "scimGroupGone": "deleted group",
-      "removeConfirmScim": "Remove the mapping for “{group}”? Its members drop to the provisioning default role now."
+      "removeBodyScim": "Its members drop to the provisioning default role now."
     },
     "domains": {
       "title": "Domains",
@@ -5880,14 +5979,16 @@
         "lookup-failed": "DNS could not be reached just now. Try again in a minute."
       },
       "enforce": "Require single sign-on",
-      "enforceConfirm": "Require single sign-on for every address on {domain}? Password sign-in stops working for them at once, except for break-glass addresses.",
+      "enforceTitle": "Require single sign-on for every address on {domain}?",
+      "enforceBody": "Password sign-in stops working for them at once, except for break-glass addresses.",
       "enforcedOn": "Single sign-on is now required on {domain}",
       "enforcedOff": "Passwords work again on {domain}",
       "enforcedHint": "People on this domain sign in only through single sign-on. Break-glass addresses set by the operator still work.",
       "notEnforcedHint": "Verified, but passwords still work. Turn this on once people have signed in with SSO at least once.",
       "remove": "Remove",
       "removed": "Domain removed",
-      "removeConfirm": "Remove {domain}? Passwords work again for its addresses at once.",
+      "removeTitle": "Remove {domain}?",
+      "removeBody": "Passwords work again for its addresses at once.",
       "domainPlaceholder": "corp.example"
     },
     "policy": {
@@ -5907,7 +6008,8 @@
       "sessionMaxAgeHint": "Sessions older than this must sign in again to reach this workspace. Sessions on this instance last {ttl} hours at most.",
       "sessionMaxAgeClamped": "This is no shorter than the instance’s {ttl}-hour session lifetime, so it has no effect.",
       "breakGlass": "Platform admins pass these rules, and every time they do it is recorded in the audit log. Addresses in AUTH_BREAK_GLASS_EMAILS can always use a password.",
-      "enforceConfirm": "Require single sign-on? Everyone signed in with a password is asked to sign in again through SSO.",
+      "enforceTitle": "Require single sign-on?",
+      "enforceBody": "Everyone signed in with a password is asked to sign in again through SSO.",
       "save": "Save policy",
       "saved": "Sign-in policy saved",
       "lockout": {
@@ -5939,7 +6041,8 @@
       "lastUsed": "used {when}",
       "neverUsed": "never used",
       "revoke": "Revoke",
-      "revokeConfirm": "Revoke “{name}”? The identity provider gets 401 from its next request.",
+      "revokeTitle": "Revoke “{name}”?",
+      "revokeBody": "The identity provider gets 401 from its next request.",
       "revoked": "Token revoked"
     }
   },
@@ -5998,8 +6101,8 @@
       "resolved": "Nothing resolved yet",
       "dismissed": "Nothing dismissed",
       "superseded": "Nothing superseded",
-      "hint": "The arbiter agent compares passages across pages and lists the ones that disagree here. Run it, schedule it, or trigger it on every indexed page in",
-      "hintLink": "Settings → AI → Agents"
+      "hint": "The arbiter agent compares passages across pages and lists the ones that disagree here. Run it, schedule it, or trigger it on every indexed page from its settings.",
+      "hintLink": "Open agent settings"
     },
     "changes": "changes",
     "morePaths": "+{n} more"

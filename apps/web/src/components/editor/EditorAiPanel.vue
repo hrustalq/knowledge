@@ -101,7 +101,7 @@ defineExpose({ focus: () => pane.value?.focus(), fill })
         <span class="kn-ai-glyph" aria-hidden="true"><Sparkles class="size-3.5" /></span>
         <div class="min-w-0 flex-1">
           <h2 class="text-sm leading-tight font-semibold">{{ t('editorAi.title') }}</h2>
-          <p class="truncate text-[11px] leading-tight text-muted-foreground">
+          <p class="truncate text-caption leading-tight text-muted-foreground">
             {{ view === 'threads' ? t('editorAi.allChats') : subtitle }}
           </p>
         </div>
@@ -163,7 +163,7 @@ defineExpose({ focus: () => pane.value?.focus(), fill })
           <h3 class="font-display text-base font-semibold tracking-tight">
             {{ blank ? t('editorAi.emptyTitleBlank') : t('editorAi.emptyTitle') }}
           </h3>
-          <p class="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">{{ t('editorAi.emptyBody') }}</p>
+          <p class="mt-1.5 text-ui leading-relaxed text-muted-foreground">{{ t('editorAi.emptyBody') }}</p>
           <ul class="mt-4 space-y-1" :aria-label="t('editorAi.startersLabel')">
             <li v-for="starter in starters" :key="starter">
               <button type="button" class="kn-ai-starter" @click="prefill(starter)">{{ starter }}</button>

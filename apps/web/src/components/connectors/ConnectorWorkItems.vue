@@ -128,8 +128,8 @@ async function detach(item: ConnectorWorkItemInfo) {
 function stateMark(item: ConnectorWorkItemInfo) {
   if (item.state === 'merged') return { icon: GitMerge, class: 'text-violet-500' }
   if (item.state === 'closed') return { icon: CircleDot, class: 'text-muted-foreground' }
-  if (item.kind === 'pull-request') return { icon: GitPullRequest, class: 'text-emerald-500' }
-  return { icon: CircleDot, class: 'text-emerald-500' }
+  if (item.kind === 'pull-request') return { icon: GitPullRequest, class: 'text-panel-tip' }
+  return { icon: CircleDot, class: 'text-panel-tip' }
 }
 </script>
 
@@ -249,8 +249,17 @@ function stateMark(item: ConnectorWorkItemInfo) {
         </DialogHeader>
 
         <div class="space-y-3">
-          <Input v-model="title" :placeholder="t('connectors.workItemTitlePlaceholder')" />
-          <Textarea v-model="body" rows="6" :placeholder="t('connectors.workItemBodyPlaceholder')" />
+          <Input
+            v-model="title"
+            :placeholder="t('connectors.workItemTitlePlaceholder')"
+            :aria-label="t('connectors.workItemTitleLabel')"
+          />
+          <Textarea
+            v-model="body"
+            rows="6"
+            :placeholder="t('connectors.workItemBodyPlaceholder')"
+            :aria-label="t('connectors.workItemBodyLabel')"
+          />
           <p class="text-muted-foreground text-xs">{{ t('connectors.workItemAttachHint') }}</p>
           <Autocomplete
             v-model="attachTo"

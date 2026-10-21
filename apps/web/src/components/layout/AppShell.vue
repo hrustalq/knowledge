@@ -14,6 +14,8 @@
  */
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { FocusScope } from 'reka-ui'
 import { Toaster } from '@/components/ui/sonner'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useSearchUiStore } from '@/stores/search-ui'
@@ -26,6 +28,7 @@ import AppBreadcrumbs from './AppBreadcrumbs.vue'
 import { useCrumbs } from './breadcrumbs'
 
 const route = useRoute()
+const { t } = useI18n()
 
 /**
  * The template gallery (issue #69) is opened from the tree and the editor,
@@ -107,24 +110,44 @@ watch(
     mobileOpen.value = false
   },
 )
+
+/**
+ * The skip link moves focus rather than following its `#main` hash: a hash
+ * change is a navigation to the router, which would replay the route's scroll
+ * and view transition just to move the caret. The href stays for no-JS.
+ */
+const mainEl = ref<HTMLElement | null>(null)
+function skipToMain() {
+  mainEl.value?.focus()
+}
 </script>
 
 <template>
+  <!-- `h-dvh`, not `h-screen`: on iOS `100vh` is the toolbar-hidden height,
+       so a fill route's footer (a chat composer) sat under Safari's toolbar. -->
   <div
-    class="relative flex h-screen overflow-hidden bg-background text-foreground"
+    class="relative flex h-dvh overflow-hidden bg-background text-foreground"
     :class="sidebar.resizing ? 'kn-resizing' : ''"
     :style="{ '--kn-rail-w': sidebar.widthPx, '--kn-chrome-h': chromeHeight }"
     :data-rail-open="railOpen"
   >
+    <!-- First in tab order. Off-canvas rather than `sr-only` until focused, so
+         it slides in on the first Tab instead of popping into the layout. -->
+    <a
+      href="#main"
+      class="fixed left-2 top-2 z-[60] -translate-y-[calc(100%+1rem)] rounded-md border bg-popover px-3 py-2 text-sm font-medium text-popover-foreground shadow-md transition-transform focus:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+      @click.prevent="skipToMain"
+    >
+      {{ t('nav.skipToContent') }}
+    </a>
     <!--
-      The rail collapses as two elements moving on one curve: a flex spacer
-      that closes the column, and the rail itself sliding out to the left over
-      it. Animating the rail's own width instead would reflow every label
-      inside it for the whole travel — a 16rem column re-wrapping as it leaves,
-      which is exactly why an instant `v-if` used to look better than a
-      transition. Here nothing inside the rail moves relative to the rail; the
-      spacer's right edge and the rail's right edge sit at the same x on every
-      frame, so the content column reads as being uncovered rather than pushed.
+      The rail collapses as two elements: a flex spacer that reserves the
+      column, and the rail itself sliding out to the left with a transform.
+      The spacer snaps rather than animating its width — a width transition
+      re-lays out the whole content column on every frame — so the content
+      moves once, behind the opaque rail, while the rail slides. Animating the
+      rail's own width would be worse still: a 16rem column re-wrapping every
+      label as it leaves.
     -->
     <div class="kn-rail-gap hidden shrink-0 lg:block" aria-hidden="true" />
     <div
@@ -134,24 +157,33 @@ watch(
       <AppSidebar />
     </div>
 
-    <!-- Mobile drawer: the same rail, arriving as a drawer over a scrim. -->
+    <!-- Mobile drawer: the same rail, arriving as a drawer over a scrim. It is
+         a modal while open, so it behaves as one: FocusScope moves focus in,
+         keeps Tab inside and hands focus back to the toggle on close, Escape
+         closes it, and the column behind is `inert` (as the collapsed desktop
+         rail is) so nothing under the scrim can be reached. -->
     <Transition name="drawer" :duration="260">
-      <div v-if="mobileOpen" class="fixed inset-0 z-40 lg:hidden">
+      <div v-if="mobileOpen" class="fixed inset-0 z-40 lg:hidden" @keydown.esc="mobileOpen = false">
         <div
           class="kn-drawer-scrim absolute inset-0 bg-black/40"
           aria-hidden="true"
           @click="mobileOpen = false"
         />
-        <div
-          class="kn-drawer-panel absolute inset-y-0 left-0 h-full shadow-[0_16px_48px_-12px_rgb(0_0_0/0.45)]"
-          :style="{ width: 'min(var(--kn-rail-w), 88vw)' }"
-        >
-          <AppSidebar />
-        </div>
+        <FocusScope as-child trapped loop>
+          <div
+            role="dialog"
+            aria-modal="true"
+            :aria-label="t('nav.navigation')"
+            class="kn-drawer-panel absolute inset-y-0 left-0 h-full shadow-[0_16px_48px_-12px_rgb(0_0_0/0.45)]"
+            :style="{ width: 'min(var(--kn-rail-w), 88vw)' }"
+          >
+            <AppSidebar />
+          </div>
+        </FocusScope>
       </div>
     </Transition>
 
-    <div class="flex min-w-0 flex-1 flex-col">
+    <div class="flex min-w-0 flex-1 flex-col" :inert="mobileOpen || undefined">
       <AppTopbar @toggle-sidebar="toggleSidebar" />
       <VerifyEmailBanner
         v-if="showVerifyBanner && auth.me"
@@ -181,8 +213,11 @@ watch(
            compositor for a texture several thousand pixels tall on every
            navigation. See markChangedPane() in router/index.ts. -->
       <main
+        id="main"
+        ref="mainEl"
+        tabindex="-1"
         data-kn-pane="1"
-        :class="['flex-1', route.meta.fill ? 'overflow-hidden' : 'overflow-y-auto']"
+        :class="['flex-1 outline-none', route.meta.fill ? 'overflow-hidden' : 'overflow-y-auto']"
       >
         <div
           :class="[

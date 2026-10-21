@@ -20,7 +20,7 @@ const segments = computed(() => pathSegments(props.path))
 <template>
   <span class="flex min-w-0 items-baseline gap-2.5">
     <ApiTone :tone="methodTone(method)" :variant="variant" class="self-center">{{ method ?? t('apiRef.channel') }}</ApiTone>
-    <code class="min-w-0 font-mono [overflow-wrap:anywhere]" :class="size === 'lg' ? 'text-[1rem] font-semibold' : 'text-[0.82rem]'">
+    <code class="min-w-0 font-mono [overflow-wrap:anywhere]" :class="size === 'lg' ? 'text-base font-semibold' : 'text-ui'">
       <template v-for="(s, i) in segments" :key="i">
         <span v-if="s.param" class="text-muted-foreground">{{ s.text }}</span>
         <template v-else>{{ s.text }}</template>

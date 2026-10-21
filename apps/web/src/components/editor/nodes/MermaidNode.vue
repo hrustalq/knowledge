@@ -8,6 +8,7 @@ import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import DOMPurify from 'dompurify'
 import { Check, Code2, Trash2 } from 'lucide-vue-next'
 import { useTheme } from '@/lib/theme'
+import { mermaidConfig } from '@/lib/mermaid'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -29,12 +30,7 @@ async function render(code: string) {
   }
   try {
     const { default: mermaid } = await import('mermaid')
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme: theme.isDark.value ? 'dark' : 'default',
-      fontFamily: 'inherit',
-    })
+    mermaid.initialize(mermaidConfig(theme.isDark.value))
     seq += 1
     const { svg: out } = await mermaid.render(`kn-mmd-${Date.now()}-${seq}`, code)
     svg.value = DOMPurify.sanitize(out, { USE_PROFILES: { svg: true, svgFilters: true } })

@@ -21,6 +21,7 @@ import { mayContainPageRef } from '@/lib/page-refs'
 import { usePageRefsStore } from '@/stores/page-refs'
 import { resolveAssetUrl } from '@/lib/api'
 import { useTheme } from '@/lib/theme'
+import { mermaidConfig } from '@/lib/mermaid'
 import { createRevealTracker, wrapRuns } from '@/lib/stream-reveal'
 
 interface MarkdownHeading { id: string; text: string; level: number }
@@ -234,12 +235,7 @@ async function renderMermaid() {
   const blocks = [...root.querySelectorAll<HTMLElement>(`[${KN.mermaid}]`)]
   if (blocks.length === 0) return
   const { default: mermaid } = await import('mermaid')
-  mermaid.initialize({
-    startOnLoad: false,
-    securityLevel: 'strict',
-    theme: theme.isDark.value ? 'dark' : 'default',
-    fontFamily: 'inherit',
-  })
+  mermaid.initialize(mermaidConfig(theme.isDark.value))
   for (const block of blocks) {
     const source = block.textContent ?? ''
     try {

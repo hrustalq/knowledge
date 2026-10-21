@@ -2,6 +2,7 @@ import type { ExportRenderPage, ExportRenderRequest, ExportRenderResponse, Local
 import { EXPORT_PRINT_READY_FLAG } from '@knowledge/contracts/publishing'
 import { formatBytes, formatDate, pluralCategory } from './lib/format'
 import { escapeHtml, KN } from './lib/markdown/nodes'
+import { mermaidConfig } from './lib/mermaid'
 import { renderPublicMarkdown, type PublicRenderOptions } from './lib/markdown/public-render.server'
 // The reader's catalog: an export is read by whoever it is handed to, like a share.
 import en from './i18n/reader/en.json'
@@ -110,7 +111,7 @@ const MERMAID_UPGRADE = `(function () {
   setTimeout(done, 20000);
   var blocks = Array.prototype.slice.call(document.querySelectorAll('[${KN.mermaid}]'));
   if (!blocks.length || !window.mermaid) return done();
-  window.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default', fontFamily: 'inherit' });
+  window.mermaid.initialize(${JSON.stringify(mermaidConfig(false))});
   var i = 0;
   blocks.reduce(function (prev, block) {
     return prev.then(function () {

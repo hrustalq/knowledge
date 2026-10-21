@@ -238,6 +238,30 @@ export class VerificationService {
   }
 
   /**
+   * Drop the declared flag and nothing else (#424): the stamp stays, so this is
+   * never a verification. What a tracker close may do for a mapped editor. One
+   * guarded statement; a page with no flag records nothing.
+   */
+  async clearFlag(documentId: string, actorId: string, metadata: Record<string, unknown> = {}): Promise<boolean> {
+    const document = await this.row(documentId);
+    const { count } = await this.prisma.document.updateMany({
+      where: { id: documentId, archivedAt: null, verificationFlag: { not: null } },
+      data: { verificationFlag: null, verificationNote: null, verificationSource: Prisma.DbNull },
+    });
+    if (!count) return false;
+    void this.activity.record({
+      workspaceId: document.workspaceId,
+      actor: actorId,
+      action: 'document.verification-cleared',
+      documentId,
+      projectId: document.projectId,
+      metadata: { title: document.title, ...metadata },
+      patch: { verificationFlag: null },
+    });
+    return true;
+  }
+
+  /**
    * Archive the page and, by default, everything under it — one statement over
    * `path LIKE '<own path>%'`, which the (workspace_id, path) index serves and
    * which is what stops a parent being archived over live children. Idempotent

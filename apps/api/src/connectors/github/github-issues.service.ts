@@ -1,13 +1,21 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { Connector } from '@prisma/client';
+import { connectorKindInfo } from '@knowledge/contracts';
 import type {
-  ConnectorWorkItemKind,
   ConnectorWorkItemState,
   CreateConnectorWorkItemInput,
 } from '@knowledge/contracts';
 import { safeFetch } from '../../common/safe-fetch.js';
 import { t } from '../../i18n/t.js';
 import { repoHost } from '../adapters/repo-archive.js';
+import {
+  markdownBody,
+  type TrackerAdapter,
+  type TrackerBodyLine,
+  type TrackerCreateInput,
+  type TrackerIssue,
+  type TrackerRef,
+} from '../adapters/tracker.js';
 import { ConnectorsService } from '../connectors.service.js';
 import { GithubAppService } from './github-app.service.js';
 
@@ -18,6 +26,9 @@ import { GithubAppService } from './github-app.service.js';
  * here for the reason feature 30 gave: the whole surface this file needs is five
  * REST endpoints and one GraphQL query, which is less code than teaching Octokit
  * about our credential resolution.
+ *
+ * The GitHub `TrackerAdapter` (#424): the methods below the tab's own read
+ * them in the shape every tracker shares.
  *
  * Deliberately *not* a `ConnectorAdapter`. An adapter moves content — `list`,
  * `fetch`, `push`, and a `verifyWebhook` answering in `ExternalRef`s — and every
@@ -32,18 +43,8 @@ const MAX_ITEMS = 100;
 /** A board query that walks a whole backlog is a GraphQL bill. The tab shows a page. */
 const MAX_BOARD_LOOKUPS = 50;
 
-export interface GithubWorkItem {
-  kind: ConnectorWorkItemKind;
-  number: number;
-  title: string;
-  state: ConnectorWorkItemState;
-  url: string;
-  authorLogin: string | null;
-  assigneeLogins: string[];
-  labels: string[];
-  externalCreatedAt: string | null;
-  externalUpdatedAt: string | null;
-}
+/** A GitHub issue or pull request is a tracker issue with no key of its own. */
+export type GithubWorkItem = TrackerIssue;
 
 /** Where a request is going and what it may use to get there. */
 interface RepoTarget {
@@ -55,7 +56,8 @@ interface RepoTarget {
 }
 
 @Injectable()
-export class GithubIssuesService {
+export class GithubIssuesService implements TrackerAdapter {
+  readonly kind = 'github' as const;
   private readonly logger = new Logger(GithubIssuesService.name);
 
   constructor(
@@ -102,21 +104,96 @@ export class GithubIssuesService {
     return toWorkItem((await res.json()) as RawIssue);
   }
 
-  /** Add a remark to an existing item — how a flow reports back what it did. */
-  async comment(row: Connector, number: number, body: string): Promise<void> {
+  // --- TrackerAdapter (#424) ---
+
+  /**
+   * A repository connector whose remote is github.com. Read from the config
+   * without the credential, so a registry lookup costs no secret-box decrypt.
+   */
+  supports(row: Connector): boolean {
+    if (!connectorKindInfo(row.kind)?.capabilities.tasks) return false;
+    try {
+      return repoHost({ config: row.config, locale: row.locale } as never).kind === 'github';
+    } catch {
+      return false;
+    }
+  }
+
+  /** GitHub's `/issues` lists pull requests too; they are projected, never handed off. */
+  async listIssues(row: Connector, since: string | null): Promise<{ items: TrackerIssue[]; cursor: string | null }> {
     const target = await this.target(row);
-    await this.request(target, `/repos/${target.path}/issues/${number}/comments`, {
-      method: 'POST',
-      body: JSON.stringify({ body }),
+    const query = `state=all&per_page=${MAX_ITEMS}&sort=updated&direction=asc${since ? `&since=${encodeURIComponent(since)}` : ''}`;
+    const res = await this.request(target, `/repos/${target.path}/issues?${query}`);
+    const raw: unknown = await res.json();
+    const items = Array.isArray(raw) ? (raw as RawIssue[]).map(toWorkItem) : [];
+    const newest = items.reduce<string | null>(
+      (max, item) => (item.externalUpdatedAt && (!max || item.externalUpdatedAt > max) ? item.externalUpdatedAt : max),
+      since,
+    );
+    return { items, cursor: newest };
+  }
+
+  getIssue(row: Connector, ref: TrackerRef): Promise<TrackerIssue | null> {
+    return this.get(row, ref.number);
+  }
+
+  /** `#45`, `45`, `owner/repo#45` or the issue URL — on this connector's repository only. */
+  parseRef(row: Connector, text: string): TrackerRef | null {
+    let host: { owner: string; repo: string };
+    try {
+      host = repoHost({ config: row.config, locale: row.locale } as never);
+    } catch {
+      return null;
+    }
+    const m =
+      /^#?(\d+)$/.exec(text.trim()) ??
+      /^([\w.-]+)\/([\w.-]+)#(\d+)$/.exec(text.trim()) ??
+      /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/issues\/(\d+)\/?$/.exec(text.trim());
+    if (!m) return null;
+    if (m.length === 4 && (m[1].toLowerCase() !== host.owner.toLowerCase() || m[2].toLowerCase() !== host.repo.toLowerCase())) {
+      return null;
+    }
+    return { number: Number(m[m.length - 1]), externalKey: null };
+  }
+
+  createIssue(row: Connector, input: TrackerCreateInput): Promise<TrackerIssue> {
+    return this.create(row, {
+      title: input.title,
+      body: markdownBody(input.lines),
+      labels: input.labels,
+      ...(input.assignees ? { assignees: input.assignees } : {}),
     });
   }
 
-  /** Close an item, as completed or as abandoned. */
-  async close(row: Connector, number: number, reason: 'completed' | 'not_planned' = 'completed'): Promise<void> {
+  /**
+   * `open` reopens; `completed` / `not_planned` close with that reason — the
+   * raw statuses `toWorkItem` reads back. Anything else is not a GitHub status.
+   */
+  async transition(row: Connector, ref: TrackerRef, externalStatus: string): Promise<TrackerIssue | null> {
+    const body =
+      externalStatus === 'open'
+        ? { state: 'open' }
+        : externalStatus === 'completed' || externalStatus === 'not_planned'
+          ? { state: 'closed', state_reason: externalStatus }
+          : null;
+    if (!body) throw new BadRequestException(t('error.workItem.unknownStatus', { status: externalStatus }));
     const target = await this.target(row);
-    await this.request(target, `/repos/${target.path}/issues/${number}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ state: 'closed', state_reason: reason }),
+    const res = await this.request(
+      target,
+      `/repos/${target.path}/issues/${ref.number}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+      true,
+    );
+    if (res.status === 404) return null;
+    return toWorkItem((await res.json()) as RawIssue);
+  }
+
+  async comment(row: Connector, ref: TrackerRef | number, body: string | TrackerBodyLine[]): Promise<void> {
+    const target = await this.target(row);
+    const number = typeof ref === 'number' ? ref : ref.number;
+    await this.request(target, `/repos/${target.path}/issues/${number}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body: typeof body === 'string' ? body : markdownBody(body) }),
     });
   }
 
@@ -230,10 +307,12 @@ interface RawProjectNode {
   projectItems?: { nodes?: Array<{ project?: { title?: string } } | null> };
 }
 
-interface RawIssue {
+export interface RawIssue {
   number: number;
   title: string;
+  body?: string | null;
   state: string;
+  state_reason?: string | null;
   html_url: string;
   user?: { login?: string } | null;
   assignees?: Array<{ login?: string }> | null;
@@ -264,9 +343,15 @@ export function toWorkItem(raw: RawIssue): GithubWorkItem {
   return {
     kind: isPr ? 'pull-request' : 'issue',
     number: raw.number,
+    externalKey: null,
     title: raw.title,
     state,
+    // The status map's raw value: the state with GitHub's close reason folded
+    // in, since `closed` alone cannot tell done from won't-do.
+    externalStatus:
+      state === 'closed' ? (raw.state_reason === 'not_planned' ? 'not_planned' : 'completed') : state,
     url: raw.html_url,
+    body: raw.body ?? null,
     authorLogin: raw.user?.login ?? null,
     assigneeLogins: (raw.assignees ?? []).map((a) => a?.login).filter((l): l is string => Boolean(l)),
     labels: (raw.labels ?? [])

@@ -155,6 +155,23 @@ export class ConflictsService {
   }
 
   /**
+   * The ticket a conflict was handed off for was closed in the tracker (#424).
+   * One guarded statement: only an open conflict moves, so a person who
+   * already closed it keeps their word. `actor` is null when the tracker
+   * account maps to nobody here; the note says where it was closed.
+   */
+  async closeFromTracker(id: string, status: 'resolved' | 'dismissed', actor: string | null, note: string): Promise<boolean> {
+    const row = await this.prisma.knowledgeConflict.findUnique({ where: { id }, select: { workspaceId: true, aDocumentId: true } });
+    if (!row) return false;
+    const { count } = await this.prisma.knowledgeConflict.updateMany({
+      where: { id, status: 'open' },
+      data: { status, resolvedAt: new Date(), resolvedBy: actor, resolution: note },
+    });
+    if (count) await this.publish(row.workspaceId, id, row.aDocumentId);
+    return count > 0;
+  }
+
+  /**
    * The merge request a fix was proposed as. Called by `AgentFindingsService`
    * when a finding that reported a conflict is proposed — from the conflict,
    * the runs panel or the drift sweeper alike — so all three link it.

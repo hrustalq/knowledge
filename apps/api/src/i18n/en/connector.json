@@ -93,5 +93,31 @@
   },
   "googleDrive": {
     "sharedDrive": "{name} (shared drive)"
+  },
+  "workItem": {
+    "title": {
+      "issue": "Knowledge issue: {title}",
+      "conflict": "Knowledge conflict: {title}",
+      "verification": "Page check: {title}",
+      "document": "{title}"
+    },
+    "restrictedTitle": {
+      "issue": "Knowledge issue {id}",
+      "conflict": "Knowledge conflict {id}",
+      "verification": "Page check {id}",
+      "document": "Page {id}"
+    },
+    "summary": {
+      "issue": "A reader reported this page as {kind}.",
+      "conflict": "Two sources in the knowledge base disagree.",
+      "requested": "Someone asked for this page to be checked.",
+      "outdated": "This page was marked outdated.",
+      "verification": "This page needs a check.",
+      "document": "Work on this page in the knowledge base."
+    },
+    "openLink": "Open in the knowledge base",
+    "reraised": "Raised again in the knowledge base.",
+    "deleted": "The knowledge object this ticket was for no longer exists.",
+    "closedVia": "Closed in {key}"
   }
 }

@@ -42,7 +42,7 @@ import DocumentFacets from '@/components/knowledge/DocumentFacets.vue'
 import GraphCanvas from '@/components/graph/GraphCanvas.vue'
 import { toGraphNodes } from '@/components/graph/graph-model'
 import { useGraphTime } from '@/components/graph/use-graph-time'
-import { needsAttention, verificationDotClass } from '@/components/verification/verification-ui'
+import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@/components/verification/verification-ui'
 
 const { t } = useI18n()
 
@@ -236,7 +236,7 @@ watch(virtualRows, (rows) => {
           :key="v.id"
           role="tab"
           :aria-selected="view === v.id"
-          class="flex h-7 items-center gap-1.5 rounded px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          class="flex h-7 items-center gap-1.5 rounded px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring"
           :class="view === v.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
           @click="setView(v.id)"
         >
@@ -270,7 +270,7 @@ watch(virtualRows, (rows) => {
         <span class="sr-only sm:not-sr-only">{{ t('graph.filters') }}</span>
         <span
           v-if="store.activeFilterCount"
-          class="grid size-4 place-items-center rounded-full bg-primary text-[0.625rem] font-semibold text-primary-foreground"
+          class="grid size-4 place-items-center rounded-full bg-primary text-micro font-semibold text-primary-foreground"
         >{{ store.activeFilterCount }}</span>
       </Button>
 
@@ -363,7 +363,9 @@ watch(virtualRows, (rows) => {
                 <span
                   class="size-1.5 shrink-0 rounded-full"
                   :class="statusDot(store.items[row.index]!.headRevisionStatus)"
-                  :title="store.items[row.index]!.headRevisionStatus ?? 'draft'"
+                  role="img"
+                  :aria-label="labelFor(t, 'revisionStatus', store.items[row.index]!.headRevisionStatus ?? 'draft')"
+                  :title="labelFor(t, 'revisionStatus', store.items[row.index]!.headRevisionStatus ?? 'draft')"
                 />
                 <span
                   class="truncate text-sm font-medium"
@@ -380,8 +382,7 @@ watch(virtualRows, (rows) => {
                 </span>
                 <span
                   v-else-if="needsAttention(store.items[row.index]!.verification)"
-                  class="size-1.5 shrink-0 rounded-full"
-                  :class="verificationDotClass(store.items[row.index]!.verification)"
+                  :class="[VERIFICATION_MARK_CLASS, verificationDotClass(store.items[row.index]!.verification)]"
                   role="img"
                   :aria-label="t(`verification.state.${store.items[row.index]!.verification}`)"
                   :title="t(`verification.state.${store.items[row.index]!.verification}`)"
@@ -393,7 +394,7 @@ watch(virtualRows, (rows) => {
                   :variant="statusVariant(store.items[row.index]!.headRevisionStatus)"
                   class="hidden shrink-0 text-xs sm:inline-flex"
                 >
-                  {{ store.items[row.index]!.headRevisionStatus ?? 'draft' }}
+                  {{ labelFor(t, 'revisionStatus', store.items[row.index]!.headRevisionStatus ?? 'draft') }}
                 </Badge>
                 <span class="ml-auto shrink-0 text-xs text-muted-foreground">
                   {{ formatDate(store.items[row.index]!.createdAt) }}

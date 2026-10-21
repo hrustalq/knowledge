@@ -41,11 +41,13 @@ const current = computed(() => (props.active ? ('page' as const) : undefined))
         : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground'
     "
   >
+    <!-- Drawn at 20px for the row's rhythm; the ::after takes the hit area to
+         24×24 (WCAG 2.5.8) without growing the row. -->
     <button
       v-if="hasChildren"
       type="button"
       data-no-drag
-      class="grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-sidebar-accent"
+      class="relative grid size-5 shrink-0 place-items-center rounded text-muted-foreground after:absolute after:-inset-0.5 hover:bg-sidebar-accent"
       :aria-label="open ? t('tree.collapse') : t('tree.expand')"
       :aria-expanded="open"
       :aria-busy="loading || undefined"

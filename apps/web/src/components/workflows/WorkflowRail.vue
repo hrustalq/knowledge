@@ -77,7 +77,7 @@ async function start(definitionId: string) {
             />
             <span class="min-w-0 flex-1">
               <span class="block truncate text-sm">{{ run.definitionName }}</span>
-              <span class="text-muted-foreground block text-[11px]">
+              <span class="text-muted-foreground block text-caption">
                 {{ t(RUN_STATUS_LABEL[run.status]) }} · {{ relativeTime(run.startedAt ?? run.createdAt) }}
                 <template v-if="run.nodeStats.awaitingReview">
                   · {{ t('workflow.toReview', { n: run.nodeStats.awaitingReview }) }}

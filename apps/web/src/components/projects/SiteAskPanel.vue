@@ -69,10 +69,10 @@ function save() {
 
 <template>
   <form class="max-w-2xl space-y-6" @submit.prevent="save">
-    <p v-if="policy.askDailyCeiling === 0" role="alert" class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+    <p v-if="policy.askDailyCeiling === 0" role="alert" class="rounded-md border kn-callout-warning px-3 py-2 text-sm">
       {{ t('site.ask.offByCeiling') }}
     </p>
-    <p v-else-if="!policy.askModelConfigured" role="alert" class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+    <p v-else-if="!policy.askModelConfigured" role="alert" class="rounded-md border kn-callout-warning px-3 py-2 text-sm">
       {{ t('site.ask.noModel') }}
     </p>
 

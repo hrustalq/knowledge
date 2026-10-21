@@ -91,6 +91,7 @@ function onKeydown(event: KeyboardEvent) {
         ref="inputEl"
         v-model="query"
         :placeholder="t('editor.searchPages')"
+        :aria-label="t('editor.searchPages')"
         autocomplete="off"
         @keydown="onKeydown"
       />

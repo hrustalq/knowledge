@@ -49,7 +49,7 @@ const state = computed(() => mrIcon(mr.value))
         <!-- stats -->
         <span
           v-if="mr.approvedBy.length > 0"
-          class="flex items-center gap-1 text-emerald-600"
+          class="flex items-center gap-1 text-panel-tip-ink"
           :title="t('mr.approvals', { n: mr.approvedBy.length }, mr.approvedBy.length)"
         >
           <ThumbsUp class="size-3.5" />{{ mr.approvedBy.length }}
@@ -57,7 +57,7 @@ const state = computed(() => mrIcon(mr.value))
         <span
           v-if="mr.threadStats.total > 0"
           class="flex items-center gap-1"
-          :class="mr.threadStats.unresolved > 0 ? 'text-amber-600' : ''"
+          :class="mr.threadStats.unresolved > 0 ? 'text-panel-warning-ink' : ''"
           :title="t('mr.threadsUnresolvedOf', { n: mr.threadStats.unresolved, total: mr.threadStats.total })"
         >
           <MessageSquare class="size-3.5" />{{ mr.threadStats.unresolved }}/{{ mr.threadStats.total }}
@@ -73,7 +73,7 @@ const state = computed(() => mrIcon(mr.value))
             avatar-only
             class="ring-2 ring-card"
           />
-          <span v-if="mr.reviewers.length > 3" class="pl-2.5 text-[10px]">+{{ mr.reviewers.length - 3 }}</span>
+          <span v-if="mr.reviewers.length > 3" class="pl-2.5 text-micro">+{{ mr.reviewers.length - 3 }}</span>
         </span>
         <UserChip v-if="mr.assigneeId" :user-id="mr.assigneeId" avatar-only />
       </div>

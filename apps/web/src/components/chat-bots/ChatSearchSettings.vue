@@ -67,14 +67,14 @@ async function save() {
   <PageState v-if="query.isPending.value" state="loading" :rows="1" row-class="h-16" />
   <PageState v-else-if="query.isError.value" state="error" :error="query.error.value" />
 
-  <form v-else-if="settings" class="max-w-2xl space-y-5" @submit.prevent="save">
+  <form v-else-if="settings" class="space-y-5" @submit.prevent="save">
     <div>
       <h2 class="text-base font-semibold">{{ t('chatBots.search.title') }}</h2>
-      <p class="mt-0.5 text-sm text-muted-foreground">{{ t('chatBots.search.intro') }}</p>
+      <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('chatBots.search.intro') }}</p>
     </div>
     <p
       v-if="!settings.available"
-      class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+      class="rounded-md border kn-callout-warning px-3 py-2 text-sm"
     >
       {{ t('chatBots.search.unavailable') }}
     </p>
@@ -82,7 +82,7 @@ async function save() {
     <div class="grid gap-x-4 gap-y-1.5 rounded-md border px-4 py-3 sm:grid-cols-[1fr_12rem]">
       <div class="min-w-0">
         <label for="chat-search-retention" class="text-sm font-medium">{{ t('chatBots.search.retention') }}</label>
-        <p class="text-xs text-muted-foreground">{{ t('chatBots.search.retentionHint') }}</p>
+        <p class="kn-measure text-xs text-muted-foreground">{{ t('chatBots.search.retentionHint') }}</p>
         <p class="mt-1 text-xs">
           <span class="text-muted-foreground">{{ t('chatBots.search.applies') }}</span>
           {{ days(settings.retentionDays.applied) }}

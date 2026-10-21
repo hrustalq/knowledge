@@ -139,7 +139,7 @@ const unscored = computed(() => (summary.value ? summary.value.totalPages - summ
             <li v-for="row in summary.worst" :key="row.documentId">
               <RouterLink
                 :to="{ path: `/documents/${row.documentId}`, query: { tab: 'quality' } }"
-                class="flex items-center gap-3 px-3 py-2.5 transition-colors outline-none hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+                class="flex items-center gap-3 px-3 py-2.5 transition-colors outline-none hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring"
               >
                 <span
                   class="w-8 shrink-0 text-right text-sm font-semibold tabular-nums"

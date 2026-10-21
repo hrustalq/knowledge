@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { CONFLICT_STATUSES, type ConflictStatus, type ListConflictsResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/api/queries'
 import { getWorkspaceId } from '@/lib/api'
+import { Button } from '@/components/ui/button'
 import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/components/layout/page'
 import ConflictCard from '@/components/knowledge/ConflictCard.vue'
 
@@ -35,17 +36,24 @@ const conflicts = computed(() => (query.data.value as ListConflictsResponse | un
       <PageTabs v-model="tab" :tabs="tabs" :label="t('filters.status')" />
     </template>
 
-    <!-- Capped: two passages read side by side, and a 1500px line is not read. -->
-    <div :id="panelId(tab)" role="tabpanel" :aria-labelledby="tabId(tab)" class="flex w-full max-w-5xl min-w-0 flex-col gap-3">
+    <!-- Fills the column like every list page; each passage keeps its own
+         reading measure inside the card (ConflictCard), so a wide window
+         widens the gutter between the two sides, not the lines. -->
+    <div :id="panelId(tab)" role="tabpanel" :aria-labelledby="tabId(tab)" class="flex w-full min-w-0 flex-col gap-3">
       <PageState v-if="query.isPending.value" state="loading" :rows="3" row-class="h-36" />
       <PageState v-else-if="query.isError.value" state="error" :error="query.error.value" />
-      <div v-else-if="!conflicts.length" class="rounded-xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-        <p class="font-medium text-foreground">{{ t(`conflicts.empty.${tab}`) }}</p>
-        <p v-if="tab === 'open'" class="mx-auto mt-1 max-w-md">
-          {{ t('conflicts.empty.hint') }}
-          <RouterLink to="/settings/ai/agents" class="underline underline-offset-2 hover:text-foreground">{{ t('conflicts.empty.hintLink') }}</RouterLink>
-        </p>
-      </div>
+      <PageState
+        v-else-if="!conflicts.length"
+        state="empty"
+        :title="t(`conflicts.empty.${tab}`)"
+        :description="tab === 'open' ? t('conflicts.empty.hint') : undefined"
+      >
+        <template v-if="tab === 'open'" #actions>
+          <Button as-child size="sm" variant="outline">
+            <RouterLink to="/settings/ai/agents">{{ t('conflicts.empty.hintLink') }}</RouterLink>
+          </Button>
+        </template>
+      </PageState>
       <template v-else>
         <ConflictCard v-for="c in conflicts" :key="c.id" :conflict="c" />
       </template>

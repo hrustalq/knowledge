@@ -20,6 +20,15 @@
         ],
         "createdAt": "2026-09-18T13:52:25.301Z",
         "reason": "user confirmed: the four findings (kn-rail-gap L241, kn-tree-window>ul L343, kn-subrail L674, kn-filters-gap L1047) are pre-existing rail/window animations whose CSS comments document why transform is rejected — it would drag the rail edge and leave a gap"
+      },
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "apps/web/src/styles/editor.css"
+        ],
+        "createdAt": "2026-10-21T11:21:56.631Z",
+        "reason": ".kn-ai-slot (L2218): transition-duration 0s with a delay — a snap that holds the slot open until the panel's transform slide ends; replaced an animated width (the layout-thrash finding), nothing animates width"
       }
     ]
   }

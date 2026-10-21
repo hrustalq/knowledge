@@ -191,8 +191,8 @@ function approve() {
               :class="[NODE_STATUS_CLASS[child.status], isBusyStatus(child.status) ? 'animate-spin' : '']"
             />
             <span class="min-w-0 flex-1">
-              <span class="block truncate text-[13px]">{{ child.draft?.title ?? t('workflow.node.untitled') }}</span>
-              <span class="text-muted-foreground block truncate text-[11px]">
+              <span class="block truncate text-ui">{{ child.draft?.title ?? t('workflow.node.untitled') }}</span>
+              <span class="text-muted-foreground block truncate text-caption">
                 {{ child.draft?.summary || t(NODE_STATUS_LABEL[child.status]) }}
               </span>
             </span>
@@ -223,10 +223,13 @@ function approve() {
         </label>
         <div class="space-y-1.5">
           <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.node.relations') }}</span>
-          <p class="text-muted-foreground text-[11px]">{{ t('workflow.node.relationsHint') }}</p>
+          <p class="text-muted-foreground text-caption">{{ t('workflow.node.relationsHint') }}</p>
           <div v-for="(row, i) in relations" :key="i" class="flex items-center gap-2">
             <Select :model-value="row.type" @update:model-value="(v) => setRelationType(i, String(v))">
-              <SelectTrigger class="h-9 w-[11rem] shrink-0 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger
+                class="h-9 w-[11rem] shrink-0 text-xs"
+                :aria-label="t('editor.relationTypeLabel', { n: i + 1 })"
+              ><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="r in AUTHORABLE_RELATION_TYPES" :key="r" :value="r">{{ r }}</SelectItem>
               </SelectContent>
@@ -264,7 +267,7 @@ function approve() {
         <!-- The operation this item is about (#78): the draft below it reads
              the spec for it and DESCRIBES it once published. -->
         <div v-if="node.draft.operationKey" class="mb-3 space-y-1 border-y py-2">
-          <span class="text-muted-foreground block text-[11px] font-medium">{{ t('apiLink.workflow') }}</span>
+          <span class="text-muted-foreground block text-caption font-medium">{{ t('apiLink.workflow') }}</span>
           <ApiOperationRef :workspace-id="getWorkspaceId()" :entity-key="node.draft.operationKey" />
         </div>
         <!-- Relations become graph facts on publication, so they are shown
@@ -273,7 +276,7 @@ function approve() {
           <span
             v-for="(r, i) in viewRelations"
             :key="`r-${i}`"
-            class="bg-muted/60 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px]"
+            class="bg-muted/60 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-caption"
           >
             <span class="font-medium">{{ r.type }}</span>
             <span class="text-muted-foreground">{{ r.target.key }}</span>
@@ -281,7 +284,7 @@ function approve() {
           <span
             v-for="tag in viewTags"
             :key="`t-${tag}`"
-            class="text-muted-foreground rounded border px-1.5 py-0.5 text-[11px]"
+            class="text-muted-foreground rounded border px-1.5 py-0.5 text-caption"
           >
             #{{ tag }}
           </span>

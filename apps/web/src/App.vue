@@ -4,6 +4,7 @@ import { RouterView, useRoute } from 'vue-router'
 import { Library } from 'lucide-vue-next'
 import { useQueryClient } from '@tanstack/vue-query'
 import { Toaster } from '@/components/ui/sonner'
+import { ConfirmDialog } from '@/components/ui/confirm'
 import AppShell from '@/components/layout/AppShell.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useEventsStore } from '@/stores/events'
@@ -59,7 +60,7 @@ watch(
       <span class="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">
         <Library class="size-4" />
       </span>
-      <span class="font-display text-[15px] font-bold tracking-tight">Knowledge</span>
+      <span class="font-display text-base font-bold tracking-tight">Knowledge</span>
     </div>
     <!-- Pane 1 for the signed-out shell, exactly as in the app shell. Only one
          of the two is ever mounted, so the level is never ambiguous; the router
@@ -79,4 +80,6 @@ watch(
   </div>
 
   <AppShell v-else />
+  <!-- Once, for both shells: every `confirm()` draws here. -->
+  <ConfirmDialog />
 </template>

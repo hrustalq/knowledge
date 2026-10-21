@@ -54,7 +54,7 @@ async function submit() {
     <div class="space-y-1.5">
       <label
         for="create-project-step-name"
-        class="text-muted-foreground block text-[11px] font-semibold tracking-wider uppercase"
+        class="text-muted-foreground block text-caption font-semibold tracking-wider uppercase"
       >
         {{ t('nav.projectName') }}
       </label>

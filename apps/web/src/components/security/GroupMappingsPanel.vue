@@ -23,6 +23,7 @@ import { errorMessage } from '@/api/errors'
 import { getWorkspaceId } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { confirm } from '@/components/ui/confirm'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { PageState } from '@/components/layout/page'
@@ -88,10 +89,14 @@ async function add() {
 }
 
 async function confirmRemove(m: GroupMappingView) {
-  // A native confirm keeps this one destructive action from needing its own dialog state.
   const group = m.providerId ? m.externalGroup : (m.scimGroupName ?? m.externalGroup)
-  const key = m.providerId ? 'security.groupMapping.removeConfirm' : 'security.groupMapping.removeConfirmScim'
-  if (!window.confirm(t(key, { group }))) return
+  const ok = await confirm({
+    title: t('security.groupMapping.removeTitle', { group }),
+    description: m.providerId ? t('security.groupMapping.removeBody') : t('security.groupMapping.removeBodyScim'),
+    action: t('security.groupMapping.remove'),
+    destructive: true,
+  })
+  if (!ok) return
   try {
     await remove.mutateAsync({ path: { ...path, mappingId: m.id } })
     toast.success(t('security.groupMapping.removed'))

@@ -470,7 +470,7 @@ const heading = computed(() =>
           class="max-h-[60vh] overflow-y-auto pr-1"
         >
           <!-- Reflects what is saved, not the edit in progress. -->
-          <p v-if="dirty" class="mb-2 text-xs text-amber-700 dark:text-amber-400">{{ t('access.page.unsavedNote') }}</p>
+          <p v-if="dirty" class="mb-2 text-xs text-panel-warning-ink">{{ t('access.page.unsavedNote') }}</p>
           <EffectiveAccess :key="savedCount" :resource-type="resourceType" :resource-id="resourceId" />
         </div>
       </template>

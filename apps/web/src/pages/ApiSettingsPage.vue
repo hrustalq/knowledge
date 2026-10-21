@@ -79,16 +79,16 @@ async function save(body: UpdateApiSettingsRequest) {
   <div class="flex w-full min-w-0 flex-col gap-6">
     <div>
       <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('apiSettings.title') }}</h1>
-      <p class="mt-0.5 text-sm text-muted-foreground">{{ t('apiSettings.subtitle') }}</p>
+      <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('apiSettings.subtitle') }}</p>
     </div>
 
     <PageState v-if="query.isPending.value" state="loading" :rows="3" row-class="h-16" />
     <PageState v-else-if="query.isError.value" state="error" :error="query.error.value" />
 
-    <section v-else-if="proxy && settings" class="max-w-2xl space-y-4">
+    <section v-else-if="proxy && settings" class="space-y-4">
       <header class="space-y-1 border-b pb-3">
         <h2 class="text-sm font-semibold">{{ t('apiSettings.proxy.title') }}</h2>
-        <p class="text-sm leading-relaxed text-muted-foreground">{{ t('apiSettings.proxy.subtitle') }}</p>
+        <p class="kn-measure text-sm leading-relaxed text-muted-foreground">{{ t('apiSettings.proxy.subtitle') }}</p>
       </header>
 
       <RadioGroup
@@ -119,12 +119,12 @@ async function save(body: UpdateApiSettingsRequest) {
                 {{ t('apiSettings.fromEnv') }}
               </Badge>
             </span>
-            <span class="mt-0.5 block text-[13px] leading-relaxed text-muted-foreground">
+            <span class="kn-measure mt-0.5 block text-ui leading-relaxed text-muted-foreground">
               {{ t(`apiSettings.mode.${mode}.body`) }}
               <RouterLink
                 v-if="mode === 'allowlist' || mode === 'open'"
                 to="/settings/ai/plugins"
-                class="text-primary underline-offset-2 hover:underline"
+                class="text-primary underline underline-offset-2"
               >{{ t('apiSettings.policies') }}</RouterLink>
             </span>
           </span>
@@ -144,7 +144,7 @@ async function save(body: UpdateApiSettingsRequest) {
       </p>
 
       <div class="flex flex-wrap items-baseline justify-between gap-3">
-        <p class="text-[13px] text-muted-foreground">
+        <p class="text-ui text-muted-foreground">
           {{
             t('apiSettings.limits', {
               perMinute: formatNumber(settings.tryLimits.perMinute),
@@ -157,7 +157,7 @@ async function save(body: UpdateApiSettingsRequest) {
         <button
           v-if="canManage && proxy.requested !== null"
           type="button"
-          class="text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          class="text-ui text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
           @click="setMode(null)"
         >
           {{ t('apiSettings.inherit', { mode: t(`apiSettings.mode.${proxy.ceiling}.label`) }) }}
@@ -165,10 +165,10 @@ async function save(body: UpdateApiSettingsRequest) {
       </div>
     </section>
 
-    <section v-if="breaking" class="max-w-2xl space-y-4">
+    <section v-if="breaking" class="space-y-4">
       <header class="space-y-1 border-b pb-3">
         <h2 class="text-sm font-semibold">{{ t('apiSettings.breaking.title') }}</h2>
-        <p class="text-sm leading-relaxed text-muted-foreground">{{ t('apiSettings.breaking.subtitle') }}</p>
+        <p class="kn-measure text-sm leading-relaxed text-muted-foreground">{{ t('apiSettings.breaking.subtitle') }}</p>
       </header>
 
       <RadioGroup
@@ -196,7 +196,7 @@ async function save(body: UpdateApiSettingsRequest) {
                 {{ t('apiSettings.breaking.default') }}
               </Badge>
             </span>
-            <span class="mt-0.5 block text-[13px] leading-relaxed text-muted-foreground">
+            <span class="kn-measure mt-0.5 block text-ui leading-relaxed text-muted-foreground">
               {{ t(`apiSettings.breaking.mode.${policy}.body`) }}
             </span>
           </span>
@@ -206,7 +206,7 @@ async function save(body: UpdateApiSettingsRequest) {
       <div v-if="canManage && breaking.requested !== null" class="flex justify-end">
         <button
           type="button"
-          class="text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          class="text-ui text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
           @click="setPolicy(null)"
         >
           {{ t('apiSettings.breaking.inherit') }}
@@ -214,7 +214,7 @@ async function save(body: UpdateApiSettingsRequest) {
       </div>
     </section>
 
-    <p v-if="settings && !canManage" class="max-w-2xl text-[13px] text-muted-foreground">{{ t('apiSettings.adminOnly') }}</p>
+    <p v-if="settings && !canManage" class="kn-measure text-ui text-muted-foreground">{{ t('apiSettings.adminOnly') }}</p>
   </div>
 </template>
 
@@ -253,7 +253,7 @@ async function save(body: UpdateApiSettingsRequest) {
   gap: 0.5rem;
   border-radius: 0.5rem;
   padding: 0.5rem 0.75rem;
-  font-size: 0.8125rem;
+  font-size: var(--kn-text-ui);
   line-height: 1.5;
   background: color-mix(in oklab, var(--muted-foreground) 8%, transparent);
   color: var(--muted-foreground);

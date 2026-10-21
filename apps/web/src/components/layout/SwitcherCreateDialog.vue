@@ -252,7 +252,7 @@ async function finish() {
               <div class="space-y-1.5">
                 <label
                   for="switcher-create-name"
-                  class="text-muted-foreground block text-[11px] font-semibold tracking-wider uppercase"
+                  class="text-muted-foreground block text-caption font-semibold tracking-wider uppercase"
                 >
                   {{ t('nav.name') }}
                 </label>
@@ -269,7 +269,7 @@ async function finish() {
               <div v-if="!isWorkspace" class="space-y-1.5">
                 <label
                   for="switcher-create-description"
-                  class="text-muted-foreground block text-[11px] font-semibold tracking-wider uppercase"
+                  class="text-muted-foreground block text-caption font-semibold tracking-wider uppercase"
                 >
                   {{ t('nav.description') }}
                   <span class="font-normal normal-case">{{ t('nav.optionalSuffix') }}</span>

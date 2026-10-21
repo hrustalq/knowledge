@@ -127,7 +127,7 @@ function assign(role: string) {
     <div class="divide-y rounded-xl border bg-card">
       <section v-for="role in ladder" :key="role" class="px-5 py-4">
         <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h3 class="font-display text-[15px] font-semibold tracking-tight">
+          <h3 class="font-display text-base font-semibold tracking-tight">
             {{ t(`role.${role}`) }}
           </h3>
           <span class="text-muted-foreground text-xs tabular-nums">
@@ -182,7 +182,7 @@ function assign(role: string) {
     <!-- Apart from the ladder: a flag, not another role. -->
     <section class="rounded-xl border bg-card px-5 py-4">
       <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h3 class="font-display text-[15px] font-semibold tracking-tight">
+        <h3 class="font-display text-base font-semibold tracking-tight">
           {{ t('access.operatorTitle') }}
         </h3>
         <span class="text-muted-foreground text-xs tabular-nums">

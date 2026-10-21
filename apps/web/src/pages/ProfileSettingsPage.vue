@@ -30,6 +30,7 @@ import { toast } from 'vue-sonner'
 import { KeyRound } from 'lucide-vue-next'
 import { SUPPORTED_LOCALES, type Locale, type MeResponse } from '@knowledge/contracts'
 import { apiFetch, getLocale, setLocale } from '@/lib/api'
+import { ensureLocaleMessages } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,7 +40,8 @@ import AvatarPicker from '@/components/people/AvatarPicker.vue'
 import LinkedChatAccounts from '@/components/profile/LinkedChatAccounts.vue'
 import ActiveSessions from '@/components/profile/ActiveSessions.vue'
 
-const { t, locale } = useI18n()
+const i18n = useI18n()
+const { t, locale } = i18n
 const auth = useAuthStore()
 
 const LOCALE_LABELS: Record<Locale, string> = { en: 'English', ru: 'Русский' }
@@ -79,6 +81,7 @@ const activeLocale = computed(() => (locale.value as Locale) ?? getLocale())
 
 async function chooseLocale(next: Locale) {
   if (next === activeLocale.value) return
+  await ensureLocaleMessages(i18n, next)
   setLocale(next)
   locale.value = next
   if (typeof document !== 'undefined') document.documentElement.lang = next
@@ -140,7 +143,7 @@ async function savePassword() {
          that failed to load. -->
     <div v-if="auth.me" class="grid min-w-0 items-start gap-5 lg:grid-cols-2">
       <section class="min-w-0 rounded-xl border bg-card">
-        <h2 class="border-b px-5 py-3.5 font-display text-[15px] font-semibold tracking-tight">
+        <h2 class="border-b px-5 py-3.5 font-display text-base font-semibold tracking-tight">
           {{ t('profileSettings.groups.profile') }}
         </h2>
 
@@ -163,7 +166,7 @@ async function savePassword() {
               </p>
               <p class="mt-0.5 text-xs text-muted-foreground">
                 {{ t('profileSettings.name.email', { email: auth.me.email }) }}
-                <RouterLink to="/u" class="text-primary underline-offset-2 hover:underline">
+                <RouterLink to="/u" class="text-primary underline underline-offset-2">
                   {{ t('profileSettings.name.viewProfile') }}
                 </RouterLink>
               </p>
@@ -227,7 +230,7 @@ async function savePassword() {
       </section>
 
       <section class="min-w-0 rounded-xl border bg-card">
-        <h2 class="border-b px-5 py-3.5 font-display text-[15px] font-semibold tracking-tight">
+        <h2 class="border-b px-5 py-3.5 font-display text-base font-semibold tracking-tight">
           {{ t('profileSettings.groups.signIn') }}
         </h2>
 

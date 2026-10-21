@@ -53,11 +53,11 @@ watch(() => route.path, revealCurrent)
     >
       <!-- Where docs and templates put their search, this names the area. -->
       <div class="hidden border-b px-3 py-3 lg:block">
-        <p class="font-display text-[15px] font-semibold tracking-tight">{{ t('common.ai') }}</p>
-        <p class="mt-0.5 text-[11px] leading-snug text-muted-foreground">{{ t('ai.pageSubtitle') }}</p>
+        <p class="font-display text-base font-semibold tracking-tight">{{ t('common.ai') }}</p>
+        <p class="mt-0.5 text-caption leading-snug text-muted-foreground">{{ t('ai.pageSubtitle') }}</p>
       </div>
 
-      <div ref="strip" class="relative flex min-h-0 flex-1 gap-1 overflow-x-auto px-2 py-2 lg:block lg:overflow-x-visible lg:overflow-y-auto lg:p-0">
+      <div ref="strip" class="relative flex min-h-0 flex-1 gap-1 overflow-x-auto px-2 py-2 max-lg:kn-scroll-strip lg:block lg:overflow-x-visible lg:overflow-y-auto lg:p-0">
         <div
           v-for="group in AI_SECTION_GROUPS"
           :key="group.label"
@@ -65,7 +65,7 @@ watch(() => route.path, revealCurrent)
         >
           <p
             :id="`kn-ai-${group.label}`"
-            class="hidden px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase lg:block"
+            class="hidden px-3 pt-2 pb-1 text-caption font-semibold tracking-wide text-muted-foreground uppercase lg:block"
           >
             {{ t(group.label) }}
           </p>

@@ -11,12 +11,15 @@
  * `sm` is the hinge the shell already reflows content at; the rail's own
  * `lg` hinge is a different question (navigation), so it is not reused here.
  *
- * SSR: `useMediaQuery` reads false on the server, so the popover branch is what
- * renders — but both branches are closed at hydration and the trigger markup is
- * identical either way, so there is nothing to mismatch.
+ * SSR: the server cannot see the viewport, so it renders the popover branch.
+ * A bare `useMediaQuery` reads the real width during the client's setup, and
+ * on a phone the first client render then has a `<Sheet>` where the server
+ * wrote a comment — a hydration node mismatch on every page with a bell in the
+ * toolbar. `useHydratedMediaQuery` holds the popover branch until mount, so
+ * hydration matches and the sheet takes over a tick later, while still closed.
  */
 import { ref } from 'vue'
-import { useMediaQuery } from '@vueuse/core'
+import { useHydratedMediaQuery } from '@/lib/use-hydrated'
 import type { HTMLAttributes } from 'vue'
 import { Popover, PopoverContent, PopoverTrigger } from '.'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -43,7 +46,7 @@ const props = withDefaults(
 )
 
 const open = defineModel<boolean>('open', { default: false })
-const isCompact = useMediaQuery('(max-width: 639.98px)')
+const isCompact = useHydratedMediaQuery('(max-width: 639.98px)')
 const sheetEl = ref<unknown>(null)
 
 function close() {

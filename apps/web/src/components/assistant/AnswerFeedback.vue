@@ -186,7 +186,7 @@ function pressDown() {
             type="button"
             role="radio"
             :aria-checked="reason === r"
-            class="rounded-full border px-2.5 py-0.5 text-xs transition-colors"
+            class="rounded-md border px-2.5 py-0.5 text-xs transition-colors"
             :class="reason === r ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:border-primary hover:text-primary'"
             @click="reason = r"
           >
@@ -200,7 +200,7 @@ function pressDown() {
             rows="3"
             maxlength="2000"
             :placeholder="t('assistant.feedback.commentPlaceholder')"
-            class="w-full resize-y rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/25"
+            class="w-full resize-y rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring"
             @keydown.enter.meta.prevent="submit({ rating: 'down', reason, comment })"
             @keydown.enter.ctrl.prevent="submit({ rating: 'down', reason, comment })"
           />
@@ -222,11 +222,11 @@ function pressDown() {
       </PopoverContent>
     </Popover>
 
-    <span v-if="thanked" class="ml-1 text-[11px] text-muted-foreground" role="status">
+    <span v-if="thanked" class="ml-1 text-caption text-muted-foreground" role="status">
       {{ reported && reported.reported > 0 ? t('assistant.feedback.reported', { n: reported.reported }, reported.reported) : t('assistant.feedback.thanks') }}
       <template v-if="reported && reported.failed > 0"> {{ t('assistant.feedback.reportFailed', { n: reported.failed }, reported.failed) }}</template>
     </span>
-    <span v-else-if="error && !open" class="ml-1 text-[11px] text-destructive" role="alert">{{ error }}</span>
+    <span v-else-if="error && !open" class="ml-1 text-caption text-destructive" role="alert">{{ error }}</span>
   </div>
 </template>
 

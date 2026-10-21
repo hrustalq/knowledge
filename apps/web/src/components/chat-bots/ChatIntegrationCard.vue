@@ -35,6 +35,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { PageTabs, panelId, tabId, type PageTab } from '@/components/layout/page'
 import AgentSelect from './AgentSelect.vue'
 import ChatBindingTable from './ChatBindingTable.vue'
 
@@ -48,6 +49,10 @@ const socket = computed(() => chatPlatformNeedsServer(props.bot.kind))
 /** Product names are never translated. */
 const platform = computed(() => CHAT_PLATFORM_NAMES[props.bot.kind])
 const tab = ref<'groups' | 'people'>('groups')
+const tabs = computed<PageTab<'groups' | 'people'>[]>(() => [
+  { key: 'groups', label: t('chatBots.card.groups', { n: props.bot.bindingCount }) },
+  { key: 'people', label: t('chatBots.card.people', { n: props.bot.identityCount }) },
+])
 const identitiesOptions = computed(() =>
   apiQueryOptions('/v1/chat/integrations/{id}/identities', { path: { id: props.bot.id } }),
 )
@@ -108,7 +113,7 @@ async function unlink(identityId: string) {
     <header class="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-start">
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
-          <h2 class="font-display text-[15px] font-semibold tracking-tight">{{ bot.name }}</h2>
+          <h2 class="font-display text-base font-semibold tracking-tight">{{ bot.name }}</h2>
           <Badge variant="outline">{{ t(`chatBots.kind.${bot.kind}`) }}</Badge>
           <Badge v-if="!bot.enabled" variant="secondary">{{ t('chatBots.card.off') }}</Badge>
         </div>
@@ -132,7 +137,7 @@ async function unlink(identityId: string) {
       <div
         v-if="bot.webhookError"
         role="status"
-        class="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300"
+        class="flex items-start gap-2 rounded-md border kn-callout-warning px-3 py-2.5 text-sm"
       >
         <AlertTriangle class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <div class="min-w-0 space-y-1">
@@ -158,37 +163,28 @@ async function unlink(identityId: string) {
         />
       </div>
 
-      <div class="flex gap-1 overflow-x-auto border-b" role="tablist">
-        <button
-          v-for="k in (['groups', 'people'] as const)"
-          :key="k"
-          type="button"
-          role="tab"
-          :aria-selected="tab === k"
-          class="-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors"
-          :class="tab === k ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'"
-          @click="tab = k"
-        >
-          {{ k === 'groups' ? t('chatBots.card.groups', { n: bot.bindingCount }) : t('chatBots.card.people', { n: bot.identityCount }) }}
-        </button>
+      <!-- Scoped by bot: the settings page lists every bot, so a bare key
+           would give each card's Groups tab the same id. -->
+      <PageTabs v-model="tab" :tabs="tabs" :scope="bot.id" :label="bot.name" />
+
+      <div :id="panelId(tab, bot.id)" role="tabpanel" :aria-labelledby="tabId(tab, bot.id)" class="space-y-4">
+        <ChatBindingTable v-if="tab === 'groups'" :integration-id="bot.id" :kind="bot.kind" @changed="emit('changed')" />
+
+        <template v-else>
+          <p class="text-xs text-muted-foreground">{{ t('chatBots.people.hint') }}</p>
+          <ul v-if="identities.length" class="divide-y rounded-md border">
+            <li v-for="i in identities" :key="i.id" class="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+              <span class="min-w-0 flex-1 truncate">
+                {{ i.externalUserName ?? i.externalUserId }}
+                <span class="text-muted-foreground"> → {{ i.userDisplayName ?? i.userId }}</span>
+                <span class="text-xs text-muted-foreground"> · {{ formatDate(i.linkedAt) }}</span>
+              </span>
+              <Button size="sm" variant="outline" @click="unlink(i.id)">{{ t('chatBots.people.unlink') }}</Button>
+            </li>
+          </ul>
+          <p v-else-if="identitiesQuery.isSuccess.value" class="text-sm text-muted-foreground">{{ t('chatBots.people.none') }}</p>
+        </template>
       </div>
-
-      <ChatBindingTable v-if="tab === 'groups'" :integration-id="bot.id" :kind="bot.kind" @changed="emit('changed')" />
-
-      <template v-else>
-        <p class="text-xs text-muted-foreground">{{ t('chatBots.people.hint') }}</p>
-        <ul v-if="identities.length" class="divide-y rounded-md border">
-          <li v-for="i in identities" :key="i.id" class="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
-            <span class="min-w-0 flex-1 truncate">
-              {{ i.externalUserName ?? i.externalUserId }}
-              <span class="text-muted-foreground"> → {{ i.userDisplayName ?? i.userId }}</span>
-              <span class="text-xs text-muted-foreground"> · {{ formatDate(i.linkedAt) }}</span>
-            </span>
-            <Button size="sm" variant="outline" @click="unlink(i.id)">{{ t('chatBots.people.unlink') }}</Button>
-          </li>
-        </ul>
-        <p v-else-if="identitiesQuery.isSuccess.value" class="text-sm text-muted-foreground">{{ t('chatBots.people.none') }}</p>
-      </template>
     </div>
 
     <AlertDialog v-model:open="confirmDelete">

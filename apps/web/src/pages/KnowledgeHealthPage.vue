@@ -255,7 +255,7 @@ const previewRow = ref<KnowledgeHealthRow | null>(null)
           v-for="p in HEALTH_PRESETS"
           :key="p"
           type="button"
-          class="inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          class="inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring"
           :class="preset === p
             ? 'border-primary/40 bg-primary/10 text-primary'
             : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'"

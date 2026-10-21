@@ -172,7 +172,7 @@ function purposesServedBy(id: string): string[] {
   >
     <ul v-if="providers.length" class="divide-y rounded-lg border">
       <li v-for="p in providers" :key="p.id" class="flex flex-wrap items-center gap-3 px-3 py-2.5">
-        <CircleCheck v-if="p.status === 'ok'" class="size-4 shrink-0 text-emerald-600" />
+        <CircleCheck v-if="p.status === 'ok'" class="size-4 shrink-0 text-panel-tip-ink" />
         <CircleX v-else-if="p.status === 'error'" class="text-destructive size-4 shrink-0" />
         <CircleDashed v-else class="text-muted-foreground size-4 shrink-0" />
 

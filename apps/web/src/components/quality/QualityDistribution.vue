@@ -44,7 +44,7 @@ const bands = computed(() =>
         </span>
       </li>
     </ol>
-    <figcaption class="mt-1 grid grid-cols-5 gap-1.5 text-center text-[0.65rem] tabular-nums text-muted-foreground" aria-hidden="true">
+    <figcaption class="mt-1 grid grid-cols-5 gap-1.5 text-center text-micro tabular-nums text-muted-foreground" aria-hidden="true">
       <span v-for="b in bands" :key="b.label">{{ b.label }}</span>
     </figcaption>
   </figure>

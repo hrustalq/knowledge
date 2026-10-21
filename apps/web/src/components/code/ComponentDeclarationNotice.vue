@@ -29,9 +29,9 @@ const missing = computed(() => (declaration.value?.warning ? [] : (declaration.v
   <p
     v-if="declaration?.warning"
     role="status"
-    class="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs"
+    class="flex items-start gap-2 rounded-md border kn-callout-warning px-3 py-2 text-xs"
   >
-    <TriangleAlert class="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+    <TriangleAlert class="mt-0.5 size-3.5 shrink-0 text-panel-warning-ink" aria-hidden="true" />
     <span>
       <span class="font-medium">{{ t('component.notice.title') }}</span>
       {{ t(`component.notice.${declaration.warning}`, { repository: declaration.repository ?? '' }) }}
@@ -40,9 +40,9 @@ const missing = computed(() => (declaration.value?.warning ? [] : (declaration.v
   <p
     v-else-if="missing.length > 0"
     role="status"
-    class="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs"
+    class="flex items-start gap-2 rounded-md border kn-callout-warning px-3 py-2 text-xs"
   >
-    <TriangleAlert class="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+    <TriangleAlert class="mt-0.5 size-3.5 shrink-0 text-panel-warning-ink" aria-hidden="true" />
     <span>
       <span class="font-medium">{{ t('component.notice.missingTitle') }}</span>
       {{ t('component.notice.missing', { paths: missing.join(', ') }) }}

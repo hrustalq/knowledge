@@ -47,7 +47,7 @@ function add() {
     <div
       v-for="(p, i) in placeholders"
       :key="i"
-      class="bg-muted/20 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_7.5rem_auto] items-center gap-2 rounded-md border p-2"
+      class="bg-muted/20 grid grid-cols-2 items-center gap-2 rounded-md border p-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_7.5rem_auto]"
     >
       <Input
         :model-value="p.name"
@@ -83,6 +83,7 @@ function add() {
         type="button"
         variant="ghost"
         size="icon-sm"
+        class="justify-self-end sm:justify-self-auto"
         :disabled="disabled"
         :aria-label="t('templates.placeholders.remove', { name: p.name || '?' })"
         @click="remove(i)"

@@ -133,7 +133,7 @@ async function submit() {
         <label class="block space-y-1">
           <span class="text-muted-foreground text-xs font-medium">{{ t('ai.learnings.text') }}</span>
           <Textarea v-model="form.text" rows="4" :placeholder="t('ai.learnings.textPlaceholder')" />
-          <span class="block text-right text-[11px]" :class="tooLong ? 'text-destructive' : 'text-muted-foreground'">
+          <span class="block text-right text-caption" :class="tooLong ? 'text-destructive' : 'text-muted-foreground'">
             {{ form.text.length }} / {{ AGENT_LEARNING_MAX_CHARS }}
           </span>
         </label>

@@ -301,7 +301,7 @@ function summaryOf(filter: SavedFilter): string {
   <div class="py-2">
     <!-- Applied ---------------------------------------------------------- -->
     <div class="flex items-center gap-2 px-3 pb-1 pt-2">
-      <h2 class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <h2 class="text-caption font-semibold uppercase tracking-wider text-muted-foreground">
         {{ t('filters.applied') }}
       </h2>
       <!-- Clear belongs to what it clears, not beside the save controls: a
@@ -309,7 +309,7 @@ function summaryOf(filter: SavedFilter): string {
       <button
         v-if="narrowed"
         type="button"
-        class="ml-auto rounded px-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        class="ml-auto rounded px-1 text-caption text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         @click="emit('clear')"
       >
         {{ t('common.clear') }}
@@ -329,7 +329,7 @@ function summaryOf(filter: SavedFilter): string {
         <span class="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 text-sm">
           <component :is="row.icon" class="size-4 shrink-0 text-muted-foreground" />
           <span class="min-w-0">
-            <span class="block truncate text-[11px] text-muted-foreground">{{ row.label }}</span>
+            <span class="block truncate text-caption text-muted-foreground">{{ row.label }}</span>
             <span class="block truncate" :title="row.value">{{ row.value }}</span>
           </span>
         </span>
@@ -402,7 +402,7 @@ function summaryOf(filter: SavedFilter): string {
     </div>
 
     <!-- Saved ------------------------------------------------------------ -->
-    <h2 class="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <h2 class="px-3 pb-1 pt-4 text-caption font-semibold uppercase tracking-wider text-muted-foreground">
       {{ t('filters.savedViews') }}
     </h2>
 
@@ -448,7 +448,7 @@ function summaryOf(filter: SavedFilter): string {
             <Bookmark class="size-4 shrink-0" />
             <span class="min-w-0">
               <span class="block truncate" :title="filter.name">{{ filter.name }}</span>
-              <span class="block truncate text-[11px] font-normal text-muted-foreground">
+              <span class="block truncate text-caption font-normal text-muted-foreground">
                 {{ summaryOf(filter)
                 }}<template v-if="filter.id === activeId && modified">
                   · {{ t('filters.edited') }}
@@ -501,7 +501,7 @@ function summaryOf(filter: SavedFilter): string {
         <AlertDialogFooter>
           <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
           <AlertDialogAction
-            class="bg-destructive text-white hover:bg-destructive/90"
+            variant="destructive"
             @click="confirmDelete"
           >
             {{ t('common.delete') }}

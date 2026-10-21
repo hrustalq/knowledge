@@ -9,6 +9,7 @@ import type { ListMergeRequestsResponse, MergeRequestInfo } from '@knowledge/con
 import { apiQueryOptions } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageState } from '@/components/layout/page'
 import MergeRequestCard from './MergeRequestCard.vue'
 
 const { t } = useI18n()
@@ -43,28 +44,19 @@ const isLoading = computed(() => props.loading ?? (!!props.documentId && documen
     <Skeleton v-for="i in 3" :key="i" class="h-16 w-full" />
   </div>
 
-  <div
+  <PageState
     v-else-if="mergeRequests.length === 0"
-    class="grid place-items-center rounded-lg border border-dashed bg-card py-16 text-center"
+    state="empty"
+    :icon="narrowed ? SearchX : GitPullRequestArrow"
+    :title="narrowed ? t('mr.noMatches') : t('mr.noMergeRequests')"
+    :description="narrowed ? t('mr.noneMatchFilters') : t('mr.branchToPropose')"
   >
-    <template v-if="narrowed">
-      <SearchX class="size-8 text-muted-foreground/50" />
-      <p class="mt-3 font-medium">{{ t('mr.noMatches') }}</p>
-      <p class="mt-1 text-sm text-muted-foreground">
-        {{ t('mr.noneMatchFilters') }}
-      </p>
-      <Button variant="outline" size="sm" class="mt-4" @click="$emit('clear')">
+    <template v-if="narrowed" #actions>
+      <Button variant="outline" size="sm" @click="$emit('clear')">
         {{ t('mr.clearSearchFilters') }}
       </Button>
     </template>
-    <template v-else>
-      <GitPullRequestArrow class="size-8 text-muted-foreground/50" />
-      <p class="mt-3 font-medium">{{ t('mr.noMergeRequests') }}</p>
-      <p class="mt-1 text-sm text-muted-foreground">
-        {{ t('mr.branchToPropose') }}
-      </p>
-    </template>
-  </div>
+  </PageState>
 
   <div v-else class="space-y-2">
     <MergeRequestCard v-for="mr in mergeRequests" :key="mr.mergeRequestId" :merge-request="mr" />

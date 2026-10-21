@@ -36,6 +36,7 @@ import { useCopy } from '@/lib/use-copy'
 import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { confirm } from '@/components/ui/confirm'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -250,8 +251,13 @@ async function runTest(p: IdentityProviderView) {
 }
 
 async function confirmRemove(p: IdentityProviderView) {
-  // A native confirm keeps this one destructive action from needing its own dialog state.
-  if (!window.confirm(t('security.providers.removeConfirm', { name: p.name }))) return
+  const ok = await confirm({
+    title: t('security.providers.removeTitle', { name: p.name }),
+    description: t('security.providers.removeBody'),
+    action: t('security.providers.remove'),
+    destructive: true,
+  })
+  if (!ok) return
   try {
     await remove.mutateAsync({ path: { ...path, providerId: p.id } })
     toast.success(t('security.providers.removed'))
@@ -302,9 +308,7 @@ const busy = computed(() => create.isPending.value || update.isPending.value)
     </p>
     <PageState v-else-if="list.isPending.value" state="loading" :rows="2" row-class="h-16" />
     <PageState v-else-if="list.isError.value" state="error" :error="list.error.value" />
-    <p v-else-if="!data?.providers.length" class="rounded-md border border-dashed px-4 py-6 text-sm text-muted-foreground">
-      {{ t('security.providers.empty') }}
-    </p>
+    <PageState v-else-if="!data?.providers.length" state="empty" :icon="KeyRound" :title="t('security.providers.empty')" />
 
     <ul v-else class="divide-y rounded-md border">
       <li v-for="p in data.providers" :key="p.id" class="flex flex-col gap-2 px-4 py-3">

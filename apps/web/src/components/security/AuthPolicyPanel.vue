@@ -19,6 +19,7 @@ import { errorMessage } from '@/api/errors'
 import { getWorkspaceId } from '@/lib/api'
 import { formatList } from '@/lib/format'
 import { Button } from '@/components/ui/button'
+import { confirm } from '@/components/ui/confirm'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { PageState } from '@/components/layout/page'
@@ -65,7 +66,14 @@ const dirty = computed(() => {
 })
 
 async function submit() {
-  if (form.ssoEnforced && !view.value?.asked.ssoEnforced && !window.confirm(t('security.policy.enforceConfirm'))) return
+  if (form.ssoEnforced && !view.value?.asked.ssoEnforced) {
+    const ok = await confirm({
+      title: t('security.policy.enforceTitle'),
+      description: t('security.policy.enforceBody'),
+      action: t('security.domains.enforce'),
+    })
+    if (!ok) return
+  }
   try {
     await save.mutateAsync({
       path,
@@ -112,7 +120,7 @@ async function submit() {
                   : t('security.policy.noProviders')
               }}
             </span>
-            <span v-if="view.asked.ssoEnforced && !view.applied.ssoEnforced" class="block text-amber-700 dark:text-amber-400">
+            <span v-if="view.asked.ssoEnforced && !view.applied.ssoEnforced" class="block text-panel-warning-ink">
               {{ t('security.policy.notApplied') }}
             </span>
           </span>
@@ -152,7 +160,7 @@ async function submit() {
         <p class="text-xs text-muted-foreground">
           {{ t('security.policy.sessionMaxAgeHint', { ttl: view.ceilings.sessionTtlHours }) }}
         </p>
-        <p v-if="ageClamped" class="text-xs text-amber-700 dark:text-amber-400">
+        <p v-if="ageClamped" class="text-xs text-panel-warning-ink">
           {{ t('security.policy.sessionMaxAgeClamped', { ttl: view.ceilings.sessionTtlHours }) }}
         </p>
       </div>

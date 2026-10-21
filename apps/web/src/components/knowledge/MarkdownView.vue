@@ -120,6 +120,9 @@ function collectHeadings(): MarkdownHeading[] {
  * table: `display:block` on a table makes it shrink to its content instead of
  * filling the column. Tiptap wraps tables for the same reason; this is the
  * read view's equivalent.
+ *
+ * Both that box and a code block scroll sideways, and a box that scrolls must
+ * be reachable without a pointer: the arrow keys only move what has focus.
  */
 function wrapTables() {
   const root = host.value
@@ -128,9 +131,11 @@ function wrapTables() {
     if (table.parentElement?.classList.contains('kn-table-scroll')) continue
     const wrap = document.createElement('div')
     wrap.className = 'kn-table-scroll'
+    wrap.tabIndex = 0
     table.replaceWith(wrap)
     wrap.append(table)
   }
+  for (const pre of root.querySelectorAll('pre:not([tabindex])')) pre.setAttribute('tabindex', '0')
 }
 
 /**
@@ -146,6 +151,10 @@ function resolveAssets() {
     // fallback here was unreachable, and an empty src is exactly the bug it
     // looked like it was guarding against.
     img.src = resolveAssetUrl(img.getAttribute('src')!)
+  }
+  // Every image, not only attachments: an external one below the fold is no
+  // more urgent than ours.
+  for (const img of root.querySelectorAll<HTMLImageElement>('img')) {
     img.loading = 'lazy'
     img.decoding = 'async'
   }

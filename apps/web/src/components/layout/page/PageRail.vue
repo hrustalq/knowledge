@@ -110,5 +110,11 @@ watch(() => route.query.tab, applyUrlTab)
     </RailSection>
 
     <slot name="after" />
+
+    <!-- Clearance for the floating Ask AI button (AskAssistant), which sits
+         over the rail's bottom-right corner at every width: without it the last
+         widget's count scrolls no further than under the button. A spacer, not
+         padding, because the lg rule in style.css owns this box's padding. -->
+    <div class="h-10" aria-hidden="true" />
   </aside>
 </template>

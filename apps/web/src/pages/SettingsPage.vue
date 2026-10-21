@@ -81,19 +81,18 @@ function isActive(to: string): boolean {
 <template>
   <!--
     A shell, not a page: the bleed, the flush nav column and the padded content
-    column are the layout's business now, and `:measure="false"` is what says
-    this hosts child routes rather than content of its own — each section knows
-    whether it is a form or a table, and capping here would answer for it.
+    column are the layout's business now. It hosts child routes rather than
+    content of its own — each section knows whether it is a form or a table.
 
     Pane 2: moving between settings sections replaces the content column and
     nothing else. The nav beside it is the same nav afterwards, so it must not
     travel — which is exactly what naming the pane instead of <main> buys. The
     attribute reaches the column through PageLayout's attribute forwarding.
   -->
-  <PageLayout variant="list" :measure="false" data-kn-pane="2">
+  <PageLayout variant="list" data-kn-pane="2">
     <template #sub-rail>
       <PageSubRail :label="t('nav.settings')" permanent>
-        <ul class="flex gap-1 overflow-x-auto px-2 py-2 lg:block lg:space-y-px lg:overflow-visible lg:p-0">
+        <ul class="flex gap-1 overflow-x-auto px-2 py-2 max-lg:kn-scroll-strip lg:block lg:space-y-px lg:overflow-visible lg:p-0">
           <li v-for="l in links" :key="l.to">
             <RouterLink
               :to="l.to"
@@ -105,7 +104,7 @@ function isActive(to: string): boolean {
               <component :is="l.icon" class="size-4 shrink-0" />
               <span class="min-w-0">
                 <span class="block truncate">{{ l.label }}</span>
-                <span class="hidden truncate text-[11px] text-muted-foreground lg:block">{{ l.hint }}</span>
+                <span class="hidden truncate text-caption text-muted-foreground lg:block">{{ l.hint }}</span>
               </span>
             </RouterLink>
           </li>

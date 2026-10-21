@@ -52,28 +52,35 @@ watch(
 </script>
 
 <template>
+  <!-- Solid, not the topbar's 90% + blur: it sits flush under the topbar, so a
+       second backdrop-filter layer bought nothing but a composite per frame. -->
   <nav
     :aria-label="t('nav.breadcrumb')"
-    class="sticky top-0 z-20 flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b bg-background/90 px-4 text-xs text-muted-foreground backdrop-blur lg:px-8"
+    class="sticky top-0 z-20 flex h-9 shrink-0 items-center border-b bg-background px-4 text-xs text-muted-foreground lg:px-8"
   >
-    <template v-for="(c, i) in crumbs" :key="i">
-      <ChevronRight v-if="i > 0" class="size-3 shrink-0" aria-hidden="true" />
-      <span
-        v-if="c.restricted"
-        class="flex max-w-56 shrink-0 items-center gap-1 italic"
-        :title="t('access.lockedLabel')"
-      >
-        <Lock class="size-3 shrink-0" aria-hidden="true" />
-        <span class="truncate">{{ c.label }}</span>
-      </span>
-      <RouterLink
-        v-else-if="c.to && i < crumbs.length - 1"
-        :to="c.to"
-        class="max-w-56 truncate transition-colors hover:text-foreground"
-      >
-        {{ c.label }}
-      </RouterLink>
-      <span v-else class="max-w-56 truncate font-medium text-foreground" aria-current="page">{{ c.label }}</span>
-    </template>
+    <!-- The trail scrolls inside the bar, not the bar itself: its fade masks
+         what it covers, and on the bar that would be the solid ground the page
+         scrolls under. -->
+    <div class="kn-scroll-strip flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+      <template v-for="(c, i) in crumbs" :key="i">
+        <ChevronRight v-if="i > 0" class="size-3 shrink-0" aria-hidden="true" />
+        <span
+          v-if="c.restricted"
+          class="flex max-w-56 shrink-0 items-center gap-1 italic"
+          :title="t('access.lockedLabel')"
+        >
+          <Lock class="size-3 shrink-0" aria-hidden="true" />
+          <span class="truncate">{{ c.label }}</span>
+        </span>
+        <RouterLink
+          v-else-if="c.to && i < crumbs.length - 1"
+          :to="c.to"
+          class="max-w-56 truncate transition-colors hover:text-foreground"
+        >
+          {{ c.label }}
+        </RouterLink>
+        <span v-else class="max-w-56 truncate font-medium text-foreground" aria-current="page">{{ c.label }}</span>
+      </template>
+    </div>
   </nav>
 </template>

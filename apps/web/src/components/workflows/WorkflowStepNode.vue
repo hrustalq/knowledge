@@ -65,14 +65,14 @@ const category = computed(() => {
       </span>
       <span class="min-w-0 flex-1">
         <span class="flex items-center gap-1.5">
-          <span class="min-w-0 flex-1 truncate text-[13px] leading-snug font-medium">
+          <span class="min-w-0 flex-1 truncate text-ui leading-snug font-medium">
             {{ data.step.title || data.step.id }}
           </span>
           <TriangleAlert v-if="data.invalid" class="text-destructive size-3.5 shrink-0" />
         </span>
         <!-- `truncate` has to sit on the text itself: on the flex row it does
              nothing, and the outcome line ran out under the card's edge. -->
-        <span class="text-muted-foreground mt-1 flex items-center gap-1 text-[11px] leading-snug">
+        <span class="text-muted-foreground mt-1 flex items-center gap-1 text-caption leading-snug">
           <Layers v-if="data.step.fanOut" class="size-3 shrink-0" />
           <span class="min-w-0 flex-1 truncate">{{ outcome }}</span>
         </span>

@@ -105,7 +105,8 @@ const inPast = computed(() => !!props.time?.point.value)
           :value="query"
           type="search"
           :placeholder="t('graph.searchNodes')"
-          class="h-8 w-full rounded-md border bg-background pl-8 pr-7 text-xs shadow-xs transition-shadow outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          :aria-label="t('graph.searchNodes')"
+          class="h-8 w-full rounded-md border bg-background pl-8 pr-7 text-xs shadow-xs transition-shadow outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring"
           @input="emit('update:query', ($event.target as HTMLInputElement).value)"
         />
         <button
@@ -139,7 +140,7 @@ const inPast = computed(() => !!props.time?.point.value)
         <Checkbox :model-value="options.colorByCommunity" @update:model-value="set('colorByCommunity', !!$event)" />
         <span class="flex-1">{{ t('graph.colorByCommunity') }}</span>
       </label>
-      <p v-if="!options.showEntities" class="pt-0.5 text-[0.68rem] leading-snug text-muted-foreground">
+      <p v-if="!options.showEntities" class="pt-0.5 text-caption leading-snug text-muted-foreground">
         {{ t('graph.derivedLinksNote') }}
       </p>
     </div>
@@ -199,7 +200,7 @@ const inPast = computed(() => !!props.time?.point.value)
           <span class="flex-1">{{ t('graph.time.changesSince') }}</span>
         </label>
         <!-- The legend is a sample of how each line draws, like the inferred dash above. -->
-        <div class="space-y-1 pl-6 text-[0.68rem] text-muted-foreground">
+        <div class="space-y-1 pl-6 text-caption text-muted-foreground">
           <p class="flex items-center gap-2">
             <svg width="18" height="4" class="shrink-0" aria-hidden="true">
               <line x1="1" y1="2" x2="17" y2="2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="0.6 3.2" />

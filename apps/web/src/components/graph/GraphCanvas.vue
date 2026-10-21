@@ -127,7 +127,7 @@ const summary = computed(() =>
       <div class="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col gap-1.5">
         <p class="self-start rounded-md bg-background/70 px-1.5 py-0.5 text-xs text-muted-foreground backdrop-blur-sm">
           {{ summary }}
-          <span v-if="truncated" class="text-amber-600 dark:text-amber-500"> · {{ t('graph.truncated') }}</span>
+          <span v-if="truncated" class="text-panel-warning-ink"> · {{ t('graph.truncated') }}</span>
         </p>
         <div class="flex items-end gap-3" :class="time ? '' : 'justify-end'">
         <GraphTimeSlider v-if="time" :time="time" />

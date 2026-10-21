@@ -27,8 +27,8 @@ const style = computed(() => (props.tone ? { '--tone': `var(--kn-panel-${props.t
   <span
     class="kn-tone inline-flex shrink-0 items-center justify-center font-mono leading-none font-semibold tracking-[0.04em] uppercase tabular-nums"
     :class="[
-      variant !== 'text' && (size === 'sm' ? 'h-[1.15rem] min-w-[2.9rem] rounded-[4px] px-1 text-[0.66rem]' : 'h-[1.4rem] min-w-[3.6rem] rounded-[5px] px-1.5 text-[0.72rem]'),
-      variant === 'text' && 'text-[0.72rem]',
+      variant !== 'text' && (size === 'sm' ? 'h-[1.15rem] min-w-[2.9rem] rounded-[4px] px-1 text-micro' : 'h-[1.4rem] min-w-[3.6rem] rounded-[5px] px-1.5 text-caption'),
+      variant === 'text' && 'text-caption',
     ]"
     :data-variant="variant"
     :data-toned="tone ? '' : undefined"

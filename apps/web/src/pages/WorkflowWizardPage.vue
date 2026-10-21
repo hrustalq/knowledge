@@ -191,7 +191,7 @@ function leave() {
       <ol class="mt-3 flex items-center gap-2 text-xs">
         <li v-for="(name, i) in WIZARD_STEPS" :key="name" class="flex min-w-0 items-center gap-2">
           <span
-            class="grid size-5 shrink-0 place-items-center rounded-full border text-[10px] font-medium transition-colors"
+            class="grid size-5 shrink-0 place-items-center rounded-full border text-micro font-medium transition-colors"
             :class="
               i < stepIndex
                 ? 'border-primary bg-primary text-primary-foreground'
@@ -238,7 +238,7 @@ function leave() {
                 <MessagesSquare class="size-4.5" />
               </span>
               <span class="mt-3 block text-sm font-medium">{{ t('workflow.wizard.laneDescribe') }}</span>
-              <span class="text-muted-foreground mt-1 block text-[13px] leading-snug">
+              <span class="text-muted-foreground mt-1 block text-ui leading-snug">
                 {{ t('workflow.wizard.laneDescribeBody') }}
               </span>
             </button>
@@ -248,7 +248,7 @@ function leave() {
                 <PenTool class="size-4.5" />
               </span>
               <span class="mt-3 block text-sm font-medium">{{ t('workflow.wizard.laneDraw') }}</span>
-              <span class="text-muted-foreground mt-1 block text-[13px] leading-snug">
+              <span class="text-muted-foreground mt-1 block text-ui leading-snug">
                 {{ t('workflow.wizard.laneDrawBody') }}
               </span>
             </button>
@@ -278,7 +278,7 @@ function leave() {
 
           <div v-else class="min-h-0 flex-1 overflow-y-auto p-4">
             <h2 class="text-sm font-medium">{{ t('workflow.wizard.pickShape') }}</h2>
-            <p class="text-muted-foreground mt-1 text-[13px] leading-snug">{{ t('workflow.wizard.pickShapeBody') }}</p>
+            <p class="text-muted-foreground mt-1 text-ui leading-snug">{{ t('workflow.wizard.pickShapeBody') }}</p>
             <ul class="mt-4 space-y-2">
               <li v-for="pattern in patterns" :key="pattern.key">
                 <button
@@ -292,8 +292,8 @@ function leave() {
                     <component :is="pattern.icon" class="size-4" />
                   </span>
                   <span class="min-w-0 flex-1">
-                    <span class="block text-[13px] font-medium">{{ pattern.name }}</span>
-                    <span class="text-muted-foreground mt-0.5 block text-[11px] leading-snug">{{ pattern.summary }}</span>
+                    <span class="block text-ui font-medium">{{ pattern.name }}</span>
+                    <span class="text-muted-foreground mt-0.5 block text-caption leading-snug">{{ pattern.summary }}</span>
                   </span>
                   <Check v-if="pickedPattern === pattern.key" class="text-primary mt-px size-4 shrink-0" />
                 </button>
@@ -332,11 +332,11 @@ function leave() {
 
       <!-- 3 · Review ------------------------------------------------------ -->
       <div v-else :key="'review'" class="kn-wf-step h-full overflow-y-auto">
-        <div class="mx-auto grid max-w-5xl gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:px-6">
+        <div class="grid gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:px-6">
           <div class="min-w-0 space-y-5">
             <div>
               <h2 class="text-lg font-semibold">{{ t('workflow.wizard.reviewTitle') }}</h2>
-              <p class="text-muted-foreground mt-1 text-sm leading-relaxed">{{ t('workflow.wizard.reviewBody') }}</p>
+              <p class="kn-measure text-muted-foreground mt-1 text-sm leading-relaxed">{{ t('workflow.wizard.reviewBody') }}</p>
             </div>
 
             <label class="block space-y-1.5">
@@ -365,7 +365,7 @@ function leave() {
                 <li v-for="(line, i) in reading" :key="line.id" class="flex gap-3 px-4 py-2.5">
                   <span class="text-muted-foreground w-4 shrink-0 text-right text-xs tabular-nums">{{ i + 1 }}</span>
                   <span class="min-w-0 flex-1">
-                    <span class="block text-[13px] font-medium">{{ line.title }}</span>
+                    <span class="block text-ui font-medium">{{ line.title }}</span>
                     <span class="text-muted-foreground block text-xs leading-snug">{{ line.sentence }}</span>
                   </span>
                 </li>
@@ -376,7 +376,7 @@ function leave() {
               <li v-for="(issue, i) in issues" :key="i" class="flex gap-1.5 text-xs leading-snug">
                 <TriangleAlert
                   class="mt-px size-3.5 shrink-0"
-                  :class="issue.severity === 'error' ? 'text-destructive' : 'text-amber-600 dark:text-amber-500'"
+                  :class="issue.severity === 'error' ? 'text-destructive' : 'text-panel-warning-ink'"
                 />
                 <span class="min-w-0 flex-1">{{ issue.message }}</span>
               </li>

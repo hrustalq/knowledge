@@ -109,10 +109,14 @@ function clear(): void {
         <span class="text-xs text-muted-foreground">{{ t('import.upTo', { size: formatBytes(maxBytes) }) }}</span>
       </button>
 
+      <!-- The button above is the keyboard route, so the input stays out of the
+           tab order; it still needs a name for assistive tech that finds it. -->
       <input
         ref="input"
         type="file"
         class="sr-only"
+        tabindex="-1"
+        :aria-label="t('import.dropFile')"
         :accept="ACCEPT_ATTR"
         :disabled="disabled"
         @change="take(($event.target as HTMLInputElement).files?.[0])"

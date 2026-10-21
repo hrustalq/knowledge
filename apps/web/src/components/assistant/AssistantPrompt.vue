@@ -225,15 +225,15 @@ function submit() {
         <div class="min-w-0 flex-1 space-y-2.5">
           <div class="space-y-1">
             <p class="text-sm font-medium">{{ t('chat.needsAgentMode') }}</p>
-            <p class="text-[13px] leading-relaxed text-muted-foreground">
+            <p class="text-ui leading-relaxed text-muted-foreground">
               {{ t('chat.agentModeExplainer') }}
             </p>
           </div>
-          <p class="rounded-lg border bg-background px-3 py-2 text-[13px] leading-relaxed">
+          <p class="rounded-lg border bg-background px-3 py-2 text-ui leading-relaxed">
             {{ prompt.intent }}
           </p>
-          <p v-if="switched" class="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
-            <Check class="size-3.5 text-emerald-500" />
+          <p v-if="switched" class="inline-flex items-center gap-1.5 text-ui text-muted-foreground">
+            <Check class="size-3.5 text-panel-tip" />
             {{ t('chat.switchedToAgent') }}
           </p>
           <Button v-else size="sm" :disabled="!active" @click="emit('switchMode', prompt.intent)">
@@ -276,8 +276,8 @@ function submit() {
               @change="values[field.name] = opt.value"
             />
             <span class="min-w-0 flex-1 leading-snug">
-              <span class="block text-[13px]">{{ opt.label }}</span>
-              <span v-if="opt.description" class="block text-[11px] text-muted-foreground">
+              <span class="block text-ui">{{ opt.label }}</span>
+              <span v-if="opt.description" class="block text-caption text-muted-foreground">
                 {{ opt.description }}
               </span>
             </span>
@@ -305,8 +305,8 @@ function submit() {
               @change="toggle(field, opt.value)"
             />
             <span class="min-w-0 flex-1 leading-snug">
-              <span class="block text-[13px]">{{ opt.label }}</span>
-              <span v-if="opt.description" class="block text-[11px] text-muted-foreground">
+              <span class="block text-ui">{{ opt.label }}</span>
+              <span v-if="opt.description" class="block text-caption text-muted-foreground">
                 {{ opt.description }}
               </span>
             </span>
@@ -320,14 +320,14 @@ function submit() {
           :placeholder="field.placeholder"
           :disabled="!active"
           rows="3"
-          class="w-full resize-y rounded-lg border bg-background px-3 py-2 text-[13px] outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/25"
+          class="w-full resize-y rounded-lg border bg-background px-3 py-2 text-ui outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring"
         />
         <Input
           v-else
           v-model="values[field.name] as string"
           :placeholder="field.placeholder"
           :disabled="!active"
-          class="h-9 text-[13px]"
+          class="h-9 text-ui"
         />
       </div>
 
@@ -339,20 +339,20 @@ function submit() {
           v-model="other"
           :placeholder="t('chat.answerInOwnWords')"
           :disabled="!active"
-          class="h-9 text-[13px]"
+          class="h-9 text-ui"
         />
       </div>
 
       <div class="flex items-center gap-2 pt-0.5">
-        <p v-if="answered" class="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
-          <Check class="size-3.5 text-emerald-500" />
+        <p v-if="answered" class="inline-flex items-center gap-1.5 text-ui text-muted-foreground">
+          <Check class="size-3.5 text-panel-tip" />
           {{ t('chat.answered') }}
         </p>
         <Button v-else type="submit" size="sm" :disabled="!active || !complete">
           {{ prompt.submitLabel ?? t('chat.sendAnswer') }}
           <ArrowRight class="size-3.5" />
         </Button>
-        <p v-if="active && !complete" class="text-[11px] text-muted-foreground">
+        <p v-if="active && !complete" class="text-caption text-muted-foreground">
           {{ t('chat.answerStarred') }}
         </p>
       </div>

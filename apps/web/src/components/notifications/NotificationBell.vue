@@ -57,7 +57,7 @@ watch(open, (isOpen) => {
         <span class="sr-only">{{ t('notifications.title') }}</span>
         <span
           v-if="store.hasUnread"
-          class="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-medium tabular-nums text-primary-foreground"
+          class="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-micro font-medium tabular-nums text-primary-foreground"
         >{{ badge }}</span>
       </Button>
     </template>
@@ -95,7 +95,9 @@ watch(open, (isOpen) => {
       <NotificationList
         :entries="shown"
         :loading="!store.loaded && store.entries.length === 0"
+        :error="store.error"
         compact
+        @retry="store.refresh()"
         @read="store.markRead([$event])"
         @navigated="open = false"
       />

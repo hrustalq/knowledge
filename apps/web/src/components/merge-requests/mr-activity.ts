@@ -83,7 +83,7 @@ export function systemNote(
 
   switch (entry.action) {
     case 'merge-request.created':
-      return { icon: GitPullRequestArrow, tone: 'text-emerald-500', text: t('mr.opened') }
+      return { icon: GitPullRequestArrow, tone: 'text-panel-tip', text: t('mr.opened') }
 
     case 'merge-request.updated': {
       const clauses = editClauses(meta, nameOf, t)
@@ -105,13 +105,13 @@ export function systemNote(
     }
 
     case 'merge-request.approved':
-      return { icon: CheckCircle2, tone: 'text-emerald-500', text: t('mr.approvedAction') }
+      return { icon: CheckCircle2, tone: 'text-panel-tip', text: t('mr.approvedAction') }
 
     case 'merge-request.closed':
-      return { icon: GitPullRequestClosed, tone: 'text-red-500', text: t('mr.closedAction') }
+      return { icon: GitPullRequestClosed, tone: 'text-panel-caution', text: t('mr.closedAction') }
 
     case 'merge-request.reopened':
-      return { icon: RotateCcw, tone: 'text-emerald-500', text: t('mr.reopenedAction') }
+      return { icon: RotateCcw, tone: 'text-panel-tip', text: t('mr.reopenedAction') }
 
     case 'merge-request.merged': {
       const strategy = str(meta.strategy)

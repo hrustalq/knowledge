@@ -123,7 +123,7 @@ defineExpose({ send })
           <li v-for="seed in SEEDS" :key="seed">
             <button
               type="button"
-              class="hover:bg-muted/60 focus-visible:ring-ring hover:border-primary/30 w-full rounded-lg border px-3 py-2 text-left text-[13px] leading-snug transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              class="hover:bg-muted/60 focus-visible:ring-ring hover:border-primary/30 w-full rounded-lg border px-3 py-2 text-left text-ui leading-snug transition-colors focus-visible:ring-2 focus-visible:outline-none"
               :disabled="disabled"
               @click="send(t(`workflow.wizard.${seed}`))"
             >
@@ -164,7 +164,7 @@ defineExpose({ send })
     </div>
 
     <div class="shrink-0 border-t p-3">
-      <div class="focus-within:border-primary focus-within:ring-ring/50 flex items-end gap-2 rounded-lg border px-2 py-1.5 transition-[color,box-shadow] focus-within:ring-[3px]">
+      <div class="focus-within:border-primary focus-within:ring-ring flex items-end gap-2 rounded-lg border px-2 py-1.5 transition-[color,box-shadow] focus-within:ring-[3px]">
         <Textarea
           v-model="input"
           rows="1"
@@ -177,7 +177,7 @@ defineExpose({ send })
           <ArrowUp class="size-4" />
         </Button>
       </div>
-      <p class="text-muted-foreground mt-1.5 px-1 text-[11px] leading-snug">
+      <p class="text-muted-foreground mt-1.5 px-1 text-caption leading-snug">
         {{ t('workflow.wizard.composerHint') }}
       </p>
     </div>

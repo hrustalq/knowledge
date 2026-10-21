@@ -82,7 +82,7 @@ const open = ref(false)
       <Button
         :variant="open ? 'secondary' : 'outline'"
         size="sm"
-        class="ml-auto h-7 font-sans text-[0.8rem]"
+        class="ml-auto h-7 font-sans text-ui"
         :aria-expanded="open"
         :aria-controls="`${uid}-console`"
         @click="open = !open"

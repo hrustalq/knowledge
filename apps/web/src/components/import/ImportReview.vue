@@ -149,13 +149,13 @@ const empty = computed(() => markdown.value.trim().length === 0)
       <!-- What the parse could not carry. Never swallowed. -->
       <section
         v-if="warnings.length"
-        class="border-b border-amber-500/25 bg-amber-500/5 p-4 text-sm dark:border-amber-400/20"
+        class="border-b kn-callout-warning p-4 text-sm"
       >
-        <p class="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300">
+        <p class="flex items-center gap-2 font-medium text-panel-warning-ink">
           <AlertTriangle class="size-4 shrink-0" aria-hidden="true" />
           {{ t('import.thingsToCheck', { n: warnings.length }, warnings.length) }}
         </p>
-        <ul class="mt-2 space-y-1.5 text-amber-900/90 dark:text-amber-100/80">
+        <ul class="mt-2 space-y-1.5 text-panel-warning-ink">
           <li v-for="w in warnings.slice(0, 2)" :key="w" class="flex gap-2">
             <span class="mt-2 size-1 shrink-0 rounded-full bg-current opacity-60" aria-hidden="true" />
             <span>{{ w }}</span>
@@ -166,7 +166,7 @@ const empty = computed(() => markdown.value.trim().length === 0)
              that idiom was first written; it now lives in ui/collapse so every
              disclosure in the app opens the same way. -->
         <Collapse :open="warningsOpen" :unmount="false">
-          <ul class="space-y-1.5 text-amber-900/90 dark:text-amber-100/80">
+          <ul class="space-y-1.5 text-panel-warning-ink">
             <li v-for="w in warnings.slice(2)" :key="w" class="flex gap-2 pt-1.5">
               <span class="mt-2 size-1 shrink-0 rounded-full bg-current opacity-60" aria-hidden="true" />
               <span>{{ w }}</span>
@@ -176,7 +176,7 @@ const empty = computed(() => markdown.value.trim().length === 0)
         <button
           v-if="warnings.length > 2"
           type="button"
-          class="mt-2 flex items-center gap-1 text-xs font-medium text-amber-700 underline-offset-4 hover:underline dark:text-amber-300"
+          class="mt-2 flex items-center gap-1 text-xs font-medium text-panel-warning-ink underline-offset-4 hover:underline"
           @click="warningsOpen = !warningsOpen"
         >
           {{ warningsOpen ? t('editor.showFewer') : t('editor.showAll', { n: warnings.length }) }}

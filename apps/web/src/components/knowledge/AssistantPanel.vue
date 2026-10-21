@@ -99,7 +99,7 @@ async function runSuggest() {
       <template v-else>
         <p class="text-xs text-muted-foreground">{{ review.summary }}</p>
         <div v-for="(issue, i) in review.issues" :key="i" class="flex items-start gap-2 text-xs">
-          <Badge :variant="severityVariant(issue.severity)" class="shrink-0 text-[10px]">{{ t(severityLabel(issue.severity)) }}</Badge>
+          <Badge :variant="severityVariant(issue.severity)" class="shrink-0 text-caption">{{ t(severityLabel(issue.severity)) }}</Badge>
           <span>
             <span v-if="issue.section" class="font-medium">{{ issue.section }}: </span>{{ issue.message }}
           </span>

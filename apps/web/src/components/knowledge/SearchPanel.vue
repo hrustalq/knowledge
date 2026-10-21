@@ -52,7 +52,7 @@ function clearLabel() {
   >
     <aside
       v-if="$slots.filters"
-      class="sidebar-scroll hidden min-h-0 overflow-y-auto lg:block"
+      class="quiet-scroll hidden min-h-0 overflow-y-auto lg:block"
       :class="
         railSurface
           ? 'border-r border-sidebar-border bg-sidebar p-4'

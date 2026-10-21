@@ -112,7 +112,7 @@ function onKey(e: KeyboardEvent) {
       <button
         v-if="at !== null"
         type="button"
-        class="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+        class="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
         @click="time.set(null)"
       >
         <RotateCcw class="size-3" />
@@ -139,7 +139,7 @@ function onKey(e: KeyboardEvent) {
       ref="track"
       role="slider"
       tabindex="0"
-      class="kn-time-track relative h-6 cursor-ew-resize touch-none rounded-sm outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      class="kn-time-track relative h-6 cursor-ew-resize touch-none rounded-sm outline-none select-none focus-visible:ring-3 focus-visible:ring-ring"
       :aria-label="t('graph.time.label')"
       :aria-valuemin="span?.from"
       :aria-valuemax="span?.to"
@@ -187,7 +187,7 @@ function onKey(e: KeyboardEvent) {
 
     <!-- Tag names under their ticks; below sm only the chosen one, which is
          the only name a phone-width strip has room to say. -->
-    <div class="relative h-4 text-[0.68rem] leading-4 text-muted-foreground">
+    <div class="relative h-4 text-micro leading-4 text-muted-foreground">
       <span v-if="span && !crowdsStart" class="absolute left-0">{{ formatDayMonth(new Date(span.from)) }}</span>
       <span
         v-for="tag in tags"

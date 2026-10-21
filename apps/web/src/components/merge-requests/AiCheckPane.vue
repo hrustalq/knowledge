@@ -67,8 +67,8 @@ type Severity = AssistantIssue['severity']
 
 // `label` is a message key, resolved with t() at the render site (docs/features/18).
 const SEVERITY: Record<Severity, { icon: Component; tone: string; label: string }> = {
-  error: { icon: AlertCircle, tone: 'text-red-500', label: 'mr.severityError' },
-  warning: { icon: AlertTriangle, tone: 'text-amber-500', label: 'mr.severityWarning' },
+  error: { icon: AlertCircle, tone: 'text-panel-caution', label: 'mr.severityError' },
+  warning: { icon: AlertTriangle, tone: 'text-panel-warning', label: 'mr.severityWarning' },
   suggestion: { icon: Lightbulb, tone: 'text-sky-500', label: 'mr.severitySuggestion' },
 }
 
@@ -143,7 +143,7 @@ function postFindings() {
       </p>
 
       <p v-else-if="state === 'running'" class="flex items-center gap-2 text-xs text-muted-foreground">
-        <span class="size-1.5 animate-pulse rounded-full bg-amber-500" />
+        <span class="size-1.5 animate-pulse rounded-full bg-panel-warning" />
         {{ t('mr.reviewing') }}&nbsp;<span class="font-mono">{{ mergeRequest.sourceBranch }}</span>…
       </p>
 
@@ -154,20 +154,20 @@ function postFindings() {
 
       <template v-else-if="review">
         <p v-if="!review.enabled" class="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
-          <AlertTriangle class="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+          <AlertTriangle class="mt-0.5 size-3.5 shrink-0 text-panel-warning" />
           <i18n-t keypath="mr.aiNotConfigured" tag="span" scope="global">
             <template #setting><span class="font-mono">ASSISTANT_PROVIDER=none</span></template>
           </i18n-t>
         </p>
 
-        <p v-else-if="passed" class="flex items-center gap-2 text-xs font-medium text-emerald-600">
+        <p v-else-if="passed" class="flex items-center gap-2 text-xs font-medium text-panel-tip-ink">
           <CheckCircle2 class="size-4" /> {{ t('mr.aiPassed') }}
         </p>
 
         <template v-else>
           <p
             class="text-xs font-medium"
-            :class="errorCount > 0 ? 'text-red-600' : 'text-amber-600'"
+            :class="errorCount > 0 ? 'text-panel-caution-ink' : 'text-panel-warning-ink'"
           >
             {{ t('count.findings', { n: issues.length }, issues.length) }}<template v-if="errorCount > 0">, {{ t('mr.toFix', { n: errorCount }) }}</template>
           </p>

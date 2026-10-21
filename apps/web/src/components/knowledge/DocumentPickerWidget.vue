@@ -133,7 +133,7 @@ const filteredAll = computed(() => {
       <div :class="compact ? '' : 'max-h-64 overflow-y-auto'">
         <p v-if="!documents.loaded" class="text-muted-foreground px-2 py-1.5 text-xs">{{ t('picker.loadingPages') }}</p>
         <template v-else>
-          <p v-if="filteredRecent.length > 0" class="text-muted-foreground px-2 pt-1 pb-0.5 text-[11px] font-medium">
+          <p v-if="filteredRecent.length > 0" class="text-muted-foreground px-2 pt-1 pb-0.5 text-caption font-medium">
             {{ t('chat.recent') }}
           </p>
           <button
@@ -148,7 +148,7 @@ const filteredAll = computed(() => {
             <Check v-if="isSelected(d.documentId)" class="text-primary size-3.5 shrink-0" />
           </button>
 
-          <p v-if="filteredAll.length > 0" class="text-muted-foreground px-2 pt-2 pb-0.5 text-[11px] font-medium">
+          <p v-if="filteredAll.length > 0" class="text-muted-foreground px-2 pt-2 pb-0.5 text-caption font-medium">
             {{ t('chat.allPages') }}
           </p>
           <button

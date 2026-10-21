@@ -22,7 +22,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useSidebarStore } from '@/stores/sidebar'
 import TreeRowMenu from './TreeRowMenu.vue'
-import { needsAttention, verificationDotClass } from '@/components/verification/verification-ui'
+import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@/components/verification/verification-ui'
 
 const { t } = useI18n()
 defineOptions({ name: 'DocumentTreeNode' })
@@ -119,7 +119,9 @@ const dnd = useTreeDndRow({
       <span
         class="size-1.5 shrink-0 rounded-full"
         :class="statusDot(node.headRevisionStatus)"
-        :title="node.headRevisionStatus ?? 'draft'"
+        role="img"
+        :aria-label="labelFor(t, 'revisionStatus', node.headRevisionStatus ?? 'draft')"
+        :title="labelFor(t, 'revisionStatus', node.headRevisionStatus ?? 'draft')"
       />
       <RouterLink
         :to="`/documents/${node.documentId}`"
@@ -151,8 +153,7 @@ const dnd = useTreeDndRow({
       </span>
       <span
         v-else-if="attention"
-        class="size-1.5 shrink-0 rounded-full"
-        :class="verificationDotClass(node.verification)"
+        :class="[VERIFICATION_MARK_CLASS, verificationDotClass(node.verification)]"
         :title="t(`verification.state.${node.verification}`)"
         role="img"
         :aria-label="t(`verification.state.${node.verification}`)"

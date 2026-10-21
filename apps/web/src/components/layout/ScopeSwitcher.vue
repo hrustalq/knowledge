@@ -67,10 +67,10 @@ const showWorkspaceRow = computed(() => workspaces.items.length > 0)
       >
         <template #trigger="{ open }">
           <span
-            class="hover:bg-sidebar-accent group-focus-visible/trigger:ring-ring/50 flex h-8 items-center gap-1.5 rounded-md px-2 transition-colors group-focus-visible/trigger:ring-3"
+            class="hover:bg-sidebar-accent group-focus-visible/trigger:ring-ring flex h-8 items-center gap-1.5 rounded-md px-2 transition-colors group-focus-visible/trigger:ring-3"
             :class="open ? 'bg-sidebar-accent' : ''"
           >
-            <span class="min-w-0 flex-1 truncate text-[13px] font-medium">
+            <span class="min-w-0 flex-1 truncate text-ui font-medium">
               {{ activeWorkspaceName }}
             </span>
             <ChevronsUpDown class="text-muted-foreground size-3.5 shrink-0" />
@@ -79,7 +79,7 @@ const showWorkspaceRow = computed(() => workspaces.items.length > 0)
 
         <template #option="{ option }">
           <span
-            class="grid size-5 shrink-0 place-items-center rounded-[6px] text-[9px] font-semibold text-white"
+            class="grid size-5 shrink-0 place-items-center rounded-[6px] text-micro font-semibold text-white"
             :style="{ backgroundColor: avatarColor(option.value) }"
             aria-hidden="true"
           >{{ initialsOf(option.label) }}</span>

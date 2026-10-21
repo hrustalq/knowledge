@@ -24,7 +24,7 @@ defineProps<{
       <p class="text-muted-foreground mx-auto mt-1.5 text-sm leading-relaxed">{{ body }}</p>
 
       <div v-if="example" class="bg-muted/50 mt-5 rounded-md p-3 text-left">
-        <p class="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
+        <p class="text-muted-foreground text-caption font-medium tracking-wide uppercase">
           {{ example.label }}
         </p>
         <ul class="mt-1.5 space-y-0.5">

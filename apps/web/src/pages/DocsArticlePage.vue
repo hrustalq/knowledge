@@ -79,14 +79,13 @@ watch(
             {{ copyState === 'copied' ? t('docs.copied') : copyState === 'failed' ? t('docs.copyFailed') : t('docs.copyPage') }}
           </Button>
         </div>
-        <p v-if="article.summary" class="mt-2 text-sm text-muted-foreground">{{ article.summary }}</p>
+        <p v-if="article.summary" class="kn-measure mt-2 text-sm text-muted-foreground">{{ article.summary }}</p>
         <p v-if="article.route" class="mt-2 font-mono text-xs text-muted-foreground">{{ article.route }}</p>
       </header>
 
       <MarkdownView
         :key="article.slug"
         :markdown="article.body"
-        class="kn-docs-prose"
         @headings="headings = $event"
         @rendered="onRendered"
       />
@@ -101,7 +100,7 @@ watch(
           :to="`/settings/docs/${neighbours.previous.slug}`"
           class="min-w-0 flex-1 rounded-md border p-3 transition-colors hover:bg-accent"
         >
-          <span class="block text-[11px] text-muted-foreground">{{ t('docs.previous') }}</span>
+          <span class="block text-caption text-muted-foreground">{{ t('docs.previous') }}</span>
           <span class="block truncate text-sm font-medium">{{ neighbours.previous.title }}</span>
         </RouterLink>
         <RouterLink
@@ -109,7 +108,7 @@ watch(
           :to="`/settings/docs/${neighbours.next.slug}`"
           class="min-w-0 flex-1 rounded-md border p-3 text-right transition-colors hover:bg-accent"
         >
-          <span class="block text-[11px] text-muted-foreground">{{ t('docs.next') }}</span>
+          <span class="block text-caption text-muted-foreground">{{ t('docs.next') }}</span>
           <span class="block truncate text-sm font-medium">{{ neighbours.next.title }}</span>
         </RouterLink>
       </nav>
@@ -121,7 +120,7 @@ watch(
       class="sticky top-6 hidden h-fit w-48 shrink-0 xl:block"
       :aria-label="t('docs.onThisPage')"
     >
-      <p class="mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+      <p class="mb-2 text-caption font-semibold tracking-wide text-muted-foreground uppercase">
         {{ t('docs.onThisPage') }}
       </p>
       <ul class="space-y-1 border-l">
@@ -146,14 +145,3 @@ watch(
     </Button>
   </div>
 </template>
-
-<style scoped>
-/*
- * The read surface caps its measure: a documentation page is read start to
- * finish, and full-width prose on a wide monitor is unreadable in a way a
- * dashboard is not. Tables and code fences opt out via their own scroll boxes.
- */
-.kn-docs-prose {
-  max-width: 72ch;
-}
-</style>

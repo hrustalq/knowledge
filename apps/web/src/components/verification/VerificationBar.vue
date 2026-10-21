@@ -216,7 +216,7 @@ const archivedBy = computed(() => nameOf(doc.value.archivedBy))
   <!-- Archived: the banner, and the way back. -->
   <div v-if="archived" class="space-y-1.5 text-sm" role="status">
     <p class="flex items-start gap-1.5 text-xs leading-snug text-muted-foreground" :title="formatDateTime(doc.archivedAt!)">
-      <Archive class="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+      <Archive class="mt-0.5 size-3.5 shrink-0 text-panel-warning-ink" aria-hidden="true" />
       <span class="min-w-0">{{ t('verification.archived.banner', { when: relativeTime(doc.archivedAt!), who: archivedBy }) }}</span>
     </p>
     <Button v-if="auth.canEdit" variant="outline" size="xs" :disabled="busy" @click="unarchive">
@@ -269,7 +269,7 @@ const archivedBy = computed(() => nameOf(doc.value.archivedBy))
       <DropdownMenu v-if="auth.canEdit">
         <DropdownMenuTrigger as-child>
           <Button variant="outline" size="xs" :disabled="busy" :aria-pressed="state === 'verified'">
-            <BadgeCheck class="size-3" :class="state === 'verified' ? 'text-emerald-500' : ''" />
+            <BadgeCheck class="size-3" :class="state === 'verified' ? 'text-panel-tip-ink' : ''" />
             {{ state === 'verified' ? t('verification.action.verified') : t('verification.action.verify') }}
             <ChevronDown class="size-3 opacity-60" />
           </Button>

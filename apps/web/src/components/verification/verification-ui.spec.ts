@@ -23,9 +23,9 @@ describe('verification-ui', () => {
     for (const s of SOURCE_VERIFICATION_STATES) {
       expect(verificationDotClass(s)).toMatch(/^bg-/)
     }
-    expect(verificationDotClass('outdated')).toBe('bg-destructive')
-    expect(verificationDotClass('expired')).toBe('bg-amber-500')
-    expect(verificationDotClass('verified')).toBe('bg-emerald-500')
+    expect(verificationDotClass('outdated')).toBe('bg-panel-caution')
+    expect(verificationDotClass('expired')).toBe('bg-panel-warning')
+    expect(verificationDotClass('verified')).toBe('bg-panel-tip')
   })
 
   it('round-trips every interval choice through the menu key', () => {

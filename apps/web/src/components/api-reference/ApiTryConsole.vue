@@ -277,11 +277,11 @@ const shownBody = computed(() => {
       <ApiTone :tone="methodTone(view.method)" variant="solid" class="ml-1.5">{{ view.method }}</ApiTone>
       <div class="kn-try-url" :title="resolved.url">
         <Select v-if="servers.length > 1" :model-value="serverUrl ?? undefined" @update:model-value="(v) => (env.serverUrl = String(v))">
-          <SelectTrigger :id="`${uid}-server`" class="kn-try-server h-7 max-w-[45%] min-w-0 gap-1 border-0 bg-transparent px-1.5 font-mono text-[0.85rem] shadow-none" :aria-label="t('apiTry.server')">
+          <SelectTrigger :id="`${uid}-server`" class="kn-try-server h-7 max-w-[45%] min-w-0 gap-1 border-0 bg-transparent px-1.5 font-mono text-sm shadow-none" :aria-label="t('apiTry.server')">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem v-for="srv in servers" :key="srv.url" :value="srv.url" class="font-mono text-[0.8rem]">{{ srv.url }}</SelectItem>
+            <SelectItem v-for="srv in servers" :key="srv.url" :value="srv.url" class="font-mono text-ui">{{ srv.url }}</SelectItem>
           </SelectContent>
         </Select>
         <span v-else class="kn-try-server-text">{{ urlParts.server || t('apiTry.noServer') }}</span>
@@ -304,7 +304,7 @@ const shownBody = computed(() => {
     <!-- Where it goes from, and what stops it going. -->
     <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
       <div class="flex items-center gap-2">
-        <span :id="`${uid}-via`" class="text-[0.8rem] text-muted-foreground">{{ t('apiTry.via.label') }}</span>
+        <span :id="`${uid}-via`" class="text-ui text-muted-foreground">{{ t('apiTry.via.label') }}</span>
         <div role="radiogroup" :aria-labelledby="`${uid}-via`" class="kn-try-seg">
           <button
             v-for="v in (['browser', 'proxy'] as const)"
@@ -325,7 +325,7 @@ const shownBody = computed(() => {
         <AlertTriangle class="size-3.5 shrink-0" aria-hidden="true" />{{ unsendable }}
       </p>
     </div>
-    <p v-if="via === 'browser' && proxyBlocked && proxyBlocked !== 'loading'" :id="`${uid}-proxy-why`" class="-mt-2 text-[0.8rem] leading-relaxed text-muted-foreground">
+    <p v-if="via === 'browser' && proxyBlocked && proxyBlocked !== 'loading'" :id="`${uid}-proxy-why`" class="-mt-2 text-ui leading-relaxed text-muted-foreground">
       {{ t(`apiTry.proxyBlocked.${proxyBlocked}`) }}
       <RouterLink v-if="proxyBlocked === 'off' && auth.canAdminWorkspace" to="/settings/api" class="text-primary underline-offset-2 hover:underline">
         {{ t('apiTry.proxyBlocked.settings') }}
@@ -356,7 +356,7 @@ const shownBody = computed(() => {
               >
                 <SelectTrigger :id="`${uid}-${p.in}-${p.name}`" class="kn-try-input h-9 w-full font-mono" :aria-invalid="isMissing(p.name) || undefined"><SelectValue :placeholder="t('apiTry.choose')" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem v-for="v in p.enumValues" :key="v" :value="v" class="font-mono text-[0.82rem]">{{ v }}</SelectItem>
+                  <SelectItem v-for="v in p.enumValues" :key="v" :value="v" class="font-mono text-ui">{{ v }}</SelectItem>
                 </SelectContent>
               </Select>
               <Input
@@ -372,12 +372,12 @@ const shownBody = computed(() => {
               />
             </div>
             <div role="cell" class="kn-try-desc-col kn-try-desc">
-              <span class="font-mono text-[0.78rem]">{{ p.type }}</span>
+              <span class="font-mono text-xs">{{ p.type }}</span>
               <span v-if="p.description" class="line-clamp-2">{{ p.description }}</span>
             </div>
           </div>
         </div>
-        <p class="mt-1.5 text-right text-[0.75rem] text-muted-foreground tabular-nums">
+        <p class="mt-1.5 text-right text-xs text-muted-foreground tabular-nums">
           {{ t('apiTry.req.filled', { n: partSummary(shownPart === 'params' ? paramRows : headerRows) }) }}
         </p>
       </div>
@@ -385,12 +385,12 @@ const shownBody = computed(() => {
       <div v-else-if="shownPart === 'body' && view.requestBody" :id="partStrip?.panelId('body')" key="body" role="tabpanel" :aria-labelledby="partStrip?.tabId('body')" class="kn-fade-swap space-y-2">
         <div class="flex flex-wrap items-center gap-2">
           <Select v-if="bodyTypes.length > 1" :model-value="draft.contentType ?? bodyTypes[0]" @update:model-value="(v) => (draft.contentType = String(v))">
-            <SelectTrigger class="h-7 w-auto font-mono text-[0.78rem]" :aria-label="t('apiTry.contentType')"><SelectValue /></SelectTrigger>
+            <SelectTrigger class="h-7 w-auto font-mono text-xs" :aria-label="t('apiTry.contentType')"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="ct in bodyTypes" :key="ct" :value="ct" class="font-mono text-[0.78rem]">{{ ct }}</SelectItem>
+              <SelectItem v-for="ct in bodyTypes" :key="ct" :value="ct" class="font-mono text-xs">{{ ct }}</SelectItem>
             </SelectContent>
           </Select>
-          <code v-else class="font-mono text-[0.78rem] text-muted-foreground">{{ bodyTypes[0] }}</code>
+          <code v-else class="font-mono text-xs text-muted-foreground">{{ bodyTypes[0] }}</code>
           <button v-if="bodyChanged && exampleBody !== null" type="button" class="kn-try-link ml-auto" @click="draft.body = exampleBody ?? null">
             <RotateCcw class="size-3.5" aria-hidden="true" />{{ t('apiTry.resetBody') }}
           </button>
@@ -399,7 +399,7 @@ const shownBody = computed(() => {
           :id="`${uid}-body`"
           :model-value="draft.body ?? ''"
           :aria-label="t('apiTry.req.body')"
-          class="kn-try-body min-h-44 font-mono text-[0.82rem] leading-[1.65]"
+          class="kn-try-body min-h-44 font-mono text-ui leading-[1.65]"
           spellcheck="false"
           @update:model-value="(v) => (draft.body = String(v))"
         />
@@ -437,7 +437,7 @@ const shownBody = computed(() => {
           </template>
         </div>
         <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p class="text-[0.8rem] leading-relaxed text-muted-foreground">{{ t('apiTry.auth.kept') }}</p>
+          <p class="text-ui leading-relaxed text-muted-foreground">{{ t('apiTry.auth.kept') }}</p>
           <button v-if="hasCredentials" type="button" class="kn-try-link" @click="forgetCredentials(env)">{{ t('apiTry.auth.forget') }}</button>
         </div>
       </div>
@@ -449,7 +449,7 @@ const shownBody = computed(() => {
         <Send class="size-4 shrink-0" aria-hidden="true" />{{ sending ? t('apiTry.sending') : t('apiTry.idle') }}
       </p>
 
-      <div v-else-if="failure" :key="`f${landed}`" role="alert" class="kn-try-note kn-try-arrive flex items-start gap-2.5 rounded-lg p-3.5 text-[0.875rem] leading-relaxed" :data-kind="failure.kind">
+      <div v-else-if="failure" :key="`f${landed}`" role="alert" class="kn-try-note kn-try-arrive flex items-start gap-2.5 rounded-lg p-3.5 text-sm leading-relaxed" :data-kind="failure.kind">
         <AlertTriangle class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <div class="space-y-1">
           <p>{{ failure.message }}</p>
@@ -461,7 +461,7 @@ const shownBody = computed(() => {
 
       <div v-else-if="result" :key="`r${landed}`" class="kn-try-arrive space-y-3">
         <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <h5 class="text-[0.9rem] font-semibold">{{ t('apiTry.response') }}</h5>
+          <h5 class="text-sm font-semibold">{{ t('apiTry.response') }}</h5>
           <dl class="kn-try-metrics">
             <div>
               <dt>{{ t('apiTry.metric.status') }}</dt>
@@ -485,10 +485,10 @@ const shownBody = computed(() => {
         <ApiTabs ref="responseStrip" v-model="tab" :tabs="responseTabs" :label="t('apiTry.response')" size="sm" />
         <div :id="responseStrip?.panelId(tab)" :key="tab" role="tabpanel" :aria-labelledby="responseStrip?.tabId(tab)" class="kn-fade-swap">
           <template v-if="tab === 'body'">
-            <p v-if="result.encoding === 'base64'" class="mb-1.5 text-[0.8rem] text-muted-foreground">{{ t('apiTry.binary') }}</p>
+            <p v-if="result.encoding === 'base64'" class="mb-1.5 text-ui text-muted-foreground">{{ t('apiTry.binary') }}</p>
             <ApiCode v-if="shownBody" :code="shownBody" :lang="isJson && result.encoding === 'utf8' ? 'json' : null" :caption="contentType || t('apiTry.tab.body')" wrap />
-            <p v-else class="py-2 text-[0.875rem] text-muted-foreground">{{ t('apiTry.emptyBody') }}</p>
-            <p v-if="result.truncated" class="mt-1.5 text-[0.8rem] text-muted-foreground">
+            <p v-else class="py-2 text-sm text-muted-foreground">{{ t('apiTry.emptyBody') }}</p>
+            <p v-if="result.truncated" class="mt-1.5 text-ui text-muted-foreground">
               {{ t('apiTry.truncated', { size: formatBytes(settings?.tryLimits.maxResponseBytes ?? result.bytes) }) }}
             </p>
           </template>
@@ -499,9 +499,9 @@ const shownBody = computed(() => {
                 <dd>{{ h.value }}</dd>
               </div>
             </dl>
-            <p v-if="result.via === 'browser'" class="mt-1.5 text-[0.8rem] text-muted-foreground">{{ t('apiTry.browserHeaders') }}</p>
+            <p v-if="result.via === 'browser'" class="mt-1.5 text-ui text-muted-foreground">{{ t('apiTry.browserHeaders') }}</p>
           </template>
-          <p v-if="result.droppedHeaders.length" class="mt-1.5 text-[0.8rem] text-muted-foreground">
+          <p v-if="result.droppedHeaders.length" class="mt-1.5 text-ui text-muted-foreground">
             {{ t('apiTry.dropped', { names: result.droppedHeaders.join(', ') }) }}
           </p>
         </div>
@@ -536,7 +536,7 @@ const shownBody = computed(() => {
   align-items: center;
   min-width: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.85rem;
+  font-size: var(--kn-text-sm);
 }
 .kn-try-server-text {
   flex-shrink: 1;
@@ -608,7 +608,7 @@ const shownBody = computed(() => {
 .kn-try-seg > button {
   padding-inline: 0.7rem;
   border-radius: 5px;
-  font-size: 0.8rem;
+  font-size: var(--kn-text-ui);
   color: var(--muted-foreground);
   transition: background-color 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out;
 }
@@ -633,14 +633,14 @@ const shownBody = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.82rem;
+  font-size: var(--kn-text-ui);
   color: color-mix(in oklab, var(--kn-panel-warning) 45%, var(--foreground));
 }
 .kn-try-link {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.8rem;
+  font-size: var(--kn-text-ui);
   color: var(--muted-foreground);
   text-underline-offset: 3px;
 }
@@ -656,7 +656,7 @@ const shownBody = computed(() => {
   border-radius: 8px;
   overflow: hidden;
   background: var(--card);
-  font-size: 0.875rem;
+  font-size: var(--kn-text-sm);
 }
 .kn-try-thead,
 .kn-try-row {
@@ -668,7 +668,7 @@ const shownBody = computed(() => {
 }
 .kn-try-thead {
   background: color-mix(in oklab, var(--foreground) 3%, var(--card));
-  font-size: 0.75rem;
+  font-size: var(--kn-text-xs);
   font-weight: 500;
   color: var(--muted-foreground);
 }
@@ -690,7 +690,7 @@ const shownBody = computed(() => {
   align-items: baseline;
   gap: 0.15rem 0.4rem;
   padding: 0.55rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--kn-text-sm);
 }
 .kn-try-key code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -704,7 +704,7 @@ const shownBody = computed(() => {
 }
 .kn-try-in {
   flex-basis: 100%;
-  font-size: 0.75rem;
+  font-size: var(--kn-text-xs);
   font-style: italic;
   color: var(--muted-foreground);
 }
@@ -718,7 +718,7 @@ const shownBody = computed(() => {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 0.85rem;
+  font-size: var(--kn-text-sm);
 }
 .kn-try-value :deep(.kn-try-input:focus-visible) {
   box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--ring) 70%, transparent);
@@ -732,7 +732,7 @@ const shownBody = computed(() => {
   flex-direction: column;
   gap: 0.15rem;
   padding: 0.55rem 0.75rem;
-  font-size: 0.8rem;
+  font-size: var(--kn-text-ui);
   line-height: 1.45;
   color: color-mix(in oklab, var(--foreground) 70%, var(--card));
 }
@@ -753,7 +753,7 @@ const shownBody = computed(() => {
   padding: 0.9rem 1rem;
   border: 1px dashed var(--border);
   border-radius: 8px;
-  font-size: 0.875rem;
+  font-size: var(--kn-text-sm);
   color: var(--muted-foreground);
 }
 .kn-try-metrics {
@@ -761,7 +761,7 @@ const shownBody = computed(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem 1.1rem;
-  font-size: 0.82rem;
+  font-size: var(--kn-text-ui);
   font-variant-numeric: tabular-nums;
 }
 .kn-try-metrics > div {
@@ -781,7 +781,7 @@ const shownBody = computed(() => {
   border-radius: 8px;
   overflow: hidden;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8rem;
+  font-size: var(--kn-text-ui);
 }
 .kn-try-headers > div {
   display: grid;

@@ -22,11 +22,11 @@ const { operation, missing } = useOperation(() => props.workspaceId, () => props
     class="group/ref flex min-w-0 flex-col gap-0.5 rounded-md py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
   >
     <ApiEndpoint :method="operation.method" :path="operation.path" :protocol="operation.protocol" />
-    <span class="truncate pl-[3.875rem] text-[11px] text-muted-foreground group-hover/ref:text-primary">
+    <span class="truncate pl-[3.875rem] text-caption text-muted-foreground group-hover/ref:text-primary">
       {{ operation.summary ? `${operation.summary} · ` : '' }}{{ operation.specTitle }}
     </span>
   </RouterLink>
-  <p v-else-if="missing" class="flex items-start gap-1.5 text-[11px] leading-snug text-muted-foreground">
+  <p v-else-if="missing" class="flex items-start gap-1.5 text-caption leading-snug text-muted-foreground">
     <AlertTriangle class="mt-px size-3 shrink-0 text-[color-mix(in_oklch,var(--kn-panel-warning)_75%,var(--foreground))]" />
     {{ t('apiLink.gone') }}
   </p>

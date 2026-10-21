@@ -278,7 +278,7 @@ function scopeLabel(scope: string): string {
               <Skeleton v-for="i in 5" :key="i" class="mx-2 my-1.5 h-6" />
             </template>
             <template v-for="group in groups" v-else :key="group.scope">
-              <p class="text-muted-foreground px-2 pt-3 pb-1 text-[11px] font-semibold tracking-wider uppercase">
+              <p class="text-muted-foreground px-2 pt-3 pb-1 text-caption font-semibold tracking-wider uppercase">
                 {{ scopeLabel(group.scope) }}
               </p>
               <button
@@ -352,7 +352,7 @@ function scopeLabel(scope: string): string {
             </form>
 
             <section :aria-label="t('templates.gallery.preview')">
-              <p class="text-muted-foreground mb-1.5 text-[11px] font-semibold tracking-wider uppercase">
+              <p class="text-muted-foreground mb-1.5 text-caption font-semibold tracking-wider uppercase">
                 {{ t('templates.gallery.preview') }}
               </p>
               <div class="kn-tpl-preview bg-muted/30 rounded-md border px-4 py-3">
@@ -398,7 +398,7 @@ function scopeLabel(scope: string): string {
   border-radius: calc(var(--radius) - 2px);
   padding: 0.375rem 0.5rem;
   text-align: left;
-  font-size: 0.875rem;
+  font-size: var(--kn-text-sm);
   transition: background-color 120ms;
 }
 .kn-tpl-row:hover {

@@ -57,7 +57,7 @@ const summary = computed(() =>
   <figure v-if="placed.length > 1" class="space-y-1.5">
     <div class="flex gap-2" :class="compact ? 'h-20' : 'h-36'" role="img" :aria-label="summary">
       <!-- The scale, outside the plot so labels never sit on the line. -->
-      <div class="relative w-6 shrink-0 text-[0.65rem] leading-none tabular-nums text-muted-foreground" aria-hidden="true">
+      <div class="relative w-6 shrink-0 text-micro leading-none tabular-nums text-muted-foreground" aria-hidden="true">
         <span class="absolute right-0 top-0 -translate-y-1/2">100</span>
         <span
           class="absolute right-0 -translate-y-1/2 text-[color:var(--kn-panel-caution)]"

@@ -304,7 +304,7 @@ const projectNames = computed(() => new Map(projects.items.map((p) => [p.project
           <!-- A plain button, not AlertDialogAction: the dialog stays open until the request settles. -->
           <Button
             v-if="!nothingPending"
-            class="bg-destructive text-white hover:bg-destructive/90"
+            variant="destructive"
             :disabled="!preview || bulk.isPending.value"
             @click="runBulk"
           >

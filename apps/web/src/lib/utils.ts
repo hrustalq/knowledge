@@ -1,5 +1,10 @@
 import { type ClassValue, clsx } from 'clsx'
-import { twMerge } from 'tailwind-merge'
+import { extendTailwindMerge } from 'tailwind-merge'
+
+// The ramp's own steps (style.css @theme: micro, caption, ui) are font sizes.
+// Unregistered, tailwind-merge reads `text-caption` as a text colour and drops
+// it from `cn('text-caption', 'text-muted-foreground')`.
+const twMerge = extendTailwindMerge({ extend: { theme: { text: ['micro', 'caption', 'ui'] } } })
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

@@ -256,6 +256,7 @@ async function remove(skill: AiSkillSummary) {
             <Checkbox
               :model-value="skill.enabled"
               :disabled="!canManage"
+              :aria-label="t('common.enableNamed', { name: skill.name })"
               @update:model-value="toggle(skill, $event === true)"
             />
           </TableCell>

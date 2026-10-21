@@ -14,7 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { Trash2 } from 'lucide-vue-next'
+import { Tag, Trash2 } from 'lucide-vue-next'
 import { RELEASE_TAG_NAME_PATTERN, type ListReleaseTagsResponse, type ReleaseTagDto } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
@@ -165,10 +165,13 @@ async function remove() {
 
     <PageState v-if="listQuery.isPending.value" state="loading" :rows="3" row-class="h-12" />
     <PageState v-else-if="listQuery.isError.value" state="error" :error="listQuery.error.value" />
-    <div v-else-if="!tags.length" class="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-      <p class="font-medium text-foreground">{{ t('releaseTags.emptyTitle') }}</p>
-      <p class="mx-auto mt-1 max-w-md">{{ t('releaseTags.empty') }}</p>
-    </div>
+    <PageState
+      v-else-if="!tags.length"
+      state="empty"
+      :icon="Tag"
+      :title="t('releaseTags.emptyTitle')"
+      :description="t('releaseTags.empty')"
+    />
 
     <div v-else class="overflow-x-auto rounded-md border">
       <table class="w-full text-sm">
@@ -185,7 +188,7 @@ async function remove() {
           <tr v-for="tag in tags" :key="tag.id" class="align-top">
             <td class="px-3 py-2">
               <!-- The tag is a way into the past: open the graph there. -->
-              <RouterLink :to="`/documents?asOf=${encodeURIComponent(`tag:${tag.name}`)}`" class="font-mono text-[0.8rem] hover:underline">
+              <RouterLink :to="`/documents?asOf=${encodeURIComponent(`tag:${tag.name}`)}`" class="font-mono text-ui hover:underline">
                 {{ tag.name }}
               </RouterLink>
             </td>
@@ -220,7 +223,7 @@ async function remove() {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
-          <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="remove">
+          <AlertDialogAction variant="destructive" @click="remove">
             {{ t('releaseTags.deleteConfirm') }}
           </AlertDialogAction>
         </AlertDialogFooter>

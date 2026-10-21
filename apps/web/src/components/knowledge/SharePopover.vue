@@ -174,7 +174,7 @@ function onOpen(next: boolean) {
               <Copy v-else class="size-3.5" />
             </Button>
           </div>
-          <p v-if="!created.share.url" class="text-xs text-amber-700 dark:text-amber-400">{{ t('share.shownOnce') }}</p>
+          <p v-if="!created.share.url" class="text-xs text-panel-warning-ink">{{ t('share.shownOnce') }}</p>
           <p v-if="created.requestedExpiresAt && created.share.expiresAt" class="text-xs text-muted-foreground">
             {{
               t('share.clamped', {

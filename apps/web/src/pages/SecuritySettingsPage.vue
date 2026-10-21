@@ -4,13 +4,13 @@
  * trail. Admin-only, like the routes behind it. Providers first, the audit log
  * last; domains, group mapping, provisioning (SCIM) and policy between them.
  *
- * Hand-rolled tab strip, as on /settings/connectors: `?tab=` is an opening
- * instruction, not two-way state.
+ * The shared PageTabs strip, as on /settings/connectors: `?tab=` picks the
+ * tab a link opens on.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/components/layout/page'
 import AuditLogTable from '@/components/security/AuditLogTable.vue'
 import AuthPolicyPanel from '@/components/security/AuthPolicyPanel.vue'
 import GroupMappingsPanel from '@/components/security/GroupMappingsPanel.vue'
@@ -20,29 +20,13 @@ import SsoDomainsPanel from '@/components/security/SsoDomainsPanel.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
-const route = useRoute()
-const router = useRouter()
 const canManage = computed(() => auth.canAdminWorkspace)
 
-// `label` is a message key — resolved with t() where the tab renders.
-const TABS = [
-  { key: 'providers', label: 'security.tabs.providers' },
-  { key: 'domains', label: 'security.tabs.domains' },
-  { key: 'groups', label: 'security.tabs.groups' },
-  { key: 'provisioning', label: 'security.tabs.provisioning' },
-  { key: 'policy', label: 'security.tabs.policy' },
-  { key: 'audit', label: 'security.tabs.audit' },
-] as const
-type TabKey = (typeof TABS)[number]['key']
+const TAB_KEYS = ['providers', 'domains', 'groups', 'provisioning', 'policy', 'audit'] as const
+type TabKey = (typeof TAB_KEYS)[number]
 
-const tab = computed<TabKey>(() => {
-  const q = route.query.tab
-  return TABS.some((entry) => entry.key === q) ? (q as TabKey) : 'providers'
-})
-
-function setTab(key: TabKey) {
-  void router.replace({ query: { ...route.query, tab: key } })
-}
+const tabs = computed<PageTab<TabKey>[]>(() => TAB_KEYS.map((key) => ({ key, label: t(`security.tabs.${key}`) })))
+const tab = usePageTabs(tabs, 'providers')
 </script>
 
 <template>
@@ -53,29 +37,15 @@ function setTab(key: TabKey) {
     </div>
     <p v-if="!canManage" class="text-sm text-muted-foreground">{{ t('security.adminOnly') }}</p>
     <template v-else>
-      <div class="flex gap-0.5 overflow-x-auto border-b" role="tablist">
-        <button
-          v-for="tabDef in TABS"
-          :key="tabDef.key"
-          role="tab"
-          :aria-selected="tab === tabDef.key"
-          class="focus-visible:ring-ring rounded-t-sm border-b-2 px-3 py-2 text-sm whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none"
-          :class="
-            tab === tabDef.key
-              ? 'border-primary text-primary font-medium'
-              : 'text-muted-foreground hover:text-foreground hover:border-border border-transparent'
-          "
-          @click="setTab(tabDef.key)"
-        >
-          {{ t(tabDef.label) }}
-        </button>
+      <PageTabs v-model="tab" :tabs="tabs" :label="t('security.title')" />
+      <div :id="panelId(tab)" role="tabpanel" :aria-labelledby="tabId(tab)" class="min-w-0">
+        <IdentityProvidersPanel v-if="tab === 'providers'" />
+        <SsoDomainsPanel v-else-if="tab === 'domains'" />
+        <GroupMappingsPanel v-else-if="tab === 'groups'" />
+        <ScimPanel v-else-if="tab === 'provisioning'" />
+        <AuthPolicyPanel v-else-if="tab === 'policy'" />
+        <AuditLogTable v-else />
       </div>
-      <IdentityProvidersPanel v-if="tab === 'providers'" />
-      <SsoDomainsPanel v-else-if="tab === 'domains'" />
-      <GroupMappingsPanel v-else-if="tab === 'groups'" />
-      <ScimPanel v-else-if="tab === 'provisioning'" />
-      <AuthPolicyPanel v-else-if="tab === 'policy'" />
-      <AuditLogTable v-else />
     </template>
   </div>
 </template>

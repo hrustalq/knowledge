@@ -148,7 +148,7 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
           class="text-muted-foreground size-3 shrink-0 transition-transform group-hover/back:-translate-x-0.5"
         />
         <h2
-          class="text-muted-foreground group-hover/back:text-sidebar-foreground truncate text-[11px] font-semibold tracking-wider uppercase transition-colors"
+          class="text-muted-foreground group-hover/back:text-sidebar-foreground truncate text-caption font-semibold tracking-wider uppercase transition-colors"
           :title="title"
         >
           {{ title }}
@@ -208,7 +208,7 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
     </div>
 
     <div
-      class="sidebar-scroll kn-tree-window mt-1 min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-4"
+      class="quiet-scroll kn-tree-window mt-1 min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-4"
       data-tree-scroll
       :style="{ '--kn-tree-shift': `${shift}px` }"
       :data-windowed="shift > 0"

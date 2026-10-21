@@ -185,8 +185,8 @@ const parentOptions = computed<ComboboxOption[]>(() => {
   <PageState v-if="query.isPending.value" state="loading" :rows="5" row-class="h-14" />
   <PageState v-else-if="query.isError.value" state="error" :error="query.error.value" />
 
-  <form v-else-if="capture" class="max-w-2xl space-y-5" @submit.prevent="save">
-    <p class="text-sm text-muted-foreground">
+  <form v-else-if="capture" class="space-y-5" @submit.prevent="save">
+    <p class="kn-measure text-sm text-muted-foreground">
       {{ t('ai.capture.intro') }}
       <RouterLink to="/captures" class="text-primary hover:underline">{{ t('ai.capture.openInbox') }}</RouterLink>
     </p>
@@ -196,7 +196,7 @@ const parentOptions = computed<ComboboxOption[]>(() => {
       <div class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
         <div class="min-w-0">
           <span id="cap-enabled-label" class="text-sm font-medium">{{ t('ai.capture.enabled.label') }}</span>
-          <p class="text-xs text-muted-foreground">{{ t('ai.capture.enabled.hint') }}</p>
+          <p class="kn-measure text-xs text-muted-foreground">{{ t('ai.capture.enabled.hint') }}</p>
           <p class="mt-1 text-xs">
             <span class="text-muted-foreground">{{ t('ai.capture.applies') }}</span>
             {{ onOff(capture.enabled.effective) }}
@@ -219,7 +219,7 @@ const parentOptions = computed<ComboboxOption[]>(() => {
       <div v-for="key in LIMITS" :key="key" class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
         <div class="min-w-0">
           <label :for="`cap-${key}`" class="text-sm font-medium">{{ t(`ai.capture.${key}.label`) }}</label>
-          <p class="text-xs text-muted-foreground">{{ t(`ai.capture.${key}.hint`) }}</p>
+          <p class="kn-measure text-xs text-muted-foreground">{{ t(`ai.capture.${key}.hint`) }}</p>
           <p class="mt-1 text-xs">
             <span class="text-muted-foreground">{{ t('ai.capture.applies') }}</span>
             {{ formatNumber(capture[key].effective) }}
@@ -253,7 +253,7 @@ const parentOptions = computed<ComboboxOption[]>(() => {
       <div v-for="key in THRESHOLDS" :key="key" class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
         <div class="min-w-0">
           <label :for="`cap-${key}`" class="text-sm font-medium">{{ t(`ai.capture.${key}.label`) }}</label>
-          <p class="text-xs text-muted-foreground">{{ t(`ai.capture.${key}.hint`) }}</p>
+          <p class="kn-measure text-xs text-muted-foreground">{{ t(`ai.capture.${key}.hint`) }}</p>
           <p class="mt-1 text-xs">
             <span class="text-muted-foreground">{{ t('ai.capture.applies') }}</span>
             <span class="tabular-nums">{{ thresholdLabel(capture[key].effective) }}</span>
@@ -285,7 +285,7 @@ const parentOptions = computed<ComboboxOption[]>(() => {
       <div class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
         <div class="min-w-0">
           <span class="text-sm font-medium">{{ t('ai.capture.parent.label') }}</span>
-          <p class="text-xs text-muted-foreground">{{ t('ai.capture.parent.hint') }}</p>
+          <p class="kn-measure text-xs text-muted-foreground">{{ t('ai.capture.parent.hint') }}</p>
         </div>
         <Combobox
           v-model="form.parentDocumentId"

@@ -28,17 +28,17 @@ const label = computed(() => t(`verification.state.${props.state}`))
 /**
  * Ink and stroke per tone, as utilities rather than a scoped stylesheet so the
  * dark variant rides the same `.dark` mechanism as every other token in
- * style.css. The hues are the ones the provenance chip and the confidence
- * badge already spend on verification (docs/features/38).
+ * style.css. The hues are the panel ramp's, matching the row mark
+ * (verification-ui); `-ink` is the ramp's text-strength step.
  */
 const toneClass = computed(() => {
   switch (tone.value) {
     case 'ok':
-      return 'border-emerald-500/40 text-emerald-700 dark:text-emerald-400'
+      return 'border-panel-tip/40 text-panel-tip-ink'
     case 'warn':
-      return 'border-amber-500/45 text-amber-700 dark:text-amber-400'
+      return 'border-panel-warning/45 text-panel-warning-ink'
     case 'bad':
-      return 'border-destructive/45 text-destructive dark:text-destructive-foreground'
+      return 'border-panel-caution/45 text-panel-caution-ink'
     default:
       return 'text-muted-foreground'
   }

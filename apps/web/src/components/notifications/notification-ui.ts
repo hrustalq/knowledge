@@ -27,8 +27,8 @@ export interface NotificationLook {
 }
 
 const LOOKS: Record<NotificationCategory, NotificationLook> = {
-  mention: { icon: AtSign, class: 'text-amber-500', label: 'notifications.category.mention' },
-  review: { icon: GitPullRequestArrow, class: 'text-emerald-500', label: 'notifications.category.review' },
+  mention: { icon: AtSign, class: 'text-panel-warning', label: 'notifications.category.mention' },
+  review: { icon: GitPullRequestArrow, class: 'text-panel-tip', label: 'notifications.category.review' },
   comment: { icon: MessageSquare, class: 'text-sky-500', label: 'notifications.category.comment' },
   document: { icon: FileText, class: 'text-violet-500', label: 'notifications.category.document' },
   verification: { icon: ShieldCheck, class: 'text-teal-500', label: 'notifications.category.verification' },
@@ -38,7 +38,7 @@ const LOOKS: Record<NotificationCategory, NotificationLook> = {
 
 /** Reasons worth an icon of their own, because they are addressed at a person. */
 const REASON_LOOKS: Record<string, NotificationLook> = {
-  assigned: { icon: UserPlus, class: 'text-emerald-500', label: 'notifications.reason.assigned' },
+  assigned: { icon: UserPlus, class: 'text-panel-tip', label: 'notifications.reason.assigned' },
 }
 
 /** The look of a category itself, for a legend or a settings list. */
@@ -97,6 +97,12 @@ export function notificationLink(entry: NotificationEntry): string | null {
  * Keyed on the event type so an unknown one can fall back to itself via
  * `labelFor` rather than rendering a raw key at the reader (the `category`
  * precedent in lib/labels.ts).
+ *
+ * The catalog keeps event types as flat keys (`"revision.finalized"`) under
+ * `notifications.event`, and vue-i18n reads a bare dot as a path separator —
+ * `notifications.event.revision.finalized` looks for a `revision` object, misses,
+ * and every row printed its raw type. The bracket segment is vue-i18n's quoted
+ * path syntax: it names the whole dotted type as one key.
  */
 export function notificationMessageKey(entry: NotificationEntry): string {
   // A directed reason describes the row better than the event that carried it:
@@ -105,5 +111,5 @@ export function notificationMessageKey(entry: NotificationEntry): string {
   if (entry.reason === 'mention') return 'notifications.event.mention'
   if (entry.reason === 'assigned') return 'notifications.event.assigned'
   if (entry.reason === 'review-requested') return 'notifications.event.reviewRequested'
-  return `notifications.event.${entry.type}`
+  return `notifications.event['${entry.type}']`
 }

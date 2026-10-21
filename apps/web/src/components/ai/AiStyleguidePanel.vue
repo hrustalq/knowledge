@@ -256,8 +256,8 @@ const ruleText = computed(() => {
 })
 
 const SEVERITY: Record<StyleRuleSeverity, { icon: typeof AlertCircle; tone: string; label: string }> = {
-  error: { icon: AlertCircle, tone: 'text-red-500', label: 'mr.severityError' },
-  warning: { icon: AlertTriangle, tone: 'text-amber-500', label: 'mr.severityWarning' },
+  error: { icon: AlertCircle, tone: 'text-panel-caution', label: 'mr.severityError' },
+  warning: { icon: AlertTriangle, tone: 'text-panel-warning', label: 'mr.severityWarning' },
   suggestion: { icon: Lightbulb, tone: 'text-sky-500', label: 'mr.severitySuggestion' },
 }
 
@@ -374,15 +374,15 @@ const readOnlyRules = computed(() => own.value?.rules ?? inherited.value?.rules 
                   >
                     {{ rule.withExample ? t('ai.styleguide.hideExample') : t('ai.styleguide.addExample') }}
                   </button>
-                  <code class="text-muted-foreground ml-auto font-mono text-[11px]">{{ rule.id }}</code>
+                  <code class="text-muted-foreground ml-auto font-mono text-caption">{{ rule.id }}</code>
                 </div>
                 <div v-if="rule.withExample && rule.example" class="grid gap-2 sm:grid-cols-2">
                   <label class="block space-y-1">
-                    <span class="text-xs font-medium text-red-600 dark:text-red-400">{{ t('ai.styleguide.exampleBad') }}</span>
+                    <span class="text-xs font-medium text-panel-caution-ink">{{ t('ai.styleguide.exampleBad') }}</span>
                     <Input v-model="rule.example.bad" :maxlength="STYLE_RULE_TEXT_MAX" />
                   </label>
                   <label class="block space-y-1">
-                    <span class="text-xs font-medium text-emerald-600 dark:text-emerald-400">{{ t('ai.styleguide.exampleGood') }}</span>
+                    <span class="text-xs font-medium text-panel-tip-ink">{{ t('ai.styleguide.exampleGood') }}</span>
                     <Input v-model="rule.example.good" :maxlength="STYLE_RULE_TEXT_MAX" />
                   </label>
                 </div>

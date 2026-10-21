@@ -26,6 +26,7 @@ import { getFilterRailOpen, getWorkspaceId, setFilterRailOpen } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import {
   PageLayout,
+  PageState,
   PageSubRail,
   PageTabs,
   panelId,
@@ -234,7 +235,7 @@ watch(railOpen, (open) => setFilterRailOpen(open))
         <!-- A closed rail must not take what it was telling you with it. -->
         <span
           v-if="narrowCount"
-          class="rounded-full bg-primary px-1.5 text-[0.625rem] leading-4 font-medium tabular-nums text-primary-foreground"
+          class="rounded-full bg-primary px-1.5 text-micro leading-4 font-medium tabular-nums text-primary-foreground"
         >
           {{ narrowCount }}
         </span>
@@ -256,7 +257,20 @@ watch(railOpen, (open) => setFilterRailOpen(open))
       :aria-labelledby="tabId(state)"
       class="flex min-w-0 flex-col gap-4"
     >
+      <!-- A failed list is not an empty one: "no merge requests are open" would
+           tell a reviewer their queue is clear when we never got to ask. A
+           failed next page keeps the rows already here. -->
+      <PageState
+        v-if="listQuery.isError.value && rows.length === 0"
+        state="error"
+        :error="listQuery.error.value"
+      >
+        <template #actions>
+          <Button size="sm" variant="outline" @click="listQuery.refetch()">{{ t('common.retry') }}</Button>
+        </template>
+      </PageState>
       <MergeRequestList
+        v-else
         :rows="rows"
         :loading="listQuery.isPending.value && rows.length === 0"
         :narrowed="narrowed"

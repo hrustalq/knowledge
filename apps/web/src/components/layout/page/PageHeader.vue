@@ -54,7 +54,7 @@ withDefaults(
         </slot>
         <p
           v-if="subtitle"
-          :class="dense ? 'truncate text-xs text-muted-foreground' : 'mt-0.5 text-sm text-muted-foreground'"
+          :class="dense ? 'truncate text-xs text-muted-foreground' : 'kn-measure mt-0.5 text-sm text-muted-foreground'"
         >
           {{ subtitle }}
         </p>

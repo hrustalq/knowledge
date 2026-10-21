@@ -12,19 +12,30 @@ import { verificationTone } from '@/lib/verification-tone'
 
 export { verificationTone }
 
-/** Tailwind background for the small dot a tree row or a list row carries. */
+/**
+ * Tailwind background for the small mark a tree row or a list row carries.
+ * Panel-ramp hues, not emerald/amber/red: those belong to the indexing dot,
+ * which sits in the same row, and a page that is indexing must not read as a
+ * page that is outdated.
+ */
 export function verificationDotClass(state: SourceVerificationState | undefined): string {
   switch (verificationTone(state)) {
     case 'ok':
-      return 'bg-emerald-500'
+      return 'bg-panel-tip'
     case 'warn':
-      return 'bg-amber-500'
+      return 'bg-panel-warning'
     case 'bad':
-      return 'bg-destructive'
+      return 'bg-panel-caution'
     default:
       return 'bg-muted-foreground/40'
   }
 }
+
+/**
+ * The mark's shape on a row: a small diamond, so it is told apart from the
+ * round indexing dot beside it by outline as well as by hue.
+ */
+export const VERIFICATION_MARK_CLASS = 'size-1.5 shrink-0 rotate-45 rounded-[1px]'
 
 /**
  * A row draws a verification mark only when the state asks for a look. A

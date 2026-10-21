@@ -39,7 +39,7 @@ function commentOn(line: { new?: number; text: string }) {
     <div v-if="compare.structural && compare.structural.changes.length" class="rounded-md border p-3 text-sm">
       <p class="mb-1 text-xs font-medium text-muted-foreground">{{ t('revisions.structural', { source: compare.structural.source }) }}</p>
       <p v-for="(c, i) in compare.structural.changes" :key="i" class="font-mono text-xs">
-        <span :class="c.kind === 'added' ? 'text-green-600' : c.kind === 'removed' ? 'text-red-600' : 'text-amber-600'">{{ c.kind }}</span>
+        <span :class="c.kind === 'added' ? 'text-panel-tip-ink' : c.kind === 'removed' ? 'text-panel-caution-ink' : 'text-panel-warning-ink'">{{ c.kind }}</span>
         {{ c.path || '(root)' }}
       </p>
     </div>
@@ -51,7 +51,7 @@ function commentOn(line: { new?: number; text: string }) {
       <template v-for="(line, li) in hunk.lines" :key="li">
         <div
           class="group flex"
-          :class="line.kind === 'added' ? 'bg-green-500/10 text-green-700 dark:text-green-400' : line.kind === 'deleted' ? 'bg-red-500/10 text-red-700 dark:text-red-400' : ''"
+          :class="line.kind === 'added' ? 'bg-panel-tip/10 text-panel-tip-ink' : line.kind === 'deleted' ? 'bg-panel-caution/10 text-panel-caution-ink' : ''"
         >
           <button
             v-if="canComment && line.kind !== 'deleted' && line.new !== undefined"

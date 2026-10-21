@@ -136,7 +136,7 @@ const indent = computed(() => `${0.5 + props.depth * 0.85}rem`)
 
         <span class="min-w-0 flex-1">
           <span class="flex items-center gap-1.5">
-            <span class="min-w-0 truncate text-[13px] leading-snug" :class="wantsReview(item) ? 'font-medium' : ''">
+            <span class="min-w-0 truncate text-ui leading-snug" :class="wantsReview(item) ? 'font-medium' : ''">
               {{ item.title }}
             </span>
             <!-- A page a model rewrote must never look like one the external
@@ -148,7 +148,7 @@ const indent = computed(() => `${0.5 + props.depth * 0.85}rem`)
             />
           </span>
 
-          <span class="text-muted-foreground flex flex-wrap items-center gap-x-1.5 text-[11px]">
+          <span class="text-muted-foreground flex flex-wrap items-center gap-x-1.5 text-caption">
             <span v-if="item.action" class="inline-flex items-center gap-1" :class="ACTION_CLASS[item.action]">
               <component :is="ACTION_ICON[item.action]" class="size-3 shrink-0" aria-hidden="true" />
               {{ t(ACTION_LABEL[item.action]) }}
@@ -159,7 +159,7 @@ const indent = computed(() => `${0.5 + props.depth * 0.85}rem`)
             <span v-if="pendingBranch">· {{ t('connectors.branchPending') }}</span>
           </span>
 
-          <span v-if="item.error" class="text-destructive block truncate text-[11px]">{{ item.error }}</span>
+          <span v-if="item.error" class="text-destructive block truncate text-caption">{{ item.error }}</span>
         </span>
       </button>
 
@@ -192,7 +192,7 @@ const indent = computed(() => `${0.5 + props.depth * 0.85}rem`)
           v-for="type in events"
           :key="type"
           type="button"
-          class="text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 rounded text-[11px] font-medium disabled:opacity-50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
+          class="text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 rounded text-caption font-medium disabled:opacity-50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
           :class="ITEM_EVENT_ICON[type] ? 'grid size-6 place-items-center' : 'px-1.5 py-0.5'"
           :disabled="busy"
           :title="ITEM_EVENT_ICON[type] ? t(ITEM_EVENT_LABEL[type]) : undefined"
@@ -206,7 +206,7 @@ const indent = computed(() => `${0.5 + props.depth * 0.85}rem`)
           v-for="type in subtreeEvents"
           :key="`sub-${type}`"
           type="button"
-          class="text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 rounded px-1.5 py-0.5 text-[11px] disabled:opacity-50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
+          class="text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 rounded px-1.5 py-0.5 text-caption disabled:opacity-50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
           :disabled="busy"
           :title="t('connectors.applyToBranch')"
           @click="emit('event', { itemId: item.id, type, subtree: true })"

@@ -84,10 +84,10 @@ function subject(m: ApiDriftMismatch): string {
         <li v-for="(m, i) in shown" :key="i" class="space-y-0.5 text-xs">
           <div class="flex flex-wrap items-center gap-1.5">
             <ApiTone :tone="TONES[m.kind]" size="sm" class="px-1.5">{{ t(`apiDrift.kind.${m.kind}`) }}</ApiTone>
-            <code class="font-mono text-[0.75rem] break-all text-foreground">{{ subject(m) }}</code>
+            <code class="font-mono text-xs break-all text-foreground">{{ subject(m) }}</code>
           </div>
           <p v-if="m.codeMethods?.length" class="text-muted-foreground">{{ t('apiDrift.codeServes', { methods: m.codeMethods.join(', ') }) }}</p>
-          <p v-if="m.file" class="truncate font-mono text-[0.7rem] text-muted-foreground" :title="m.file">
+          <p v-if="m.file" class="truncate font-mono text-caption text-muted-foreground" :title="m.file">
             {{ m.file }}<template v-if="m.line">:{{ m.line }}</template>
           </p>
         </li>

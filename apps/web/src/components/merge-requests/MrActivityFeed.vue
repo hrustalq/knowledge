@@ -276,10 +276,10 @@ const loading = computed(() => activityQuery.isPending.value && entries.value.le
                 <RouterLink
                   v-if="noteAt(item.index)!.code"
                   :to="`/documents/${documentId}?tab=revisions`"
-                  class="ml-1 rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-primary hover:underline"
+                  class="ml-1 rounded bg-muted px-1 py-0.5 font-mono text-caption text-primary hover:underline"
                 >{{ noteAt(item.index)!.code }}</RouterLink>
 <span
-                  class="text-xs whitespace-nowrap text-muted-foreground/70"
+                  class="text-xs whitespace-nowrap text-muted-foreground"
                   :title="fullTime(noteAt(item.index)!.entry.createdAt)"
                 >&nbsp;· {{ timelineTime(noteAt(item.index)!.entry.createdAt) }}</span>
               </p>

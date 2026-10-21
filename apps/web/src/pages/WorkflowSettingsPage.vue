@@ -133,7 +133,9 @@ function problems(workflow: WorkflowDefinitionInfo): number {
             >
               <span
                 class="size-1.5 shrink-0 rounded-full"
-                :class="w.enabled ? 'bg-emerald-500' : 'bg-muted-foreground/30'"
+                :class="w.enabled ? 'bg-panel-tip' : 'bg-muted-foreground/30'"
+                role="img"
+                :aria-label="w.enabled ? t('workflow.settings.availableToRun') : t('workflow.settings.retired')"
                 :title="w.enabled ? t('workflow.settings.availableToRun') : t('workflow.settings.retired')"
               />
               <span class="min-w-0 flex-1 truncate">{{ w.name }}</span>

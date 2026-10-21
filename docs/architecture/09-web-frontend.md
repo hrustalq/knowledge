@@ -115,13 +115,19 @@ third SSR input in `vite.config.ts`.
 export function createApp() {
   const app = createSSRApp(App)
   const pinia = createPinia(); const router = createRouter()
-  app.use(createI18nFor(getLocale()))
-  app.use(pinia); app.use(router)
+  const i18n = createI18nFor(getLocale())
+  app.use(i18n); app.use(pinia); app.use(router)
   app.use(VueQueryPlugin, { queryClient: createQueryClient() })
   installAuthGuard(router, pinia); installViewTransitions(router)
-  return { app, router, pinia }
+  return { app, router, pinia, i18n }
 }
 ```
+
+The i18n instance starts without messages: each locale's catalog is its own
+chunk, so a reader downloads one language, not both. `entry-server.ts` awaits
+`ensureLocaleMessages(i18n, locale)` before `renderToString`, `entry-client.ts`
+awaits it alongside `router.isReady()` before mounting, and a locale switch
+loads the new catalog before it flips `locale`.
 
 App, router, pinia, query client **and i18n instance** are per request on the
 server and per page load in the browser. `entry-server.ts` pushes the URL,

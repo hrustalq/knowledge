@@ -92,7 +92,7 @@ function isCurrent(to: string): boolean {
         <span class="bg-primary text-primary-foreground grid size-7 shrink-0 place-items-center rounded-md">
           <Library class="size-4" />
         </span>
-        <span class="font-display text-[15px] font-bold tracking-tight">{{ t('nav.brand') }}</span>
+        <span class="font-display text-base font-bold tracking-tight">{{ t('nav.brand') }}</span>
       </RouterLink>
       <ScopeSwitcher @create="openCreate" />
     </div>

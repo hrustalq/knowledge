@@ -33,7 +33,7 @@ const date = (iso: string) => formatDate(iso, props.state.locale)
 <template>
   <div class="min-h-dvh bg-background text-foreground">
     <header class="sticky top-0 z-10 border-b bg-background/90 backdrop-blur">
-      <div class="mx-auto flex h-12 max-w-7xl items-center gap-3 px-4 sm:px-6">
+      <div class="flex h-12 items-center gap-3 px-4 lg:px-8">
         <FileText class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <a
           v-if="share"
@@ -77,9 +77,16 @@ const date = (iso: string) => formatDate(iso, props.state.locale)
       <PublicPasswordGate :token="view.token" :api-base="state.apiBase" />
     </main>
 
-    <div v-else-if="share" class="mx-auto flex max-w-7xl gap-8 px-4 py-8 sm:px-6">
-      <nav v-if="rows.length" class="hidden w-60 shrink-0 lg:block" :aria-label="t('shareReader.pages')">
-        <div class="sticky top-20 max-h-[calc(100dvh-6rem)] overflow-y-auto">
+    <!-- The in-app shape: a rail flush with the left edge, a content column
+         that fills the rest, and the outline as a third column where there is
+         room. The prose keeps its own measure (--kn-text-measure). -->
+    <div v-else-if="share" class="flex">
+      <nav
+        v-if="rows.length"
+        class="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:block"
+        :aria-label="t('shareReader.pages')"
+      >
+        <div class="quiet-scroll sticky top-12 h-[calc(100dvh-3rem)] overflow-y-auto px-2 py-4">
           <p class="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{{ t('shareReader.pages') }}</p>
           <ul class="space-y-px text-sm">
             <li v-for="row in rows" :key="row.documentId">
@@ -98,35 +105,37 @@ const date = (iso: string) => formatDate(iso, props.state.locale)
         </div>
       </nav>
 
-      <article class="min-w-0 flex-1">
-        <div class="mx-auto max-w-3xl">
-          <h1 class="mb-1 text-3xl font-semibold tracking-tight">{{ share.page.title }}</h1>
-          <p v-if="share.page.updatedAt" class="mb-8 text-xs text-muted-foreground">
-            {{ t('shareReader.updated', { date: date(share.page.updatedAt) }) }}
-          </p>
-          <!-- Pages of the subtree, for readers on a screen too narrow for the side nav. -->
-          <details v-if="rows.length" class="mb-6 rounded-md border px-3 py-2 text-sm lg:hidden">
-            <summary class="cursor-pointer font-medium">{{ t('shareReader.pages') }}</summary>
-            <ul class="mt-2 space-y-1">
-              <li v-for="row in rows" :key="row.documentId" :style="{ paddingLeft: `${row.depth * 0.875}rem` }">
-                <a :href="shareHref(share.token, row.documentId, rootId)" class="hover:underline">{{ row.title }}</a>
+      <main class="flex min-w-0 flex-1 gap-8 px-4 py-6 lg:px-8 lg:py-8">
+        <article class="min-w-0 flex-1">
+          <div>
+            <h1 class="mb-1 text-3xl font-semibold tracking-tight">{{ share.page.title }}</h1>
+            <p v-if="share.page.updatedAt" class="mb-8 text-xs text-muted-foreground">
+              {{ t('shareReader.updated', { date: date(share.page.updatedAt) }) }}
+            </p>
+            <!-- Pages of the subtree, for readers on a screen too narrow for the side nav. -->
+            <details v-if="rows.length" class="mb-6 rounded-md border px-3 py-2 text-sm lg:hidden">
+              <summary class="cursor-pointer font-medium">{{ t('shareReader.pages') }}</summary>
+              <ul class="mt-2 space-y-1">
+                <li v-for="row in rows" :key="row.documentId" :style="{ paddingLeft: `${row.depth * 0.875}rem` }">
+                  <a :href="shareHref(share.token, row.documentId, rootId)" class="hover:underline">{{ row.title }}</a>
+                </li>
+              </ul>
+            </details>
+            <PublicMarkdown :html="share.page.html" />
+          </div>
+        </article>
+
+        <aside v-if="toc.length > 1" class="hidden w-52 shrink-0 xl:block" :aria-label="t('shareReader.onThisPage')">
+          <div class="sticky top-20">
+            <p class="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{{ t('shareReader.onThisPage') }}</p>
+            <ul class="space-y-1 text-sm">
+              <li v-for="h in toc" :key="h.id" :style="{ paddingLeft: `${(h.level - 2) * 0.75}rem` }">
+                <a :href="`#${h.id}`" class="text-muted-foreground hover:text-foreground">{{ h.text }}</a>
               </li>
             </ul>
-          </details>
-          <PublicMarkdown :html="share.page.html" />
-        </div>
-      </article>
-
-      <aside v-if="toc.length > 1" class="hidden w-52 shrink-0 xl:block" :aria-label="t('shareReader.onThisPage')">
-        <div class="sticky top-20">
-          <p class="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{{ t('shareReader.onThisPage') }}</p>
-          <ul class="space-y-1 text-sm">
-            <li v-for="h in toc" :key="h.id" :style="{ paddingLeft: `${(h.level - 2) * 0.75}rem` }">
-              <a :href="`#${h.id}`" class="text-muted-foreground hover:text-foreground">{{ h.text }}</a>
-            </li>
-          </ul>
-        </div>
-      </aside>
+          </div>
+        </aside>
+      </main>
     </div>
   </div>
 </template>

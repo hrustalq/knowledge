@@ -47,7 +47,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { PageState } from '@/components/layout/page'
+import { PageState, PageTabs, panelId, tabId, type PageTab } from '@/components/layout/page'
 import SiteAskPanel from '@/components/projects/SiteAskPanel.vue'
 import SiteAudiencePanel from '@/components/projects/SiteAudiencePanel.vue'
 
@@ -113,12 +113,14 @@ function previewUrl(slug: string): string {
 }
 
 // ---------------------------------------------------------------- tabs
-// Hand-rolled (CLAUDE.md); `?tab=` opens one, it is not two-way state.
+// The shared PageTabs strip on a local ref (CLAUDE.md): `?tab=` opens one, it
+// is not two-way state.
 const TABS = ['general', 'theme', 'versions', 'domains', 'audience', 'ask'] as const
 type Tab = (typeof TABS)[number]
 /** Who may read which pages is an admin's to see as well as to change: the rules name restricted pages. */
 const visibleTabs = computed(() => TABS.filter((id) => id !== 'audience' || canManage.value))
 const tab = ref<Tab>(TABS.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'general')
+const pageTabs = computed<PageTab<Tab>[]>(() => visibleTabs.value.map((key) => ({ key, label: t(`site.tab.${key}`) })))
 
 // ---------------------------------------------------------------- create
 const createForm = reactive({ slug: '', root: WHOLE_PROJECT })
@@ -394,13 +396,13 @@ const backToProject = () => router.push(`/settings/projects/${projectId.value}`)
     <template v-else-if="data && policy">
       <p
         v-if="!policy.ceiling"
-        class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+        class="rounded-md border kn-callout-warning px-3 py-2 text-sm"
       >
         {{ t('site.ceilingOff') }}
       </p>
       <p
         v-else-if="!policy.enabled"
-        class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+        class="rounded-md border kn-callout-warning px-3 py-2 text-sm"
       >
         {{ t('site.disabled') }}
         <RouterLink v-if="canManage" to="/settings/publishing" class="font-medium underline">{{ t('site.openPublishing') }}</RouterLink>
@@ -461,372 +463,361 @@ const backToProject = () => router.push(`/settings/projects/${projectId.value}`)
           </template>
         </div>
 
-        <div class="flex gap-1 border-b" role="tablist">
-          <button
-            v-for="id in visibleTabs"
-            :key="id"
-            type="button"
-            role="tab"
-            :aria-selected="tab === id"
-            class="-mb-px border-b-2 px-3 py-2 text-sm"
-            :class="tab === id ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'"
-            @click="tab = id"
-          >
-            {{ t(`site.tab.${id}`) }}
-          </button>
-        </div>
+        <PageTabs v-model="tab" :tabs="pageTabs" :label="t('site.title')" />
 
-        <!-- General -->
-        <form v-if="tab === 'general'" class="max-w-xl space-y-4" @submit.prevent="saveGeneral">
-          <label class="block space-y-1">
-            <span class="text-xs font-medium text-muted-foreground">{{ t('site.slug') }}</span>
-            <Input v-model="general.slug" :disabled="!canManage" autocomplete="off" spellcheck="false" />
-            <span class="block text-xs text-muted-foreground">{{ t('site.slugChangeHint') }}</span>
-          </label>
-          <div class="space-y-1">
-            <span class="text-xs font-medium text-muted-foreground">{{ t('site.root') }}</span>
-            <Select v-model="general.root" :disabled="!canManage">
-              <SelectTrigger class="h-9 w-full" :aria-label="t('site.root')"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem :value="WHOLE_PROJECT">{{ t('site.wholeProject') }}</SelectItem>
-                <SelectItem
-                  v-if="site.rootDocumentId && !pageOptions.some((o) => o.id === site!.rootDocumentId)"
-                  :value="site.rootDocumentId"
-                >
-                  {{ site.rootDocumentTitle ?? site.rootDocumentId }}
-                </SelectItem>
-                <SelectItem v-for="o in pageOptions" :key="o.id" :value="o.id">{{ o.label }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <label class="flex items-start gap-2 text-sm">
-            <input v-model="general.seoIndexable" type="checkbox" class="mt-0.5" :disabled="!canManage">
-            <span>
-              {{ t('site.seoIndexable') }}
-              <span class="block text-xs text-muted-foreground">{{ t('site.seoIndexableHint') }}</span>
-            </span>
-          </label>
-          <Button v-if="canManage" type="submit" size="sm" :disabled="!generalDirty || busy">{{ t('common.save') }}</Button>
-
-          <div v-if="canManage" class="mt-8 space-y-2 border-t pt-4">
-            <p class="text-sm font-medium">{{ t('site.deleteTitle') }}</p>
-            <p class="text-xs text-muted-foreground">{{ t('site.deleteHint') }}</p>
-            <div class="flex gap-2">
-              <Button v-if="!confirmingDelete" type="button" size="sm" variant="outline" class="text-destructive" @click="confirmingDelete = true">
-                {{ t('site.delete') }}
-              </Button>
-              <template v-else>
-                <Button type="button" size="sm" variant="destructive" :disabled="busy" @click="deleteSite">{{ t('site.deleteConfirm') }}</Button>
-                <Button type="button" size="sm" variant="ghost" @click="confirmingDelete = false">{{ t('common.cancel') }}</Button>
-              </template>
-            </div>
-          </div>
-        </form>
-
-        <!-- Theme -->
-        <form v-else-if="tab === 'theme'" class="grid max-w-3xl gap-6 md:grid-cols-[1fr_16rem]" @submit.prevent="saveTheme">
-          <div class="space-y-4">
-            <div class="grid gap-4 sm:grid-cols-2">
-              <label v-for="key in (['primaryColor', 'primaryColorDark'] as const)" :key="key" class="block space-y-1">
-                <span class="text-xs font-medium text-muted-foreground">{{ t(`site.theme.${key}`) }}</span>
-                <div class="flex items-center gap-2">
-                  <input
-                    type="color"
-                    class="h-9 w-10 shrink-0 cursor-pointer rounded border bg-transparent"
-                    :value="isHexColor(theme[key]) ? theme[key] : HEX_EXAMPLE"
-                    :disabled="!canManage"
-                    :aria-label="t(`site.theme.${key}`)"
-                    @input="theme[key] = ($event.target as HTMLInputElement).value"
-                  >
-                  <Input v-model="theme[key]" :placeholder="HEX_EXAMPLE" :disabled="!canManage" spellcheck="false" />
-                </div>
-                <span v-if="colourError(theme[key])" class="block text-xs text-destructive">{{ t('site.theme.colourHint') }}</span>
-              </label>
-            </div>
+        <div :id="panelId(tab)" role="tabpanel" :aria-labelledby="tabId(tab)">
+          <!-- General -->
+          <form v-if="tab === 'general'" class="max-w-xl space-y-4" @submit.prevent="saveGeneral">
+            <label class="block space-y-1">
+              <span class="text-xs font-medium text-muted-foreground">{{ t('site.slug') }}</span>
+              <Input v-model="general.slug" :disabled="!canManage" autocomplete="off" spellcheck="false" />
+              <span class="block text-xs text-muted-foreground">{{ t('site.slugChangeHint') }}</span>
+            </label>
             <div class="space-y-1">
-              <span class="text-xs font-medium text-muted-foreground">{{ t('site.theme.font') }}</span>
-              <Select v-model="theme.font" :disabled="!canManage">
-                <SelectTrigger class="h-9 w-full" :aria-label="t('site.theme.font')"><SelectValue /></SelectTrigger>
+              <span class="text-xs font-medium text-muted-foreground">{{ t('site.root') }}</span>
+              <Select v-model="general.root" :disabled="!canManage">
+                <SelectTrigger class="h-9 w-full" :aria-label="t('site.root')"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem v-for="f in SITE_FONTS" :key="f" :value="f">{{ t(`site.theme.fonts.${f}`) }}</SelectItem>
+                  <SelectItem :value="WHOLE_PROJECT">{{ t('site.wholeProject') }}</SelectItem>
+                  <SelectItem
+                    v-if="site.rootDocumentId && !pageOptions.some((o) => o.id === site!.rootDocumentId)"
+                    :value="site.rootDocumentId"
+                  >
+                    {{ site.rootDocumentTitle ?? site.rootDocumentId }}
+                  </SelectItem>
+                  <SelectItem v-for="o in pageOptions" :key="o.id" :value="o.id">{{ o.label }}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <label class="flex items-center gap-2 text-sm">
-              <input v-model="theme.showLogo" type="checkbox" :disabled="!canManage">
-              {{ t('site.theme.showLogo') }}
+            <label class="flex items-start gap-2 text-sm">
+              <input v-model="general.seoIndexable" type="checkbox" class="mt-0.5" :disabled="!canManage">
+              <span>
+                {{ t('site.seoIndexable') }}
+                <span class="block text-xs text-muted-foreground">{{ t('site.seoIndexableHint') }}</span>
+              </span>
             </label>
+            <Button v-if="canManage" type="submit" size="sm" :disabled="!generalDirty || busy">{{ t('common.save') }}</Button>
 
-            <div class="space-y-2">
-              <span class="text-xs font-medium text-muted-foreground">{{ t('site.theme.headerLinks') }}</span>
-              <div v-for="(link, i) in theme.headerLinks" :key="i" class="flex gap-2">
-                <Input v-model="link.label" :placeholder="t('site.theme.linkLabel')" :maxlength="SITE_THEME_LIMITS.linkLabel" class="w-40" :disabled="!canManage" />
-                <Input v-model="link.url" :placeholder="URL_EXAMPLE" :disabled="!canManage" />
-                <Button v-if="canManage" type="button" size="icon" variant="ghost" :aria-label="t('common.remove')" @click="theme.headerLinks.splice(i, 1)">
-                  <X class="size-4" />
-                </Button>
-              </div>
-              <Button
-                v-if="canManage && theme.headerLinks.length < SITE_THEME_LIMITS.headerLinks"
-                type="button"
-                size="sm"
-                variant="outline"
-                @click="theme.headerLinks.push({ label: '', url: '' })"
-              >
-                <Plus class="size-4" />{{ t('site.theme.addLink') }}
-              </Button>
-            </div>
-
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-muted-foreground">{{ t('site.theme.footer') }}</span>
-              <Textarea v-model="theme.footerText" :maxlength="SITE_THEME_LIMITS.footerText" rows="2" :disabled="!canManage" />
-            </label>
-
-            <div v-if="canManage" class="flex gap-2">
-              <Button type="submit" size="sm" :disabled="busy || !themeValid">{{ t('common.save') }}</Button>
-              <Button type="button" size="sm" variant="ghost" @click="resetTheme">{{ t('site.theme.reset') }}</Button>
-            </div>
-          </div>
-
-          <!-- A swatch of what the colours do on the site: the primary drives
-               links, the current page in the nav and focus rings. -->
-          <div class="h-fit space-y-2 rounded-xl border p-4 text-sm" :style="previewColour ? { '--primary': previewColour } : undefined">
-            <p class="text-xs font-medium tracking-wide text-muted-foreground uppercase">{{ t('site.theme.preview') }}</p>
-            <p class="rounded-md bg-primary/10 px-2 py-1 font-medium text-primary">{{ t('site.theme.previewCurrent') }}</p>
-            <p class="px-2 text-foreground/80">{{ t('site.theme.previewOther') }}</p>
-            <p class="px-2"><a class="text-primary underline" href="#" @click.prevent>{{ t('site.theme.previewLink') }}</a></p>
-          </div>
-        </form>
-
-        <!-- Domains -->
-        <SiteAudiencePanel v-else-if="tab === 'audience' && canManage" :site="site" :pages="pageOptions" :can-manage="canManage" />
-
-        <SiteAskPanel
-          v-else-if="tab === 'ask' && policy"
-          :site="site"
-          :policy="policy"
-          :can-manage="canManage"
-          :busy="busy"
-          @save="(body) => patchSite(body, 'site.saved')"
-        />
-
-        <div v-else-if="tab === 'domains'" class="max-w-3xl space-y-6">
-          <p
-            v-if="!policy.customDomains"
-            class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
-          >
-            {{ t('site.domains.off') }}
-          </p>
-          <p class="text-sm text-muted-foreground">{{ t('site.domains.intro') }}</p>
-
-          <ul v-if="site.domains.length" class="divide-y rounded-md border">
-            <li v-for="d in site.domains" :key="d.id" class="space-y-3 p-4">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="font-medium break-all">{{ d.hostname }}</span>
-                <Badge :variant="d.verified ? 'default' : 'outline'">
-                  {{ t(d.verified ? 'site.domains.verified' : 'site.domains.pending') }}
-                </Badge>
-                <span class="flex-1" />
-                <template v-if="canManage">
-                  <Button
-                    v-if="!d.verified"
-                    size="sm"
-                    variant="outline"
-                    class="h-7"
-                    :disabled="checkingDomain === d.id || !policy.customDomains"
-                    @click="verifyDomain(d)"
-                  >
-                    <RefreshCw v-if="checkingDomain === d.id" class="size-3 animate-spin" aria-hidden="true" />
-                    {{ t('site.domains.verify') }}
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    class="size-7 text-destructive hover:text-destructive"
-                    :aria-label="t('site.domains.remove', { hostname: d.hostname })"
-                    @click="removeDomain(d)"
-                  >
-                    <Trash2 class="size-4" />
-                  </Button>
-                </template>
-              </div>
-
-              <p v-if="d.verified" class="text-xs text-muted-foreground">
-                {{ t('site.domains.verifiedHint', { when: d.verifiedAt ? relativeTime(d.verifiedAt) : '—' }) }}
-              </p>
-              <template v-else>
-                <p v-if="d.lastError" class="text-xs text-amber-700 dark:text-amber-300">
-                  {{ t(`site.domains.error.${d.lastError}`) }}
-                  <span v-if="d.lastCheckAt" class="text-muted-foreground">· {{ t('site.domains.checked', { when: relativeTime(d.lastCheckAt) }) }}</span>
-                </p>
-                <p class="text-xs text-muted-foreground">{{ t('site.domains.pendingHint') }}</p>
-                <!-- The two records, each copyable whole: DNS consoles are unforgiving about a stray character. -->
-                <dl class="grid gap-x-3 gap-y-2 rounded-md bg-muted/40 p-3 text-xs sm:grid-cols-[auto_auto_1fr_auto]">
-                  <template v-for="rec in [
-                    { type: 'CNAME', name: d.hostname, value: d.dnsTarget },
-                    { type: 'TXT', name: d.txtName, value: d.txtValue },
-                  ]" :key="rec.type">
-                    <dt class="font-medium text-muted-foreground">{{ rec.type }}</dt>
-                    <dd class="font-mono break-all">{{ rec.name }}</dd>
-                    <dd class="font-mono break-all">{{ rec.value }}</dd>
-                    <dd>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        class="size-6"
-                        :aria-label="t('common.copy')"
-                        :title="t('common.copy')"
-                        @click="copy(rec.value)"
-                      >
-                        <Check v-if="copied === rec.value" class="size-3.5" />
-                        <Copy v-else class="size-3.5" />
-                      </Button>
-                    </dd>
-                  </template>
-                </dl>
-              </template>
-            </li>
-          </ul>
-          <p v-else class="text-sm text-muted-foreground">{{ t('site.domains.none') }}</p>
-
-          <form v-if="canManage" class="space-y-2" @submit.prevent="addDomain">
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-muted-foreground">{{ t('site.domains.add') }}</span>
+            <div v-if="canManage" class="mt-8 space-y-2 border-t pt-4">
+              <p class="text-sm font-medium">{{ t('site.deleteTitle') }}</p>
+              <p class="text-xs text-muted-foreground">{{ t('site.deleteHint') }}</p>
               <div class="flex gap-2">
-                <Input
-                  v-model="domainInput"
-                  :placeholder="DOMAIN_EXAMPLE"
-                  autocomplete="off"
-                  spellcheck="false"
-                  :disabled="!canAddDomain"
-                />
-                <Button type="submit" size="sm" :disabled="!canAddDomain || !domainHost || addingDomain">
-                  {{ t('site.domains.addButton') }}
+                <Button v-if="!confirmingDelete" type="button" size="sm" variant="outline" class="text-destructive" @click="confirmingDelete = true">
+                  {{ t('site.delete') }}
                 </Button>
-              </div>
-            </label>
-            <p v-if="domainInput && !domainHost" class="text-xs text-destructive">{{ t('site.domains.invalid') }}</p>
-            <p v-else-if="site.domains.length >= SITE_MAX_DOMAINS" class="text-xs text-muted-foreground">
-              {{ t('site.domains.limit', { max: SITE_MAX_DOMAINS }) }}
-            </p>
-          </form>
-        </div>
-
-        <!-- Versions -->
-        <div v-else class="space-y-6">
-          <p class="max-w-2xl text-sm text-muted-foreground">{{ t('site.versionsIntro') }}</p>
-          <div class="overflow-x-auto rounded-md border">
-            <table class="w-full text-sm">
-              <thead class="bg-muted/40 text-left text-xs text-muted-foreground">
-                <tr>
-                  <th class="px-3 py-2 font-medium">{{ t('site.col.version') }}</th>
-                  <th class="px-3 py-2 font-medium">{{ t('site.col.source') }}</th>
-                  <th class="px-3 py-2 font-medium">{{ t('site.col.build') }}</th>
-                  <th class="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody class="divide-y">
-                <template v-for="v in site.versions" :key="v.id">
-                  <tr>
-                    <td class="px-3 py-2">
-                      <div class="flex flex-wrap items-center gap-1.5">
-                        <span class="font-medium">{{ v.name }}</span>
-                        <Badge v-if="v.isDefault" variant="secondary">{{ t('site.default') }}</Badge>
-                        <Badge variant="outline">{{ t(`site.kind.${v.kind}`) }}</Badge>
-                      </div>
-                      <span class="text-xs text-muted-foreground">/{{ v.isDefault ? '' : v.slug }}</span>
-                    </td>
-                    <td class="px-3 py-2 text-muted-foreground">{{ v.sourceBranch ?? t('site.defaultBranches') }}</td>
-                    <td class="px-3 py-2">
-                      <span v-if="v.status === 'building'" class="inline-flex items-center gap-1 text-muted-foreground">
-                        <RefreshCw class="size-3 animate-spin" aria-hidden="true" />{{ t('site.building') }}
-                      </span>
-                      <span v-else-if="v.status === 'failed'" class="text-destructive" :title="v.error ?? ''">{{ t('site.failed') }}</span>
-                      <span v-else class="text-muted-foreground">
-                        {{ t('site.builtSummary', { n: v.pageCount, when: v.builtAt ? relativeTime(v.builtAt) : '—' }) }}
-                      </span>
-                      <button
-                        v-if="v.warnings.length"
-                        type="button"
-                        class="ml-2 text-xs text-amber-700 underline dark:text-amber-300"
-                        @click="openWarnings = openWarnings === v.id ? null : v.id"
-                      >
-                        {{ t('site.warnings', { n: v.warnings.length }, v.warnings.length) }}
-                      </button>
-                    </td>
-                    <td class="px-3 py-2 text-right whitespace-nowrap">
-                      <template v-if="canManage">
-                        <Button size="sm" variant="ghost" class="h-7" :disabled="v.status === 'building'" @click="versionAction(v, 'rebuild')">
-                          {{ t('site.rebuild') }}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          class="h-7"
-                          @click="versionAction(v, v.kind === 'live' ? 'freeze' : 'unfreeze')"
-                        >
-                          {{ t(v.kind === 'live' ? 'site.freeze' : 'site.unfreeze') }}
-                        </Button>
-                        <Button v-if="!v.isDefault && v.builtAt" size="sm" variant="ghost" class="h-7" @click="versionAction(v, 'default')">
-                          {{ t('site.makeDefault') }}
-                        </Button>
-                        <Button
-                          v-if="!v.isDefault"
-                          size="icon"
-                          variant="ghost"
-                          class="size-7 text-destructive hover:text-destructive"
-                          :aria-label="t('common.delete')"
-                          @click="versionAction(v, 'delete')"
-                        >
-                          <Trash2 class="size-4" />
-                        </Button>
-                      </template>
-                    </td>
-                  </tr>
-                  <tr v-if="openWarnings === v.id">
-                    <td colspan="4" class="bg-muted/30 px-3 py-2">
-                      <ul class="space-y-1 text-xs">
-                        <li v-for="(w, i) in v.warnings" :key="i">
-                          <RouterLink v-if="w.documentId" :to="`/documents/${w.documentId}`" class="font-medium hover:underline">{{ w.title }}</RouterLink>
-                          — {{ t(`site.warning.${w.code}`) }}
-                        </li>
-                      </ul>
-                    </td>
-                  </tr>
+                <template v-else>
+                  <Button type="button" size="sm" variant="destructive" :disabled="busy" @click="deleteSite">{{ t('site.deleteConfirm') }}</Button>
+                  <Button type="button" size="sm" variant="ghost" @click="confirmingDelete = false">{{ t('common.cancel') }}</Button>
                 </template>
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </div>
+          </form>
 
-          <form v-if="canManage" class="max-w-3xl space-y-3 rounded-xl border p-4" @submit.prevent="addVersion">
-            <p class="text-sm font-medium">{{ t('site.addVersion') }}</p>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <label class="block space-y-1">
-                <span class="text-xs font-medium text-muted-foreground">{{ t('site.versionName') }}</span>
-                <Input v-model="versionForm.name" :placeholder="VERSION_EXAMPLE" maxlength="60" />
-              </label>
-              <label class="block space-y-1">
-                <span class="text-xs font-medium text-muted-foreground">{{ t('site.versionSlug') }}</span>
-                <Input v-model="versionForm.slug" :placeholder="t('site.versionSlugAuto')" maxlength="32" spellcheck="false" />
-              </label>
+          <!-- Theme -->
+          <form v-else-if="tab === 'theme'" class="grid max-w-3xl gap-6 md:grid-cols-[1fr_16rem]" @submit.prevent="saveTheme">
+            <div class="space-y-4">
+              <div class="grid gap-4 sm:grid-cols-2">
+                <label v-for="key in (['primaryColor', 'primaryColorDark'] as const)" :key="key" class="block space-y-1">
+                  <span class="text-xs font-medium text-muted-foreground">{{ t(`site.theme.${key}`) }}</span>
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="color"
+                      class="h-9 w-10 shrink-0 cursor-pointer rounded border bg-transparent"
+                      :value="isHexColor(theme[key]) ? theme[key] : HEX_EXAMPLE"
+                      :disabled="!canManage"
+                      :aria-label="t(`site.theme.${key}`)"
+                      @input="theme[key] = ($event.target as HTMLInputElement).value"
+                    >
+                    <Input v-model="theme[key]" :placeholder="HEX_EXAMPLE" :disabled="!canManage" spellcheck="false" />
+                  </div>
+                  <span v-if="colourError(theme[key])" class="block text-xs text-destructive">{{ t('site.theme.colourHint') }}</span>
+                </label>
+              </div>
               <div class="space-y-1">
-                <span class="text-xs font-medium text-muted-foreground">{{ t('site.versionKind') }}</span>
-                <Select v-model="versionForm.kind">
-                  <SelectTrigger class="h-9 w-full" :aria-label="t('site.versionKind')"><SelectValue /></SelectTrigger>
+                <span class="text-xs font-medium text-muted-foreground">{{ t('site.theme.font') }}</span>
+                <Select v-model="theme.font" :disabled="!canManage">
+                  <SelectTrigger class="h-9 w-full" :aria-label="t('site.theme.font')"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="frozen">{{ t('site.kind.frozen') }} — {{ t('site.kindHint.frozen') }}</SelectItem>
-                    <SelectItem value="live">{{ t('site.kind.live') }} — {{ t('site.kindHint.live') }}</SelectItem>
+                    <SelectItem v-for="f in SITE_FONTS" :key="f" :value="f">{{ t(`site.theme.fonts.${f}`) }}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <label class="block space-y-1">
-                <span class="text-xs font-medium text-muted-foreground">{{ t('site.sourceBranch') }}</span>
-                <Input v-model="versionForm.sourceBranch" :placeholder="t('site.defaultBranches')" maxlength="100" spellcheck="false" />
+              <label class="flex items-center gap-2 text-sm">
+                <input v-model="theme.showLogo" type="checkbox" :disabled="!canManage">
+                {{ t('site.theme.showLogo') }}
               </label>
+
+              <div class="space-y-2">
+                <span class="text-xs font-medium text-muted-foreground">{{ t('site.theme.headerLinks') }}</span>
+                <div v-for="(link, i) in theme.headerLinks" :key="i" class="flex gap-2">
+                  <Input v-model="link.label" :placeholder="t('site.theme.linkLabel')" :maxlength="SITE_THEME_LIMITS.linkLabel" class="w-40" :disabled="!canManage" />
+                  <Input v-model="link.url" :placeholder="URL_EXAMPLE" :disabled="!canManage" />
+                  <Button v-if="canManage" type="button" size="icon" variant="ghost" :aria-label="t('common.remove')" @click="theme.headerLinks.splice(i, 1)">
+                    <X class="size-4" />
+                  </Button>
+                </div>
+                <Button
+                  v-if="canManage && theme.headerLinks.length < SITE_THEME_LIMITS.headerLinks"
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  @click="theme.headerLinks.push({ label: '', url: '' })"
+                >
+                  <Plus class="size-4" />{{ t('site.theme.addLink') }}
+                </Button>
+              </div>
+
+              <label class="block space-y-1">
+                <span class="text-xs font-medium text-muted-foreground">{{ t('site.theme.footer') }}</span>
+                <Textarea v-model="theme.footerText" :maxlength="SITE_THEME_LIMITS.footerText" rows="2" :disabled="!canManage" />
+              </label>
+
+              <div v-if="canManage" class="flex gap-2">
+                <Button type="submit" size="sm" :disabled="busy || !themeValid">{{ t('common.save') }}</Button>
+                <Button type="button" size="sm" variant="ghost" @click="resetTheme">{{ t('site.theme.reset') }}</Button>
+              </div>
             </div>
-            <p class="text-xs text-muted-foreground">{{ t('site.sourceBranchHint') }}</p>
-            <Button type="submit" size="sm" :disabled="addingVersion || !versionForm.name.trim()">{{ t('site.addVersion') }}</Button>
+
+            <!-- A swatch of what the colours do on the site: the primary drives
+                 links, the current page in the nav and focus rings. -->
+            <div class="h-fit space-y-2 rounded-xl border p-4 text-sm" :style="previewColour ? { '--primary': previewColour } : undefined">
+              <p class="text-xs font-medium tracking-wide text-muted-foreground uppercase">{{ t('site.theme.preview') }}</p>
+              <p class="rounded-md bg-primary/10 px-2 py-1 font-medium text-primary">{{ t('site.theme.previewCurrent') }}</p>
+              <p class="px-2 text-foreground/80">{{ t('site.theme.previewOther') }}</p>
+              <p class="px-2"><a class="text-primary underline" href="#" @click.prevent>{{ t('site.theme.previewLink') }}</a></p>
+            </div>
           </form>
+
+          <!-- Domains -->
+          <SiteAudiencePanel v-else-if="tab === 'audience' && canManage" :site="site" :pages="pageOptions" :can-manage="canManage" />
+
+          <SiteAskPanel
+            v-else-if="tab === 'ask' && policy"
+            :site="site"
+            :policy="policy"
+            :can-manage="canManage"
+            :busy="busy"
+            @save="(body) => patchSite(body, 'site.saved')"
+          />
+
+          <div v-else-if="tab === 'domains'" class="space-y-6">
+            <p
+              v-if="!policy.customDomains"
+              class="rounded-md border kn-callout-warning px-3 py-2 text-sm"
+            >
+              {{ t('site.domains.off') }}
+            </p>
+            <p class="kn-measure text-sm text-muted-foreground">{{ t('site.domains.intro') }}</p>
+
+            <ul v-if="site.domains.length" class="divide-y rounded-md border">
+              <li v-for="d in site.domains" :key="d.id" class="space-y-3 p-4">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="font-medium break-all">{{ d.hostname }}</span>
+                  <Badge :variant="d.verified ? 'default' : 'outline'">
+                    {{ t(d.verified ? 'site.domains.verified' : 'site.domains.pending') }}
+                  </Badge>
+                  <span class="flex-1" />
+                  <template v-if="canManage">
+                    <Button
+                      v-if="!d.verified"
+                      size="sm"
+                      variant="outline"
+                      class="h-7"
+                      :disabled="checkingDomain === d.id || !policy.customDomains"
+                      @click="verifyDomain(d)"
+                    >
+                      <RefreshCw v-if="checkingDomain === d.id" class="size-3 animate-spin" aria-hidden="true" />
+                      {{ t('site.domains.verify') }}
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      class="size-7 text-destructive hover:text-destructive"
+                      :aria-label="t('site.domains.remove', { hostname: d.hostname })"
+                      @click="removeDomain(d)"
+                    >
+                      <Trash2 class="size-4" />
+                    </Button>
+                  </template>
+                </div>
+
+                <p v-if="d.verified" class="text-xs text-muted-foreground">
+                  {{ t('site.domains.verifiedHint', { when: d.verifiedAt ? relativeTime(d.verifiedAt) : '—' }) }}
+                </p>
+                <template v-else>
+                  <p v-if="d.lastError" class="text-xs text-panel-warning-ink">
+                    {{ t(`site.domains.error.${d.lastError}`) }}
+                    <span v-if="d.lastCheckAt" class="text-muted-foreground">· {{ t('site.domains.checked', { when: relativeTime(d.lastCheckAt) }) }}</span>
+                  </p>
+                  <p class="text-xs text-muted-foreground">{{ t('site.domains.pendingHint') }}</p>
+                  <!-- The two records, each copyable whole: DNS consoles are unforgiving about a stray character. -->
+                  <dl class="grid gap-x-3 gap-y-2 rounded-md bg-muted/40 p-3 text-xs sm:grid-cols-[auto_auto_1fr_auto]">
+                    <template v-for="rec in [
+                      { type: 'CNAME', name: d.hostname, value: d.dnsTarget },
+                      { type: 'TXT', name: d.txtName, value: d.txtValue },
+                    ]" :key="rec.type">
+                      <dt class="font-medium text-muted-foreground">{{ rec.type }}</dt>
+                      <dd class="font-mono break-all">{{ rec.name }}</dd>
+                      <dd class="font-mono break-all">{{ rec.value }}</dd>
+                      <dd>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          class="size-6"
+                          :aria-label="t('common.copy')"
+                          :title="t('common.copy')"
+                          @click="copy(rec.value)"
+                        >
+                          <Check v-if="copied === rec.value" class="size-3.5" />
+                          <Copy v-else class="size-3.5" />
+                        </Button>
+                      </dd>
+                    </template>
+                  </dl>
+                </template>
+              </li>
+            </ul>
+            <p v-else class="text-sm text-muted-foreground">{{ t('site.domains.none') }}</p>
+
+            <form v-if="canManage" class="max-w-xl space-y-2" @submit.prevent="addDomain">
+              <label class="block space-y-1">
+                <span class="text-xs font-medium text-muted-foreground">{{ t('site.domains.add') }}</span>
+                <div class="flex gap-2">
+                  <Input
+                    v-model="domainInput"
+                    :placeholder="DOMAIN_EXAMPLE"
+                    autocomplete="off"
+                    spellcheck="false"
+                    :disabled="!canAddDomain"
+                  />
+                  <Button type="submit" size="sm" :disabled="!canAddDomain || !domainHost || addingDomain">
+                    {{ t('site.domains.addButton') }}
+                  </Button>
+                </div>
+              </label>
+              <p v-if="domainInput && !domainHost" class="text-xs text-destructive">{{ t('site.domains.invalid') }}</p>
+              <p v-else-if="site.domains.length >= SITE_MAX_DOMAINS" class="text-xs text-muted-foreground">
+                {{ t('site.domains.limit', { max: SITE_MAX_DOMAINS }) }}
+              </p>
+            </form>
+          </div>
+
+          <!-- Versions -->
+          <div v-else class="space-y-6">
+            <p class="kn-measure text-sm text-muted-foreground">{{ t('site.versionsIntro') }}</p>
+            <div class="overflow-x-auto rounded-md border">
+              <table class="w-full text-sm">
+                <thead class="bg-muted/40 text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th class="px-3 py-2 font-medium">{{ t('site.col.version') }}</th>
+                    <th class="px-3 py-2 font-medium">{{ t('site.col.source') }}</th>
+                    <th class="px-3 py-2 font-medium">{{ t('site.col.build') }}</th>
+                    <th class="px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody class="divide-y">
+                  <template v-for="v in site.versions" :key="v.id">
+                    <tr>
+                      <td class="px-3 py-2">
+                        <div class="flex flex-wrap items-center gap-1.5">
+                          <span class="font-medium">{{ v.name }}</span>
+                          <Badge v-if="v.isDefault" variant="secondary">{{ t('site.default') }}</Badge>
+                          <Badge variant="outline">{{ t(`site.kind.${v.kind}`) }}</Badge>
+                        </div>
+                        <span class="text-xs text-muted-foreground">/{{ v.isDefault ? '' : v.slug }}</span>
+                      </td>
+                      <td class="px-3 py-2 text-muted-foreground">{{ v.sourceBranch ?? t('site.defaultBranches') }}</td>
+                      <td class="px-3 py-2">
+                        <span v-if="v.status === 'building'" class="inline-flex items-center gap-1 text-muted-foreground">
+                          <RefreshCw class="size-3 animate-spin" aria-hidden="true" />{{ t('site.building') }}
+                        </span>
+                        <span v-else-if="v.status === 'failed'" class="text-destructive" :title="v.error ?? ''">{{ t('site.failed') }}</span>
+                        <span v-else class="text-muted-foreground">
+                          {{ t('site.builtSummary', { n: v.pageCount, when: v.builtAt ? relativeTime(v.builtAt) : '—' }) }}
+                        </span>
+                        <button
+                          v-if="v.warnings.length"
+                          type="button"
+                          class="ml-2 text-xs text-panel-warning-ink underline"
+                          @click="openWarnings = openWarnings === v.id ? null : v.id"
+                        >
+                          {{ t('site.warnings', { n: v.warnings.length }, v.warnings.length) }}
+                        </button>
+                      </td>
+                      <td class="px-3 py-2 text-right whitespace-nowrap">
+                        <template v-if="canManage">
+                          <Button size="sm" variant="ghost" class="h-7" :disabled="v.status === 'building'" @click="versionAction(v, 'rebuild')">
+                            {{ t('site.rebuild') }}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            class="h-7"
+                            @click="versionAction(v, v.kind === 'live' ? 'freeze' : 'unfreeze')"
+                          >
+                            {{ t(v.kind === 'live' ? 'site.freeze' : 'site.unfreeze') }}
+                          </Button>
+                          <Button v-if="!v.isDefault && v.builtAt" size="sm" variant="ghost" class="h-7" @click="versionAction(v, 'default')">
+                            {{ t('site.makeDefault') }}
+                          </Button>
+                          <Button
+                            v-if="!v.isDefault"
+                            size="icon"
+                            variant="ghost"
+                            class="size-7 text-destructive hover:text-destructive"
+                            :aria-label="t('common.delete')"
+                            @click="versionAction(v, 'delete')"
+                          >
+                            <Trash2 class="size-4" />
+                          </Button>
+                        </template>
+                      </td>
+                    </tr>
+                    <tr v-if="openWarnings === v.id">
+                      <td colspan="4" class="bg-muted/30 px-3 py-2">
+                        <ul class="space-y-1 text-xs">
+                          <li v-for="(w, i) in v.warnings" :key="i">
+                            <RouterLink v-if="w.documentId" :to="`/documents/${w.documentId}`" class="font-medium hover:underline">{{ w.title }}</RouterLink>
+                            — {{ t(`site.warning.${w.code}`) }}
+                          </li>
+                        </ul>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+
+            <form v-if="canManage" class="max-w-3xl space-y-3 rounded-xl border p-4" @submit.prevent="addVersion">
+              <p class="text-sm font-medium">{{ t('site.addVersion') }}</p>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="block space-y-1">
+                  <span class="text-xs font-medium text-muted-foreground">{{ t('site.versionName') }}</span>
+                  <Input v-model="versionForm.name" :placeholder="VERSION_EXAMPLE" maxlength="60" />
+                </label>
+                <label class="block space-y-1">
+                  <span class="text-xs font-medium text-muted-foreground">{{ t('site.versionSlug') }}</span>
+                  <Input v-model="versionForm.slug" :placeholder="t('site.versionSlugAuto')" maxlength="32" spellcheck="false" />
+                </label>
+                <div class="space-y-1">
+                  <span class="text-xs font-medium text-muted-foreground">{{ t('site.versionKind') }}</span>
+                  <Select v-model="versionForm.kind">
+                    <SelectTrigger class="h-9 w-full" :aria-label="t('site.versionKind')"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="frozen">{{ t('site.kind.frozen') }} — {{ t('site.kindHint.frozen') }}</SelectItem>
+                      <SelectItem value="live">{{ t('site.kind.live') }} — {{ t('site.kindHint.live') }}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <label class="block space-y-1">
+                  <span class="text-xs font-medium text-muted-foreground">{{ t('site.sourceBranch') }}</span>
+                  <Input v-model="versionForm.sourceBranch" :placeholder="t('site.defaultBranches')" maxlength="100" spellcheck="false" />
+                </label>
+              </div>
+              <p class="text-xs text-muted-foreground">{{ t('site.sourceBranchHint') }}</p>
+              <Button type="submit" size="sm" :disabled="addingVersion || !versionForm.name.trim()">{{ t('site.addVersion') }}</Button>
+            </form>
+          </div>
         </div>
       </template>
     </template>

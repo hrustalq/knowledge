@@ -41,7 +41,7 @@ const progress = computed(() => {
         </p>
       </div>
       <div class="text-muted-foreground shrink-0 text-right text-xs">
-        <p v-if="progress.awaitingReview" class="text-amber-600 dark:text-amber-500">
+        <p v-if="progress.awaitingReview" class="text-panel-warning-ink">
           {{ t('workflow.toReview', { n: progress.awaitingReview }) }}
         </p>
         <p v-if="progress.failed" class="text-destructive">{{ t('workflow.failedN', { n: progress.failed }) }}</p>

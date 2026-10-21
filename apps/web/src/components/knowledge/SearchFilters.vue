@@ -113,7 +113,7 @@ function onWorkspace(next: string[]) {
         :options="workspaceOptions"
         @update:model-value="onWorkspace"
       />
-      <p class="text-[11px] leading-snug text-muted-foreground">{{ t('search.switchingReloads') }}</p>
+      <p class="text-caption leading-snug text-muted-foreground">{{ t('search.switchingReloads') }}</p>
     </div>
 
     <div class="border-t" />
@@ -130,7 +130,7 @@ function onWorkspace(next: string[]) {
       <div class="flex items-center justify-between gap-2">
         <Label
           for="search-mode"
-          class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+          class="text-caption font-semibold uppercase tracking-wider text-muted-foreground"
         >
           {{ t('search.mode') }}
         </Label>
@@ -176,7 +176,7 @@ function onWorkspace(next: string[]) {
       <div class="flex items-center justify-between gap-2">
         <Label
           for="search-limit"
-          class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+          class="text-caption font-semibold uppercase tracking-wider text-muted-foreground"
         >
           {{ t('search.limit') }}
         </Label>
@@ -199,13 +199,13 @@ function onWorkspace(next: string[]) {
          never both: picking one clears the other. -->
     <section class="space-y-2 text-sm">
       <div class="flex items-center justify-between gap-2">
-        <Label for="search-as-of" class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <Label for="search-as-of" class="text-caption font-semibold uppercase tracking-wider text-muted-foreground">
           {{ t('search.asOf.label') }}
         </Label>
         <button
           v-if="search.asOf.value"
           type="button"
-          class="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          class="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
           @click="search.asOf.value = null"
         >
           <X class="size-3" />
@@ -223,7 +223,7 @@ function onWorkspace(next: string[]) {
           </SelectItem>
         </SelectContent>
       </Select>
-      <p class="text-[11px] leading-snug text-muted-foreground">{{ t('search.asOf.hint') }}</p>
+      <p class="text-caption leading-snug text-muted-foreground">{{ t('search.asOf.hint') }}</p>
     </section>
   </div>
 </template>

@@ -242,7 +242,7 @@ async function add() {
             <span class="block text-sm">{{ t('chatBots.bindings.autoHarvest') }}</span>
             <span class="block text-xs text-muted-foreground">{{ autoHint }}</span>
             <span v-if="!b.listening" class="mt-1 block text-xs text-muted-foreground">{{ t('chatBots.bindings.autoHarvestNeedsListening') }}</span>
-            <span v-if="!auto.available" class="mt-1 block text-xs text-amber-700 dark:text-amber-400">{{ t('chatBots.bindings.autoHarvestUnavailable') }}</span>
+            <span v-if="!auto.available" class="mt-1 block text-xs text-panel-warning-ink">{{ t('chatBots.bindings.autoHarvestUnavailable') }}</span>
           </span>
         </label>
         <!-- Outside the label: the chip opens a card, and a control inside a label is invalid markup. -->
@@ -265,7 +265,7 @@ async function add() {
             <span class="block text-sm">{{ t('chatBots.bindings.searchable') }}</span>
             <span class="block text-xs text-muted-foreground">{{ searchHint }}</span>
             <span v-if="kind === 'telegram'" class="mt-1 block text-xs text-muted-foreground">{{ t('chatBots.bindings.searchableTelegram') }}</span>
-            <span v-if="!search.available" class="mt-1 block text-xs text-amber-700 dark:text-amber-400">{{ t('chatBots.bindings.searchableUnavailable') }}</span>
+            <span v-if="!search.available" class="mt-1 block text-xs text-panel-warning-ink">{{ t('chatBots.bindings.searchableUnavailable') }}</span>
           </span>
         </label>
         <!-- Outside the label, as above: the chip opens a card. -->

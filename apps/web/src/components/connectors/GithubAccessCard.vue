@@ -102,9 +102,9 @@ const STATUS_ICON: Record<GithubGrantStatus, typeof CircleCheck> = {
 
 /** A gap in something this connector does not use is shown, never alarmed about. */
 function statusClass(status: GithubGrantStatus, active: boolean): string {
-  if (status === 'granted') return 'text-emerald-600 dark:text-emerald-500'
+  if (status === 'granted') return 'text-panel-tip-ink'
   if (status === 'extra' || !active) return 'text-muted-foreground'
-  return status === 'pending' ? 'text-amber-600 dark:text-amber-500' : 'text-destructive'
+  return status === 'pending' ? 'text-panel-warning-ink' : 'text-destructive'
 }
 
 function purposes(list: GithubAccessPurpose[]): string {
@@ -149,7 +149,7 @@ async function forget() {
         <span
           v-if="!open && preview"
           class="ml-auto truncate pl-2 text-xs"
-          :class="problems ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground'"
+          :class="problems ? 'text-panel-warning-ink' : 'text-muted-foreground'"
         >
           {{ preview }}
         </span>
@@ -210,7 +210,7 @@ async function forget() {
       <section v-if="access.permissions.length" class="space-y-1.5">
         <h3 class="text-muted-foreground flex items-center justify-between text-xs font-medium uppercase">
           {{ t('connectors.githubAccess.permissions') }}
-          <span v-if="problems" class="text-amber-600 normal-case dark:text-amber-500">
+          <span v-if="problems" class="text-panel-warning-ink normal-case">
             {{ t('connectors.githubAccess.problems', { count: problems }) }}
           </span>
         </h3>
@@ -238,7 +238,7 @@ async function forget() {
                   })
                 }}
               </p>
-              <p v-if="row.purposes.length" class="text-muted-foreground/80">{{ purposes(row.purposes) }}</p>
+              <p v-if="row.purposes.length" class="text-muted-foreground">{{ purposes(row.purposes) }}</p>
             </div>
           </li>
         </ul>
@@ -251,7 +251,7 @@ async function forget() {
           <li
             v-for="row in access.events"
             :key="row.name"
-            class="flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]"
+            class="flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption"
             :title="
               [row.purposes.length ? purposes(row.purposes) : '', row.status === 'granted' || row.status === 'extra' ? '' : t(`connectors.githubAccess.eventStatus.${row.status}`)]
                 .filter(Boolean)
@@ -289,7 +289,7 @@ async function forget() {
         <p v-if="access.identity" class="flex items-center gap-1.5 text-xs">
           <img v-if="access.identity.avatarUrl" :src="access.identity.avatarUrl" alt="" class="size-4 rounded-full" loading="lazy" />
           <span class="font-medium">@{{ access.identity.login }}</span>
-          <span v-if="!access.identity.usable" class="text-amber-600 dark:text-amber-500">
+          <span v-if="!access.identity.usable" class="text-panel-warning-ink">
             · {{ t('connectors.githubAccess.expired') }}
           </span>
         </p>

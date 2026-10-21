@@ -116,6 +116,15 @@ in the pull request that introduces them — see
   app and over MCP (`knowledge_search`, `knowledge_search_chat`) now tell the
   model to search with the user's own words and language, and to reword only
   to resolve "it" or "that page" from earlier in the conversation.
+- Assistant answers are no longer marked **low** confidence just because
+  keyword search is on (#403). With `FULLTEXT_PROVIDER=opensearch`, every
+  answer carried a "weak retrieval" reason worth −0.2, because the check read
+  the combined ranking score (at most about 0.03) against a semantic
+  similarity threshold of 0.35. It now reads the semantic similarity of the
+  best page the answer was given, whichever search legs ran. A page only
+  keyword search found does not count either way. Search results gain an
+  optional `vectorScore`, that similarity. Confidence already stored on past
+  answers is not recomputed.
 - **Knowledge health → Settings** no longer goes blank when you type a number
   into any field (#401). Typing into a number box handed the form a number
   where it expected text, so the form crashed on the first keystroke and

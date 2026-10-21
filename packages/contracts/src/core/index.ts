@@ -907,6 +907,8 @@ export interface SourceProvenance {
   factClass?: FactExtractor;
   /** Retrieval score of the best chunk, 0..1, when the source came from search. */
   score?: number;
+  /** Best raw cosine among the page's chunks in the vector leg; absent when only BM25 found it (#403). */
+  vectorScore?: number;
 }
 
 /**

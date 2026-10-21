@@ -430,6 +430,8 @@ export class AssistantReadToolsService {
         seen.set(r.documentId, source);
         sources.push(source);
       }
+      // The page's best cosine, which a lower-ranked chunk may hold (#403).
+      if (r.vectorScore !== undefined && r.vectorScore > (source.vectorScore ?? -Infinity)) source.vectorScore = r.vectorScore;
     }
     // Owner display names for the hits, one lookup. The dev principal and
     // deleted accounts have no row, and are simply not named.

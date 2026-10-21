@@ -218,7 +218,7 @@ export class SearchService {
     // A hit is kept only if this read returns its page, for every reader: a
     // page gone from PG can leave chunks behind in a store, and those must not
     // outrank real answers as "(unknown)" for whoever happens to hide nothing.
-    const visibleHits = async (candidates: ChunkHit[]) => {
+    const visibleHits = async <H extends ChunkHit>(candidates: H[]) => {
       const docIds = [...new Set(candidates.map((h) => h.documentId))];
       const docs = await this.loadDocs(docIds, scope);
       const seen = new Set(docs.map((d) => d.id));
@@ -267,6 +267,7 @@ export class SearchService {
       title: docById.get(h.documentId)?.title ?? '(unknown)',
       snippet: h.text.slice(0, 300),
       score: Number(score.toFixed(4)),
+      ...(h.vectorScore !== undefined ? { vectorScore: Number(h.vectorScore.toFixed(4)) } : {}),
       headingPath: h.headingPath ?? [],
       ...(trust ? { trust } : {}),
     }));

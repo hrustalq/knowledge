@@ -112,6 +112,18 @@ describe('SearchService with an unreachable BM25 index (#173)', () => {
     expect(res).not.toHaveProperty('degraded');
   });
 
+  it('reports the same raw cosine whichever legs answered (#403)', async () => {
+    const hybrid = build({ enabled: true, search: vi.fn(async () => [hit('vec', 3), hit('kw', 2)]) });
+    const degraded = build({ enabled: true, search: vi.fn(async () => Promise.reject(new Error('down'))) });
+    const vectorOnly = build({ enabled: false, search: vi.fn(async () => []) });
+    const top = async (b: ReturnType<typeof build>) =>
+      (await b.svc.search({ workspaceId: WS, query: 'q' }, ADMIN)).results.map((r) => [r.documentId, r.vectorScore]);
+    // Fused, `vec` scores ~0.033; its cosine stays 0.9. BM25-only `kw` has none.
+    expect(await top(hybrid)).toEqual([['vec', 0.9], ['kw', undefined]]);
+    expect(await top(degraded)).toEqual([['vec', 0.9]]);
+    expect(await top(vectorOnly)).toEqual([['vec', 0.9]]);
+  });
+
   it('is unchanged with FULLTEXT_PROVIDER=none', async () => {
     const search = vi.fn(async () => []);
     const { svc } = build({ enabled: false, search });

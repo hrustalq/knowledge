@@ -134,6 +134,12 @@ export interface SearchResult {
   /** The fused retrieval score after the trust re-rank (docs/features/39). */
   score: number;
   /**
+   * The chunk's raw cosine from the vector leg, before fusion and trust;
+   * absent when only BM25 found it. Unlike `score`, its scale does not depend
+   * on which legs answered (#403).
+   */
+  vectorScore?: number;
+  /**
    * The page's verification state, owner and inactivity, and what the re-rank
    * read (docs/features/39). On every hit, so `ask` and `knowledge_search` can
    * say which page they trusted and why.

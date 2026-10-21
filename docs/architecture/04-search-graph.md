@@ -394,7 +394,8 @@ audit row carries `aclBypass: true`.
 `knowledge_search`, `knowledge_find_relations`, `knowledge_impact_analysis`,
 `knowledge_trace_relation`, `knowledge_get_historical_context`. Each passes the
 caller's `AccessScope`, exactly as the REST route it mirrors does; guests may
-use `knowledge_search`.
+use `knowledge_search`. `knowledge_search_chat` is the chat path's tool (see
+*Chat search* below), read-only and guarded the same way.
 
 ## Recording searches
 
@@ -414,6 +415,30 @@ for the workspace's retention, and its query text is redacted after
 `ANALYTICS_QUERY_TEXT_DAYS`. A search with no context (the backtest replaying,
 the PR-drift candidate search) writes the JSONL line and no row. The write is
 fire-and-forget and never fails the search.
+
+## Chat search
+
+Searchable groups' chat ([feature 60](../features/60-chat-search.md)) is a
+second, separate retrieval path that shares this one's parts, not its data.
+`ChatSearchService` never touches `Chunk`, `documents` or the fulltext
+provider, and `POST /v1/search` never returns a chat window.
+
+- **Vectors:** a `ChatChunk` vertex type with its own `LSM_VECTOR` index,
+  `ChatChunk[embedding]`. `ensureVectorIndex` and `vectorIndexFits` take the
+  vertex type as an argument, so the two indexes are built, sized and rebuilt
+  on an `EMBEDDINGS_DIM` change by the same code. `nearestChatChunks` is the
+  page query's twin, pre-filtered by the same kind of RID subquery: the
+  workspace and the readable binding ids.
+- **Text:** a generated `to_tsvector('russian', text)` column on
+  `chat_chunks`, GIN-indexed and queried with `plainto_tsquery`. It is
+  Postgres, not the BM25 provider, so it works with `FULLTEXT_PROVIDER=none`.
+- **Fusion:** the same `fuseHits` RRF (k = 60) over a 4× over-fetch.
+- **ACL first.** The readable bindings are decided in Postgres before either
+  leg runs (`canSeeChat`: the binding's project under the caller's
+  `AccessScope`; a project-less binding is never shown to a guest). Both legs
+  take only those ids, and the final read joins `chat_chunks` on them again.
+  As with pages, Postgres has the final say. A vector whose row is gone is
+  never served; the indexer reaps it.
 
 ## Communities
 

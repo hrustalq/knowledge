@@ -5049,7 +5049,7 @@
     "search": {
       "title": "Searchable chat",
       "intro": "How long the messages of searchable groups are kept. Each group is made searchable on its own row above.",
-      "unavailable": "Chat search is switched off on this server (CHAT_SEARCH_ENABLED=false). Nothing is kept and the Chat tab is hidden.",
+      "unavailable": "Chat search is switched off on this server (CHAT_SEARCH_ENABLED=false): no group can be made searchable and nothing new is kept. What was kept stays searchable until it expires.",
       "retention": "Keep messages for",
       "retentionHint": "Older windows of a thread are deleted from search whole. Leave empty to use the deployment’s period.",
       "applies": "Applies:",

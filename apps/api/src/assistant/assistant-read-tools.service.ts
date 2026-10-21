@@ -9,6 +9,7 @@ import { DocumentsService } from '../documents/documents.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import type { AccessScope } from '../permissions/access-scope.js';
 import { SearchService } from '../search/search.service.js';
+import { firstPerPage } from '../search/ranking.js';
 import { readFrontmatterRelations, readFrontmatterTags } from '../common/relations.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { TemplatesService } from '../templates/templates.service.js';
@@ -152,8 +153,8 @@ export class AssistantReadToolsService {
         function: {
           name: 'search_knowledge',
           description:
-            'Hybrid (semantic + keyword) search over this workspace, with one hop of knowledge-graph ' +
-            'expansion. Returns matching documents with snippets plus graph-related documents. Each result ' +
+            'Hybrid (semantic + keyword) search over this workspace. Returns the matching pages, one entry ' +
+            'per page with its best snippet; it may return fewer than the limit. Each result ' +
             'carries a `cite` label (S1, S2, …) to end your sentences with. ' +
             'Use it whenever the current page does not already answer the question. ' +
             "Search with the user's own words and language — see query.",
@@ -387,16 +388,16 @@ export class AssistantReadToolsService {
     // Asked on this call, not once per turn: a grant revoked mid-turn holds
     // from the next search (#76).
     const scope = await this.scopeOf(ctx);
+    // No graph expansion (#416): its related list named every page sharing any
+    // entity with any hit, most of the workspace, none of it citable. The
+    // model walks the graph with explore_document_graph / list_relations.
     const res = await this.search.search(
       {
         workspaceId: ctx.workspaceId, // pinned — never from args
         query,
         mode: 'hybrid',
         limit,
-        // A project-scoped turn (issue #71) gets no graph expansion: related
-        // pages are walked across the whole workspace, and offering them would
-        // steer the model straight back out of the project it was bound to.
-        ...(ctx.projectId ? { filters: { projectIds: [ctx.projectId] } } : { expandGraph: { depth: 1 } }),
+        ...(ctx.projectId ? { filters: { projectIds: [ctx.projectId] } } : {}),
       },
       scope,
       this.callerOf(ctx),
@@ -440,7 +441,7 @@ export class AssistantReadToolsService {
       ? await this.prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, displayName: true } })
       : [];
     const ownerName = new Map(owners.map((u) => [u.id, u.displayName]));
-    const results = res.results.map((r) => ({
+    const results = firstPerPage(res.results).map((r) => ({
       documentId: r.documentId,
       title: r.title,
       breadcrumb: trails.get(r.documentId) || '(top level)',
@@ -458,13 +459,8 @@ export class AssistantReadToolsService {
         : {}),
       ...this.citeOf(ctx, seen.get(r.documentId)!),
     }));
-    const related = (res.related ?? []).map((d) => ({
-      documentId: d.documentId,
-      title: d.title,
-      via: d.via.map((v) => `${v.relationType} ${v.entityKey}`).slice(0, 5),
-    }));
     return {
-      content: JSON.stringify({ results, related }),
+      content: JSON.stringify({ results }),
       ok: true,
       sources,
     };

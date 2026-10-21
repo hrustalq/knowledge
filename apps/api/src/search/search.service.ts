@@ -25,7 +25,7 @@ import { loadRevisionStamps } from '../graph/revision-stamps.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
 import type { SearchDto } from './search.dto.js';
-import { floorVectorHits, fuseHits, type SearchPool } from './ranking.js';
+import { floorTextHits, floorVectorHits, fuseHits, type SearchPool } from './ranking.js';
 
 @Injectable()
 export class SearchService {
@@ -150,12 +150,12 @@ export class SearchService {
     ]);
     let vectorHits = vectorHitsFirst;
     let textHits = textHitsFirst;
-    // The relevance floor (#401) drops weak vector evidence before fusion.
+    // The relevance floors (#401, #416) drop weak evidence from each leg before fusion.
     let vectorFloored = 0;
     const fuse = () => {
       const floored = floorVectorHits(vectorHits, settings);
       vectorFloored = vectorHits.length - floored.length;
-      return fuseHits(floored, textHits, fetchK, settings.rrfK);
+      return fuseHits(floored, floorTextHits(textHits), fetchK, settings.rrfK);
     };
     let hits = fuse();
     let aclFiltered = 0;

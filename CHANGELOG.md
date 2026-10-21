@@ -13,6 +13,31 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Changed
+
+- MCP `knowledge_search` returns at most 8 hits when the caller sets no
+  `limit` (it was 20), and lists each page once, with its best-matching
+  passage (#416). An agent that relied on 20 hits per call passes
+  `limit: 20` explicitly. Even then, a page matched in several passages
+  appears once, so it may get fewer entries than it asked for.
+
+### Fixed
+
+- The assistant and MCP agents no longer read unrelated pages with every
+  search (#416). In production, each assistant search added 26–29 pages that
+  only shared an entity with a hit, about the whole workspace and
+  roughly 9 KB of a 14 KB result, none of them citable. A page also appeared
+  once per matching passage, and a page that shared just two common words
+  with the question could still reach the top 5 («Навигация и вкладки» for
+  «Где в системе определяются права и роли пользователей?»).
+  - The assistant's search no longer attaches graph-related pages. It still
+    walks the graph when it chooses to, through its relation tools.
+  - Each page appears once per search, in both the assistant and MCP.
+  - A keyword match far below the best keyword match no longer counts. This
+    applies to every hybrid and keyword search, the web search page included.
+
 ## [0.30.0] — 2026-10-21
 
 ### Added

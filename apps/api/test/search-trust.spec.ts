@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SEARCH_RRF_K, TRUST_WEIGHTS } from '@knowledge/contracts';
 import { SearchService } from '../src/search/search.service.js';
-import { rankPool, type SearchKnobs, type SearchPool } from '../src/search/ranking.js';
+import { firstPerPage, rankPool, type SearchKnobs, type SearchPool } from '../src/search/ranking.js';
 import { systemScope } from '../src/permissions/access-scope.js';
 import { DEV_PRINCIPAL } from '../src/auth/principal.js';
 import { emitBacktest } from '@knowledge/observability';
@@ -284,5 +284,25 @@ describe('SearchService relevance floor (#401)', () => {
     const partial = build(docs, [hit('plain', 0.6), hit('expired', 0.45), hit('inactive', 0.3)], false, [], { minCosine: 0.4, minCosineShare: 0.7 });
     const some = await partial.svc.search({ workspaceId: WS, query: 'q', limit: 3, mode: 'semantic' }, ADMIN);
     expect(some.results.map((r) => r.documentId)).toEqual(['plain', 'expired']);
+  });
+
+  it('a keyword hit far below the BM25 leader is not fused (#416), and the replay agrees', async () => {
+    // Prod, 2026-10-21: «Навигация и вкладки» reached the top 5 on two common
+    // words, at about half the best BM25 score.
+    const text = [hit('outdated', 7), hit('verified', 5.8), hit('inactive', 3.6)];
+    const { svc } = build(docs, [hit('plain', 0.5)], false, text);
+    let pool = null as SearchPool | null;
+    const res = await svc.search({ workspaceId: WS, query: 'q', limit: 5 }, ADMIN, undefined, (p) => (pool = p));
+    expect(res.results.map((r) => r.documentId).sort()).toEqual(['outdated', 'plain', 'verified']);
+    expect(rankPool(pool!, { rrfK: SEARCH_RRF_K, minCosine: 0, minCosineShare: 0, trustWeights: TRUST_WEIGHTS })).toEqual(
+      res.results.map((r) => r.documentId),
+    );
+  });
+});
+
+describe('firstPerPage (#416)', () => {
+  it("keeps each page's first, best-ranked chunk, in rank order", () => {
+    const hits = [hit('a', 0.9), { ...hit('b', 0.8), chunkId: 'b1' }, { ...hit('a', 0.7), chunkId: 'a2' }, hit('c', 0.6)];
+    expect(firstPerPage(hits).map((h) => [h.documentId, h.score])).toEqual([['a', 0.9], ['b', 0.8], ['c', 0.6]]);
   });
 });

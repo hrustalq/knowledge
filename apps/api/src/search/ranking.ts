@@ -27,21 +27,29 @@ export function floorVectorHits<T extends Pick<ChunkHit, 'score'>>(hits: T[], kn
  * Merge vector and BM25 rankings. Single-source results keep their native
  * score (BM25 normalized to 0..1 by the max); two-source results use
  * reciprocal rank fusion — raw cosine and BM25 scores are not comparable.
+ * Every hit the vector leg found also keeps its raw cosine as `vectorScore`,
+ * the one scale that means the same whichever legs answered (#403).
  */
-export function fuseHits<T extends Pick<ChunkHit, 'chunkId' | 'score'>>(vectorHits: T[], textHits: T[], k: number, rrfK: number): T[] {
-  if (textHits.length === 0) return vectorHits.slice(0, k);
+export function fuseHits<T extends Pick<ChunkHit, 'chunkId' | 'score'>>(
+  vectorHits: T[],
+  textHits: T[],
+  k: number,
+  rrfK: number,
+): (T & { vectorScore?: number })[] {
+  const vector = vectorHits.map((h) => ({ ...h, vectorScore: h.score }));
+  if (textHits.length === 0) return vector.slice(0, k);
   if (vectorHits.length === 0) {
     const max = Math.max(...textHits.map((h) => h.score), 1e-9);
     return textHits.slice(0, k).map((h) => ({ ...h, score: h.score / max }));
   }
-  const fused = new Map<string, T>();
-  const add = (rank: number, hit: T) => {
+  const fused = new Map<string, T & { vectorScore?: number }>();
+  const add = (rank: number, hit: T & { vectorScore?: number }) => {
     const existing = fused.get(hit.chunkId);
     const increment = 1 / (rrfK + rank + 1);
     if (existing) existing.score += increment;
     else fused.set(hit.chunkId, { ...hit, score: increment });
   };
-  vectorHits.forEach((h, i) => add(i, h));
+  vector.forEach((h, i) => add(i, h));
   textHits.forEach((h, i) => add(i, h));
   return [...fused.values()].sort((a, b) => b.score - a.score).slice(0, k);
 }

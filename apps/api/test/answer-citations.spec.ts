@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AssistantSource } from '@knowledge/contracts';
+import { assessAnswer } from '@knowledge/contracts';
 import {
   CITATION_CLAUSE,
   CiteLabels,
@@ -115,8 +116,8 @@ describe('finalizeCitations', () => {
 describe('answerSignals', () => {
   const now = new Date('2026-10-10T00:00:00Z');
   const sources: AssistantSource[] = [
-    { documentId: 'a', title: 'A', cite: 'S1', verification: 'verified', changedAt: '2026-10-01T00:00:00Z', score: 0.8, factClass: 'explicit' },
-    { documentId: 'b', title: 'B', cite: 'S2', verification: 'outdated', changedAt: '2025-01-01T00:00:00Z', score: 0.3, factClass: 'inferred' },
+    { documentId: 'a', title: 'A', cite: 'S1', verification: 'verified', changedAt: '2026-10-01T00:00:00Z', score: 0.8, vectorScore: 0.8, factClass: 'explicit' },
+    { documentId: 'b', title: 'B', cite: 'S2', verification: 'outdated', changedAt: '2025-01-01T00:00:00Z', score: 0.3, vectorScore: 0.3, factClass: 'inferred' },
     { documentId: 'c', title: 'C', cite: 'S3', verification: 'unverified', changedAt: '2026-09-01T00:00:00Z' },
   ];
 
@@ -146,6 +147,21 @@ describe('answerSignals', () => {
     expect(s.inferredOnly).toBe(true);
     expect(s.budgetExhausted).toBe(true);
     expect(s.toolErrors).toBe(1);
+  });
+
+  // #403: hybrid search hands out RRF scores (~0.03), not cosines.
+  it('reads the raw cosine, not the fused score', () => {
+    const final = finalizeCitations('One. [S1]', new Set(['S1', 'S2']));
+    const run = (hits: AssistantSource[]) =>
+      assessAnswer(answerSignals({ final, sources: hits, trace: [], toolErrors: 0, maxToolCalls: 24, staleAfterDays: 180, now }));
+    const strong = run([
+      { documentId: 'a', title: 'A', cite: 'S1', score: 0.033, vectorScore: 0.49 },
+      // Found only by BM25: no cosine, so no vote either way.
+      { documentId: 'b', title: 'B', cite: 'S2', score: 0.016 },
+    ]);
+    expect(strong.reasons.map((r) => r.key)).not.toContain('low-retrieval-score');
+    const weak = run([{ documentId: 'a', title: 'A', cite: 'S1', score: 0.033, vectorScore: 0.21 }]);
+    expect(weak.reasons).toContainEqual({ key: 'low-retrieval-score', value: 0.21 });
   });
 });
 

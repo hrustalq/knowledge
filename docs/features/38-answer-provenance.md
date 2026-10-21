@@ -21,7 +21,7 @@ gives one.
 - **Provenance on every source.** `AssistantAskSource` gains the optional
   fields of `SourceProvenance`: `revisionId`, `revisionNumber`, `chunkId`,
   `headingPath`, `authorId`, `authorName`, `changedAt`, `verification`,
-  `verifiedAt`, `verifiedByName`, `factClass`, `score`. Resolved **once per
+  `verifiedAt`, `verifiedByName`, `factClass`, `score`, `vectorScore`. Resolved **once per
   answer** by `ProvenanceService` in one batched PostgreSQL read, never per
   tool call. `knowledge_search` over MCP decorates its hits with the same
   fields and adds a `traceId` for the call.
@@ -31,7 +31,12 @@ gives one.
   score, stale or outdated or flagged sources, inferred-only evidence, tool
   errors, and a spent tool budget. `none` is reserved for an answer with no
   sources at all. Stored as `assistant_messages.confidence`, returned on
-  `/ask` and in `done`.
+  `/ask` and in `done`. The retrieval score is the best **raw cosine**
+  (`vectorScore`) among the page sources, never the fused `score`: with BM25
+  on, `score` is an RRF sum near 0.03, and with the vector leg skipped it is
+  BM25 normalised to 1.0, so neither is on the scale of `lowScoreBelow`
+  (#403). A page only BM25 found carries no `vectorScore` and casts no vote;
+  a turn with none skips the check.
 - **The verification stamp.** `POST /v1/documents/:id/verify` (editor) writes
   `verified_at`, `verified_by`, `verified_revision_id` at the current head;
   `DELETE` removes it. Whether the stamp still holds is **derived** on read by

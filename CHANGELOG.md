@@ -15,6 +15,23 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Changed
+
+- A page's actions now sit in a bar directly under the breadcrumbs, as in Confluence, instead of sharing
+  a row with the title (#441). The bar stays in place while the page scrolls. It shows labels when it is
+  wide and icons when it is narrow (an open sidebar narrows it too), and every button keeps its name for
+  screen readers and as a tooltip. New quick buttons for History, Graph and Export open the same views as
+  the rail widgets and the menu. The ⋯ menu now groups items into submenus: Export ▸ opens the export
+  dialog on the format you pick, and View ▸ holds Full width and Glossary links.
+- The editor (`/documents/:id/edit`, `/create`) now shows the breadcrumb trail. Its actions use the same
+  bar, so Edit and Publish stay in the same place when you switch between reading and writing. The
+  formatting toolbar sits directly beneath. The project name that used to head the editor is gone; the
+  trail names it. The editor's ⋯ menu has Changes ▸ (review or discard unpublished edits, with a
+  confirmation) and Template ▸ (insert a template at the cursor, or save the page as one). On a phone,
+  Settings and Cancel are now icons in the bar instead of items in the menu.
+- Submenus in every dropdown open beside their item, flip to the other side near the screen edge, and
+  animate like the menu they come from. They are no longer clipped by the menu that contains them.
+
 ### Fixed
 
 - Search in the app (the search sheet and `/search`) listed a page once for every section that matched,

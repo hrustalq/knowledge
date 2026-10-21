@@ -101,7 +101,7 @@ function choose(next: SubscriptionState) {
         class="gap-1.5"
       >
         <component :is="look.icon" class="size-4" />
-        <span v-if="!compact" class="text-xs">{{ look.label }}</span>
+        <span v-if="!compact" class="kn-bar-label text-xs">{{ look.label }}</span>
       </Button>
     </DropdownMenuTrigger>
 

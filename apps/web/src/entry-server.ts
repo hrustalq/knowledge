@@ -94,7 +94,12 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     await messagesReady
     await prefetchShell(router, pinia, request)
 
-    const html = await renderToString(app)
+    const ssrContext: { teleports?: Record<string, string> } = {}
+    let html = await renderToString(app, ssrContext)
+    // The page action bar (#441) is a teleport into the shell's own markup, so
+    // its buffer goes back into that element here; the client hydrates it there.
+    const bar = ssrContext.teleports?.['#kn-page-toolbar']
+    if (bar) html = html.replace(/(<div id="kn-page-toolbar"[^>]*>)(<\/div>)/, (_, open, close) => open + bar + close)
 
     // Transfer Pinia state for hydration; escape < to prevent script breakout.
     const state = JSON.stringify(pinia.state.value).replace(/</g, '\\u003c')

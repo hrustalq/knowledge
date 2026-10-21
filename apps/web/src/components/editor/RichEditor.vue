@@ -837,6 +837,8 @@ onBeforeUnmount(() => {
 })
 
 defineExpose({
+  /** The `/template` gallery, opened from the editor's ⋯ menu (#441) rather than the slash menu. */
+  openTemplates,
   /** The live editor, for hosts that need to read the document (comment anchoring). */
   editor,
   /**

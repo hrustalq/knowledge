@@ -247,6 +247,80 @@
 }
 
 /*
+ * The page action bar (#441): the strip under the breadcrumbs that the page
+ * view and the editor teleport their actions into. It is drawn only while a
+ * page has put something in it, and the shell's chrome height grows by the bar
+ * from the same test, so the sub-rails and fill routes size against what is
+ * really on screen. `:has()` rather than a route flag: the page decides what
+ * goes in the bar, and a flag would be a second statement of that fact.
+ *
+ * The start group gives way first (it holds state, not controls), and the end
+ * group never wraps: a bar that grows a second row would move the page under it.
+ */
+.kn-page-toolbar {
+  display: none;
+  height: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  padding-inline: 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  container: kn-bar / inline-size;
+}
+.kn-page-toolbar:has(> *) {
+  display: flex;
+}
+.kn-shell:has(.kn-page-toolbar > *) {
+  --kn-toolbar-h: 2.75rem;
+}
+@media (min-width: 1024px) {
+  .kn-page-toolbar {
+    padding-inline: 2rem;
+  }
+}
+/* Labels on a wide bar, icons on a narrow one. The bar, not the window,
+   decides: an open rail narrows it as much as a small window does, and the
+   threshold is where the Russian labels — 15–20% longer — still fit in one
+   row. Folded labels stay as the button's accessible name, and every button
+   carries a title for the pointer. One size for every label in the bar, so a
+   component that brings its own (Watch's `text-xs`) does not break the row. */
+.kn-page-toolbar .kn-bar-label {
+  font-size: var(--kn-text-sm);
+}
+@container kn-bar (max-width: 68rem) {
+  .kn-bar-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+.kn-bar-start {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.375rem;
+  overflow: hidden;
+}
+.kn-bar-end {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.375rem;
+}
+/* The divider between groups of controls, the formatting toolbar's own rule. */
+.kn-bar-rule {
+  width: 1px;
+  height: 1.1rem;
+  margin-inline: 0.25rem;
+  background: var(--border);
+}
+
+/*
  * The page rail (the widget stack beside a document or a project).
  *
  * It was sticky but unbounded, which works only while the stack is shorter than

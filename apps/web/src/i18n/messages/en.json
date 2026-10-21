@@ -306,7 +306,10 @@
     "fullWidth": "Full width",
     "asOfBanner": "As of {date}",
     "asOfBannerTag": "As of {tag}, {date}",
-    "unplacedCommentsHint": "On the page as a whole, or on a passage that has since changed."
+    "unplacedCommentsHint": "On the page as a whole, or on a passage that has since changed.",
+    "menu": {
+      "view": "View"
+    }
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -3440,6 +3443,13 @@
       "title": "This page did not load, so it cannot be edited yet",
       "openPage": "Open the page",
       "body": "{reason} — nothing was saved. Check your connection and retry, or open the page to read it."
+    },
+    "menu": {
+      "changes": "Changes",
+      "review": "Review changes…",
+      "template": "Template",
+      "insertTemplate": "Insert template…",
+      "discardBody": "Every edit made since the page was last published is lost, and the editor goes back to the published page."
     }
   },
   "toolbar": {

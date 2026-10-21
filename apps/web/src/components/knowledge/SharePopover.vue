@@ -139,9 +139,9 @@ function onOpen(next: boolean) {
 <template>
   <ResponsivePopover v-model:open="open" :title="t('share.title')" align="end" side="bottom" panel-class="w-96 p-4" @update:open="onOpen">
     <template #trigger>
-      <Button variant="outline" size="sm">
+      <Button variant="outline" size="sm" :title="t('share.button')">
         <Share2 class="size-3.5" />
-        {{ t('share.button') }}
+        <span class="kn-bar-label">{{ t('share.button') }}</span>
       </Button>
     </template>
 

@@ -81,13 +81,18 @@ const showVerifyBanner = computed(
   () => !!auth.me && auth.me.mode !== 'dev' && !auth.me.emailVerified && !bannerDismissed.value,
 )
 
-/** `h-14` topbar, `h-10` verify banner, `h-9` strip, in the unit the consumers want. */
+/**
+ * `h-14` topbar, `h-10` verify banner, `h-9` strip, in the unit the consumers want.
+ * The page toolbar under the strip (#441) adds `--kn-toolbar-h`, which the
+ * stylesheet sets from whether a page teleported anything into it: the page,
+ * not the shell, knows that, and CSS can answer it on the server's first frame.
+ */
 const TOPBAR_REM = 3.5
 const BANNER_REM = 2.5
 const CRUMBS_REM = 2.25
 const chromeHeight = computed(
   () =>
-    `${TOPBAR_REM + (showVerifyBanner.value ? BANNER_REM : 0) + (showCrumbs.value ? CRUMBS_REM : 0)}rem`,
+    `calc(${TOPBAR_REM + (showVerifyBanner.value ? BANNER_REM : 0) + (showCrumbs.value ? CRUMBS_REM : 0)}rem + var(--kn-toolbar-h, 0rem))`,
 )
 
 /**
@@ -128,7 +133,7 @@ function skipToMain() {
   <!-- `h-dvh`, not `h-screen`: on iOS `100vh` is the toolbar-hidden height,
        so a fill route's footer (a chat composer) sat under Safari's toolbar. -->
   <div
-    class="relative flex h-dvh overflow-hidden bg-background text-foreground"
+    class="kn-shell relative flex h-dvh overflow-hidden bg-background text-foreground"
     :class="sidebar.resizing ? 'kn-resizing' : ''"
     :style="{ '--kn-rail-w': sidebar.widthPx, '--kn-chrome-h': chromeHeight }"
     :data-rail-open="railOpen"
@@ -194,6 +199,13 @@ function skipToMain() {
         @dismiss="bannerDismissed = true"
       />
       <AppBreadcrumbs v-if="showCrumbs" :crumbs="crumbs" />
+      <!-- The page's action bar (#441): the page view and the editor teleport
+           their actions here, so the bar sits under the trail and outside the
+           scroller — always visible, and an anchor jump never lands under it.
+           Always rendered, so a teleport never misses its target; drawn only
+           while something is in it. `id` stays the first attribute:
+           entry-server splices the server's teleport buffer in by it. -->
+      <div id="kn-page-toolbar" class="kn-page-toolbar" />
       <!--
         Two content modes.
 

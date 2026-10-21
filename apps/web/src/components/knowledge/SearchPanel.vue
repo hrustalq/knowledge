@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { nativeEl } from '@/lib/utils'
 import SearchResults from './SearchResults.vue'
-import type { UseSearch } from './use-search'
+import type { SearchCopy, UseSearch } from './use-search'
 
 const { t } = useI18n()
 
@@ -21,6 +21,7 @@ const props = withDefaults(
     /** The sheet tints its rail to match the app shell; the page keeps the ground. */
     railSurface?: boolean
     placeholder?: string
+    copy?: SearchCopy
   }>(),
   { railSurface: false, placeholder: '' },
 )
@@ -72,7 +73,7 @@ function clearLabel() {
     </aside>
 
     <section class="flex min-h-0 flex-col">
-      <div :class="railSurface ? 'border-b p-4 pr-14' : 'pb-4 pl-5'">
+      <div :class="railSurface ? 'border-b p-4 pr-14' : $slots.filters ? 'pb-4 lg:pl-5' : 'pb-4'">
         <form role="search" class="flex gap-2" @submit.prevent="search.run()">
           <div class="relative flex-1">
             <Search
@@ -126,12 +127,13 @@ function clearLabel() {
         </button>
       </div>
 
-      <div class="min-h-0 flex-1 overflow-y-auto" :class="railSurface ? 'p-4' : 'pl-5'">
+      <div class="min-h-0 flex-1 overflow-y-auto" :class="railSurface ? 'p-4' : $slots.filters ? 'lg:pl-5' : ''">
         <SearchResults
           :response="search.response.value"
           :busy="search.busy.value"
           :error="search.error.value"
           :active-filter-count="search.activeFilterCount.value"
+          :copy="copy"
           @navigate="emit('navigate')"
           @clear-filters="search.clearFilters()"
         />

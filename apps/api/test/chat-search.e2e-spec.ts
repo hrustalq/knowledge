@@ -171,6 +171,19 @@ describe('chat search (e2e, #339)', () => {
     expect(labels(await searchAs(people.bob, { bindingIds: [bindings.open] }))).toEqual(['open']);
   });
 
+  it('availability reads through the same ACL: a guest with no grant sees no Chat tab', async () => {
+    const readable = async (p: Person) =>
+      (await http().get('/v1/chat/search').query({ workspaceId: WORKSPACE }).set(as(p)).expect(ok(200))).body.readable as boolean;
+    expect(await readable(people.bob)).toBe(true);
+    expect(await readable(people.gus)).toBe(true);
+    const nan = await person('nan', 'guest');
+    try {
+      expect(await readable(nan)).toBe(false);
+    } finally {
+      await prisma.apiKey.delete({ where: { id: nan.keyId } });
+    }
+  });
+
   it('snippets are masked and name no one', async () => {
     const [hit] = await searchAs(people.admin, { bindingIds: [bindings.open] });
     expect(hit.snippet).toContain('[EMAIL_1]');

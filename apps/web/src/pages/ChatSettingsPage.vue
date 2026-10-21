@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { PageState } from '@/components/layout/page'
 import ChatIntegrationCard from '@/components/chat-bots/ChatIntegrationCard.vue'
 import ConnectBotDialog from '@/components/chat-bots/ConnectBotDialog.vue'
+import ChatSearchSettings from '@/components/chat-bots/ChatSearchSettings.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -66,6 +67,7 @@ function refresh() {
           <p class="text-sm font-medium">{{ t('chatBots.empty.title') }}</p>
           <p class="mt-1 text-sm text-muted-foreground">{{ t('chatBots.empty.body') }}</p>
         </div>
+        <ChatSearchSettings v-if="data.integrations.length" :workspace-id="getWorkspaceId()" />
       </template>
     </template>
 

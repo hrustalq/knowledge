@@ -248,6 +248,11 @@ export interface ChatSearchResponse {
   hits: ChatSearchHit[];
 }
 
+/** Whether the caller may read any searchable group (#339): what shows the web's Chat tab. */
+export interface ChatSearchAvailability {
+  readable: boolean;
+}
+
 export interface ChatBindingsResponse {
   bindings: ChatBindingEntry[];
   /** CHAT_LISTEN_TTL_DAYS: how long a listening group's messages are kept. */

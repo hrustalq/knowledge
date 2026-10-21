@@ -252,6 +252,21 @@ export class ConnectorWorkItemsService {
   }
 
   /**
+   * A tracker delivery on the connector's own webhook (#424, Jira and GitLab).
+   * A site-wide hook reports every ticket on the site, so only one we already
+   * hold, or one carrying the handoff label, is written.
+   */
+  async applyTrackerDelivery(row: Connector, item: TrackerIssue, actorId: string | null, label: string): Promise<boolean> {
+    const held = await this.prisma.connectorWorkItem.findUnique({
+      where: { connectorId_kind_number: { connectorId: row.id, kind: item.kind, number: item.number } },
+      select: { id: true },
+    });
+    if (!held && !item.labels.includes(label)) return false;
+    await this.upsertFrom(row, item, { actorId, announce: true });
+    return true;
+  }
+
+  /**
    * Record what a poll read (#424): the projection, and an event only when the
    * ticket's status moved — a poll re-reads the newest ticket every time.
    */

@@ -27,11 +27,19 @@ in the pull request that introduces them — see
   until someone retries it (`POST /v1/connectors/:id/work-items/:workItemId/retry`). Only a GitHub account
   mapped to an editor can clear a page's flag from the tracker. No tracker action ever verifies a page.
 - `GET /v1/work-items?workspaceId&sourceKind&sourceId` lists the issues handed off for one object.
+- Jira Cloud connectors are trackers too (#424). A handoff creates a ticket in the tracker route's Jira project,
+  or in the connector's new **Default project key**, with the route's issue type (default `Task`). An existing
+  ticket can be attached by `BILL-123` or its browse URL. Status moves through Jira's own workflow
+  transitions. The connector's JQL is now optional: leave it empty to use Jira only as a tracker. A signed
+  Jira webhook on `/v1/connectors/:id/webhook` updates a handed-off ticket within seconds. Without one,
+  polling picks the change up.
 
 ### Changed
 
 - Work-item lists (the connector's Work items tab, MCP `knowledge_list_work_items`, the assistant's `task_*`
   tools) leave out an item attached to a page the caller cannot open (#424).
+- The Jira connector reads issues through `/rest/api/3/search/jql`. The `/rest/api/3/search` endpoint it
+  used before is deprecated on Jira Cloud. Test connection now shows Jira's approximate match count (#424).
 - Linking a work item (`POST /v1/connectors/:id/work-items/:workItemId/link`) also accepts an anchor
   (`sourceKind` + `sourceId`), and unlinking drops it. Unlinking never closes the issue (#424).
 

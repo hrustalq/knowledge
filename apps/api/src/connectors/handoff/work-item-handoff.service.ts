@@ -7,13 +7,10 @@ import { asLocale } from '../../i18n/locale.js';
 import { t } from '../../i18n/t.js';
 import { PermissionService } from '../../permissions/permission.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import type { TrackerAdapter } from '../adapters/tracker.js';
+import { labelFor, type TrackerAdapter } from '../adapters/tracker.js';
 import { ConnectorWorkItemsService, keyOf } from '../connector-work-items.service.js';
 import { ConnectorsService } from '../connectors.service.js';
 import { WorkItemAnchorsService, type AnchorView } from './work-item-anchors.service.js';
-
-/** The label a handed-off ticket carries unless the connector names another. */
-const DEFAULT_LABEL = 'knowledge';
 
 /**
  * Handoff (#424): give a knowledge object a ticket in a tracker, by creating
@@ -198,12 +195,6 @@ export class WorkItemHandoffService {
       throw err;
     }
   }
-}
-
-/** The label a connector puts on handed-off tickets: `config.workItemLabel`, else `knowledge`. */
-export function labelFor(row: Pick<Connector, 'config'>): string {
-  const label = (row.config as { workItemLabel?: unknown } | null)?.workItemLabel;
-  return typeof label === 'string' && label.trim() ? label.trim().slice(0, 50) : DEFAULT_LABEL;
 }
 
 function sameTicket(tracker: TrackerAdapter, row: Connector, item: ConnectorWorkItem, attach: string): boolean {

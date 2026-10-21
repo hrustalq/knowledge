@@ -8,6 +8,7 @@ import { ConnectorsCoreModule } from './connectors-core.module.js';
 import { ConnectorWorkItemsService } from './connector-work-items.service.js';
 import { GithubCoreModule } from './github/github-core.module.js';
 import { GithubIssuesService } from './github/github-issues.service.js';
+import { JiraTrackerService } from './adapters/jira-tracker.js';
 import { TrackerRegistry } from './tracker-registry.service.js';
 import { WorkItemToolsService } from './work-item-tools.service.js';
 
@@ -41,7 +42,7 @@ import { WorkItemToolsService } from './work-item-tools.service.js';
     ConnectorsCoreModule,
     GithubCoreModule,
   ],
-  providers: [GithubIssuesService, TrackerRegistry, ConnectorWorkItemsService, WorkItemToolsService],
+  providers: [GithubIssuesService, JiraTrackerService, TrackerRegistry, ConnectorWorkItemsService, WorkItemToolsService],
   exports: [GithubIssuesService, TrackerRegistry, ConnectorWorkItemsService, WorkItemToolsService],
 })
 export class ConnectorWorkItemsModule {}

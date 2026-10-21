@@ -1385,6 +1385,7 @@ export type I18nTranslations = {
             "notRetryable": string;
             "ticketGone": string;
             "anchorOrDocument": string;
+            "jiraNoProject": string;
         };
     };
     "export": {

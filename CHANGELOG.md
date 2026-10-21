@@ -65,6 +65,19 @@ in the pull request that introduces them — see
   follows the ticket (Todo, In Progress, Done). That write is best effort; the issue's own state is the
   status. A user-owned board is refused, because the GitHub App cannot reach it. Moving a card on the board
   refreshes the issue's board names in the projection.
+- The assistant can record a decision (`capture_decision`) and mark a page outdated (`mark_outdated`) in
+  Agent mode (#425). When something wide-reaching is left open, it asks instead of guessing, one question per
+  turn. For a decision that is the project, the related page and a reviewer (only when a page is linked). For
+  the outdated flag it is whether to include the subpages, which to leave alone, and why. The options come
+  from the workspace (projects, pages and members you can see), never from the model. A suggested option is
+  marked and pre-selected. A decision becomes a merge request through the same path as an MCP capture, and
+  the picked reviewer is assigned to it. Typing a message instead of answering leaves the flow, and nothing
+  is written.
+- `POST /v1/assistant/threads/:id/messages` (and its streaming twin) accepts `answer: { flow, questionId,
+  value }` beside the readable `content`. It is stored on the message and returned as `answer`. An answer to
+  anything but the open question, or the one answered last, is refused with 409 `flow-answer-stale` (#425).
+- `ask_user` options take `recommended`, at most one per field, and the tool now asks for one question per
+  form (#425).
 
 ### Changed
 
@@ -91,6 +104,8 @@ in the pull request that introduces them — see
   (#424).
 - Migration `20261129100000_tracker_route_board_url` adds a nullable `project_tracker_routes.board_url`,
   expand-only (#424).
+- Migration `20261130100000_assistant_message_answer` adds a nullable `assistant_messages.answer`, expand-only
+  with no backfill. The previous image ignores it, so a code rollback is safe (#425).
 - The GitHub App now asks for **Organization projects: write**, up from read, and the **Projects v2 item**
   webhook event (#424). Change both on the App's settings page, then have each organization accept the new
   permission. Until then board writes fail quietly and everything else works.

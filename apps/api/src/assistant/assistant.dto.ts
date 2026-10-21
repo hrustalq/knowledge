@@ -3,7 +3,8 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize, IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested,
 } from 'class-validator';
-import { ASSISTANT_DRAFT_MAX_CHARS, ASSISTANT_MESSAGE_MAX_CHARS } from '@knowledge/contracts';
+import { ASSISTANT_DRAFT_MAX_CHARS, ASSISTANT_MESSAGE_MAX_CHARS, FLOW_KEYS, FLOW_TEXT_MAX_CHARS } from '@knowledge/contracts';
+import type { FlowAnswer, FlowKey } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 export class AssistantReviewDto {
@@ -191,6 +192,35 @@ export class AssistantDraftDto {
   template?: AssistantDraftTemplateDto;
 }
 
+/**
+ * One answered step of a question flow (#425). Shape only: whether the value
+ * is one of the question's options is decided against the rebuilt flow, which
+ * is the only place the options exist.
+ */
+export class AssistantFlowAnswerDto {
+  @ApiProperty({ enum: FLOW_KEYS })
+  @IsIn(FLOW_KEYS)
+  flow!: FlowKey;
+
+  @ApiProperty({ example: 'project' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(60, { message: vmsg('maxLength') })
+  questionId!: string;
+
+  @ApiProperty({
+    nullable: true,
+    oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+    description: 'An option value, the ticked values of a checklist, free text, or null to skip an optional question',
+  })
+  // A string, or an array of them: `each` validates the elements of an array
+  // and the value itself otherwise.
+  @ValidateIf((_, value) => value !== null)
+  @IsString({ each: true })
+  @MaxLength(FLOW_TEXT_MAX_CHARS, { each: true, message: vmsg('maxLength') })
+  value!: FlowAnswer;
+}
+
 export class PostAssistantMessageDto {
   @ApiProperty({
     example: 'Draft a short onboarding page for new hires',
@@ -269,6 +299,17 @@ export class PostAssistantMessageDto {
   @ValidateNested()
   @Type(() => AssistantDraftDto)
   draft?: AssistantDraftDto;
+
+  @ApiPropertyOptional({
+    type: AssistantFlowAnswerDto,
+    description:
+      "Set when this message answers the open step of a question flow (#425); `content` is the readable " +
+      'form the transcript shows. An answer to anything but the open question (or the one answered last) is a 409.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AssistantFlowAnswerDto)
+  answer?: AssistantFlowAnswerDto;
 }
 
 export class AssistantAskDto {

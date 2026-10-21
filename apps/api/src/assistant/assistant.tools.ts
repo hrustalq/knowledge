@@ -4,8 +4,12 @@ import {
   accessRank,
   ASSISTANT_WRITE_TOOL_NAMES,
   AUTHORABLE_RELATION_TYPES,
+  CAPTURE_ITEM_MAX_CHARS,
+  CAPTURE_LIST_MAX,
+  CAPTURE_TITLE_MAX_CHARS,
   DRAFT_EDIT_OPS,
   isAuthorableRelationType,
+  VERIFICATION_NOTE_MAX_CHARS,
 } from '@knowledge/contracts';
 import type {
   AccessLevel,
@@ -14,6 +18,7 @@ import type {
   AssistantPromptField,
   AssistantPromptOption,
   DocumentCategory,
+  FlowKey,
 } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
 import { keepFrontmatter } from '../common/frontmatter.js';
@@ -28,6 +33,8 @@ import { WebResearchService } from './web-research.service.js';
 import { AssistantReadToolsService } from './assistant-read-tools.service.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
 import { WorkItemToolsService } from '../connectors/work-item-tools.service.js';
+import { FlowsService } from '../flows/flows.service.js';
+import type { FlowRun } from '../flows/flows.service.js';
 import {
   CODE_TOOLS,
   TASK_TOOLS,
@@ -65,11 +72,18 @@ const MAX_PROMPT_OPTIONS = 8;
 const PROMPT_FIELD_TYPES = new Set(['choice', 'checklist', 'text']);
 
 /**
+ * Tasks behind a question flow (#425): with an argument missing they end the
+ * turn on the flow's next question, so they share ask_user's one-question-per-
+ * turn guard. Pane-only for the same reason as ask_user.
+ */
+export const FLOW_TOOLS = new Set(['capture_decision', 'mark_outdated']);
+
+/**
  * Tools whose only effect is something the chat pane draws. A caller that
  * renders plain text — the one-shot /assistant/ask endpoint — must never be
  * offered them, or the model spends a turn producing a form nobody will see.
  */
-const PANE_ONLY_TOOLS = new Set(['render_component', 'ask_user', 'request_agent_mode']);
+const PANE_ONLY_TOOLS = new Set(['render_component', 'ask_user', 'request_agent_mode', ...FLOW_TOOLS]);
 
 /**
  * Tools that act on the draft open in the author's editor (docs/features/34).
@@ -110,6 +124,7 @@ export class AssistantToolsService {
     private readonly code: CodeResearchService,
     private readonly tasks: WorkItemToolsService,
     private readonly permissions: PermissionService,
+    private readonly flows: FlowsService,
   ) {}
 
   /** @param mode 'ask' (default) hides create_document/propose_update from the model entirely,
@@ -205,7 +220,8 @@ export class AssistantToolsService {
             'to do something wide-reaching and want the scope confirmed. Renders radios for "choice", ' +
             'checkboxes for "checklist", and a text box for "text". END YOUR TURN right after calling this — ' +
             'their answer arrives as the next message. Do not use it for questions you can answer yourself ' +
-            'with a tool, and never ask more than one form per turn.',
+            'with a tool. Ask ONE question per form and one form per turn; ask the next once they have answered. ' +
+            'Mark the option you would pick as recommended (it is pre-selected) and say why in its description.',
           parameters: {
             type: 'object',
             properties: {
@@ -232,7 +248,8 @@ export class AssistantToolsService {
                         properties: {
                           value: { type: 'string' },
                           label: { type: 'string' },
-                          description: { type: 'string' },
+                          description: { type: 'string', description: 'One line; for the recommended option, why' },
+                          recommended: { type: 'boolean', description: 'At most one per field: the option you suggest' },
                         },
                         required: ['value', 'label'],
                       },
@@ -366,6 +383,54 @@ export class AssistantToolsService {
       {
         type: 'function',
         function: {
+          name: 'capture_decision',
+          description:
+            'Record a decision reached in this conversation — what was chosen, why, and what was ruled out — as a ' +
+            'page proposed in a merge request a person reviews. Unless the user named the project, leave projectId ' +
+            'out: the user is then asked, one question per turn, for the project, the related page and a reviewer. ' +
+            'When this returns a question, END YOUR TURN. When the user has answered, call this again with the ' +
+            'same arguments — their answers are applied by the server, never pass them yourself.',
+          parameters: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'The decision as a short statement' },
+              context: { type: 'string', description: 'The problem and the forces at play' },
+              decision: { type: 'string', description: 'What was decided and why' },
+              consequences: { type: 'string', description: 'What follows from it, good and bad' },
+              alternatives: { type: 'array', items: { type: 'string' }, description: 'Options considered and why each was not chosen' },
+              relatedDocumentIds: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Pages you think it relates to; the first is offered to the user as the suggestion',
+              },
+              projectId: { type: 'string', description: 'Only when the user named the project' },
+            },
+            required: ['title', 'context', 'decision'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'mark_outdated',
+          description:
+            'Mark a page as outdated — known to be wrong — so it ranks last in search until a person verifies or ' +
+            'clears it. When the page has subpages the user is asked whether to include them and which to leave ' +
+            'alone, and is asked for the reason unless you give it. When this returns a question, END YOUR TURN; ' +
+            'when the user has answered, call this again with the same arguments.',
+          parameters: {
+            type: 'object',
+            properties: {
+              documentId: { type: 'string', description: 'UUID of the page' },
+              reason: { type: 'string', description: 'Why it is outdated, in plain words — only if the user said' },
+            },
+            required: ['documentId'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'edit_draft',
           description:
             'Change the page the user has open in the editor. The edit streams into their editor as a suggestion ' +
@@ -484,6 +549,10 @@ export class AssistantToolsService {
           return await this.createDocument(args, ctx);
         case 'propose_update':
           return await this.proposeUpdate(args, ctx);
+        case 'capture_decision':
+          return await this.captureDecision(args, ctx);
+        case 'mark_outdated':
+          return await this.markOutdated(args, ctx);
         case 'web_search':
           return await this.webSearch(args, ctx);
         case 'web_fetch':
@@ -771,8 +840,12 @@ export class AssistantToolsService {
           value,
           label: optLabel,
           ...(o.description ? { description: String(o.description).slice(0, 240) } : {}),
+          ...(o.recommended === true ? { recommended: true } : {}),
         });
       }
+      // One suggestion per field: a second "recommended" would leave the
+      // pre-selection to whichever the pane drew first.
+      for (const extra of options.filter((o) => o.recommended).slice(1)) delete extra.recommended;
       // A picker with nothing to pick is worse than no picker: it strands the
       // user on a form they cannot complete.
       if (options.length === 0) {
@@ -799,6 +872,86 @@ export class AssistantToolsService {
       sources: [],
       prompt,
     };
+  }
+
+  // ---- Question flows (#425) -------------------------------------------------
+
+  /** A decision, proposed as a captured page. The flow asks what the model left out. */
+  private async captureDecision(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
+    const title = clip(args.title, CAPTURE_TITLE_MAX_CHARS);
+    const context = clip(args.context, 20_000);
+    const decision = clip(args.decision, 20_000);
+    if (!title || !context || !decision) return this.fail('title, context and decision are required');
+    const consequences = clip(args.consequences, 20_000);
+    const alternatives = strings(args.alternatives, CAPTURE_ITEM_MAX_CHARS);
+    const answers = this.flowAnswers('capture-decision', ctx);
+    // Inside a flow the person's answer is the project, whatever the model restates.
+    const projectId = answers ? '' : clip(args.projectId, 60);
+    const run = await this.flows.captureDecision(
+      ctx.principal,
+      ctx.workspaceId, // pinned — never from args
+      {
+        title,
+        context,
+        decision,
+        ...(consequences ? { consequences } : {}),
+        ...(alternatives.length ? { alternatives } : {}),
+        ...(projectId ? { projectId } : {}),
+        relatedDocumentIds: strings(args.relatedDocumentIds, 60),
+        session: { client: 'assistant' },
+      },
+      answers ?? {},
+    );
+    if (run.status === 'needs_input') return flowQuestion(run);
+    const r = run.result;
+    return {
+      content: JSON.stringify({
+        captureId: r.captureId,
+        state: r.state,
+        outcome: r.outcome,
+        mergeRequestId: r.mergeRequestId,
+        webUrl: r.webUrl,
+        reviewerId: r.reviewerId,
+        ...(run.dropped.length ? { dropped: run.dropped } : {}),
+        note:
+          r.state === 'duplicate'
+            ? 'The knowledge base already records this — nothing new was proposed. Say so.'
+            : 'Proposed as a merge request — a person reviews it before it goes live.',
+      }),
+      ok: true,
+      sources: [],
+    };
+  }
+
+  /** The outdated flag on a page, or on its subtree minus what the person leaves alone. */
+  private async markOutdated(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
+    const documentId = String(args.documentId ?? '');
+    const doc = await this.requireWorkspaceDocument(documentId, ctx, 'edit');
+    if (typeof doc === 'string') return this.fail(doc);
+    const reason = clip(args.reason, VERIFICATION_NOTE_MAX_CHARS);
+    const run = await this.flows.markOutdated(
+      ctx.principal,
+      ctx.workspaceId,
+      { documentId, ...(reason ? { reason } : {}) },
+      this.flowAnswers('mark-outdated', ctx) ?? {},
+    );
+    if (run.status === 'needs_input') return flowQuestion(run);
+    const { results, subtreeTooLarge } = run.result;
+    return {
+      content: JSON.stringify({
+        marked: results.filter((r) => r.ok).map((r) => r.documentId),
+        failed: results.filter((r) => !r.ok),
+        ...(subtreeTooLarge ? { subtreeTooLarge: true, hint: 'Only this page was marked; Knowledge health marks a whole large subtree.' } : {}),
+        ...(run.dropped.length ? { dropped: run.dropped } : {}),
+      }),
+      ok: results.some((r) => r.ok),
+      sources: [{ documentId: doc.id, title: doc.title }],
+    };
+  }
+
+  /** The person's answers, when this turn answers a step of `flow`. */
+  private flowAnswers(flow: FlowKey, ctx: AssistantToolContext): Record<string, unknown> | null {
+    return ctx.flow?.flow === flow ? ctx.flow.answers : null;
   }
 
   private requestAgentMode(args: Record<string, unknown>): AssistantToolResult {
@@ -909,6 +1062,57 @@ export class AssistantToolsService {
   private fail(message: string): AssistantToolResult {
     return { content: JSON.stringify({ error: message }), ok: false, sources: [] };
   }
+}
+
+/** A model's string argument, trimmed and clipped; anything else is empty. */
+function clip(raw: unknown, max: number): string {
+  return typeof raw === 'string' ? raw.trim().slice(0, max) : '';
+}
+
+/** A model's string-array argument: strings only, clipped, at most CAPTURE_LIST_MAX. */
+function strings(raw: unknown, max: number): string[] {
+  return Array.isArray(raw) ? raw.map((v) => clip(v, max)).filter(Boolean).slice(0, CAPTURE_LIST_MAX) : [];
+}
+
+/**
+ * A flow's open question as the pane's form: one field, the flow's counter,
+ * and the turn ends on it. The options are the server's, never the model's.
+ */
+function flowQuestion(run: Extract<FlowRun<unknown>, { status: 'needs_input' }>): AssistantToolResult {
+  const q = run.step.question;
+  const field: AssistantPromptField =
+    q.type === 'text'
+      ? {
+          type: 'text',
+          name: q.id,
+          label: q.label,
+          required: q.required === true,
+          ...(q.placeholder ? { placeholder: q.placeholder } : {}),
+          ...(q.multiline ? { multiline: true } : {}),
+        }
+      : { type: q.type, name: q.id, label: q.label, options: q.options, required: q.required === true };
+  const prompt: AssistantPrompt = {
+    kind: 'form',
+    question: q.description ?? q.label,
+    fields: [field],
+    ...(q.type !== 'text' && q.allowOther ? { allowOther: true } : {}),
+    flow: run.flow,
+    questionId: q.id,
+    step: run.step.step,
+    of: run.step.of,
+  };
+  return {
+    content: JSON.stringify({
+      asked: q.id,
+      step: run.step.step,
+      of: run.step.of,
+      ...(run.dropped.length ? { dropped: run.dropped } : {}),
+      note: 'The question is now in front of the user. End your turn — their answer arrives as the next message.',
+    }),
+    ok: true,
+    sources: [],
+    prompt,
+  };
 }
 
 /** A model's `values` argument as placeholder values: string fields only, anything else dropped. */

@@ -10,7 +10,7 @@ import type {
 import type { RelationInput } from '@knowledge/contracts/documents';
 import type { AiActionId } from '@knowledge/contracts/content';
 import type { ApiDriftSpec } from '@knowledge/contracts/api';
-import type { FlowKey } from '@knowledge/contracts/flows';
+import type { FlowAnswer, FlowKey } from '@knowledge/contracts/flows';
 import type { ReviewThreadAnchor } from '@knowledge/contracts/reviews';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
@@ -119,6 +119,18 @@ export interface AssistantModeSwitchPrompt {
 }
 
 export type AssistantPrompt = AssistantFormPrompt | AssistantModeSwitchPrompt;
+
+/**
+ * A person's answer to one step of a question flow (#425), sent beside the
+ * readable `Label: value` text and stored on their message. The API rebuilds
+ * the open flow from these, so the web never parses labels back into values.
+ */
+export interface AssistantFlowAnswer {
+  flow: FlowKey;
+  questionId: string;
+  /** An option value, the ticked values of a checklist, free text, or `null` for a skipped optional question. */
+  value: FlowAnswer;
+}
 
 // ---------------------------------------------------------------------------
 // Answer feedback (docs/features/38, issue #67 phase 2)
@@ -354,6 +366,8 @@ export interface AssistantMessageInfo {
   citations: AnswerCitation[];
   /** Null for user turns and pre-feature rows; the badge is simply not drawn. */
   confidence: AnswerConfidence | null;
+  /** A user turn that answered a question-flow step (#425); null otherwise. */
+  answer?: AssistantFlowAnswer | null;
   /**
    * The caller's own vote on this answer (docs/features/38, phase 2). Present
    * only when a thread is read back — a `done` frame carries none, because a
@@ -1557,6 +1571,12 @@ export const ASSISTANT_TOOL_NAMES = [
    * available in Ask mode too.
    */
   'edit_draft',
+  /**
+   * Question-flow tasks (#425): with an argument missing they ask the person,
+   * one question per turn, instead of guessing. Writes, so Agent mode only.
+   */
+  'capture_decision',
+  'mark_outdated',
   /** Read a connected repository (docs/features/31). Opt-in, like the web pair. */
   'code_tree',
   'code_read',
@@ -1617,6 +1637,9 @@ export const ASSISTANT_WRITE_TOOL_NAMES = [
   'create_document',
   'propose_update',
   'edit_relations',
+  /** A decision proposed as a captured page (#73), and the outdated flag on a page or subtree (#425). */
+  'capture_decision',
+  'mark_outdated',
   /**
    * These two leave the workspace (docs/features/32). Grouped with the page
    * writes because the gate is the same — `editor`, checked on execution, and

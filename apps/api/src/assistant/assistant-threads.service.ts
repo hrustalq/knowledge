@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
   AnswerCitation,
   AnswerConfidence,
+  AssistantFlowAnswer,
   AssistantSource,
   AssistantMessageInfo,
   AssistantMessageRole,
@@ -253,6 +254,7 @@ export class AssistantThreadsService {
       prompt?: AssistantPrompt | null;
       citations?: AnswerCitation[];
       confidence?: AnswerConfidence | null;
+      answer?: AssistantFlowAnswer | null;
     } = {},
   ): Promise<AssistantMessageInfo> {
     const [message] = await this.prisma.$transaction([
@@ -271,6 +273,7 @@ export class AssistantThreadsService {
           // Same NULL-vs-null rule as `prompt`: a turn that was not assessed
           // (a user turn, a disabled provider) leaves the column empty.
           confidence: opts.confidence ? (opts.confidence as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+          answer: opts.answer ? (opts.answer as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         },
       }),
       this.prisma.assistantThread.update({ where: { id: threadId }, data: { updatedAt: new Date() } }),
@@ -306,6 +309,7 @@ export class AssistantThreadsService {
       prompt: (m.prompt ?? null) as unknown as AssistantPrompt | null,
       citations: (m.citations ?? []) as unknown as AnswerCitation[],
       confidence: (m.confidence ?? null) as unknown as AnswerConfidence | null,
+      answer: (m.answer ?? null) as unknown as AssistantFlowAnswer | null,
       createdAt: m.createdAt.toISOString(),
     };
   }

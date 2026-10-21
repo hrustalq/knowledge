@@ -7,9 +7,8 @@ import {
   type WorkItemStatus,
 } from '@knowledge/contracts';
 import type { Connector } from '@prisma/client';
-import { markdownBody } from '../src/connectors/adapters/tracker.js';
+import { labelFor, markdownBody } from '../src/connectors/adapters/tracker.js';
 import { GithubIssuesService, toWorkItem } from '../src/connectors/github/github-issues.service.js';
-import { labelFor } from '../src/connectors/handoff/work-item-handoff.service.js';
 import { afterFailure, syncDecision, type AnchorState } from '../src/connectors/handoff/work-item-sync.js';
 
 /**
@@ -150,5 +149,6 @@ describe('ticket text', () => {
     ).toBe('Two sources disagree.\n\n[Open here](https://kb/conflicts)\n\nknowledge-ref: conflict:abc');
     expect(labelFor({ config: {} })).toBe('knowledge');
     expect(labelFor({ config: { workItemLabel: ' docs ' } })).toBe('docs');
+    expect(labelFor({ config: { workItemLabel: 'kb docs' } })).toBe('kb-docs');
   });
 });

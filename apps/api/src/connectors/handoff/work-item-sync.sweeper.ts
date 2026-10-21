@@ -6,10 +6,9 @@ import type { Env } from '../../config/env.js';
 import { asLocale } from '../../i18n/locale.js';
 import { t } from '../../i18n/t.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import type { TrackerAdapter, TrackerIssue } from '../adapters/tracker.js';
+import { labelFor, type TrackerAdapter, type TrackerIssue } from '../adapters/tracker.js';
 import { ConnectorWorkItemsService, keyOf } from '../connector-work-items.service.js';
 import { TrackerRegistry } from '../tracker-registry.service.js';
-import { labelFor } from './work-item-handoff.service.js';
 import { WorkItemAnchorsService } from './work-item-anchors.service.js';
 import { afterFailure, syncDecision } from './work-item-sync.js';
 
@@ -114,7 +113,13 @@ export class WorkItemSyncSweeper implements OnModuleInit, OnModuleDestroy {
       });
       since = oldest?.createdAt.toISOString() ?? new Date().toISOString();
     }
-    const { items, cursor } = await tracker.listIssues(row, since);
+    const watched = await this.prisma.connectorWorkItem.findMany({
+      where: { connectorId: row.id, sourceKind: { not: null } },
+      select: { number: true, externalKey: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+    });
+    const { items, cursor } = await tracker.listIssues(row, since, watched);
     for (const item of items) {
       const saved = await this.workItems.applyPolled(row, item);
       if (!saved.sourceKind) await this.adopt(row, saved, item);

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Connector } from '@prisma/client';
 import type { TrackerAdapter } from './adapters/tracker.js';
+import { JiraTrackerService } from './adapters/jira-tracker.js';
 import { GithubIssuesService } from './github/github-issues.service.js';
 
 /**
@@ -12,8 +13,8 @@ import { GithubIssuesService } from './github/github-issues.service.js';
 export class TrackerRegistry {
   private readonly adapters: TrackerAdapter[];
 
-  constructor(github: GithubIssuesService) {
-    this.adapters = [github];
+  constructor(github: GithubIssuesService, jira: JiraTrackerService) {
+    this.adapters = [github, jira];
   }
 
   trackerFor(row: Connector): TrackerAdapter | null {

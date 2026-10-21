@@ -249,7 +249,9 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
   {
     kind: 'jira',
     label: 'Jira',
-    capabilities: { pull: true, push: false, webhook: true, tree: false },
+    // `tasks` since #424: a Jira connector is a tracker that knowledge objects
+    // are handed off to, with or without pulling issues in as pages.
+    capabilities: { pull: true, push: false, webhook: true, tree: false, tasks: true },
     credentialLabel: 'email:api-token',
     fields: [
       {
@@ -263,9 +265,17 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         key: 'jql',
         label: 'JQL',
         kind: 'text',
-        required: true,
+        required: false,
         placeholder: 'project = ENG AND issuetype = Epic',
-        help: 'Which issues become pages.',
+        help: 'Which issues become pages. Leave empty to use this connector only as a tracker.',
+      },
+      {
+        key: 'projectKey',
+        label: 'Default project key',
+        kind: 'text',
+        required: false,
+        placeholder: 'ENG',
+        help: "Where handed-off tickets go when the knowledge project's tracker route names no Jira project.",
       },
     ],
   },

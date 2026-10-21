@@ -751,6 +751,7 @@
     "unmappedStatus": "The connector's status map has no outbound status for {status}",
     "notRetryable": "Only a failed or orphaned work item can be retried",
     "ticketGone": "The ticket no longer exists on the tracker",
-    "anchorOrDocument": "Give a page or an anchor, not both"
+    "anchorOrDocument": "Give a page or an anchor, not both",
+    "jiraNoProject": "Connector {name} has no default Jira project and the tracker route names none"
   }
 }

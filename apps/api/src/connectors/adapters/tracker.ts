@@ -69,9 +69,15 @@ export interface TrackerAdapter {
   /**
    * Tickets changed since `since` (an ISO time, null = recent ones), oldest
    * change first so a cursor can advance past them. `cursor` is what to pass
-   * next time; it never moves backwards.
+   * next time; it never moves backwards. `watch` names the anchored tickets, for
+   * a tracker too big to list whole (a Jira site): it lists those plus the
+   * handoff label. A repository tracker lists the repository and ignores it.
    */
-  listIssues(row: Connector, since: string | null): Promise<{ items: TrackerIssue[]; cursor: string | null }>;
+  listIssues(
+    row: Connector,
+    since: string | null,
+    watch?: TrackerRef[],
+  ): Promise<{ items: TrackerIssue[]; cursor: string | null }>;
   /** Null when the ticket is gone or the credential cannot see it. */
   getIssue(row: Connector, ref: TrackerRef): Promise<TrackerIssue | null>;
   /** Read a person's `BILL-123` / `#45` / URL into a ref, or null when it is not one of this tracker's. */
@@ -82,12 +88,34 @@ export interface TrackerAdapter {
   comment(row: Connector, ref: TrackerRef, lines: TrackerBodyLine[]): Promise<void>;
   /** Board names per ticket number, for the trackers that have boards. Never throws. */
   boardsFor?(row: Connector, numbers: number[]): Promise<Map<number, string[]>>;
+  /**
+   * A delivery on the connector's own webhook (`/v1/connectors/:id/webhook`):
+   * null when the signature does not verify, `item: null` when it verified but
+   * is not about a ticket. GitHub has no implementation: its deliveries come
+   * through the App webhook.
+   */
+  verifyWebhook?(
+    row: Connector,
+    secret: string,
+    headers: Record<string, string>,
+    rawBody: string,
+  ): { item: TrackerIssue | null; actorId: string | null } | null;
 }
 
 /** A connector's status map: `config.statusMap` layered over its tracker's default. */
 export function statusMapFor(row: Pick<Connector, 'config'> | null, kind: TrackerKind): WorkItemStatusMap {
   const override = (row?.config as { statusMap?: Partial<WorkItemStatusMap> } | null)?.statusMap;
   return workItemStatusMap(kind, override && typeof override === 'object' ? override : null);
+}
+
+/**
+ * The label a connector puts on handed-off tickets: `config.workItemLabel`,
+ * else `knowledge`. No whitespace, which Jira labels cannot hold.
+ */
+export function labelFor(row: Pick<Connector, 'config'>): string {
+  const label = (row.config as { workItemLabel?: unknown } | null)?.workItemLabel;
+  const raw = typeof label === 'string' && label.trim() ? label.trim().slice(0, 50) : 'knowledge';
+  return raw.replace(/\s+/g, '-');
 }
 
 /** Markdown for the trackers that take it (GitHub, GitLab). */

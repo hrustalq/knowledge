@@ -30,18 +30,35 @@ export class JiraAdapter implements ConnectorAdapter {
   readonly kind: ConnectorKind = 'jira';
   readonly capabilities: ConnectorCapabilities = { pull: true, push: false, webhook: true, tree: false };
 
+  /**
+   * A tracker-only connector (no JQL, #424) has nothing to count, so the test
+   * is then just that the credential can read the site.
+   */
   async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
-    const page = await this.search(ctx, 0, 1);
-    return { ok: true, detail: `${page.total ?? 0} issues match this JQL` };
+    const jql = typeof ctx.config.jql === 'string' ? ctx.config.jql.trim() : '';
+    if (!jql) {
+      await connectorFetch(`${jiraBase(ctx)}/rest/api/3/myself`, { headers: jiraHeaders(ctx), signal: ctx.signal }, ctx);
+      return { ok: true };
+    }
+    const res = await connectorFetch(
+      `${jiraBase(ctx)}/rest/api/3/search/approximate-count`,
+      { method: 'POST', headers: { ...jiraHeaders(ctx), 'content-type': 'application/json' }, body: JSON.stringify({ jql }), signal: ctx.signal },
+      ctx,
+    );
+    const { count } = (await res.json()) as { count?: number };
+    return { ok: true, detail: `${count ?? 0} issues match this JQL` };
   }
 
+  /**
+   * `/rest/api/3/search/jql`, token-paged: the offset-paged `/search` it
+   * replaces is deprecated and returns 410 on Jira Cloud.
+   */
   async *list(ctx: ConnectorContext): AsyncIterable<ExternalRef> {
-    const base = this.base(ctx);
-    let startAt = 0;
+    const base = jiraBase(ctx);
+    let token: string | undefined;
     for (;;) {
-      const page = await this.search(ctx, startAt, PAGE_SIZE);
-      const issues = page.issues ?? [];
-      for (const issue of issues) {
+      const page = await jiraSearch(ctx, requireConfig(ctx.config, 'jql'), { maxResults: PAGE_SIZE, fields: 'summary,updated', token });
+      for (const issue of page.issues ?? []) {
         yield {
           externalId: issue.key,
           title: issue.fields?.summary ?? issue.key,
@@ -49,16 +66,16 @@ export class JiraAdapter implements ConnectorAdapter {
           version: issue.fields?.updated,
         };
       }
-      startAt += issues.length;
-      if (issues.length === 0 || startAt >= (page.total ?? 0)) return;
+      token = page.nextPageToken;
+      if (page.isLast || !token || !page.issues?.length) return;
     }
   }
 
   async fetch(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalDocument> {
-    const base = this.base(ctx);
+    const base = jiraBase(ctx);
     const url = `${base}/rest/api/3/issue/${encodeURIComponent(ref.externalId)}?expand=renderedFields`;
     const issue = (await (
-      await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
+      await connectorFetch(url, { headers: jiraHeaders(ctx), signal: ctx.signal }, ctx)
     ).json()) as JiraIssue;
 
     const warnings: string[] = [];
@@ -104,28 +121,35 @@ export class JiraAdapter implements ConnectorAdapter {
     return [{ externalId: String(key), title: '' }];
   }
 
-  private base(ctx: ConnectorContext): string {
-    return trimBaseUrl(requireConfig(ctx.config, 'baseUrl'));
-  }
+}
 
-  private headers(ctx: ConnectorContext): Record<string, string> {
-    return {
-      authorization: `Basic ${Buffer.from(ctx.credential ?? '').toString('base64')}`,
-      accept: 'application/json',
-    };
-  }
+/** The site, as the admin typed it, without a trailing slash. Shared with the tracker (#424). */
+export function jiraBase(ctx: Pick<ConnectorContext, 'config'>): string {
+  return trimBaseUrl(requireConfig(ctx.config, 'baseUrl'));
+}
 
-  private async search(ctx: ConnectorContext, startAt: number, maxResults: number): Promise<JiraSearch> {
-    const base = this.base(ctx);
-    const url = new URL(`${base}/rest/api/3/search`);
-    url.searchParams.set('jql', requireConfig(ctx.config, 'jql'));
-    url.searchParams.set('startAt', String(startAt));
-    url.searchParams.set('maxResults', String(maxResults));
-    url.searchParams.set('fields', 'summary,updated');
-    return (await (
-      await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx)
-    ).json()) as JiraSearch;
-  }
+/** `email:api-token`, as Basic auth. */
+export function jiraHeaders(ctx: Pick<ConnectorContext, 'credential'>): Record<string, string> {
+  return {
+    authorization: `Basic ${Buffer.from(ctx.credential ?? '').toString('base64')}`,
+    accept: 'application/json',
+  };
+}
+
+/** One page of `/rest/api/3/search/jql`. */
+export async function jiraSearch(
+  ctx: ConnectorContext,
+  jql: string,
+  opts: { maxResults: number; fields: string; token?: string },
+): Promise<JiraSearch> {
+  const url = new URL(`${jiraBase(ctx)}/rest/api/3/search/jql`);
+  url.searchParams.set('jql', jql);
+  url.searchParams.set('maxResults', String(opts.maxResults));
+  url.searchParams.set('fields', opts.fields);
+  if (opts.token) url.searchParams.set('nextPageToken', opts.token);
+  return (await (
+    await connectorFetch(url.toString(), { headers: jiraHeaders(ctx), signal: ctx.signal }, ctx)
+  ).json()) as JiraSearch;
 }
 
 function dropEmpty(record: Record<string, unknown>): Record<string, unknown> {
@@ -134,18 +158,21 @@ function dropEmpty(record: Record<string, unknown>): Record<string, unknown> {
 
 // --- upstream shapes (only the fields actually read) ---
 
-interface JiraSearch {
-  total?: number;
+export interface JiraSearch {
   issues?: JiraIssue[];
+  nextPageToken?: string;
+  isLast?: boolean;
 }
-interface JiraIssue {
+export interface JiraIssue {
+  id?: string;
   key: string;
   fields?: {
     summary?: string;
+    created?: string;
     updated?: string;
     description?: unknown;
     labels?: string[];
-    status?: { name?: string };
+    status?: { name?: string; statusCategory?: { key?: string } };
     issuetype?: { name?: string };
     assignee?: { displayName?: string };
     reporter?: { displayName?: string };

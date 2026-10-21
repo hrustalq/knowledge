@@ -78,6 +78,14 @@ in the pull request that introduces them — see
   anything but the open question, or the one answered last, is refused with 409 `flow-answer-stale` (#425).
 - `ask_user` options take `recommended`, at most one per field, and the tool now asks for one question per
   form (#425).
+- In the assistant pane, a question from one of these flows shows "Question 2 of 3", and its suggested option
+  is pre-selected and focused, so accepting every suggestion is a run of Enter presses (#425). An answered
+  question collapses to one line, and the answer is drawn as an answer, not as a chat message. While the
+  next question is open, the one answered just before it has a **Change** action. A changed answer, and a
+  question it made unnecessary, stay in the transcript struck through, never silently replaced. Turns that
+  ask, and the turn reporting what the flow did, show no confidence badge, rating or reply actions. The tool
+  line reads "Asked about the decision" while it is asking, and says so when the write fails instead of
+  claiming it happened. A form answered late from another tab reloads the thread to the open question.
 
 ### Changed
 
@@ -87,6 +95,8 @@ in the pull request that introduces them — see
   used before is deprecated on Jira Cloud. Test connection now shows Jira's approximate match count (#424).
 - Linking a work item (`POST /v1/connectors/:id/work-items/:workItemId/link`) also accepts an anchor
   (`sourceKind` + `sourceId`), and unlinking drops it. Unlinking never closes the issue (#424).
+- An error frame on the assistant's streaming endpoint carries `details`, the same as the error body of every
+  other route (a 409's `reason`, for one). Before, the extras were dropped (#425).
 
 - Page text fills the content column again, on every page, the public share links and published sites
   included (#422). In 0.30.1 paragraphs and lists stopped at about 65 characters, which left a wide screen

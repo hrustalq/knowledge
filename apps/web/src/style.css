@@ -1307,9 +1307,35 @@ body.kn-tree-dragging a {
  * Density is set as a step index rather than a colour so the ramp is defined
  * once here and the component only ever counts.
  */
+/*
+ * Cell size fits a year to the ledger's width: weeks × pitch − one gap, with
+ * the gap a quarter of the cell, so the grid is cell × (1.25·weeks − 0.25)
+ * wide. Clamped to 12–24px — below 12 the grid scrolls instead (opening on the
+ * present), above 24 a wide card leaves room on the right rather than drawing
+ * tiles. The available width is the box less the weekday axis and its 0.5rem
+ * gap, less 1px so rounding never tips a fitting year into a scrollbar.
+ * `--kn-weeks` is set by the component.
+ */
+.kn-ledger {
+  container-type: inline-size;
+  --kn-axis: 1.75rem;
+  --kn-cell: clamp(
+    12px,
+    (100cqw - var(--kn-axis) - 0.5rem - 1px) / (var(--kn-weeks, 53) * 1.25 - 0.25),
+    24px
+  );
+  --kn-gap: calc(var(--kn-cell) / 4);
+  --kn-pitch: calc(var(--kn-cell) + var(--kn-gap));
+}
+.kn-ledger-grid {
+  width: calc(var(--kn-weeks, 53) * var(--kn-pitch) - var(--kn-gap));
+}
 .kn-ledger-cell {
   --kn-ink: color-mix(in oklch, var(--primary) calc(var(--kn-step, 0) * 25%), transparent);
-  border-radius: 2px;
+  width: var(--kn-cell);
+  height: var(--kn-cell);
+  /* 2px at the minimum size, 4px at the maximum. */
+  border-radius: calc(var(--kn-cell) / 6);
   background-color: var(--kn-ink);
   box-shadow: inset 0 0 0 1px var(--border);
   transition:

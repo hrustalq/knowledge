@@ -108,6 +108,14 @@ in the pull request that introduces them — see
   On a replay of production searches, the right page came first for 97% of
   page titles, up from 55%, and off-topic questions returned nothing instead
   of 10 pages.
+- The assistant no longer translates or pads your question before searching
+  (#402). Asked «От какой ветки базироваться при разработке фичи?», it
+  searched `feature development which branch base from base branch develop
+  main branching strategy`, and the English words matched code and table
+  headers instead of the Russian page that answered. The search tools in the
+  app and over MCP (`knowledge_search`, `knowledge_search_chat`) now tell the
+  model to search with the user's own words and language, and to reword only
+  to resolve "it" or "that page" from earlier in the conversation.
 - **Knowledge health → Settings** no longer goes blank when you type a number
   into any field (#401). Typing into a number box handed the form a number
   where it expected text, so the form crashed on the first keystroke and

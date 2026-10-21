@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { assistantSourceHref, assistantSourceKey, isPageSource, type AssistantSource } from '@knowledge/contracts';
 import { AssistantReadToolsService } from '../src/assistant/assistant-read-tools.service.js';
+import { SEARCH_QUERY_RULE } from '../src/assistant/assistant-tool-types.js';
 import { CiteLabels, finalizeCitations } from '../src/assistant/citations.js';
 import { BUILT_IN_AGENT_DEFAULTS } from '../src/agents/built-in-agents.js';
 import { DEV_PRINCIPAL } from '../src/auth/principal.js';
@@ -58,6 +59,16 @@ describe('search_chat', () => {
     const names = (opts?: { chat?: boolean }) => tools.definitions(opts).map((d) => d.function.name);
     expect(names()).not.toContain('search_chat');
     expect(names({ chat: true })).toContain('search_chat');
+  });
+
+  it('asks for the user’s own wording, like search_knowledge (#402)', () => {
+    const { tools } = readTools();
+    const query = (name: string) =>
+      (tools.definitions({ chat: true }).find((d) => d.function.name === name)?.function.parameters as never as {
+        properties: { query: { description: string } };
+      }).properties.query.description;
+    expect(query('search_chat')).toBe(SEARCH_QUERY_RULE);
+    expect(query('search_knowledge')).toBe(SEARCH_QUERY_RULE);
   });
 
   it('is named by the researcher and the author only, never a background agent', () => {

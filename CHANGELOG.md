@@ -80,6 +80,17 @@ in the pull request that introduces them — see
       searchable". It now says kept messages serve only `/capture`, and that
       searching is the separate switch.
 
+### Fixed
+
+- Keyword search (`FULLTEXT_PROVIDER=opensearch`) no longer ranks pages on
+  stopwords (#400). A Russian question such as «От какой ветки базироваться
+  при разработке фичи?» matched any chunk containing «от», «при» or «какой»,
+  and an English rewrite matched an env-var table on the single word `Base`.
+  Chunk text is now indexed with Russian and English stemming and stopwords,
+  so «ветки» finds «ветка». A query of more than two words must share 60% of
+  its meaningful words (rounded down) with a chunk before the keyword leg
+  returns it.
+
 ### Operations
 
 - **New env vars:**
@@ -107,6 +118,13 @@ in the pull request that introduces them — see
   kept chat (the harvest buffer and searchable groups) while
   `CHAT_ENABLED=false`, because a retention is a promise about rows already
   written.
+- **Keyword search backfill (#400):** on its first search after the deploy,
+  the API (or the worker) adds the ru/en fields to the OpenSearch index and
+  starts a background `_update_by_query` over the rows that lack them. Nothing
+  is re-embedded. Until it finishes, typically seconds to a few minutes, the
+  keyword leg misses older pages, and vector search still finds them. The
+  log line is `Re-analyzing <n> row(s) of <index>`. Rolling back is safe: the
+  previous image ignores the new fields.
 
 ## [0.29.1] — 2026-10-20
 

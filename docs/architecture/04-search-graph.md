@@ -182,6 +182,39 @@ to index for keyword search must never fail a revision that is otherwise
 retrievable. Hybrid ranking fuses the vector and BM25 orderings by **reciprocal
 rank fusion**; `mode: 'keyword'` is BM25-only.
 
+### Analyzed fields (#400)
+
+Chunk `text` keeps the `standard` analyzer and carries two multi-fields:
+`text.ru` (built-in `russian`) and `text.en` (built-in `english`), each with
+its language's stemming and stopwords. «ветки» and «ветка» meet at `ветк`,
+and «от», «при», `from` and `which` drop out.
+
+`bm25Clause` queries **one** of them, picked by the query's script: any
+Cyrillic letter sends it to `text.ru`, anything else to `text.en`. Latin tokens
+in a Russian query (`main`, `MR`) pass the Russian analyzer unchanged. Each
+analyzer drops only its own language's stopwords, so a `most_fields` sum over
+all three fields counted «от» and «при» once per field that kept them, and a
+3 200-character Docker chunk outranked the branching pages on stopwords. The
+raw `text` field is no longer queried.
+
+The match carries `minimum_should_match: '2<60%'`: a query of up to two
+analyzed terms needs all of them, a longer one 60% of them, rounded down (3
+terms → 1, 4 → 2, 10 → 6). One shared generic token (`base`) is no longer a
+hit. What it cannot do is bridge word families. The Snowball stemmer leaves
+«базироваться» as `базирова` and «база» as `баз`, so «От какой ветки
+базироваться при разработке фичи?» shares only `ветк` with the page that
+answers it, and BM25 returns nothing for it. That page reaches the answer
+through the vector leg, and cross-language matching (`feature` ↔ «фича») is
+the vector leg's job as well.
+
+An index created before #400 takes the multi-fields through the boot
+`_mapping` update, as it does `ACL_PROPERTIES`. `OpenSearchFulltextProvider.reanalyze`
+then counts rows with no `text.ru` and, if there are any, starts a background
+`_update_by_query` that rewrites them from their own `_source`. Nothing is
+re-chunked or re-embedded. Until it finishes, those rows are invisible to
+BM25. The check reads the rows rather than the mapping, so a backfill cut
+short by a restart resumes on the next boot.
+
 The read path is just as optional (#173). `SearchService.fulltextLeg` races the
 BM25 query against `FULLTEXT_TIMEOUT_MS` (default 1500). If it errors or loses
 the race, the search drops that leg and answers from vectors alone. A keyword

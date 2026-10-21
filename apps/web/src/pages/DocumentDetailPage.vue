@@ -45,6 +45,7 @@ import {
   Workflow as WorkflowIcon,
   ListTree,
   Eye,
+  MessageSquare,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type {
@@ -93,6 +94,7 @@ import ExportDialog from '@/components/knowledge/ExportDialog.vue'
 import { PageLayout, PageRail, PageState } from '@/components/layout/page'
 import TocRail from '@/components/knowledge/TocRail.vue'
 import DocumentCanvas from '@/components/knowledge/DocumentCanvas.vue'
+import ThreadCard from '@/components/merge-requests/ThreadCard.vue'
 import ApiOperationIndex from '@/components/api-reference/ApiOperationIndex.vue'
 import { useApiReference } from '@/components/api-reference/use-api-reference'
 import MergeRequestList from '@/components/merge-requests/MergeRequestList.vue'
@@ -139,6 +141,9 @@ const RAIL_WIDGETS = [
   // folds away and is remembered the same way.
   { id: 'verification', label: t('verification.title'), icon: BadgeCheck, expandable: false },
   { id: 'overview', label: t('rail.overview'), icon: Info, expandable: false },
+  // Comments with no place on the text (#439): on the page as a whole, or on a
+  // passage edited away. Only while there are any.
+  { id: 'comments', label: t('rail.comments'), icon: MessageSquare, expandable: false },
   { id: 'frontmatter', label: t('rail.frontmatter'), icon: Braces, expandable: false },
   { id: 'revisions', label: t('rail.history'), icon: History, expandable: true },
   { id: 'merge-requests', label: t('rail.changes'), icon: GitMerge, expandable: true },
@@ -195,6 +200,7 @@ const visibleWidgets = computed(() =>
       (w.id !== 'used-by' || !!declaration.value) &&
       (w.id !== 'quality' || !!quality.value?.score) &&
       (w.id !== 'conflicts' || openConflicts.value > 0) &&
+      (w.id !== 'comments' || unplacedThreads.value.length > 0) &&
       (w.id !== 'operations' || isSpec.value),
   ),
 )
@@ -366,6 +372,15 @@ const threads = computed(
 // A plain comment has nothing to resolve, so it is not an open request — the
 // same rule the API's threadStats applies.
 const unresolvedCount = computed(() => threads.value.filter((t) => t.resolvable && !t.resolved).length)
+/**
+ * Threads the canvas cannot draw: no text anchor, or one whose passage is
+ * gone. Stored and answerable like any other, so they are listed in the rail
+ * rather than nowhere (#439).
+ */
+const unplacedThreads = computed(() =>
+  threads.value.filter((t) => t.anchor?.type !== 'text' || outdatedThreads.value.includes(t.threadId)),
+)
+const unplacedOpen = computed(() => unplacedThreads.value.filter((t) => !t.resolved).length)
 
 const threadsKey = computed(() => ['/v1/documents/{id}/threads', { id: documentId.value }, null])
 // Every comment also lands in the activity log, and the rail reads it — so both
@@ -578,6 +593,9 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
           : 'none'
       : null,
     conflicts: openConflicts.value ? String(openConflicts.value) : null,
+    comments: unplacedOpen.value
+      ? t('count.openComments', { n: unplacedOpen.value }, unplacedOpen.value)
+      : t('count.threads', { n: unplacedThreads.value.length }, unplacedThreads.value.length),
     insights: insights.value ? t('analytics.viewsCount', { n: insights.value.views }, insights.value.views) : null,
     quality: quality.value?.score
       ? quality.value.stale
@@ -804,7 +822,7 @@ watch(
         <PageRail
           :widgets="visibleWidgets"
           surface="document"
-          :default-open="['operations', 'verification', 'overview']"
+          :default-open="['operations', 'verification', 'overview', 'comments']"
           :previews="previewFor"
           @expand="expanded = $event"
         >
@@ -874,6 +892,26 @@ watch(
                   {{ showAllRelations ? t('common.showFewer') : t('common.andNMore', { n: relations.length - RELATION_PREVIEW }) }}
                 </button>
               </div>
+            </div>
+          </template>
+
+          <template #widget-comments>
+            <p class="mb-2 text-xs text-muted-foreground">{{ t('documents.unplacedCommentsHint') }}</p>
+            <div class="space-y-2">
+              <ThreadCard
+                v-for="thread in unplacedThreads"
+                :key="thread.threadId"
+                :thread="thread"
+                :outdated="outdatedThreads.includes(thread.threadId)"
+                :readonly="!canComment"
+                :busy="threadsBusy"
+                :resolve-document-id="resolveDocumentId"
+                teach-kind="document-thread"
+                @reply="(b: string, p: string | null) => onReply(thread.threadId, b, p)"
+                @resolve="(r: boolean) => onResolve(thread.threadId, r)"
+                @edit="(c: string, b: string) => onEditComment(thread.threadId, c, b)"
+                @delete="(c: string) => onDeleteComment(thread.threadId, c)"
+              />
             </div>
           </template>
 

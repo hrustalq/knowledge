@@ -24,6 +24,13 @@ in the pull request that introduces them — see
 - Sequence diagrams drew every participant twice, again under the lifelines, which read as duplicate
   entities (#438). Each participant now appears once, at the top, on every render site including export.
   Add `%%{init: {"sequence": {"mirrorActors": true}}}%%` to a diagram to bring the bottom row back.
+- Commenting on a list or a table from the margin control looked like it failed: the comment was saved
+  but appeared nowhere (#439). The control now targets one list item or one table row and highlights
+  the comment on exactly that text. Comments with no place on the text, posted on the page as a whole
+  or on a passage that has since been edited away, are listed in a new **Comments** widget in the page
+  rail, where they can be replied to and resolved. Comments already saved this way show up there too.
+- After pressing Comment, typing went nowhere until the box was clicked (#439). The composer now has
+  focus when it opens.
 
 ## [0.31.0] — 2026-10-21
 

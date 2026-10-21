@@ -40,9 +40,9 @@ import RichEditor from '@/components/editor/RichEditor.vue'
 import {
   ANCHOR_ATTR,
   anchorFromDomSelection,
-  anchorFromQuote,
   anchorFromRange,
   anchorsAtEvent,
+  blockRangeAt,
   type AnchorAuthor,
   type CommentAnchor,
 } from '@/components/editor/extensions/comment-anchors'
@@ -357,7 +357,9 @@ const hoverAt = ref<Floater | null>(null)
 const hoverBottom = ref(0)
 /** Same block, in viewport space, for the composer that opens off it. */
 const hoverRect = ref<AnchorRect | null>(null)
-const hoverQuote = ref<string | null>(null)
+/** The block under the control, and its document range — what a block comment anchors to. */
+let hoverBlock: Element | null = null
+let hoverRange: { from: number; to: number } | null = null
 /** The open discussion popover: which threads, and where. */
 const openThreadIds = ref<string[]>([])
 const popoverAt = ref<AnchorRect | null>(null)
@@ -382,7 +384,11 @@ const openThreads = computed(() =>
   openThreadIds.value.map((id) => byId.value.get(id)).filter((t): t is ReviewThread => !!t),
 )
 
-/** Only anchored threads are drawn on the text; the rest live in the list below. */
+/**
+ * Only anchored threads are drawn on the text. The rest — page-level comments,
+ * and anchors whose passage is gone — are the page's to list (the rail's
+ * Comments widget, #439); this component reports the outdated ones.
+ */
 const { nameOf } = useMembers()
 
 const anchors = computed<CommentAnchor[]>(() =>
@@ -446,7 +452,9 @@ function onPageMove(event: MouseEvent) {
     return
   }
   const target = event.target instanceof Element ? event.target : null
-  const block = target?.closest('.kn-prose > *')
+  // The innermost list item or table row, else the top-level block: one item
+  // of a list is as much a unit of the document as a paragraph is (#439).
+  const block = target?.closest('li, tr, .kn-prose > *')
   /*
    * Travelling to the control means leaving the block that summoned it: the
    * pointer crosses the gutter, where the target is the padding rather than any
@@ -457,30 +465,45 @@ function onPageMove(event: MouseEvent) {
    * "nothing changed" rather than "nothing is hovered".
    */
   if (!block || !root.contains(block)) return
+  if (block === hoverBlock && hoverAt.value) return
   // A diagram or a whiteboard holds nothing the document can quote, so it gets
   // no control rather than one that fails on click.
-  const text = quotableText(block)
-  if (!text) {
+  const range = blockRange(block)
+  if (!range || !editorEl.value?.editor?.state.doc.textBetween(range.from, range.to).trim()) {
     hoverAt.value = null
+    hoverBlock = null
     return
   }
   const host = canvas.value
   if (!host) return
   const base = host.getBoundingClientRect()
   const rect = block.getBoundingClientRect()
-  hoverQuote.value = text
+  hoverBlock = block
+  hoverRange = range
   hoverAt.value = { top: rect.top - base.top, left: rect.left - base.left }
   hoverBottom.value = rect.bottom - base.top
   hoverRect.value = toRect(rect)
 }
 
 /**
- * The block's text as the *document* has it.
- *
- * `textContent` would also collect what the annotation layer drew into the
- * block — a comment-count pin renders as a real text node — and a quote ending
- * in a stray "1" matches nothing in the document, so the block silently became
- * uncommentable once someone commented on it.
+ * A rendered block's document range. The quote is then read off the
+ * projection, never the DOM: DOM text joins list items and cells with no
+ * separator, so it never matched and the comment went in unanchored (#439).
+ */
+function blockRange(el: Element): { from: number; to: number } | null {
+  const view = editorEl.value?.editor?.view
+  if (!view) return null
+  try {
+    return blockRangeAt(view.state.doc, view.posAtDOM(el, 0))
+  } catch {
+    // An element ProseMirror does not own (a node view's own chrome).
+    return null
+  }
+}
+
+/**
+ * A heading's text without what the annotation layer drew into it — a
+ * comment-count pin renders as a real text node.
  */
 function quotableText(block: Element): string {
   const clone = block.cloneNode(true) as Element
@@ -490,8 +513,9 @@ function quotableText(block: Element): string {
 
 function startBlockThread() {
   const doc = editorEl.value?.editor?.state.doc
-  if (!doc || !hoverQuote.value) return
-  pendingAnchor.value = anchorFromQuote(doc, props.revisionId, hoverQuote.value)
+  if (!doc || !hoverRange) return
+  const anchor = anchorFromRange(doc, hoverRange.from, hoverRange.to)
+  pendingAnchor.value = anchor ? { type: 'text', revisionId: props.revisionId, ...anchor } : null
   composing.value = true
   popoverAt.value = hoverRect.value
   hoverAt.value = null
@@ -574,7 +598,6 @@ function closePopover() {
   pendingAnchor.value = null
   composing.value = false
   popoverAt.value = null
-  hoverQuote.value = null
 }
 
 function submitNewThread(body: string, resolvable: boolean) {

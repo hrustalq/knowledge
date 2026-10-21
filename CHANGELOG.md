@@ -97,6 +97,15 @@ in the pull request that introduces them — see
 - `WORK_ITEM_AUTOCREATE_MAX_PER_TICK` (default `20`) caps the tickets that handoff rules create per sync tick,
   across all workspaces. `0` turns rule-driven handoff off. It has a default, so no deploy change is
   needed (#424).
+- Tracker handoff release checklist (#424; details in `docs/features/32-connector-work-items.md` → Setup):
+  1. Set `GH_APP_WEBHOOK_SECRET` in the GitHub `production` environment. It has been empty in prod, so the
+     App webhook refused every delivery.
+  2. On the GitHub App: turn **Webhook Active** on, with URL
+     `https://knowledge.hrustalq.dev/api/v1/connectors/github/webhook` and the same secret. Raise
+     **Organization projects** to Read and write, and subscribe to **Projects v2 item**.
+  3. Have each installation accept the new permissions.
+  4. From the laptop, check that one delivery returns 202 in the App's "Recent deliveries".
+  Polling keeps everything in sync if any of this is late; the webhook only makes it faster.
 - Status sync runs in the API process every `WORK_ITEM_SYNC_TICK_MS` (default `15000`). Set
   `WORK_ITEM_SYNC_ENABLED=false` to stop it; handoff still works. Both variables have defaults, so no
   deploy change is needed. Sync works by polling. The GitHub App webhook only makes it faster.

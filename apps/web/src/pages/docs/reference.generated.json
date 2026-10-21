@@ -5280,7 +5280,7 @@
     },
     {
       "name": "knowledge_flag_document",
-      "description": "Set a page's declared verification state (docs/features/39): \"requested\" asks its owner to check it (any member), \"outdated\" declares it wrong (editor) and ranks it last in search until a person verifies or clears it. Give a note saying why. Verifying is a person's act and has no tool. For a problem with evidence that should be checked and fixed, prefer knowledge_report_issue.",
+      "description": "Set a page's declared verification state (docs/features/39): \"requested\" asks its owner to check it (any member), \"outdated\" declares it wrong (editor) and ranks it last in search until a person verifies or clears it. Give a note saying why. Verifying is a person's act and has no tool. For a problem with evidence that should be checked and fixed, prefer knowledge_report_issue. \"outdated\" asks the person first when the page has subpages (this page or the subtree, minus what to leave alone) or no note was given, as status \"needs_input\" (or a form, where the client has one).",
       "inputs": [
         {
           "name": "workspaceId",
@@ -5297,6 +5297,10 @@
         {
           "name": "note",
           "optional": true
+        },
+        {
+          "name": "answers",
+          "optional": false
         }
       ]
     },

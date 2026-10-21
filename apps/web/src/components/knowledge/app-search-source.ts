@@ -13,6 +13,8 @@ export function searchRequestOf(state: SearchSnapshot): SearchRequest {
     query: state.query,
     mode: state.mode,
     limit: state.limit,
+    // One row per page, the matched words marked (#443).
+    groupBy: 'page',
     ...(state.asOf ? { asOf: state.asOf } : {}),
     ...(state.expand && state.mode === 'hybrid' ? { expandGraph: { depth: state.depth } } : {}),
     ...(hasFilters
@@ -40,11 +42,11 @@ export function searchViewOf(res: SearchResponse): SearchView {
   }
   return {
     results: res.results.map((r, i) => ({
-      key: r.chunkId,
+      key: r.documentId,
       title: r.title,
       to: linkOf(r.documentId, i + 1),
       // Chunk snippets are cut mid-sentence.
-      snippet: [{ text: `${r.snippet}…`, hit: false }],
+      snippet: r.snippetParts ?? [{ text: `${r.snippet}…`, hit: false }],
       score: r.score,
       trust: r.trust?.status,
       badges: (r.entities ?? []).map((e) => ({ key: e.key, label: e.name })),

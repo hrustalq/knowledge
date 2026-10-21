@@ -31980,7 +31980,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.30.1",
+    "version": "0.31.0",
     "contact": {}
   },
   "tags": [],
@@ -33836,6 +33836,13 @@
             "default": 20,
             "minimum": 1,
             "maximum": 100
+          },
+          "groupBy": {
+            "type": "string",
+            "enum": [
+              "page"
+            ],
+            "description": "'page': one result per page (its best-ranked chunk), limit counting pages, each with snippetParts. Omitted: one result per chunk"
           },
           "asOf": {
             "type": "string",

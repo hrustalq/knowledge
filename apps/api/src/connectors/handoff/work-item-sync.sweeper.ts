@@ -242,6 +242,8 @@ export class WorkItemSyncSweeper implements OnModuleInit, OnModuleDestroy {
       // newer than the anchor, is what keeps the next reconcile from pushing again.
       // Quiet: the act was the anchor's resolution, which has its own activity row.
       await this.workItems.upsertFrom(connector, moved, { actorId: null, quiet: true });
+      const board = tracker.setBoardStatus ? await this.workItems.boardFor(item) : null;
+      if (board) await tracker.setBoardStatus!(connector, item, board, status);
       await this.prisma.connectorWorkItem.update({
         where: { id: item.id },
         data: { syncState: 'synced', pendingStatus: null, syncAttempts: 0, nextSyncAt: null, syncError: null },

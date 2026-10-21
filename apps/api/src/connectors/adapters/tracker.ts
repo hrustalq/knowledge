@@ -4,6 +4,7 @@ import type {
   ConnectorWorkItemKind,
   ConnectorWorkItemState,
   TrackerKind,
+  WorkItemStatus,
   WorkItemStatusMap,
 } from '@knowledge/contracts';
 
@@ -56,6 +57,12 @@ export interface TrackerCreateInput {
 /** A body is three kinds of line, so no tracker needs a markdown converter. */
 export type TrackerBodyLine = { text: string } | { link: string; text: string };
 
+/** A board and its single-select status field, as a tracker route stores them. */
+export interface TrackerBoard {
+  nodeId: string;
+  fieldId: string;
+}
+
 /** A ticket as the work-item row knows it. */
 export interface TrackerRef {
   number: number;
@@ -88,6 +95,13 @@ export interface TrackerAdapter {
   comment(row: Connector, ref: TrackerRef, lines: TrackerBodyLine[]): Promise<void>;
   /** Board names per ticket number, for the trackers that have boards. Never throws. */
   boardsFor?(row: Connector, numbers: number[]): Promise<Map<number, string[]>>;
+  /**
+   * Put the ticket's card on a board and move it to the column for `status`
+   * (GitHub Projects v2). Best effort: never throws, answers whether it moved.
+   */
+  setBoardStatus?(row: Connector, ref: TrackerRef, board: TrackerBoard, status: WorkItemStatus): Promise<boolean>;
+  /** A board URL a person pasted, as the ids `setBoardStatus` needs. Throws a 400 a person can read. */
+  resolveBoard?(row: Connector, url: string): Promise<TrackerBoard>;
   /**
    * A delivery on the connector's own webhook (`/v1/connectors/:id/webhook`):
    * null when the signature does not verify, `item: null` when it verified but

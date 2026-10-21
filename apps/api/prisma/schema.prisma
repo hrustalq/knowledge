@@ -2524,6 +2524,8 @@ model ProjectTrackerRoute {
   /// GitHub org Projects v2 board and its single-select Status field.
   boardNodeId     String? @map("board_node_id")
   boardFieldId    String? @map("board_field_id")
+  /// The board as a person pasted it, so the settings page can show it back.
+  boardUrl        String? @map("board_url")
 
   updatedBy String?  @map("updated_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz

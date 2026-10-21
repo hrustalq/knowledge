@@ -1475,6 +1475,28 @@ export interface ListAnchorWorkItemsResponse {
   workItems: ConnectorWorkItemInfo[];
 }
 
+/** GET|PUT /v1/projects/:id/tracker-route — where a knowledge project hands off to. */
+export interface TrackerRouteInfo {
+  projectId: string;
+  connectorId: string;
+  /** Jira project key; null on a repository tracker. */
+  externalProject: string | null;
+  /** Jira issue type; null = Task. */
+  issueType: string | null;
+  /** The GitHub org board a handed-off issue's card is kept on; null = none. */
+  boardUrl: string | null;
+  updatedAt: string;
+}
+export interface TrackerRouteResponse {
+  route: TrackerRouteInfo | null;
+}
+export interface PutTrackerRouteInput {
+  connectorId: string;
+  externalProject?: string | null;
+  issueType?: string | null;
+  boardUrl?: string | null;
+}
+
 /** POST /v1/work-items/handoff — create a ticket for an anchor, or attach an existing one. */
 export interface WorkItemHandoffInput {
   workspaceId: string;

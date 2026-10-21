@@ -1,262 +1,380 @@
-# 32 — Connector detail page and work items
+# 32 — Work items and tracker handoff
 
 Оригинал: «add a detail page for connectors like github — we should also be able
 to manage linked projects, issues to be able to handoff task to execution + sync
 document state based on flows»
 
+Grown by #424 (2026-10-21): «task sources — hand off what the knowledge base
+finds to Jira / GitHub / GitLab, and keep the status in sync both ways».
+
 ## What
 
-A connector stops being a card in a list and becomes a place you can stand in.
-`/settings/connectors/:id` shows one connection — what it is doing, what it has
-claimed, and, for a GitHub-backed connector, **the work on the far side**:
+A **work item** is one ticket in an external **tracker** (Jira Cloud, GitHub
+Issues, GitLab Issues), as this platform records it: its key, its status, and,
+since #424, the knowledge object it is about, its **anchor**. Creating or
+attaching that ticket is a **handoff**. The vocabulary is fixed in
+[GLOSSARY.md](../../GLOSSARY.md). "Task" is the workflow step and is not used for any of this.
 
-| Tab            | What it carries                                                       |
-| -------------- | --------------------------------------------------------------------- |
-| **Work items** | Issues and pull requests, and the page each one is about. New issue.   |
-| **Links**      | The external item ↔ page identity map feature 19 already kept.         |
-| **Runs**       | This connector's sync history, without picking it from a dropdown.     |
+```
+reported issue ┐                         ┌ Jira Cloud    (jira connector)
+conflict       ├─ handoff ─▶ work item ─▶┼ GitHub Issues (+ org Projects v2 board)
+flagged page   │   (anchor)   (row)      └ GitLab Issues (markdown-git / codebase on GitLab)
+page           ┘        ▲                       │
+                        └── status, both ways ──┘
+```
 
-Two things arrive underneath it. An **App-level webhook** turns what happens on
-a repository into events on the bus the product already runs on, and a work item
-can be **attached to a page**, which is what lets those events reach a workflow.
+**The tracker is the task list. This side keeps the link and moves the status.**
+There is no board here. A chip on the object shows `BILL-123 · In progress`
+and links out.
+
+| Where                         | What it shows                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| Report row, conflict card     | The ticket chip(s) and **Send to tracker** (create, or attach `BILL-123`)       |
+| Verification bar              | The same for a flagged page                                                      |
+| `/knowledge-health`           | A **Handed off** filter, the ticket under each row, bulk **Send to tracker**      |
+| Knowledge health → Settings   | The handoff rules and the deployment ceiling                                     |
+| Connector → **Work items**    | Every ticket on the connector (feature 32's tab, now any tracker)                |
+| Connector → **Tracker**       | Project routes, the status map, tracker accounts ↔ members                       |
 
 ## Why
 
-Feature 19 made external systems first-class as **sources of content**. That is
-half of what a repository is. The other half is the work: the issue that says a
-page is wrong, the pull request that makes it right, the task somebody wants
-handed to whoever — or whatever — is going to do it. None of that was reachable
-from here, and a knowledge base that can read a repository but cannot see that
-an issue was closed against one of its pages is describing a world it cannot
-observe changing.
+Feature 19 made external systems sources of content. The other half of a
+repository, or of a Jira site, is the work. A knowledge base that finds a
+wrong page, a contradiction or a stale runbook, and then leaves the finding in
+its own inbox, has handed the problem to nobody. Teams already have a tracker
+where work gets triaged and done. A finding that never reaches that tracker is
+not going to be fixed.
 
-The Runs and Links tabs were also, quietly, the wrong shape. Both opened with a
-connector dropdown, because both lived on a workspace-wide page that had to ask
-which connector you meant. Once there is a page **about** one connector, the
-question is already answered, and the dropdown is a control that exists to undo
-the page you navigated to.
+Feature 32 already projected GitHub issues into `connector_work_items` and
+could open one. #424 kept that model, because it was right, and widened three
+things:
+
+- the anchor (a page only → four kinds of object);
+- the trackers (GitHub only → Jira, GitHub, GitLab);
+- the direction (outbound create only → status moving both ways).
 
 ## Decisions
 
+### The model
+
 **A work item is not a link.** `connector_links` maps external *content* onto a
-page, and its `document_id` is `NOT NULL` because the hashes beside it are what
-break the pull → push → webhook → pull echo loop; every sync reads that column.
-A work item is a different relationship in three ways: it usually has no page at
-all, its interesting state is a lifecycle rather than a content hash, and it is
-what an inbound event is about. Folding them together would have meant making
-`document_id` nullable on the table whose idempotence depends on reading it, and
-would have made "is this page in sync" and "is this task done" the same
-question. They are not.
+page. Its `document_id` is NOT NULL because the hashes beside it break the
+pull → push → webhook → pull echo loop. A work item usually has no page, its
+interesting state is a lifecycle, and it is what an inbound event is about.
+Folding the two together would make "is this page in sync" and "is this task
+done" one question.
 
-**The row is a projection and never the truth.** Everything except the page
-attachment is overwritten wholesale on the next read or delivery, which is what
-lets `upsertFrom` be a blind write and why there is no local edit path. The one
-field we own is the attachment, because it is the one fact GitHub does not have.
-A refresh failure degrades to the stored rows rather than an error page: they
-are still the last thing the far side told us, and a webhook lost while the API
-was restarting would otherwise leave a stale row nobody could correct.
+**Extend `connector_work_items`, no parallel task table.** #424 adds an anchor
+(`source_kind`, `source_id`), the raw tracker status (`external_status`), a
+citation (`external_key`, `BILL-123`) and outbound-sync bookkeeping
+(`sync_state`, `pending_status`, `sync_error`, `sync_attempts`, `next_sync_at`,
+`external_actor_id`). Existing rows are plain projections with a null anchor.
+The migration anchored the newest page-attached issue per (connector, page) as
+a `document` anchor.
 
-**`merged` is not `closed`.** GitHub reports a merged pull request as `closed`,
-identically to an abandoned one; `merged_at` is the only field that separates
-them. A flow that fires on "done" must not fire on work that was thrown away, so
-the two are different states here and different events on the bus. This is most
-of what `test/work-items.spec.ts` is about.
+**Anchors are rows only.** The four anchor kinds are:
 
-**The App-level webhook reverses a feature-30 decision, rather than working
-around it.** Feature 30 left it out with a stated reason — "an App-level webhook
-has no way to know which connector an event belongs to" — and the reason was
-wrong. Every delivery carries `installation.id` and `repository.full_name`,
-which together name exactly the connectors configured against that installation
-and that repository. The per-connector hook at `/v1/connectors/:id/webhook` is
-untouched: that one authenticates a repository hook somebody configured by hand,
-this one authenticates GitHub delivering for a whole installation, and a
-repository can have both.
+| `source_kind`  | `source_id` is                 |
+| -------------- | ------------------------------ |
+| `issue`        | `knowledge_issues.id`          |
+| `conflict`     | `knowledge_conflicts.id`       |
+| `verification` | `documents.id` of a flagged page |
+| `document`     | `documents.id`                 |
 
-It also does its work **inline** rather than enqueueing, which is the opposite
-of what the per-connector hook does and deliberately so. That hook starts a
-*sync* — unbounded work behind a public URL, which is a denial-of-service
-surface. This one writes one row and publishes one frame per delivery, bounded
-by the number of connectors on one repository.
+A finding inside an agent run's JSON has no id that survives, so it becomes a
+reported issue first. A work item has one anchor per connector,
+`@@unique([connectorId, sourceKind, sourceId])`, for the anchor's whole
+lifetime. A re-raised conflict or a re-flagged page reopens the same ticket.
+A new report is a new ticket.
 
-**A repo event reaches a workflow through the page, or not at all.** Feature 17
-already has event triggers: `WorkflowTriggerService` subscribes to the bus and
-starts a run whose root is `event.documentId`. So `repo.*` events carry the
-linked page's id when there is one, and nothing new is needed on the trigger
-side — an attached work item reaches a flow through the path every other event
-uses, and an unattached one reaches nothing. That asymmetry is the feature, not
-a gap: a workflow runs *against a page*, and an issue nobody has connected to a
-page has none to offer.
+**For Jira, `number` is the site-wide issue id.** One Jira connector serves
+several Jira projects, so the key's numeric suffix collides across projects
+(`BILL-1`, `OPS-1`). The id does not, which keeps the existing
+`(connector, kind, number)` unique valid and the migration expand-only.
+`external_key` carries what a person cites.
 
-**The "only ever once" guard becomes a cooldown, for repo events only.**
-Feature 17 refuses to auto-start a definition against a page it has *ever* run
-against, and that guard is load-bearing: a run's output edits pages, an edit is
-itself a page event, and without it the chain feeds itself forever. A repo event
-cannot do that on its own — a person on the far side caused it — and an issue
-that opens, closes and reopens over a month is three separate pieces of news
-about the same page, of which the absolute guard would let through exactly one.
+**Identity is `external_identities`, for attribution only.** The table #76
+added for ACL mirroring already maps `(connector, external id) → user`, never
+overwriting a manual mapping. #424 reuses it instead of adding a
+`tracker_identities` table. A second map would give one GitHub account two
+answers.
+- A tracker actor seen for the first time is recorded there, and the existing
+  resolver tries a linked GitHub account, then a verified email.
+- An unmapped actor is `tracker:<connectorId>`, never a person. The activity
+  feed shows it as "Tracker".
+- Nothing is ever assigned to anybody.
 
-Exempt is not unbounded, though. A flow that comments on or closes an issue when
-it finishes *does* make the far side move, and that comes back as another
-`repo.*` event. So the guard is replaced rather than removed:
-`WORKFLOW_REPO_RETRIGGER_COOLDOWN_MINUTES` (default 60) bounds how often one
-definition can re-fire for one page, and the in-flight guard and
-`WORKFLOW_AUTOSTART_MAX_ACTIVE` are untouched. The predicate reads
-`REPO_EVENT_TYPES` rather than testing for a `repo.` prefix, because a guard
-keyed off a naming convention says yes to the first event somebody names
-`repo.something` without meaning this.
+### Status
 
-**`repo.` rather than `connector.repo.`** The existing `connector.*` events are
-all about a sync run — our machinery. These are about the far side, and somebody
-ticking a checkbox in a trigger picker should not have to know which connector
-row delivered the news.
+**Two layers, the classifier derived.** Each row stores two statuses:
+- `state` (`open | closed | merged | draft`) is the coarse projection that SQL
+  filters on. `merged` is still not `closed`: a merged pull request finished,
+  a closed one was abandoned.
+- `external_status` is the tracker's own word.
 
-**One GraphQL call, and it is allowed to fail.** Projects v2 has no REST surface
-whatsoever, so board membership is the single GraphQL query in the product. It
-is batched with field aliases — one request per page of rows, not one per row —
-capped at 50 lookups, and returns an empty map on any failure. Board names are
-decoration on a list whose substance came from REST; a GraphQL hiccup must not
-take the tab down with it.
+The vocabulary every surface speaks, `open | in_progress | done | wont_do`, is
+**derived at read time** by `workItemStatusFor(row, map)` and never stored.
+Changing a status map re-labels every row at once.
 
-**Two helpers moved to a leaf.** `verifyHubSignature` and `safeJson` lived on
-`confluence.adapter.ts`, and four adapters already imported them from there —
-harmless until a *controller* wanted them, at which point
-`dip-connector-adapter-stays-behind-the-registry` correctly refused, because
-reaching a named adapter is how `CONNECTOR_KIND_INFO` stops being the single
-source of truth. They are about HTTP and HMAC and know nothing about Confluence,
-so they are now `connectors/webhook-payload.ts`. Likewise the delivery's
-connector lookup lives on `ConnectorsService` rather than in the controller:
-`transaction-boundary-lives-in-a-service` is what keeps a write in a layer where
-a transaction can later be introduced.
+**Each tracker has a default status map; a connector stores only its
+overrides.** `DEFAULT_WORK_ITEM_STATUS_MAPS` (contracts) has two sides:
+- `inbound`: raw status → ours, matched case-insensitively, because people type
+  Jira status names.
+- `outbound`: ours → raw status.
 
-**`tasks` is an optional capability.** The other four on
-`ConnectorCapabilities` are required because they describe how content moves and
-every adapter has an answer. This one describes a second kind of object most
-connectors do not have, so declaring it only where it is true keeps six adapters
-from claiming a capability by boilerplate. The Work items tab is **absent**
-rather than empty on a connector without it, and the reason is said once on the
-connector — it is a property of the connection, not of this moment.
+`connectors.config.statusMap` holds the connector's overrides only, and saving
+an empty map restores the default. The defaults per tracker:
+- **GitHub**: the raw status is the issue state with its close reason folded
+  in (`completed` / `not_planned`).
+- **GitLab**: only `opened` / `closed`.
+- **Jira**: the stock workflow names. `state` follows the status *category*,
+  so a team's custom "Shipped" still closes.
 
-**The assistant gets four tools, two of which write outside the workspace.**
-`task_list` / `task_read` / `task_create` / `task_comment`, shaped exactly like
-the `code_*` precedent. The difference is that a page the assistant creates can
-be deleted, while a comment it leaves on somebody's issue has already been
-emailed to everyone watching — so the two writes are in
-`ASSISTANT_WRITE_TOOL_NAMES`, which keeps them out of Ask mode entirely, and out
-of `PARALLEL_SAFE_TOOLS`, because batching a write to a stranger's repository is
-the one thing that allowlist exists to prevent. The researcher gets the read
-half; only the author gets the writes.
+When the map cannot express a transition, the failure is reported as the
+tracker error, not guessed.
 
-`ConnectorWorkItemsModule` is **not** imported by `AgentWorkerModule`, which is
-the rest of that decision: a background agent runs unattended, and "the worker
-generates, the API publishes" is exactly the rule that stops an unattended run
-opening an issue on somebody's repository. The one worker-side exception is the
-step kind below, which acts only on issues already attached to its own page.
+**Sync is one comparison, not hooks.** `WorkItemSyncSweeper` compares, every
+`WORK_ITEM_SYNC_TICK_MS`, each anchored row's derived status and `updated_at`
+with its anchor's state and time (`syncDecision`, pure, tested in CI). The
+newer side wins.
 
-**A third `wrapUntrusted` origin.** `'repo'` says "cite by path and line", which
-is wrong for an issue. The wrapper branches on **origin** — a fact about where
-bytes came from — and never on policy, so adding `'task'` is consistent with
-what it already is. An issue body is the most open injection surface in the
-product: anyone with an account on that host can write one.
+| Ticket | Anchor | Newer  | Result                                         |
+| ------ | ------ | ------ | ---------------------------------------------- |
+| closed | open   | ticket | **inbound**: resolve the anchor                |
+| closed | open   | anchor | **outbound**: reopen the ticket, comment "raised again" |
+| open   | closed | anchor | **outbound**: close the ticket                 |
+| open   | closed | ticket | nothing: a resolved report or closed conflict is final |
 
-**`task.update` is the only step kind whose effect leaves the workspace**, and
-it acts on the work items already attached to the run's source page rather than
-on a number the definition names. A definition therefore cannot comment on an
-arbitrary issue. It runs in the worker like every other step — the
-"worker generates, API publishes" rule is about acts needing a principal to
-attribute them to, and a run carries `created_by` precisely so its steps have
-one. A page with no attached item is a no-op, not a failure: a flow that also
-runs manually should finish rather than fail on a step that had nothing to say.
+Nothing in the issue, conflict or verification services knows trackers exist.
+This one comparison covers both directions, a lost webhook, a lost Redis
+event and a restart, because it reads state, not messages about state. The
+cost is up to one tick of latency.
 
-**MCP gets the read tool only.** `knowledge_list_work_items` and nothing that
-writes — stdio has no principal, the same reason workflow approval is absent
-from that surface.
+An anchor's time comes from:
+
+| Anchor                | Time                                                            |
+| --------------------- | --------------------------------------------------------------- |
+| reported issue        | `resolved_at`, else `created_at`                                |
+| conflict              | `resolved_at`, else `detected_at`; a superseded conflict has no opinion |
+| flagged page          | the flag's `source.at`                                          |
+| page with no flag     | the latest verification activity row (pages have no `updated_at`, and clearing a flag wipes its source) |
+
+**A tracker close never verifies a page.** Verifying is a person's act (feature 39). An inbound close:
+- resolves a report (`done`), or dismisses it (`wont_do`);
+- resolves or dismisses a conflict, with "Closed in BILL-123" as the note;
+- clears a page's flag only when the closer maps to someone who may edit the
+  page *now*. The verification stamp is left as it was.
+
+The page owner gets one `work-item.closed` notification (verification
+category).
+
+**Outbound is API-side, with backoff and a visible failure.** A pending
+transition is retried 5 times with exponential backoff, then marked `failed`
+with the tracker's error, which shows on the chip with a Retry. A ticket
+deleted on the tracker becomes `orphaned`. Unlinking stops sync and never
+closes the ticket. An anchor that was deleted gets its ticket closed with a
+comment, and the row is dropped.
+
+### Transport
+
+**Polling is the guaranteed path, webhooks the fast path.** Each tick polls
+one tracker connector that has anchored tickets, round robin, from
+`connectors.task_cursor` ("updated since"). A connector with a content run in
+flight is skipped. A labelled ticket with no row (lost, or created before its
+row) is re-anchored from its `knowledge-ref:` footer.
+
+Webhooks only get the same projection written sooner:
+
+| Tracker | Webhook                                                                 |
+| ------- | ----------------------------------------------------------------------- |
+| GitHub  | The App webhook, feature 32's, which also handles `projects_v2_item`    |
+| Jira    | A signed webhook on `/v1/connectors/:id/webhook`                        |
+| GitLab  | An `Issue Hook` with `X-Gitlab-Token` on the same route                 |
+
+**The sweeper runs in the API process only.** It writes to somebody else's
+tracker and resolves reports in a person's name, and "the worker generates,
+the API publishes". It also polls there, not in `ConnectorScheduleSweeper`
+(worker). It is provided by `ConnectorsModule`, not by
+`WorkItemHandoffModule`, because the stdio MCP server imports the latter, and
+a second process running the sweeper would double every transition. The
+worker-side `task.update` step stays feature 32's documented exception.
+
+### Trackers
+
+**`TrackerAdapter` sits beside `ConnectorAdapter`, never on it.** The content
+interface's verbs all mean something else here. `TrackerRegistry.trackerFor(row)`
+decides per row, and no new connector kinds were added:
+
+| Tracker | Connector                                                  | Notes                                                                                                   |
+| ------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| GitHub  | `markdown-git` / `codebase` on github.com                  | Feature 32's service refactored onto the interface                                                      |
+| Jira    | `jira`                                                     | Its JQL is now optional (a tracker-only connector). The content pull moved to `/rest/api/3/search/jql`. |
+| GitLab  | `markdown-git` / `codebase` whose host contains `gitlab`   | Addressed by the whole namespace path (`RepoHost.path`), so subgroups work                              |
+
+- **Jira moves through workflow transitions, not to a status.** The adapter
+  picks the available transition whose target status, or failing that its
+  name, matches. One that is unavailable from the current status is an error,
+  never a guess.
+- **Jira's poll** is `(labels = "<label>" OR key in (<anchored keys>)) AND
+  updated >= <cursor − 1 day>`. JQL dates are in the API user's timezone,
+  which the API cannot see, and re-reading a day is cheap and idempotent.
+- **Jira bodies** are ADF built from three kinds of line (text, link, footer).
+  There is no markdown→ADF converter.
+
+**Projects v2: org boards only, best effort.** A route may name a board URL,
+which is resolved at save time to the board and its single-select Status
+field. A user-owned board is refused, because the App's
+`organization_projects` permission cannot reach it. A handoff adds the card in
+Todo. A transition moves it to the matching column, and if that write fails
+the issue's own state is still the status. The App asks for
+`organization_projects: write` and the `projects_v2_item` event. A card moved
+on the board refreshes the issue's board names; its column is not read back as
+a status.
+
+### Ticket text and routing
+
+**Summary, link, footer, never content.** A ticket has:
+- **title**: the object's title, or its id when any page involved is
+  restricted;
+- **body**: one sentence saying why, a deep link, and
+  `knowledge-ref: <kind>:<id>`, in the connector's locale;
+- **label**: `knowledge`, or `config.workItemLabel`.
+
+The tracker's readers are not the page's readers. Comments are not mirrored in
+either direction.
+
+**Routing is per knowledge project.** `project_tracker_routes` has one row per
+project, holding the connector plus a Jira project key and issue type, or a
+GitHub board. A project without a route has the connector picked by hand, and
+the rules leave it alone.
+
+**Every read takes an `AccessScope`.** Work-item lists drop a row on a page the
+caller cannot open, never with a 403 and never with a title. This covers the
+connector tab, MCP `knowledge_list_work_items`, the assistant's
+`task_list`/`task_read`, and the chip. A conflict-anchored row also needs its
+other page to be visible.
+
+### Rules
+
+**Three scalar columns, all off, under an env ceiling.** The rules live on
+`workspace_settings`, following the `lint_policy` precedent:
+- `work_item_issues` (`high | medium | all`): a report has no severity, so
+  `issueRankFor` ranks it. `wrong`, or three or more reports, is high. `stale`
+  or `missing`, or two reports, is medium.
+- `work_item_conflicts` (`on`).
+- `work_item_verification` (`outdated | all`).
+
+Each tick the oldest admitted objects with no ticket are handed into their
+route, up to `WORK_ITEM_AUTOCREATE_MAX_PER_TICK` across all workspaces. They
+are attributed to `rule:<kind>`. The settings form shows the ceiling beside
+the choice.
 
 ## Surface
 
 ```
-GET    /v1/connectors/:id/work-items                      viewer
-POST   /v1/connectors/:id/work-items                      editor
-POST   /v1/connectors/:id/work-items/:workItemId/link     editor
-DELETE /v1/connectors/:id/work-items/:workItemId/link     editor
-POST   /v1/connectors/github/webhook                      public, HMAC-verified
+POST   /v1/work-items/handoff                              editor (on the anchor's page, checked in the service)
+GET    /v1/work-items?workspaceId&sourceKind&sourceId      viewer (scoped)
+GET    /v1/work-items/rules?workspaceId                    admin
+PUT    /v1/work-items/rules                                admin
+GET    /v1/projects/:id/tracker-route                      viewer
+PUT    /v1/projects/:id/tracker-route                      admin
+DELETE /v1/projects/:id/tracker-route                      admin
+GET    /v1/connectors/:id/tracker-routes                   viewer
+PUT    /v1/connectors/:id/status-map                       admin
+GET    /v1/connectors/:id/work-items                       viewer (scoped)
+POST   /v1/connectors/:id/work-items                       editor
+POST   /v1/connectors/:id/work-items/:workItemId/link      editor (documentId, or sourceKind + sourceId)
+DELETE /v1/connectors/:id/work-items/:workItemId/link      editor
+POST   /v1/connectors/:id/work-items/:workItemId/retry     editor
+POST   /v1/connectors/github/webhook                       public, HMAC (App)
+POST   /v1/connectors/:id/webhook                          public, per-connector secret (Jira, GitLab)
 ```
 
-Creating an issue is `editor`, not `admin`, and deliberately a lower bar than
-editing the connector: opening an issue is ordinary work on content this
-workspace already syncs, while changing a credential that reaches an external
-system is not.
+- **MCP**: `knowledge_list_work_items` (scoped) and `knowledge_handoff_work_item`
+  (`WRITE_TOOLS`, `guard.ws(…, 'editor')`).
+- **Assistant**: `task_list`, `task_read`, `task_create`, `task_comment`, now
+  on any tracker.
+- **Workflow step**: `task.update`.
+- **Events**: every tracker emits `repo.issue.*`. The agent trigger event
+  `work-item.updated` is heard on `repo.issue.closed|reopened|labeled`, with
+  subject `issue:<workItemId>`.
+- **Activity**: `connector.work-item.handoff | status-changed | unlinked`.
+- **Notification**: `work-item.closed`.
 
-Assistant tools: `task_list`, `task_read`, `task_create`, `task_comment`.
-MCP: `knowledge_list_work_items`. Workflow step kind: `task.update`.
-
-New event types, all in `REPO_EVENT_TYPES` and spread into `KNOWN_EVENT_TYPES`
-so the trigger picker and the WS filter see them: `repo.issue.opened|closed|
-reopened|commented|assigned|labeled`, `repo.pull-request.opened|closed|merged`,
-`repo.push`, `repo.release.published`.
+Env (all with defaults): `WORK_ITEM_SYNC_ENABLED` (`true`, the kill switch),
+`WORK_ITEM_SYNC_TICK_MS` (`15000`), `WORK_ITEM_AUTOCREATE_MAX_PER_TICK` (`20`).
 
 ## Setup
 
-The App needs more than feature 30 asked for. On
-`https://github.com/settings/apps/<your-app>`:
+**GitHub App**, on `https://github.com/settings/apps/<your-app>`:
 
-| Section                   | Setting                                              |
-| ------------------------- | ---------------------------------------------------- |
-| Repository permissions    | Issues: **Read and write**                           |
-| Repository permissions    | Pull requests: **Read and write**                    |
-| Repository permissions    | Contents: Read and write (unchanged, feature 30)     |
-| Organization permissions  | Projects: **Read and write** (Projects v2 boards)    |
-| Webhook                   | **Active: on**                                       |
-| Webhook URL               | `$API_PUBLIC_URL/v1/connectors/github/webhook`       |
-| Webhook secret            | a new random string → `GITHUB_APP_WEBHOOK_SECRET`    |
-| Subscribe to events       | Issues, Issue comment, Pull request, Pull request review, Push, Release, Project v2 item |
+| Section                  | Setting                                                              |
+| ------------------------ | -------------------------------------------------------------------- |
+| Repository permissions   | Issues: **Read and write**; Pull requests: **Read and write**        |
+| Organization permissions | Projects: **Read and write** (was read; #424 moves cards)            |
+| Webhook                  | **Active: on**, URL `$API_PUBLIC_URL/v1/connectors/github/webhook`   |
+| Webhook secret           | a random string → `GITHUB_APP_WEBHOOK_SECRET` (`GH_APP_WEBHOOK_SECRET` in the GH `production` environment) |
+| Subscribe to events      | Issues, Issue comment, Pull request, Push, Release, **Projects v2 item** |
 
-`installation` and `installation_repositories` are delivered to every App
-automatically; there is nothing to subscribe to and no permission to request.
+Each installation must accept the raised permission. Until it does, board
+writes fail quietly and everything else works.
 
-`GITHUB_APP_WEBHOOK_SECRET` empty is the off switch, matching `GITHUB_APP_ID`:
-with no secret the endpoint refuses every delivery rather than trusting an
-unsigned one. Everything else keeps working — a connector with a PAT, a
-connector on the picker, the per-connector webhook.
+**Jira**: a `jira` connector with the site URL and `email:api-token`. Set a
+**Default project key**, or route projects with a Jira project key. For
+seconds-fast sync, add a Jira webhook (issue updated) to
+`$API_PUBLIC_URL/v1/connectors/:id/webhook` with the connector's webhook
+secret. Without it, polling still syncs.
+
+**GitLab**: a `markdown-git` or `codebase` connector on the GitLab repository
+with a project or group access token (`api` scope). For seconds-fast sync, add
+an Issues hook to the same per-connector URL with the connector's secret as its
+token.
 
 ## Deliberate deferrals
 
-- **GitHub only.** `repoHost` already classifies the URL, so a GitLab remote is
-  refused by reading the config the archive download would have read, rather
-  than by a 404 from a GitHub path built out of a GitLab URL. GitLab issues are
-  a second adapter's worth of work and were not asked for.
-- **Boards are read, not managed.** Board membership is shown; adding an item to
-  a board is not. It needs the item's GraphQL node id and a mutation, and the
-  `projects_v2_item` webhook — which would keep membership live — fires only on
-  *organization* webhooks and is still a GitHub public preview.
-- **No `documents.status`.** "Sync document state based on flows" is served by
-  the flow doing the writing: a repo event starts a workflow, and the workflow's
-  existing steps produce revisions. A lifecycle column would have been a second
-  state machine beside feature 17's, disagreeing with it eventually.
-- **No connector filter on a trigger.** A `connectorIds` field was drafted and
-  cut: a repo event only reaches a workflow through a work item attached to a
-  page, and that attachment is already specific to one connector, so the filter
-  would have narrowed something already narrow.
-- **No document-side rail yet.** `listForDocument` exists and is what the
-  assistant's task tools will read; the page-side widget is not built.
-- **Work items are not searched or indexed.** An issue is not a page and does
-  not enter the graph, for the reason feature 31 gives about code: a tool call
-  is ephemeral, and reading an issue should not create a page.
+- **Direction (b), ticket → agent work**, for example a `docs`-labelled ticket
+  starting a draft. The `work-item.updated` trigger event is the hook; the work
+  is #433.
+- **No comment mirroring and no assignee push.** Identity is attribution only.
+- **No OAuth for Jira or GitLab** until somebody cannot issue a token.
+- **No user-owned Projects v2 boards, no Jira Data Center, no
+  Plane/Gitea/YouTrack/Redmine.** The adapter interface is sized for them.
+- **A self-hosted GitLab whose host name lacks `gitlab`** is `other`, as
+  `repoHost` always classified it. A per-connector host override would fix it,
+  and nobody has asked.
+- **Orphaned tickets** show on the chip and in `/knowledge-health`. Nobody is
+  notified, because an orphan is nobody's in particular to act on.
+- **Work items are not indexed or graphed.** A ticket is not a page.
+- **Reconcile reads up to 500 anchored rows a tick, oldest-written first.** An
+  updated-since watermark is the upgrade once a workspace holds that many open
+  handoffs.
 
 ## Verification
 
-`make verify` passes, and `apps/api/test/work-items.spec.ts` covers the two
-things that are load-bearing and not obvious: the state mapping (13 cases, most
-of them about `merged` vs `closed`) and the signature check's rejections.
-
-End to end, against a repository the App is installed on:
-
-1. Open `/settings/connectors/:id` on a `codebase` or `markdown-git` connector.
-   The Work items tab lists open issues and pull requests.
-2. **New issue** opens one on GitHub. It appears in the list, and on GitHub.
-3. Attach it to a page. Close the issue on GitHub. Within one delivery the row
-   reads `closed` — that is the webhook, the signature check and the projection
-   write all working.
-4. A workflow whose trigger names `repo.issue.closed` and whose page is that
-   page starts a run. An issue with no page attached starts nothing.
-5. `GITHUB_APP_WEBHOOK_SECRET` empty: the endpoint 401s every delivery and
-   everything else on the page still works.
+- CI (no network, no DB):
+  - `test/work-item-status.spec.ts`: status maps, rule ranks, the footer.
+  - `test/work-item-sync.spec.ts`: the sync contract driven through an
+    in-memory tracker (handoff, close on the tracker, re-raise, resolve, no
+    echo), backoff, GitHub's raw statuses and refs.
+  - `test/jira-tracker.spec.ts`, `test/gitlab-tracker.spec.ts`,
+    `test/github-projects.spec.ts`: recorded API shapes through a mocked
+    `safeFetch`.
+  - `test/work-items.spec.ts`: feature 32's state mapping and signature checks.
+- Local, against live infra: `test/work-item-handoff.e2e-spec.ts` (7 cases).
+  It runs the real services over Postgres with a fake tracker, and covers
+  every acceptance item that needs a database:
+  - one ticket per anchor;
+  - a close by poll alone dismisses a conflict with nobody attributed;
+  - a re-raise reopens the same ticket;
+  - resolving closes it without echo;
+  - five failures end in `failed` with the error, and retry recovers;
+  - an unmapped closer leaves the flag and the stamp alone;
+  - the rules create nothing when off or unrouted, and no more than the
+    ceiling when on.
+- By hand, after deploy, from the laptop:
+  1. Hand off a report to a GitHub connector. The issue has the title, link,
+     footer and `knowledge` label.
+  2. Close it as not planned on GitHub. Within seconds (webhook) or one poll,
+     the report reads dismissed.
+  3. Re-flag a verified page that had a ticket. The same ticket reopens with a
+     "raised again" comment.

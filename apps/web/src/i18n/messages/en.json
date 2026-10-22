@@ -5845,7 +5845,13 @@
         "scim_group_deleted": "SCIM: group deleted",
         "scim_token_created": "SCIM token created",
         "scim_token_revoked": "SCIM token revoked",
-        "scim_settings_updated": "SCIM settings changed"
+        "scim_settings_updated": "SCIM settings changed",
+        "chat_search_enabled": "Chat group made searchable",
+        "chat_search_disabled": "Chat group search turned off",
+        "chat_listen_enabled": "Chat messages kept for /capture",
+        "chat_listen_disabled": "Chat messages no longer kept for /capture",
+        "chat_auto_harvest_enabled": "Automatic thread harvest turned on",
+        "chat_auto_harvest_disabled": "Automatic thread harvest turned off"
       }
     },
     "tabs": {

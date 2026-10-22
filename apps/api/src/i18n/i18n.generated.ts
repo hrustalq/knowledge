@@ -968,6 +968,7 @@ export type I18nTranslations = {
             "unknownKind": string;
             "missingField": string;
             "credentialRequired": string;
+            "zendeskAgentRequired": string;
             "encryptionKeyMissing": string;
             "urlInvalid": string;
             "urlNotHttps": string;

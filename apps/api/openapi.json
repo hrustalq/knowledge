@@ -35514,7 +35514,8 @@
               "markdown-git",
               "codebase",
               "google-drive",
-              "linear"
+              "linear",
+              "zendesk"
             ]
           },
           "name": {

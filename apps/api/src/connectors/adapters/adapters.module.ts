@@ -10,6 +10,7 @@ import { ConnectorRegistry } from './connector.registry.js';
 import { GoogleDriveAdapter } from './google-drive.adapter.js';
 import { JiraAdapter } from './jira.adapter.js';
 import { LinearAdapter } from './linear.adapter.js';
+import { ZendeskAdapter } from './zendesk.adapter.js';
 import { MarkdownGitAdapter } from './markdown-git.adapter.js';
 import { NotionAdapter } from './notion.adapter.js';
 import { TreeSitterService } from './tree-sitter.service.js';
@@ -44,6 +45,7 @@ import { TreeSitterService } from './tree-sitter.service.js';
     ConfluenceServerAdapter,
     JiraAdapter,
     LinearAdapter,
+    ZendeskAdapter,
     NotionAdapter,
     MarkdownGitAdapter,
     CodebaseAdapter,

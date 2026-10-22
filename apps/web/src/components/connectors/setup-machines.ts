@@ -236,6 +236,11 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
   // A harvest source (#382): the API key, and which label marks an issue
   // worth keeping. One step — the label refines what the key reads.
   linear: [{ name: 'workspace', meta: { labelKey: 'connectors.step.harvest', fields: ['harvestLabel'], credential: true } }],
+  // The help desk's address and an agent's token, then the tag (#383).
+  zendesk: [
+    { name: 'site', meta: { labelKey: 'connectors.step.site', fields: ['baseUrl'], credential: true } },
+    { name: 'tag', meta: { labelKey: 'connectors.step.harvestTag', fields: ['harvestLabel'] } },
+  ],
 }
 
 export const confluenceSetup = kindMachine('confluenceSetup', KIND_STEPS.confluence)
@@ -246,6 +251,7 @@ export const markdownGitSetup = kindMachine('markdownGitSetup', KIND_STEPS['mark
 export const codebaseSetup = kindMachine('codebaseSetup', KIND_STEPS.codebase)
 export const googleDriveSetup = kindMachine('googleDriveSetup', KIND_STEPS['google-drive'])
 export const linearSetup = kindMachine('linearSetup', KIND_STEPS.linear)
+export const zendeskSetup = kindMachine('zendeskSetup', KIND_STEPS.zendesk)
 
 export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   confluence: confluenceSetup,
@@ -256,6 +262,7 @@ export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   codebase: codebaseSetup,
   'google-drive': googleDriveSetup,
   linear: linearSetup,
+  zendesk: zendeskSetup,
 }
 
 /** The per-kind steps, for the stepper — read without running the machine. */

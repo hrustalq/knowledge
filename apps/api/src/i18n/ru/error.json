@@ -327,6 +327,7 @@
     "unknownKind": "«{kind}» — недоступный тип коннектора",
     "missingField": "Для {kind} нужно указать «{field}»",
     "credentialRequired": "Для работы коннектора нужны учётные данные",
+    "zendeskAgentRequired": "Пользователь Zendesk должен быть агентом или администратором: конечный пользователь не видит тикеты",
     "encryptionKeyMissing": "Переменная SETTINGS_ENCRYPTION_KEY не задана — сохранить учётные данные нельзя",
     "urlInvalid": "Это не похоже на URL",
     "urlNotHttps": "URL коннектора должен использовать https",

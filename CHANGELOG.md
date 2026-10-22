@@ -17,6 +17,13 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Solved Zendesk tickets can be harvested into reviewed captures (#383). Add a Zendesk connector with
+  your Zendesk address, an agent's `email:api-token` and a harvest tag (default `knowledge`), then
+  create a Zendesk webhook pointed at the connector's address and a trigger, *Ticket status changed to
+  Solved* with the tag, whose *Notify webhook* body is the JSON the setup dialog shows. When a linked
+  editor solves a tagged ticket, its public replies and internal notes are masked and proposed as
+  captures in their name. Nothing is written back to Zendesk.
+
 - Linear issues can be harvested into reviewed captures (#382). Add a Linear connector under
   Settings → Connectors with a personal API key and a harvest label (default `knowledge`), then add a
   webhook on Issues in Linear pointed at the connector's address and paste its signing secret. When a

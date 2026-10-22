@@ -442,7 +442,8 @@
       "options": "What it does",
       "serviceAccount": "Service account",
       "folder": "Folder",
-      "harvest": "Workspace and label"
+      "harvest": "Workspace and label",
+      "harvestTag": "Tag"
     },
     "testing": "Checking the connection",
     "testingHint": "Making one request to prove the credential reaches the right place.",
@@ -824,11 +825,22 @@
           "help": "An issue carrying this label is harvested when it is completed. Leave empty for \"knowledge\"."
         },
         "credential": "A personal API key from Linear (Settings → Security & access) that can read the teams whose issues are harvested."
+      },
+      "zendesk": {
+        "baseUrl": {
+          "label": "Zendesk URL"
+        },
+        "harvestLabel": {
+          "label": "Harvest tag",
+          "help": "A ticket carrying this tag is harvested when it is solved. Leave empty for \"knowledge\"."
+        },
+        "credential": "The email of an agent and an API token (Admin Center → Apps and integrations → Zendesk API), as email:token. The agent must be able to read the tickets that are harvested."
       }
     },
     "harvestHint": "Nothing syncs either way. When an issue carrying the harvest label is completed by a linked editor, its description and comments are masked and proposed as captures in their name, for review in the Captures inbox.",
     "harvestWebhook": "In {kind}, add a webhook on issues pointed at this server, and paste its signing secret here:",
-    "directionHarvest": "Harvest"
+    "directionHarvest": "Harvest",
+    "harvestWebhookZendesk": "In Zendesk, create a webhook pointed at the address below, then a trigger: Ticket status changed to Solved, Tags contain the harvest tag, action Notify webhook with this JSON body. Paste the webhook’s signing secret above."
   },
   "workflow": {
     "nodeStatus": {

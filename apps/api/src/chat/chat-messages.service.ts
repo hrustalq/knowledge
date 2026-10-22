@@ -75,6 +75,24 @@ export class ChatMessagesService {
   }
 
   /**
+   * The team a searchable Time/Mattermost group is in, resolved once — at the
+   * first message kept after it was bound or this shipped — so a search hit
+   * links to its thread with no platform call at search time (#407). '' = in
+   * no team. A failed lookup leaves it unresolved, for the next message.
+   */
+  async rememberTeam(binding: ChatChannelBinding, lookup: () => Promise<string | null>): Promise<void> {
+    if (binding.teamName !== null) return;
+    let team: string | null;
+    try {
+      team = await lookup();
+    } catch {
+      return;
+    }
+    // ponytail: resolved once; a renamed team keeps the old name until team_name is cleared
+    await this.prisma.chatChannelBinding.updateMany({ where: { id: binding.id, teamName: null }, data: { teamName: team ?? '' } });
+  }
+
+  /**
    * An edit or a delete the platform reported. Only a message already kept is
    * touched. The row is locked and its chunk read under the lock, so a pack
    * committing at the same moment (`ChatIndexSweeper`) is either seen and

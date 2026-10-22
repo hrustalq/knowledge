@@ -13,6 +13,24 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- A chat search result from a Time or Mattermost channel now links to its thread, as Telegram supergroup
+  results already did (#407). On the Chat tab of search and in an assistant answer's chat citation, the
+  result opens the thread's first post on the chat server in a new tab. Direct chats still have no link.
+  A channel that was made searchable before this release gets its link after the next message posted in
+  it.
+
+### Operations
+
+- Migration `20261201100000_chat_binding_team` adds a nullable `chat_channel_bindings.team_name`. It is
+  additive, and the previous release ignores it, so a rollback keeps working. The bot fills it once per
+  searchable Time/Mattermost channel, at the first message it keeps there, with two calls to the chat
+  server. A team renamed after that keeps the old name in the column. Set the column to `NULL` and the
+  next message resolves the new name.
+
 ## [0.32.1] — 2026-10-22
 
 ### Fixed

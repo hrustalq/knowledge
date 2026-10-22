@@ -7,7 +7,8 @@ import type { AccessScope } from '../src/permissions/access-scope.js';
  * readable bindings are decided before anything is embedded, and with none
  * nothing is; both legs are restricted to them; the final read drops a
  * vector whose row is gone; a Telegram supergroup hit links its first
- * message. The audience itself is pinned in permissions.spec.ts
+ * message, and a Time/Mattermost one its thread root through the team kept
+ * on the binding (#407). The audience itself is pinned in permissions.spec.ts
  * (`canSeeChat`) and end to end in chat-search.e2e-spec.ts.
  */
 
@@ -26,13 +27,14 @@ const member: AccessScope = {
 
 function harness(opts: { textHits?: Array<{ chunkId: string; score: number }>; vectorHits?: Array<{ chunkId: string; score: number }> } = {}) {
   const bindings = [
-    { id: 'b-open', projectId: 'p-open', title: '#ops', externalChatId: '-100123', integration: { kind: 'telegram' } },
-    { id: 'b-secret', projectId: 'p-secret', title: '#pay', externalChatId: 'ch-2', integration: { kind: 'time' } },
+    { id: 'b-open', projectId: 'p-open', title: '#ops', externalChatId: '-100123', teamName: null, integration: { kind: 'telegram', serverUrl: '' } },
+    { id: 'b-secret', projectId: 'p-secret', title: '#pay', externalChatId: 'ch-2', teamName: 'pay', integration: { kind: 'time', serverUrl: 'https://time.example' } },
   ];
   const chunk = (id: string, bindingId: string) => ({
     id,
     bindingId,
     workspaceId: WS,
+    threadKey: 'root-1',
     text: 'author-1: ship on Tuesdays',
     firstAt: new Date('2026-10-20T10:00:00Z'),
     lastAt: new Date('2026-10-20T10:05:00Z'),
@@ -65,7 +67,7 @@ describe('chat search', () => {
   it('embeds nothing when no searchable group is readable', async () => {
     const h = harness();
     h.prisma.chatChannelBinding.findMany.mockResolvedValueOnce([
-      { id: 'b-secret', projectId: 'p-secret', title: '#pay', externalChatId: 'ch-2', integration: { kind: 'time' } },
+      { id: 'b-secret', projectId: 'p-secret', title: '#pay', externalChatId: 'ch-2', teamName: 'pay', integration: { kind: 'time', serverUrl: 'https://time.example' } },
     ]);
     expect(await h.svc.search(member, { query: 'tuesday', limit: 10 })).toEqual({ hits: [] });
     expect(h.embeddings.embed).not.toHaveBeenCalled();
@@ -85,10 +87,22 @@ describe('chat search', () => {
     expect(where).toEqual({ workspaceId: WS, searchableAt: { not: null }, id: { in: ['b-open'] }, projectId: { in: ['p-open'] } });
   });
 
-  it('a hit from a platform with no links carries none', async () => {
+  it.each(['mattermost', 'time'])('a %s hit in a team channel links its thread root, from the binding alone', async (kind) => {
     const h = harness();
     h.prisma.chatChannelBinding.findMany.mockResolvedValueOnce([
-      { id: 'b-open', projectId: 'p-open', title: '#ops', externalChatId: 'ch-1', integration: { kind: 'mattermost' } },
+      { id: 'b-open', projectId: 'p-open', title: '#ops', externalChatId: 'ch-1', teamName: 'platform', integration: { kind, serverUrl: 'https://chat.example/' } },
+    ]);
+    const { hits } = await h.svc.search(member, { query: 'x', limit: 5 });
+    expect(hits[0].url).toBe('https://chat.example/platform/pl/root-1');
+  });
+
+  it.each([
+    ['not resolved yet', null],
+    ['in no team', ''],
+  ])('a Mattermost hit whose team is %s carries no link', async (_, teamName) => {
+    const h = harness();
+    h.prisma.chatChannelBinding.findMany.mockResolvedValueOnce([
+      { id: 'b-open', projectId: 'p-open', title: '#ops', externalChatId: 'ch-1', teamName, integration: { kind: 'mattermost', serverUrl: 'https://chat.example' } },
     ]);
     const { hits } = await h.svc.search(member, { query: 'x', limit: 5 });
     expect(hits[0].url).toBeNull();

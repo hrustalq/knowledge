@@ -7,6 +7,7 @@ import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embeddi
 import { canSeeChat, type AccessScope } from '../permissions/access-scope.js';
 import { fuseHits } from '../search/ranking.js';
 import { telegramMessageUrl } from './adapters/telegram.adapter.js';
+import { mattermostPermalink } from './adapters/mattermost.adapter.js';
 
 export interface ChatSearchQuery {
   query: string;
@@ -24,6 +25,22 @@ const OVERFETCH = 4;
 /** The standard RRF constant, as page search's default. */
 const RRF_K = 60;
 const SNIPPET_CHARS = 400;
+
+/**
+ * Where a hit opens on its platform, from what the binding already holds — no
+ * platform call at search time. Telegram: the window's first message (a
+ * supergroup only). Time/Mattermost: the thread's root, through the team kept
+ * on the binding (#407); a channel in no team, or one not yet resolved, has none.
+ */
+function hitUrl(
+  binding: { externalChatId: string; teamName: string | null; integration: { kind: string; serverUrl: string } },
+  threadKey: string,
+  firstMessageId: string | undefined,
+): string | null {
+  if (binding.integration.kind === 'telegram') return firstMessageId ? telegramMessageUrl(binding.externalChatId, firstMessageId) : null;
+  const root = threadKey || firstMessageId;
+  return binding.teamName && binding.integration.serverUrl && root ? mattermostPermalink(binding.integration.serverUrl, binding.teamName, root) : null;
+}
 
 /**
  * Chat search (#339, phase 3): the windows of searchable groups the caller
@@ -61,7 +78,7 @@ export class ChatSearchService {
         ...(filter.bindingIds ? { id: { in: filter.bindingIds } } : {}),
         ...(filter.projectIds ? { projectId: { in: filter.projectIds } } : {}),
       },
-      select: { id: true, projectId: true, title: true, externalChatId: true, integration: { select: { kind: true } } },
+      select: { id: true, projectId: true, title: true, externalChatId: true, teamName: true, integration: { select: { kind: true, serverUrl: true } } },
     });
     const projectIds = [...new Set(bindings.flatMap((b) => (b.projectId ? [b.projectId] : [])))];
     const restricted = new Set(
@@ -131,7 +148,7 @@ export class ChatSearchService {
           lastAt: row.lastAt.toISOString(),
           messageCount: row.messageCount,
           snippet: row.text.length > SNIPPET_CHARS ? `${row.text.slice(0, SNIPPET_CHARS)}…` : row.text,
-          url: platform === 'telegram' && first ? telegramMessageUrl(binding.externalChatId, first) : null,
+          url: hitUrl(binding, row.threadKey, first),
           score: h.score,
         };
       }),

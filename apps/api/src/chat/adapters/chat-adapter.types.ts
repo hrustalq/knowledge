@@ -266,6 +266,12 @@ export interface ChatAdapter {
     beforeMessageId: string | null,
     max: number,
   ): Promise<ChatThread>;
+  /**
+   * The team a channel is in, which its permalinks need (Time, Mattermost);
+   * null for a channel in none, such as a direct chat. Throws when the
+   * platform cannot be asked. Kept on the binding for chat search (#407).
+   */
+  chatTeam?(ctx: ChatAdapterContext, chatId: string): Promise<string | null>;
   /** A link to one message, where the platform has one for this chat; the origin of a harvest from the buffer. */
   messageUrl?(chatId: string, messageId: string): string | null;
   /** A link that opens a private chat with the bot, or null if the platform has none. */

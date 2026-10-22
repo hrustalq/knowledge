@@ -441,7 +441,8 @@
       "destination": "Destination",
       "options": "What it does",
       "serviceAccount": "Service account",
-      "folder": "Folder"
+      "folder": "Folder",
+      "harvest": "Workspace and label"
     },
     "testing": "Checking the connection",
     "testingHint": "Making one request to prove the credential reaches the right place.",
@@ -816,8 +817,18 @@
           "label": "Act as user",
           "help": "Domain-wide delegation: read Drive as this person instead of as the service account. Also needed to read Google Groups when access is mirrored."
         }
+      },
+      "linear": {
+        "harvestLabel": {
+          "label": "Harvest label",
+          "help": "An issue carrying this label is harvested when it is completed. Leave empty for \"knowledge\"."
+        },
+        "credential": "A personal API key from Linear (Settings → Security & access) that can read the teams whose issues are harvested."
       }
-    }
+    },
+    "harvestHint": "Nothing syncs either way. When an issue carrying the harvest label is completed by a linked editor, its description and comments are masked and proposed as captures in their name, for review in the Captures inbox.",
+    "harvestWebhook": "In {kind}, add a webhook on issues pointed at this server, and paste its signing secret here:",
+    "directionHarvest": "Harvest"
   },
   "workflow": {
     "nodeStatus": {
@@ -4087,7 +4098,8 @@
       "access.denied": "declined your access request",
       "access.expired": "Your access request expired",
       "access.granted": "gave you access",
-      "work-item.closed": "closed the tracker ticket for this"
+      "work-item.closed": "closed the tracker ticket for this",
+      "connector.harvest.proposed": "a resolved item you closed was harvested into captures for review"
     }
   },
   "connect": {

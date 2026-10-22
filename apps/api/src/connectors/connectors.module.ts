@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { HarvestCoreModule } from '../chat/harvest-core.module.js';
+import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
+import { ConnectorHarvestSweeper } from './harvest/connector-harvest.sweeper.js';
 import { ActivityModule } from '../activity/activity.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
@@ -64,6 +67,8 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
     GithubCoreModule,
     // The repo guidance listener (#70) — API-side, so the shared subscriber.
     EventsSubscriberModule,
+    HarvestCoreModule,
+    NotificationsCoreModule,
   ],
   // GithubWebhookController comes FIRST, before ConnectorWebhookController:
   // `/v1/connectors/github/webhook` and `/v1/connectors/:id/webhook` have the
@@ -76,6 +81,8 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
     ConnectorConflictSweeper,
     // #424: API-only, here rather than in WorkItemHandoffModule (which MCP imports).
     WorkItemSyncSweeper,
+    // #382: API-only for the same reason — a harvest is attributed to the person who resolved the item.
+    ConnectorHarvestSweeper,
     ConnectorItemsService,
     ConnectorItemAiService,
     // API-only: both exist to serve a person clicking through the picker.

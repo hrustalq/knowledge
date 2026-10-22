@@ -19,6 +19,7 @@ export const CONNECTOR_KINDS = [
   'markdown-git',
   'codebase',
   'google-drive',
+  'linear',
 ] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
@@ -82,7 +83,16 @@ export interface ConnectorCapabilities {
    * connector-level audience (`aclAudienceGroupId`).
    */
   acl?: boolean;
+  /**
+   * A resolved item can be harvested into reviewed captures (#382–#384, doc
+   * 59). Such a kind moves no content — `pull` and `push` are false — and is
+   * fed by its webhook alone. Optional for the reason `tasks` is.
+   */
+  harvest?: boolean;
 }
+
+/** The label a harvest connector looks for when `config.harvestLabel` is empty. */
+export const DEFAULT_HARVEST_LABEL = 'knowledge';
 
 // ---------------------------------------------------------------------------
 // Access mirroring (#76, phase 6)
@@ -492,6 +502,25 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         required: false,
         placeholder: 'docs-reader@example.com',
         help: 'Domain-wide delegation: read Drive as this person instead of as the service account. Also needed to read Google Groups when access is mirrored.',
+      },
+    ],
+  },
+  {
+    // A harvest source (#382, doc 59): a resolved, labelled issue becomes
+    // reviewed captures in the name of whoever resolved it. Nothing is synced
+    // either way, so there is no destination tree and no runs.
+    kind: 'linear',
+    label: 'Linear',
+    capabilities: { pull: false, push: false, webhook: true, tree: false, harvest: true },
+    credentialLabel: 'Personal API key',
+    fields: [
+      {
+        key: 'harvestLabel',
+        label: 'Harvest label',
+        kind: 'text',
+        required: false,
+        placeholder: DEFAULT_HARVEST_LABEL,
+        help: 'An issue carrying this label is harvested when it is completed. Leave empty for "knowledge".',
       },
     ],
   },

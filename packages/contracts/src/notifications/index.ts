@@ -155,6 +155,8 @@ const NOTIFIED_JOB_TYPES: readonly string[] = [
   // An automatic harvest (#340) proposed captures as you: background work
   // running in your name, waiting on review.
   'chat.harvest.proposed',
+  // The same, for an item you resolved in a tracker or help desk (#382).
+  'connector.harvest.proposed',
 ];
 
 /**

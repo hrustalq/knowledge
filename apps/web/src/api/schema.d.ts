@@ -7864,7 +7864,7 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive";
+            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear";
             /** @example Product wiki */
             name: string;
             /**

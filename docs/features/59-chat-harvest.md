@@ -26,6 +26,13 @@ separate switch with its own store and retention ([feature 60](60-chat-search.md
   | a private chat | — | forward the bot the messages, then `/capture` |
   | a reaction | 📌 on any message of a thread | ✍ on a kept message, where the bot is a group admin |
 
+  On **Teams** (#381) `capture` is said inside a channel thread, mentioning
+  the bot, and reads that thread from the listening buffer: the root's id is
+  the thread's topic, and its text is a kept row like the replies (Teams sends
+  none of it with the command). A channel that does not keep its messages has
+  nothing to read, and the bot says so (`chat.harvest.notKept`) rather than
+  harvesting the command alone. Teams has no harvest reaction.
+
 - **What it reads:**
   - **Time, Mattermost, Slack:** the whole thread, fetched by root. A command reads up to the
     command; a reaction reads all of it.

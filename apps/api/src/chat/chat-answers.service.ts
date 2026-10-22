@@ -56,6 +56,7 @@ const HELP_KEY: Record<ChatPlatformKind, string> = {
   time: 'chat.helpTime',
   mattermost: 'chat.helpTime',
   slack: 'chat.helpTime',
+  teams: 'chat.helpTeams',
 };
 
 /** Which buttons sit under an answer: the vote row, the reasons for a 👎, or what to save it as. */
@@ -657,6 +658,8 @@ export class ChatAnswersService {
       if (!asked) return this.notice(d, t('chat.harvest.reactionNotKept', { count: this.buffer.ttlDays }));
       const m = asked.replyTo;
       if (!m) return this.notice(d, t('chat.harvest.replyFirst'));
+      // Teams delivers no text for a thread's root: without kept messages there is nothing to read.
+      if (!m.text && !d.binding?.listening) return this.notice(d, t('chat.harvest.notKept'));
       const url = adapter.messageUrl?.(inbound.chatId, m.messageId) ?? null;
       read = () => this.buffer.groupThread(integration.id, d.binding!, asked, this.harvestMax, url);
     }

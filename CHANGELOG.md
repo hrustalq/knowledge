@@ -17,6 +17,15 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Microsoft Teams is a chat-bot platform (#381). Connect an Azure Bot (single tenant) with its app ID,
+  tenant ID and a client secret under Settings → Chat bots, set the address shown on the bot's card as
+  its messaging endpoint, and install it in Teams with an app package that grants
+  `ChannelMessage.Read.Group` (the manifest is in the chat bots docs). The bot answers a mention in a
+  channel, in the post's thread, and a message in a chat, as the linked person, with citations, 👍/👎
+  and Save. A channel can keep its messages for capture, as Telegram groups can. Then `capture` said
+  in a thread proposes what the thread settled, and without kept messages the bot says there is
+  nothing to read. Every activity's Bot Framework token is checked, and a forged one is refused.
+
 - Closed Intercom conversations can be harvested into reviewed captures (#384). Add an Intercom
   connector with your Intercom app's access token, its data region and a harvest tag (default
   `knowledge`), paste the app's client secret as the webhook secret, and subscribe the app's webhook

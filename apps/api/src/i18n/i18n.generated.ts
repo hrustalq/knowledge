@@ -483,6 +483,7 @@ export type I18nTranslations = {
                 "few": string;
                 "many": string;
             };
+            "notKept": string;
         };
         "forget": {
             "done": {
@@ -506,6 +507,12 @@ export type I18nTranslations = {
                 "few": string;
                 "many": string;
             };
+            "onPlain": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
         };
         "search": {
             "on": {
@@ -515,6 +522,7 @@ export type I18nTranslations = {
                 "many": string;
             };
         };
+        "helpTeams": string;
     };
     "connector": {
         "stage": {

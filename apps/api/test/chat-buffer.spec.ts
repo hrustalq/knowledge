@@ -97,6 +97,16 @@ describe('reading', () => {
     expect(where).toMatchObject({ externalChatId: '-1001', topicId: '77', externalMessageId: { notIn: ['11', '20'] }, sentAt: { gte: M.at, lte: cmd.at } });
   });
 
+  it('M delivered without its text (a Teams thread root): M is read from the buffer like the rest', async () => {
+    const { svc, db } = buffer([{ authorId: '7', text: 'Ship on Tuesdays?', sentAt: new Date(1) }]);
+    const root = { ...M, authorId: '', text: '', at: new Date(0) };
+    const read = await svc.groupThread('int-1', binding, { ...cmd, topicId: '11', replyTo: root }, 200, null);
+    expect(read.thread.messages.map((m) => m.text)).toEqual(['Ship on Tuesdays?']);
+    expect(read.note).toBeNull();
+    const where = (db.findMany.mock.calls[0] as unknown as [{ where: Record<string, unknown> }])[0].where;
+    expect(where).toMatchObject({ topicId: '11', externalMessageId: { notIn: ['20'] } });
+  });
+
   it('M older than the buffer: what is kept, and the note says the read is partial', async () => {
     const { svc } = buffer([], 0);
     const read = await svc.groupThread('int-1', binding, cmd, 200, null);

@@ -37716,7 +37716,8 @@
               "telegram",
               "time",
               "mattermost",
-              "slack"
+              "slack",
+              "teams"
             ]
           },
           "name": {

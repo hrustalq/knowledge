@@ -325,7 +325,7 @@
     "templatesHint": "Page shapes to start from",
     "publishingHint": "Public links to pages",
     "exportsHint": "Files you exported",
-    "chatBotsHint": "Answer questions in Telegram, citing your pages.",
+    "chatBotsHint": "Answer questions in chat, citing your pages.",
     "apiReferenceHint": "Try-it proxy for spec pages",
     "securityHint": "Sign-in and the audit trail",
     "releasesHint": "Named points in time"
@@ -5084,7 +5084,7 @@
     "ceilingOff": "Chat bots are switched off on this server (CHAT_ENABLED=false). You can prepare a bot here, but nothing will be answered until an operator turns them on.",
     "empty": {
       "title": "No bots yet",
-      "body": "Connect a Telegram, Time or Mattermost bot, then message it privately to link your account. To let it answer in a group or channel, add it there and send /bind (in Time and Mattermost: mention it with the word bind)."
+      "body": "Connect a Telegram, Time, Mattermost, Slack or Microsoft Teams bot, then message it privately to link your account. To let it answer in a group or channel, add it there and send /bind (in Time, Mattermost, Slack and Teams: mention it with the word bind)."
     },
     "connect": {
       "open": "Connect a bot",
@@ -5117,6 +5117,14 @@
         "step3": "Paste the Bot User OAuth Token (xoxb-…) and, from Basic Information, the Signing Secret below.",
         "step4": "Once connected, paste the address shown on the bot’s card as the Request URL under Event Subscriptions (bot events message.channels, message.groups, message.im, reaction_added) and under Interactivity. Then invite the bot to a channel and mention it, or message it privately to link your account.",
         "checking": "Checking with Slack…"
+      },
+      "teams": {
+        "description": "Microsoft checks the credential before anything is saved. It is stored encrypted and never shown again.",
+        "step1": "In the Azure portal, create an Azure Bot of type Single Tenant. Copy its Microsoft App ID and its directory (tenant) ID, and create a client secret for its app registration.",
+        "step2": "Paste the three below. Once the bot is connected, set the address shown on its card as the bot’s Messaging endpoint (Configuration), and turn on the Microsoft Teams channel.",
+        "step3": "Install it in Teams with an app package whose manifest names the bot, and grants the resource-specific permission ChannelMessage.Read.Group so a channel can keep its messages for capture (manifest in the docs).",
+        "step4": "Mention the bot in a channel, or message it in a chat: it replies with a link that connects your account.",
+        "checking": "Checking with Microsoft…"
       }
     },
     "fields": {
@@ -5139,7 +5147,11 @@
       "tokenHintMattermost": "The bot account's access token, from Integrations → Bot Accounts. Write-only: the page only ever shows its last four characters.",
       "tokenHintSlack": "The Bot User OAuth Token, from OAuth & Permissions. Write-only: the page only ever shows its last four characters.",
       "signingSecret": "Signing secret",
-      "signingSecretHint": "From Basic Information → App Credentials. {platform} signs every request with it, and a request that does not match is refused. Write-only."
+      "signingSecretHint": "From Basic Information → App Credentials. {platform} signs every request with it, and a request that does not match is refused. Write-only.",
+      "appId": "Microsoft App ID",
+      "tenantId": "Directory (tenant) ID",
+      "clientSecret": "Client secret",
+      "tokenHintTeams": "From the app registration’s Certificates & secrets. Write-only: the page only ever shows its last four characters."
     },
     "locale": {
       "en": "English",
@@ -5149,7 +5161,8 @@
       "telegram": "Telegram",
       "time": "Time",
       "mattermost": "Mattermost",
-      "slack": "Slack"
+      "slack": "Slack",
+      "teams": "Microsoft Teams"
     },
     "answerMode": {
       "mention": "When mentioned",
@@ -5157,7 +5170,7 @@
       "off": "Never"
     },
     "bindings": {
-      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time, Mattermost and Slack: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
+      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time, Mattermost, Slack and Teams: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
       "untitled": "Untitled chat",
       "wholeWorkspace": "Whole workspace",
       "botDefault": "Bot default",
@@ -5181,7 +5194,11 @@
       "searchableTelegram": "Telegram: needs privacy mode off in {'@'}BotFather or the bot as a group admin. A message deleted in Telegram stays searchable until it expires, because Telegram does not tell bots about deletions.",
       "searchableUnavailable": "Switched off on this server (CHAT_SEARCH_ENABLED): no group can be made searchable.",
       "searchableBy": "Made searchable by",
-      "chatIdPlaceholderSlack": "C0123ABCDEF"
+      "chatIdPlaceholderSlack": "C0123ABCDEF",
+      "chatIdPlaceholderTeams": "19:…{'@'}thread.tacv2",
+      "listenTeams": "Keep messages for capture",
+      "listenHintTeams": "Messages are kept for {days}, with emails, phone numbers, card numbers and secrets masked, so editors can mention the bot with capture inside a thread to propose what it settled. Kept only for capture: making the channel searchable is a separate switch below. Needs the ChannelMessage.Read.Group permission in the Teams app. The channel is told when this is turned on, and what was kept is deleted when it is turned off.",
+      "autoHarvestNeedsListeningTeams": "Needs Keep messages for capture."
     },
     "card": {
       "off": "Off",
@@ -5206,7 +5223,10 @@
       "requestUrl": "{platform} delivers messages and button presses only once this address is set as the Request URL under Event Subscriptions and under Interactivity in the app’s settings:",
       "copyRequestUrl": "Copy the Request URL",
       "copyFailed": "The clipboard is unavailable here. Select the address and copy it manually.",
-      "testOkSlack": "{bot} is reachable. {platform} delivers once the Request URL below is set in the app’s settings."
+      "testOkSlack": "{bot} is reachable. {platform} delivers once the Request URL below is set in the app’s settings.",
+      "messagingEndpoint": "{platform} delivers messages only once this address is the Messaging endpoint of your Azure Bot (Configuration):",
+      "copyMessagingEndpoint": "Copy the messaging endpoint",
+      "testOkTeams": "{bot} has a valid credential. {platform} delivers once the messaging endpoint below is set on the Azure Bot."
     },
     "people": {
       "hint": "Every answer runs as the linked person, with exactly their access. Unlinking stops the bot answering that account.",

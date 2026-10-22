@@ -119,7 +119,8 @@
     "reactionNotKept": {
       "one": "I can't read that message: ✍ works on messages I keep, and I keep this group's messages for {count} day, only while keeping is on. Reply to it with /capture instead.",
       "other": "I can't read that message: ✍ works on messages I keep, and I keep this group's messages for {count} days, only while keeping is on. Reply to it with /capture instead."
-    }
+    },
+    "notKept": "This channel does not keep its messages, so there is nothing for me to read. A workspace admin can turn on Keep messages for capture for it in the bot's settings."
   },
   "forget": {
     "done": {
@@ -136,6 +137,10 @@
     "autoOn": {
       "one": "From now on, once a thread here has been quiet for {count} minute, I read what I kept of it and propose what it settled for review in the knowledge base. Nothing is posted here and nothing kept for /capture is searchable. /forget deletes yours.",
       "other": "From now on, once a thread here has been quiet for {count} minutes, I read what I kept of it and propose what it settled for review in the knowledge base. Nothing is posted here and nothing kept for /capture is searchable. /forget deletes yours."
+    },
+    "onPlain": {
+      "one": "From now on I keep this group's messages for {count} day, with emails, phone numbers, card numbers and secrets masked, so workspace editors can ask me to capture a thread for the knowledge base. Nothing kept for capture is searchable. forget deletes yours.",
+      "other": "From now on I keep this group's messages for {count} days, with emails, phone numbers, card numbers and secrets masked, so workspace editors can ask me to capture a thread for the knowledge base. Nothing kept for capture is searchable. forget deletes yours."
     }
   },
   "search": {
@@ -143,5 +148,6 @@
       "one": "From now on I keep this group's messages for {count} day, with emails, phone numbers, card numbers and secrets masked, so people who can see this group's part of the knowledge base can search them. Edits are followed; a message deleted here may stay searchable until it expires. /forget deletes yours at once.",
       "other": "From now on I keep this group's messages for {count} days, with emails, phone numbers, card numbers and secrets masked, so people who can see this group's part of the knowledge base can search them. Edits are followed; a message deleted here may stay searchable until it expires. /forget deletes yours at once."
     }
-  }
+  },
+  "helpTeams": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a chat with me, just ask. In a channel, mention me — I answer in the post's thread, and anything else said in that thread is a follow-up.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\nSend one of these words on its own (in a channel, after mentioning me):\nnew — start a new conversation\nunlink — disconnect your account\nbind — answer in this channel (workspace admins)\nunbind — stop answering in this channel (workspace admins)\ncapture — propose what this thread settled for the knowledge base, said inside the thread (editors; the channel must keep its messages)\nforget — delete the messages of yours I keep\nhelp — this message"
 }

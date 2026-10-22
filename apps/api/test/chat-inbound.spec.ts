@@ -661,6 +661,17 @@ describe('Telegram harvest (#82, phase 3)', () => {
     expect(h.harvester.harvest).not.toHaveBeenCalled();
   });
 
+  it('a capture whose thread root came with no text (Teams) reads nothing unless the group keeps its messages', async () => {
+    const root = { ...M, messageId: 'root-1', authorId: '', text: '', at: new Date(0) };
+    const off = harness({ telegram: true, binding: { ...group, listening: false } });
+    await off.svc.receive(integration, capture({ replyTo: root }));
+    expect(off.posted).toEqual([{ kind: 'notice', text: 'chat.harvest.notKept' }]);
+    expect(off.buffer.groupThread).not.toHaveBeenCalled();
+    const on = harness({ telegram: true, binding: group });
+    await on.svc.receive(integration, capture({ replyTo: root }));
+    expect(on.buffer.groupThread).toHaveBeenCalled();
+  });
+
   it('a DM /capture harvests the forwards, then uses them up', async () => {
     const h = harness({ telegram: true });
     await h.svc.receive(integration, inbound({ command: { name: 'capture', args: '' } }));

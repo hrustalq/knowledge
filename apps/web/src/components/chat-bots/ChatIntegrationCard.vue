@@ -18,7 +18,7 @@ import {
   CHAT_PLATFORM_NAMES,
   chatBotHandle,
   chatPlatformNeedsServer,
-  chatPlatformNeedsSigningSecret,
+  chatPlatformPastesEndpoint,
   type ChatIdentitiesResponse,
   type ChatIntegrationSummary,
   type ChatIntegrationTestResponse,
@@ -51,8 +51,8 @@ const queryClient = useQueryClient()
 
 /** A bot that hears over its own websocket (Time, Mattermost) rather than through our webhook. */
 const socket = computed(() => chatPlatformNeedsServer(props.bot.kind))
-/** A bot whose Request URL the admin pastes into the platform's own app settings (Slack). */
-const pasted = computed(() => chatPlatformNeedsSigningSecret(props.bot.kind))
+/** A bot whose endpoint the admin pastes into the platform's own settings (Slack, Teams). */
+const pasted = computed(() => chatPlatformPastesEndpoint(props.bot.kind))
 const handle = computed(() => (props.bot.botUsername ? chatBotHandle(props.bot.kind, props.bot.botUsername) : null))
 const { state: copyState, copy } = useCopy()
 /** Product names are never translated. */
@@ -85,7 +85,7 @@ async function test() {
   busy.value = true
   try {
     const res = (await api.post('/v1/chat/integrations/{id}/test', { path: { id: props.bot.id } })) as ChatIntegrationTestResponse
-    if (res.ok) toast.success(t(socket.value ? 'chatBots.card.testOkSocket' : pasted.value ? 'chatBots.card.testOkSlack' : 'chatBots.card.testOk', { bot: res.botUsername ? chatBotHandle(props.bot.kind, res.botUsername) : props.bot.name, platform: platform.value }))
+    if (res.ok) toast.success(t(socket.value ? 'chatBots.card.testOkSocket' : pasted.value ? (props.bot.kind === 'teams' ? 'chatBots.card.testOkTeams' : 'chatBots.card.testOkSlack') : 'chatBots.card.testOk', { bot: res.botUsername ? chatBotHandle(props.bot.kind, res.botUsername) : props.bot.name, platform: platform.value }))
     else toast.error(t('chatBots.card.testFailed', { reason: res.error ?? '' }))
     emit('changed')
   } catch (e) {
@@ -159,7 +159,7 @@ async function unlink(identityId: string) {
       <div v-else-if="pasted" class="space-y-1.5 text-xs text-muted-foreground">
         <p class="flex items-start gap-2">
           <Link2 class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          <span>{{ t('chatBots.card.requestUrl', { platform }) }}</span>
+          <span>{{ t(bot.kind === 'teams' ? 'chatBots.card.messagingEndpoint' : 'chatBots.card.requestUrl', { platform }) }}</span>
         </p>
         <div class="flex items-center gap-2 pl-5.5">
           <code class="min-w-0 flex-1 break-all rounded-md border bg-muted/40 px-2 py-1 font-mono text-foreground">{{ bot.webhookUrl }}</code>
@@ -167,7 +167,7 @@ async function unlink(identityId: string) {
             size="icon"
             variant="ghost"
             class="size-8 shrink-0"
-            :aria-label="t('chatBots.card.copyRequestUrl')"
+            :aria-label="t(bot.kind === 'teams' ? 'chatBots.card.copyMessagingEndpoint' : 'chatBots.card.copyRequestUrl')"
             @click="copy(bot.webhookUrl)"
           >
             <Check v-if="copyState === 'copied'" class="size-4" aria-hidden="true" />

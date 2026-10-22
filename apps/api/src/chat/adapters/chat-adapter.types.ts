@@ -225,9 +225,10 @@ export interface ChatAdapter {
    * compared against the stored hash; Time sends nothing to check, so its
    * buttons carry a signature over their data, keyed by the bot's token
    * (`ctx`); Slack signs every request with the app's signing secret
-   * (`ctx.signingSecret`). Constant-time each way. Websocket messages never come here.
+   * (`ctx.signingSecret`); Teams sends a Bot Framework JWT, checked against
+   * its published keys — the one asynchronous check. Constant-time each way. Websocket messages never come here.
    */
-  verifyInbound(raw: RawInbound, secretHash: string | null, ctx: ChatAdapterContext | null): boolean;
+  verifyInbound(raw: RawInbound, secretHash: string | null, ctx: ChatAdapterContext | null): boolean | Promise<boolean>;
   /**
    * A verified delivery that is the platform checking our URL rather than
    * sending anything (Slack's `url_verification`): what the webhook answers

@@ -835,12 +835,29 @@
           "help": "A ticket carrying this tag is harvested when it is solved. Leave empty for \"knowledge\"."
         },
         "credential": "The email of an agent and an API token (Admin Center → Apps and integrations → Zendesk API), as email:token. The agent must be able to read the tickets that are harvested."
+      },
+      "intercom": {
+        "region": {
+          "label": "Data region",
+          "help": "Where your Intercom workspace is hosted. Leave on United States unless it is in Europe or Australia.",
+          "options": {
+            "us": "United States",
+            "eu": "Europe",
+            "au": "Australia"
+          }
+        },
+        "harvestLabel": {
+          "label": "Harvest tag",
+          "help": "A conversation carrying this tag is harvested when an admin closes it. Leave empty for \"knowledge\"."
+        },
+        "credential": "The access token of your Intercom app (Developer Hub → your app → Authentication). It must be able to read conversations."
       }
     },
     "harvestHint": "Nothing syncs either way. When an issue carrying the harvest label is completed by a linked editor, its description and comments are masked and proposed as captures in their name, for review in the Captures inbox.",
     "harvestWebhook": "In {kind}, add a webhook on issues pointed at this server, and paste its signing secret here:",
     "directionHarvest": "Harvest",
-    "harvestWebhookZendesk": "In Zendesk, create a webhook pointed at the address below, then a trigger: Ticket status changed to Solved, Tags contain the harvest tag, action Notify webhook with this JSON body. Paste the webhook’s signing secret above."
+    "harvestWebhookZendesk": "In Zendesk, create a webhook pointed at the address below, then a trigger: Ticket status changed to Solved, Tags contain the harvest tag, action Notify webhook with this JSON body. Paste the webhook’s signing secret above.",
+    "harvestWebhookIntercom": "In the Developer Hub, open your app’s Webhooks, point them at the address below and subscribe to conversation.admin.closed. Paste the app’s client secret (Basic information) above: Intercom signs every delivery with it."
   },
   "workflow": {
     "nodeStatus": {

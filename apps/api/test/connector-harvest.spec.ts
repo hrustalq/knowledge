@@ -406,3 +406,113 @@ describe('Zendesk', async () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('Intercom', async () => {
+  const { IntercomAdapter, intercomSignature, intercomText } = await import('../src/connectors/adapters/intercom.adapter.js');
+  const ictx = { ...ctx, credential: 'ic_token', config: { region: 'eu' } } as unknown as ConnectorContext;
+  const admin = { type: 'admin', id: '814860', name: 'Ann Admin', email: 'ann@acme.test' };
+  /** `conversation.admin.closed`, the notification shape Intercom documents, with the closing part. */
+  const notification = (over: { topic?: string; author?: unknown } = {}) =>
+    JSON.stringify({
+      type: 'notification_event',
+      id: 'notif_1',
+      topic: over.topic ?? 'conversation.admin.closed',
+      app_id: 'a86dr8yl',
+      created_at: NOW / 1000,
+      data: {
+        type: 'notification_event_data',
+        item: {
+          type: 'conversation',
+          id: '1911149811',
+          state: 'closed',
+          conversation_parts: {
+            type: 'conversation_part.list',
+            conversation_parts: [
+              { part_type: 'comment', author: admin },
+              { part_type: 'close', author: over.author === undefined ? admin : over.author },
+            ],
+          },
+        },
+      },
+    });
+  const verify = (headers: Record<string, string>, body: string, c = ictx) => new IntercomAdapter().verifyHarvestDelivery(c, headers, body);
+
+  it('a signed close by an admin names the conversation and the admin', () => {
+    const body = notification();
+    expect(verify({ 'x-hub-signature': intercomSignature(SECRET, body) }, body)).toEqual({
+      item: { externalId: '1911149811', actor: { externalId: '814860', name: 'Ann Admin', email: 'ann@acme.test' } },
+    });
+  });
+
+  it('refuses an unsigned, forged, tampered or secret-less delivery', () => {
+    const body = notification();
+    expect(verify({}, body)).toBeNull();
+    expect(verify({ 'x-hub-signature': intercomSignature('other', body) }, body)).toBeNull();
+    expect(verify({ 'x-hub-signature': intercomSignature(SECRET, body) }, body.replace('1911149811', '1911149812'))).toBeNull();
+    expect(verify({ 'x-hub-signature': intercomSignature(SECRET, body) }, body, { ...ictx, webhookSecret: null })).toBeNull();
+  });
+
+  it('another topic, or a close by a bot, is verified and nothing', () => {
+    const other = notification({ topic: 'conversation.user.replied' });
+    expect(verify({ 'x-hub-signature': intercomSignature(SECRET, other) }, other)).toEqual({ item: null });
+    const bot = notification({ author: { type: 'bot', id: '1' } });
+    expect(verify({ 'x-hub-signature': intercomSignature(SECRET, bot) }, bot)).toEqual({ item: null });
+  });
+
+  it('reads the opening message, replies and notes as text — never bots, closes or assignments — on the region’s host', async () => {
+    const fetchMock = vi.mocked(safeFetch);
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: '1911149811',
+            title: null,
+            state: 'closed',
+            created_at: 1_760_000_000,
+            source: { subject: '', body: '<p>Export to CSV fails &amp; times out</p>', author: { type: 'user', id: 'u-1' } },
+            tags: { tags: [{ name: 'Knowledge' }] },
+            conversation_parts: {
+              conversation_parts: [
+                { part_type: 'comment', body: '<p>Fin here!</p>', created_at: 1_760_000_010, author: { type: 'bot', id: 'b-1' } },
+                { part_type: 'note', body: '<p>Known: exports over 50k rows<br>use the API</p>', created_at: 1_760_000_100, author: admin },
+                { part_type: 'assignment', body: null, created_at: 1_760_000_150, author: admin },
+                { part_type: 'comment', body: '<p>Please use the API for large exports.</p>', created_at: 1_760_000_200, author: admin },
+                { part_type: 'close', body: null, created_at: 1_760_000_300, author: admin },
+              ],
+            },
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ app: { id_code: 'a86dr8yl' } })));
+    const item = await new IntercomAdapter().readHarvestItem(ictx, '1911149811');
+    expect(item).toMatchObject({
+      key: '#1911149811',
+      title: 'Export to CSV fails & times out',
+      url: 'https://app.intercom.com/a/inbox/a86dr8yl/inbox/conversation/1911149811',
+      resolved: true,
+      labels: ['Knowledge'],
+    });
+    expect(item!.messages.map((m) => [m.authorId, m.text])).toEqual([
+      ['u-1', 'Export to CSV fails & times out'],
+      ['814860', 'Known: exports over 50k rows\nuse the API'],
+      ['814860', 'Please use the API for large exports.'],
+    ]);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.eu.intercom.io/conversations/1911149811');
+    expect(init.headers).toMatchObject({ authorization: 'Bearer ic_token', 'intercom-version': '2.11' });
+  });
+
+  it('a conversation gone is nothing; a non-numeric id is never asked for', async () => {
+    const fetchMock = vi.mocked(safeFetch);
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValueOnce(new Response('{"type":"error.list"}', { status: 404 }));
+    expect(await new IntercomAdapter().readHarvestItem(ictx, '1')).toBeNull();
+    expect(await new IntercomAdapter().readHarvestItem(ictx, 'me')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('HTML reads back as text', () => {
+    expect(intercomText('<p>a &lt;b&gt;</p><p>c&nbsp;d</p>')).toBe('a <b>\nc d');
+  });
+});

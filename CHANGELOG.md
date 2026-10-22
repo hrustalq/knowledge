@@ -17,6 +17,13 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Closed Intercom conversations can be harvested into reviewed captures (#384). Add an Intercom
+  connector with your Intercom app's access token, its data region and a harvest tag (default
+  `knowledge`), paste the app's client secret as the webhook secret, and subscribe the app's webhook
+  to `conversation.admin.closed` at the connector's address. When a linked editor closes a tagged
+  conversation, its opening message, replies and admin notes are masked and proposed as captures in
+  their name. Nothing is written back to Intercom.
+
 - Solved Zendesk tickets can be harvested into reviewed captures (#383). Add a Zendesk connector with
   your Zendesk address, an agent's `email:api-token` and a harvest tag (default `knowledge`), then
   create a Zendesk webhook pointed at the connector's address and a trigger, *Ticket status changed to

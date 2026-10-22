@@ -21,6 +21,7 @@ export const CONNECTOR_KINDS = [
   'google-drive',
   'linear',
   'zendesk',
+  'intercom',
 ] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
@@ -549,6 +550,36 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         required: false,
         placeholder: DEFAULT_HARVEST_LABEL,
         help: 'A ticket carrying this tag is harvested when it is solved. Leave empty for "knowledge".',
+      },
+    ],
+  },
+  {
+    // A harvest source (#384, doc 59): a conversation an admin closes while
+    // it carries the tag, in that admin's name. Fed by the app's webhook.
+    kind: 'intercom',
+    label: 'Intercom',
+    capabilities: { pull: false, push: false, webhook: true, tree: false, harvest: true },
+    credentialLabel: 'Access token',
+    fields: [
+      {
+        key: 'region',
+        label: 'Data region',
+        kind: 'select',
+        required: false,
+        options: [
+          { value: 'us', label: 'United States' },
+          { value: 'eu', label: 'Europe' },
+          { value: 'au', label: 'Australia' },
+        ],
+        help: 'Where your Intercom workspace is hosted. Leave on United States unless it is in Europe or Australia.',
+      },
+      {
+        key: 'harvestLabel',
+        label: 'Harvest tag',
+        kind: 'text',
+        required: false,
+        placeholder: DEFAULT_HARVEST_LABEL,
+        help: 'A conversation carrying this tag is harvested when an admin closes it. Leave empty for "knowledge".',
       },
     ],
   },

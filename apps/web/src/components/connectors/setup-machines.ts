@@ -241,6 +241,11 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
     { name: 'site', meta: { labelKey: 'connectors.step.site', fields: ['baseUrl'], credential: true } },
     { name: 'tag', meta: { labelKey: 'connectors.step.harvestTag', fields: ['harvestLabel'] } },
   ],
+  // The app's token and its region, then the tag (#384).
+  intercom: [
+    { name: 'app', meta: { labelKey: 'connectors.step.integration', fields: ['region'], credential: true } },
+    { name: 'tag', meta: { labelKey: 'connectors.step.harvestTag', fields: ['harvestLabel'] } },
+  ],
 }
 
 export const confluenceSetup = kindMachine('confluenceSetup', KIND_STEPS.confluence)
@@ -252,6 +257,7 @@ export const codebaseSetup = kindMachine('codebaseSetup', KIND_STEPS.codebase)
 export const googleDriveSetup = kindMachine('googleDriveSetup', KIND_STEPS['google-drive'])
 export const linearSetup = kindMachine('linearSetup', KIND_STEPS.linear)
 export const zendeskSetup = kindMachine('zendeskSetup', KIND_STEPS.zendesk)
+export const intercomSetup = kindMachine('intercomSetup', KIND_STEPS.intercom)
 
 export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   confluence: confluenceSetup,
@@ -263,6 +269,7 @@ export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   'google-drive': googleDriveSetup,
   linear: linearSetup,
   zendesk: zendeskSetup,
+  intercom: intercomSetup,
 }
 
 /** The per-kind steps, for the stepper — read without running the machine. */

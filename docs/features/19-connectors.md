@@ -275,11 +275,11 @@ rule for a failed re-read).
 
 ## Harvest connectors (#382)
 
-`linear` (#382) and `zendesk` (#383) are connector kinds that move no content: `capabilities`
+`linear` (#382), `zendesk` (#383) and `intercom` (#384) are connector kinds that move no content: `capabilities`
 has `harvest: true` and `pull`/`push` false, so there is no Sync button, no
 runs and no destination tree. The webhook says when an issue was completed
 or a ticket solved, and a resolved item carrying the connector's harvest
-label (a Zendesk tag) becomes reviewed captures in the name of whoever
+label (a Zendesk or Intercom tag) becomes reviewed captures in the name of whoever
 resolved it. The whole contract (trigger,
 attribution, what is read, the `connector_harvests` claim and its sweeper) is
 in [59 — Chat harvest](59-chat-harvest.md#trackers-and-help-desks-382384).

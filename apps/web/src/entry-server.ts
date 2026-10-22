@@ -98,8 +98,10 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     let html = await renderToString(app, ssrContext)
     // The page action bar (#441) is a teleport into the shell's own markup, so
     // its buffer goes back into that element here; the client hydrates it there.
-    const bar = ssrContext.teleports?.['#kn-page-toolbar']
-    if (bar) html = html.replace(/(<div id="kn-page-toolbar"[^>]*>)(<\/div>)/, (_, open, close) => open + bar + close)
+    for (const id of ['kn-page-actions', 'kn-page-toolbar']) {
+      const buffer = ssrContext.teleports?.[`#${id}`]
+      if (buffer) html = html.replace(new RegExp(`(<div id="${id}"[^>]*>)(</div>)`), (_, open, close) => open + buffer + close)
+    }
 
     // Transfer Pinia state for hydration; escape < to prevent script breakout.
     const state = JSON.stringify(pinia.state.value).replace(/</g, '\\u003c')

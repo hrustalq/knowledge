@@ -3229,6 +3229,9 @@ model ChatChannelBinding {
   /// told. null = off. Independent of `listening`, and on every platform.
   searchableBy   String?   @map("searchable_by") @db.Uuid
   searchableAt   DateTime? @map("searchable_at") @db.Timestamptz
+  /// Time/Mattermost: the channel's team, for search hits' permalinks (#407).
+  /// null = not resolved yet (the next kept message does), '' = in no team.
+  teamName       String?   @map("team_name")
   createdBy      String?   @map("created_by") @db.Uuid
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz

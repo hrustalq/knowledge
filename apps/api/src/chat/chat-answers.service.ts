@@ -191,6 +191,9 @@ export class ChatAnswersService {
     // Kept for search (#339), apart from the harvest buffer: its own switch, on any platform.
     if (this.messages.enabled && d.binding?.searchableAt && !command && inbound.text) {
       await this.messages.keep(d.binding, inbound).catch((err: unknown) => this.notKept(integration.id, err));
+      const binding = d.binding;
+      const { adapter, ctx } = d;
+      if (adapter.chatTeam) await this.messages.rememberTeam(binding, () => adapter.chatTeam!(ctx, binding.externalChatId));
     }
 
     if (command) {

@@ -63,6 +63,15 @@ function verifyAction(data: string, signature: string, token: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * A post's permalink, which opens it in its thread for the channel's members.
+ * Stateless, so chat search (#407) links a window from the team kept on its
+ * binding without an adapter or a platform call.
+ */
+export function mattermostPermalink(serverUrl: string, team: string, postId: string): string {
+  return `${serverUrl.replace(/\/$/, '')}/${encodeURIComponent(team)}/pl/${encodeURIComponent(postId)}`;
+}
+
 /** `S3` → `3`: the reader sees a footnote number, not the model's label. */
 const citeNumber = (label: string): string => label.replace(/^S/i, '');
 
@@ -440,15 +449,20 @@ export class MattermostAdapter implements ChatAdapter {
 
   private async permalink(ctx: ChatAdapterContext, chatId: string, postId: string): Promise<string | null> {
     try {
-      const channel = await this.call<{ team_id?: string }>(ctx, 'GET', `/channels/${encodeURIComponent(chatId)}`);
-      // A direct channel belongs to no team, and a permalink needs one.
-      if (!channel.team_id) return null;
-      const team = await this.call<{ name?: string }>(ctx, 'GET', `/teams/${encodeURIComponent(channel.team_id)}`);
-      if (!team.name) return null;
-      return `${ctx.serverUrl!.replace(/\/$/, '')}/${encodeURIComponent(team.name)}/pl/${encodeURIComponent(postId)}`;
+      const team = await this.chatTeam(ctx, chatId);
+      return team ? mattermostPermalink(ctx.serverUrl!, team, postId) : null;
     } catch {
       return null;
     }
+  }
+
+  /** The name of the team a channel is in: one call for the channel, one for its team. */
+  async chatTeam(ctx: ChatAdapterContext, chatId: string): Promise<string | null> {
+    const channel = await this.call<{ team_id?: string }>(ctx, 'GET', `/channels/${encodeURIComponent(chatId)}`);
+    // A direct channel belongs to no team, and a permalink needs one.
+    if (!channel.team_id) return null;
+    const team = await this.call<{ name?: string }>(ctx, 'GET', `/teams/${encodeURIComponent(channel.team_id)}`);
+    return team.name || null;
   }
 
   /** The websocket URL for a server: the API's own origin and path, over ws(s). */

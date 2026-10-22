@@ -523,6 +523,22 @@ were settled with the owner on 2026-10-22, before any code:
     - The read is one GraphQL call: identifier, title, URL, `state.type`,
       labels, the description and up to 250 comments.
     - The key goes bare in `Authorization`.
+- **Zendesk (#383).**
+  - Zendesk has no "ticket solved" subscription of its own, so the admin
+    builds a trigger: *Ticket status changed to Solved*, *Tags contain* the
+    harvest tag, and a *Notify webhook* action whose JSON body is
+    `ZENDESK_TRIGGER_BODY` (contracts: ticket id, status, and the updating
+    agent's id, name and email). The dialog shows it to paste.
+  - The signature is `X-Zendesk-Webhook-Signature`, base64 HMAC-SHA256 over
+    the `-Timestamp` header plus the raw body. A timestamp more than 5 minutes
+    off is refused.
+  - The prefilter: status `solved` or `closed`, and a numeric agent id
+    (`-1`, Zendesk itself, is no person).
+  - The read is the ticket (subject, status, tags) and one page of 100
+    comments, oldest first, public and private alike, as `email/token`
+    Basic auth. A 404 or 403 is a ticket gone.
+  - `testConnection` refuses an end-user credential, which cannot read
+    tickets.
 - **The same contract as chat.** Captures go through `CaptureService` with a
   server-set origin (`platform: 'linear' | 'zendesk' | 'intercom'`, the
   item's key and title, its URL, the span of its messages). They are

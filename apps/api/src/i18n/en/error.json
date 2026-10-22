@@ -325,6 +325,7 @@
     "unknownKind": "\"{kind}\" is not a connector type this workspace can use",
     "missingField": "{kind} needs \"{field}\"",
     "credentialRequired": "This connector needs a credential before it can be used",
+    "zendeskAgentRequired": "The Zendesk user must be an agent or an admin; an end user cannot read tickets",
     "encryptionKeyMissing": "SETTINGS_ENCRYPTION_KEY is not set, so credentials cannot be saved",
     "urlInvalid": "That does not look like a URL",
     "urlNotHttps": "Connector URLs must use https",

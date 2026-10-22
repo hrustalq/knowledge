@@ -6,6 +6,7 @@ import { ConfluenceAdapter } from './confluence.adapter.js';
 import { ConfluenceServerAdapter } from './confluence-server.adapter.js';
 import { JiraAdapter } from './jira.adapter.js';
 import { LinearAdapter } from './linear.adapter.js';
+import { ZendeskAdapter } from './zendesk.adapter.js';
 import { MarkdownGitAdapter } from './markdown-git.adapter.js';
 import { NotionAdapter } from './notion.adapter.js';
 import type { ConnectorAdapter } from './connector.types.js';
@@ -28,6 +29,7 @@ export class ConnectorRegistry {
     codebase: CodebaseAdapter,
     googleDrive: GoogleDriveAdapter,
     linear: LinearAdapter,
+    zendesk: ZendeskAdapter,
   ) {
     this.byKind = {
       confluence,
@@ -38,6 +40,7 @@ export class ConnectorRegistry {
       codebase,
       'google-drive': googleDrive,
       linear,
+      zendesk,
     };
   }
 

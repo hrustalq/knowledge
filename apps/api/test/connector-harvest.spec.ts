@@ -319,3 +319,90 @@ describe('the connector webhook, for a harvest connector', () => {
     expect(claim).not.toHaveBeenCalled();
   });
 });
+
+describe('Zendesk', async () => {
+  const { ZendeskAdapter, zendeskSignature } = await import('../src/connectors/adapters/zendesk.adapter.js');
+  const { ZENDESK_TRIGGER_BODY } = await import('@knowledge/contracts');
+  const zctx = { ...ctx, credential: 'agent@acme.test:zd_token', config: { baseUrl: 'https://acme.zendesk.com/' } } as unknown as ConnectorContext;
+  /** The trigger body as Zendesk renders it, placeholders filled. */
+  const rendered = (over: Record<string, string> = {}) => {
+    const vals: Record<string, string> = {
+      'ticket.id': '4711',
+      'ticket.status': 'Solved',
+      'current_user.id': '9001',
+      'current_user.name': 'Ann Agent',
+      'current_user.email': 'ann@acme.test',
+      ...over,
+    };
+    return ZENDESK_TRIGGER_BODY.replace(/\{\{([\w.]+)\}\}/g, (_, k: string) => vals[k] ?? '');
+  };
+  const signed = (body: string, at = new Date(NOW).toISOString(), secret = SECRET) => ({
+    'x-zendesk-webhook-signature': zendeskSignature(secret, at, body),
+    'x-zendesk-webhook-signature-timestamp': at,
+  });
+  const verify = (headers: Record<string, string>, body: string, c = zctx) => {
+    vi.useFakeTimers({ now: NOW });
+    return new ZendeskAdapter().verifyHarvestDelivery(c, headers, body);
+  };
+
+  it('a signed trigger body for a solved ticket names the ticket and the agent', () => {
+    const body = rendered();
+    expect(verify(signed(body), body)).toEqual({
+      item: { externalId: '4711', actor: { externalId: '9001', name: 'Ann Agent', email: 'ann@acme.test' } },
+    });
+  });
+
+  it('refuses an unsigned, forged, tampered, replayed or secret-less delivery', () => {
+    const body = rendered();
+    expect(verify({}, body)).toBeNull();
+    expect(verify(signed(body, undefined, 'other'), body)).toBeNull();
+    expect(verify(signed(body), body.replace('4711', '4712'))).toBeNull();
+    expect(verify(signed(body, new Date(NOW - 6 * 60_000).toISOString()), body)).toBeNull();
+    expect(verify(signed(body), body, { ...zctx, webhookSecret: null })).toBeNull();
+  });
+
+  it('a ticket not solved, or one Zendesk itself changed, is verified and nothing', () => {
+    const open = rendered({ 'ticket.status': 'Open' });
+    expect(verify(signed(open), open)).toEqual({ item: null });
+    const automation = rendered({ 'current_user.id': '-1' });
+    expect(verify(signed(automation), automation)).toEqual({ item: null });
+  });
+
+  it('reads the ticket and every comment — public replies and internal notes — as the agent', async () => {
+    const fetchMock = vi.mocked(safeFetch);
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ticket: { subject: 'VPN drops', status: 'solved', tags: ['Knowledge', 'vpn'] } })))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            comments: [
+              { author_id: 1, body: 'My VPN drops every hour', public: true, created_at: '2026-10-20T10:00:00Z' },
+              { author_id: 9001, body: 'Known MTU issue, set 1380', public: false, created_at: '2026-10-20T11:00:00Z' },
+              { author_id: 9001, body: 'Fixed for you', public: true, created_at: '2026-10-20T12:00:00Z' },
+              { author_id: null, body: 'system', public: false, created_at: '2026-10-20T12:30:00Z' },
+            ],
+          }),
+        ),
+      );
+    const item = await new ZendeskAdapter().readHarvestItem(zctx, '4711');
+    expect(item).toMatchObject({ key: '#4711', title: 'VPN drops', url: 'https://acme.zendesk.com/agent/tickets/4711', resolved: true, labels: ['Knowledge', 'vpn'] });
+    expect(item!.messages.map((m) => [m.authorId, m.text])).toEqual([
+      ['1', 'My VPN drops every hour'],
+      ['9001', 'Known MTU issue, set 1380'],
+      ['9001', 'Fixed for you'],
+    ]);
+    const [url, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(url).toBe('https://acme.zendesk.com/api/v2/tickets/4711/comments.json?sort_order=asc&per_page=100');
+    expect((init.headers as Record<string, string>).authorization).toBe(`Basic ${Buffer.from('agent@acme.test/token:zd_token').toString('base64')}`);
+  });
+
+  it('a ticket gone or out of reach is nothing; a non-numeric id is never asked for', async () => {
+    const fetchMock = vi.mocked(safeFetch);
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValueOnce(new Response('{"error":"RecordNotFound"}', { status: 404 }));
+    expect(await new ZendeskAdapter().readHarvestItem(zctx, '4711')).toBeNull();
+    expect(await new ZendeskAdapter().readHarvestItem(zctx, '../users')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

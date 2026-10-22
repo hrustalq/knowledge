@@ -20,6 +20,7 @@ export const CONNECTOR_KINDS = [
   'codebase',
   'google-drive',
   'linear',
+  'zendesk',
 ] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
@@ -93,6 +94,14 @@ export interface ConnectorCapabilities {
 
 /** The label a harvest connector looks for when `config.harvestLabel` is empty. */
 export const DEFAULT_HARVEST_LABEL = 'knowledge';
+
+/**
+ * The JSON body a Zendesk trigger's webhook action sends (#383). Zendesk
+ * sends what the trigger says, so the admin pastes exactly this, the setup
+ * dialog shows it, and the adapter reads that shape.
+ */
+export const ZENDESK_TRIGGER_BODY =
+  '{"ticket_id":"{{ticket.id}}","status":"{{ticket.status}}","updated_by_id":"{{current_user.id}}","updated_by_name":"{{current_user.name}}","updated_by_email":"{{current_user.email}}"}';
 
 // ---------------------------------------------------------------------------
 // Access mirroring (#76, phase 6)
@@ -521,6 +530,25 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         required: false,
         placeholder: DEFAULT_HARVEST_LABEL,
         help: 'An issue carrying this label is harvested when it is completed. Leave empty for "knowledge".',
+      },
+    ],
+  },
+  {
+    // A harvest source (#383, doc 59): a solved ticket carrying the tag, in
+    // the name of the agent who solved it. Fed by a trigger's webhook.
+    kind: 'zendesk',
+    label: 'Zendesk',
+    capabilities: { pull: false, push: false, webhook: true, tree: false, harvest: true },
+    credentialLabel: 'email:api-token',
+    fields: [
+      { key: 'baseUrl', label: 'Zendesk URL', kind: 'text', required: true, placeholder: 'https://your-team.zendesk.com' },
+      {
+        key: 'harvestLabel',
+        label: 'Harvest tag',
+        kind: 'text',
+        required: false,
+        placeholder: DEFAULT_HARVEST_LABEL,
+        help: 'A ticket carrying this tag is harvested when it is solved. Leave empty for "knowledge".',
       },
     ],
   },

@@ -28,6 +28,7 @@ import {
   connectorKindInfo,
   driftCheckMode,
   driftFlagPages,
+  ZENDESK_TRIGGER_BODY,
 } from '@knowledge/contracts'
 import type {
   ConnectorConflictPolicy,
@@ -575,9 +576,10 @@ function startOver() {
                 @update:model-value="patch({ webhookSecret: String($event) })"
               />
               <span class="text-muted-foreground block text-xs">
-                {{ t('connectors.harvestWebhook', { kind: info.label }) }}
+                {{ kind === 'zendesk' ? t('connectors.harvestWebhookZendesk') : t('connectors.harvestWebhook', { kind: info.label }) }}
                 <code v-if="editing?.webhookPath" class="bg-muted rounded px-1">{{ editing.webhookPath }}</code>
               </span>
+              <code v-if="kind === 'zendesk'" class="bg-muted block rounded px-2 py-1.5 text-xs break-all">{{ ZENDESK_TRIGGER_BODY }}</code>
             </label>
           </template>
           <template v-else>

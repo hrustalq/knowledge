@@ -17,6 +17,15 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Slack is a chat-bot platform (#380). A workspace admin connects an internal Slack app with its bot
+  token and signing secret under Settings → Chat bots, then pastes the address shown on the bot's card
+  as the app's Request URL for Event Subscriptions and Interactivity. The bot answers a mention in a
+  channel (in the message's thread) and a direct message, as the linked person, with citations, 👍/👎
+  and Save, as it does on Time and Mattermost. `capture` said in a thread, or 📌 on any of its
+  messages, harvests the thread into reviewed captures. The chat reply gives counts and an inbox
+  link. Every request Slack sends is checked against the signing secret, and an unsigned, forged or
+  more than five-minute-old request is refused.
+
 - A chat search result from a Time or Mattermost channel now links to its thread, as Telegram supergroup
   results already did (#407). On the Chat tab of search and in an assistant answer's chat citation, the
   result opens the thread's first post on the chat server in a new tab. Direct chats still have no link.
@@ -25,6 +34,10 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261202100000_chat_signing_secret` adds a nullable `chat_integrations.signing_secret`
+  (the Slack app's signing secret, encrypted with `SETTINGS_ENCRYPTION_KEY`). It is additive, so a
+  rollback keeps working; a Slack bot saved on this release stops answering on the previous one,
+  which has no Slack adapter. No new env var: `CHAT_ENABLED` covers Slack too.
 - Migration `20261201100000_chat_binding_team` adds a nullable `chat_channel_bindings.team_name`. It is
   additive, and the previous release ignores it, so a rollback keeps working. The bot fills it once per
   searchable Time/Mattermost channel, at the first message it keeps there, with two calls to the chat

@@ -16,8 +16,8 @@ import { ChatIntegrationsService } from './chat-integrations.service.js';
  *
  * `@Public()` because the caller is a messenger, not a session. What
  * authenticates it is the adapter's check, before anything else is read: the
- * shared secret Telegram echoes on every delivery, or the signature a Time or
- * Mattermost button carries in its context. A failed check is a 401 that touched nothing.
+ * shared secret Telegram echoes on every delivery, the signature a Time or
+ * Mattermost button carries in its context, or Slack's request signature. A failed check is a 401 that touched nothing.
  *
  * The handler answers at once — Telegram redelivers what it thinks timed out —
  * and the work continues detached in {@link ChatAnswersService.receive}, which
@@ -66,6 +66,9 @@ export class ChatWebhookController {
       this.logger.warn({ msg: 'chat delivery refused: bad secret', integrationId: id });
       throw new UnauthorizedException(t('error.chat.invalidSecret'));
     }
+    // Slack checking the Request URL it was given: answered, and nothing else read.
+    const handshake = adapter.handshake?.(raw);
+    if (handshake) return handshake;
     const replies: Array<Promise<unknown>> = [];
     for (const inbound of adapter.parseInbound(raw, row.botUsername)) {
       const handled = this.answers.receive(row, inbound);

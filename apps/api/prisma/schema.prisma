@@ -3159,7 +3159,7 @@ model ExportJob {
 model ChatIntegration {
   id          String  @id @default(uuid()) @db.Uuid
   workspaceId String  @map("workspace_id") @db.Uuid
-  /// CHAT_PLATFORM_KINDS — 'telegram' | 'time' | 'mattermost'.
+  /// CHAT_PLATFORM_KINDS — 'telegram' | 'time' | 'mattermost' | 'slack'.
   kind        String
   name        String
   enabled     Boolean @default(true)
@@ -3176,6 +3176,10 @@ model ChatIntegration {
   /// `secret_token`). Only the hash is kept: the secret is handed to the
   /// platform once, when the webhook is set, and compared on the way in.
   inboundSecretHash String? @map("inbound_secret_hash")
+  /// AES-256-GCM envelope of the key the platform signs every delivery with
+  /// (Slack's signing secret, #380). Unlike Telegram's secret it is the
+  /// platform's, not ours, so it is kept to recompute the HMAC; never leaves the API.
+  signingSecret     String? @map("signing_secret")
   /// Read from the platform (getMe) whenever the token is saved or tested.
   botUsername       String? @map("bot_username")
   /// The platform's last refusal of setWebhook; null once it was accepted.

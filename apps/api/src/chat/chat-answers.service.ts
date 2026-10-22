@@ -47,13 +47,15 @@ const REASONS_PER_ROW = 2;
 
 /**
  * The help each platform gets: Telegram's commands are `/slash`; a Mattermost
- * client (Time's too) takes every leading `/` for itself, so its commands are
- * plain words — one text for both, named for the platform that had it first.
+ * client (Time's too) and Slack's take every leading `/` for themselves, so
+ * their commands are plain words — one text for all three, named for the
+ * platform that had it first.
  */
 const HELP_KEY: Record<ChatPlatformKind, string> = {
   telegram: 'chat.help',
   time: 'chat.helpTime',
   mattermost: 'chat.helpTime',
+  slack: 'chat.helpTime',
 };
 
 /** Which buttons sit under an answer: the vote row, the reasons for a 👎, or what to save it as. */

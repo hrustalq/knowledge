@@ -567,6 +567,8 @@
     "linkNotMember": "Вы не участник пространства, к которому подключён этот бот",
     "serverUrlRequired": "{platform} размещается у вас: укажите адрес вашего сервера",
     "serverUrlUnexpected": "У {platform} один общий сервер — оставьте адрес сервера пустым",
+    "signingSecretRequired": "{platform} подписывает каждый запрос: вставьте Signing Secret со страницы Basic Information приложения",
+    "signingSecretUnexpected": "{platform} не подписывает запросы — оставьте Signing Secret пустым",
     "serverUrlInvalid": "Это не адрес сервера — ожидается что-то вроде https://time.example.com",
     "serverUrlNotHttps": "Сервер мессенджера должен использовать https (http допустим только при CHAT_ALLOW_PRIVATE_URLS)",
     "serverUrlPrivate": "Адрес {address} находится в частной сети; разрешите его через CHAT_ALLOW_PRIVATE_URLS",

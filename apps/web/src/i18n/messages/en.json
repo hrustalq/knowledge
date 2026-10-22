@@ -5068,6 +5068,14 @@
         "step2": "Copy the access token it shows once, and paste it below with your Mattermost server address.",
         "step3": "Add the bot to a team and a channel and mention it, or message it privately: it replies with a link that connects your account.",
         "checking": "Checking with Mattermost…"
+      },
+      "slack": {
+        "description": "The token is checked with Slack. The token and the signing secret are stored encrypted and never shown again.",
+        "step1": "At api.slack.com/apps, create an app from scratch in your workspace. It stays internal to that workspace; nothing is published.",
+        "step2": "Under OAuth & Permissions, add the bot token scopes chat:write, channels:history, groups:history, im:history and reactions:read, then install the app.",
+        "step3": "Paste the Bot User OAuth Token (xoxb-…) and, from Basic Information, the Signing Secret below.",
+        "step4": "Once connected, paste the address shown on the bot’s card as the Request URL under Event Subscriptions (bot events message.channels, message.groups, message.im, reaction_added) and under Interactivity. Then invite the bot to a channel and mention it, or message it privately to link your account.",
+        "checking": "Checking with Slack…"
       }
     },
     "fields": {
@@ -5087,7 +5095,10 @@
       "serverUrl": "{platform} server",
       "serverUrlHint": "The address you open {platform} at. This server must be able to reach it, and it must reach API_PUBLIC_URL for buttons to work.",
       "tokenHintTime": "From Integrations → Bot accounts. Write-only: the page only ever shows its last four characters.",
-      "tokenHintMattermost": "The bot account's access token, from Integrations → Bot Accounts. Write-only: the page only ever shows its last four characters."
+      "tokenHintMattermost": "The bot account's access token, from Integrations → Bot Accounts. Write-only: the page only ever shows its last four characters.",
+      "tokenHintSlack": "The Bot User OAuth Token, from OAuth & Permissions. Write-only: the page only ever shows its last four characters.",
+      "signingSecret": "Signing secret",
+      "signingSecretHint": "From Basic Information → App Credentials. {platform} signs every request with it, and a request that does not match is refused. Write-only."
     },
     "locale": {
       "en": "English",
@@ -5096,7 +5107,8 @@
     "kind": {
       "telegram": "Telegram",
       "time": "Time",
-      "mattermost": "Mattermost"
+      "mattermost": "Mattermost",
+      "slack": "Slack"
     },
     "answerMode": {
       "mention": "When mentioned",
@@ -5104,7 +5116,7 @@
       "off": "Never"
     },
     "bindings": {
-      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time and Mattermost: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
+      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time, Mattermost and Slack: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
       "untitled": "Untitled chat",
       "wholeWorkspace": "Whole workspace",
       "botDefault": "Bot default",
@@ -5127,7 +5139,8 @@
       "searchableHint": "Messages are kept for {days}, masked, and found under Search → Chat by anyone who can read this group's project (the whole workspace's members when it has none; never guests). Edits are followed; /forget deletes a person's own. Turning this on posts a notice in the group first; turning it off deletes everything kept.",
       "searchableTelegram": "Telegram: needs privacy mode off in {'@'}BotFather or the bot as a group admin. A message deleted in Telegram stays searchable until it expires, because Telegram does not tell bots about deletions.",
       "searchableUnavailable": "Switched off on this server (CHAT_SEARCH_ENABLED): no group can be made searchable.",
-      "searchableBy": "Made searchable by"
+      "searchableBy": "Made searchable by",
+      "chatIdPlaceholderSlack": "C0123ABCDEF"
     },
     "card": {
       "off": "Off",
@@ -5148,7 +5161,11 @@
       "socketDown": "This server is not connected to {platform}, so the bot hears nothing.",
       "socketFix": "Check that the {platform} server is reachable from here and that the bot token is still valid; the connection retries on its own.",
       "socketOk": "Listening to {server}",
-      "testOkSocket": "{bot} is reachable. Messages arrive over the bot’s connection to {platform}."
+      "testOkSocket": "{bot} is reachable. Messages arrive over the bot’s connection to {platform}.",
+      "requestUrl": "{platform} delivers messages and button presses only once this address is set as the Request URL under Event Subscriptions and under Interactivity in the app’s settings:",
+      "copyRequestUrl": "Copy the Request URL",
+      "copyFailed": "The clipboard is unavailable here. Select the address and copy it manually.",
+      "testOkSlack": "{bot} is reachable. {platform} delivers once the Request URL below is set in the app’s settings."
     },
     "people": {
       "hint": "Every answer runs as the linked person, with exactly their access. Unlinking stops the bot answering that account.",

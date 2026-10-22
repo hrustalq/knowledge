@@ -298,7 +298,7 @@ async function add() {
     <form class="grid gap-2 sm:grid-cols-[12rem_minmax(0,1fr)_auto] sm:items-end" @submit.prevent="add">
       <div class="grid gap-1">
         <Label :for="`chat-id-${integrationId}`" class="text-xs font-normal text-muted-foreground">{{ t('chatBots.fields.chatId') }}</Label>
-        <Input :id="`chat-id-${integrationId}`" v-model="draft.chatId" class="h-8 font-mono text-xs" :placeholder="t('chatBots.bindings.chatIdPlaceholder')" />
+        <Input :id="`chat-id-${integrationId}`" v-model="draft.chatId" class="h-8 font-mono text-xs" :placeholder="t(kind === 'slack' ? 'chatBots.bindings.chatIdPlaceholderSlack' : 'chatBots.bindings.chatIdPlaceholder')" />
       </div>
       <div class="grid gap-1">
         <Label :for="`chat-title-${integrationId}`" class="text-xs font-normal text-muted-foreground">{{ t('chatBots.fields.chatTitle') }}</Label>

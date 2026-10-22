@@ -565,6 +565,8 @@
     "linkNotMember": "You are not a member of the workspace this bot belongs to",
     "serverUrlRequired": "{platform} is self-hosted: give the address of your server",
     "serverUrlUnexpected": "{platform} has one fixed server — leave the server address empty",
+    "signingSecretRequired": "{platform} signs every request: paste the signing secret from the app’s Basic Information page",
+    "signingSecretUnexpected": "{platform} does not sign its deliveries — leave the signing secret empty",
     "serverUrlInvalid": "That is not a server address — expected something like https://time.example.com",
     "serverUrlNotHttps": "The messenger server must use https (http is allowed only with CHAT_ALLOW_PRIVATE_URLS)",
     "serverUrlPrivate": "{address} is on a private network; set CHAT_ALLOW_PRIVATE_URLS to allow it",

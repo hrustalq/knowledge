@@ -193,6 +193,8 @@ export interface ChatAdapterContext {
   serverUrl: string | null;
   /** Our webhook: where a platform that is told per button (Time) sends a press. */
   actionUrl: string;
+  /** The key a platform signs every delivery with (Slack's signing secret); null where it signs nothing. */
+  signingSecret?: string | null;
 }
 
 /** The platform refused or could not be reached. The message never contains the token. */
@@ -222,9 +224,16 @@ export interface ChatAdapter {
    * Is this webhook delivery the platform's? Telegram echoes a shared secret,
    * compared against the stored hash; Time sends nothing to check, so its
    * buttons carry a signature over their data, keyed by the bot's token
-   * (`ctx`). Constant-time either way. Websocket messages never come here.
+   * (`ctx`); Slack signs every request with the app's signing secret
+   * (`ctx.signingSecret`). Constant-time each way. Websocket messages never come here.
    */
   verifyInbound(raw: RawInbound, secretHash: string | null, ctx: ChatAdapterContext | null): boolean;
+  /**
+   * A verified delivery that is the platform checking our URL rather than
+   * sending anything (Slack's `url_verification`): what the webhook answers
+   * it with. null for every other delivery; absent where there is no such check.
+   */
+  handshake?(raw: RawInbound): unknown;
   /** Messages addressed to the bot; anything else (edits, joins, other bots' commands) is dropped. */
   parseInbound(raw: RawInbound, botUsername: string | null): ChatInbound[];
 

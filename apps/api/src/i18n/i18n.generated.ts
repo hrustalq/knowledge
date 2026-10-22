@@ -1208,6 +1208,8 @@ export type I18nTranslations = {
             "linkNotMember": string;
             "serverUrlRequired": string;
             "serverUrlUnexpected": string;
+            "signingSecretRequired": string;
+            "signingSecretUnexpected": string;
             "serverUrlInvalid": string;
             "serverUrlNotHttps": string;
             "serverUrlPrivate": string;

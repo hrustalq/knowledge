@@ -72,11 +72,23 @@ export function mattermostPermalink(serverUrl: string, team: string, postId: str
   return `${serverUrl.replace(/\/$/, '')}/${encodeURIComponent(team)}/pl/${encodeURIComponent(postId)}`;
 }
 
+/**
+ * A command said as a whole message in plain words (`help`, `capture`…): a
+ * Mattermost client, like Slack's, takes every leading `/` for its own slash
+ * commands and never posts it. `remember` and `запомни` are `capture`.
+ */
+export function plainCommand(text: string): { name: string; args: string } | null {
+  const match = COMMAND_RE.exec(text);
+  if (!match) return null;
+  const name = match[1].toLowerCase();
+  return { name: CAPTURE_WORDS.has(name) ? 'capture' : name, args: '' };
+}
+
 /** `S3` → `3`: the reader sees a footnote number, not the model's label. */
-const citeNumber = (label: string): string => label.replace(/^S/i, '');
+export const citeNumber = (label: string): string => label.replace(/^S/i, '');
 
 /** `[text](url)`, the URL allowed one level of parentheses — the Telegram adapter's pattern. */
-const MD_LINK_RE = /\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g;
+export const MD_LINK_RE = /\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g;
 
 /** Link text that came from a page title: brackets would end the link early. */
 const escapeLinkText = (s: string): string => s.replace(/([[\]\\])/g, '\\$1');
@@ -91,7 +103,7 @@ export function defuseMentions(text: string): string {
   return text.replace(/(^|[^\w/:.@])@(?=[\w])/g, '$1@​');
 }
 
-function resolveUrl(raw: string, base: string): string | null {
+export function resolveUrl(raw: string, base: string): string | null {
   try {
     const url = new URL(raw, base.endsWith('/') ? base : `${base}/`);
     return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
@@ -266,8 +278,6 @@ export class MattermostAdapter implements ChatAdapter {
     const mentionRe = bot ? new RegExp(`(^|[^\\w.@-])@${escapeRegex(bot)}(?![\\w-]|\\.\\w)`, 'gi') : null;
     const mentioned = !!mentionRe && mentionRe.test(original);
     const text = (mentionRe ? original.replace(mentionRe, '$1') : original).replace(/\s+/g, ' ').trim();
-    // In a channel a command must be addressed, or `help` said to colleagues would summon the bot.
-    const cmd = (isDm || mentioned) && COMMAND_RE.exec(text);
     const root = post.root_id || null;
 
     return [
@@ -282,7 +292,8 @@ export class MattermostAdapter implements ChatAdapter {
         mentioned,
         replyToBotMessageId: root,
         threadId: root ?? (isDm ? null : post.id),
-        command: cmd ? { name: CAPTURE_WORDS.has(cmd[1].toLowerCase()) ? 'capture' : cmd[1].toLowerCase(), args: '' } : null,
+        // In a channel a command must be addressed, or `help` said to colleagues would summon the bot.
+        command: isDm || mentioned ? plainCommand(text) : null,
         action: null,
         // An edit's time is the edit's; a post's, its creation.
         ...(post.edit_at || post.create_at ? { at: new Date(post.edit_at || post.create_at!) } : {}),
@@ -544,7 +555,7 @@ export class MattermostAdapter implements ChatAdapter {
   }
 }
 
-function parseJson<T>(raw: unknown): T | null {
+export function parseJson<T>(raw: unknown): T | null {
   if (typeof raw !== 'string') return null;
   try {
     const value: unknown = JSON.parse(raw);

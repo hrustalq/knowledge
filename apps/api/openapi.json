@@ -31981,7 +31981,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.31.0",
+    "version": "0.32.1",
     "contact": {}
   },
   "tags": [],
@@ -37712,7 +37712,8 @@
             "enum": [
               "telegram",
               "time",
-              "mattermost"
+              "mattermost",
+              "slack"
             ]
           },
           "name": {
@@ -37722,7 +37723,12 @@
           },
           "token": {
             "type": "string",
-            "description": "The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token). Write-only — never returned."
+            "description": "The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token; Slack: the Bot User OAuth Token, xoxb-…). Write-only — never returned."
+          },
+          "signingSecret": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The app's signing secret, for a platform that signs its deliveries (Slack: Basic Information → App Credentials) — required there, refused elsewhere. Write-only — never returned."
           },
           "serverUrl": {
             "type": "string",
@@ -37764,6 +37770,11 @@
           "token": {
             "type": "string",
             "description": "Replaces the stored token; omit to keep it"
+          },
+          "signingSecret": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Replaces the stored signing secret (Slack); omit to keep it"
           },
           "serverUrl": {
             "type": "string",

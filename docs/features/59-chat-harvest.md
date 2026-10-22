@@ -1,4 +1,4 @@
-# 59 — Chat harvest: a Telegram, Time or Mattermost thread, proposed as reviewed captures
+# 59 — Chat harvest: a Telegram, Time, Mattermost or Slack thread, proposed as reviewed captures
 
 Issue [#82](https://github.com/hrustalq/knowledge/issues/82), shipped as five
 PRs (#344–#347 and the one carrying this document). Before it, the only way
@@ -20,14 +20,14 @@ separate switch with its own store and retention ([feature 60](60-chat-search.md
 - **Ask for a harvest**, as a linked person with the `editor` role in the
   bound workspace:
 
-  | trigger | Time, Mattermost | Telegram |
+  | trigger | Time, Mattermost, Slack | Telegram |
   | --- | --- | --- |
   | a command | `capture` (or `remember`, `запомни`) inside a thread, mentioning the bot in a channel | `/capture` as a reply to the first message of the thread |
   | a private chat | — | forward the bot the messages, then `/capture` |
   | a reaction | 📌 on any message of a thread | ✍ on a kept message, where the bot is a group admin |
 
 - **What it reads:**
-  - **Time, Mattermost:** the whole thread, fetched by root. A command reads up to the
+  - **Time, Mattermost, Slack:** the whole thread, fetched by root. A command reads up to the
     command; a reaction reads all of it.
   - **Telegram group:** the replied-to message, then what the group (or
     forum topic) said from there up to the command, from the listening
@@ -92,6 +92,12 @@ The adapter seam (`chat-adapter.types.ts`) has two optional members:
   a reaction passes null. The thread link is the root's permalink, which needs
   the channel's team. A direct channel has no team, so no link, and a link that
   cannot be built is left out rather than failing the harvest.
+- `fetchThread` on Slack (#380) is `conversations.replies` from the root:
+  asked about a reply, Slack returns that reply alone with its `thread_ts`,
+  so the thread is read again from the root (one page of 1000). Bots' and
+  join/topic messages are left out, markup is read back to text, and the link
+  is `chat.getPermalink` of the root, left out if it fails. 📌 is
+  `reaction_added` with `pushpin`.
 - `messageUrl(chatId, messageId)`: Telegram's `t.me/c/…` link for a
   supergroup. A basic group and a private chat have none.
 

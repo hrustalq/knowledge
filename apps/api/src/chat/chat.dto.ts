@@ -48,12 +48,21 @@ export class CreateChatIntegrationDto {
   name!: string;
 
   @ApiProperty({
-    description: 'The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token). Write-only — never returned.',
+    description: 'The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token; Slack: the Bot User OAuth Token, xoxb-…). Write-only — never returned.',
   })
   @IsString()
   @IsNotEmpty()
   @MaxLength(512, { message: vmsg('maxLength') })
   token!: string;
+
+  @ApiPropertyOptional({
+    maxLength: 200,
+    description: "The app's signing secret, for a platform that signs its deliveries (Slack: Basic Information → App Credentials) — required there, refused elsewhere. Write-only — never returned.",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200, { message: vmsg('maxLength') })
+  signingSecret?: string;
 
   @ApiPropertyOptional({
     maxLength: 500,
@@ -95,6 +104,12 @@ export class UpdateChatIntegrationDto {
   @IsString()
   @MaxLength(512, { message: vmsg('maxLength') })
   token?: string;
+
+  @ApiPropertyOptional({ maxLength: 200, description: 'Replaces the stored signing secret (Slack); omit to keep it' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200, { message: vmsg('maxLength') })
+  signingSecret?: string;
 
   @ApiPropertyOptional({ maxLength: 500, description: 'Moves a self-hosted bot to another server; omit to keep it' })
   @IsOptional()

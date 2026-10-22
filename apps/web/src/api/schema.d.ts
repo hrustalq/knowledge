@@ -8711,11 +8711,13 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            kind: "telegram" | "time" | "mattermost";
+            kind: "telegram" | "time" | "mattermost" | "slack";
             /** @example Team bot */
             name: string;
-            /** @description The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token). Write-only — never returned. */
+            /** @description The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token; Slack: the Bot User OAuth Token, xoxb-…). Write-only — never returned. */
             token: string;
+            /** @description The app's signing secret, for a platform that signs its deliveries (Slack: Basic Information → App Credentials) — required there, refused elsewhere. Write-only — never returned. */
+            signingSecret?: string;
             /**
              * @description The messenger server, for a self-hosted platform (Time, Mattermost) — required there, refused for Telegram
              * @example https://time.example.com
@@ -8734,6 +8736,8 @@ export interface components {
             enabled?: boolean;
             /** @description Replaces the stored token; omit to keep it */
             token?: string;
+            /** @description Replaces the stored signing secret (Slack); omit to keep it */
+            signingSecret?: string;
             /** @description Moves a self-hosted bot to another server; omit to keep it */
             serverUrl?: string;
             /** @description Omit to keep; null goes back to the researcher */

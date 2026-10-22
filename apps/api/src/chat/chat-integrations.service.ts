@@ -13,6 +13,7 @@ import {
   CHAT_PLATFORM_NAMES,
   type AuditAction,
   chatPlatformNeedsServer,
+  chatPlatformNeedsSigningSecret,
   type ChatAutoHarvestLimits,
   type ChatBindingEntry,
   type ChatBindingsResponse,
@@ -108,7 +109,13 @@ export class ChatIntegrationsService {
   context(row: ChatIntegration): ChatAdapterContext | null {
     const token = decryptSecret(row.credential, this.key);
     return token
-      ? { token, botUsername: row.botUsername, serverUrl: row.serverUrl || null, actionUrl: this.webhookUrl(row.id) }
+      ? {
+          token,
+          botUsername: row.botUsername,
+          serverUrl: row.serverUrl || null,
+          actionUrl: this.webhookUrl(row.id),
+          signingSecret: decryptSecret(row.signingSecret, this.key),
+        }
       : null;
   }
 
@@ -128,6 +135,7 @@ export class ChatIntegrationsService {
     if (!token) throw new BadRequestException(t('error.chat.tokenRequired'));
     if (dto.defaultAgentKey) await this.assertAgent(dto.workspaceId, dto.defaultAgentKey);
     const serverUrl = await this.serverUrlFor(dto.kind, dto.serverUrl);
+    const signingSecret = this.signingSecretFor(dto.kind, dto.signingSecret);
     const botUsername = await this.identify(dto.kind, token, serverUrl);
     let row: ChatIntegration;
     try {
@@ -139,6 +147,7 @@ export class ChatIntegrationsService {
           serverUrl,
           credential: encryptSecret(token, this.key),
           credentialHint: maskSecret(token),
+          signingSecret: signingSecret ? encryptSecret(signingSecret, this.key) : null,
           botUsername,
           defaultAgentKey: dto.defaultAgentKey ?? null,
           locale: dto.locale ?? 'en',
@@ -163,6 +172,11 @@ export class ChatIntegrationsService {
       data.defaultAgentKey = dto.defaultAgentKey;
     }
     const kind = row.kind as ChatPlatformKind;
+    if (dto.signingSecret !== undefined) {
+      const secret = this.signingSecretFor(kind, dto.signingSecret);
+      if (!this.key) throw new BadRequestException(t('error.chat.noEncryptionKey'));
+      data.signingSecret = secret ? encryptSecret(secret, this.key) : null;
+    }
     const token = dto.token?.trim();
     const serverUrl = dto.serverUrl !== undefined ? await this.serverUrlFor(kind, dto.serverUrl) : row.serverUrl;
     const moved = serverUrl !== row.serverUrl;
@@ -267,6 +281,18 @@ export class ChatIntegrationsService {
     });
     const url = new URL(value);
     return `${url.origin}${url.pathname}`.replace(/\/+$/, '');
+  }
+
+  /** The signing secret a signed platform's bot needs (Slack), trimmed; null for a platform that must not be given one. */
+  private signingSecretFor(kind: ChatPlatformKind, raw: string | undefined): string | null {
+    const value = raw?.trim() ?? '';
+    const platform = CHAT_PLATFORM_NAMES[kind];
+    if (!chatPlatformNeedsSigningSecret(kind)) {
+      if (value) throw new BadRequestException(t('error.chat.signingSecretUnexpected', { platform }));
+      return null;
+    }
+    if (!value) throw new BadRequestException(t('error.chat.signingSecretRequired', { platform }));
+    return value;
   }
 
   private async identify(kind: ChatPlatformKind, token: string, serverUrl: string): Promise<string> {

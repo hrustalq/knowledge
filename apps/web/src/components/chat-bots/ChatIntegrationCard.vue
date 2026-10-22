@@ -5,16 +5,20 @@
  * HTTPS URL must be provided" is the whole diagnosis for a development server
  * — and Test sets the webhook again after API_PUBLIC_URL is fixed. A Time or
  * Mattermost bot has no webhook to refuse: what it shows is its websocket's
- * last failure, which reconnects on its own.
+ * last failure, which reconnects on its own. A Slack bot's webhook is set in
+ * the Slack app by the admin, and nothing tells us whether it was: the card
+ * gives the address to paste rather than claiming a delivery it cannot see.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { AlertTriangle, CheckCircle2, Trash2 } from 'lucide-vue-next'
+import { AlertTriangle, Check, CheckCircle2, Copy, Link2, Trash2 } from 'lucide-vue-next'
 import {
   CHAT_PLATFORM_NAMES,
+  chatBotHandle,
   chatPlatformNeedsServer,
+  chatPlatformNeedsSigningSecret,
   type ChatIdentitiesResponse,
   type ChatIntegrationSummary,
   type ChatIntegrationTestResponse,
@@ -23,6 +27,7 @@ import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { formatDate } from '@/lib/format'
+import { useCopy } from '@/lib/use-copy'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -46,6 +51,10 @@ const queryClient = useQueryClient()
 
 /** A bot that hears over its own websocket (Time, Mattermost) rather than through our webhook. */
 const socket = computed(() => chatPlatformNeedsServer(props.bot.kind))
+/** A bot whose Request URL the admin pastes into the platform's own app settings (Slack). */
+const pasted = computed(() => chatPlatformNeedsSigningSecret(props.bot.kind))
+const handle = computed(() => (props.bot.botUsername ? chatBotHandle(props.bot.kind, props.bot.botUsername) : null))
+const { state: copyState, copy } = useCopy()
 /** Product names are never translated. */
 const platform = computed(() => CHAT_PLATFORM_NAMES[props.bot.kind])
 const tab = ref<'groups' | 'people'>('groups')
@@ -76,7 +85,7 @@ async function test() {
   busy.value = true
   try {
     const res = (await api.post('/v1/chat/integrations/{id}/test', { path: { id: props.bot.id } })) as ChatIntegrationTestResponse
-    if (res.ok) toast.success(t(socket.value ? 'chatBots.card.testOkSocket' : 'chatBots.card.testOk', { bot: `@${res.botUsername}`, platform: platform.value }))
+    if (res.ok) toast.success(t(socket.value ? 'chatBots.card.testOkSocket' : pasted.value ? 'chatBots.card.testOkSlack' : 'chatBots.card.testOk', { bot: res.botUsername ? chatBotHandle(props.bot.kind, res.botUsername) : props.bot.name, platform: platform.value }))
     else toast.error(t('chatBots.card.testFailed', { reason: res.error ?? '' }))
     emit('changed')
   } catch (e) {
@@ -118,7 +127,7 @@ async function unlink(identityId: string) {
           <Badge v-if="!bot.enabled" variant="secondary">{{ t('chatBots.card.off') }}</Badge>
         </div>
         <p class="mt-0.5 flex flex-wrap gap-x-1.5 text-xs text-muted-foreground">
-          <span v-if="bot.botUsername" class="whitespace-nowrap">@{{ bot.botUsername }} ·</span>
+          <span v-if="handle" class="whitespace-nowrap">{{ handle }} ·</span>
           <span class="whitespace-nowrap">{{ t('chatBots.card.token', { hint: bot.credentialHint ?? '—' }) }}</span>
         </p>
       </div>
@@ -146,6 +155,28 @@ async function unlink(identityId: string) {
           <p class="text-xs">{{ t(socket ? 'chatBots.card.socketFix' : 'chatBots.card.webhookFix', { platform }) }}</p>
           <p v-if="!socket" class="break-all font-mono text-xs opacity-80">{{ bot.webhookUrl }}</p>
         </div>
+      </div>
+      <div v-else-if="pasted" class="space-y-1.5 text-xs text-muted-foreground">
+        <p class="flex items-start gap-2">
+          <Link2 class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span>{{ t('chatBots.card.requestUrl', { platform }) }}</span>
+        </p>
+        <div class="flex items-center gap-2 pl-5.5">
+          <code class="min-w-0 flex-1 break-all rounded-md border bg-muted/40 px-2 py-1 font-mono text-foreground">{{ bot.webhookUrl }}</code>
+          <Button
+            size="icon"
+            variant="ghost"
+            class="size-8 shrink-0"
+            :aria-label="t('chatBots.card.copyRequestUrl')"
+            @click="copy(bot.webhookUrl)"
+          >
+            <Check v-if="copyState === 'copied'" class="size-4" aria-hidden="true" />
+            <Copy v-else class="size-4" aria-hidden="true" />
+          </Button>
+        </div>
+        <p v-if="copyState !== 'idle'" class="pl-5.5" aria-live="polite">
+          {{ t(copyState === 'copied' ? 'common.copied' : 'chatBots.card.copyFailed') }}
+        </p>
       </div>
       <p v-else class="flex items-center gap-2 text-xs text-muted-foreground">
         <CheckCircle2 class="size-3.5 shrink-0" aria-hidden="true" />

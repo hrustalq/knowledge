@@ -3247,8 +3247,6 @@
     "suggestionAdded": "“{term}” added",
     "openPage": "Open page",
     "openEntry": "Open glossary entry",
-    "linksOn": "Glossary links on",
-    "linksOff": "Glossary links off",
     "toggleLinks": "Glossary",
     "ambiguous": "«{spelling}» is claimed by {n} entries, so it links to none of them.",
     "ambiguousTitle": "Contested spellings",

@@ -25,7 +25,6 @@ import { useQuery } from '@tanstack/vue-query'
 import {
   Activity as ActivityIcon,
   BadgeCheck,
-  BookA,
   Braces,
   Download,
   Flag,
@@ -40,7 +39,6 @@ import {
   Info,
   Network,
   Pencil,
-  Waypoints,
   Scale,
   Share2,
   Workflow as WorkflowIcon,
@@ -714,132 +712,99 @@ watch(
 </script>
 
 <template>
-  <!-- The page's action bar (#441), drawn in the shell's strip under the
-       breadcrumbs so it stays put while the page scrolls. Ordered as the
-       head always was: what any reader can do to the page, then who hears
-       about it and who may see it, then the editor's own act. Labels show
-       while the bar has room for them and fold to icons when it does not. -->
-  <Teleport to="#kn-page-toolbar">
-    <!-- Held open while the page loads, so the content does not drop by a
-         bar's height when it arrives. -->
-    <div v-if="!detail && !error && !restrictedRefusal" class="kn-bar-start" aria-hidden="true" />
-    <template v-else-if="detail">
-      <div class="kn-bar-start">
-        <!-- Only on pages that actually have vocabulary in them: a switch for
-             something the page does not do is noise. -->
-        <Button
-          v-if="canvasEl?.hasGlossary"
-          variant="ghost"
-          size="sm"
-          class="hidden text-muted-foreground sm:inline-flex"
-          :aria-pressed="canvasEl?.glossaryOn"
-          :title="canvasEl?.glossaryOn ? t('glossary.linksOn') : t('glossary.linksOff')"
-          @click="canvasEl?.toggleGlossaryLinks()"
+  <!-- The page's actions (#441), at the end of the trail's row: where you are
+       on the left, what you can do to it on the right, one strip that stays
+       put while the page scrolls. Only acts on the page itself — History and
+       Graph live in the rail and Export in ⋯, so neither is said twice.
+       Quiet first (who hears about it, who may open it, who else may), then
+       the two verbs with their words, then ⋯. -->
+  <Teleport to="#kn-page-actions">
+    <template v-if="detail">
+      <WatchButton subject-type="document" :subject-id="detail.document.documentId" compact />
+      <!-- Handing the page to people outside the workspace is an editor's act
+           (docs/features/43); the server checks the role and the workspace switch. -->
+      <SharePopover
+        v-if="auth.canEdit && !archived"
+        :document-id="detail.document.documentId"
+        :restricted="!!detail.document.restricted"
+        compact
+      />
+      <!-- Who may open the page (#76). Offered to every reader: a manager
+           edits it, anyone else is told where they stand. The icon is the
+           page's state, so a restricted page reads as one from its row. -->
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        :data-restricted="detail.document.restricted ? 'true' : undefined"
+        :title="detail.document.restricted ? t('access.lockedLabel') : t('access.action')"
+        :aria-label="detail.document.restricted ? t('access.lockedLabel') : t('access.action')"
+        @click="accessOpen = true"
+      >
+        <Lock v-if="detail.document.restricted" class="size-4" aria-hidden="true" />
+        <LockOpen v-else class="size-4" aria-hidden="true" />
+      </Button>
+      <span class="kn-bar-rule" aria-hidden="true" />
+      <!-- Every reader can hand the page to an AI tool (issue #68). -->
+      <PageAiActions
+        :document-id="detail.document.documentId"
+        :title="detail.document.title"
+        :revision-id="viewingRevision"
+      />
+      <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
+        <RouterLink
+          :to="`/documents/${detail.document.documentId}/${isSpec ? 'spec' : 'edit'}`"
+          :title="hasUnstaged ? t('editor.unstaged.label') : t('common.edit')"
         >
-          <BookA class="size-3.5" :class="canvasEl?.glossaryOn ? 'text-primary' : 'opacity-60'" />
-          <span class="kn-bar-label">{{ t('glossary.toggleLinks') }}</span>
-        </Button>
-      </div>
-        <div class="kn-bar-end">
-          <!-- Every reader can hand the page to an AI tool (issue #68). -->
-          <PageAiActions
-            :document-id="detail.document.documentId"
-            :title="detail.document.title"
-            :revision-id="viewingRevision"
-          />
-          <!-- Quick ways into what the rail and the menu already hold: the
-               page's history, its graph, a copy of it. A phone has the rail
-               under the page and Export in ⋯, so these step aside there. -->
-          <span class="kn-bar-rule hidden sm:block" aria-hidden="true" />
-          <Button variant="ghost" size="sm" class="hidden sm:inline-flex" :title="t('rail.history')" @click="expanded = 'revisions'">
-            <History class="size-3.5" aria-hidden="true" />
-            <span class="kn-bar-label">{{ t('rail.history') }}</span>
+          <Pencil class="size-3.5" />
+          <span class="kn-bar-label">{{ t('common.edit') }}</span>
+          <span v-if="hasUnstaged" class="kn-dirty-dot" aria-hidden="true" />
+          <span v-if="hasUnstaged" class="sr-only">{{ t('editor.unstaged.label') }}</span>
+        </RouterLink>
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="icon-sm" :aria-label="t('documents.moreActions')" :title="t('documents.moreActions')">
+            <MoreHorizontal class="size-4" />
           </Button>
-          <Button variant="ghost" size="sm" class="hidden sm:inline-flex" :title="t('rail.graph')" @click="expanded = 'graph'">
-            <Waypoints class="size-3.5" aria-hidden="true" />
-            <span class="kn-bar-label">{{ t('rail.graph') }}</span>
-          </Button>
-          <Button variant="ghost" size="sm" class="hidden sm:inline-flex" :title="t('export.action')" @click="openExport('zip')">
-            <Download class="size-3.5" aria-hidden="true" />
-            <span class="kn-bar-label">{{ t('export.action') }}</span>
-          </Button>
-          <span class="kn-bar-rule hidden sm:block" aria-hidden="true" />
-          <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
-          <!-- Handing the page to people outside the workspace is an editor's act
-               (docs/features/43); the server checks the role and the workspace switch. -->
-          <SharePopover
-            v-if="auth.canEdit && !archived"
-            :document-id="detail.document.documentId"
-            :restricted="!!detail.document.restricted"
-          />
-          <!-- Who may open the page (#76). Offered to every reader: a manager
-               edits it, anyone else is told where they stand. The icon is the
-               page's state, so a restricted page reads as one from its bar. -->
-          <Button
-            variant="outline"
-            size="sm"
-            :title="detail.document.restricted ? t('access.lockedLabel') : t('access.action')"
-            @click="accessOpen = true"
-          >
-            <Lock v-if="detail.document.restricted" class="size-3.5" aria-hidden="true" />
-            <LockOpen v-else class="size-3.5" aria-hidden="true" />
-            <span class="kn-bar-label">{{ t('access.action') }}</span>
-          </Button>
-          <span v-if="auth.canEdit && !archived" class="kn-bar-rule hidden sm:block" aria-hidden="true" />
-          <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
-            <RouterLink
-              :to="`/documents/${detail.document.documentId}/${isSpec ? 'spec' : 'edit'}`"
-              :title="hasUnstaged ? t('editor.unstaged.label') : t('common.edit')"
-            >
-              <Pencil class="size-3.5" />
-              <span class="kn-bar-label">{{ t('common.edit') }}</span>
-              <span v-if="hasUnstaged" class="kn-dirty-dot" aria-hidden="true" />
-              <span v-if="hasUnstaged" class="sr-only">{{ t('editor.unstaged.label') }}</span>
-            </RouterLink>
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-sm" :aria-label="t('documents.moreActions')">
-                <MoreHorizontal class="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" class="w-52">
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <Download class="size-4" /> {{ t('export.action') }}
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent class="w-44">
-                  <DropdownMenuItem v-for="f in EXPORT_FORMATS" :key="f" @select="openExport(f)">
-                    {{ t(`export.format.${f}`) }}
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              <DropdownMenuItem v-if="auth.canEdit && saveAsPage" @select="saveAsOpen = true">
-                <LayoutTemplate class="size-4" /> {{ t('templates.saveAs.action') }}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" class="w-52">
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Download class="size-4" /> {{ t('export.action') }}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent class="w-44">
+              <DropdownMenuItem v-for="f in EXPORT_FORMATS" :key="f" @select="openExport(f)">
+                {{ t(`export.format.${f}`) }}
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <!-- Reader preferences, not page actions (#422): full width applies
-                   to every page and is remembered in a cookie. -->
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <Eye class="size-4" /> {{ t('documents.menu.view') }}
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent class="w-52">
-                  <DropdownMenuCheckboxItem :model-value="layout.fullWidth" @update:model-value="layout.setFullWidth">
-                    {{ t('documents.fullWidth') }}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                    v-if="canvasEl?.hasGlossary"
-                    :model-value="!!canvasEl?.glossaryOn"
-                    @update:model-value="canvasEl?.toggleGlossaryLinks()"
-                  >
-                    {{ t('glossary.toggleLinks') }}
-                  </DropdownMenuCheckboxItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            </DropdownMenuContent>
-          </DropdownMenu>
-      </div>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuItem v-if="auth.canEdit && saveAsPage" @select="saveAsOpen = true">
+            <LayoutTemplate class="size-4" /> {{ t('templates.saveAs.action') }}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <!-- Reader preferences, not page actions (#422): full width applies
+               to every page and is remembered in a cookie. -->
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Eye class="size-4" /> {{ t('documents.menu.view') }}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent class="w-52">
+              <DropdownMenuCheckboxItem :model-value="layout.fullWidth" @update:model-value="layout.setFullWidth">
+                {{ t('documents.fullWidth') }}
+              </DropdownMenuCheckboxItem>
+              <!-- Only on pages that actually have vocabulary in them: a switch
+                   for something the page does not do is noise. -->
+              <DropdownMenuCheckboxItem
+                v-if="canvasEl?.hasGlossary"
+                :model-value="!!canvasEl?.glossaryOn"
+                @update:model-value="canvasEl?.toggleGlossaryLinks()"
+              >
+                {{ t('glossary.toggleLinks') }}
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </template>
   </Teleport>
 

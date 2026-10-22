@@ -82,17 +82,17 @@ const showVerifyBanner = computed(
 )
 
 /**
- * `h-14` topbar, `h-10` verify banner, `h-9` strip, in the unit the consumers want.
- * The page toolbar under the strip (#441) adds `--kn-toolbar-h`, which the
- * stylesheet sets from whether a page teleported anything into it: the page,
- * not the shell, knows that, and CSS can answer it on the server's first frame.
+ * `h-14` topbar and `h-10` verify banner, in the unit the consumers want. The
+ * trail row adds `--kn-trail-h` and the editor's bar under it (#441)
+ * `--kn-toolbar-h`, both set by the stylesheet: the trail row is drawn for a
+ * trail *or* for page actions, and only the page knows whether it has those,
+ * which CSS can answer on the server's first frame.
  */
 const TOPBAR_REM = 3.5
 const BANNER_REM = 2.5
-const CRUMBS_REM = 2.25
 const chromeHeight = computed(
   () =>
-    `calc(${TOPBAR_REM + (showVerifyBanner.value ? BANNER_REM : 0) + (showCrumbs.value ? CRUMBS_REM : 0)}rem + var(--kn-toolbar-h, 0rem))`,
+    `calc(${TOPBAR_REM + (showVerifyBanner.value ? BANNER_REM : 0)}rem + var(--kn-trail-h, 0rem) + var(--kn-toolbar-h, 0rem))`,
 )
 
 /**
@@ -198,13 +198,21 @@ function skipToMain() {
         :email="auth.me.email"
         @dismiss="bannerDismissed = true"
       />
-      <AppBreadcrumbs v-if="showCrumbs" :crumbs="crumbs" />
-      <!-- The page's action bar (#441): the page view and the editor teleport
-           their actions here, so the bar sits under the trail and outside the
-           scroller — always visible, and an anchor jump never lands under it.
-           Always rendered, so a teleport never misses its target; drawn only
-           while something is in it. `id` stays the first attribute:
-           entry-server splices the server's teleport buffer in by it. -->
+      <!-- The trail row: where you are on the left, what you can do to it on
+           the right. A page teleports its actions into the end slot, so they
+           share the trail's row instead of stacking a second strip under it,
+           and stay outside the scroller — always visible, and an anchor jump
+           never lands under them. Both targets are always rendered, so a
+           teleport never misses one; each is drawn only while it holds
+           something. `id` stays the first attribute: entry-server splices the
+           server's teleport buffers in by it. -->
+      <div class="kn-trail">
+        <AppBreadcrumbs v-if="showCrumbs" :crumbs="crumbs" />
+        <div id="kn-page-actions" class="kn-page-actions" />
+      </div>
+      <!-- The editor's bar (#441): the state of the edit on the left, its acts on
+           the right, the formatting toolbar directly beneath — too much to share
+           the trail's row, so it keeps a row of its own. -->
       <div id="kn-page-toolbar" class="kn-page-toolbar" />
       <!--
         Two content modes.

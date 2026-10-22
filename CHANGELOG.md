@@ -13,6 +13,16 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- A page's actions no longer take a second strip under the breadcrumbs (#455). They now sit at the right
+  end of the breadcrumb row: Watch, Share and Access as icons, then Copy page, Edit and ⋯, all the same
+  height on one line. History and Graph left the bar because the rail beside the page already holds them,
+  and Export and the glossary switch are still in ⋯ (Export ▸, View ▸). On a narrow window Copy page and
+  Edit show only their icons. The editor's bar is unchanged.
+
 ## [0.32.0] — 2026-10-22
 
 ### Added

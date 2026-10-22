@@ -233,6 +233,9 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
     },
     { name: 'folder', meta: { labelKey: 'connectors.step.folder', fields: ['folderId'] } },
   ],
+  // A harvest source (#382): the API key, and which label marks an issue
+  // worth keeping. One step — the label refines what the key reads.
+  linear: [{ name: 'workspace', meta: { labelKey: 'connectors.step.harvest', fields: ['harvestLabel'], credential: true } }],
 }
 
 export const confluenceSetup = kindMachine('confluenceSetup', KIND_STEPS.confluence)
@@ -242,6 +245,7 @@ export const notionSetup = kindMachine('notionSetup', KIND_STEPS.notion)
 export const markdownGitSetup = kindMachine('markdownGitSetup', KIND_STEPS['markdown-git'])
 export const codebaseSetup = kindMachine('codebaseSetup', KIND_STEPS.codebase)
 export const googleDriveSetup = kindMachine('googleDriveSetup', KIND_STEPS['google-drive'])
+export const linearSetup = kindMachine('linearSetup', KIND_STEPS.linear)
 
 export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   confluence: confluenceSetup,
@@ -251,6 +255,7 @@ export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   'markdown-git': markdownGitSetup,
   codebase: codebaseSetup,
   'google-drive': googleDriveSetup,
+  linear: linearSetup,
 }
 
 /** The per-kind steps, for the stepper — read without running the machine. */

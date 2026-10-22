@@ -276,6 +276,36 @@ export interface ConnectorAdapter {
     headers: Record<string, string>,
     rawBody: string,
   ): ExternalRef[] | null;
+
+  /**
+   * A harvest connector's delivery (#382, doc 59). Null means "not verified":
+   * the caller answers 401 and does no work. `item: null` is verified but not
+   * a resolution by a person. The payload is only a prefilter — whether the
+   * item is resolved and labelled is decided by {@link readHarvestItem}.
+   * Present exactly when `capabilities.harvest` is true.
+   */
+  verifyHarvestDelivery?(ctx: ConnectorContext, headers: Record<string, string>, rawBody: string): HarvestDelivery | null;
+
+  /** The item as it is now, read fresh; null when it is gone or the credential cannot see it. */
+  readHarvestItem?(ctx: ConnectorContext, externalId: string): Promise<HarvestItem | null>;
+}
+
+/** A resolution, as a delivery tells it: which item, and who resolved it. */
+export interface HarvestDelivery {
+  item: { externalId: string; actor: ExternalGroupMember } | null;
+}
+
+/** An item a harvest reads: its messages as a chat thread, oldest first. */
+export interface HarvestItem {
+  /** How a person cites it (`ENG-123`). */
+  key: string;
+  title: string;
+  url: string;
+  /** In its resolved state now (Linear: a `completed`-type state). */
+  resolved: boolean;
+  labels: string[];
+  /** Authors are the source's opaque ids; the text is raw and is masked by the harvest. */
+  messages: Array<{ authorId: string; text: string; at: Date }>;
 }
 
 /** Reads a required string out of `config`, with the adapter's own error. */

@@ -9,7 +9,7 @@ import {
   Signpost,
   Waypoints,
 } from 'lucide-vue-next'
-import { CHAT_PLATFORM_NAMES } from '@knowledge/contracts'
+import { CHAT_PLATFORM_NAMES, connectorKindInfo } from '@knowledge/contracts'
 import type { CaptureClient, CaptureInfo, CaptureKind, CaptureSession, CaptureStatus, ChatPlatformKind } from '@knowledge/contracts'
 
 /**
@@ -63,7 +63,7 @@ export function clientLabel(client: string, t: (key: string) => string): string 
 
 /** A chat platform's product name (#82). */
 export function platformName(platform: string): string {
-  return CHAT_PLATFORM_NAMES[platform as ChatPlatformKind] ?? platform
+  return CHAT_PLATFORM_NAMES[platform as ChatPlatformKind] ?? connectorKindInfo(platform)?.label ?? platform
 }
 
 /** A commit as people quote one: the first seven characters. */

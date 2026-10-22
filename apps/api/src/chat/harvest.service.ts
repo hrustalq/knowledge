@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { CaptureOrigin, CaptureSession, ChatPlatformKind, CreateCaptureRequest } from '@knowledge/contracts';
+import type { CaptureOrigin, CaptureSession, ChatPlatformKind, ConnectorKind, CreateCaptureRequest } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { Principal } from '../auth/principal.js';
@@ -37,7 +37,8 @@ export interface HarvestInput {
   workspaceId: string;
   /** The group's project; null in a DM, where the workspace's first is used. */
   projectId: string | null;
-  platform: ChatPlatformKind;
+  /** A chat platform, or a harvest connector's kind (#382). */
+  platform: ChatPlatformKind | ConnectorKind;
   chatTitle: string | null;
   thread: ChatThread;
 }

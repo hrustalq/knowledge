@@ -398,6 +398,10 @@ export const KNOWN_EVENT_TYPES = [
   // thread. Never published on the bus: a directed row to the admin it runs
   // as. `title` is the group's name; metadata carries counts only.
   'chat.harvest.proposed',
+  // A resolved tracker or help-desk item was harvested (#382) as the person
+  // who resolved it. A directed row to them; `title` is the item's key and
+  // title, metadata carries counts only.
+  'connector.harvest.proposed',
   'connector.created',
   'connector.updated',
   'connector.deleted',

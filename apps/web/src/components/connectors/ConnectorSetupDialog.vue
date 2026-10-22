@@ -381,7 +381,7 @@ function startOver() {
               >
                 {{ k.label }}
                 <span class="text-muted-foreground mt-0.5 block text-xs font-normal">
-                  {{ k.capabilities.push ? t('connectors.directionBoth') : t('connectors.directionPull') }}
+                  {{ k.capabilities.harvest ? t('connectors.directionHarvest') : k.capabilities.push ? t('connectors.directionBoth') : t('connectors.directionPull') }}
                 </span>
               </button>
             </div>
@@ -561,6 +561,26 @@ function startOver() {
 
         <!-- What should it do ---------------------------------------------->
         <div v-else-if="state === 'options' || state === 'saving'" class="space-y-4">
+          <!-- A harvest source (#382) moves no content, so none of the sync
+               questions below apply; what it needs is the webhook's secret. -->
+          <template v-if="info?.capabilities.harvest">
+            <p class="text-muted-foreground text-sm">{{ t('connectors.harvestHint') }}</p>
+            <label class="block space-y-1.5">
+              <span class="text-sm font-medium">{{ t('connectors.webhookSecret') }}</span>
+              <Input
+                :model-value="context?.webhookSecret ?? ''"
+                type="password"
+                autocomplete="off"
+                :placeholder="editing?.hasWebhookSecret ? t('connectors.webhookSecretKeep') : ''"
+                @update:model-value="patch({ webhookSecret: String($event) })"
+              />
+              <span class="text-muted-foreground block text-xs">
+                {{ t('connectors.harvestWebhook', { kind: info.label }) }}
+                <code v-if="editing?.webhookPath" class="bg-muted rounded px-1">{{ editing.webhookPath }}</code>
+              </span>
+            </label>
+          </template>
+          <template v-else>
           <label class="block space-y-1.5">
             <span class="text-sm font-medium">{{ t('connectors.direction') }}</span>
             <Select :model-value="context?.direction ?? 'pull'" @update:model-value="patch({ direction: $event as ConnectorDirection })">
@@ -628,6 +648,7 @@ function startOver() {
             />
             <span class="text-muted-foreground block text-xs">{{ t('connectors.intervalHint') }}</span>
           </label>
+          </template>
 
           <label v-if="info?.capabilities.push" class="flex items-start gap-2">
             <Checkbox

@@ -31,7 +31,7 @@ import { ChatSocketSupervisor } from './chat-socket.supervisor.js';
 import { ChatSubscriptionSweeper } from './chat-subscription.sweeper.js';
 import { ChatSubscriptionsService } from './chat-subscriptions.service.js';
 import { ChatWebhookController } from './chat-webhook.controller.js';
-import { HarvestService } from './harvest.service.js';
+import { HarvestCoreModule } from './harvest-core.module.js';
 
 /**
  * Chat bots (issue #71). API-only, and a single module rather than the
@@ -55,6 +55,7 @@ import { HarvestService } from './harvest.service.js';
  */
 @Module({
   imports: [
+    HarvestCoreModule,
     PrismaModule,
     AgentCoreModule,
     AiCoreModule,
@@ -86,7 +87,6 @@ import { HarvestService } from './harvest.service.js';
     ChatSubscriptionsService,
     ChatSubscriptionSweeper,
     ChatSocketSupervisor,
-    HarvestService,
   ],
 })
 export class ChatModule {}

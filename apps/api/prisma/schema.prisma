@@ -2077,6 +2077,7 @@ model Connector {
   conflicts             ConnectorConflict[]
   workItems             ConnectorWorkItem[]
   identities            ExternalIdentity[]
+  harvests              ConnectorHarvest[]
   codeImports           CodeImport[]
   codeFiles             CodeFile[]
   componentDeclarations ComponentDeclaration[]
@@ -2235,6 +2236,36 @@ model ExternalIdentity {
   @@unique([connectorId, externalId])
   @@index([workspaceId, userId])
   @@map("external_identities")
+}
+
+/// A resolved item of a harvest connector (#382, doc 59), claimed by its
+/// webhook and finished by `ConnectorHarvestSweeper` (API-only). The unique
+/// key is the once-per-item rule: the insert is the claim, so a redelivery or
+/// a second process claims nothing. A row whose item turns out not to qualify
+/// is deleted, so a later qualifying delivery can claim it again.
+model ConnectorHarvest {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  connectorId String    @map("connector_id") @db.Uuid
+  /// The item's id at the source (a Linear issue id).
+  externalId  String    @map("external_id")
+  /// Who resolved it, as the source names them: what attribution resolves.
+  actorId     String    @map("actor_id")
+  /// A sweep working on it; a lease, so a crashed process's row is retried.
+  lockedAt    DateTime? @map("locked_at") @db.Timestamptz
+  /// Done. Set once, and the row stays, which is what stops a second harvest.
+  harvestedAt DateTime? @map("harvested_at") @db.Timestamptz
+  /// The person it ran as (no FK, house policy) and what it proposed.
+  userId      String?   @map("user_id") @db.Uuid
+  proposed    Int       @default(0)
+  duplicates  Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@unique([connectorId, externalId])
+  @@index([harvestedAt, lockedAt])
+  @@map("connector_harvests")
 }
 
 /// One sync execution. The row is the truth and the queue is only the

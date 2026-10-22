@@ -500,6 +500,29 @@ were settled with the owner on 2026-10-22, before any code:
     an unmapped person) is deleted, so a later qualifying delivery can claim
     the item again.
   - A harvested item is never harvested twice.
+- **Where it lives (#382, shipped for Linear first).**
+  - `ConnectorAdapter` gains two optional members:
+    `verifyHarvestDelivery(ctx, headers, rawBody)` → `{ item }` or null
+    (401), and `readHarvestItem(ctx, id)` → the item fresh, or null.
+  - `ConnectorWebhookController` hands a verified resolution to
+    `ConnectorHarvestSweeper.claim`. The claim records the person through
+    `ConnectorAclService.userFor` (the delivery is the only place their
+    email is) and inserts the row.
+  - `ConnectorHarvestSweeper` is in `ConnectorsModule`, API-only. It takes up
+    to five unharvested rows every 30 s under a 10-minute lease and finishes
+    each.
+  - `HarvestService` moved into `HarvestCoreModule`, so ChatModule and
+    ConnectorsModule share it without loading each other's controllers.
+  - It is off with `HARVEST_ENABLED=false`, like every harvest.
+  - Linear specifically:
+    - The webhook is on **Issues**.
+    - `Linear-Signature` must match, and `webhookTimestamp` must be within
+      60 s.
+    - The prefilter is an `Issue` `update` with `stateId` in `updatedFrom`, by
+      a `user` actor.
+    - The read is one GraphQL call: identifier, title, URL, `state.type`,
+      labels, the description and up to 250 comments.
+    - The key goes bare in `Authorization`.
 - **The same contract as chat.** Captures go through `CaptureService` with a
   server-set origin (`platform: 'linear' | 'zendesk' | 'intercom'`, the
   item's key and title, its URL, the span of its messages). They are

@@ -17,6 +17,14 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Linear issues can be harvested into reviewed captures (#382). Add a Linear connector under
+  Settings → Connectors with a personal API key and a harvest label (default `knowledge`), then add a
+  webhook on Issues in Linear pointed at the connector's address and paste its signing secret. When a
+  linked editor completes an issue that carries the label, its description and comments are masked
+  and proposed as captures in their name, and they get one notification with the counts. An issue
+  completed by someone who is not mapped to a member, or is not an editor, is not harvested. Each
+  issue is harvested at most once, and nothing is written back to Linear.
+
 - Slack is a chat-bot platform (#380). A workspace admin connects an internal Slack app with its bot
   token and signing secret under Settings → Chat bots, then pastes the address shown on the bot's card
   as the app's Request URL for Event Subscriptions and Interactivity. The bot answers a mention in a
@@ -34,6 +42,9 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261203100000_connector_harvests` adds the `connector_harvests` table, one row per
+  harvested issue. It is a new table the previous release never reads, so a rollback keeps working; a
+  Linear connector saved on this release is unknown to the previous one and shows as an unknown kind.
 - Migration `20261202100000_chat_signing_secret` adds a nullable `chat_integrations.signing_secret`
   (the Slack app's signing secret, encrypted with `SETTINGS_ENCRYPTION_KEY`). It is additive, so a
   rollback keeps working; a Slack bot saved on this release stops answering on the previous one,

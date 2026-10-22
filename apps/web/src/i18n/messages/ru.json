@@ -5845,7 +5845,13 @@
         "scim_group_deleted": "SCIM: группа удалена",
         "scim_token_created": "Создан токен SCIM",
         "scim_token_revoked": "Токен SCIM отозван",
-        "scim_settings_updated": "Изменены настройки SCIM"
+        "scim_settings_updated": "Изменены настройки SCIM",
+        "chat_search_enabled": "Группа чата открыта для поиска",
+        "chat_search_disabled": "Выключен поиск по группе чата",
+        "chat_listen_enabled": "Включено хранение сообщений для /capture",
+        "chat_listen_disabled": "Выключено хранение сообщений для /capture",
+        "chat_auto_harvest_enabled": "Включён автоматический сбор тредов",
+        "chat_auto_harvest_disabled": "Выключен автоматический сбор тредов"
       }
     },
     "tabs": {

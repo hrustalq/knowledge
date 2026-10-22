@@ -294,11 +294,13 @@ describe('the switch', () => {
     };
     const adapter = { postMessage: vi.fn(post), render: (v: unknown) => v };
     const env: Record<string, unknown> = { API_PUBLIC_URL: 'https://api.test', CHAT_LISTEN_TTL_DAYS: 7, HARVEST_AUTO_QUIET_MINUTES: 60 };
-    const svc = new ChatIntegrationsService(prisma as never, { get: () => adapter } as never, {} as never, { get: (k: string) => env[k] } as never, {} as never);
+    const audit = { record: vi.fn(async () => undefined) };
+    const svc = new ChatIntegrationsService(prisma as never, { get: () => adapter } as never, {} as never, { get: (k: string) => env[k] } as never, {} as never, audit as never);
     vi.spyOn(svc, 'require').mockResolvedValue({ id: 'int-1', kind: 'telegram', locale: 'en' } as never);
     vi.spyOn(svc, 'context').mockReturnValue({ token: 'T' } as never);
     const data = () => (prisma.chatChannelBinding.update.mock.calls[0] as unknown as [{ data: Record<string, unknown> }])[0].data;
-    return { svc, prisma, adapter, data };
+    const actions = () => audit.record.mock.calls.map((c) => (c as unknown as [{ action: string }])[0].action);
+    return { svc, prisma, adapter, data, audit, actions };
   }
 
   it('on: tells the group first, and the caller becomes who it runs as', async () => {
@@ -307,6 +309,9 @@ describe('the switch', () => {
     expect(h.adapter.postMessage).toHaveBeenCalledWith({ token: 'T' }, { chatId: '-1001' }, { kind: 'notice', text: 'chat.listen.autoOn' });
     expect(h.data()).toMatchObject({ autoHarvestBy: 'admin-1', autoHarvestAt: expect.any(Date) });
     expect(entry.autoHarvestBy).toBe('admin-1');
+    expect(h.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 'ws', actor: 'admin-1', action: 'chat.auto_harvest_enabled', target: 'b-1', params: expect.objectContaining({ quietMinutes: 60 }) }),
+    );
   });
 
   it('already on: another admin pressing it again does not take it over', async () => {
@@ -314,6 +319,7 @@ describe('the switch', () => {
     await h.svc.updateBinding('b-1', { autoHarvest: true }, 'admin-2');
     expect(h.adapter.postMessage).not.toHaveBeenCalled();
     expect(h.data()).not.toHaveProperty('autoHarvestBy');
+    expect(h.audit.record).not.toHaveBeenCalled();
   });
 
   it('needs listening, and the group told — otherwise it stays off', async () => {
@@ -326,23 +332,26 @@ describe('the switch', () => {
     });
     await expect(kicked.svc.updateBinding('b-1', { autoHarvest: true }, 'admin-1')).rejects.toBeInstanceOf(BadRequestException);
     expect(kicked.prisma.chatChannelBinding.update).not.toHaveBeenCalled();
+    expect(kicked.audit.record).not.toHaveBeenCalled();
   });
 
   it('off, or listening off, clears who it ran as', async () => {
     const h = integrations({ autoHarvestBy: 'admin-1', autoHarvestAt: AUTO_AT });
     await h.svc.updateBinding('b-1', { autoHarvest: false }, 'admin-2');
     expect(h.data()).toMatchObject({ autoHarvestBy: null, autoHarvestAt: null });
+    expect(h.actions()).toEqual(['chat.auto_harvest_disabled']);
 
     const l = integrations({ autoHarvestBy: 'admin-1', autoHarvestAt: AUTO_AT });
     await l.svc.updateBinding('b-1', { listening: false }, 'admin-2');
     expect(l.data()).toMatchObject({ listening: false, autoHarvestBy: null, autoHarvestAt: null });
+    expect(l.actions()).toEqual(['chat.listen_disabled', 'chat.auto_harvest_disabled']);
   });
 
   it('the list says what the server allows beside what each binding asks for', async () => {
     const env: Record<string, unknown> = { CHAT_ENABLED: true, HARVEST_ENABLED: true, HARVEST_AUTO_ENABLED: false, HARVEST_AUTO_MIN_MESSAGES: 8, HARVEST_AUTO_QUIET_MINUTES: 60, CHAT_LISTEN_TTL_DAYS: 7, API_PUBLIC_URL: 'x' };
     const prisma = { chatChannelBinding: { findMany: vi.fn(async () => []) }, chatIntegration: { findUnique: vi.fn(async () => ({ id: 'int-1', workspaceId: 'ws' })) } };
     const messages = { settings: vi.fn(async () => ({ available: true, retentionDays: { ceiling: 90, requested: null, applied: 90 } })) };
-    const svc = new ChatIntegrationsService(prisma as never, {} as never, {} as never, { get: (k: string) => env[k] } as never, messages as never);
+    const svc = new ChatIntegrationsService(prisma as never, {} as never, {} as never, { get: (k: string) => env[k] } as never, messages as never, { record: vi.fn() } as never);
     expect((await svc.listBindings('int-1')).autoHarvest).toEqual({ available: false, minMessages: 8, quietMinutes: 60 });
   });
 });

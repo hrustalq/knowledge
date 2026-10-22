@@ -145,10 +145,11 @@ describe('the searchable switch', () => {
       settings: vi.fn(async () => ({ available: true, retentionDays: { ceiling: 90, requested: 30, applied: 30 } })),
       purgeBinding: vi.fn(async () => undefined),
     };
-    const svc = new ChatIntegrationsService(prisma as never, { get: () => adapter } as never, {} as never, config as never, messages as never);
+    const audit = { record: vi.fn(async () => undefined) };
+    const svc = new ChatIntegrationsService(prisma as never, { get: () => adapter } as never, {} as never, config as never, messages as never, audit as never);
     vi.spyOn(svc, 'require').mockResolvedValue({ id: 'int-1', kind: 'mattermost', locale: 'en' } as never);
     vi.spyOn(svc, 'context').mockReturnValue({ token: 'T' } as never);
-    return { svc, prisma, adapter, messages };
+    return { svc, prisma, adapter, messages, audit };
   }
 
   it('on, on any platform: tells the group the applied retention first, and the caller becomes who turned it on', async () => {
@@ -157,6 +158,10 @@ describe('the searchable switch', () => {
     expect(h.adapter.postMessage).toHaveBeenCalledWith({ token: 'T' }, { chatId: 'ch-1' }, { kind: 'notice', text: 'chat.search.on' });
     expect(entry.searchableBy).toBe('admin-1');
     expect(entry.searchableAt).not.toBeNull();
+    expect(h.audit.record).toHaveBeenCalledOnce();
+    expect(h.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 'ws-1', actor: 'admin-1', action: 'chat.search_enabled', target: 'b-1', params: expect.objectContaining({ retentionDays: 30 }) }),
+    );
   });
 
   it('a notice that cannot be posted switches nothing on', async () => {
@@ -165,6 +170,7 @@ describe('the searchable switch', () => {
     });
     await expect(h.svc.updateBinding('b-1', { searchable: true }, 'admin-1')).rejects.toBeInstanceOf(BadRequestException);
     expect(h.prisma.chatChannelBinding.update).not.toHaveBeenCalled();
+    expect(h.audit.record).not.toHaveBeenCalled();
   });
 
   it('refused while CHAT_SEARCH_ENABLED is off', async () => {
@@ -184,6 +190,7 @@ describe('the searchable switch', () => {
     expect(h.messages.purgeBinding).toHaveBeenCalledWith('b-1');
     expect(h.adapter.postMessage).not.toHaveBeenCalled();
     expect(entry.searchableBy).toBeNull();
+    expect(h.audit.record).toHaveBeenCalledWith(expect.objectContaining({ actor: 'admin-2', action: 'chat.search_disabled', target: 'b-1' }));
   });
 
   it('asking for the state it is already in does nothing', async () => {
@@ -191,6 +198,7 @@ describe('the searchable switch', () => {
     const entry = await h.svc.updateBinding('b-1', { searchable: true }, 'admin-2');
     expect(h.adapter.postMessage).not.toHaveBeenCalled();
     expect(entry.searchableBy).toBe('admin-1');
+    expect(h.audit.record).not.toHaveBeenCalled();
   });
 });
 

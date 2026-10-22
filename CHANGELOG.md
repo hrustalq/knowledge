@@ -26,6 +26,13 @@ in the pull request that introduces them — see
   it. The trigger starts nothing for a ticket attached to a page its owner cannot open, or for a ticket
   labelled before the trigger existed. Jira tickets carrying only the trigger's label are now picked up as
   well, not just those with the connector's handoff label.
+- Security → Audit now records each change to a chat group's three switches (#408): making it searchable
+  or turning search off, keeping messages for /capture or stopping, and turning the automatic thread
+  harvest on or off. Each row names the admin, the group binding and the workspace. Turning one on also
+  records the retention or quiet period that applied at that moment. A switch that is refused, for
+  example because the bot could not post its notice in the group, records nothing. Until now the binding
+  showed only who last turned a switch on, so once a switch went off and on again the earlier history
+  was lost.
 
 ### Changed
 

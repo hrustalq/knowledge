@@ -13,6 +13,81 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.32.0] — 2026-10-22
+
+### Added
+
+- A ticket in a connected tracker can now ask the knowledge base for documentation (#433). Give an
+  "A tracker ticket opens or changes" agent trigger a **Ticket labels** filter (for example `docs`), or
+  apply the new **Docs from tickets** recipe, and turn it on. A matching ticket on GitHub, GitLab or Jira
+  then starts the new **Scribe** agent once. The Scribe reads the ticket, searches the pages its owner can
+  open, and proposes up to three new or rewritten pages. Each proposal is a merge request that links back
+  to the ticket, and the ticket gets one comment listing them. Nothing is published until someone merges
+  it. The trigger starts nothing for a ticket attached to a page its owner cannot open, or for a ticket
+  labelled before the trigger existed. Jira tickets carrying only the trigger's label are now picked up as
+  well, not just those with the connector's handoff label.
+- Security → Audit now records each change to a chat group's three switches (#408): making it searchable
+  or turning search off, keeping messages for /capture or stopping, and turning the automatic thread
+  harvest on or off. Each row names the admin, the group binding and the workspace. Turning one on also
+  records the retention or quiet period that applied at that moment. A switch that is refused, for
+  example because the bot could not post its notice in the group, records nothing. Until now the binding
+  showed only who last turned a switch on, so once a switch went off and on again the earlier history
+  was lost.
+
+### Changed
+
+- Agent triggers on tracker tickets (`work-item.updated`, now labelled "A tracker ticket opens or
+  changes") also fire when a ticket is first seen, and when a poll sees a Jira or GitLab ticket's labels
+  change. Before, they fired only when a ticket was
+  closed or reopened, or (on GitHub) relabelled (#433).
+- An agent trigger now starts nothing when its owner cannot open the page the event is about. Before,
+  it started a run that then skipped the page (#433).
+- A page's actions now sit in a bar directly under the breadcrumbs, as in Confluence, instead of sharing
+  a row with the title (#441). The bar stays in place while the page scrolls. It shows labels when it is
+  wide and icons when it is narrow (an open sidebar narrows it too), and every button keeps its name for
+  screen readers and as a tooltip. New quick buttons for History, Graph and Export open the same views as
+  the rail widgets and the menu. The ⋯ menu now groups items into submenus: Export ▸ opens the export
+  dialog on the format you pick, and View ▸ holds Full width and Glossary links.
+- The editor (`/documents/:id/edit`, `/create`) now shows the breadcrumb trail. Its actions use the same
+  bar, so Edit and Publish stay in the same place when you switch between reading and writing. The
+  formatting toolbar sits directly beneath. The project name that used to head the editor is gone; the
+  trail names it. The editor's ⋯ menu has Changes ▸ (review or discard unpublished edits, with a
+  confirmation) and Template ▸ (insert a template at the cursor, or save the page as one). On a phone,
+  Settings and Cancel are now icons in the bar instead of items in the menu.
+- Submenus in every dropdown open beside their item, flip to the other side near the screen edge, and
+  animate like the menu they come from. They are no longer clipped by the menu that contains them.
+
+### Fixed
+
+- Search in the app (the search sheet and `/search`) listed a page once for every section that matched,
+  so one long page could take several rows and push other pages past the limit (#443). Each page now
+  appears once, showing its best-matching section, and the limit counts pages: 20 matching pages still
+  give 20 rows. The row's snippet now opens around the first matching word instead of at the section's
+  first 300 characters, and the matched words are highlighted, including other forms of the word
+  (`сервис` marks `сервиса`). A page found only by meaning shows a plain snippet with nothing marked.
+  API callers opt in with `groupBy: "page"` on `POST /v1/search`, which adds `snippetParts` to each
+  result; without it the response is unchanged, and so are MCP `knowledge_search` and the assistant's
+  `search_knowledge`.
+- The activity ledger on a profile page drew the year at a fixed small size, so on a desktop screen it
+  filled under half its card and its days were hard to hover or click (#440). The year now stretches to
+  the card's width, with days between 12 and 24px. On a narrow screen it still scrolls, opening on the
+  current week. The Mon / Wed / Fri labels were one row too low (Mon sat beside Tuesday) and now line
+  up with their rows.
+- Mermaid flowcharts showed their boxes and arrows with no text: every node name and edge label was
+  missing on the page view, in the editor, in the assistant and docs, and on share links and published
+  sites (#438). Labels are now drawn as SVG text, so they survive sanitizing. An
+  `%%{init: {"flowchart": {"htmlLabels": false}}}%%` line is no longer needed but does no harm.
+- Sequence diagrams drew every participant twice, again under the lifelines, which read as duplicate
+  entities (#438). Each participant now appears once, at the top, on every render site including export.
+  Add `%%{init: {"sequence": {"mirrorActors": true}}}%%` to a diagram to bring the bottom row back.
+- Commenting on a list or a table from the margin control looked like it failed: the comment was saved
+  but appeared nowhere (#439). The control now targets one list item or one table row and highlights
+  the comment on exactly that text. Comments with no place on the text, posted on the page as a whole
+  or on a passage that has since been edited away, are listed in a new **Comments** widget in the page
+  rail, where they can be replied to and resolved. Comments already saved this way show up there too.
+- After pressing Comment, typing went nowhere until the box was clicked (#439). The composer now has
+  focus when it opens.
+
 ## [0.31.0] — 2026-10-21
 
 ### Added
@@ -4382,7 +4457,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.31.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/hrustalq/knowledge/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/hrustalq/knowledge/compare/v0.30.1...v0.31.0
 [0.30.1]: https://github.com/hrustalq/knowledge/compare/v0.30.0...v0.30.1
 [0.30.0]: https://github.com/hrustalq/knowledge/compare/v0.29.1...v0.30.0

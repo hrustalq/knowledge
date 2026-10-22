@@ -25,7 +25,8 @@ import { loadRevisionStamps } from '../graph/revision-stamps.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
 import type { SearchDto } from './search.dto.js';
-import { floorTextHits, floorVectorHits, fuseHits, type SearchPool } from './ranking.js';
+import { firstPerPage, floorTextHits, floorVectorHits, fuseHits, type SearchPool } from './ranking.js';
+import { snippetPartsOf } from './snippet.js';
 
 @Injectable()
 export class SearchService {
@@ -67,6 +68,9 @@ export class SearchService {
   ): Promise<SearchResponse> {
     const mode = dto.mode ?? 'hybrid';
     const k = dto.limit ?? 20;
+    // #443: `k` counts pages, so the chunk pool is deeper and the refill below
+    // tops it up when its pages still fall short.
+    const byPage = dto.groupBy === 'page';
     // Feature 02: with any metadata filter (category, project or tag),
     // over-fetch candidates so the filter does not shrink the requested limit.
     const categories = dto.filters?.categories?.length ? new Set(dto.filters.categories) : null;
@@ -98,7 +102,7 @@ export class SearchService {
     // hidden pages — over-fetch for that as for any other filter.
     const aclPostOnly = acl.kind !== 'all' && !acl.pushdown;
     const aclOverfetch = aclPostOnly ? this.config.get('SEARCH_ACL_OVERFETCH', { infer: true }) : 1;
-    let fetchK = Math.max(filtered ? k * 5 : k, trustOn ? k * 2 : k, k * aclOverfetch);
+    let fetchK = Math.max(filtered ? k * 5 : k, trustOn ? k * 2 : k, k * aclOverfetch, byPage ? k * 3 : k);
 
     // Phase 5 BM25 layer (plan.md §11): when a fulltext provider is
     // configured, 'hybrid' fuses vector + BM25 rankings (RRF) and 'keyword'
@@ -230,10 +234,12 @@ export class SearchService {
     // One refill round (#76): the post-filter dropped hits, left fewer than k,
     // and a leg came back full — so it had more to give. Bounded by
     // SEARCH_ACL_MAX_FETCH, and only ever once. A vector leg the floor cut is
-    // not full: whatever lies deeper scores lower still (#401).
+    // not full: whatever lies deeper scores lower still (#401). By page
+    // (#443), a pool whose chunks name fewer than k pages refills the same way.
     const maxFetch = this.config.get('SEARCH_ACL_MAX_FETCH', { infer: true });
     const saturated = (vectorHits.length >= fetchK && vectorFloored === 0) || textHits.length >= fetchK;
-    if (aclFiltered > 0 && kept.length < k && saturated && fetchK < maxFetch) {
+    const short = byPage ? new Set(kept.map((h) => h.documentId)).size < k : aclFiltered > 0 && kept.length < k;
+    if (short && saturated && fetchK < maxFetch) {
       fetchK = Math.min(fetchK * 2, maxFetch);
       [[vectorHits], [textHits]] = await legs(fetchK);
       hits = fuse();
@@ -256,16 +262,19 @@ export class SearchService {
       .map((h) => {
         const trust = trustOf.get(h.documentId);
         const weight = trustOn && trust ? trustWeight(trust.status, trust.inactive, settings.trustWeights) : 1;
-        return { hit: h, score: h.score * weight, trust };
+        return { hit: h, documentId: h.documentId, score: h.score * weight, trust };
       });
     if (trustOn) weighted.sort((a, b) => b.score - a.score);
 
-    const results: SearchResult[] = weighted.slice(0, k).map(({ hit: h, score, trust }) => ({
+    // By page, each page's best chunk after the re-sort, then the cut.
+    const ranked = byPage ? firstPerPage(weighted) : weighted;
+    const results: SearchResult[] = ranked.slice(0, k).map(({ hit: h, score, trust }) => ({
       documentId: h.documentId,
       revisionId: h.revisionId,
       chunkId: h.chunkId,
       title: docById.get(h.documentId)?.title ?? '(unknown)',
       snippet: h.text.slice(0, 300),
+      ...(byPage ? { snippetParts: snippetPartsOf(h.text, dto.query) } : {}),
       score: Number(score.toFixed(4)),
       ...(h.vectorScore !== undefined ? { vectorScore: Number(h.vectorScore.toFixed(4)) } : {}),
       headingPath: h.headingPath ?? [],

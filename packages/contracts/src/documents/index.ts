@@ -100,6 +100,12 @@ export interface SearchRequest {
   /** 'hybrid' fuses vector + BM25 (when a fulltext provider is configured); 'keyword' is BM25-only. */
   mode?: 'hybrid' | 'semantic' | 'keyword';
   limit?: number;
+  /**
+   * `'page'` (#443): one result per page, its best-ranked chunk, `limit`
+   * counting pages, each with `snippetParts`. What a person's result list
+   * reads; absent, one result per chunk.
+   */
+  groupBy?: 'page';
   /** Search the text as it stood then (#81): an ISO date, `rev:<id>` or `tag:<name>`. */
   asOf?: string;
   /** What was believed at this ISO date (#81); only the graph expansion reads it. */
@@ -131,6 +137,11 @@ export interface SearchResult {
   chunkId: string;
   title: string;
   snippet: string;
+  /**
+   * With `groupBy: 'page'` (#443): a window of the chunk around the first
+   * query match, the matched words as `hit` runs. No match, no `hit` run.
+   */
+  snippetParts?: { text: string; hit: boolean }[];
   /** The fused retrieval score after the trust re-rank (docs/features/39). */
   score: number;
   /**

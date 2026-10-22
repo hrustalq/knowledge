@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, type ChatChannelBinding, type ChatIntegration } from '@prisma/client';
 import {
   CHAT_PLATFORM_NAMES,
+  type AuditAction,
   chatPlatformNeedsServer,
   type ChatAutoHarvestLimits,
   type ChatBindingEntry,
@@ -25,6 +26,7 @@ import {
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
+import { AuditService } from '../auth/audit.service.js';
 import { decryptSecret, encryptSecret, maskSecret, parseKey } from '../ai/secret-box.js';
 import { assertSafeExternalUrl } from '../common/safe-url.js';
 import { t } from '../i18n/t.js';
@@ -64,6 +66,7 @@ export class ChatIntegrationsService {
     private readonly agents: AgentRegistryService,
     config: ConfigService<Env, true>,
     private readonly messages: ChatMessagesService,
+    private readonly audit: AuditService,
   ) {
     this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
     this.apiPublicUrl = config.get('API_PUBLIC_URL', { infer: true }).replace(/\/$/, '');
@@ -384,14 +387,15 @@ export class ChatIntegrationsService {
     const listening = dto.listening ?? row.listening;
     const turningAutoOn = dto.autoHarvest === true && !row.autoHarvestBy;
     if (turningAutoOn && !listening) throw new BadRequestException(t('error.chat.autoHarvestNeedsListening'));
-    if (dto.listening !== undefined && dto.listening !== row.listening) await this.switchListening(row, dto.listening);
+    const listenSwitch = dto.listening === undefined || dto.listening === row.listening ? null : dto.listening;
+    if (listenSwitch !== null) await this.switchListening(row, listenSwitch);
     // Told before it starts, as listening is: a group whose threads are read
     // without anyone asking must have been told that they will be.
     if (turningAutoOn) {
       await this.tellGroup(row, (locale) => t('chat.listen.autoOn', { count: this.autoHarvest.quietMinutes }, locale), 'error.chat.autoHarvestNoticeFailed');
     }
     const searchSwitch = dto.searchable === undefined || dto.searchable === !!row.searchableAt ? null : dto.searchable;
-    if (searchSwitch !== null) await this.switchSearch(row, searchSwitch);
+    const retentionDays = searchSwitch === null ? null : await this.switchSearch(row, searchSwitch);
     const autoOff = dto.autoHarvest === false || !listening;
     const next = await this.prisma.chatChannelBinding.update({
       where: { id },
@@ -409,7 +413,26 @@ export class ChatIntegrationsService {
       },
       include: SUBSCRIPTION_COUNT,
     });
+    // Only once the switch is stored: a refused notice above has thrown, and writes no row.
+    if (listenSwitch === true) this.recordSwitch(row, actorId, { action: 'chat.listen_enabled', retentionDays: this.listenTtlDays });
+    if (listenSwitch === false) this.recordSwitch(row, actorId, { action: 'chat.listen_disabled' });
+    if (turningAutoOn) this.recordSwitch(row, actorId, { action: 'chat.auto_harvest_enabled', quietMinutes: this.autoHarvest.quietMinutes });
+    if (autoOff && row.autoHarvestBy) this.recordSwitch(row, actorId, { action: 'chat.auto_harvest_disabled' });
+    if (searchSwitch === true) this.recordSwitch(row, actorId, { action: 'chat.search_enabled', retentionDays });
+    if (searchSwitch === false) this.recordSwitch(row, actorId, { action: 'chat.search_disabled' });
     return toBindingEntry(next);
+  }
+
+  /** One audit row per switch flip (#408), the binding as its target. Fire-and-forget, as every audit write is. */
+  private recordSwitch(row: ChatChannelBinding, actor: string, { action, ...params }: { action: AuditAction } & Record<string, unknown>): void {
+    void this.audit.record({
+      workspaceId: row.workspaceId,
+      actor,
+      action,
+      params: { integrationId: row.integrationId, externalChatId: row.externalChatId, title: row.title, ...params },
+      ok: true,
+      target: row.id,
+    });
   }
 
   /**
@@ -432,12 +455,17 @@ export class ChatIntegrationsService {
    * Searchable chat (#339), any platform. On, the group is told first — what
    * is kept, for how long, and that /forget works — and if the bot cannot say
    * so, nothing is switched: the listening rule. Off, what was kept goes at once.
+   * Returns the retention applied when on, for the audit row.
    */
-  private async switchSearch(row: ChatChannelBinding, on: boolean): Promise<void> {
-    if (!on) return this.messages.purgeBinding(row.id);
+  private async switchSearch(row: ChatChannelBinding, on: boolean): Promise<number | null> {
+    if (!on) {
+      await this.messages.purgeBinding(row.id);
+      return null;
+    }
     if (!this.messages.enabled) throw new BadRequestException(t('error.chat.searchDisabled'));
     const { retentionDays } = await this.messages.settings(row.workspaceId);
     await this.tellGroup(row, (locale) => t('chat.search.on', { count: retentionDays.applied }, locale), 'error.chat.searchNoticeFailed');
+    return retentionDays.applied;
   }
 
   /** A notice in the group, in its language, or a 400 saying why it could not be posted — and nothing switched. */

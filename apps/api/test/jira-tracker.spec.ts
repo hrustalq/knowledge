@@ -138,9 +138,15 @@ describe('JiraTrackerService', () => {
       { number: 1, externalKey: 'not a key) OR 1=1 (' },
     ]);
     const jql = new URL(calls[0].url).searchParams.get('jql');
-    expect(jql).toBe('(labels = "knowledge" OR key in (BILL-7)) AND updated >= "2026/10/20 10:00" ORDER BY updated ASC');
+    expect(jql).toBe('(labels in ("knowledge") OR key in (BILL-7)) AND updated >= "2026/10/20 10:00" ORDER BY updated ASC');
     expect(items).toHaveLength(1);
     expect(cursor).toBe('2026-10-21T12:00:00.000Z');
+  });
+
+  it('also polls the labels ticket triggers filter on (#433)', async () => {
+    routes.push([/GET .*\/rest\/api\/3\/search\/jql\?/, () => ({ issues: [], isLast: true })]);
+    await tracker.listIssues(row, null, [], ['knowledge', 'docs']);
+    expect(new URL(calls[0].url).searchParams.get('jql')).toBe('(labels in ("knowledge", "docs")) ORDER BY updated ASC');
   });
 
   it('reads a ref as a key or a browse URL on its own site', () => {

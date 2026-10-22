@@ -183,7 +183,7 @@ async function copyAgentLink() {
     >
       <Check v-if="copyState === 'copied'" class="size-3.5" />
       <Copy v-else class="size-3.5" />
-      {{ copyState === 'copied' ? t('aiActions.copied') : t('aiActions.copyPage') }}
+      <span class="kn-bar-label">{{ copyState === 'copied' ? t('aiActions.copied') : t('aiActions.copyPage') }}</span>
     </Button>
     <DropdownMenu @update:open="(open: boolean) => open && void loadConnection()">
       <DropdownMenuTrigger as-child>

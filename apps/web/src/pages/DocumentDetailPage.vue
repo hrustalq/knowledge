@@ -40,11 +40,13 @@ import {
   Info,
   Network,
   Pencil,
+  Waypoints,
   Scale,
   Share2,
   Workflow as WorkflowIcon,
   ListTree,
   Eye,
+  MessageSquare,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type {
@@ -67,7 +69,7 @@ import type {
   DocumentWorkflowRunsResponse,
 } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId, relativeTime, statusVariant } from '@/lib/api'
-import { isOpenIssueStatus } from '@knowledge/contracts'
+import { EXPORT_FORMATS, isOpenIssueStatus, type ExportFormat } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import CollabDraftBadge from '@/components/editor/CollabDraftBadge.vue'
 import ComponentDeclarationNotice from '@/components/code/ComponentDeclarationNotice.vue'
@@ -86,6 +88,10 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/components/templates/SaveAsTemplateDialog.vue'
@@ -93,6 +99,7 @@ import ExportDialog from '@/components/knowledge/ExportDialog.vue'
 import { PageLayout, PageRail, PageState } from '@/components/layout/page'
 import TocRail from '@/components/knowledge/TocRail.vue'
 import DocumentCanvas from '@/components/knowledge/DocumentCanvas.vue'
+import ThreadCard from '@/components/merge-requests/ThreadCard.vue'
 import ApiOperationIndex from '@/components/api-reference/ApiOperationIndex.vue'
 import { useApiReference } from '@/components/api-reference/use-api-reference'
 import MergeRequestList from '@/components/merge-requests/MergeRequestList.vue'
@@ -139,6 +146,9 @@ const RAIL_WIDGETS = [
   // folds away and is remembered the same way.
   { id: 'verification', label: t('verification.title'), icon: BadgeCheck, expandable: false },
   { id: 'overview', label: t('rail.overview'), icon: Info, expandable: false },
+  // Comments with no place on the text (#439): on the page as a whole, or on a
+  // passage edited away. Only while there are any.
+  { id: 'comments', label: t('rail.comments'), icon: MessageSquare, expandable: false },
   { id: 'frontmatter', label: t('rail.frontmatter'), icon: Braces, expandable: false },
   { id: 'revisions', label: t('rail.history'), icon: History, expandable: true },
   { id: 'merge-requests', label: t('rail.changes'), icon: GitMerge, expandable: true },
@@ -195,6 +205,7 @@ const visibleWidgets = computed(() =>
       (w.id !== 'used-by' || !!declaration.value) &&
       (w.id !== 'quality' || !!quality.value?.score) &&
       (w.id !== 'conflicts' || openConflicts.value > 0) &&
+      (w.id !== 'comments' || unplacedThreads.value.length > 0) &&
       (w.id !== 'operations' || isSpec.value),
   ),
 )
@@ -246,6 +257,12 @@ const templateChip = computed(() => {
 })
 /** "Export…" (docs/features/45): a reader's act, so the menu is offered to every role. */
 const exportOpen = ref(false)
+/** The format the Export ▸ submenu picked (#441); the dialog opens on it. */
+const exportFormat = ref<ExportFormat>('zip')
+function openExport(format: ExportFormat) {
+  exportFormat.value = format
+  exportOpen.value = true
+}
 /** "Save as template": the page as it is shown — an older revision, when one is being read. */
 const saveAsOpen = ref(false)
 const saveAsPage = computed<SaveAsTemplatePage | null>(() => {
@@ -366,6 +383,15 @@ const threads = computed(
 // A plain comment has nothing to resolve, so it is not an open request — the
 // same rule the API's threadStats applies.
 const unresolvedCount = computed(() => threads.value.filter((t) => t.resolvable && !t.resolved).length)
+/**
+ * Threads the canvas cannot draw: no text anchor, or one whose passage is
+ * gone. Stored and answerable like any other, so they are listed in the rail
+ * rather than nowhere (#439).
+ */
+const unplacedThreads = computed(() =>
+  threads.value.filter((t) => t.anchor?.type !== 'text' || outdatedThreads.value.includes(t.threadId)),
+)
+const unplacedOpen = computed(() => unplacedThreads.value.filter((t) => !t.resolved).length)
 
 const threadsKey = computed(() => ['/v1/documents/{id}/threads', { id: documentId.value }, null])
 // Every comment also lands in the activity log, and the rail reads it — so both
@@ -578,6 +604,9 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
           : 'none'
       : null,
     conflicts: openConflicts.value ? String(openConflicts.value) : null,
+    comments: unplacedOpen.value
+      ? t('count.openComments', { n: unplacedOpen.value }, unplacedOpen.value)
+      : t('count.threads', { n: unplacedThreads.value.length }, unplacedThreads.value.length),
     insights: insights.value ? t('analytics.viewsCount', { n: insights.value.views }, insights.value.views) : null,
     quality: quality.value?.score
       ? quality.value.stale
@@ -685,6 +714,135 @@ watch(
 </script>
 
 <template>
+  <!-- The page's action bar (#441), drawn in the shell's strip under the
+       breadcrumbs so it stays put while the page scrolls. Ordered as the
+       head always was: what any reader can do to the page, then who hears
+       about it and who may see it, then the editor's own act. Labels show
+       while the bar has room for them and fold to icons when it does not. -->
+  <Teleport to="#kn-page-toolbar">
+    <!-- Held open while the page loads, so the content does not drop by a
+         bar's height when it arrives. -->
+    <div v-if="!detail && !error && !restrictedRefusal" class="kn-bar-start" aria-hidden="true" />
+    <template v-else-if="detail">
+      <div class="kn-bar-start">
+        <!-- Only on pages that actually have vocabulary in them: a switch for
+             something the page does not do is noise. -->
+        <Button
+          v-if="canvasEl?.hasGlossary"
+          variant="ghost"
+          size="sm"
+          class="hidden text-muted-foreground sm:inline-flex"
+          :aria-pressed="canvasEl?.glossaryOn"
+          :title="canvasEl?.glossaryOn ? t('glossary.linksOn') : t('glossary.linksOff')"
+          @click="canvasEl?.toggleGlossaryLinks()"
+        >
+          <BookA class="size-3.5" :class="canvasEl?.glossaryOn ? 'text-primary' : 'opacity-60'" />
+          <span class="kn-bar-label">{{ t('glossary.toggleLinks') }}</span>
+        </Button>
+      </div>
+        <div class="kn-bar-end">
+          <!-- Every reader can hand the page to an AI tool (issue #68). -->
+          <PageAiActions
+            :document-id="detail.document.documentId"
+            :title="detail.document.title"
+            :revision-id="viewingRevision"
+          />
+          <!-- Quick ways into what the rail and the menu already hold: the
+               page's history, its graph, a copy of it. A phone has the rail
+               under the page and Export in ⋯, so these step aside there. -->
+          <span class="kn-bar-rule hidden sm:block" aria-hidden="true" />
+          <Button variant="ghost" size="sm" class="hidden sm:inline-flex" :title="t('rail.history')" @click="expanded = 'revisions'">
+            <History class="size-3.5" aria-hidden="true" />
+            <span class="kn-bar-label">{{ t('rail.history') }}</span>
+          </Button>
+          <Button variant="ghost" size="sm" class="hidden sm:inline-flex" :title="t('rail.graph')" @click="expanded = 'graph'">
+            <Waypoints class="size-3.5" aria-hidden="true" />
+            <span class="kn-bar-label">{{ t('rail.graph') }}</span>
+          </Button>
+          <Button variant="ghost" size="sm" class="hidden sm:inline-flex" :title="t('export.action')" @click="openExport('zip')">
+            <Download class="size-3.5" aria-hidden="true" />
+            <span class="kn-bar-label">{{ t('export.action') }}</span>
+          </Button>
+          <span class="kn-bar-rule hidden sm:block" aria-hidden="true" />
+          <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
+          <!-- Handing the page to people outside the workspace is an editor's act
+               (docs/features/43); the server checks the role and the workspace switch. -->
+          <SharePopover
+            v-if="auth.canEdit && !archived"
+            :document-id="detail.document.documentId"
+            :restricted="!!detail.document.restricted"
+          />
+          <!-- Who may open the page (#76). Offered to every reader: a manager
+               edits it, anyone else is told where they stand. The icon is the
+               page's state, so a restricted page reads as one from its bar. -->
+          <Button
+            variant="outline"
+            size="sm"
+            :title="detail.document.restricted ? t('access.lockedLabel') : t('access.action')"
+            @click="accessOpen = true"
+          >
+            <Lock v-if="detail.document.restricted" class="size-3.5" aria-hidden="true" />
+            <LockOpen v-else class="size-3.5" aria-hidden="true" />
+            <span class="kn-bar-label">{{ t('access.action') }}</span>
+          </Button>
+          <span v-if="auth.canEdit && !archived" class="kn-bar-rule hidden sm:block" aria-hidden="true" />
+          <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
+            <RouterLink
+              :to="`/documents/${detail.document.documentId}/${isSpec ? 'spec' : 'edit'}`"
+              :title="hasUnstaged ? t('editor.unstaged.label') : t('common.edit')"
+            >
+              <Pencil class="size-3.5" />
+              <span class="kn-bar-label">{{ t('common.edit') }}</span>
+              <span v-if="hasUnstaged" class="kn-dirty-dot" aria-hidden="true" />
+              <span v-if="hasUnstaged" class="sr-only">{{ t('editor.unstaged.label') }}</span>
+            </RouterLink>
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="ghost" size="icon-sm" :aria-label="t('documents.moreActions')">
+                <MoreHorizontal class="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="w-52">
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Download class="size-4" /> {{ t('export.action') }}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent class="w-44">
+                  <DropdownMenuItem v-for="f in EXPORT_FORMATS" :key="f" @select="openExport(f)">
+                    {{ t(`export.format.${f}`) }}
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuItem v-if="auth.canEdit && saveAsPage" @select="saveAsOpen = true">
+                <LayoutTemplate class="size-4" /> {{ t('templates.saveAs.action') }}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <!-- Reader preferences, not page actions (#422): full width applies
+                   to every page and is remembered in a cookie. -->
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Eye class="size-4" /> {{ t('documents.menu.view') }}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent class="w-52">
+                  <DropdownMenuCheckboxItem :model-value="layout.fullWidth" @update:model-value="layout.setFullWidth">
+                    {{ t('documents.fullWidth') }}
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    v-if="canvasEl?.hasGlossary"
+                    :model-value="!!canvasEl?.glossaryOn"
+                    @update:model-value="canvasEl?.toggleGlossaryLinks()"
+                  >
+                    {{ t('glossary.toggleLinks') }}
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </DropdownMenuContent>
+          </DropdownMenu>
+      </div>
+    </template>
+  </Teleport>
+
   <RequestAccessCard v-if="restrictedRefusal" resource-type="document" :resource-id="documentId" />
   <PageState v-else-if="error" state="error" :description="error" />
 
@@ -710,83 +868,6 @@ watch(
         </Badge>
       </template>
 
-      <template #actions>
-        <!-- Only on pages that actually have vocabulary in them: a switch for
-             something the page does not do is noise. -->
-        <Button
-          v-if="canvasEl?.hasGlossary"
-          variant="ghost"
-          size="sm"
-          class="text-muted-foreground"
-          :aria-pressed="canvasEl?.glossaryOn"
-          :title="canvasEl?.glossaryOn ? t('glossary.linksOn') : t('glossary.linksOff')"
-          @click="canvasEl?.toggleGlossaryLinks()"
-        >
-          <BookA class="size-3.5" :class="canvasEl?.glossaryOn ? 'text-primary' : 'opacity-60'" />
-          {{ t('glossary.toggleLinks') }}
-        </Button>
-        <!-- Watch sits before Edit: following a page is open to every reader,
-             while editing is not, so a viewer still sees a balanced row. -->
-        <!-- Every reader can hand the page to an AI tool (issue #68); it sits
-             with Watch, before the editor-only Edit. -->
-        <PageAiActions
-          :document-id="detail.document.documentId"
-          :title="detail.document.title"
-          :revision-id="viewingRevision"
-        />
-        <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
-        <!-- Handing the page to people outside the workspace is an editor's act
-             (docs/features/43); the server checks the role and the workspace switch. -->
-        <SharePopover
-          v-if="auth.canEdit && !archived"
-          :document-id="detail.document.documentId"
-          :restricted="!!detail.document.restricted"
-        />
-        <!-- Who may open the page (#76). Offered to every reader: a manager
-             edits it, anyone else is told where they stand. The icon is the
-             page's state, so a restricted page reads as one from its header. -->
-        <Button
-          variant="outline"
-          size="sm"
-          :title="detail.document.restricted ? t('access.lockedLabel') : undefined"
-          @click="accessOpen = true"
-        >
-          <Lock v-if="detail.document.restricted" class="size-3.5" aria-hidden="true" />
-          <LockOpen v-else class="size-3.5" aria-hidden="true" />
-          {{ t('access.action') }}
-        </Button>
-        <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
-          <RouterLink
-            :to="`/documents/${detail.document.documentId}/${isSpec ? 'spec' : 'edit'}`"
-            :title="hasUnstaged ? t('editor.unstaged.label') : undefined"
-          >
-            <Pencil class="size-3.5" />
-            {{ t('common.edit') }}
-            <span v-if="hasUnstaged" class="kn-dirty-dot" aria-hidden="true" />
-            <span v-if="hasUnstaged" class="sr-only">{{ t('editor.unstaged.label') }}</span>
-          </RouterLink>
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="icon-sm" :aria-label="t('documents.moreActions')">
-              <MoreHorizontal class="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" class="w-48">
-            <DropdownMenuItem @select="exportOpen = true">
-              <Download class="size-4" /> {{ t('export.action') }}
-            </DropdownMenuItem>
-            <DropdownMenuItem v-if="auth.canEdit && saveAsPage" @select="saveAsOpen = true">
-              <LayoutTemplate class="size-4" /> {{ t('templates.saveAs.action') }}
-            </DropdownMenuItem>
-            <!-- A reader preference, not a page action (#422): it applies to
-                 every page in the app, and is remembered in a cookie. -->
-            <DropdownMenuCheckboxItem :model-value="layout.fullWidth" @update:model-value="layout.setFullWidth">
-              {{ t('documents.fullWidth') }}
-            </DropdownMenuCheckboxItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </template>
 
       <template #meta>
         <p class="text-xs text-muted-foreground">
@@ -804,7 +885,7 @@ watch(
         <PageRail
           :widgets="visibleWidgets"
           surface="document"
-          :default-open="['operations', 'verification', 'overview']"
+          :default-open="['operations', 'verification', 'overview', 'comments']"
           :previews="previewFor"
           @expand="expanded = $event"
         >
@@ -874,6 +955,26 @@ watch(
                   {{ showAllRelations ? t('common.showFewer') : t('common.andNMore', { n: relations.length - RELATION_PREVIEW }) }}
                 </button>
               </div>
+            </div>
+          </template>
+
+          <template #widget-comments>
+            <p class="mb-2 text-xs text-muted-foreground">{{ t('documents.unplacedCommentsHint') }}</p>
+            <div class="space-y-2">
+              <ThreadCard
+                v-for="thread in unplacedThreads"
+                :key="thread.threadId"
+                :thread="thread"
+                :outdated="outdatedThreads.includes(thread.threadId)"
+                :readonly="!canComment"
+                :busy="threadsBusy"
+                :resolve-document-id="resolveDocumentId"
+                teach-kind="document-thread"
+                @reply="(b: string, p: string | null) => onReply(thread.threadId, b, p)"
+                @resolve="(r: boolean) => onResolve(thread.threadId, r)"
+                @edit="(c: string, b: string) => onEditComment(thread.threadId, c, b)"
+                @delete="(c: string) => onDeleteComment(thread.threadId, c)"
+              />
             </div>
           </template>
 
@@ -1023,6 +1124,7 @@ watch(
     <SaveAsTemplateDialog v-model:open="saveAsOpen" :page="saveAsPage" />
     <ExportDialog
       v-model:open="exportOpen"
+      :initial-format="exportFormat"
       :target="{ kind: 'document', documentId: detail.document.documentId, title: detail.document.title }"
     />
     <PageAccessDialog

@@ -31,7 +31,7 @@ test('a failed load shows an error state, and Retry opens the page', async ({ pa
   await expect(page.getByRole('alert')).toBeVisible()
   await expect(page.locator('.ProseMirror')).toHaveCount(0)
   await expect(page.getByRole('button', { name: /publish/i })).toBeDisabled()
-  await page.locator('.kn-page-head').click()
+  await page.locator('.kn-bar-start').click()
   await page.keyboard.type('typed into nothing')
   const stored = await page.evaluate((id) => Object.keys(localStorage).filter((k) => k.includes(id)), documentId)
   expect(stored).toEqual([])

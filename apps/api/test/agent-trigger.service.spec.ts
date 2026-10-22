@@ -80,6 +80,8 @@ function harness(opts: {
   agent?: Record<string, unknown> | null;
   overBudget?: boolean;
   maxActive?: number;
+  /** Pages the owner cannot open. */
+  hidden?: string[];
 } = {}) {
   const runs: Run[] = [...(opts.runs ?? [])];
   const prisma: any = {
@@ -120,6 +122,11 @@ function harness(opts: {
     producer as never,
     activity as never,
     config as never,
+    { principalFor: vi.fn(async (userId: string) => ({ userId })) } as never,
+    {
+      scopeFor: vi.fn(async () => ({})),
+      visibleDocumentIds: vi.fn(async (_scope: unknown, ids: string[]) => new Set(ids.filter((id) => !opts.hidden?.includes(id)))),
+    } as never,
   );
   return { service, runs, prisma, producer, activity, usage };
 }
@@ -239,6 +246,12 @@ describe('AgentTriggerService.fire', () => {
       expect(await service.fire(trigger(), merged(), NOW)).toEqual({ started: false, reason: 'budget' });
     });
 
+    it('a page its owner cannot open (#433)', async () => {
+      const { service, runs } = harness({ hidden: [PAGE] });
+      expect(await service.fire(trigger(), merged(), NOW)).toEqual({ started: false, reason: 'no-access' });
+      expect(runs).toHaveLength(0);
+    });
+
     it('a repository reader on an event that names no repository', async () => {
       const { service } = harness();
       const t = trigger({ agentKey: 'archaeologist', event: 'connector.synced' });
@@ -327,6 +340,34 @@ function connectorFacts(over: Partial<TriggerFacts> = {}): TriggerFacts {
   };
 }
 
+describe('a labelled ticket (#433)', () => {
+  const ticket = (labels: string[]): TriggerFacts => ({
+    workspaceId: WS,
+    event: { type: 'work-item.updated', source: 'repo.issue.labeled', subjectId: 'wi-1' },
+    subjectKey: 'issue:wi-1',
+    projectId: 'p-1',
+    connectorId: 'c-1',
+    labels,
+  });
+  const scribe = trigger({ agentKey: 'scribe', event: 'work-item.updated', filter: { labels: ['docs'] }, cooldownMinutes: 0 });
+
+  it('matches a label case-insensitively, and misses without one', () => {
+    expect(matchesTrigger(scribe, ticket(['Docs', 'bug']))).toBe(true);
+    expect(matchesTrigger(scribe, ticket(['bug']))).toBe(false);
+  });
+
+  it('answers a ticket once, whatever the cooldown and however it changes later', async () => {
+    const { service, runs } = harness({ agent: { name: 'Scribe' } });
+    expect((await service.fire(scribe, ticket(['docs']), NOW)).started).toBe(true);
+    runs[0].status = 'succeeded';
+    const closed = { ...ticket(['docs']), event: { ...ticket(['docs']).event, source: 'repo.issue.closed' } };
+    expect(await service.fire(scribe, closed, NOW)).toEqual({ started: false, reason: 'already-seen' });
+    // Without a label filter the event is news every time, after the cooldown.
+    const plain = trigger({ agentKey: 'curator', event: 'work-item.updated', cooldownMinutes: 0 });
+    expect((await service.fire(plain, closed, NOW)).started).toBe(true);
+  });
+});
+
 describe('matchesTrigger', () => {
   it('an absent field matches everything; a present one must hold', () => {
     expect(matchesTrigger(trigger(), merged())).toBe(true);
@@ -365,6 +406,8 @@ describe('mergeFilter', () => {
     expect(mergeFilter('connector.synced', {}, { categories: ['guide'], connectorIds: ['c-1'] })).toEqual({
       connectorIds: ['c-1'],
     });
+    expect(mergeFilter('work-item.updated', {}, { labels: [' needs docs ', 'docs'] })).toEqual({ labels: ['needs-docs', 'docs'] });
+    expect(mergeFilter('page.merged', {}, { labels: ['docs'] })).toEqual({});
   });
 });
 

@@ -32,7 +32,20 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { onKeyStroke, useStorage } from '@vueuse/core'
-import { GitCompareArrows, History, LayoutTemplate, MoreHorizontal, Route, Settings2, Sparkles, X } from 'lucide-vue-next'
+import {
+  Eye,
+  FilePlus2,
+  GitCompareArrows,
+  History,
+  LayoutTemplate,
+  MoreHorizontal,
+  Route,
+  Save,
+  Settings2,
+  Sparkles,
+  Undo2,
+  X,
+} from 'lucide-vue-next'
 import {
   AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
@@ -114,6 +127,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import RichEditor from '@/components/editor/RichEditor.vue'
@@ -344,9 +360,6 @@ const mentionablePages = computed(() =>
     .map((d) => ({ documentId: d.documentId, title: d.title, category: d.category })),
 )
 
-const projectName = computed(
-  () => projects.items.find((p) => p.projectId === projectId.value)?.name ?? t('import.project'),
-)
 
 /* ------------------------------------------------------ working copy */
 
@@ -1211,15 +1224,17 @@ onBeforeUnmount(() => {
 <template>
   <div class="kn-page-editor" :data-ai-open="aiOpen ? 'true' : 'false'">
     <div class="kn-page-column">
-      <header class="kn-page-head">
-        <!-- The page's visible title is a field, not a heading, so the route's
-             one h1 is spoken only. -->
-        <h1 class="sr-only">
-          {{ title.trim() || (isEdit ? t('editor.editing') : t('editor.newPage')) }}
-        </h1>
-        <div class="kn-page-crumb">
-          <!-- Before a load the project is the sidebar's, not the page's. -->
-          <strong v-if="!loadError">{{ projectName }}</strong>
+      <!-- The page's visible title is a field, not a heading, so the route's
+           one h1 is spoken only. -->
+      <h1 class="sr-only">
+        {{ title.trim() || (isEdit ? t('editor.editing') : t('editor.newPage')) }}
+      </h1>
+      <!-- The action bar (#441), in the shell's strip under the breadcrumbs —
+           the same place the page view's bar stands, so Edit and Publish do not
+           jump between reading and writing. The trail above names the project
+           and the page; the bar names only the state of this edit. -->
+      <Teleport to="#kn-page-toolbar">
+        <div class="kn-bar-start kn-page-crumb">
           <span class="kn-page-state">{{ isEdit ? t('editor.editing') : t('editor.newPage') }}</span>
           <span v-if="!isEdit && template" class="kn-page-state">
             {{ templateName ? t('editor.fromTemplate', { name: templateName }) : t('editor.fromATemplate') }}
@@ -1249,7 +1264,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <div class="ml-auto flex items-center gap-1.5">
+        <div class="kn-bar-end">
           <CollabPresence v-if="collab" :peers="collab.status.peers" :writers="editorRef?.aiWriters ?? []" />
           <Button
             variant="ghost"
@@ -1259,30 +1274,62 @@ onBeforeUnmount(() => {
             :title="`${t('editorAi.toggle')} (${modKey}J)`"
             @click="setAiOpen(!aiOpen)"
           >
-            <Sparkles class="size-4" /> <span class="sr-only sm:not-sr-only">{{ t('editorAi.button') }}</span>
+            <Sparkles class="size-4" /> <span class="kn-bar-label">{{ t('editorAi.button') }}</span>
           </Button>
-          <Button variant="ghost" size="sm" class="hidden sm:inline-flex" @click="settingsOpen = true">
-            <Settings2 class="size-4" /> {{ t('editor.settings') }}
+          <!-- Labels while the bar has room, icons when it does not; Publish
+               keeps its word at every width — it is the one irreversible act here. -->
+          <Button variant="ghost" size="sm" :title="t('editor.settings')" @click="settingsOpen = true">
+            <Settings2 class="size-4" /> <span class="kn-bar-label">{{ t('editor.settings') }}</span>
           </Button>
-          <Button variant="ghost" size="sm" class="hidden sm:inline-flex" @click="cancel">{{ t('common.cancel') }}</Button>
-          <!-- Below sm the row holds the assistant, this, and Publish: the two
-               controls you reach for least fold into one menu. -->
+          <Button variant="ghost" size="sm" :title="t('common.cancel')" @click="cancel">
+            <X class="size-4" /> <span class="kn-bar-label">{{ t('common.cancel') }}</span>
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-sm" :aria-label="t('editor.moreActions')">
                 <MoreHorizontal class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" class="w-48">
-              <DropdownMenuItem class="sm:hidden" @select="settingsOpen = true">
-                <Settings2 class="size-4" /> {{ t('editor.settings') }}
-              </DropdownMenuItem>
-              <DropdownMenuItem class="sm:hidden" @select="cancel">
-                <X class="size-4" /> {{ t('common.cancel') }}
-              </DropdownMenuItem>
-              <DropdownMenuItem @select="openSaveAs">
-                <LayoutTemplate class="size-4" /> {{ t('templates.saveAs.action') }}
-              </DropdownMenuItem>
+            <DropdownMenuContent align="end" class="w-52">
+              <!-- What this edit holds that the page does not, and the two
+                   things to do about it — the same review the chip opens. -->
+              <DropdownMenuSub v-if="unstaged">
+                <DropdownMenuSubTrigger>
+                  <GitCompareArrows class="size-4" /> {{ t('editor.menu.changes') }}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent class="w-52">
+                  <DropdownMenuItem @select="openReview">
+                    <Eye class="size-4" /> {{ t('editor.menu.review') }}
+                  </DropdownMenuItem>
+                  <!-- Asks first either way: from a menu there is no diff on
+                       screen showing what would go. -->
+                  <DropdownMenuItem
+                    variant="destructive"
+                    :disabled="collab !== null && !collab.status.writable"
+                    @select="discardOpen = true"
+                  >
+                    <Undo2 class="size-4" />
+                    {{ collab ? t('editor.collab.discard.action') : t('editor.unstaged.discardAll') }}
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <LayoutTemplate class="size-4" /> {{ t('editor.menu.template') }}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent class="w-52">
+                  <!-- The `/template` slash command's gallery, inserting at the cursor. -->
+                  <DropdownMenuItem
+                    :disabled="!editorRef || (collab !== null && !collab.status.writable)"
+                    @select="editorRef?.openTemplates()"
+                  >
+                    <FilePlus2 class="size-4" /> {{ t('editor.menu.insertTemplate') }}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem @select="openSaveAs">
+                    <Save class="size-4" /> {{ t('templates.saveAs.action') }}
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button
@@ -1293,7 +1340,7 @@ onBeforeUnmount(() => {
             {{ busy ? t('common.saving') : isEdit ? t('editor.publish') : t('editor.createAndIndex') }}
           </Button>
         </div>
-      </header>
+      </Teleport>
 
       <div class="kn-page-body">
         <div class="kn-page-main">
@@ -1458,23 +1505,27 @@ onBeforeUnmount(() => {
       </AlertDialogContent>
     </AlertDialog>
 
-    <!-- What publishing would change, before it does. -->
+    <!-- What publishing would change, before it does. The shared draft's
+         question, or — from the ⋯ menu's Changes ▸ (#441) — this browser's
+         working copy's. -->
     <AlertDialog v-model:open="discardOpen">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{{ t('editor.collab.discard.title') }}</AlertDialogTitle>
+          <AlertDialogTitle>{{ collab ? t('editor.collab.discard.title') : t('editor.discardChanges') }}</AlertDialogTitle>
           <AlertDialogDescription>
             {{
-              collab && collab.status.peers.length > 0
-                ? t('editor.collab.discard.bodyPeers', { n: collab.status.peers.length }, collab.status.peers.length)
-                : t('editor.collab.discard.body')
+              !collab
+                ? t('editor.menu.discardBody')
+                : collab.status.peers.length > 0
+                  ? t('editor.collab.discard.bodyPeers', { n: collab.status.peers.length }, collab.status.peers.length)
+                  : t('editor.collab.discard.body')
             }}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{{ t('editor.keepEditing') }}</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" @click="discardDraft">
-            {{ t('editor.collab.discard.confirm') }}
+          <AlertDialogAction variant="destructive" @click="collab ? discardDraft() : discardUnstaged()">
+            {{ collab ? t('editor.collab.discard.confirm') : t('editor.discardChangesAction') }}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

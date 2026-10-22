@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { ActivityCoreModule } from '../activity/activity-core.module.js';
+import { AuthCoreModule } from '../auth/auth-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { AgentCoreModule } from './agent-core.module.js';
 import { AgentQueueModule } from './agent-queue.module.js';
 import { AgentTriggerService } from './agent-trigger.service.js';
@@ -13,7 +15,7 @@ import { AgentTriggerService } from './agent-trigger.service.js';
  * The listener half is `AgentTriggerListener`, in `AgentWorkerModule` only.
  */
 @Module({
-  imports: [PrismaModule, AiCoreModule, ActivityCoreModule, AgentCoreModule, AgentQueueModule],
+  imports: [PrismaModule, AiCoreModule, ActivityCoreModule, AuthCoreModule, PermissionsCoreModule, AgentCoreModule, AgentQueueModule],
   providers: [AgentTriggerService],
   exports: [AgentTriggerService],
 })

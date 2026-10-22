@@ -38,14 +38,20 @@ Two things changed inside the main column:
   and expands.
 - **Any passage can be commented on**, the way an annotated PDF or a Figma
   frame works. There is no discussion list under the content: comments live on
-  the text, and nowhere else.
+  the text. The ones with no place on it — a comment on the page as a whole,
+  or one whose passage has since been edited away (**outdated**) — are listed
+  in the rail's **Comments** widget, which appears only while there are any
+  (#439). They were stored and never shown until then.
 
 Two ways in:
 
 - **Select a passage** → a floating **Comment** button appears at the selection
   → a composer, anchored to exactly those words.
 - **Hover a block** → a comment control appears in the reading gutter beside it
-  → a composer anchored to the whole block. This is the affordance Notion,
+  → a composer anchored to the whole block. A block is the innermost list item
+  or table row under the pointer, else the top-level block (paragraph,
+  heading, blockquote); a list item quotes its own paragraph, not the items
+  nested under it. This is the affordance Notion,
   Figma and Docs use, and the reason none of them open a composer on hover
   itself: a box that appears wherever the pointer rests fires continuously
   while someone is reading.
@@ -173,7 +179,12 @@ activity log and published on the live bus like every other thread write.
   on `ReviewThread`. The popover threads are deliberately the *same* review UI,
   resolve workflow included — a comment on a page and a comment on a change are
   the same conversation.
-- A block's quote is read from a clone with the annotation layer stripped. The
-  comment-count pin renders as a real text node inside the block, so plain
-  `textContent` produced a quote ending in a stray digit — which matched
-  nothing, silently making a block uncommentable as soon as it had a comment.
+- A block's quote is read off the document projection, never the DOM: the
+  control maps the element to a document range (`posAtDOM` →
+  `blockRangeAt`) and `anchorFromRange` quotes the projection between its
+  bounds. DOM `textContent` joined list items and table cells with no
+  separator where the projection puts a space, so a list or a table never
+  matched and the comment went in unanchored (#439); earlier it also picked up
+  the comment-count pin's digit.
+- The composer takes focus when it opens, without scrolling: the popover is
+  still at its origin on the first frame.

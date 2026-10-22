@@ -95,6 +95,12 @@ export const AUDIT_ACTIONS = [
   'scim.token_created',
   'scim.token_revoked',
   'scim.settings_updated',
+  'chat.search_enabled',
+  'chat.search_disabled',
+  'chat.listen_enabled',
+  'chat.listen_disabled',
+  'chat.auto_harvest_enabled',
+  'chat.auto_harvest_disabled',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

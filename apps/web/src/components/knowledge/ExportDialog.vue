@@ -37,6 +37,8 @@ const props = defineProps<{
   target: ExportTarget
   /** Start with "Include subpages" ticked — the tree's menu, where a row stands for its branch. */
   subtree?: boolean
+  /** The format to open on — the page's Export ▸ submenu picks it first (#441). Still changeable here. */
+  initialFormat?: ExportFormat
 }>()
 const open = defineModel<boolean>('open', { required: true })
 
@@ -52,7 +54,7 @@ const submitting = ref(false)
 // Immediate: a caller may mount this already open (TreeRowMenu, #279).
 watch(open, (isOpen) => {
   if (!isOpen) return
-  format.value = 'zip'
+  format.value = props.initialFormat ?? 'zip'
   includeSubtree.value = !!props.subtree
   branch.value = ''
 }, { immediate: true })

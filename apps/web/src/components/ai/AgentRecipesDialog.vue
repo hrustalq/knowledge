@@ -37,6 +37,7 @@ const MESSAGE: Record<AgentRecipeKey, string> = {
   'weekly-digest': 'weeklyDigest',
   'freshness-sweep': 'freshnessSweep',
   'glossary-suggester': 'glossarySuggester',
+  'docs-from-tickets': 'docsFromTickets',
 }
 
 const recipes = computed(() =>

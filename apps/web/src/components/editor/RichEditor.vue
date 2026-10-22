@@ -837,6 +837,8 @@ onBeforeUnmount(() => {
 })
 
 defineExpose({
+  /** The `/template` gallery, opened from the editor's ⋯ menu (#441) rather than the slash menu. */
+  openTemplates,
   /** The live editor, for hosts that need to read the document (comment anchoring). */
   editor,
   /**
@@ -876,8 +878,9 @@ defineExpose({
     if (!instance || !first) return
     instance.chain().setTextSelection(first.from).scrollIntoView().run()
   },
-  focus() {
-    editor.value?.commands.focus()
+  /** `scroll: false` for a box that is not placed yet — a popover still at its origin. */
+  focus(scroll = true) {
+    editor.value?.commands.focus(null, { scrollIntoView: scroll })
   },
   /**
    * Replace the whole body as an ordinary edit — in a shared draft, one every

@@ -13,9 +13,11 @@ import { asLocale } from '../i18n/locale.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
+import { AccessService } from '../auth/access.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { AgentRegistryService } from './agent-registry.service.js';
 import { AgentProducer } from './agent.producer.js';
-import { RUNNABLE_AGENTS } from './agent.executor.js';
+import { isTriggerableAgent } from './agent.executor.js';
 
 /**
  * What the listener learned about one event, resolved against PostgreSQL —
@@ -43,6 +45,8 @@ export interface TriggerFacts {
   occurredAt?: Date;
   /** A webhook body, kept on the run as `input.payload` (already cut to size). */
   payload?: string;
+  /** The ticket's labels, for `work-item.updated` (#433). */
+  labels?: string[];
 }
 
 /**
@@ -62,6 +66,7 @@ export type TriggerSkip =
   | 'no-owner'
   | 'agent-unavailable'
   | 'no-scope'
+  | 'no-access'
   | 'already-seen'
   | 'budget'
   | 'in-flight'
@@ -114,6 +119,8 @@ export class AgentTriggerService {
     private readonly producer: AgentProducer,
     private readonly activity: ActivityService,
     config: ConfigService<Env, true>,
+    private readonly access: AccessService,
+    private readonly permissions: PermissionService,
   ) {
     this.maxActive = Number(config.get('AGENT_TRIGGER_MAX_ACTIVE', { infer: true }) ?? 5);
   }
@@ -135,7 +142,7 @@ export class AgentTriggerService {
     }
 
     const agent = await this.registry.resolve(trigger.workspaceId, trigger.agentKey).catch(() => null);
-    if (!agent?.enabled || !agent.surfaces.includes('background') || !RUNNABLE_AGENTS.has(trigger.agentKey)) {
+    if (!agent?.enabled || !agent.surfaces.includes('background') || !isTriggerableAgent(trigger.agentKey)) {
       this.logger.warn(`Trigger skipped for ${label}: the agent is disabled or cannot run in the background`);
       return skip('agent-unavailable');
     }
@@ -149,6 +156,15 @@ export class AgentTriggerService {
     }
     if (facts.occurredAt && facts.occurredAt < trigger.createdAt) return skip('already-seen');
 
+    // The event's page must be one the run's identity may open (#433): a
+    // ticket anchored on a restricted page, or a merge on one, starts nothing
+    // rather than a run that would read around it.
+    const documentId = facts.event.documentId;
+    if (documentId && !(await this.canOpen(ownerId, trigger.workspaceId, documentId))) {
+      this.logger.warn(`Trigger skipped for ${label}: its owner cannot open the page the event is about`);
+      return skip('no-access');
+    }
+
     try {
       await this.usage.assertWithinBudget(trigger.workspaceId, ownerId);
     } catch {
@@ -156,7 +172,6 @@ export class AgentTriggerService {
       return skip('budget');
     }
 
-    const documentId = facts.event.documentId;
     const input: AgentRunInput = {
       ...(trigger.note ? { note: trigger.note } : {}),
       ...(documentId && isPageScopedAgent(trigger.agentKey) ? { documentIds: [documentId] } : {}),
@@ -182,8 +197,9 @@ export class AgentTriggerService {
         });
         if (seen > 0) return skip('already-seen');
       }
-      // A retried delivery is the same delivery, however long after the first.
-      if (facts.event.deliveryId) {
+      // A retried delivery is the same delivery, however long after the first;
+      // a labelled ticket is a request, answered once (#433).
+      if (facts.event.deliveryId || answersOnce(trigger)) {
         const seen = await tx.agentRun.count({ where: { triggerId: trigger.id, subjectKey: facts.subjectKey } });
         if (seen > 0) return skip('already-seen');
       }
@@ -251,6 +267,22 @@ export class AgentTriggerService {
     this.logger.log(`Started ${label} for ${facts.subjectKey}`);
     return result;
   }
+
+  /** Whether `userId` may open the page. A missing owner or a lost membership is a no. */
+  private async canOpen(userId: string, workspaceId: string, documentId: string): Promise<boolean> {
+    try {
+      const principal = await this.access.principalFor(userId, 'en');
+      const scope = await this.permissions.scopeFor(principal, workspaceId);
+      return (await this.permissions.visibleDocumentIds(scope, [documentId])).has(documentId);
+    } catch {
+      return false;
+    }
+  }
+}
+
+/** A label-filtered ticket trigger starts one run per ticket, for good (#433). */
+function answersOnce(trigger: Pick<AgentTrigger, 'event' | 'filter'>): boolean {
+  return trigger.event === 'work-item.updated' && !!filterOf(trigger.filter).labels?.length;
 }
 
 function skip(reason: TriggerSkip): TriggerOutcome {
@@ -274,6 +306,10 @@ export function matchesTrigger(
   if (filter.connectorIds?.length && !(facts.connectorId && filter.connectorIds.includes(facts.connectorId))) {
     return false;
   }
+  if (filter.labels?.length) {
+    const has = new Set((facts.labels ?? []).map((l) => l.toLowerCase()));
+    if (!filter.labels.some((l) => has.has(l.toLowerCase()))) return false;
+  }
   if (filter.branch) return facts.branch === filter.branch;
   // A page indexed on a draft branch is somebody editing, not the page changing.
   if (facts.event.type === 'page.indexed') return facts.defaultBranch === true;
@@ -288,9 +324,11 @@ export function filterOf(value: unknown): AgentTriggerFilter {
     Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.length > 0) : undefined;
   const categories = strings(raw.categories);
   const connectorIds = strings(raw.connectorIds);
+  const labels = strings(raw.labels);
   return {
     ...(categories?.length ? { categories } : {}),
     ...(connectorIds?.length ? { connectorIds } : {}),
+    ...(labels?.length ? { labels } : {}),
     ...(typeof raw.branch === 'string' && raw.branch ? { branch: raw.branch } : {}),
   };
 }

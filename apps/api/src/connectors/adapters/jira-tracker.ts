@@ -35,10 +35,10 @@ export class JiraTrackerService implements TrackerAdapter {
     return row.kind === 'jira';
   }
 
-  async listIssues(row: Connector, since: string | null, watch: TrackerRef[] = []) {
+  async listIssues(row: Connector, since: string | null, watch: TrackerRef[] = [], labels: string[] = [labelFor(row)]) {
     const ctx = await this.ctx(row);
     const keys = watch.map((r) => r.externalKey).filter((k): k is string => !!k && KEY.test(k)).slice(0, MAX_WATCHED);
-    const who = `labels = ${jqlString(labelFor(row))}${keys.length ? ` OR key in (${keys.join(', ')})` : ''}`;
+    const who = `labels in (${labels.map(jqlString).join(', ')})${keys.length ? ` OR key in (${keys.join(', ')})` : ''}`;
     const when = since ? ` AND updated >= ${jqlString(jqlDate(new Date(Date.parse(since) - JQL_SKEW_MS)))}` : '';
     const page = await jiraSearch(ctx, `(${who})${when} ORDER BY updated ASC`, { maxResults: PAGE, fields: FIELDS });
     const items = (page.issues ?? []).map((issue) => toTrackerIssue(ctx, issue));

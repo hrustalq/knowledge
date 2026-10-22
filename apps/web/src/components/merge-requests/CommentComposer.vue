@@ -143,6 +143,13 @@ async function expand() {
 // Hosts open this from outside — a Reply button beside a comment, say.
 defineExpose({ expand })
 
+// A box that opens already expanded was opened by a press (Comment, Edit), so
+// the next keystroke belongs in it (#439). No scroll: a floating popover is
+// still at its origin when this runs, and scrolling there loses the reader.
+onMounted(() => {
+  if (props.autoExpand) void nextTick(() => editorEl.value?.focus(false))
+})
+
 function submit(resolvable = !props.offerThread) {
   // The editor debounces its markdown by 200ms, so submitting straight after
   // the last keystroke would post the text as it stood a moment ago. flush()

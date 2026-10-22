@@ -160,10 +160,11 @@ describe('the listening switch', () => {
     };
     const adapter = { postMessage: vi.fn(post), render: (v: unknown) => v };
     const cfg = { get: (k: string) => ({ API_PUBLIC_URL: 'https://api.test', CHAT_LISTEN_TTL_DAYS: 7 })[k] };
-    const svc = new ChatIntegrationsService(prisma as never, { get: () => adapter } as never, {} as never, cfg as never, {} as never);
+    const audit = { record: vi.fn(async () => undefined) };
+    const svc = new ChatIntegrationsService(prisma as never, { get: () => adapter } as never, {} as never, cfg as never, {} as never, audit as never);
     vi.spyOn(svc, 'require').mockResolvedValue({ id: 'int-1', kind, locale: 'en' } as never);
     vi.spyOn(svc, 'context').mockReturnValue({ token: 'T' } as never);
-    return { svc, prisma, adapter, row };
+    return { svc, prisma, adapter, row, audit };
   }
 
   it('on: tells the group first, then keeps', async () => {
@@ -171,6 +172,9 @@ describe('the listening switch', () => {
     const entry = await h.svc.updateBinding('b-1', { listening: true }, 'admin-1');
     expect(h.adapter.postMessage).toHaveBeenCalledWith({ token: 'T' }, { chatId: '-1001' }, { kind: 'notice', text: 'chat.listen.on' });
     expect(entry.listening).toBe(true);
+    expect(h.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 'ws', actor: 'admin-1', action: 'chat.listen_enabled', target: 'b-1', params: expect.objectContaining({ retentionDays: 7 }) }),
+    );
   });
 
   it('on, but the group could not be told: nothing is kept', async () => {
@@ -179,6 +183,7 @@ describe('the listening switch', () => {
     });
     await expect(h.svc.updateBinding('b-1', { listening: true }, 'admin-1')).rejects.toBeInstanceOf(BadRequestException);
     expect(h.prisma.chatChannelBinding.update).not.toHaveBeenCalled();
+    expect(h.audit.record).not.toHaveBeenCalled();
   });
 
   it('off: what was kept goes at once', async () => {
@@ -186,6 +191,7 @@ describe('the listening switch', () => {
     h.row.listening = true;
     await h.svc.updateBinding('b-1', { listening: false }, 'admin-1');
     expect(h.prisma.chatBufferedMessage.deleteMany).toHaveBeenCalledWith({ where: { bindingId: 'b-1' } });
+    expect(h.audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'chat.listen_disabled', target: 'b-1' }));
   });
 
   it('Time threads are read whole: no listening there', async () => {

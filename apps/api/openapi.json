@@ -14370,7 +14370,8 @@
               "enum": [
                 "weekly-digest",
                 "freshness-sweep",
-                "glossary-suggester"
+                "glossary-suggester",
+                "docs-from-tickets"
               ],
               "type": "string"
             }
@@ -31980,7 +31981,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.30.1",
+    "version": "0.31.0",
     "contact": {}
   },
   "tags": [],
@@ -33837,6 +33838,13 @@
             "minimum": 1,
             "maximum": 100
           },
+          "groupBy": {
+            "type": "string",
+            "enum": [
+              "page"
+            ],
+            "description": "'page': one result per page (its best-ranked chunk), limit counting pages, each with snippetParts. Omitted: one result per chunk"
+          },
           "asOf": {
             "type": "string",
             "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph."
@@ -34862,6 +34870,14 @@
             "nullable": true,
             "description": "Only this branch. Absent, a page.indexed trigger hears the default branch only."
           },
+          "labels": {
+            "nullable": true,
+            "description": "Only tickets carrying one of these labels, case-insensitive (work-item.updated). Answered once per ticket.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "enabled": {
             "type": "boolean",
             "description": "Enabling makes the caller the owner the runs execute as. Off unless sent."
@@ -35016,6 +35032,14 @@
             "type": "string",
             "nullable": true,
             "description": "Only this branch. Absent, a page.indexed trigger hears the default branch only."
+          },
+          "labels": {
+            "nullable": true,
+            "description": "Only tickets carrying one of these labels, case-insensitive (work-item.updated). Answered once per ticket.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "enabled": {
             "type": "boolean",

@@ -113,6 +113,7 @@ const blank = () => ({
   categories: '',
   connectorIds: [] as string[],
   branch: '',
+  labels: '',
   /** Null on a new trigger: left out of the create, so `AGENT_TRIGGER_COOLDOWN_MINUTES` decides. */
   cooldownMinutes: null as number | null,
   note: '',
@@ -133,6 +134,7 @@ function openEdit(trigger: AgentTriggerSummary) {
     categories: (trigger.filter.categories ?? []).join(', '),
     connectorIds: [...(trigger.filter.connectorIds ?? [])],
     branch: trigger.filter.branch ?? '',
+    labels: (trigger.filter.labels ?? []).join(', '),
     cooldownMinutes: trigger.cooldownMinutes,
     note: trigger.note ?? '',
     enabled: trigger.enabled,
@@ -151,11 +153,13 @@ function toggleConnector(id: string, on: boolean) {
 function bodyFrom() {
   const f = form.value
   const categories = f.categories.split(',').map((c) => c.trim()).filter(Boolean)
+  const labels = f.labels.split(',').map((l) => l.trim()).filter(Boolean)
   return {
     projectId: f.projectId === ALL ? null : f.projectId,
     ...(fields.value.includes('categories') ? { categories: categories.length ? categories : null } : {}),
     ...(fields.value.includes('connectorIds') ? { connectorIds: f.connectorIds.length ? f.connectorIds : null } : {}),
     ...(fields.value.includes('branch') ? { branch: f.branch.trim() || null } : {}),
+    ...(fields.value.includes('labels') ? { labels: labels.length ? labels : null } : {}),
     ...(f.cooldownMinutes !== null ? { cooldownMinutes: f.cooldownMinutes } : {}),
     note: f.note.trim() || null,
     enabled: f.enabled,
@@ -211,6 +215,7 @@ function scopeLabel(trigger: AgentTriggerSummary): string {
     parts.push(formatList(trigger.filter.connectorIds.map((id) => connectors.value.find((c) => c.id === id)?.name ?? id)))
   }
   if (trigger.filter.branch) parts.push(trigger.filter.branch)
+  if (trigger.filter.labels?.length) parts.push(formatList(trigger.filter.labels))
   return parts.join(' · ')
 }
 </script>
@@ -382,6 +387,12 @@ function scopeLabel(trigger: AgentTriggerSummary): string {
         </div>
         <span class="text-muted-foreground block text-xs">{{ t('ai.triggers.anyConnector') }}</span>
       </div>
+
+      <label v-if="fields.includes('labels')" class="block space-y-1">
+        <span class="text-muted-foreground text-xs font-medium">{{ t('ai.triggers.labels') }}</span>
+        <Input v-model="form.labels" :placeholder="t('ai.triggers.labelsPlaceholder')" />
+        <span class="text-muted-foreground block text-xs">{{ t('ai.triggers.labelsHint') }}</span>
+      </label>
 
       <label v-if="fields.includes('branch')" class="block max-w-64 space-y-1">
         <span class="text-muted-foreground text-xs font-medium">{{ t('ai.triggers.branch') }}</span>

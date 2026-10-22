@@ -1461,46 +1461,35 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 /* Editor page shell -------------------------------------------------------
  *
  * The route is `meta.fill`, so this owns the viewport and the prose column is
- * what scrolls. The header carries *no* bottom border on purpose: the toolbar
- * directly beneath it already draws one, and two parallel rules 40px apart
- * read as a mistake rather than as structure. One line, one meaning.
- */
+ * what scrolls. Its actions are not here: they stand in the shell's page bar
+ * under the breadcrumbs (#441), and the formatting toolbar is the column's
+ * first row, directly beneath. The bar drops its own bottom rule here, as the
+ * editor's header always did: the toolbar draws one, and two parallel rules
+ * 40px apart read as a mistake rather than as structure. */
 .kn-page-editor { position: relative; display: flex; height: 100%; min-height: 0; }
-/* Everything but the assistant: header over body, as the editor always was. */
-.kn-page-column { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; container: kn-page / inline-size; }
-.kn-page-head {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.6rem 1rem 0.5rem;
-  background: var(--background);
-}
-.kn-page-crumb {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-  font-size: var(--kn-text-sm);
-}
-.kn-page-crumb strong { color: var(--foreground); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A phone's header has room for the page's name and its three controls. The
-   state chip goes, and "unstaged changes" keeps its dot — still the way into
-   the review, still labelled for assistive tech by its title. */
+.kn-shell:has(.kn-page-editor) .kn-page-toolbar { border-bottom-color: transparent; }
+/* Everything but the assistant: the body, as the editor always was. */
+.kn-page-column { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+/* The bar's start group: the state of this edit, never the page's name — the
+   trail above already says which page and which project. */
+.kn-page-crumb { gap: 0.5rem; font-size: var(--kn-text-sm); }
+/* A phone's bar has room for the assistant, ⋯ and Publish. The state chip goes,
+   and "unstaged changes" keeps its dot — still the way into the review, still
+   labelled for assistive tech by its title. */
 @media (max-width: 639.98px) {
-  .kn-page-head { gap: 0.35rem; padding-inline: 0.75rem 0.5rem; }
   .kn-page-state { display: none; }
 }
-/* The column, not the window, decides when the state chips fold to their
-   dots: the assistant beside it narrows the header as much as a phone does,
-   and a label that does not fit slides under the controls instead. */
-@container kn-page (max-width: 56rem) {
+/* The bar, not the window, decides when the state chips fold to their dots:
+   an open rail narrows it as much as a phone does, and a label that does not
+   fit slides under the controls instead. */
+@container kn-bar (max-width: 56rem) {
   .kn-unstaged-label,
   .kn-collab-status:not(.kn-collab-writing) .kn-collab-status-label {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
   }
 }
-/* "Writing for …" says who, so it keeps its words until the column is phone-sized. */
-@container kn-page (max-width: 40rem) {
+/* "Writing for …" says who, so it keeps its words until the bar is phone-sized. */
+@container kn-bar (max-width: 40rem) {
   .kn-collab-writing .kn-collab-status-label {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
   }

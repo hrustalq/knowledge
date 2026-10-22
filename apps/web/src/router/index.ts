@@ -39,16 +39,18 @@ export function createRouter() {
       { path: '/documents', component: () => import('@/pages/DocumentsListPage.vue'), meta: { fill: true } },
       { path: '/documents/:id', component: () => import('@/pages/DocumentDetailPage.vue') },
       // `fill`: the editor owns the viewport and scrolls its own prose column.
-      // `bare`: no breadcrumbs — while writing, the only chrome is the page's own.
+      // Not `bare` (#441): the trail names the project and the page, and the
+      // editor's actions stand in the page bar beneath it, where the page
+      // view's do — so reading and writing share one chrome stack.
       {
         path: '/documents/:id/edit',
         component: () => import('@/pages/EditorPage.vue'),
-        meta: { fill: true, bare: true },
+        meta: { fill: true },
       },
       {
         path: '/create',
         component: () => import('@/pages/EditorPage.vue'),
-        meta: { fill: true, bare: true },
+        meta: { fill: true },
       },
       // API specs (#78) are written as text, not in the page editor.
       { path: '/create/spec', component: () => import('@/pages/ApiSpecEditorPage.vue') },

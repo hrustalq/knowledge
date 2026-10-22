@@ -7220,6 +7220,11 @@ export interface components {
             mode: "hybrid" | "semantic" | "keyword";
             /** @default 20 */
             limit: number;
+            /**
+             * @description 'page': one result per page (its best-ranked chunk), limit counting pages, each with snippetParts. Omitted: one result per chunk
+             * @enum {string}
+             */
+            groupBy?: "page";
             /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
             asOf?: string;
             /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
@@ -7587,6 +7592,8 @@ export interface components {
             connectorIds?: string[] | null;
             /** @description Only this branch. Absent, a page.indexed trigger hears the default branch only. */
             branch?: string | null;
+            /** @description Only tickets carrying one of these labels, case-insensitive (work-item.updated). Answered once per ticket. */
+            labels?: string[] | null;
             /** @description Enabling makes the caller the owner the runs execute as. Off unless sent. */
             enabled?: boolean;
             /** @description Minutes before the same subject may fire this trigger again; 0 turns it off. Defaults to AGENT_TRIGGER_COOLDOWN_MINUTES. */
@@ -7664,6 +7671,8 @@ export interface components {
             connectorIds?: string[] | null;
             /** @description Only this branch. Absent, a page.indexed trigger hears the default branch only. */
             branch?: string | null;
+            /** @description Only tickets carrying one of these labels, case-insensitive (work-item.updated). Answered once per ticket. */
+            labels?: string[] | null;
             /** @description Enabling makes the caller the owner the runs execute as. Off unless sent. */
             enabled?: boolean;
             /** @description Minutes before the same subject may fire this trigger again; 0 turns it off. Defaults to AGENT_TRIGGER_COOLDOWN_MINUTES. */
@@ -18353,7 +18362,7 @@ export interface operations {
                 "Accept-Language"?: "en" | "ru";
             };
             path: {
-                recipe: "weekly-digest" | "freshness-sweep" | "glossary-suggester";
+                recipe: "weekly-digest" | "freshness-sweep" | "glossary-suggester" | "docs-from-tickets";
             };
             cookie?: never;
         };

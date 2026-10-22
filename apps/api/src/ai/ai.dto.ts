@@ -1087,6 +1087,19 @@ class AgentTriggerFieldsDto {
   @MaxLength(200, { message: vmsg('maxLength') })
   branch?: string | null;
 
+  @ApiPropertyOptional({
+    type: [String],
+    nullable: true,
+    description: 'Only tickets carrying one of these labels, case-insensitive (work-item.updated). Answered once per ticket.',
+  })
+  @IsOptional()
+  @NULLABLE<AgentTriggerFieldsDto>('labels')
+  @IsArray()
+  @ArrayMaxSize(20, { message: vmsg('arrayMaxSize') })
+  @IsString({ each: true })
+  @MaxLength(50, { each: true, message: vmsg('maxLength') })
+  labels?: string[] | null;
+
   @ApiPropertyOptional({ description: 'Enabling makes the caller the owner the runs execute as. Off unless sent.' })
   @IsOptional()
   @IsBoolean()

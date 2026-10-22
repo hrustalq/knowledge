@@ -15,7 +15,7 @@ import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
-import { RUNNABLE_AGENTS } from '../agents/agent.executor.js';
+import { isTriggerableAgent } from '../agents/agent.executor.js';
 import { filterOf } from '../agents/agent-trigger.service.js';
 import { decryptSecret, encryptSecret, parseKey } from './secret-box.js';
 import type { CreateAgentTriggerDto, UpdateAgentTriggerDto } from './ai.dto.js';
@@ -153,7 +153,7 @@ export class AgentTriggersService {
   private async assertTriggerable(workspaceId: string, agentKey: string, event: AgentTriggerEvent): Promise<void> {
     const agent = await this.registry.resolve(workspaceId, agentKey).catch(() => null);
     if (!agent) throw new NotFoundException(t('error.ai.agentNotFound', { key: agentKey }));
-    if (!agent.surfaces.includes('background') || !RUNNABLE_AGENTS.has(agentKey)) {
+    if (!agent.surfaces.includes('background') || !isTriggerableAgent(agentKey)) {
       throw new BadRequestException(t('error.ai.agentNotBackground', { key: agentKey }));
     }
     if (!agentTriggerEventsFor(agentKey).includes(event)) {
@@ -186,7 +186,8 @@ export class AgentTriggersService {
       }
     }
 
-    const touchesFilter = dto.categories !== undefined || dto.connectorIds !== undefined || dto.branch !== undefined;
+    const touchesFilter =
+      dto.categories !== undefined || dto.connectorIds !== undefined || dto.branch !== undefined || dto.labels !== undefined;
     const filter = touchesFilter ? mergeFilter(event, filterOf(existing?.filter), dto) : undefined;
     return {
       ...(dto.projectId !== undefined ? { projectId: dto.projectId } : {}),
@@ -201,7 +202,7 @@ export class AgentTriggersService {
 export function mergeFilter(
   event: AgentTriggerEvent,
   stored: AgentTriggerFilter,
-  dto: Pick<UpdateAgentTriggerDto, 'categories' | 'connectorIds' | 'branch'>,
+  dto: Pick<UpdateAgentTriggerDto, 'categories' | 'connectorIds' | 'branch' | 'labels'>,
 ): AgentTriggerFilter {
   const pick = <K extends keyof AgentTriggerFilter>(key: K): AgentTriggerFilter[K] | undefined => {
     const sent = dto[key];
@@ -210,10 +211,13 @@ export function mergeFilter(
   const categories = [...new Set((pick('categories') ?? []).map((c) => c.trim()).filter(Boolean))];
   const connectorIds = [...new Set(pick('connectorIds') ?? [])];
   const branch = pick('branch')?.trim();
+  // Jira labels hold no whitespace, so neither does a filter on them.
+  const labels = [...new Set((pick('labels') ?? []).map((l) => l.trim().replace(/\s+/g, '-')).filter(Boolean))];
   const merged: AgentTriggerFilter = {
     ...(categories.length ? { categories } : {}),
     ...(connectorIds.length ? { connectorIds } : {}),
     ...(branch ? { branch } : {}),
+    ...(labels.length ? { labels } : {}),
   };
   const allowed = AGENT_TRIGGER_FILTER_FIELDS[event];
   return Object.fromEntries(

@@ -178,7 +178,8 @@ comment, and the row is dropped.
 ### Transport
 
 **Polling is the guaranteed path, webhooks the fast path.** Each tick polls
-one tracker connector that has anchored tickets, round robin, from
+one tracker connector that has anchored tickets, or an enabled label-filtered
+ticket trigger covering it ([49](49-agent-triggers.md#ticket-triggers-and-the-scribe)), round robin, from
 `connectors.task_cursor` ("updated since"). A connector with a content run in
 flight is skipped. A labelled ticket with no row (lost, or created before its
 row) is re-anchored from its `knowledge-ref:` footer.
@@ -330,11 +331,12 @@ with a project or group access token (`api` scope). For seconds-fast sync, add
 an Issues hook to the same per-connector URL with the connector's secret as its
 token.
 
+Direction (b), ticket → agent work, shipped in #433: a labelled ticket starts
+a `scribe` run whose drafts open as merge requests and are linked back on the
+ticket. See [49](49-agent-triggers.md#ticket-triggers-and-the-scribe).
+
 ## Deliberate deferrals
 
-- **Direction (b), ticket → agent work**, for example a `docs`-labelled ticket
-  starting a draft. The `work-item.updated` trigger event is the hook; the work
-  is #433.
 - **No comment mirroring and no assignee push.** Identity is attribution only.
 - **No OAuth for Jira or GitLab** until somebody cannot issue a token.
 - **No user-owned Projects v2 boards, no Jira Data Center, no

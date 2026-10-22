@@ -18,7 +18,6 @@ import {
   verifyRepoDelivery,
 } from './drift/pull-request-delivery.js';
 import { readRepoPushDelivery, safeJson } from './webhook-payload.js';
-import { labelFor } from './adapters/tracker.js';
 import { ConnectorWorkItemsService } from './connector-work-items.service.js';
 import { TrackerRegistry } from './tracker-registry.service.js';
 
@@ -79,7 +78,7 @@ export class ConnectorWebhookController {
       const delivery = tracker.verifyWebhook(row, ctx.webhookSecret, lower, rawBody);
       if (delivery === null) throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
       if (delivery.item) {
-        await this.workItems.applyTrackerDelivery(row, delivery.item, delivery.actorId, labelFor(row));
+        await this.workItems.applyTrackerDelivery(row, delivery.item, delivery.actorId, await this.workItems.watchLabels(row));
         if (row.kind !== 'jira') return { accepted: true, runId: null };
       }
       if (row.kind === 'jira' && !String((row.config as { jql?: unknown } | null)?.jql ?? '').trim()) {

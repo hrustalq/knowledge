@@ -61,7 +61,7 @@ export class ChatWebhookController {
       headers: Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v])),
       body: req.rawBody?.toString('utf8') ?? '',
     };
-    if (!adapter.verifyInbound(raw, row.inboundSecretHash, this.integrations.context(row))) {
+    if (!(await adapter.verifyInbound(raw, row.inboundSecretHash, this.integrations.context(row)))) {
       // The integration id and nothing else: the body is unauthenticated input.
       this.logger.warn({ msg: 'chat delivery refused: bad secret', integrationId: id });
       throw new UnauthorizedException(t('error.chat.invalidSecret'));

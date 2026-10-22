@@ -143,7 +143,8 @@ export class ChatBufferService {
       where: {
         ...scope,
         topicId: inbound.topicId ?? null,
-        externalMessageId: { notIn: [m.messageId, inbound.messageId] },
+        // M is excluded only when its text came with the command: on Teams it did not, and M is a kept row.
+        externalMessageId: { notIn: head.length ? [m.messageId, inbound.messageId] : [inbound.messageId] },
         sentAt: { gte: m.at, ...(inbound.at ? { lte: inbound.at } : {}) },
       },
       orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }],

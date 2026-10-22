@@ -13,6 +13,7 @@ import {
   CHAT_PLATFORM_NAMES,
   type AuditAction,
   chatPlatformNeedsServer,
+  chatPlatformListens,
   chatPlatformNeedsSigningSecret,
   type ChatAutoHarvestLimits,
   type ChatBindingEntry,
@@ -469,12 +470,14 @@ export class ChatIntegrationsService {
    */
   private async switchListening(row: ChatChannelBinding, on: boolean): Promise<void> {
     const integration = await this.require(row.integrationId);
-    if (integration.kind !== 'telegram') throw new BadRequestException(t('error.chat.listenTelegramOnly'));
+    if (!chatPlatformListens(integration.kind as ChatPlatformKind)) throw new BadRequestException(t('error.chat.listenTelegramOnly'));
     if (!on) {
       await this.prisma.chatBufferedMessage.deleteMany({ where: { bindingId: row.id } });
       return;
     }
-    await this.tellGroup(row, (locale) => t('chat.listen.on', { count: this.listenTtlDays }, locale), 'error.chat.listenNoticeFailed', integration);
+    // Telegram's commands are /slash; Teams' are plain words.
+    const key = integration.kind === 'telegram' ? 'chat.listen.on' : 'chat.listen.onPlain';
+    await this.tellGroup(row, (locale) => t(key, { count: this.listenTtlDays }, locale), 'error.chat.listenNoticeFailed', integration);
   }
 
   /**

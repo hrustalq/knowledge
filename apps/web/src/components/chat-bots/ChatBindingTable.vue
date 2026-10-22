@@ -25,6 +25,8 @@ import { Bell, ChevronDown, Trash2 } from 'lucide-vue-next'
 import {
   CHAT_ANSWER_MODES,
   SUPPORTED_LOCALES,
+  chatPlatformListens,
+  type ChatPlatformKind,
   type ChatBindingEntry,
   type ChatBindingsResponse,
 } from '@knowledge/contracts'
@@ -43,6 +45,8 @@ import AgentSelect from './AgentSelect.vue'
 import ChatSubscriptionEditor from './ChatSubscriptionEditor.vue'
 
 const props = defineProps<{ integrationId: string; kind: string }>()
+/** Groups on this platform can keep their messages for capture (Telegram, Teams). */
+const listens = computed(() => chatPlatformListens(props.kind as ChatPlatformKind))
 const emit = defineEmits<{ changed: [] }>()
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -211,7 +215,7 @@ async function add() {
           </div>
         </div>
         <label
-          v-if="kind === 'telegram'"
+          v-if="listens"
           class="mt-3 flex max-w-[46rem] cursor-pointer items-start gap-2.5 has-[:disabled]:cursor-progress"
         >
           <Checkbox
@@ -221,14 +225,14 @@ async function add() {
             @update:model-value="(v) => setListening(b, v === true)"
           />
           <span class="min-w-0">
-            <span class="block text-sm">{{ t('chatBots.bindings.listen') }}</span>
+            <span class="block text-sm">{{ t(kind === 'teams' ? 'chatBots.bindings.listenTeams' : 'chatBots.bindings.listen') }}</span>
             <span class="block text-xs text-muted-foreground">
-              {{ t('chatBots.bindings.listenHint', { days: t('chatBots.bindings.listenDays', { days: ttlDays }, ttlDays) }) }}
+              {{ t(kind === 'teams' ? 'chatBots.bindings.listenHintTeams' : 'chatBots.bindings.listenHint', { days: t('chatBots.bindings.listenDays', { days: ttlDays }, ttlDays) }) }}
             </span>
           </span>
         </label>
         <label
-          v-if="kind === 'telegram' && auto"
+          v-if="listens && auto"
           class="mt-3 flex max-w-[46rem] items-start gap-2.5"
           :class="b.listening && (auto.available || b.autoHarvestBy) ? 'cursor-pointer has-[:disabled]:cursor-progress' : 'cursor-not-allowed'"
         >
@@ -241,12 +245,12 @@ async function add() {
           <span class="min-w-0">
             <span class="block text-sm">{{ t('chatBots.bindings.autoHarvest') }}</span>
             <span class="block text-xs text-muted-foreground">{{ autoHint }}</span>
-            <span v-if="!b.listening" class="mt-1 block text-xs text-muted-foreground">{{ t('chatBots.bindings.autoHarvestNeedsListening') }}</span>
+            <span v-if="!b.listening" class="mt-1 block text-xs text-muted-foreground">{{ t(kind === 'teams' ? 'chatBots.bindings.autoHarvestNeedsListeningTeams' : 'chatBots.bindings.autoHarvestNeedsListening') }}</span>
             <span v-if="!auto.available" class="mt-1 block text-xs text-panel-warning-ink">{{ t('chatBots.bindings.autoHarvestUnavailable') }}</span>
           </span>
         </label>
         <!-- Outside the label: the chip opens a card, and a control inside a label is invalid markup. -->
-        <div v-if="kind === 'telegram' && b.autoHarvestBy" class="mt-1 flex items-center gap-1.5 pl-[1.625rem] text-xs text-muted-foreground">
+        <div v-if="listens && b.autoHarvestBy" class="mt-1 flex items-center gap-1.5 pl-[1.625rem] text-xs text-muted-foreground">
           {{ t('chatBots.bindings.autoHarvestRunsAs') }}
           <UserChip :user-id="b.autoHarvestBy" size="sm" />
         </div>
@@ -298,7 +302,7 @@ async function add() {
     <form class="grid gap-2 sm:grid-cols-[12rem_minmax(0,1fr)_auto] sm:items-end" @submit.prevent="add">
       <div class="grid gap-1">
         <Label :for="`chat-id-${integrationId}`" class="text-xs font-normal text-muted-foreground">{{ t('chatBots.fields.chatId') }}</Label>
-        <Input :id="`chat-id-${integrationId}`" v-model="draft.chatId" class="h-8 font-mono text-xs" :placeholder="t(kind === 'slack' ? 'chatBots.bindings.chatIdPlaceholderSlack' : 'chatBots.bindings.chatIdPlaceholder')" />
+        <Input :id="`chat-id-${integrationId}`" v-model="draft.chatId" class="h-8 font-mono text-xs" :placeholder="t(kind === 'slack' ? 'chatBots.bindings.chatIdPlaceholderSlack' : kind === 'teams' ? 'chatBots.bindings.chatIdPlaceholderTeams' : 'chatBots.bindings.chatIdPlaceholder')" />
       </div>
       <div class="grid gap-1">
         <Label :for="`chat-title-${integrationId}`" class="text-xs font-normal text-muted-foreground">{{ t('chatBots.fields.chatTitle') }}</Label>

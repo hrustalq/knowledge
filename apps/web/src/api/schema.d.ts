@@ -8711,7 +8711,7 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            kind: "telegram" | "time" | "mattermost" | "slack";
+            kind: "telegram" | "time" | "mattermost" | "slack" | "teams";
             /** @example Team bot */
             name: string;
             /** @description The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token; Slack: the Bot User OAuth Token, xoxb-…). Write-only — never returned. */

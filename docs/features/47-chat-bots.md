@@ -12,7 +12,9 @@ own websocket instead of a webhook (see **Time specifics**). Mattermost
 (#343) is the third, through the same adapter as Time (see **Mattermost
 specifics**). Slack (#380) is the fourth: an internal app per workspace, heard
 through the Events API on our webhook, every request signed (see **Slack
-specifics**). Since #82 a
+specifics**). Microsoft Teams (#381) is the fifth: a Bot Framework bot whose
+channels can keep their messages for `capture` (see **Teams specifics**).
+Since #82 a
 linked editor can also ask the bot to **harvest** a thread of people's
 messages into reviewed captures; that is its own document,
 [59 — Chat harvest](59-chat-harvest.md).
@@ -330,7 +332,7 @@ field is the search sheet's (`lib/tag-options.ts`).
 The core decides *what* to say and the adapter decides *how* it looks and
 travels. `ChatAdapterRegistry` is keyed by `ChatPlatformKind`, so a kind added
 to `CHAT_PLATFORM_KINDS` without an adapter is a type error.
-`CHAT_PLATFORM_KINDS` is `['telegram', 'time', 'mattermost', 'slack']`: VK Teams joins
+`CHAT_PLATFORM_KINDS` is `['telegram', 'time', 'mattermost', 'slack', 'teams']`: VK Teams joins
 it only with its adapter, because a closed vocabulary must not promise a
 value the code never emits. `CHAT_SELF_HOSTED_PLATFORMS` (`['time',
 'mattermost']`) is the one list the form, the DTO check and the service read
@@ -339,7 +341,11 @@ for "this bot needs a server address". Time and Mattermost are **one adapter**,
 per kind; `CHAT_SOCKET_KINDS` in the registry is the list of kinds the socket
 supervisor holds, and `registry.socket(kind)` hands it the right instance.
 `CHAT_SIGNED_PLATFORMS` (`['slack']`) is the one list for "this bot needs a
-signing secret", read the same three ways.
+signing secret", read the same three ways. `CHAT_PASTED_ENDPOINT_PLATFORMS`
+(`['slack', 'teams']`) is the list whose card shows the address to paste,
+and `CHAT_LISTENING_PLATFORMS` (`['telegram', 'teams']`) the list whose groups
+can keep their messages — the switch, its guard and the automatic harvest.
+`verifyInbound` may be asynchronous (Teams fetches signing keys).
 
 How each platform maps, and what a later one must:
 
@@ -581,6 +587,67 @@ Slack (#380) is `SlackAdapter` (`chat/adapters/slack.adapter.ts`), plain
 - **No deep link.** Opening a DM with an app needs its app id, which a bot
   token does not name; a group asks people to message the bot.
 
+## Teams specifics
+
+Microsoft Teams (#381) is `TeamsAdapter` (`chat/adapters/teams.adapter.ts`):
+the Bot Framework's Bot Connector over plain `fetch`, `jose` for its tokens.
+
+- **An Azure Bot, single tenant.** Microsoft no longer creates multi-tenant
+  bots, so a token needs the tenant: the form asks for the **Microsoft App
+  ID**, the **directory (tenant) ID** and a **client secret** of the bot's app
+  registration, and joins them into the one write-only token as
+  `app:tenant:secret` (`teamsCredential`). Saving asks Entra for a
+  client-credentials token (`scope https://api.botframework.com/.default`) —
+  that is `identify`, and the bot's `botUsername` is its app id.
+- **The messaging endpoint is pasted.** Once saved, the admin sets the bot
+  card's address as the Azure Bot's *Messaging endpoint* and turns on the
+  Microsoft Teams channel. Nothing is registered by API.
+- **Every activity is a JWT.** `Authorization: Bearer` from Bot Framework,
+  verified against `login.botframework.com`'s keys (`createRemoteJWKSet`),
+  issuer `https://api.botframework.com`, audience the app id, and the
+  token's `serviceurl` claim equal to the activity's `serviceUrl`. That is the
+  only proof a delivery carries, so a button needs no signature of its own.
+  The key's `endorsements` are not checked (`ponytail:` in the adapter).
+- **The app package.** Teams installs the bot through an app whose manifest
+  names it, and asks for the resource-specific permission that lets it hear a
+  whole channel:
+
+  ```json
+  {
+    "bots": [{ "botId": "<app id>", "scopes": ["personal", "team", "groupChat"] }],
+    "webApplicationInfo": { "id": "<app id>", "resource": "https://RscPermission" },
+    "authorization": {
+      "permissions": {
+        "resourceSpecific": [{ "name": "ChannelMessage.Read.Group", "type": "Application" }]
+      }
+    }
+  }
+  ```
+
+  The team owner grants it at install; no Graph call is made and no protected
+  API approval is needed (the alternative, `ChannelMessage.Read.All`, was
+  rejected on #381). With it, every channel message reaches the webhook, and a
+  channel whose binding keeps messages (*Keep messages for capture*, as on
+  Telegram) files them in the listening buffer.
+- **Threads.** A channel thread's conversation id is
+  `<channel>;messageid=<root>`. `chatId` is the channel (what a binding names);
+  the root is `threadId` and `topicId`, so kept messages are filed per thread.
+  A post in a channel is its own thread's root. Chats (one-to-one and group)
+  have no threads. Replies go to the thread's conversation id, remembered per
+  message; edits `PUT` the activity there.
+- **Service URLs** come from activities, and only Bot Framework's hosts
+  (`*.trafficmanager.net`, `*.botframework.com`) are remembered; an unknown
+  conversation uses `https://smba.trafficmanager.net/teams/`.
+- **Buttons** are one Adaptive Card under the markdown text, a row per
+  `ActionSet`: `Action.Submit` carries the data, `Action.OpenUrl` a link. A
+  press arrives as a message whose `value` is the data. Teams has no note shown
+  to the presser alone, so `acknowledge` is silent; the core's edit answers.
+- **Commands are plain words** (`chat.helpTeams`), as on Time and Slack. Edits
+  and deletes (`messageUpdate`, `messageDelete`) reach a searchable channel's
+  kept copy only. Reactions are not a trigger on Teams.
+- **Links.** A channel message opens at `teams.microsoft.com/l/message/…`; the
+  bot opens at `teams.microsoft.com/l/chat/0/0?users=28:<app id>`.
+
 ## Configuration
 
 | Variable                              | Default                    | Meaning                                                             |
@@ -621,6 +688,16 @@ All nine tables are new (`chat_captures` was folded into `knowledge_captures` by
 of their own.
 
 ## Tests
+
+- `test/chat-teams.spec.ts` (#381, activities in Bot Framework's documented
+  shapes, tokens signed with a local key set): a token for this app from the
+  named service verifies; no token, a forged key, another issuer, another
+  app, an expired token and a mismatched service URL are refused. A channel
+  mention is its own thread and topic; a thread reply names its root (and
+  `capture` reads from it); a chat has no thread; a card submit is a press;
+  edits and deletes are changes. The client-credentials token, replies in the
+  thread on its service URL with the card, edits there, a chat answered in
+  place, a foreign service URL never used, and the links.
 
 - `test/chat-slack.spec.ts` (#380, Events API and interactivity payloads in
   Slack's documented shapes):

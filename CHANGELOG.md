@@ -13,6 +13,16 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.32.1] — 2026-10-22
+
+### Fixed
+
+- A page's actions no longer take a second strip under the breadcrumbs (#455). They now sit at the right
+  end of the breadcrumb row: Watch, Share and Access as icons, then Copy page, Edit and ⋯, all the same
+  height on one line. History and Graph left the bar because the rail beside the page already holds them,
+  and Export and the glossary switch are still in ⋯ (Export ▸, View ▸). On a narrow window Copy page and
+  Edit show only their icons. The editor's bar is unchanged.
+
 ## [0.32.0] — 2026-10-22
 
 ### Added
@@ -4457,7 +4467,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.32.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.32.1...HEAD
+[0.32.1]: https://github.com/hrustalq/knowledge/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/hrustalq/knowledge/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/hrustalq/knowledge/compare/v0.30.1...v0.31.0
 [0.30.1]: https://github.com/hrustalq/knowledge/compare/v0.30.0...v0.30.1

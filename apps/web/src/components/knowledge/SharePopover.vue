@@ -48,6 +48,8 @@ const props = defineProps<{
    * so they can still be revoked.
    */
   restricted?: boolean
+  /** Icon-only, for a crowded header — WatchButton's `compact`. */
+  compact?: boolean
 }>()
 
 const { t } = useI18n()
@@ -139,9 +141,14 @@ function onOpen(next: boolean) {
 <template>
   <ResponsivePopover v-model:open="open" :title="t('share.title')" align="end" side="bottom" panel-class="w-96 p-4" @update:open="onOpen">
     <template #trigger>
-      <Button variant="outline" size="sm" :title="t('share.button')">
-        <Share2 class="size-3.5" />
-        <span class="kn-bar-label">{{ t('share.button') }}</span>
+      <Button
+        :variant="compact ? 'ghost' : 'outline'"
+        :size="compact ? 'icon-sm' : 'sm'"
+        :title="t('share.button')"
+        :aria-label="compact ? t('share.button') : undefined"
+      >
+        <Share2 :class="compact ? 'size-4' : 'size-3.5'" />
+        <span v-if="!compact" class="kn-bar-label">{{ t('share.button') }}</span>
       </Button>
     </template>
 

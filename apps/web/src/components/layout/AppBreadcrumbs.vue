@@ -52,11 +52,11 @@ watch(
 </script>
 
 <template>
-  <!-- Solid, not the topbar's 90% + blur: it sits flush under the topbar, so a
-       second backdrop-filter layer bought nothing but a composite per frame. -->
+  <!-- The row it sits in (`.kn-trail`, the shell's) draws the strip; the trail
+       takes what the page's actions leave. -->
   <nav
     :aria-label="t('nav.breadcrumb')"
-    class="sticky top-0 z-20 flex h-9 shrink-0 items-center border-b bg-background px-4 text-xs text-muted-foreground lg:px-8"
+    class="flex h-full min-w-0 flex-1 items-center text-xs text-muted-foreground"
   >
     <!-- The trail scrolls inside the bar, not the bar itself: its fade masks
          what it covers, and on the bar that would be the solid ground the page

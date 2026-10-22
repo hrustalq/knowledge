@@ -35515,7 +35515,8 @@
               "codebase",
               "google-drive",
               "linear",
-              "zendesk"
+              "zendesk",
+              "intercom"
             ]
           },
           "name": {

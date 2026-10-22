@@ -539,6 +539,22 @@ were settled with the owner on 2026-10-22, before any code:
     Basic auth. A 404 or 403 is a ticket gone.
   - `testConnection` refuses an end-user credential, which cannot read
     tickets.
+- **Intercom (#384).**
+  - The admin's Intercom app subscribes its webhook to
+    `conversation.admin.closed`. The app's **client secret** is the webhook
+    secret, and its access token is the credential. A region select (US, EU,
+    AU) picks the API host.
+  - The signature is `X-Hub-Signature: sha1=` hex HMAC-SHA1 of the raw body.
+    Intercom signs no timestamp, so there is no replay window, and none is
+    needed: the claim is once per conversation, and the sweeper re-reads the
+    conversation before anything is harvested.
+  - Who closed it is the author of the conversation's last `close` part, and
+    it must be an `admin`. Bots and Fin are no person.
+  - The read is `GET /conversations/:id` (`Intercom-Version: 2.11`): the
+    opening message, every `comment` and `note` part (replies **and** admin
+    notes), with bot parts dropped. HTML is read back to text. The URL needs
+    the app's `id_code`, so `/me` is read once per harvest. A 404 or 403
+    means the conversation is gone.
 - **The same contract as chat.** Captures go through `CaptureService` with a
   server-set origin (`platform: 'linear' | 'zendesk' | 'intercom'`, the
   item's key and title, its URL, the span of its messages). They are
@@ -551,7 +567,10 @@ were settled with the owner on 2026-10-22, before any code:
 
 - No new sources (Teams and the rest #341, Google Drive #338). Slack shipped
   as a chat platform (#380); Linear, Zendesk and Intercom as harvest
-  connectors (above). Chat
+  connectors (#382–#384, above).
+- A harvest connector reads one page of an item's comments (Linear 250,
+  Zendesk 100, Intercom's 500-part cap); longer items are harvested from what
+  that page holds (`ponytail:` markers in each adapter). Chat
   search arrived separately as [feature 60](60-chat-search.md).
 - No named-entity detection, no reversible masking. A passport mentioned with
   its context word more than 20 characters (or a digit) away from the number

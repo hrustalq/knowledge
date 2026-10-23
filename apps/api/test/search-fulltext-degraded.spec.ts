@@ -44,6 +44,7 @@ function build(fulltext: { enabled: boolean; search: (...a: unknown[]) => Promis
     },
   };
   const graph = {
+    entityKeysOf: vi.fn(async () => new Map<string, string[]>()),
     searchChunks: vi.fn(async () => [hit('vec', 0.9)]),
     getDocumentIdsByTags: vi.fn(async () => new Set<string>()),
     getWorkspaceRelationGraph: vi.fn(async () => ({ edges: [], entities: {}, documents: {} })),
@@ -68,6 +69,9 @@ function build(fulltext: { enabled: boolean; search: (...a: unknown[]) => Promis
     config as never,
     // No asOf: every search here reads the live projection (#81).
     { resolve: async () => undefined } as never,
+    // No analytics, no communities built (#475): no prior, no communityPath.
+    { search: () => undefined } as never,
+    { scored: async () => [] } as never,
   );
   const warn = vi.spyOn((svc as unknown as { logger: { warn: () => void } }).logger, 'warn').mockImplementation(() => {});
   return { svc, graph, warn };

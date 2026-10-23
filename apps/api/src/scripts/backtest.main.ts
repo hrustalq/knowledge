@@ -569,6 +569,18 @@ async function calibrateCaptures(): Promise<void> {
  * may send, appends the same report to tune-<day>.jsonl beside the backtest
  * stream, and writes no setting.
  */
+/** The search knobs of a workspace's effective settings. */
+function knobsOf(e: SearchKnobs): SearchKnobs {
+  return {
+    rrfK: e.rrfK,
+    minCosine: e.minCosine,
+    minCosineShare: e.minCosineShare,
+    communityPriorWeight: e.communityPriorWeight,
+    communityPriorFloor: e.communityPriorFloor,
+    trustWeights: e.trustWeights,
+  };
+}
+
 async function tune(): Promise<void> {
   const workspaceId = option('--workspace', DEMO_WORKSPACE);
   const k = Number(option('--k', '10'));
@@ -614,7 +626,7 @@ async function tune(): Promise<void> {
   }
   const replay = (cases: FeedbackBacktestCase[]): Replay[] => cases.map((c) => ({ case: c, pool: pools.get(c.query) ?? null }));
   const [effective, override] = await Promise.all([policy.effective(workspaceId), policy.override(workspaceId)]);
-  const searchTuning = tuneSearch(replay(feedback), replay(known), { rrfK: effective.rrfK, minCosine: effective.minCosine, minCosineShare: effective.minCosineShare, trustWeights: effective.trustWeights }, k);
+  const searchTuning = tuneSearch(replay(feedback), replay(known), knobsOf(effective), k);
 
   const capture = await app.get(AiConfigService).captureSettings(workspaceId);
   const probes = await captureScores(app, workspaceId, Number(option('--capture-limit', '200')), false);
@@ -627,12 +639,14 @@ async function tune(): Promise<void> {
 
   // The diff, against what applies now. trustWeights replaces the stored map,
   // so the states already overridden ride along.
-  const healthPatch: { rrfK?: number; minCosine?: number; minCosineShare?: number; trustWeights?: Partial<TrustWeights> } = {};
+  const healthPatch: Partial<Omit<SearchKnobs, 'trustWeights'>> & { trustWeights?: Partial<TrustWeights> } = {};
   const proposal = searchTuning.proposal;
   if (proposal) {
     if (proposal.rrfK !== effective.rrfK) healthPatch.rrfK = proposal.rrfK;
     if (proposal.minCosine !== effective.minCosine) healthPatch.minCosine = proposal.minCosine;
     if (proposal.minCosineShare !== effective.minCosineShare) healthPatch.minCosineShare = proposal.minCosineShare;
+    if (proposal.communityPriorWeight !== effective.communityPriorWeight) healthPatch.communityPriorWeight = proposal.communityPriorWeight;
+    if (proposal.communityPriorFloor !== effective.communityPriorFloor) healthPatch.communityPriorFloor = proposal.communityPriorFloor;
     const changed = Object.entries(proposal.trustWeights).filter(([state, v]) => v !== effective.trustWeights[state as keyof TrustWeights]);
     if (changed.length) healthPatch.trustWeights = { ...override.trustWeights, ...Object.fromEntries(changed) };
   }
@@ -641,7 +655,14 @@ async function tune(): Promise<void> {
   if (amend?.proposal != null) aiPatch.captureAmendThreshold = amend.proposal;
 
   const knobs = (kn: SearchKnobs) =>
-    [`rrfK=${kn.rrfK}`, `minCosine=${kn.minCosine}`, `minCosineShare=${kn.minCosineShare}`, ...TUNED_WEIGHTS.map((s) => `${s}=${kn.trustWeights[s]}`)].join('  ');
+    [
+      `rrfK=${kn.rrfK}`,
+      `minCosine=${kn.minCosine}`,
+      `minCosineShare=${kn.minCosineShare}`,
+      `communityPriorWeight=${kn.communityPriorWeight}`,
+      `communityPriorFloor=${kn.communityPriorFloor}`,
+      ...TUNED_WEIGHTS.map((s) => `${s}=${kn.trustWeights[s]}`),
+    ].join('  ');
   const pct = (share: number) => `${(share * 100).toFixed(1).padStart(5)}%`;
   const threshold = (label: string, t: ThresholdTuning | null) => {
     if (!t) return console.log(`${label.padEnd(8)} skipped: ${'error' in probes ? probes.error : ''}`);

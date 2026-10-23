@@ -17,6 +17,23 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Search can use the community tree and entity layers (#475, phase 4), both off until an admin
+  turns them on in **Knowledge health → Settings → Search ranking**:
+  - **Community boost** raises the pages of the community whose summary best matches the
+    question, starting at the broadest matching level and going down to its closest sub-group.
+    A page deeper in that path gains more. It only boosts and never hides a page. It needs the
+    Atlas agent to have built communities. **Community match threshold** sets how close a match
+    must be. `make tune` now proposes both.
+  - **Expand related pages by layer** changes what hybrid search's related pages follow: a page
+    about one API operation reaches its component, its code and its spec, but no longer every
+    page that merely names the same service. An operation also reaches the component its spec
+    page names.
+  - Every search result now says where it sits: `layer` (the level most of its entities are on)
+    and `communityPath` (the titles of its communities, broadest first). A community holding any
+    page the reader cannot open boosts nothing and appears in no path, at any level. A search
+    `asOf` a past date never uses the community boost.
+
+  With the settings empty, search ranks exactly as before.
 - Every entity in the workspace and page graphs (`GET /v1/documents/graph`, `GET /v1/documents/:id/graph`)
   now carries a `layer` (#475, phase 3): `system` (services, domains, integrations), `component`
   (components, databases, tables, queues), `interface` (API operations, channels, specs), `code`
@@ -200,6 +217,9 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261208100000_community_prior_knobs` adds three nullable columns to
+  `knowledge_health_settings` (#475). The previous image never reads them, so a code rollback is
+  safe.
 - **QA server runner (#483):** new env var `API_TEST_RUNNER_MODE` (`off` | `on`, default `off`), a
   ceiling a workspace still has to opt into. Set it in the GitHub `production` environment before
   tagging (`gh variable set API_TEST_RUNNER_MODE --env production --body off`), or the deploy

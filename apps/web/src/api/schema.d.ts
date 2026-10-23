@@ -8799,6 +8799,12 @@ export interface components {
             minCosine?: number | null;
             /** @description Keep vector hits at or above this share of the best cosine (#401); null = 0.9 */
             minCosineShare?: number | null;
+            /** @description Community prior (#475): a matched page scores up to ×(1 + this); null = 0, off */
+            communityPriorWeight?: number | null;
+            /** @description Community prior (#475): the cosine a community's summary must reach; null = 0.5 */
+            communityPriorFloor?: number | null;
+            /** @description Hybrid expansion walks by entity layer (#475); null = off */
+            layeredExpansion?: boolean | null;
             /** @description Per-state search weights; a state left out keeps its default, null resets them all */
             trustWeights?: components["schemas"]["TrustWeightsDto"] | null;
         };

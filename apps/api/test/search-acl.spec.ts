@@ -96,6 +96,7 @@ function build(opts: {
   const permissions = new PermissionService(prisma as never, {} as never, {} as never, config as never);
   // A store that ignores the filter outright: whatever PG says is the answer.
   const graph = {
+    entityKeysOf: vi.fn(async () => new Map<string, string[]>()),
     searchChunks: vi.fn(async (_ws: string, _e: number[], k: number, _acl: DocumentAclFilter) => opts.hits.slice(0, k)),
     getDocumentIdsByTags: vi.fn(async () => new Set<string>()),
     getWorkspaceRelationGraph: vi.fn(async (_ws: string, _acl: DocumentAclFilter) => ({
@@ -117,6 +118,9 @@ function build(opts: {
     config as never,
     // No asOf: every search here reads the live projection (#81).
     { resolve: async () => undefined } as never,
+    // No analytics, no communities built (#475): no prior, no communityPath.
+    { search: () => undefined } as never,
+    { scored: async () => [] } as never,
   );
   return { svc, graph, permissions, prisma };
 }

@@ -2,12 +2,59 @@ import type { SourceVerificationState, TrustWeights } from '@knowledge/contracts
 import { trustWeight } from '@knowledge/contracts';
 import type { ChunkHit } from '../graph/graph.service.js';
 
-/** The knobs a workspace may override and `make tune` proposes (#305, #401). */
+/** The knobs a workspace may override and `make tune` proposes (#305, #401, #475). */
 export interface SearchKnobs {
   rrfK: number;
   minCosine: number;
   minCosineShare: number;
+  /** 0 = no community prior: the ranking is exactly the one before #475. */
+  communityPriorWeight: number;
+  communityPriorFloor: number;
   trustWeights: TrustWeights;
+}
+
+/** A community the reader may see whole, scored against the query (#475). */
+export interface PriorCommunity {
+  communityId: string;
+  level: number;
+  parentId: string | null;
+  /** Every page beneath it. */
+  members: readonly string[];
+  /** Cosine of its summary against the query embedding. */
+  score: number;
+}
+
+/**
+ * The community prior (#475, docs/features/63): page → score multiplier.
+ *
+ * One path: the best community at the coarsest level where any clears the
+ * floor, then the best of its children that clears it, down to level 0. A
+ * page `d` deep in a path of `n` gets `1 + weight · d/n` — the finest match
+ * the full weight — and every other page is absent (×1). It boosts, never
+ * filters. Ties go to the smaller id, so the same scores give the same path.
+ */
+export function communityPrior(
+  communities: readonly PriorCommunity[],
+  knobs: Pick<SearchKnobs, 'communityPriorWeight' | 'communityPriorFloor'>,
+): Map<string, number> {
+  const boost = new Map<string, number>();
+  if (!(knobs.communityPriorWeight > 0)) return boost;
+  const clearing = communities.filter((c) => c.score >= knobs.communityPriorFloor);
+  if (clearing.length === 0) return boost;
+  const best = (cs: readonly PriorCommunity[]) =>
+    cs.reduce((a, b) => (b.score > a.score || (b.score === a.score && b.communityId < a.communityId) ? b : a));
+  const top = Math.max(...clearing.map((c) => c.level));
+  const path = [best(clearing.filter((c) => c.level === top))];
+  for (;;) {
+    const children = clearing.filter((c) => c.parentId === path[path.length - 1]!.communityId);
+    if (children.length === 0) break;
+    path.push(best(children));
+  }
+  // Coarse to fine: a deeper community overwrites its ancestor's smaller boost.
+  path.forEach((c, i) => {
+    for (const m of c.members) boost.set(m, 1 + (knobs.communityPriorWeight * (i + 1)) / path.length);
+  });
+  return boost;
 }
 
 /**
@@ -92,6 +139,8 @@ export interface SearchPool {
   trustOn: boolean;
   /** Pages the search may return; a hit whose page is absent is dropped, as the PG join drops it. */
   pages: Map<string, { status: SourceVerificationState; inactive: boolean; archived: boolean }>;
+  /** The readable communities scored against the query (#475); empty when none, or under `asOf`. */
+  communities: PriorCommunity[];
 }
 
 /**
@@ -100,12 +149,13 @@ export interface SearchPool {
  * `search-trust.spec.ts` replays one search through both.
  */
 export function rankPool(pool: SearchPool, knobs: SearchKnobs): string[] {
+  const prior = communityPrior(pool.communities, knobs);
   const weighted = fuseHits(floorVectorHits(pool.vectorHits, knobs), floorTextHits(pool.textHits), pool.fetchK, knobs.rrfK).flatMap((h) => {
     const page = pool.pages.get(h.documentId);
     if (!page || page.archived) return [];
     const weight = pool.trustOn ? trustWeight(page.status, page.inactive, knobs.trustWeights) : 1;
-    return [{ documentId: h.documentId, score: h.score * weight }];
+    return [{ documentId: h.documentId, score: h.score * weight * (prior.get(h.documentId) ?? 1) }];
   });
-  if (pool.trustOn) weighted.sort((a, b) => b.score - a.score);
+  if (pool.trustOn || prior.size > 0) weighted.sort((a, b) => b.score - a.score);
   return weighted.slice(0, pool.k).map((w) => w.documentId);
 }

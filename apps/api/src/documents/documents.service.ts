@@ -50,6 +50,7 @@ import type {
 } from './dto/documents.dto.js';
 import type { Document, DocumentBranch, DocumentRevision, Prisma } from '@prisma/client';
 import {
+  entityLayerFor,
   isInactive,
   verificationStateFor,
   type VerificationFlag,
@@ -1592,6 +1593,7 @@ export class DocumentsService {
         kind: 'entity',
         label: g.entities[key]?.name ?? key,
         entityType: g.entities[key]?.type ?? 'entity',
+        layer: entityLayerFor(key),
         degree: degree.get(key) ?? 0,
       });
     }
@@ -1651,6 +1653,7 @@ export class DocumentsService {
         kind: 'entity',
         label: g.entities[key]?.name ?? key,
         entityType: g.entities[key]?.type ?? 'entity',
+        layer: entityLayerFor(key),
         distance: distance.get(key) ?? 0,
       });
     }

@@ -254,5 +254,6 @@ describe('fixture bindings (#483, phase 2)', () => {
     expect(WRITE_TOOLS.has('knowledge_set_test_fixtures')).toBe(true);
     expect(WRITE_TOOLS.has('knowledge_get_test_suite')).toBe(false);
     expect(WRITE_TOOLS.has('knowledge_suggest_test_fixtures')).toBe(false);
+    expect(WRITE_TOOLS.has('knowledge_get_test_run_plan')).toBe(false);
   });
 });

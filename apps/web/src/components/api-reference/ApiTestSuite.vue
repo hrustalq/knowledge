@@ -9,11 +9,14 @@
  * they carry the fixtures' setup and teardown, which only the server can
  * resolve against the specs the caller may open. Above the cases sits the
  * suite's setup; inside a case, that case's own.
+ *
+ * Run suite (phase 3) opens the browser runner in place, above the cases,
+ * for a member holding `api-test-suites.run`.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { ChevronRight, Download, Loader2, RefreshCw, X } from 'lucide-vue-next'
+import { ChevronRight, Download, Loader2, Play, RefreshCw, X } from 'lucide-vue-next'
 import { renderCodeSample, type ApiOperationInfo, type ApiTestCase, type ApiTestSuiteFormat, type ApiTestSuiteResponse } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import { Collapse } from '@/components/ui/collapse'
@@ -22,16 +25,20 @@ import { apiFetchBlob, saveFile } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
 import ApiCode from './ApiCode.vue'
 import ApiSuiteSetup from './ApiSuiteSetup.vue'
+import ApiTestRun from './ApiTestRun.vue'
 import ApiTone from './ApiTone.vue'
 import type { SuiteFixtures } from './use-suite-fixtures'
 
 const props = defineProps<{
+  document: Record<string, unknown>
+  workspaceId: string
   operation: ApiOperationInfo
   suite: ApiTestSuiteResponse | undefined
   generating: boolean
   failure: string | null
   loadError: string | null
   canGenerate: boolean
+  canRun: boolean
   fixtures: SuiteFixtures
 }>()
 const emit = defineEmits<{ generate: [regenerate: boolean] }>()
@@ -55,6 +62,8 @@ function toggle(id: string) {
   else next.add(id)
   open.value = next
 }
+
+const running = ref(false)
 
 const downloading = ref<ApiTestSuiteFormat | null>(null)
 const downloadError = ref<string | null>(null)
@@ -113,6 +122,17 @@ const domId = (c: ApiTestCase) => `${uid}-${c.id.replace(/[^\w-]/gu, '_')}`
           </Button>
           <Button
             size="sm"
+            :variant="running ? 'secondary' : 'outline'"
+            :disabled="generating || !canRun"
+            :title="canRun ? undefined : t('apiTests.run.noCapability')"
+            :aria-expanded="running"
+            @click="running = !running"
+          >
+            <Play class="size-3.5" aria-hidden="true" />
+            {{ t('apiTests.run.action') }}
+          </Button>
+          <Button
+            size="sm"
             variant="ghost"
             :disabled="generating || !canGenerate"
             :title="canGenerate ? undefined : t('apiTests.noCapability')"
@@ -125,6 +145,16 @@ const domId = (c: ApiTestCase) => `${uid}-${c.id.replace(/[^\w-]/gu, '_')}`
       </div>
 
       <p v-if="downloadError" class="kn-ts-status kn-ts-status--error" role="alert">{{ downloadError }}</p>
+      <p v-if="suite && !canRun" class="text-ui text-muted-foreground">{{ t('apiTests.run.noCapability') }}</p>
+
+      <ApiTestRun
+        v-if="suite && running && canRun"
+        :document="document"
+        :operation="operation"
+        :workspace-id="workspaceId"
+        :generated-at="suite.generatedAt"
+        @close="running = false"
+      />
 
       <ApiSuiteSetup
         :fixtures="fixtures"

@@ -400,13 +400,56 @@ Inputs carry their defaults; secrets and credential slots no fixture captures
 are variables with no value. A capture named like a credential slot (`TOKEN`)
 fills it.
 
-The runners and the `/qa` view follow in the later phases of #483.
+### Running a suite (#483, phase 3)
+
+**Run suite** in the suite panel runs the whole chain from the browser against
+a real server, for a member holding `api-test-suites.run`
+([06](../architecture/06-auth-acl.md#member-capabilities)) — independent of
+role, implicit for admins, like `generate`. Without it, Run is disabled and the
+panel says which permission is missing.
+
+**One plan, any client.** `GET /v1/api-specs/:id/test-run-plan` (viewer +
+`api-test-suites.run`) is the cached suite as `testRunPlan` prints it: setup →
+cases (negative first, each with its own setup and teardown) → teardown, every
+request flattened to strings with `{{placeholders}}` (captures, `input.x`,
+`secret.x`, credential slots), and each call's **target** — the spec document
+and head revision defining its operation, and the server its URL starts with.
+The plan holds no value. `runTestPlan` (contracts) walks it with an injected
+`send`: a failed setup step makes every case `not-run`; a case runs between its
+own setup and teardown with its captures shadowed; teardown always runs, after
+a failure or Stop, and skips a step whose placeholders were never captured.
+`fillRunRequest` encodes a value in the URL, escapes it inside a JSON body,
+and leaves out a header whose slot is empty (an empty credential is "no
+credentials", as in the try console). The browser runner and an agent
+(`knowledge_get_test_run_plan`) walk the same plan, so they get the same results.
+
+**Two routes out, as in the try console.** From the browser (CORS permitting),
+or through the proxy's twin `POST /v1/api-specs/:id/test-run/send` — the same
+`ApiTryService.send` (mode, source policies, `safeFetch`, target check, caps,
+audit as `api.try`), behind `@Access('viewer', 'document', { capability:
+'api-test-suites.run' })` instead of editor, since `@Access` cannot express
+role-or-capability. `:id` is the spec defining the step's operation, so a login
+step in another spec is checked against that spec. It shares try-it's per-user
+rate limit; a 429 holds the row for `retryAfter` and sends again, so a long
+suite finishes. Revoking the capability mid-run fails the next proxied step.
+
+**Values never leave the run.** The form asks for what the plan lists: secrets
+and credential slots (a slot starts from that spec's Try-it value, read and
+never written back) and inputs (starting at the fixture's default). They live
+in the component for one run and are sent only in the requests using them.
+Each spec's requests go to the server picked in its Try-it console; the suite's
+own spec has a server select in the run form. Results — expected vs actual
+status, outcome, duration, captures with secret-like names masked
+(`isSecretName`) — are never stored.
+
+The server runner and the `/qa` view follow in the later phases of #483.
 
 ## Surface
 
 | What | Where |
 | --- | --- |
 | Tables | `documents.kind`, `documents.spec_slug`, `api_operations`, `workspace_settings`, `merge_requests.breaking_ack_*`, `api_test_suites`, `api_fixture_calls`, `api_test_bindings` |
+| Runs (#483) | `@knowledge/contracts/api/test-chain` (`testRunPlan`, `runTestPlan`, `fillRunRequest`, `isSecretName`); `ApiFixturesService.plan`; web `ApiTestRun` |
 | Fixtures (#483) | `@knowledge/contracts/api/fixtures` (`readTestFixture`, `parseCaptureRule`, `evaluateCapture`, `resolvePlaceholders`, `literalCredentialIssues`); `ApiFixturesService` in `ApiSpecsCoreModule`; `TestFixturesController` (`GET /v1/test-fixtures`, `GET /v1/test-fixtures/:id`, viewer); web `TestFixtureEditorPage` (`/create/fixture`, `/documents/:id/fixture`) and `TestFixtureView` |
 | Vocabulary | `@knowledge/contracts/api` (`API_DOCUMENT_KINDS`, keys, `API_TRY_PROXY_MODES`, `API_BREAKING_CHANGE_POLICIES`, `API_DRIFT_KINDS`), `…/api/diff` (`API_CHANGE_RULES`), `…/api/samples` (`CODE_SAMPLE_LANGS`, generator), `…/api/test-cases` (`testCasesFor`, `buildTestSuite`, `testSuiteCurl`, `testSuitePostman`, `operationFingerprint`) |
 | Parse, project, read, diff | `api-spec.parser.ts` (`parseApiSpec`), `api-spec.projection.ts` (`renderSpecProjection`, `renderOperation`), `api-diff.ts` (`diffApiSpecs`), pure; `ApiSpecsService` (`project`), `ApiSpecReadService`, `ApiSpecDiffService` in `ApiSpecsCoreModule` (both processes) |
@@ -428,6 +471,8 @@ The runners and the `/qa` view follow in the later phases of #483.
 | `POST /v1/api-specs/:id/drift-check` | editor, document; `202 { runId, existing }` |
 | `GET /v1/api-specs/:id/test-suite?entityKey=&format=` | viewer, document; the cached suite or 404; `format=curl\|postman` answers with a file |
 | `POST /v1/api-specs/:id/test-suite` `{ entityKey, regenerate? }` | viewer, document, capability `api-test-suites.generate`; `{ suite }` from the cache or `{ runId, existing }` |
+| `GET /v1/api-specs/:id/test-run-plan?entityKey=` | viewer, document, capability `api-test-suites.run`; the run plan, no values |
+| `POST /v1/api-specs/:id/test-run/send` | viewer, document, capability `api-test-suites.run`; one proxied step, `/try`'s body and answer |
 | `GET /v1/api-operations?workspaceId=&q=&documentId=&entityKey=` | viewer, query, guests; operations at each spec's default-branch head |
 | `GET` / `PATCH /v1/workspaces/:id/api-settings` | viewer / admin, workspace |
 | `GET /v1/documents/:id/compare` | unchanged; gains `api` on a spec |
@@ -451,13 +496,15 @@ because a key holds `/` and `:`. A page passed to a per-document route is a 400
 | `knowledge_generate_test_suite` (`regenerate?`) | viewer, document + `api-test-suites.generate`; write tool |
 | `knowledge_suggest_test_fixtures` | viewer, document; read tool; prerequisites, candidates and current bindings |
 | `knowledge_set_test_fixtures` (`bindings`) | viewer, document + `api-test-suites.generate`; write tool |
+| `knowledge_get_test_run_plan` | viewer, document + `api-test-suites.run`; read tool; the plan an agent executes with its own HTTP client |
 
 Only `knowledge_generate_test_suite` and `knowledge_set_test_fixtures` are in
-`WRITE_TOOLS`, and there is no try-it tool.
+`WRITE_TOOLS`, and there is no try-it tool: an agent runs a plan with its own
+client, so no request an agent writes is sent through us.
 
 Web: `components/api-reference/` (`ApiReferenceView`, `ApiOperationDetail`,
 `ApiSchemaTree`, `ApiCodeSamples`, `ApiTryConsole`, `ApiChangesPanel`,
-`ApiDriftCheck`, `ApiTestSuite` with `use-test-suite.ts` and `ApiSuiteSetup` with `use-suite-fixtures.ts`, `ApiOperationPicker`, `ApiOperationEmbed`, and the shared
+`ApiDriftCheck`, `ApiTestSuite` with `use-test-suite.ts`, `ApiSuiteSetup` with `use-suite-fixtures.ts` and the runner `ApiTestRun`, `ApiOperationPicker`, `ApiOperationEmbed`, and the shared
 `ApiTabs`, `ApiCode`, `ApiTone`, `ApiMediaContent`), `pages/ApiSpecEditorPage.vue`
 (`/create/spec`, `/documents/:id/spec`), `pages/ApiSettingsPage.vue`
 (`/settings/api`), and the **API changes** tab on `MergeRequestDetailPage`,
@@ -500,9 +547,10 @@ shown only when the merge request is on a spec. In the graph view, `op:` and
   unnecessary.
 - Try-it, drift and test suites for AsyncAPI: a channel has no HTTP request to
   send, no route to compare and nothing to test.
-- For test suites (#468): a mock server, running the cases or asserting live
-  responses, a suite for a whole spec at once, other export formats (Insomnia,
-  HTTPie, k6) and an MCP tool. Suites under a key no head reaches any more are
+- For test suites (#468): a mock server, asserting response bodies beyond the
+  status, a suite for a whole spec at once, and other export formats (Insomnia,
+  HTTPie, k6). Running the cases ships with #483 phase 3; a server-side runner
+  is phase 5. Suites under a key no head reaches any more are
   never purged; a document's deletion cascades them.
 - An `operationKey` picker on the workflow canvas; items get keys from the
   fan-out step only.

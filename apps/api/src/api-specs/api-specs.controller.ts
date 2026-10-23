@@ -18,6 +18,7 @@ import type {
   RankApiTestFixturesResponse,
   SearchApiOperationsResponse,
   TestFixtureResponse,
+  TestRunPlan,
 } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
@@ -235,6 +236,43 @@ export class ApiSpecsController {
       "403 while the workspace's mode is off; redirects are returned, not followed; Set-Cookie is dropped",
   })
   try(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApiTryRequestDto,
+  ): Promise<ApiTryResponse> {
+    return this.tries.send(principal, id, dto);
+  }
+
+  @Get(':id/test-run-plan')
+  @Access('viewer', 'document', { capability: 'api-test-suites.run' })
+  @ApiOperation({
+    summary:
+      "One operation's cached QA suite as a run plan (#483): setup, the cases (negative first, each with its own " +
+      'setup and teardown), then teardown, every request with {{placeholders}} for captures, inputs and secrets, ' +
+      'and the spec revision each call is proxied through. Holds no value. Needs the api-test-suites.run capability',
+  })
+  async testRunPlan(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ApiTestOperationDto,
+  ): Promise<TestRunPlan> {
+    return this.testSuites.plan(await this.permissions.scopeForDocument(principal, id), id, query.entityKey);
+  }
+
+  // The runner's twin of /try (#483): the same proxy, mode, rate limit and
+  // target check, gated by the capability instead of editor, which @Access
+  // cannot express as role-or-capability. `:id` is the spec defining the
+  // step's operation, so a step in another spec is checked against that one.
+  @Post(':id/test-run/send')
+  @HttpCode(200)
+  @Access('viewer', 'document', { capability: 'api-test-suites.run' })
+  @ApiOperation({
+    summary:
+      'Send one step of a QA suite run through the try-it proxy: a request to a server this revision names, for ' +
+      "an operation it defines. 403 while the workspace's proxy mode is off. Shares try-it's rate limit. Needs the " +
+      'api-test-suites.run capability',
+  })
+  sendTestRunStep(
     @CurrentPrincipal() principal: Principal,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ApiTryRequestDto,

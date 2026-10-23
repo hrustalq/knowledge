@@ -28,6 +28,7 @@ import type {
   ListWorkspaceCandidatesResponse,
   ListWorkspaceMembersResponse,
   ListWorkspacesResponse,
+  MemberCapability,
   WorkspaceCandidate,
   WorkspaceMemberEntry,
   WorkspaceRole,
@@ -86,19 +87,25 @@ const members = ref<WorkspaceMemberEntry[]>([])
 const loadingMembers = ref(false)
 
 const addRole = ref<WorkspaceRole>('viewer')
-const addTestSuites = ref(false)
+const addCapabilities = ref<MemberCapability[]>([])
 const addOpen = ref(false)
 
 /**
- * The one member capability so far (#468). Admins hold it implicitly, so
- * their cell says so rather than offering a box that would change nothing.
- * ponytail: one column for one capability; a multi-select when the catalogue grows.
+ * Member capabilities (#468, #483), one column each. Admins hold every one
+ * implicitly, so their cell says so rather than offering a box that would
+ * change nothing. `key` names the column's messages under `access.`.
  */
-const TEST_SUITES = 'api-test-suites.generate' as const
-const holdsTestSuites = (m: WorkspaceMemberEntry) => m.capabilities.includes(TEST_SUITES)
-function setTestSuites(member: WorkspaceMemberEntry, on: boolean) {
-  const rest = member.capabilities.filter((c) => c !== TEST_SUITES)
-  void patchMember(member, { capabilities: on ? [...rest, TEST_SUITES] : rest })
+const CAPABILITIES = [
+  { id: 'api-test-suites.generate', key: 'testSuites' },
+  { id: 'api-test-suites.run', key: 'testRuns' },
+] as const satisfies ReadonlyArray<{ id: MemberCapability; key: string }>
+const holds = (m: WorkspaceMemberEntry, c: MemberCapability) => m.capabilities.includes(c)
+function setCapability(member: WorkspaceMemberEntry, c: MemberCapability, on: boolean) {
+  const rest = member.capabilities.filter((x) => x !== c)
+  void patchMember(member, { capabilities: on ? [...rest, c] : rest })
+}
+function toggleAddCapability(c: MemberCapability, on: boolean) {
+  addCapabilities.value = on ? [...addCapabilities.value.filter((x) => x !== c), c] : addCapabilities.value.filter((x) => x !== c)
 }
 
 // --- filters ---------------------------------------------------------------
@@ -261,12 +268,12 @@ async function addMember() {
   try {
     const res = await apiFetch<ListWorkspaceMembersResponse>(`/v1/workspaces/${selected.value}/members`, {
       method: 'POST',
-      body: JSON.stringify({ email: user.email, role: addRole.value, capabilities: addTestSuites.value ? [TEST_SUITES] : [] }),
+      body: JSON.stringify({ email: user.email, role: addRole.value, capabilities: addCapabilities.value }),
     })
     members.value = res.members
     toast.success(t('access.memberAdded', { email: user.email, role: t(`role.${addRole.value}`) }))
     addOpen.value = false
-    addTestSuites.value = false
+    addCapabilities.value = []
     pickedUser.value = null
     candidateCache.delete(user.userId) // now a member — no longer a candidate
   } catch (e) {
@@ -393,7 +400,7 @@ const tab = usePageTabs(tabs, 'members')
             <TableHead>{{ t('access.member') }}</TableHead>
             <TableHead>{{ t('access.role') }}</TableHead>
             <TableHead>{{ t('access.trustedOperator') }}</TableHead>
-            <TableHead>{{ t('access.testSuites') }}</TableHead>
+            <TableHead v-for="c in CAPABILITIES" :key="c.id">{{ t(`access.${c.key}`) }}</TableHead>
             <TableHead class="text-right">{{ t('access.actions') }}</TableHead>
           </TableRow>
         </TableHeader>
@@ -438,16 +445,16 @@ const tab = usePageTabs(tabs, 'members')
               />
               <span v-else class="text-muted-foreground text-sm">{{ member.trustedOperator ? t('common.yes') : t('common.no') }}</span>
             </TableCell>
-            <TableCell>
+            <TableCell v-for="c in CAPABILITIES" :key="c.id">
               <span v-if="member.role === 'admin'" class="text-muted-foreground text-sm">{{ t('access.implicitForAdmins') }}</span>
               <!-- Any row, managed or not: no identity provider writes capabilities, so editing one takes nothing over. -->
               <Checkbox
                 v-else-if="canManage"
-                :model-value="holdsTestSuites(member)"
-                :aria-label="t('access.testSuitesFor', { name: member.displayName })"
-                @update:model-value="setTestSuites(member, $event === true)"
+                :model-value="holds(member, c.id)"
+                :aria-label="t(`access.${c.key}For`, { name: member.displayName })"
+                @update:model-value="setCapability(member, c.id, $event === true)"
               />
-              <span v-else class="text-muted-foreground text-sm">{{ holdsTestSuites(member) ? t('common.yes') : t('common.no') }}</span>
+              <span v-else class="text-muted-foreground text-sm">{{ holds(member, c.id) ? t('common.yes') : t('common.no') }}</span>
             </TableCell>
             <TableCell class="text-right">
               <div v-if="canManage" class="flex justify-end gap-1.5">
@@ -523,11 +530,16 @@ const tab = usePageTabs(tabs, 'members')
               </SelectContent>
             </Select>
           </div>
-          <div class="flex items-start gap-2.5">
-            <Checkbox id="add-test-suites" v-model="addTestSuites" class="mt-0.5" />
-            <Label for="add-test-suites" class="grid gap-0.5 font-normal">
-              <span class="text-sm">{{ t('access.testSuitesGrant') }}</span>
-              <span class="text-muted-foreground text-xs">{{ t('access.testSuitesHint') }}</span>
+          <div v-for="c in CAPABILITIES" :key="c.id" class="flex items-start gap-2.5">
+            <Checkbox
+              :id="`add-${c.key}`"
+              :model-value="addCapabilities.includes(c.id)"
+              class="mt-0.5"
+              @update:model-value="toggleAddCapability(c.id, $event === true)"
+            />
+            <Label :for="`add-${c.key}`" class="grid gap-0.5 font-normal">
+              <span class="text-sm">{{ t(`access.${c.key}Grant`) }}</span>
+              <span class="text-muted-foreground text-xs">{{ t(`access.${c.key}Hint`) }}</span>
             </Label>
           </div>
         </form>

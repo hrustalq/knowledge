@@ -4597,6 +4597,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/api-specs/{id}/test-run-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One operation's cached QA suite as a run plan (#483): setup, the cases (negative first, each with its own setup and teardown), then teardown, every request with {{placeholders}} for captures, inputs and secrets, and the spec revision each call is proxied through. Holds no value. Needs the api-test-suites.run capability */
+        get: operations["ApiSpecsController_testRunPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/test-run/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send one step of a QA suite run through the try-it proxy: a request to a server this revision names, for an operation it defines. 403 while the workspace's proxy mode is off. Shares try-it's rate limit. Needs the api-test-suites.run capability */
+        post: operations["ApiSpecsController_sendTestRunStep"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/api-specs/{id}/drift-check": {
         parameters: {
             query?: never;
@@ -6923,14 +6957,14 @@ export interface components {
              */
             trustedOperator: boolean;
             /** @description Grained permissions beside the role (#468). Replaces the list; admins hold every one implicitly. */
-            capabilities?: "api-test-suites.generate"[];
+            capabilities?: ("api-test-suites.generate" | "api-test-suites.run")[];
         };
         UpdateMemberDto: {
             /** @enum {string} */
             role?: "guest" | "viewer" | "editor" | "admin";
             trustedOperator?: boolean;
             /** @description Grained permissions beside the role (#468). Replaces the list; admins hold every one implicitly. */
-            capabilities?: "api-test-suites.generate"[];
+            capabilities?: ("api-test-suites.generate" | "api-test-suites.run")[];
             /** @description Take an IdP-managed row (source jit/group/scim) over as manual. Without it such a row answers 409 managedByIdp. */
             convertToManual?: boolean;
         };
@@ -24014,6 +24048,93 @@ export interface operations {
         };
     };
     ApiSpecsController_try: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiTryRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_testRunPlan: {
+        parameters: {
+            query: {
+                /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+                entityKey: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_sendTestRunStep: {
         parameters: {
             query?: never;
             header?: {

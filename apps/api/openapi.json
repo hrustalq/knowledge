@@ -22949,6 +22949,139 @@
         ]
       }
     },
+    "/v1/api-specs/{id}/test-run-plan": {
+      "get": {
+        "operationId": "ApiSpecsController_testRunPlan",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityKey",
+            "required": true,
+            "in": "query",
+            "description": "The operation, as its row names it (op:billing-api:post-/invoices)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One operation's cached QA suite as a run plan (#483): setup, the cases (negative first, each with its own setup and teardown), then teardown, every request with {{placeholders}} for captures, inputs and secrets, and the spec revision each call is proxied through. Holds no value. Needs the api-test-suites.run capability",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/api-specs/{id}/test-run/send": {
+      "post": {
+        "operationId": "ApiSpecsController_sendTestRunStep",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiTryRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Send one step of a QA suite run through the try-it proxy: a request to a server this revision names, for an operation it defines. 403 while the workspace's proxy mode is off. Shares try-it's rate limit. Needs the api-test-suites.run capability",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
     "/v1/api-specs/{id}/drift-check": {
       "post": {
         "operationId": "ApiSpecsController_driftCheck",
@@ -33261,7 +33394,8 @@
             "items": {
               "type": "string",
               "enum": [
-                "api-test-suites.generate"
+                "api-test-suites.generate",
+                "api-test-suites.run"
               ]
             }
           }
@@ -33292,7 +33426,8 @@
             "items": {
               "type": "string",
               "enum": [
-                "api-test-suites.generate"
+                "api-test-suites.generate",
+                "api-test-suites.run"
               ]
             }
           },

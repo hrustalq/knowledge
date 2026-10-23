@@ -7,6 +7,7 @@ import {
   type SampleText,
 } from '@knowledge/contracts/api/samples';
 import {
+  evaluateCapture,
   isCallStep,
   parseCaptureRule,
   parsePlaceholder,
@@ -449,4 +450,300 @@ export function testSuiteCurl(chain: TestChain): string {
   }
   lines.push('exit $failed');
   return lines.join('\n') + '\n';
+}
+
+// ---------------------------------------------------------------------------
+// The run plan (#483, phase 3): the chain with every request flattened to
+// strings carrying `{{name}}` placeholders, and each call naming the spec
+// revision that defines it — the try-it proxy's `:id` and `revisionId`. The
+// browser runner walks it with `runTestPlan`; an agent walks it with its own
+// HTTP client. No value is ever in it: a run supplies `values`.
+// ---------------------------------------------------------------------------
+
+/** Where a call goes. `server` is the base URL the plan's request starts with, so a run may swap it for another server of that spec. */
+export interface TestRunTarget {
+  documentId: string;
+  revisionId: string;
+  entityKey: string;
+  server: string;
+}
+
+/** A request with `{{name}}` placeholders: captures, `input.x`, `secret.x` and credential slots (`TOKEN`). */
+export interface TestRunRequest {
+  method: string;
+  /** With the query. A placeholder here is URL-encoded when filled. */
+  url: string;
+  headers: Array<{ name: string; value: string }>;
+  body: string | null;
+}
+
+export interface TestRunCall {
+  id: string;
+  kind: 'call';
+  label: string;
+  target: TestRunTarget;
+  request: TestRunRequest;
+  expect: string;
+  capture: Record<string, string>;
+}
+
+export interface TestRunNote {
+  id: string;
+  kind: 'manual';
+  label: string;
+  note: string;
+}
+
+export type TestRunStep = TestRunCall | TestRunNote;
+
+export interface TestRunCase {
+  id: string;
+  kind: 'positive' | 'negative';
+  name: string;
+  target: TestRunTarget;
+  request: TestRunRequest;
+  expect: string;
+  setup: TestRunStep[];
+  teardown: TestRunCall[];
+  /** Captures this case's own fixtures make: shadowed for the case, restored after it. */
+  captures: string[];
+}
+
+/** GET /v1/api-specs/:id/test-run-plan and `knowledge_get_test_run_plan`. */
+export interface TestRunPlan {
+  documentId: string;
+  entityKey: string;
+  title: string;
+  setup: TestRunStep[];
+  /** Negative cases first. */
+  cases: TestRunCase[];
+  teardown: TestRunCall[];
+  inputs: Record<string, FixtureScalar | null>;
+  secrets: string[];
+}
+
+const flatText = (t: SampleText) => splitVars(t).map((p) => (typeof p === 'string' ? p : `{{${p.env}}}`)).join('');
+
+function flatRequest(req: SampleRequest): TestRunRequest {
+  const r = withVarParts(req);
+  return {
+    method: r.method,
+    url: flatText(fullUrl(r)),
+    headers: r.headers.map((h) => ({ name: h.name, value: flatText(h.value) })),
+    body: r.body ? flatText([r.body.text]) : null,
+  };
+}
+
+/** The chain as a plan. `target` answers for every call's entity key, and for null (the suite's own operation). */
+export function testRunPlan(
+  chain: TestChain,
+  at: { documentId: string; entityKey: string },
+  target: (entityKey: string | null) => TestRunTarget,
+): TestRunPlan {
+  const label = (s: ChainStepBase) => `${s.fixtureTitle} › ${s.stepId}`;
+  const call = (s: TestChainCall): TestRunCall => ({
+    id: s.id,
+    kind: 'call',
+    label: label(s),
+    target: target(s.entityKey),
+    request: flatRequest(s.request),
+    expect: s.expect,
+    capture: s.capture,
+  });
+  const step = (s: TestChainStep): TestRunStep => (s.kind === 'call' ? call(s) : { id: s.id, kind: 'manual', label: label(s), note: s.note });
+  return {
+    documentId: at.documentId,
+    entityKey: at.entityKey,
+    title: chain.title,
+    setup: chain.setup.map(step),
+    cases: chain.cases.map((c) => ({
+      id: c.case.id,
+      kind: c.case.kind,
+      name: c.case.name,
+      target: target(null),
+      request: flatRequest(c.case.request),
+      expect: c.case.expected.status,
+      setup: c.setup.map(step),
+      teardown: c.teardown.map(call),
+      captures: c.captures,
+    })),
+    teardown: chain.teardown.map(call),
+    inputs: chain.inputs,
+    secrets: chain.secrets,
+  };
+}
+
+const PLACEHOLDER_RE = /\{\{\s*([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*\}\}/gu;
+
+/**
+ * The request with values in place, or the names it lacks. A header whose
+ * placeholder has no value is left out (an empty credential slot is "no
+ * credentials", as in the try-it console); a gap in the URL or body is a gap.
+ * In a JSON body a value is escaped for the string it sits in.
+ */
+export function fillRunRequest(req: TestRunRequest, values: Readonly<Record<string, string>>): { request: TestRunRequest; missing: string[] } {
+  const missing = new Set<string>();
+  const fill = (s: string, encode: (v: string) => string, gaps: Set<string>) =>
+    s.replace(PLACEHOLDER_RE, (all, name: string) => {
+      const v = values[name];
+      if (v === undefined || v === '') {
+        gaps.add(name);
+        return all;
+      }
+      return encode(v);
+    });
+  const json = req.headers.some((h) => h.name.toLowerCase() === 'content-type' && isJsonType(h.value));
+  const headers = req.headers.flatMap((h) => {
+    const gaps = new Set<string>();
+    const value = fill(h.value, (v) => v, gaps);
+    return gaps.size ? [] : [{ name: h.name, value }];
+  });
+  const url = fill(req.url, encodeURIComponent, missing);
+  const body = req.body === null ? null : fill(req.body, json ? (v) => JSON.stringify(v).slice(1, -1) : (v) => v, missing);
+  return { request: { method: req.method, url, headers, body }, missing: [...missing] };
+}
+
+/** `201` matches 201; `2XX` matches 200–299. */
+function statusMatches(expect: string, status: number): boolean {
+  const range = /^([1-5])XX$/iu.exec(expect.trim());
+  return range ? Math.floor(status / 100) === Number(range[1]) : Number(expect) === status;
+}
+
+/** A name a run must not show the value of: a credential slot or anything named like a secret. */
+export const isSecretName = (name: string) =>
+  name.startsWith('secret.') || /token|secret|passw|pwd|api[_-]?key|session|cookie|credential/iu.test(name);
+
+export type TestRunOutcome = 'pass' | 'fail' | 'error' | 'skipped' | 'not-run' | 'manual';
+
+export interface TestRunResult {
+  outcome: TestRunOutcome;
+  status: number | null;
+  durationMs: number | null;
+  /** What this step captured, as text. */
+  captures: Record<string, string>;
+  /** Why it failed, errored or was skipped: a send error, a missing value, a capture the response lacked. */
+  reason: string | null;
+}
+
+export interface TestRunResponse {
+  status: number;
+  headers: Array<{ name: string; value: string }>;
+  body: string;
+  /** The request's own time, when the sender knows it better than the wall clock (a proxy that waited out a rate limit). */
+  durationMs?: number;
+}
+
+/** Sends one filled request. A throw is an `error` row, never the end of the run. */
+export type TestRunSend = (key: string, target: TestRunTarget, request: TestRunRequest) => Promise<TestRunResponse>;
+
+/**
+ * Result keys, one per row a runner shows: `setup/<id>`, `case/<caseId>`,
+ * `case/<caseId>/setup/<id>`, `case/<caseId>/teardown/<id>`, `teardown/<id>`.
+ */
+export const testRunKey = {
+  setup: (s: TestRunStep) => `setup/${s.id}`,
+  case: (c: TestRunCase) => `case/${c.id}`,
+  caseSetup: (c: TestRunCase, s: TestRunStep) => `case/${c.id}/setup/${s.id}`,
+  caseTeardown: (c: TestRunCase, s: TestRunStep) => `case/${c.id}/teardown/${s.id}`,
+  teardown: (s: TestRunStep) => `teardown/${s.id}`,
+};
+
+const outcomeOf = (outcome: TestRunOutcome, reason: string | null = null): TestRunResult => ({
+  outcome,
+  status: null,
+  durationMs: null,
+  captures: {},
+  reason,
+});
+
+/**
+ * Walk a plan: suite setup (a failed step stops every case), each case
+ * between its own setup and teardown with its captures shadowed, then the
+ * suite's teardown — always, after a failure or `signal` too. A teardown
+ * step whose values were never captured is skipped, not sent with a hole.
+ * `onResult` fires as each row settles; the map it fills is also returned.
+ */
+export async function runTestPlan(
+  plan: TestRunPlan,
+  values: Readonly<Record<string, string>>,
+  send: TestRunSend,
+  onResult: (key: string, result: TestRunResult) => void = () => undefined,
+  signal?: AbortSignal,
+): Promise<Map<string, TestRunResult>> {
+  const results = new Map<string, TestRunResult>();
+  const vars: Record<string, string> = { ...values };
+  const settle = (key: string, r: TestRunResult) => {
+    results.set(key, r);
+    onResult(key, r);
+    return r;
+  };
+
+  const sendOne = async (key: string, target: TestRunTarget, req: TestRunRequest, expect: string, capture: Record<string, string>, teardown: boolean) => {
+    const { request, missing } = fillRunRequest(req, vars);
+    if (missing.length) return settle(key, outcomeOf(teardown ? 'skipped' : 'error', `missing:${missing.join(',')}`));
+    const started = Date.now();
+    let res: TestRunResponse;
+    try {
+      res = await send(key, target, request);
+    } catch (e) {
+      return settle(key, { ...outcomeOf('error', (e as Error).message), durationMs: Date.now() - started });
+    }
+    const durationMs = res.durationMs ?? Date.now() - started;
+    if (!statusMatches(expect, res.status)) return settle(key, { ...outcomeOf('fail'), status: res.status, durationMs });
+    let body: unknown;
+    try {
+      body = JSON.parse(res.body);
+    } catch {
+      body = undefined;
+    }
+    const captures: Record<string, string> = {};
+    for (const [name, raw] of Object.entries(capture)) {
+      const rule = parseCaptureRule(raw);
+      const v = rule ? evaluateCapture(rule, { headers: res.headers, body }) : undefined;
+      if (v === undefined || v === null) return settle(key, { ...outcomeOf('fail', `capture:${name}`), status: res.status, durationMs, captures });
+      captures[name] = typeof v === 'string' ? v : JSON.stringify(v);
+    }
+    Object.assign(vars, captures);
+    return settle(key, { outcome: 'pass', status: res.status, durationMs, captures, reason: null });
+  };
+
+  /** Steps in order; false once one fails, after which the rest are `not-run`. */
+  const runSteps = async (steps: readonly TestRunStep[], key: (s: TestRunStep) => string): Promise<boolean> => {
+    let ok = true;
+    for (const s of steps) {
+      if (!ok || signal?.aborted) {
+        settle(key(s), outcomeOf('not-run'));
+        ok = false;
+      } else if (s.kind === 'manual') settle(key(s), outcomeOf('manual'));
+      else ok = (await sendOne(key(s), s.target, s.request, s.expect, s.capture, false)).outcome === 'pass';
+    }
+    return ok;
+  };
+  const tearDown = async (steps: readonly TestRunCall[], key: (s: TestRunCall) => string) => {
+    for (const s of steps) await sendOne(key(s), s.target, s.request, s.expect, s.capture, true);
+  };
+
+  let ok = await runSteps(plan.setup, testRunKey.setup);
+  for (const c of plan.cases) {
+    if (!ok || signal?.aborted) {
+      for (const s of c.setup) settle(testRunKey.caseSetup(c, s), outcomeOf('not-run'));
+      settle(testRunKey.case(c), outcomeOf('not-run'));
+      for (const s of c.teardown) settle(testRunKey.caseTeardown(c, s), outcomeOf('not-run'));
+      ok = false;
+      continue;
+    }
+    const saved = Object.fromEntries(c.captures.map((k) => [k, vars[k]]));
+    if (await runSteps(c.setup, (s) => testRunKey.caseSetup(c, s))) {
+      await sendOne(testRunKey.case(c), c.target, c.request, c.expect, {}, false);
+    } else {
+      settle(testRunKey.case(c), outcomeOf('not-run', 'setup'));
+    }
+    await tearDown(c.teardown, (s) => testRunKey.caseTeardown(c, s));
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete vars[k];
+      else vars[k] = v;
+    }
+  }
+  await tearDown(plan.teardown, testRunKey.teardown);
+  return results;
 }

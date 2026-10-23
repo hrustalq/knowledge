@@ -3055,11 +3055,15 @@
     },
     "roleFor": "Role for {name}",
     "trustedOperatorFor": "Trusted operator for {name}",
-    "testSuites": "API test suites",
+    "testSuites": "Generate API tests",
     "testSuitesFor": "Can generate API test suites: {name}",
     "implicitForAdmins": "Included for admins",
     "testSuitesGrant": "Allow generating API test suites",
     "testSuitesHint": "Generate and regenerate the test requests of an API operation. Each generation spends this person's AI budget. Independent of role; admins always have it.",
+    "testRuns": "Run API tests",
+    "testRunsFor": "Can run API test suites: {name}",
+    "testRunsGrant": "Allow running API test suites",
+    "testRunsHint": "Send a suite's requests to the API it describes, from the browser or through the proxy. Independent of role; admins always have it.",
     "groups": {
       "hint": "A group is a named set of members. Page and project restrictions are granted to groups as well as to people, so a team is added once rather than person by person.",
       "new": "New group",
@@ -5707,7 +5711,6 @@
       "forCase": "Setup for this case:",
       "addToCase": "Bind a fixture to {name}"
     },
-
     "expect": "Expect {status}:",
     "expectedBody": "Expected body · {status}",
     "curlLabel": "curl command",
@@ -5727,6 +5730,58 @@
       "pattern": "Pattern",
       "missing-credentials": "No credentials",
       "documented-error": "Documented error"
+    },
+    "run": {
+      "action": "Run suite",
+      "noCapability": "Running a suite needs the permission to run test suites. A workspace admin grants it on Access control.",
+      "title": "Run against a server",
+      "intro": "Setup runs once, then every case (negative ones first), then teardown, which runs even after a failure. The values below are kept for this run only and sent only in the requests that use them.",
+      "server": "Server",
+      "values": "Values for this run",
+      "noValues": "This suite needs no values.",
+      "secret": "secret",
+      "input": "input",
+      "fromTryIt": "from Try it",
+      "emptyNote": "A credential left empty is not sent; any other empty value fails the step that needs it.",
+      "start": "Start run",
+      "again": "Run again",
+      "stop": "Stop",
+      "close": "Close the run",
+      "loading": "Preparing the run…",
+      "running": "Running…",
+      "stopping": "Stopping after this request. Teardown still runs.",
+      "waiting": "Waiting {seconds} s for the rate limit",
+      "section": {
+        "setup": "Setup",
+        "cases": "Cases",
+        "teardown": "Teardown"
+      },
+      "col": {
+        "step": "Step",
+        "expected": "Expected",
+        "actual": "Got",
+        "time": "Time",
+        "captured": "Captured"
+      },
+      "outcome": {
+        "pass": "Passed",
+        "fail": "Failed",
+        "error": "Error",
+        "skipped": "Skipped",
+        "not-run": "Not run",
+        "manual": "Check by hand",
+        "running": "Running",
+        "pending": "Waiting"
+      },
+      "reason": {
+        "missing": "No value for {names}",
+        "capture": "The response has no {name} to capture",
+        "setup": "Its setup failed",
+        "skipped": "Setup never captured what this step sends",
+        "cors": "No response reached this page from {host}: the API may not allow requests from a browser (CORS), or it could not be reached. Try the proxy."
+      },
+      "summary": "{passed} passed · {failed} failed · {notRun} not run",
+      "hidden": "hidden"
     }
   },
   "apiTry": {

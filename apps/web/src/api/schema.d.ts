@@ -26543,6 +26543,8 @@ export interface operations {
                 q?: string;
                 /** @description 10 when absent */
                 limit?: number;
+                /** @description The level of the community tree, 0 = finest (#475). 0 when absent */
+                level?: number;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */

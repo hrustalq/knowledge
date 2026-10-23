@@ -257,6 +257,16 @@ export interface RevisionFactsInput {
   live: boolean;
 }
 
+/** A stored community (#81, #475): its place in the tree, its summary, and every page beneath it. */
+export interface StoredCommunity {
+  communityId: string;
+  level: number;
+  parentId: string | null;
+  title: string;
+  summary: string;
+  members: string[];
+}
+
 /** One row of the workspace-wide relation graph (Phase 4 traversal). */
 export interface WorkspaceRelationGraph {
   edges: Array<{ type: string; documentId: string; targetKey: string; extractor: string; confidence: number }>;
@@ -1406,11 +1416,12 @@ export class GraphService {
    * agent wrote, each with its member pages and its summary's embedding. Whole
    * replace, like the code edges — a rebuild is a new answer, not an edit.
    * `fingerprint` is the projection they were built from, so an unchanged
-   * graph can skip the next rebuild.
+   * graph can skip the next rebuild. `level`/`parentId` place each one in the
+   * tree (#475); `members` is every page beneath it.
    */
   async replaceCommunities(
     workspaceId: string,
-    communities: ReadonlyArray<{ communityId: string; title: string; summary: string; members: string[]; embedding: number[] }>,
+    communities: ReadonlyArray<StoredCommunity & { embedding: number[] }>,
     fingerprint: string,
   ): Promise<void> {
     await this.arcade.command('sql', 'DELETE FROM Community WHERE workspaceId = :workspaceId', { workspaceId }).catch(() => {
@@ -1420,7 +1431,7 @@ export class GraphService {
     for (const c of communities) {
       await this.arcade.command(
         'sql',
-        'CREATE VERTEX Community SET workspaceId = :workspaceId, communityId = :communityId, title = :title, summary = :summary, members = :members, embedding = :embedding, fingerprint = :fingerprint, builtAt = :builtAt',
+        'CREATE VERTEX Community SET workspaceId = :workspaceId, communityId = :communityId, level = :level, parentId = :parentId, title = :title, summary = :summary, members = :members, embedding = :embedding, fingerprint = :fingerprint, builtAt = :builtAt',
         { workspaceId, ...c, fingerprint, builtAt },
       );
     }
@@ -1444,11 +1455,11 @@ export class GraphService {
     workspaceId: string,
     admit: (members: readonly string[]) => boolean,
     queryEmbedding?: number[],
-  ): Promise<Array<{ communityId: string; title: string; summary: string; members: string[]; builtAt: number; score: number }>> {
+  ): Promise<Array<StoredCommunity & { builtAt: number; score: number }>> {
     const rows = await this.arcade
-      .query<{ communityId: string; title: string; summary: string; members: string[]; embedding: number[]; builtAt: number }>(
+      .query<Omit<StoredCommunity, 'level' | 'parentId'> & { level?: number | null; parentId?: string | null; embedding: number[]; builtAt: number }>(
         'sql',
-        'SELECT communityId, title, summary, members, embedding, builtAt FROM Community WHERE workspaceId = :workspaceId LIMIT 1000',
+        'SELECT communityId, level, parentId, title, summary, members, embedding, builtAt FROM Community WHERE workspaceId = :workspaceId LIMIT 1000',
         { workspaceId },
       )
       .catch(() => []);
@@ -1456,6 +1467,9 @@ export class GraphService {
       .filter((r) => admit(r.members ?? []))
       .map((r) => ({
         communityId: r.communityId,
+        // Rows built before #475 have neither: one level, all roots.
+        level: r.level ?? 0,
+        parentId: r.parentId ?? null,
         title: r.title,
         summary: r.summary,
         members: r.members ?? [],

@@ -8,6 +8,7 @@ import type { Principal } from '../auth/principal.js';
 import { vmsg } from '../common/validation.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { ListReleaseTagsQueryDto } from '../temporal/temporal.dto.js';
+import { MAX_COMMUNITY_LEVELS } from '../agents/communities.js';
 import { CommunitiesService } from './communities.service.js';
 
 export class ListCommunitiesQueryDto extends ListReleaseTagsQueryDto {
@@ -24,6 +25,14 @@ export class ListCommunitiesQueryDto extends ListReleaseTagsQueryDto {
   @Min(1, { message: vmsg('min') })
   @Max(50, { message: vmsg('max') })
   limit?: number;
+
+  @ApiPropertyOptional({ minimum: 0, maximum: MAX_COMMUNITY_LEVELS - 1, description: 'The level of the community tree, 0 = finest (#475). 0 when absent' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0, { message: vmsg('min') })
+  @Max(MAX_COMMUNITY_LEVELS - 1, { message: vmsg('max') })
+  level?: number;
 }
 
 /** Communities of pages for global questions (#81, phase 7). Only those the caller may read whole. */
@@ -40,6 +49,6 @@ export class CommunitiesController {
   @ApiOperation({ summary: 'Communities of related pages with their summaries, closest to a question first' })
   async list(@Query() query: ListCommunitiesQueryDto, @CurrentPrincipal() principal: Principal): Promise<ListCommunitiesResponse> {
     const scope = await this.permissions.scopeFor(principal, query.workspaceId);
-    return { communities: await this.communities.overview(scope, query.q, query.limit ?? 10) };
+    return { communities: await this.communities.overview(scope, query.q, query.limit ?? 10, query.level) };
   }
 }

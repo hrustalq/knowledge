@@ -26753,6 +26753,17 @@
             }
           },
           {
+            "name": "level",
+            "required": false,
+            "in": "query",
+            "description": "The level of the community tree, 0 = finest (#475). 0 when absent",
+            "schema": {
+              "minimum": 0,
+              "maximum": 2,
+              "type": "number"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,

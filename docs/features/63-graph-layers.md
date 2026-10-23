@@ -1,8 +1,9 @@
 # 63 — Graph layers: a community hierarchy and entity layers that search ranks through
 
-Issue [#475](https://github.com/hrustalq/knowledge/issues/475). This document
-is phase 1: the decisions the later phases build on. Phases 2–6 replace each
-"will" below with what shipped.
+Issue [#475](https://github.com/hrustalq/knowledge/issues/475), shipped as six
+PRs (#493–#497 and the one carrying this update). Phase 1 decided what is
+below; the later phases built it, and where building it changed a decision
+(the hierarchy's resolution), the section says so.
 
 The graph is flat in two ways, and search inherits both:
 
@@ -20,7 +21,7 @@ does POST /invoices return?") is diluted in hybrid mode: `expandGraph` treats
 every shared key as one hop, and a broad `service:` key reaches every page of
 the service.
 
-## What will change
+## What changed
 
 - **The atlas builds a hierarchy.** It runs Louvain again on the aggregated
   graph, up to three levels. Each `Community` carries `level` (0 = finest) and
@@ -234,7 +235,7 @@ both through, so a model sees where a hit sits.
 
 ## Settings and knobs
 
-Three sparse columns on `workspace_settings`, each null meaning the code
+Three sparse columns on `knowledge_health_settings`, each null meaning the code
 default, editable beside the other search knobs on `/knowledge-health`
 (feature [40](40-knowledge-health.md)):
 
@@ -250,21 +251,41 @@ reading what it returns. Nothing switches on by deploying.
 
 ## Backtest
 
-Phase 5 adds a **broad-query set** beside the known-item one:
+`make backtest ARGS="--generate"` reports a **broad-query set** beside the known-item one:
 
 - **Queries.** Each readable community's title, at every level. They are
   generated without a model, so the set is reproducible.
 - **Expected.** The community's member pages.
 - **Metric.** recall@5 = |top 5 ∩ members| / min(5, |members|).
 
-`make backtest ARGS="--generate"` reports both sets. The acceptance check runs
-both before the prior (weight 0) and after the tuned knobs, in the same
-session on the same data: broad recall@5 must rise, and known-item recall@1
-must not fall. `make tune` scores candidates on the broad set beside the
+`--with '<json>'` overrides the knobs for one run, so the acceptance check
+runs both sets before the prior (weight 0) and after the tuned knobs, in the
+same session on the same data: broad recall@5 must rise, and known-item
+recall@1 must not fall. `make tune` scores candidates on the broad set beside the
 feedback set, under the known-item constraint it already has.
 
 It runs on dev data, with bge-m3 served by the Mac mini's Ollama, one backtest
 at a time, because ArcadeDB runs out of memory with two.
+
+### Measured (2026-10-23)
+
+- **Empty settings rank as before.** `--generate` on the demo workspace (35
+  pages) against `dev` before the milestone (ba5ee72b) and after phase 5 gave
+  the same 35 searches: identical documents, chunks and scores, compared
+  event by event in the backtest stream. Recall@1 was 40.0% and recall@10
+  68.6% on both.
+- **The prior's gain is not measured yet.** The atlas could not build
+  communities on dev data: the configured gen-api model answered every
+  summary with a policy block, and gen-api was then unreachable. To measure:
+  1. Run the atlas with `COMMUNITY_SUMMARIES_ENABLED=true`.
+  2. Run `make backtest ARGS="--generate"`.
+  3. Run `make tune`.
+  4. Run `make backtest ARGS="--generate --with '<proposal>'"`.
+- **End to end:** `graph-layers.e2e-spec.ts` seeds a two-level tree over an
+  open page and a restricted one, and searches as two non-admin editors. The
+  admitted reader's open page rises with a `communityPath`. The excluded
+  reader's results are identical with the prior on and off, with no path and
+  an empty level-1 overview.
 
 ## Decisions
 
@@ -305,23 +326,23 @@ nearly everything into one root that answers no question.
 
 One PR each into `dev`:
 
-1. This document.
-2. **Community hierarchy**: the aggregation in `agents/communities.ts`
+1. This document (#493).
+2. **Community hierarchy** (#494): the aggregation in `agents/communities.ts`
    (`level`, `parentId`, deterministic, with a spec); `Community.level` /
    `parentId` and reads by level in `GraphService`; upper-level summaries and
    the shared budget in `AgentExecutor`; withheld-whole up the tree and
    `level` in `CommunitiesService.overview` and
    `GET /v1/graph/communities`.
-3. **Entity layers**: `entityLayerFor`, `entityTypesOfLayer` and
+3. **Entity layers** (#495): `entityLayerFor`, `entityTypesOfLayer` and
    `pageLayerOf` in contracts (buildless package constraints apply);
    `layerParents`; `layer` on the entity nodes of the workspace and document
    graphs.
-4. **Search**: the prior in `rankPool` and `SearchService`, the knobs in
-   `SearchKnobs`, `workspace_settings` and `/knowledge-health`; layered
+4. **Search** (#496): the prior in `rankPool` and `SearchService`, the knobs in
+   `SearchKnobs`, `knowledge_health_settings` and `/knowledge-health`; layered
    `expandGraph`; `layer` and `communityPath` on `SearchResult`; the tuner
    axes; `make api-client`.
-5. **Backtest**: the broad-query set, reported beside the known-item set and
-   scored by `make tune`.
+5. **Backtest** (#497): the broad-query set, reported beside the known-item set and
+   scored by `make tune`; `--with`; the non-admin e2e.
 6. **Agents, MCP and docs**: pass-through in the Ask read tools and
    `knowledge_search`; `level` on both overview tools; `skill.ts` and the
    atlas instructions; [04](../architecture/04-search-graph.md)

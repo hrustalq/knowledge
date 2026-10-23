@@ -318,7 +318,10 @@ ${feedbackStep}${reportStep}${flagStep}
 
 ### Dependencies and impact
 
-Entities are keyed \`type:name\` — \`service:identity\`, \`db:orders\`.
+Entities are keyed \`type:name\` — \`service:identity\`, \`db:orders\`. The prefix names a layer: \`system\` (\`service:\`,
+\`domain:\`), \`component\` (\`component:\`, \`db:\`), \`interface\` (\`op:\`, \`channel:\`), \`code\` (\`module:\`, \`file:\`), or
+\`concept\` for anything else. Pick the prefix for the level you mean, so a page about one endpoint names \`op:\`, not only
+its service.
 
 - ${toolRef('knowledge_find_relations')} — what an entity touches, within N hops.
 - ${toolRef('knowledge_impact_analysis')} — what breaks if it changes (\`direction: "dependents"\`), or what it relies on.
@@ -330,6 +333,9 @@ not. ${toolRef('knowledge_list_release_tags')} names the instants worth asking a
 
 For a broad question across everything ("what are our main risks?"), ${toolRef('knowledge_global_overview')}
 returns the communities of related pages closest to it, each with a summary. Read and cite the pages it names.
+Communities form a tree: \`level: 0\` (the default) is the finest grouping, \`level: 1\` and \`2\` broader areas. A
+search result's \`communityPath\` names its areas broadest first, and \`layer\` says whether the page is about a system,
+a component, an interface or code.
 
 What was said but never written down may be in a team chat a workspace made searchable:
 ${toolRef('knowledge_search_chat')} returns masked windows of messages from the chats you may read. A chat is not a

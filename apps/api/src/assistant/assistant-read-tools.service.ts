@@ -14,6 +14,7 @@ import { readFrontmatterRelations, readFrontmatterTags } from '../common/relatio
 import { wrapUntrusted } from '../common/untrusted.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
+import { MAX_COMMUNITY_LEVELS } from '../agents/communities.js';
 import { READ_TOOL_NAMES, SEARCH_QUERY_RULE } from './assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 
@@ -155,7 +156,8 @@ export class AssistantReadToolsService {
           description:
             'Hybrid (semantic + keyword) search over this workspace. Returns the matching pages, one entry ' +
             'per page with its best snippet; it may return fewer than the limit. Each result ' +
-            'carries a `cite` label (S1, S2, …) to end your sentences with. ' +
+            'carries a `cite` label (S1, S2, …) to end your sentences with, and may say where the page sits: ' +
+            '`layer` (system, component, interface, code or concept) and `communityPath` (its areas, broadest first). ' +
             'Use it whenever the current page does not already answer the question. ' +
             "Search with the user's own words and language — see query.",
           parameters: {
@@ -176,12 +178,14 @@ export class AssistantReadToolsService {
             'For a broad question about the whole knowledge base ("what are our main risks?", "what do we know ' +
             'about payments?"): the communities of related pages closest to it, each with a summary of what its ' +
             'pages cover and the pages themselves (each with a `cite` label). Summaries are written by an agent ' +
-            'from the pages — read the pages before relying on a detail. Empty when communities have not been built.',
+            'from the pages — read the pages before relying on a detail. Empty when communities have not been built. ' +
+            'Communities form a tree: level 0 (the default) is the finest; ask level 1 or 2 for broader areas.',
           parameters: {
             type: 'object',
             properties: {
               question: { type: 'string', description: 'The broad question, in natural language' },
               limit: { type: 'integer', minimum: 1, maximum: 8, description: 'Max communities (default 4)' },
+              level: { type: 'integer', minimum: 0, maximum: MAX_COMMUNITY_LEVELS - 1, description: 'Level of the community tree, 0 = finest (default 0)' },
             },
             required: ['question'],
           },
@@ -447,6 +451,9 @@ export class AssistantReadToolsService {
       breadcrumb: trails.get(r.documentId) || '(top level)',
       section: r.headingPath?.length ? r.headingPath.join(' › ') : undefined,
       snippet: r.snippet,
+      // Where the page sits (#475): derived from its keys and the atlas's tree.
+      ...(r.layer ? { layer: r.layer } : {}),
+      ...(r.communityPath ? { communityPath: r.communityPath } : {}),
       // Trusted PG metadata, outside the untrusted content wrapper
       // (docs/features/39): the status is a fact about the row, not page text.
       ...(r.trust
@@ -476,11 +483,13 @@ export class AssistantReadToolsService {
     const question = String(args.question ?? '').slice(0, 2_000).trim();
     if (!question) return this.fail('question is required');
     const limit = Math.min(Math.max(Math.floor(Number(args.limit)) || 4, 1), 8);
-    const communities = await this.communities.overview(await this.scopeOf(ctx), question, limit);
+    const level = Math.min(Math.max(Math.floor(Number(args.level)) || 0, 0), MAX_COMMUNITY_LEVELS - 1);
+    const communities = await this.communities.overview(await this.scopeOf(ctx), question, limit, level);
     const sources: AssistantAskSource[] = [];
     const seen = new Map<string, AssistantAskSource>();
     const results = communities.map((c) => ({
       title: c.title,
+      level: c.level,
       summary: wrapUntrusted(c.summary, 'global_overview', 'page'),
       pages: c.documents.map((d) => {
         let source = seen.get(d.documentId);

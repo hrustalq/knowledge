@@ -337,6 +337,7 @@
     "disabled": "Коннектор отключён",
     "pullNotSupported": "Коннекторы {kind} не умеют загружать",
     "pushNotSupported": "Коннекторы {kind} не умеют выгружать",
+    "figmaAllowlistInvalid": "Не команда и не проект Figma: {entries}",
     "directionNotAllowed": "Коннектор не настроен на действие «{direction}»",
     "runInFlight": "Синхронизация этого коннектора уже выполняется",
     "webhookNotConfigured": "Для коннектора не задан секрет вебхука",

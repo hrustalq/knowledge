@@ -336,6 +336,8 @@ export class ConnectorRequestError extends Error {
     readonly status: number,
     readonly url: string,
     body: string,
+    /** `Retry-After` as sent, for an adapter that backs off on 429. */
+    readonly retryAfter: string | null = null,
   ) {
     super(`${status} from ${url}${body ? `: ${body.slice(0, 300)}` : ''}`);
     this.name = 'ConnectorRequestError';
@@ -421,7 +423,7 @@ export async function connectorFetch(
     bytes: res.headers.get('content-length') ?? '?',
   });
   if (!res.ok) {
-    throw new ConnectorRequestError(res.status, url, await res.text().catch(() => ''));
+    throw new ConnectorRequestError(res.status, url, await res.text().catch(() => ''), res.headers.get('retry-after'));
   }
   return res;
 }

@@ -1,5 +1,6 @@
 import type { DocumentCategory } from '@knowledge/contracts/documents';
 import type { ApiSpecKind } from '@knowledge/contracts/api';
+import { FIGMA_ALLOWLIST_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY } from '@knowledge/contracts/embeds';
 
 // configured sources and destinations. A connector is one configured
 // connection; a link is the recorded identity between an external item and a
@@ -22,6 +23,7 @@ export const CONNECTOR_KINDS = [
   'linear',
   'zendesk',
   'intercom',
+  'figma',
 ] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
@@ -91,6 +93,11 @@ export interface ConnectorCapabilities {
    * fed by its webhook alone. Optional for the reason `tasks` is.
    */
   harvest?: boolean;
+  /**
+   * The source's items can be embedded in pages (#470, doc 64): a token and an
+   * allowlist, no content moved either way. Optional for the reason `tasks` is.
+   */
+  embeds?: boolean;
 }
 
 /** The label a harvest connector looks for when `config.harvestLabel` is empty. */
@@ -580,6 +587,33 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         required: false,
         placeholder: DEFAULT_HARVEST_LABEL,
         help: 'A conversation carrying this tag is harvested when an admin closes it. Leave empty for "knowledge".',
+      },
+    ],
+  },
+  {
+    // An embed source (#470, doc 64): frames from the allowlisted teams and
+    // projects can be embedded in pages. Nothing syncs either way; the
+    // connector's tick checks whether pinned frames changed.
+    kind: 'figma',
+    label: 'Figma',
+    capabilities: { pull: false, push: false, webhook: false, tree: false, embeds: true },
+    credentialLabel: 'Personal access token',
+    fields: [
+      {
+        key: FIGMA_ALLOWLIST_CONFIG_KEY,
+        label: 'Teams and projects',
+        kind: 'text',
+        required: true,
+        placeholder: 'https://www.figma.com/files/team/1234567890/Design',
+        help: 'Figma team or project links (or team:<id>, project:<id>), separated by spaces or commas. Only their files can be embedded.',
+      },
+      {
+        key: FIGMA_TOKEN_EXPIRES_CONFIG_KEY,
+        label: 'Token expires on',
+        kind: 'text',
+        required: false,
+        placeholder: '2027-01-31',
+        help: 'The expiry you chose when creating the token, as YYYY-MM-DD. Figma does not report it, so the card warns from this date.',
       },
     ],
   },

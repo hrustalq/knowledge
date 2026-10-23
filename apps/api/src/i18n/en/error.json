@@ -335,6 +335,7 @@
     "disabled": "This connector is disabled",
     "pullNotSupported": "{kind} connectors cannot pull",
     "pushNotSupported": "{kind} connectors cannot push",
+    "figmaAllowlistInvalid": "Not a Figma team or project: {entries}",
     "directionNotAllowed": "This connector is not configured to {direction}",
     "runInFlight": "A sync for this connector is already running",
     "webhookNotConfigured": "This connector has no webhook secret",

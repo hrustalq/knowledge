@@ -535,6 +535,7 @@ export type I18nTranslations = {
         "helpTeams": string;
     };
     "connector": {
+        "figmaReach": string;
         "stage": {
             "connecting": string;
             "listing": string;
@@ -996,6 +997,7 @@ export type I18nTranslations = {
             "disabled": string;
             "pullNotSupported": string;
             "pushNotSupported": string;
+            "figmaAllowlistInvalid": string;
             "directionNotAllowed": string;
             "runInFlight": string;
             "webhookNotConfigured": string;

@@ -445,6 +445,7 @@
       "serviceAccount": "Service account",
       "folder": "Folder",
       "harvest": "Workspace and label",
+      "figmaAccess": "Access",
       "harvestTag": "Tag"
     },
     "testing": "Checking the connection",
@@ -810,6 +811,17 @@
       "assistOff": "The AI assists rewrite markdown, so they are not offered for an API spec."
     },
     "kindText": {
+      "figma": {
+        "allowlist": {
+          "label": "Teams and projects",
+          "help": "Figma team or project links (or team:<id>, project:<id>), separated by spaces or commas. Only their files can be embedded; removing one hides its embeds everywhere until it is added back."
+        },
+        "tokenExpiresAt": {
+          "label": "Token expires on",
+          "help": "The expiry you chose when creating the token, as YYYY-MM-DD. Figma does not report it, so the card warns from this date."
+        },
+        "credential": "A personal access token from Figma (Settings → Security → Personal access tokens) with read access to file content, file metadata and projects."
+      },
       "googleDrive": {
         "credential": "Paste the whole JSON key file of a Google Cloud service account with the Drive API enabled. Then share the folder with the service account's email, or add it to the shared drive.",
         "folderId": {
@@ -858,6 +870,10 @@
     "harvestHint": "Nothing syncs either way. When an issue carrying the harvest label is completed by a linked editor, its description and comments are masked and proposed as captures in their name, for review in the Captures inbox.",
     "harvestWebhook": "In {kind}, add a webhook on issues pointed at this server, and paste its signing secret here:",
     "directionHarvest": "Harvest",
+    "directionEmbeds": "Embeds",
+    "embedsHint": "Nothing syncs either way. Frames from the files of the teams and projects listed can be embedded in pages; snapshots are rendered with this token, and the connector checks pinned frames for design changes.",
+    "tokenExpiresSoon": "Token expires {date}",
+    "tokenExpired": "Token expired {date}",
     "harvestWebhookZendesk": "In Zendesk, create a webhook pointed at the address below, then a trigger: Ticket status changed to Solved, Tags contain the harvest tag, action Notify webhook with this JSON body. Paste the webhook’s signing secret above.",
     "harvestWebhookIntercom": "In the Developer Hub, open your app’s Webhooks, point them at the address below and subscribe to conversation.admin.closed. Paste the app’s client secret (Basic information) above: Intercom signs every delivery with it."
   },

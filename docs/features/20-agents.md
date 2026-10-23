@@ -214,6 +214,17 @@ instructions or skills, or a change of its model, is part of the suite's cache
 key, so the next Generate after one asks the model again. Its calls are billed
 as `test-suite`.
 
+Its second duty (#483, [62](62-qa-fixtures-runs.md)) is **Ask tester** on a
+suite's fixture candidates: the spec has already decided which fixtures are
+candidates and why (`suitePrerequisites`, then the fixtures calling a
+producer), and the tester is asked only to order them and say why, as JSON.
+`readTesterRanking` keeps each known id once, drops any it was not shown and
+appends the ones it left out unexplained, so a model can reorder the list but
+never add to it. The answer stays on the run row, keyed by the candidate set's
+hash, and applies only to that exact set. Nothing is bound until a person
+presses Bind. The same capability (`api-test-suites.generate`) is checked at
+the route and again when the run executes.
+
 ## The linter and the auditor measure, and the harness decides
 
 Two built-ins came with doc quality ([53](53-doc-quality.md)). Both run on the

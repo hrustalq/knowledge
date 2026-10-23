@@ -340,6 +340,13 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Leaving **New workflow** no longer brings its old conversation back next time (#473). The wizard
+  kept every step in the browser so a reload could resume it, and only Create or Cancel cleared that.
+  Now going anywhere else in the app clears it too, and the next visit starts at the first step. A
+  reload or a reopened tab still picks up where you were. The architect chat, in the wizard and in the
+  workflow editor, gains **New conversation**: it clears the messages and keeps the chain on the
+  canvas, and the next message is sent with that chain. In the wizard the chat now fills its column,
+  with the message box at the bottom.
 - On a phone, the page editor no longer leaves a wide blank margin on each side of the text
   (#499). It reserved 28 px for drag handles that never appear on a touch screen. It now uses the
   app's 16 px gutter there; desktop keeps its margin.

@@ -17,6 +17,12 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Agents see where a search hit sits (#475, phase 6). Ask's `search_knowledge` and MCP
+  `knowledge_search` return each result's `layer` and `communityPath`. Ask's `global_overview`
+  and MCP `knowledge_global_overview` take an optional `level` (0, the finest, by default; 1 and 2
+  for broader areas). The atlas agent's instructions now cover summarising a group of
+  already-summarised areas. The MCP skill explains entity prefixes as layers. Feature doc 63
+  describes all of #475.
 - Search can use the community tree and entity layers (#475, phase 4), both off until an admin
   turns them on in **Knowledge health → Settings → Search ranking**:
   - **Community boost** raises the pages of the community whose summary best matches the

@@ -5774,7 +5774,7 @@
     },
     {
       "name": "knowledge_global_overview",
-      "description": "For a broad question across the whole knowledge base (\"what are our main risks?\"): the communities of related pages closest to it, each with an agent-written summary and its pages. Read the pages before relying on a detail; cite pages, not summaries. Empty until the atlas agent has built communities.",
+      "description": "For a broad question across the whole knowledge base (\"what are our main risks?\"): the communities of related pages closest to it, each with an agent-written summary and its pages. Read the pages before relying on a detail; cite pages, not summaries. Empty until the atlas agent has built communities. Communities form a tree (#475): level 0, the default, is the finest; level 1 and 2 are broader areas.",
       "inputs": [
         {
           "name": "workspaceId",
@@ -5786,6 +5786,10 @@
         },
         {
           "name": "limit",
+          "optional": true
+        },
+        {
+          "name": "level",
           "optional": true
         }
       ]
@@ -6334,7 +6338,7 @@
     },
     {
       "name": "knowledge_search",
-      "description": "Semantic search over the knowledge base. Every result carries document/revision/chunk citations plus provenance: revisionNumber, changedAt (freshness), authorName, verification / trust.status (verified | expired | edited | requested | outdated | flagged | unverified), trust.inactive, trust.ownerId and factClass. Ranking already favours verified pages and demotes outdated ones; still say when a page you relied on is outdated, expired or edited since verification. Archived pages are absent unless includeArchived is true. The response traceId identifies this search. With asOf, it searches the text each page held then, and a result whose validTo is set has since been superseded.",
+      "description": "Semantic search over the knowledge base. Every result carries document/revision/chunk citations plus provenance: revisionNumber, changedAt (freshness), authorName, verification / trust.status (verified | expired | edited | requested | outdated | flagged | unverified), trust.inactive, trust.ownerId and factClass. Ranking already favours verified pages and demotes outdated ones; still say when a page you relied on is outdated, expired or edited since verification. Archived pages are absent unless includeArchived is true. The response traceId identifies this search. With asOf, it searches the text each page held then, and a result whose validTo is set has since been superseded. A result may say where its page sits: layer (system | component | interface | code | concept, from its entity keys) and communityPath (the titles of its communities, broadest first; never under asOf).",
       "inputs": [
         {
           "name": "workspaceId",

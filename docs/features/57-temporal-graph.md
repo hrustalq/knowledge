@@ -197,7 +197,12 @@ when both describe the same thing, which is what passage pairing already finds.
   rebuild.
 - Answering a broad question is Ask's job, with `global_overview` as a tool,
   so `finalizeCitations` settles the citations. `mode: 'global'` on
-  `/v1/search` would have put a model call inside search.
+  `/v1/search` would have put a model call inside search. That still holds
+  after #475: search gained a community **prior**, arithmetic on the embedding
+  it already computes, not a mode
+  ([feature 63](63-graph-layers.md#the-community-prior)).
+- One level became a tree of up to three in #475, still deterministic and
+  fingerprint-skipped ([feature 63](63-graph-layers.md#the-community-hierarchy)).
 - Communities are ArcadeDB `Community` vertices with a member list rather than
   `IN_COMMUNITY` edges. They are structural and never join
   `RELATION_EDGE_TYPES`.
@@ -253,7 +258,8 @@ when both describe the same thing, which is what passage pairing already finds.
   `/conflicts`.
 - **Contradictions against web sources**, and auto-applying any fix. A
   conflict only proposes, and a person merges.
-- **Multi-level communities** and `IN_COMMUNITY` edges.
+- `IN_COMMUNITY` edges. Multi-level communities shipped in #475
+  ([feature 63](63-graph-layers.md)).
 
 ## Verification
 

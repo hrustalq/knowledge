@@ -99,6 +99,7 @@ import { ReleaseTagsService } from '../temporal/release-tags.service.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
+import { MAX_COMMUNITY_LEVELS } from '../agents/communities.js';
 import { ChatSearchService } from '../chat/chat-search.service.js';
 import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
 import { AnalyticsQueryService } from '../analytics/analytics-query.service.js';
@@ -329,7 +330,9 @@ export class McpService {
           'factClass. Ranking already favours verified pages and demotes outdated ones; still say when a page you ' +
           'relied on is outdated, expired or edited since verification. Archived pages are absent unless ' +
           'includeArchived is true. The response traceId identifies this search. With asOf, it searches the text ' +
-          'each page held then, and a result whose validTo is set has since been superseded.',
+          'each page held then, and a result whose validTo is set has since been superseded. A result may say where ' +
+          'its page sits: layer (system | component | interface | code | concept, from its entity keys) and ' +
+          'communityPath (the titles of its communities, broadest first; never under asOf).',
         inputSchema: {
           workspaceId: z.string().uuid(),
           query: z.string().min(1).describe(SEARCH_QUERY_RULE),
@@ -1955,16 +1958,24 @@ export class McpService {
         description:
           'For a broad question across the whole knowledge base ("what are our main risks?"): the communities of ' +
           'related pages closest to it, each with an agent-written summary and its pages. Read the pages before ' +
-          'relying on a detail; cite pages, not summaries. Empty until the atlas agent has built communities.',
+          'relying on a detail; cite pages, not summaries. Empty until the atlas agent has built communities. ' +
+          'Communities form a tree (#475): level 0, the default, is the finest; level 1 and 2 are broader areas.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           question: z.string().min(1).max(2000),
           limit: z.number().int().min(1).max(20).optional(),
+          level: z
+            .number()
+            .int()
+            .min(0)
+            .max(MAX_COMMUNITY_LEVELS - 1)
+            .optional()
+            .describe('Level of the community tree, 0 = finest (default 0)'),
         },
       },
-      async ({ workspaceId, question, limit }) => {
+      async ({ workspaceId, question, limit, level }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json({ communities: await this.communities.overview(await guard.scope(workspaceId), question, limit ?? 5) });
+        return this.json({ communities: await this.communities.overview(await guard.scope(workspaceId), question, limit ?? 5, level ?? 0) });
       },
     );
 

@@ -447,6 +447,20 @@ search list gets the same through `groupBy: 'page'` (#443), applied inside
 highlighted `snippetParts` (docs/features/02). The backtest and `make tune` never
 pass it and keep reading chunk-level results.
 
+The walk itself is `walkRelated` (`search/expansion.ts`), a pure BFS whose
+`follow` rule says which of a page's entities a hop may cross. The default
+`flatFollow` crosses every key the page names, as before #475. With the
+workspace's `layeredExpansion` on, `layeredFollow` crosses only:
+
+- keys within one rung of the page's own layer (`pageLayerOf`);
+- the membership parents and children of its keys on that rung
+  (`graph/layers.ts` `layerParents`, from declaring pages only);
+- `concept` keys, from any page.
+
+An entity more than `HUB_ENTITY_PAGES` pages name is skipped at every layer. A
+hit about one operation therefore never reaches a page linked only through a
+`service:` key ([feature 63](../features/63-graph-layers.md)).
+
 ## Provenance on results
 
 A hit is a `(documentId, revisionId, chunkId, score)` and, since
@@ -534,12 +548,31 @@ provider, and `POST /v1/search` never returns a chat window.
 ## Communities
 
 The atlas agent ([feature 57](../features/57-temporal-graph.md)) groups pages
-with one Louvain level over the page-to-page projection (`agents/communities.ts`).
-Two pages are linked once per entity they share; hubs named by more than 12
-pages are skipped. Each group's summary is stored as an ArcadeDB `Community`
-vertex with its embedding. These are structural, outside `RELATION_EDGE_TYPES`,
-and never walked. `CommunitiesService` ranks them by cosine to a question and
-withholds a community whose pages the reader may not all open.
+with Louvain over the page-to-page projection (`agents/communities.ts`). Two
+pages are linked once per entity they share; hubs named by more than 12 pages
+are skipped.
+
+**A tree of up to three levels** (#475). `communityHierarchy` runs Louvain again
+on the communities so far, each level at half the previous resolution, because
+at resolution 1 a converged level 0 is already a modularity optimum. A level
+keeps only communities that merge at least two below. Each `Community` vertex
+carries its `level`, its `parentId` and, as `members`, every page beneath it.
+Level 0 is summarised from page excerpts, each level above from its children's
+summaries, under one `COMMUNITY_MAX_PER_RUN` budget.
+
+They are structural, outside `RELATION_EDGE_TYPES`, and never walked.
+`CommunitiesService` ranks them by cosine to a question and withholds a
+community whose pages the reader may not all open. Because `members` holds
+every page beneath it, an ancestor of a withheld community is withheld by the
+same check.
+
+**The community prior.** With `communityPriorWeight > 0` and no `asOf`, search
+scores the readable communities against the query embedding it already has.
+It walks one path: the coarsest level clearing `communityPriorFloor`, then its
+best clearing children. A page `d` deep in a path of `n` is multiplied by
+`1 + weight·d/n` (`communityPrior` in `search/ranking.ts`). It never filters,
+and with weight 0 the ranking is the one before #475. Every result carries
+`communityPath` (its readable communities, coarsest first) and `layer`.
 
 ## Limits
 
@@ -568,3 +601,9 @@ withholds a community whose pages the reader may not all open.
   [feature 50 §Calibration](../features/50-agent-memory.md#calibration).
 - Entity keys are free-form strings (`service:identity`); nothing normalises two
   spellings of the same entity into one node.
+- A layer is only as good as the prefix: `widget:x` is `concept` until the
+  catalogue in `@knowledge/contracts` (`ENTITY_LAYER_PREFIXES`) names it.
+- The community prior and `communityPath` describe the current graph only. An
+  `asOf` search gets neither, and there is no community tree as of a date.
+- The prior follows one path, the best match at each level. A question that
+  spans two areas boosts only the closer one.

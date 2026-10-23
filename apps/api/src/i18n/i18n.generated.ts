@@ -1335,6 +1335,22 @@ export type I18nTranslations = {
                 "literal-credential": string;
             };
         };
+        "apiTestEnvironment": {
+            "notFound": string;
+            "unreadable": string;
+            "keyMissing": string;
+            "name": string;
+            "server": string;
+            "tooMany": string;
+            "valueName": string;
+            "value": string;
+            "duplicate": string;
+        };
+        "apiTestRun": {
+            "off": string;
+            "notFound": string;
+            "environmentGone": string;
+        };
         "apiTry": {
             "disabled": string;
             "operationNotInSpec": string;

@@ -468,7 +468,45 @@ library's own predicates), linking to the **Fixtures** tab narrowed to it. The
 library follows the active project unless narrowed to one operation or spec,
 where it crosses projects, as the counts do.
 
-The server runner follows in phase 5 of #483.
+### The server runner (#483, phase 5)
+
+**Run on server** runs the same plan from the worker, against a **test
+environment**: a name, one server URL, non-secret inputs, and secrets in one
+`ai/secret-box.ts` envelope (`api_test_environments`). Editors manage them on
+the **Environments** tab of `/qa`; secrets are write-only — the API returns
+their names, a PATCH sets, replaces (`"name": "value"`) or removes
+(`"name": null`) one, and nothing reads a value back except the worker.
+
+**Off unless both say on.** `API_TEST_RUNNER_MODE` (default `off`) is a ceiling
+and `workspace_settings.api_test_runner` the workspace's opt-in, shown on
+Settings → API as asked / ceiling / applied (`resolveApiTestRunner`). With it
+off, the Server route is absent, `POST …/test-runs` and
+`knowledge_run_test_suite` refuse 403 `runner-off`, and the worker refuses a
+run it already queued.
+
+**One egress path.** `ApiTryService` moved, with `ApiSettingsService`, into the
+controller-free `ApiRunnerCoreModule`, which the worker loads. A step goes out
+through `sendAs(owner, …, metered: false)`: the workspace's proxy mode, source
+policies, `safeFetch`, the target check (only servers the step's spec declares)
+and the `api.try` audit under the run's owner — exactly what the proxy
+reaches. The environment's server replaces a step's server only when that
+step's spec declares it in `servers`; otherwise the spec's own server is used.
+Unmetered because a run is bounded by its plan.
+
+**The worker generates, the API stores the ask.** `POST
+/v1/api-specs/:id/test-runs` resolves the plan under the person's scope and
+inserts a `queued` `api_test_runs` row holding it (placeholders, never a value);
+the job carries the run id only, so no secret sits in Redis. The worker claims
+it (`queued → running`, one guarded update), checks again at execution — runner
+on, owner still holds `api-test-suites.run`, may still open every spec the plan
+calls, environment still exists — walks it with `runTestPlan`, and writes the
+results without any capture named like a secret (`isSecretName`). Then it keeps
+the newest `API_TEST_RUNS_KEPT` (20) runs of the suite. One attempt: a run that
+died mid-suite already sent requests, and replaying setup is not a retry.
+
+The run panel shows the result in the browser runner's table, from the plan
+stored on the run, and lists the suite's recent runs; `/qa` gains a last-run
+column while the runner applies. Scheduling is out of scope.
 
 ## Surface
 
@@ -500,6 +538,9 @@ The server runner follows in phase 5 of #483.
 | `GET /v1/api-specs/:id/test-run-plan?entityKey=` | viewer, document, capability `api-test-suites.run`; the run plan, no values |
 | `POST /v1/api-specs/:id/test-run/send` | viewer, document, capability `api-test-suites.run`; one proxied step, `/try`'s body and answer |
 | `GET /v1/qa/overview?workspaceId=&projectId=&documentId=` | viewer, workspace (guests too), filtered by scope; every HTTP operation's suite state |
+| `POST /v1/api-specs/:id/test-runs` | viewer, document, capability `api-test-suites.run`, runner on; queues a server run (202) |
+| `GET /v1/api-specs/:id/test-runs?entityKey=` / `…/test-runs/:runId` | viewer, document; a suite's recent runs / one run's plan and results |
+| `GET\|POST /v1/workspaces/:id/test-environments`, `PATCH\|DELETE …/:environmentId` | viewer to read (names, server, inputs, secret names); editor to write; secrets write-only |
 | `GET /v1/api-operations?workspaceId=&q=&documentId=&entityKey=` | viewer, query, guests; operations at each spec's default-branch head |
 | `GET` / `PATCH /v1/workspaces/:id/api-settings` | viewer / admin, workspace |
 | `GET /v1/documents/:id/compare` | unchanged; gains `api` on a spec |
@@ -525,6 +566,8 @@ because a key holds `/` and `:`. A page passed to a per-document route is a 400
 | `knowledge_set_test_fixtures` (`bindings`) | viewer, document + `api-test-suites.generate`; write tool |
 | `knowledge_get_test_run_plan` | viewer, document + `api-test-suites.run`; read tool; the plan an agent executes with its own HTTP client |
 | `knowledge_qa_overview` (`projectId?`, `documentId?`) | viewer, workspace; read tool; filtered by scope; every operation's suite state, worst first |
+| `knowledge_run_test_suite` (`environment` by name) | viewer, document + `api-test-suites.run`, runner on; write tool |
+| `knowledge_get_test_run` (`runId?` or `entityKey`) | viewer, document; read tool; one run, or a suite's recent runs |
 
 Only `knowledge_generate_test_suite` and `knowledge_set_test_fixtures` are in
 `WRITE_TOOLS`, and there is no try-it tool: an agent runs a plan with its own

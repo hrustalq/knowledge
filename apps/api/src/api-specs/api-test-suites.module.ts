@@ -3,6 +3,7 @@ import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AgentQueueModule } from '../agents/agent-queue.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { ApiRunnerCoreModule } from './api-runner-core.module.js';
 import { ApiSpecsCoreModule } from './api-specs-core.module.js';
 import { ApiTestSuiteRequestsService } from './api-test-suite-requests.service.js';
 
@@ -13,7 +14,7 @@ import { ApiTestSuiteRequestsService } from './api-test-suite-requests.service.j
  * the worker executes.
  */
 @Module({
-  imports: [PrismaModule, ApiSpecsCoreModule, AiCoreModule, AgentCoreModule, AgentQueueModule],
+  imports: [PrismaModule, ApiSpecsCoreModule, ApiRunnerCoreModule, AiCoreModule, AgentCoreModule, AgentQueueModule],
   providers: [ApiTestSuiteRequestsService],
   exports: [ApiTestSuiteRequestsService],
 })

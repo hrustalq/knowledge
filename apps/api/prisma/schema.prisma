@@ -121,6 +121,7 @@ model Document {
   apiTestSuites        ApiTestSuite[]
   apiTestBindings      ApiTestBinding[]      @relation("bindingSpec")
   apiTestBoundBy       ApiTestBinding[]      @relation("bindingFixture")
+  apiTestRuns          ApiTestRun[]
   collabDrafts         CollabDraft[]
 
   @@index([workspaceId, createdAt])
@@ -3663,6 +3664,67 @@ model ApiTestBinding {
   @@map("api_test_bindings")
 }
 
+/// Where a QA server run sends and with what (#483, phase 5). Secrets are one
+/// `ai/secret-box.ts` envelope of a JSON object, write-only over the API; their
+/// names are kept beside it so a reader can see what is set.
+model ApiTestEnvironment {
+  id            String   @id @default(uuid()) @db.Uuid
+  /// No FK, house policy.
+  workspaceId   String   @map("workspace_id") @db.Uuid
+  name          String
+  /// Used for a step whose spec declares it in `servers`.
+  server        String?
+  /// Non-secret run values by plan name.
+  inputs        Json     @default("{}")
+  /// `gcm$…` envelope of `{ name: value }`; null for none.
+  secretsCipher String?  @map("secrets_cipher")
+  secretNames   String[] @default([]) @map("secret_names")
+  /// No FK, house policy.
+  createdBy     String   @map("created_by") @db.Uuid
+  updatedBy     String   @map("updated_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  runs ApiTestRun[]
+
+  @@unique([workspaceId, name])
+  @@map("api_test_environments")
+}
+
+/// One QA suite run on the server (#483, phase 5). The API inserts it queued
+/// with the plan it will walk (placeholders only, never a value); the worker
+/// runs it and writes the results. The last API_TEST_RUNS_KEPT per suite stay.
+model ApiTestRun {
+  id            String    @id @default(uuid()) @db.Uuid
+  /// From the spec document, never the caller. No FK, house policy.
+  workspaceId   String    @map("workspace_id") @db.Uuid
+  /// The spec document.
+  documentId    String    @map("document_id") @db.Uuid
+  entityKey     String    @map("entity_key")
+  environmentId String?   @map("environment_id") @db.Uuid
+  /// queued | running | passed | failed | error
+  status        String    @default("queued")
+  /// `TestRunPlan`
+  plan          Json
+  /// `Record<key, TestRunResult>`, secret-named captures left out.
+  results       Json      @default("{}")
+  passed        Int       @default(0)
+  failed        Int       @default(0)
+  notRun        Int       @default(0) @map("not_run")
+  error         String?
+  /// No FK, house policy.
+  createdBy     String    @map("created_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  startedAt     DateTime? @map("started_at") @db.Timestamptz
+  finishedAt    DateTime? @map("finished_at") @db.Timestamptz
+
+  document    Document            @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  environment ApiTestEnvironment? @relation(fields: [environmentId], references: [id], onDelete: SetNull)
+
+  @@index([documentId, entityKey, createdAt(sort: Desc)])
+  @@map("api_test_runs")
+}
+
 /// Workspace settings outside AI and publishing (#78), one sparse row per
 /// workspace: `null` inherits the deployment default or ceiling, so an empty
 /// table reproduces the env exactly. Other milestones add their columns here
@@ -3673,6 +3735,8 @@ model WorkspaceSettings {
   apiTryProxyMode         String?  @map("api_try_proxy_mode")
   /// off | warn | block — the merge gate for breaking spec changes; null is `warn`.
   apiBreakingChangePolicy String?  @map("api_breaking_change_policy")
+  /// off | on — the QA server runner (#483); on only when API_TEST_RUNNER_MODE is on too. Null is off.
+  apiTestRunner           String?  @map("api_test_runner")
   /// off | warn | block — the style lint of merge requests (#74); null is STYLE_LINT_POLICY.
   lintPolicy              String?  @map("lint_policy")
   /// #75 enterprise auth. Enforced SSO: a session must come from one of this

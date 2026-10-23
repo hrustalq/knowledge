@@ -674,6 +674,22 @@
       "literal-credential": "{name} carries a literal value; put credentials in a {{{{secret.x}}}} placeholder"
     }
   },
+  "apiTestEnvironment": {
+    "notFound": "No test environment {id} in this workspace.",
+    "unreadable": "The secrets of test environment “{name}” no longer decrypt: the settings encryption key changed. Set them again.",
+    "keyMissing": "Secrets cannot be saved: SETTINGS_ENCRYPTION_KEY is not set on this deployment.",
+    "name": "A test environment needs a name of 1–80 characters.",
+    "server": "{url} is not an http(s) URL without credentials.",
+    "tooMany": "A test environment holds at most {max} inputs or secrets.",
+    "valueName": "“{name}” is not a value name a plan uses, like input.currency, secret.password or TOKEN.",
+    "value": "The value of {name} must be text of at most 4000 characters.",
+    "duplicate": "A test environment named “{name}” already exists."
+  },
+  "apiTestRun": {
+    "off": "Server runs are off for this workspace. An admin turns them on in Settings → API, where the deployment allows it.",
+    "notFound": "No run {id} for this spec.",
+    "environmentGone": "The run's test environment was deleted before it started."
+  },
   "apiTry": {
     "disabled": "The try-it proxy is off for this workspace. Send the request from your browser instead.",
     "operationNotInSpec": "This revision of the spec has no {method} operation {entityKey}.",

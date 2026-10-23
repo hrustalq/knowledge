@@ -354,6 +354,8 @@ export interface QaOperationRow {
   reviewFixtures: number;
   /** Fixtures the reader may open whose head calls this operation. */
   fixtures: number;
+  /** The newest server run (phase 5); null when there is none. */
+  lastRun: Pick<ApiTestRunSummary, 'id' | 'status' | 'counts' | 'finishedAt'> | null;
 }
 
 /** GET /v1/qa/overview — every HTTP operation of the OpenAPI specs in scope, worst first. */
@@ -361,6 +363,8 @@ export interface QaOverviewResponse {
   operations: QaOperationRow[];
   /** OpenAPI specs read; 0 means there is nothing to test yet. */
   specs: number;
+  /** Whether server runs apply in this workspace: the last-run column shows only then. */
+  runner: boolean;
 }
 
 /**
@@ -389,6 +393,8 @@ export interface ApiSettingsResponse {
   breakingChanges: { requested: ApiBreakingChangePolicy | null; effective: ApiBreakingChangePolicy };
   /** The proxy's deployment caps, for the console to state. */
   tryLimits: { timeoutMs: number; maxRequestBytes: number; maxResponseBytes: number; perMinute: number };
+  /** The server runner (#483, phase 5): the workspace's switch beside the deployment's. */
+  testRunner: ApiTestRunnerSettings;
   updatedAt: string | null;
 }
 
@@ -397,7 +403,85 @@ export interface UpdateApiSettingsRequest {
   apiTryProxyMode?: ApiTryProxyMode | null;
   /** null goes back to the default, `warn`. */
   apiBreakingChangePolicy?: ApiBreakingChangePolicy | null;
+  /** null goes back to off. */
+  apiTestRunner?: ApiTestRunnerMode | null;
 }
+
+// ---------------------------------------------------------------------------
+// The server runner (#483, phase 5)
+// ---------------------------------------------------------------------------
+
+export const API_TEST_RUNNER_MODES = ['off', 'on'] as const;
+export type ApiTestRunnerMode = (typeof API_TEST_RUNNER_MODES)[number];
+
+/**
+ * Off unless both say on: API_TEST_RUNNER_MODE is a ceiling, and a workspace
+ * opts in — a deployment turning it on runs nothing until a workspace asks.
+ */
+export interface ApiTestRunnerSettings {
+  requested: ApiTestRunnerMode | null;
+  ceiling: ApiTestRunnerMode;
+  effective: ApiTestRunnerMode;
+}
+
+export function resolveApiTestRunner(requested: string | null | undefined, ceiling: ApiTestRunnerMode): ApiTestRunnerSettings {
+  const asked = requested === 'on' || requested === 'off' ? requested : null;
+  return { requested: asked, ceiling, effective: ceiling === 'on' && asked === 'on' ? 'on' : 'off' };
+}
+
+/**
+ * Where a server run sends and with what. Secrets are write-only: the API
+ * returns their names, never a value.
+ */
+export interface ApiTestEnvironment {
+  id: string;
+  name: string;
+  /** Used for a step whose spec declares it in `servers`; the spec's first server otherwise. */
+  server: string | null;
+  /** Non-secret run values, by plan name (`input.currency`). */
+  inputs: Record<string, string>;
+  /** The names of the stored secrets (`secret.qaPassword`, `TOKEN`). */
+  secrets: string[];
+  updatedAt: string;
+}
+
+export interface ListApiTestEnvironmentsResponse {
+  environments: ApiTestEnvironment[];
+}
+
+/** POST creates (name required); PATCH merges. A secret set to null is removed. */
+export interface SaveApiTestEnvironmentRequest {
+  name?: string;
+  server?: string | null;
+  inputs?: Record<string, string>;
+  secrets?: Record<string, string | null>;
+}
+
+export const API_TEST_RUN_STATUSES = ['queued', 'running', 'passed', 'failed', 'error'] as const;
+export type ApiTestRunStatus = (typeof API_TEST_RUN_STATUSES)[number];
+
+/** Runs kept per suite; the worker deletes older ones when it finishes a run. */
+export const API_TEST_RUNS_KEPT = 20;
+
+export interface ApiTestRunSummary {
+  id: string;
+  documentId: string;
+  entityKey: string;
+  /** Null once the environment is deleted. */
+  environment: { id: string; name: string } | null;
+  status: ApiTestRunStatus;
+  counts: { passed: number; failed: number; notRun: number };
+  /** Why the run itself could not run (`error`), as opposed to a case that failed. */
+  error: string | null;
+  createdBy: string;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface ListApiTestRunsResponse {
+  runs: ApiTestRunSummary[];
+}
+
 
 /** The largest request body the proxy forwards. */
 export const API_TRY_MAX_REQUEST_BYTES = 256 * 1024;

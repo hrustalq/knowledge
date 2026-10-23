@@ -82,6 +82,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_generate_test_suite',
   // Replaces a suite's fixture bindings, which changes its cache key (#483).
   'knowledge_set_test_fixtures',
+  // Queues a QA server run that sends requests to a real server (#483).
+  'knowledge_run_test_suite',
   // Resolves or dismisses a contradiction between pages (#81).
   'knowledge_resolve_conflict',
 ]);

@@ -1,3 +1,4 @@
+import { embedLoneUrls } from '@knowledge/editor-schema/markdown';
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import matter from 'gray-matter';
@@ -182,7 +183,8 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
     return {
       ref,
       title: (typeof parsed.data.title === 'string' && parsed.data.title) || titleFor(ref.externalId, bytes),
-      markdown: parsed.content.trim(),
+      // A Figma link alone on a line is how a plain markdown file embeds a frame (#470).
+      markdown: embedLoneUrls(parsed.content.trim()),
       frontmatter: { ...parsed.data, source: blobUrl(ctx, ref.externalId, await resolveBranch(ctx)) },
       warnings,
     };

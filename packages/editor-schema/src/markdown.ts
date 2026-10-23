@@ -7,7 +7,7 @@
 import { Marked, type Token, type Tokens, type TokensList } from 'marked';
 import { slugifyPath } from '@knowledge/contracts/publishing';
 import { pageTitleHref, type PageRefResolver } from '@knowledge/contracts';
-import { asEmbedLayout, canonicalizeEmbedUrl, type EmbedItem, type EmbedLayout } from '@knowledge/contracts/embeds';
+import { asEmbedLayout, canonicalEmbedUrl, canonicalizeEmbedUrl, parseEmbedUrl, type EmbedItem, type EmbedLayout } from '@knowledge/contracts/embeds';
 import {
   KN,
   diagramLayoutAttrs,
@@ -311,6 +311,42 @@ export function rewriteEmbedGroups(md: string, rewrite: (group: EmbedGroup, inde
     out += token.raw;
   }
   return open !== null ? `${out}${rewrite(parseFigure(open), index)}\n` : out;
+}
+
+/**
+ * A group as stored markdown (#470): one HTML block, no blank line inside —
+ * the spelling the editor's serializer writes, for every writer without a DOM
+ * (connectors, importers, the API).
+ */
+export function embedGroupMarkup(group: EmbedGroup): string {
+  const items = group.items.map((item) => {
+    const version = item.version ? ` ${KN.version}="${escapeHtml(item.version)}"` : '';
+    return `<a href="${escapeHtml(item.url)}"${version}>${escapeHtml(item.caption || item.url)}</a>`;
+  });
+  const caption = group.caption ? [`<figcaption>${escapeHtml(group.caption)}</figcaption>`] : [];
+  return [`<figure ${KN.embed}="${group.layout}">`, ...items, ...caption, '</figure>'].join('\n');
+}
+
+/**
+ * A Figma link alone in a paragraph becomes a one-item group (#470) — how a
+ * plain markdown file (a git repository) spells an embed. A link inside a
+ * sentence stays a link, as in the editor.
+ */
+export function embedLoneUrls(md: string): string {
+  let changed = false;
+  const out = marked
+    .lexer(md ?? '')
+    .map((token) => {
+      if (token.type !== 'paragraph') return token.raw;
+      const text = token.text.trim().replace(/^<(.+)>$/, '$1');
+      const ref = /^\S+$/.test(text) ? parseEmbedUrl(text) : null;
+      if (!ref) return token.raw;
+      changed = true;
+      const tail = token.raw.match(/\n*$/)?.[0] ?? '';
+      return `${embedGroupMarkup({ layout: 'strip', caption: '', items: [{ url: canonicalEmbedUrl(ref), version: null, caption: '' }] })}${tail || '\n'}`;
+    })
+    .join('');
+  return changed ? out : md;
 }
 
 function parseFigure(html: string): EmbedGroup {

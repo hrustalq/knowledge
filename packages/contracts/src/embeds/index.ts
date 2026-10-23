@@ -41,7 +41,7 @@ export interface EmbedRef {
   board: boolean;
 }
 
-const FIGMA_HOSTS = new Set(['figma.com', 'www.figma.com']);
+const FIGMA_HOSTS = new Set(['figma.com', 'www.figma.com', 'embed.figma.com']);
 const FIGMA_KINDS = new Set(['design', 'file', 'proto', 'board']);
 const FIGMA_KEY_RE = /^[A-Za-z0-9]{10,64}$/;
 const FIGMA_NODE_RE = /^[A-Za-z0-9:;-]{1,200}$/;
@@ -50,7 +50,8 @@ const FIGMA_NODE_RE = /^[A-Za-z0-9:;-]{1,200}$/;
  * The one matcher every surface calls — the paste rule, the parse rule, the
  * importers, the connectors and the API's warnings — so they cannot disagree
  * about what is embeddable. Design, prototype, Dev Mode, legacy `/file/` and
- * FigJam board links; a branch link's branch key is the file key, because that
+ * FigJam board links, and Figma's own embed URLs (`/embed?url=…`,
+ * `embed.figma.com/…`); a branch link's branch key is the file key, because that
  * is the key Figma's API takes.
  */
 export function parseEmbedUrl(raw: string): EmbedRef | null {
@@ -61,6 +62,12 @@ export function parseEmbedUrl(raw: string): EmbedRef | null {
     return null;
   }
   if (url.protocol !== 'https:' || !FIGMA_HOSTS.has(url.hostname)) return null;
+  // Figma's own embed, as an iframe or another tool writes it: the old form
+  // carries the file link in `url`; `embed.figma.com` mirrors the file path.
+  if (url.pathname === '/embed') {
+    const inner = url.searchParams.get('url');
+    return inner && !/figma\.com\/embed\b/.test(inner) ? parseEmbedUrl(inner) : null;
+  }
   const [kind, key, ...rest] = url.pathname.split('/').filter(Boolean);
   if (!kind || !FIGMA_KINDS.has(kind)) return null;
   const fileKey = rest[0] === 'branch' && rest[1] ? rest[1] : key;

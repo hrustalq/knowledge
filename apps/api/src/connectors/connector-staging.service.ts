@@ -1,3 +1,4 @@
+import { FigmaFilesService } from '../embeds/figma-files.service.js';
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, type Connector, type ConnectorLink, type ConnectorRun, type ConnectorRunItem } from '@prisma/client';
 import {
@@ -55,6 +56,7 @@ export class ConnectorStagingService {
     private readonly documents: DocumentsService,
     private readonly storage: StorageService,
     private readonly acl: ConnectorAclService,
+    private readonly figma: FigmaFilesService,
   ) {}
 
   // --- stage ---
@@ -97,6 +99,8 @@ export class ConnectorStagingService {
     }
 
     const doc = await adapter.fetch(ctx, ref);
+    // A Figma frame the source embeds is pinned to its file's current version on pull (#470).
+    doc.markdown = await this.figma.pinMarkdown(row.workspaceId, doc.markdown);
     const markdown = composeMarkdown(doc);
     const hash = sha256(markdown);
 

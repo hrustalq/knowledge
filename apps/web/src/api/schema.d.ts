@@ -8094,7 +8094,7 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom";
+            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma";
             /** @example Product wiki */
             name: string;
             /**

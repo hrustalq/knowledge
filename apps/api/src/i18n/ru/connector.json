@@ -1,4 +1,5 @@
 {
+  "figmaReach": "проектов: {projects}, файлов для встраивания: {files}",
   "stage": {
     "connecting": "Подключение",
     "listing": "Получение списка",

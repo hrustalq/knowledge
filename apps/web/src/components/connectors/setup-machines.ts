@@ -25,7 +25,7 @@
  * localStorage, which is per-viewer and needs no schema.
  */
 import { assign, createActor, fromPromise, sendParent, sendTo, setup, type Snapshot } from 'xstate'
-import { connectorKindInfo } from '@knowledge/contracts'
+import { connectorKindInfo, FIGMA_ALLOWLIST_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY } from '@knowledge/contracts'
 import type {
   ConnectorConflictPolicy,
   ConnectorDirection,
@@ -246,6 +246,14 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
     { name: 'app', meta: { labelKey: 'connectors.step.integration', fields: ['region'], credential: true } },
     { name: 'tag', meta: { labelKey: 'connectors.step.harvestTag', fields: ['harvestLabel'] } },
   ],
+  // An embed source (#470): the token and what it may reach are one question,
+  // since the connection test needs both.
+  figma: [
+    {
+      name: 'access',
+      meta: { labelKey: 'connectors.step.figmaAccess', fields: [FIGMA_ALLOWLIST_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY], credential: true },
+    },
+  ],
 }
 
 export const confluenceSetup = kindMachine('confluenceSetup', KIND_STEPS.confluence)
@@ -258,6 +266,7 @@ export const googleDriveSetup = kindMachine('googleDriveSetup', KIND_STEPS['goog
 export const linearSetup = kindMachine('linearSetup', KIND_STEPS.linear)
 export const zendeskSetup = kindMachine('zendeskSetup', KIND_STEPS.zendesk)
 export const intercomSetup = kindMachine('intercomSetup', KIND_STEPS.intercom)
+export const figmaSetup = kindMachine('figmaSetup', KIND_STEPS.figma)
 
 export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   confluence: confluenceSetup,
@@ -270,6 +279,7 @@ export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   linear: linearSetup,
   zendesk: zendeskSetup,
   intercom: intercomSetup,
+  figma: figmaSetup,
 }
 
 /** The per-kind steps, for the stepper — read without running the machine. */

@@ -17,6 +17,13 @@ in the pull request that introduces them — see
 
 ### Added
 
+- A **Figma** connector (#470, phase 2). An admin adds it under **Settings → Connectors** with a
+  Figma personal access token and an allowlist of Figma team and project links (or `team:<id>`,
+  `project:<id>`); only files in those teams and projects will be embeddable. It syncs no pages.
+  **Test** names the token's owner and how many projects and files the allowlist reaches. Figma
+  does not report a token's expiry, so the admin can type it in, and the connector card warns from
+  14 days before that date and once it has passed. Figma's `429` answers are retried after
+  `Retry-After`, up to three attempts.
 - Pages can hold an embed group (#470, phase 1): one block of Figma frames, written in markdown as
   `<figure data-kn-embed="strip|grid">` with one link per frame (its canonical Figma URL and a pinned
   `data-kn-version`) and an optional `<figcaption>`. The reader and the editor show the group as

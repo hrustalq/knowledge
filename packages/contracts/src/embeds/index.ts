@@ -76,3 +76,50 @@ export function canonicalizeEmbedUrl(raw: string): string {
   const ref = parseEmbedUrl(raw);
   return ref ? canonicalEmbedUrl(ref) : raw.trim();
 }
+
+// --------------------------------------------------------- figma connector
+
+/** The `figma` connector's config keys. */
+export const FIGMA_ALLOWLIST_CONFIG_KEY = 'allowlist';
+export const FIGMA_TOKEN_EXPIRES_CONFIG_KEY = 'tokenExpiresAt';
+
+/** Days before the typed-in expiry that the connector card starts warning. */
+export const FIGMA_TOKEN_WARN_DAYS = 14;
+
+export interface FigmaAllowlist {
+  teams: string[];
+  projects: string[];
+  /** Entries that are neither, echoed back so the form can say which. */
+  invalid: string[];
+}
+
+/**
+ * The allowlist field: team and project links or `team:<id>` / `project:<id>`,
+ * separated by whitespace or commas. Figma's links are
+ * `/files/team/<id>/…`, `/files/project/<id>/…`, and either one under an
+ * organization (`/files/<org>/team/<id>/…`), so the id is the number after
+ * the word.
+ */
+export function parseFigmaAllowlist(text: string | null | undefined): FigmaAllowlist {
+  const out: FigmaAllowlist = { teams: [], projects: [], invalid: [] };
+  for (const entry of (text ?? '').split(/[\s,]+/).filter(Boolean)) {
+    const match = /^(team|project):(\d+)$/.exec(entry) ?? /^https:\/\/(?:www\.)?figma\.com\/files\/(?:[^/?#]+\/)*?(team|project)\/(\d+)(?:[/?#]|$)/.exec(entry);
+    if (!match) out.invalid.push(entry);
+    else (match[1] === 'team' ? out.teams : out.projects).push(match[2]);
+  }
+  out.teams = [...new Set(out.teams)];
+  out.projects = [...new Set(out.projects)];
+  return out;
+}
+
+/** The typed-in token expiry against today: null when no valid date was entered. */
+export function figmaTokenExpiry(value: string | null | undefined, now: Date = new Date()): 'ok' | 'soon' | 'expired' | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec((value ?? '').trim());
+  if (!match) return null;
+  // The token works through the whole day it expires on, in UTC.
+  const end = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 1);
+  if (Number.isNaN(end)) return null;
+  const left = end - now.getTime();
+  if (left <= 0) return 'expired';
+  return left <= FIGMA_TOKEN_WARN_DAYS * 86_400_000 ? 'soon' : 'ok';
+}

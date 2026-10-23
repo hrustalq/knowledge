@@ -383,7 +383,7 @@ function startOver() {
               >
                 {{ k.label }}
                 <span class="text-muted-foreground mt-0.5 block text-xs font-normal">
-                  {{ k.capabilities.harvest ? t('connectors.directionHarvest') : k.capabilities.push ? t('connectors.directionBoth') : t('connectors.directionPull') }}
+                  {{ k.capabilities.harvest ? t('connectors.directionHarvest') : k.capabilities.embeds ? t('connectors.directionEmbeds') : k.capabilities.push ? t('connectors.directionBoth') : t('connectors.directionPull') }}
                 </span>
               </button>
             </div>
@@ -589,6 +589,8 @@ function startOver() {
               <code v-if="kind === 'zendesk'" class="bg-muted block rounded px-2 py-1.5 text-xs break-all">{{ ZENDESK_TRIGGER_BODY }}</code>
             </label>
           </template>
+          <!-- An embed source (#470) moves no content either: no sync questions. -->
+          <p v-else-if="info?.capabilities.embeds" class="text-muted-foreground text-sm">{{ t('connectors.embedsHint') }}</p>
           <template v-else>
           <label class="block space-y-1.5">
             <span class="text-sm font-medium">{{ t('connectors.direction') }}</span>

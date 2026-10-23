@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { CircleCheck, CircleDashed, CircleX, Plug, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-vue-next'
-import { connectorKindInfo } from '@knowledge/contracts'
+import { connectorKindInfo, figmaTokenExpiry, FIGMA_TOKEN_EXPIRES_CONFIG_KEY } from '@knowledge/contracts'
 import type { ConnectorSummary, ListConnectorsResponse } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
@@ -16,6 +16,7 @@ import AiEmptyState from '@/components/ai/AiEmptyState.vue'
 import { PageState } from '@/components/layout/page'
 import { getWorkspaceId } from '@/lib/api'
 import { relativeTime } from '@/lib/api'
+import { formatDate } from '@/lib/format'
 import ConnectorSetupDialog from './ConnectorSetupDialog.vue'
 
 defineProps<{ canManage: boolean }>()
@@ -86,6 +87,10 @@ function statusIcon(connector: ConnectorSummary) {
   if (status === 'failed' || status === 'partial') return { icon: CircleX, class: 'text-destructive' }
   return { icon: CircleDashed, class: 'text-muted-foreground' }
 }
+
+function tokenExpiry(connector: ConnectorSummary) {
+  return connector.kind === 'figma' ? figmaTokenExpiry(connector.config[FIGMA_TOKEN_EXPIRES_CONFIG_KEY]) : null
+}
 </script>
 
 <template>
@@ -147,11 +152,25 @@ function statusIcon(connector: ConnectorSummary) {
               </RouterLink>
               <Badge variant="outline">{{ connectorKindInfo(connector.kind)?.label ?? connector.kind }}</Badge>
               <Badge v-if="!connector.enabled" variant="outline">{{ t('connectors.disabled') }}</Badge>
+              <!-- The admin typed this date in (#470): Figma does not report a token's expiry. -->
+              <Badge
+                v-if="tokenExpiry(connector) === 'soon' || tokenExpiry(connector) === 'expired'"
+                :variant="tokenExpiry(connector) === 'expired' ? 'destructive' : 'outline'"
+              >
+                {{
+                  t(tokenExpiry(connector) === 'expired' ? 'connectors.tokenExpired' : 'connectors.tokenExpiresSoon', {
+                    date: formatDate(`${connector.config[FIGMA_TOKEN_EXPIRES_CONFIG_KEY]}T12:00:00Z`),
+                  })
+                }}
+              </Badge>
             </div>
             <p class="text-muted-foreground mt-1 text-xs">
+              <template v-if="connector.capabilities.embeds">{{ t('connectors.directionEmbeds') }}</template>
+              <template v-else>
               {{ t(`connectors.direction${connector.direction === 'both' ? 'Both' : connector.direction === 'push' ? 'Push' : 'Pull'}`) }}
               ·
               {{ t('connectors.linkCount', { count: connector.linkCount }, connector.linkCount) }}
+              </template>
               <template v-if="connector.lastSyncedAt"> · {{ relativeTime(connector.lastSyncedAt) }}</template>
               <template v-if="connector.syncIntervalMinutes">
                 · {{ t('connectors.everyMinutes', { count: connector.syncIntervalMinutes }, connector.syncIntervalMinutes) }}

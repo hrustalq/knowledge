@@ -8340,7 +8340,7 @@ export interface components {
              * @description Override this built-in for the workspace (`admin`): with `source` to customise it, with `enabled: false` to hide it
              * @enum {string}
              */
-            builtInKey?: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component";
+            builtInKey?: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report";
             /** @description Required for a custom template; a built-in override inherits the built-in name */
             name?: string;
             description?: string | null;

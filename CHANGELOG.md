@@ -17,6 +17,13 @@ in the pull request that introduces them — see
 
 ### Added
 
+- QA page templates (#482). The template gallery, in English and Russian, and agents through
+  `knowledge_list_templates` / `knowledge_get_template`, now offer **Test plan**, **Test case**,
+  **Test data** and **Bug report**. Each asks for the operation under test (`op:` key) and links the
+  new page to it, so the operation's linked pages and impact analysis show its test plan and bug
+  reports. A bug report also records the suite case that found it (`<entityKey>#<caseId>`). None of
+  them has a credential field, and their AI instructions keep secrets out of the page. Workspaces
+  can customise, hide or reset them like any other built-in.
 - Diagrams open full-screen (#476). Clicking, tapping or pressing Enter on a rendered mermaid
   diagram of any type, or on a whiteboard drawing, opens it scaled to the screen. This works in a
   page, a comment, a merge request, an assistant answer, a share link and a published site. The

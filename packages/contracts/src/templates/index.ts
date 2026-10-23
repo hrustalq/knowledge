@@ -35,6 +35,10 @@ export const BUILT_IN_TEMPLATE_KEYS = [
   'use-case',
   'entity',
   'component',
+  'test-plan',
+  'test-case',
+  'test-data',
+  'bug-report',
 ] as const;
 export type BuiltInTemplateKey = (typeof BUILT_IN_TEMPLATE_KEYS)[number];
 

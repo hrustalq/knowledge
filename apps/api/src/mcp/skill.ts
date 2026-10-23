@@ -174,9 +174,10 @@ Pass \`projectId\` (and a \`note\` for a page with no subpages) and nothing is a
 
 ### Start a page from a template
 
-Decisions, proposals, runbooks and incident reviews have a house shape. ${toolRef('knowledge_list_templates')} lists them
+Decisions, proposals, runbooks, incident reviews, test plans and bug reports have a house shape. ${toolRef('knowledge_list_templates')} lists them
 (\`builtin:adr\`, \`builtin:rfc\`, \`builtin:runbook\`, \`builtin:postmortem\`, \`builtin:api-spec\`, \`builtin:use-case\`,
-\`builtin:entity\`, \`builtin:component\`, plus the workspace's own); ${toolRef('knowledge_get_template')} shows a template's sections and the
+\`builtin:entity\`, \`builtin:component\`, \`builtin:test-plan\`, \`builtin:test-case\`, \`builtin:test-data\`,
+\`builtin:bug-report\`, plus the workspace's own); ${toolRef('knowledge_get_template')} shows a template's sections and the
 placeholders it expects. Pass \`templateRef\` and \`values\` to ${toolRef('knowledge_create_document')}: without \`content\`
 the server fills the skeleton in, with \`content\` (the skeleton, written out) yours is published and the template is
 recorded as the page's origin. Either way the template's tags and relations link the page into the graph.

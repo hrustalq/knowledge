@@ -1106,6 +1106,7 @@
       "followUp": "Ask for a change…",
       "describePlaceholder": "Describe what this workflow should produce…",
       "composerHint": "Enter sends · Shift+Enter for a new line",
+      "newConversation": "New conversation",
       "pickShape": "Start from a shape",
       "pickShapeBody": "These are the arrangements this feature was built around. Pick the closest and change it on the canvas.",
       "aiUnavailable": "No AI provider is configured for this workspace, so the architect cannot run.",

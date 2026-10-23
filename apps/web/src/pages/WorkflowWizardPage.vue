@@ -18,7 +18,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { createActor, type Actor } from 'xstate'
 import { toast } from 'vue-sonner'
 import { ArrowLeft, ArrowRight, Check, MessagesSquare, PenTool, Sparkles, TriangleAlert } from 'lucide-vue-next'
@@ -84,6 +84,12 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => actor.value?.stop())
+
+// The snapshot is for a reload or a closed tab, which never reach a router
+// guard. Walking away inside the app is leaving, so the next visit starts fresh.
+// Stopping the actor afterwards does not write it back: xstate notifies
+// subscribers only of active snapshots.
+onBeforeRouteLeave(() => clearSnapshot())
 
 const send = (event: Parameters<NonNullable<typeof actor.value>['send']>[0]) => actor.value?.send(event)
 
@@ -268,12 +274,14 @@ function leave() {
         <div class="flex min-h-0 flex-col overflow-hidden lg:border-r">
           <WorkflowArchitectChat
             v-if="context.lane === 'describe'"
+            class="min-h-0 flex-1"
             :turns="context.turns"
             :graph="context.graph"
             :disabled="context.aiDisabled || !canManage"
             @say="(turn) => send({ type: 'SAY', turn })"
             @propose="(p) => send({ type: 'PROPOSE', ...p })"
             @unavailable="send({ type: 'AI_UNAVAILABLE' })"
+            @clear="send({ type: 'CLEAR_TURNS' })"
           />
 
           <div v-else class="min-h-0 flex-1 overflow-y-auto p-4">

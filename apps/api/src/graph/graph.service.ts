@@ -1052,6 +1052,34 @@ export class GraphService {
   }
 
   /**
+   * The entity keys each of `documentIds` names (#475), for a search result's
+   * `layer`. The workspace graph's view — live, or as of `at` — and its ACL,
+   * but only these pages: one small query per edge type, not the whole graph.
+   */
+  async entityKeysOf(workspaceId: string, documentIds: string[], acl: DocumentAclFilter, at?: TemporalPoint): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    if (documentIds.length === 0) return out;
+    const pushed = aclClause(acl);
+    const asOf = at ? asOfEdgeClause(at, SCOPED_SQL) : null;
+    const rows = await Promise.all(
+      RELATION_EDGE_TYPES.map((type) =>
+        this.arcade
+          .query<{ documentId: string; targetKey: string }>(
+            'sql',
+            `SELECT documentId, targetKey FROM ${type} WHERE workspaceId = :workspaceId AND documentId IN :documentIds${pushed?.sql ?? ''} AND ${asOf?.sql ?? LIVE} LIMIT 20000`,
+            { workspaceId, documentIds, ...pushed?.params, ...asOf?.params },
+          )
+          .catch(() => []),
+      ),
+    );
+    for (const r of rows.flat()) {
+      if (!aclAdmits(acl, r.documentId)) continue;
+      out.set(r.documentId, [...(out.get(r.documentId) ?? []), r.targetKey]);
+    }
+    return out;
+  }
+
+  /**
    * Relation edges of a document, with provenance (workspace-scoped).
    *
    * `liveOnly` (#83) restricts to the live projection — what the page asserts

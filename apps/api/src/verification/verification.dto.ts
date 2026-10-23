@@ -239,6 +239,25 @@ export class UpdateKnowledgeHealthSettingsDto {
   @Max(1, { message: vmsg('max') })
   minCosineShare?: number | null;
 
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Community prior (#475): a matched page scores up to ×(1 + this); null = 0, off' })
+  @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.communityPriorWeight !== undefined && o.communityPriorWeight !== null)
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  @Max(2, { message: vmsg('max') })
+  communityPriorWeight?: number | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: "Community prior (#475): the cosine a community's summary must reach; null = 0.5" })
+  @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.communityPriorFloor !== undefined && o.communityPriorFloor !== null)
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  @Max(1, { message: vmsg('max') })
+  communityPriorFloor?: number | null;
+
+  @ApiPropertyOptional({ type: Boolean, nullable: true, description: 'Hybrid expansion walks by entity layer (#475); null = off' })
+  @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.layeredExpansion !== undefined && o.layeredExpansion !== null)
+  @IsBoolean()
+  layeredExpansion?: boolean | null;
+
   @ApiPropertyOptional({
     type: TrustWeightsDto,
     nullable: true,

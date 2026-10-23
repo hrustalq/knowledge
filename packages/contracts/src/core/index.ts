@@ -740,6 +740,14 @@ export const SEARCH_RRF_K = 60;
  */
 export const SEARCH_MIN_COSINE_SHARE = 0.9;
 
+/**
+ * #475: how much the community prior multiplies a matched page's score by, at
+ * most (`1 + weight`). 0 is off, so an empty settings row ranks as before.
+ */
+export const SEARCH_COMMUNITY_PRIOR_WEIGHT = 0;
+/** #475: the cosine a community's summary must reach against the query to boost anything. Tuned for bge-m3. */
+export const SEARCH_COMMUNITY_PRIOR_FLOOR = 0.5;
+
 export function trustWeight(state: SourceVerificationState, inactive: boolean, weights: TrustWeights = TRUST_WEIGHTS): number {
   return weights[state] * (inactive ? weights.inactive : 1);
 }
@@ -878,6 +886,12 @@ export interface KnowledgeHealthSettingsValues {
   minCosine: number;
   /** #401: the vector leg keeps hits at or above this share of its best cosine; 0 = none. */
   minCosineShare: number;
+  /** #475: the community prior's weight; 0 = off. */
+  communityPriorWeight: number;
+  /** #475: the cosine a community must reach to boost its pages. */
+  communityPriorFloor: number;
+  /** #475: hybrid expansion walks by entity layer instead of every shared key. */
+  layeredExpansion: boolean;
   trustWeights: TrustWeights;
 }
 /** Sparse: `null` inherits. `trustWeights` is sparse per state too — it names only what differs. */

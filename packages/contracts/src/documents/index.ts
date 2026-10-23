@@ -165,6 +165,17 @@ export interface SearchResult {
   /** Entities related to the result's document (present when expandGraph is used). */
   entities?: EntityRef[];
   /**
+   * Where the page sits (#475): the abstraction layer most of its entities
+   * are on (`pageLayerOf`). Absent for a page that names no entity.
+   */
+  layer?: EntityLayer;
+  /**
+   * Titles of the communities containing the page that the reader may see
+   * whole, coarsest first (#475). Absent when there are none, and under
+   * `asOf` — communities describe only the current graph.
+   */
+  communityPath?: string[];
+  /**
    * When the matched text was the page's content (#81), ISO; present on an
    * `asOf` search. A `validTo` means the page has since changed: the text is
    * superseded.

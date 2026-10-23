@@ -4712,6 +4712,19 @@
           "label": "Similarity band",
           "hint": "A semantic match counts only within this share of the best one, so pages found at middling ranks by both legs cannot outrank the best match of either. 0 turns it off"
         },
+        "communityPriorWeight": {
+          "label": "Community boost",
+          "hint": "How much a page gains when its community's summary matches the question: a page in the closest matching group scores up to this much higher (0.5 means ×1.5). Needs communities built by the Atlas agent. 0 turns it off"
+        },
+        "communityPriorFloor": {
+          "label": "Community match threshold",
+          "hint": "How closely a community's summary must match the question before it boosts anything. Higher boosts only clear matches. The right value depends on the embedding model: about 0.5 for bge-m3",
+          "inert": "The community boost is off, so this threshold changes nothing until a boost is set."
+        },
+        "layeredExpansion": {
+          "label": "Expand related pages by layer",
+          "hint": "When search also returns related pages, follow only links at the hit's own level of detail and one step up or down. A page about one API operation then reaches its component and its code, not every page of the whole service"
+        },
         "trustWeights": {
           "label": "Trust weights",
           "hint": "What each page state multiplies a result's score by. An empty field keeps the default; Inactive applies on top of the state",

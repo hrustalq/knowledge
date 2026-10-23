@@ -2723,22 +2723,28 @@ model NotificationPreference {
  * exactly the env behaviour. workspace_id carries no FK, like ai_settings.
  */
 model KnowledgeHealthSettings {
-  workspaceId        String   @id @map("workspace_id") @db.Uuid
-  reviewIntervalDays Int?     @map("review_interval_days")
-  remindBeforeDays   Int?     @map("remind_before_days")
-  inactiveAfterDays  Int?     @map("inactive_after_days")
-  emptyMaxChars      Int?     @map("empty_max_chars")
-  trustRanking       Boolean? @map("trust_ranking")
+  workspaceId          String   @id @map("workspace_id") @db.Uuid
+  reviewIntervalDays   Int?     @map("review_interval_days")
+  remindBeforeDays     Int?     @map("remind_before_days")
+  inactiveAfterDays    Int?     @map("inactive_after_days")
+  emptyMaxChars        Int?     @map("empty_max_chars")
+  trustRanking         Boolean? @map("trust_ranking")
   /// #305 tuner: the reciprocal-rank-fusion constant; null is SEARCH_RRF_K.
-  rrfK               Int?     @map("rrf_k")
+  rrfK                 Int?     @map("rrf_k")
   /// #401 relevance floor: absolute cosine for the vector leg; null is SEARCH_MIN_COSINE.
-  minCosine          Float?   @map("min_cosine")
+  minCosine            Float?   @map("min_cosine")
   /// #401 relevance floor: share of the leg's best cosine; null is SEARCH_MIN_COSINE_SHARE.
-  minCosineShare     Float?   @map("min_cosine_share")
+  minCosineShare       Float?   @map("min_cosine_share")
+  /// #475 community prior: how much a matched community boosts its pages; null is 0 (off).
+  communityPriorWeight Float?   @map("community_prior_weight")
+  /// #475 community prior: the cosine a community summary must reach to count; null is 0.5.
+  communityPriorFloor  Float?   @map("community_prior_floor")
+  /// #475: hybrid expansion walks by entity layer; null is off (the flat walk).
+  layeredExpansion     Boolean? @map("layered_expansion")
   /// #305 tuner: a sparse map over TRUST_WEIGHTS — only the states it names
   /// differ from the code default; null inherits all of them.
-  trustWeights       Json?    @map("trust_weights")
-  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  trustWeights         Json?    @map("trust_weights")
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("knowledge_health_settings")
 }

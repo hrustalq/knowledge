@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CommunitySummaryDto } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { GraphService } from '../graph/graph.service.js';
+import { GraphService, type StoredCommunity } from '../graph/graph.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 
@@ -40,6 +40,16 @@ export class CommunitiesService {
       builtAt: new Date(r.builtAt).toISOString(),
       score: Number(Math.max(0, r.score).toFixed(4)),
     }));
+  }
+
+  /**
+   * Every level's communities the reader may see whole, scored against
+   * `embedding` when given (0 without one), for search's prior and its
+   * results' `communityPath` (#475). Search already holds the query's
+   * embedding, so nothing is embedded here.
+   */
+  async scored(scope: AccessScope, embedding?: number[]): Promise<Array<StoredCommunity & { score: number }>> {
+    return (await this.readable(scope, embedding)).rows;
   }
 
   /** Page → level-0 community, for colouring the graph. Only communities the reader may see whole. */

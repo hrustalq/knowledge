@@ -7,7 +7,7 @@ import type {
   SearchResponse,
   SearchResult,
 } from '@knowledge/contracts';
-import { isInactive, trustWeight, verificationStateFor } from '@knowledge/contracts';
+import { isInactive, pageLayerOf, trustWeight, verificationStateFor } from '@knowledge/contracts';
 import { currentTrace, emitBacktest } from '@knowledge/observability';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -24,8 +24,11 @@ import type { TemporalPoint } from '../graph/temporal.js';
 import { loadRevisionStamps } from '../graph/revision-stamps.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
+import { CommunitiesService } from '../communities/communities.service.js';
+import { layerParents } from '../graph/layers.js';
 import type { SearchDto } from './search.dto.js';
-import { firstPerPage, floorTextHits, floorVectorHits, fuseHits, type SearchPool } from './ranking.js';
+import { communityPrior, firstPerPage, floorTextHits, floorVectorHits, fuseHits, type PriorCommunity, type SearchPool } from './ranking.js';
+import { flatFollow, layeredFollow, walkRelated } from './expansion.js';
 import { snippetPartsOf } from './snippet.js';
 
 @Injectable()
@@ -45,6 +48,7 @@ export class SearchService {
     private readonly config: ConfigService<Env, true>,
     private readonly temporal: TemporalResolverService,
     private readonly analytics: AnalyticsRecorder,
+    private readonly communities: CommunitiesService,
   ) {}
 
   /**
@@ -96,13 +100,16 @@ export class SearchService {
       this.temporal.resolve(dto.workspaceId, dto.asOf, dto.knownAt),
     ]);
     const trustOn = settings.trustRanking;
+    // #475: the community prior describes the current graph only, so an asOf
+    // search never gets it; with weight 0 (the default) nothing below changes.
+    const priorOn = settings.communityPriorWeight > 0 && !at;
     const filtered = categories || projectIds || tagKeys || states;
     // When the stores could not take the caller's page list as a predicate
     // (past ACL_DENY_LIST_MAX), the post-filter below is what drops their
     // hidden pages — over-fetch for that as for any other filter.
     const aclPostOnly = acl.kind !== 'all' && !acl.pushdown;
     const aclOverfetch = aclPostOnly ? this.config.get('SEARCH_ACL_OVERFETCH', { infer: true }) : 1;
-    let fetchK = Math.max(filtered ? k * 5 : k, trustOn ? k * 2 : k, k * aclOverfetch, byPage ? k * 3 : k);
+    let fetchK = Math.max(filtered ? k * 5 : k, trustOn || priorOn ? k * 2 : k, k * aclOverfetch, byPage ? k * 3 : k);
 
     // Phase 5 BM25 layer (plan.md §11): when a fulltext provider is
     // configured, 'hybrid' fuses vector + BM25 rankings (RRF) and 'keyword'
@@ -154,6 +161,12 @@ export class SearchService {
     ]);
     let vectorHits = vectorHitsFirst;
     let textHits = textHitsFirst;
+    // #475: the communities the reader may see whole, read beside the PG join
+    // below — for the prior and every result's `communityPath`. Scored only
+    // when something reads the score, with the embedding the vector leg made.
+    const communitiesRead: Promise<Array<PriorCommunity & { title: string }>> = at
+      ? Promise.resolve([])
+      : (async () => this.communities.scored(scope, (priorOn || observe) && embedding ? await embedding : undefined))();
     // The relevance floors (#401, #416) drop weak evidence from each leg before fusion.
     let vectorFloored = 0;
     const fuse = () => {
@@ -212,7 +225,10 @@ export class SearchService {
     // Absent unless a leg was skipped, so a healthy response is unchanged.
     const health = () => ({ ...(degraded.length ? { degraded } : {}), ...(at ? { resolvedAsOf: at.resolved } : {}) });
 
-    if (hits.length === 0) return { results: [], ...health(), ...record([]) };
+    if (hits.length === 0) {
+      communitiesRead.catch(() => undefined);
+      return { results: [], ...health(), ...record([]) };
+    }
 
     // Join PG for authoritative titles (three-store separation: PG owns
     // metadata), for everything the trust re-rank reads — the stamp, the flag,
@@ -248,7 +264,8 @@ export class SearchService {
     }
 
     const docById = new Map(docs.map((d) => [d.id, d]));
-    const trustOf = await this.trustOf(docs, settings.inactiveAfterDays);
+    const [trustOf, readable] = await Promise.all([this.trustOf(docs, settings.inactiveAfterDays), communitiesRead]);
+    const prior = priorOn ? communityPrior(readable, settings) : new Map<string, number>();
 
     // Archived pages drop first, whatever the switch says: they are put away,
     // not demoted. Then the multiplicative weight, a re-sort, and only then
@@ -262,9 +279,9 @@ export class SearchService {
       .map((h) => {
         const trust = trustOf.get(h.documentId);
         const weight = trustOn && trust ? trustWeight(trust.status, trust.inactive, settings.trustWeights) : 1;
-        return { hit: h, documentId: h.documentId, score: h.score * weight, trust };
+        return { hit: h, documentId: h.documentId, score: h.score * weight * (prior.get(h.documentId) ?? 1), trust };
       });
-    if (trustOn) weighted.sort((a, b) => b.score - a.score);
+    if (trustOn || prior.size > 0) weighted.sort((a, b) => b.score - a.score);
 
     // By page, each page's best chunk after the re-sort, then the cut.
     const ranked = byPage ? firstPerPage(weighted) : weighted;
@@ -280,7 +297,7 @@ export class SearchService {
       headingPath: h.headingPath ?? [],
       ...(trust ? { trust } : {}),
     }));
-    if (at) await this.attachValidity(results);
+    await Promise.all([at ? this.attachValidity(results) : undefined, this.attachPlacement(dto.workspaceId, results, readable, acl, at)]);
 
     const recorded = record(results);
     if (observe) {
@@ -295,6 +312,7 @@ export class SearchService {
         k,
         trustOn,
         pages: new Map(pooled.map((d) => [d.id, { ...pooledTrust.get(d.id)!, archived: d.archivedAt !== null }])),
+        communities: readable,
       });
     }
 
@@ -308,6 +326,7 @@ export class SearchService {
         Math.min(dto.expandGraph.depth ?? 1, 3),
         dto.expandGraph.relationTypes,
         includeArchived,
+        settings.layeredExpansion,
         at,
       );
       return { results, related, ...health(), ...recorded };
@@ -422,9 +441,33 @@ export class SearchService {
   }
 
   /**
+   * Where each result sits (#475): its page's layer, from the entities it
+   * names in the same view the search read (live, or as of `at`), and the
+   * titles of the readable communities containing it, coarsest first.
+   */
+  private async attachPlacement(
+    workspaceId: string,
+    results: SearchResult[],
+    readable: ReadonlyArray<PriorCommunity & { title: string }>,
+    acl: DocumentAclFilter,
+    at?: TemporalPoint,
+  ): Promise<void> {
+    if (results.length === 0) return;
+    const keys = await this.graph.entityKeysOf(workspaceId, [...new Set(results.map((r) => r.documentId))], acl, at);
+    const coarseFirst = [...readable].sort((a, b) => b.level - a.level);
+    for (const r of results) {
+      const layer = pageLayerOf(keys.get(r.documentId) ?? []);
+      if (layer) r.layer = layer;
+      const path = coarseFirst.filter((c) => c.members.includes(r.documentId)).map((c) => c.title);
+      if (path.length) r.communityPath = path;
+    }
+  }
+
+  /**
    * BFS from the hit documents over the doc→entity relation graph. Attaches
    * each hit document's entities to its results and returns documents that are
    * only reachable through the graph, with the connecting edges as evidence.
+   * `layered` (#475) walks by entity layer instead of every shared key.
    */
   private async expandGraph(
     scope: AccessScope,
@@ -433,6 +476,7 @@ export class SearchService {
     depth: number,
     relationTypes?: string[],
     includeArchived = false,
+    layered = false,
     at?: TemporalPoint,
   ): Promise<RelatedDocumentResult[]> {
     // The graph comes back without the caller's hidden pages and without the
@@ -443,13 +487,7 @@ export class SearchService {
     const edges = allowed ? g.edges.filter((e) => allowed.has(e.type)) : g.edges;
 
     const entitiesByDoc = new Map<string, typeof edges>();
-    const docsByEntity = new Map<string, typeof edges>();
-    for (const e of edges) {
-      entitiesByDoc.set(e.documentId, [...(entitiesByDoc.get(e.documentId) ?? []), e]);
-      docsByEntity.set(e.targetKey, [...(docsByEntity.get(e.targetKey) ?? []), e]);
-    }
-
-    const hitDocIds = new Set(results.map((r) => r.documentId));
+    for (const e of edges) entitiesByDoc.set(e.documentId, [...(entitiesByDoc.get(e.documentId) ?? []), e]);
     for (const r of results) {
       const rels = entitiesByDoc.get(r.documentId);
       if (rels?.length) {
@@ -461,37 +499,26 @@ export class SearchService {
       }
     }
 
-    // depth = entity hops: docs sharing an entity with a hit are distance 1.
-    const related = new Map<string, RelatedDocumentResult>();
-    let frontierDocs = new Set(hitDocIds);
-    const seenDocs = new Set(hitDocIds);
-    for (let hop = 1; hop <= depth; hop++) {
-      const nextDocs = new Set<string>();
-      for (const docId of frontierDocs) {
-        for (const out of entitiesByDoc.get(docId) ?? []) {
-          for (const inc of docsByEntity.get(out.targetKey) ?? []) {
-            if (seenDocs.has(inc.documentId)) {
-              const existing = related.get(inc.documentId);
-              if (existing && existing.distance === hop) {
-                if (!existing.via.some((v) => v.entityKey === inc.targetKey && v.relationType === inc.type)) {
-                  existing.via.push({ entityKey: inc.targetKey, relationType: inc.type, confidence: inc.confidence });
-                }
-              }
-              continue;
-            }
-            seenDocs.add(inc.documentId);
-            nextDocs.add(inc.documentId);
-            related.set(inc.documentId, {
-              documentId: inc.documentId,
-              title: g.documents[inc.documentId]?.title ?? '(unknown)',
-              distance: hop,
-              via: [{ entityKey: inc.targetKey, relationType: inc.type, confidence: inc.confidence }],
-            });
-          }
-        }
-      }
-      frontierDocs = nextDocs;
-    }
+    // Membership comes from the pages that declare a component (#475); the
+    // graph holds only pages the caller may open, so their declarations are
+    // all this reads.
+    const follow = layered
+      ? layeredFollow(
+          edges,
+          layerParents(
+            edges,
+            new Map(
+              (
+                await this.prisma.componentDeclaration.findMany({
+                  where: { workspaceId: scope.workspaceId, documentId: { in: Object.keys(g.documents) } },
+                  select: { documentId: true, componentKey: true },
+                })
+              ).map((d) => [d.documentId, d.componentKey]),
+            ),
+          ),
+        )
+      : flatFollow(edges);
+    const related = new Map(walkRelated({ edges, documents: g.documents }, new Set(results.map((r) => r.documentId)), depth, follow).map((r) => [r.documentId, r]));
     // The graph does not know about archive (docs/features/39): a put-away page
     // keeps its edges, so the walk reaches it and PG says whether to show it.
     // PG also has the last word on visibility (#76) and on existence, as for

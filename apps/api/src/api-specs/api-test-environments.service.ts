@@ -38,6 +38,7 @@ export class ApiTestEnvironmentsService {
     return row ? toInfo(row) : null;
   }
 
+  // ponytail: environment writes are not audited; add an AUDIT_ACTIONS value when credential changes need a trail.
   async create(workspaceId: string, dto: SaveApiTestEnvironmentRequest, userId: string): Promise<ApiTestEnvironment> {
     const name = checkName(dto.name);
     const secrets = mergeSecrets({}, dto.secrets);

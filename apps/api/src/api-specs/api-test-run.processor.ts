@@ -46,6 +46,7 @@ export class ApiTestRunProcessor extends WorkerHost {
   }
 
   async process(job: Job<{ runId: string }>): Promise<void> {
+    // ponytail: a worker that dies mid-run leaves the row `running` for good; add a stale-run sweeper if that is ever seen.
     const run = await this.runs.claim(job.data.runId);
     if (!run) return;
     const plan = run.plan as unknown as TestRunPlan;

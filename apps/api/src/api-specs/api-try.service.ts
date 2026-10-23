@@ -125,6 +125,7 @@ export class ApiTryService {
    * (#483, phase 5) sends unmetered: a run is bounded by its plan, and a
    * person's per-minute budget would stall it mid-suite.
    */
+  // ponytail: server runs are unmetered, bounded by plan size; meter per run if a suite ever floods a target.
   async sendAs(actor: string, documentId: string, req: ApiTryRequest, metered: boolean): Promise<ApiTryResponse> {
     const doc = await this.prisma.document.findUnique({ where: { id: documentId }, select: { workspaceId: true } });
     if (!doc) throw new NotFoundException(t('error.document.notFound', { id: documentId }));

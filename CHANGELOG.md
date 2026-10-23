@@ -17,6 +17,12 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Every entity in the workspace and page graphs (`GET /v1/documents/graph`, `GET /v1/documents/:id/graph`)
+  now carries a `layer` (#475, phase 3): `system` (services, domains, integrations), `component`
+  (components, databases, tables, queues), `interface` (API operations, channels, specs), `code`
+  (modules, files, functions), or `concept` for anything else (tags, teams, unknown prefixes). The
+  layer comes from the key's prefix (`op:` → `interface`) and is never stored, so existing graphs
+  have it at once, with no reindex.
 - Communities now form a tree (#475, phase 2). The atlas agent groups related pages as before, then
   groups those groups into broader areas, up to three levels. Each area above the finest is
   summarised from the summaries of the groups it contains. `GET /v1/graph/communities` takes

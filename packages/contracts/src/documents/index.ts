@@ -7,7 +7,7 @@ import type {
   SourceVerificationState,
 } from '@knowledge/contracts/core';
 import type { ApiSpecDiff } from '@knowledge/contracts/api/diff';
-import type { AuthorableRelationType, FactExtractor, ResolvedAsOf } from '@knowledge/contracts/graph';
+import type { AuthorableRelationType, EntityLayer, FactExtractor, ResolvedAsOf } from '@knowledge/contracts/graph';
 import type { DeleteReviewCommentResponse, ReviewComment, ReviewThread, SemanticDiff, StructuralDiff } from '@knowledge/contracts/reviews';
 
 // rich editor. Two-step by design (presign → confirm), mirroring the revision
@@ -513,6 +513,8 @@ export interface DocumentGraphNode {
   label: string;
   category?: DocumentCategory | string;
   entityType?: string;
+  /** Entities only: the abstraction layer its key's prefix names (#475). */
+  layer?: EntityLayer;
   /** Entity hops from the root document (root = 0). */
   distance: number;
 }
@@ -549,6 +551,8 @@ export interface WorkspaceGraphNode {
   label: string;
   category?: DocumentCategory | string;
   entityType?: string;
+  /** Entities only: the abstraction layer its key's prefix names (#475). */
+  layer?: EntityLayer;
   /** Documents only: head-revision status, for the lifecycle dot. */
   status?: RevisionStatus | null;
   /** Incident edge count, after filtering. */

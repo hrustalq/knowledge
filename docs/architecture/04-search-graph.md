@@ -521,6 +521,21 @@ for the workspace's retention, and its query text is redacted after
 the PR-drift candidate search) writes the JSONL line and no row. The write is
 fire-and-forget and never fails the search.
 
+## Embedded designs
+
+A page's embedded Figma frames (#470, [feature 64](../features/64-embeds.md))
+reach search as ordinary chunks: one per pinned frame, after the page's own,
+holding the frame's name, the item's caption and the frame's text layers from
+the snapshot cache. They rank and filter like any chunk of the page, and a
+search for words that appear only in a frame finds the page. A frame whose file
+leaves the allowlist drops out at the page's next reindex. Published-site search
+(`site-search.text.ts`) strips a group's HTML to its captions, so it never
+matches a Figma URL.
+
+`knowledge_find_embeds` (REST `GET /v1/embeds/usages`) is the reverse lookup:
+the pages whose default-branch head embeds a file or a frame, filtered in the
+same statement by `visibilitySql` and `listedSql`.
+
 ## Chat search
 
 Searchable groups' chat ([feature 60](../features/60-chat-search.md)) is a

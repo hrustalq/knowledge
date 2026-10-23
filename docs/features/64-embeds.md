@@ -1,9 +1,9 @@
 # 64 — Embeds: Figma frames in pages, pinned and agent-readable
 
-Issue [#470](https://github.com/hrustalq/knowledge/issues/470). This document
-records the decisions taken before any code was written (phase 0). The later
-phases build it, and phase 9 rewrites the parts where building changed a
-decision.
+Issue [#470](https://github.com/hrustalq/knowledge/issues/470), shipped as
+nine PRs (#501–#509 and the one carrying this update). Phase 0 decided what is
+below; the later phases built it, and where building changed a decision the
+section says so. **Built differently** at the end lists every such change.
 
 An analyst who documents UX or UI logic cannot show the design being
 described. No surface embeds an external resource. DOMPurify's
@@ -169,17 +169,17 @@ refused.
   `warning` (not allowlisted, unpinned, malformed, over the item limit). This
   is how "the revision gets a warning" without a new column on
   `document_revisions`.
-- **The route.** `GET /v1/documents/:id/embeds/:fileKey/:nodeId/:version`
-  (`@Access('viewer','document')`, `@CookieTokenOk`, mirroring
-  `attachments.controller.ts`). It answers with a 302 to a presigned URL, but
-  only when:
-  - a revision of **that document** references the item (`revision_embeds`);
-  - the item passes the allowlist read check;
-  - the cache has the bytes.
-
-  Otherwise it returns 404. On a referenced, allowlisted miss it answers
-  `202 { status: 'rendering' }` and queues the job. The node view then shows
-  "Rendering…" and polls. A file-level item uses `_` as its node segment.
+- **The routes.**
+  - `GET /v1/documents/:id/embeds` (`viewer`, `document`) answers each
+    referenced item's state — `ready`, `rendering`, `unavailable`, `failed` —
+    with its name, size and `changed`, and queues a render for what is missing.
+    The node view reads it once per page and polls while something renders.
+  - `GET /v1/documents/:id/embeds/:fileKey/:nodeId/:version` (`viewer`,
+    `document`, `@CookieTokenOk`, mirroring `attachments.controller.ts`)
+    answers with a 302 to a presigned URL, but only when a revision of **that
+    document** references the item, the item passes the allowlist read check,
+    and the cache has the bytes. Otherwise 404. A file-level item uses `_` as
+    its node segment.
 - **Figma being down never fails indexing.** Indexing reads the cache and never
   calls Figma. A miss leaves the item as caption + link, and the connector tick
   fills the cache later.
@@ -190,9 +190,10 @@ refused.
 | --- | --- |
 | Reader (read-only `RichEditor`) and `MarkdownView` | The snapshot, the captions, and "Open live" for members only. "Open live" mounts Figma's embed iframe inside the node view, never through sanitized HTML. |
 | Editor | Same, plus caption editing, reorder, layout, remove, Update. |
-| Share links ([43](43-share-links.md)) and published sites ([44](44-docs-portal.md)) | Snapshots only when the workspace setting `publicEmbeds` is on (default off), served by a public twin route under the share or snapshot check. Otherwise the captions and "Mockup not available publicly", with **no Figma link**, because the link would reveal the file key. Never the live iframe. |
-| Export ([45](45-export.md)) html, pdf, docx | Always the snapshots: the worker reads the bytes itself. |
-| `.md`, `llms-full.txt`, `knowledge_get_document_content` | The `<figure>` markup as stored. It is parseable, and it carries no image URL. |
+| Share links ([43](43-share-links.md)) and published sites ([44](44-docs-portal.md)) | Snapshots only when **Publishing → Show embedded designs publicly** (`publishing_settings.allow_public_embeds`) is on, default off. The page's markup is rewritten **on the server** (`EmbedsService.publicMarkdown` over `rewriteEmbedGroups`), so no Figma link reaches the reader's browser at all: off, each item is its caption; on, a ready allowlisted item carries an opaque `data-kn-item` (its `revision_embeds` id), which `…/public/shares/:token/embeds/:itemId` or `…/public/sites/:siteId/versions/:versionId/embeds/:itemId` resolve after the link's scope or the site's pinned revision and audience. Never the live iframe. |
+| A published site's `.md` and `llms-full.txt` | Captions only, whatever the switch. |
+| Export ([45](45-export.md)) html, pdf, docx | A member's export always shows the snapshots, packaged as image attachments keyed by item id; a share link's export follows the switch. The zip keeps the source. |
+| `.md`, `llms-full.txt`, `knowledge_get_document_content` behind the login | The `<figure>` markup as stored. It is parseable, and it carries no image URL. |
 
 ## Agents and search
 
@@ -214,6 +215,20 @@ refused.
   put in **its own chunks** after the page's prose, so it cannot drown out what
   the page says. Like all document content, it is wrapped untrusted wherever it
   reaches a prompt.
+
+## Writing and editing
+
+- `/figma` (also `/макет`) opens the picker, a lazy `import()` so a reader
+  never downloads it. It lists the allowlisted files, each page's top-level
+  frames with thumbnails, and takes a pasted link for a deeper layer; the
+  selection reorders by drag or arrow buttons, with a caption per item, a group
+  caption, and Strip or Grid. Every Figma call goes through the API
+  (`/v1/embeds/figma/files`, `/files/:fileKey`, `/resolve`, editor role).
+- A Figma link pasted alone on an empty line becomes a one-item group, pinned
+  through `/resolve` and captioned with the frame's name; a 10 s toast offers
+  **Keep as link**, and undo works too.
+- The pencil on a group reopens the picker. **Update** on a changed or unpinned
+  item pins it to the file's current version as an ordinary edit.
 
 ## Writes that skip the picker
 
@@ -247,6 +262,35 @@ refused.
     other health filter.
 - **Nothing flags a page, and nothing opens a merge request.**
 
+## Built differently
+
+Where building changed a phase 0 decision:
+
+- **The public switch lives on `publishing_settings`** (`allowPublicEmbeds`),
+  beside the other public switches and their settings page, not on
+  `workspace_settings`.
+- **Public pages are rewritten on the server**, not only in the renderer: the
+  share and site page payloads carried the raw `<figure>`, so its Figma links
+  reached the anonymous browser. Snapshots on a public page are addressed by an
+  opaque item id, never by file key.
+- **A share link's export follows the public switch.** The issue said export
+  always shows snapshots; that holds for a member's export, but a share link's
+  download is anonymous, and including them would bypass the switch.
+- **The snapshot route has a status twin** instead of answering 202:
+  `GET /v1/documents/:id/embeds` reports every item's state at once, and the
+  node view polls it.
+- **Indexed frame text follows the allowlist at index time.** Revoking a
+  project hides its snapshots at once; its text leaves the index at the page's
+  next reindex.
+- **`FigmaFilesService` lives in `ConnectorsCoreModule`**, so the connector
+  staging step can pin pulled embeds; the allowlist rule is the leaf
+  `embeds/embed-access.ts`.
+- **The importer does not pin.** A Figma iframe in an imported HTML page
+  arrives unpinned and warns until an editor presses Update; connector pulls
+  pin.
+- **A frame deleted in Figma reads as changed.** Whole-file items have no
+  subtree and are not checked.
+
 ## Invariants
 
 1. The markdown holds references, never image URLs.
@@ -270,27 +314,27 @@ Each env var has a default, as `generate-openapi.main.ts` requires.
 | `EMBED_SNAPSHOT_SCALE` | `2` | Figma render scale. |
 | `EMBED_SNAPSHOT_MAX_PX` | `4096` | Long side of a snapshot. |
 | `EMBED_TEXT_MAX_BYTES` | `2048` | Extracted text per item. |
-| `EMBED_CHECK_INTERVAL_HOURS` | `6` | Change-check tick. |
+| `EMBED_CHECK_INTERVAL_HOURS` | `6` | Hours between a Figma connector's change checks. |
 
-`publicEmbeds` is a sparse `workspace_settings` column. `null` and `false`
-both mean off.
+`allowPublicEmbeds` is a sparse `publishing_settings` column. `null` and
+`false` both mean off.
 
 ## Phases
 
 One PR per phase into `dev`. Each phase leaves the app working.
 
-| # | Phase | Ships |
+| # | Phase | PR |
 | --- | --- | --- |
-| 0 | Decision doc | This document |
-| 1 | Block and markdown | Provider catalogue + URL parser; node spec, parse rule, sanitizer, turndown; a caption + link node view |
-| 2 | Connector | `figma` kind, adapter, token, allowlist, expiry, Figma client |
-| 3 | Snapshots | `embed_files`, `embed_nodes`, `revision_embeds`; worker job; snapshot route; snapshots in the node view; lazy "Open live" |
-| 4 | Editor UX | Paste-to-embed, `/embed`, lazy picker, reorder, layout, captions |
-| 5 | Index and agents | Text-layer chunks, site-search text, `knowledge_get_embed` / `knowledge_find_embeds` + REST twins, ai-readable output |
-| 6 | Public surfaces and export | `publicEmbeds`, public render pass, public snapshot twins, export images |
-| 7 | Conversion | Notion, Confluence (Cloud and Server), markdown-git, HTML importer |
-| 8 | Change check | Subtree hashes on the tick, badge, Update, `stale-mockups` |
-| 9 | Docs | This document to match what shipped; architecture 03 and 04 |
+| 0 | Decision doc | #501 |
+| 1 | Block and markdown | #502 |
+| 2 | Connector | #503 |
+| 3 | Snapshots | #504 |
+| 4 | Editor UX | #505 |
+| 5 | Index and agents | #506 |
+| 6 | Public surfaces and export | #507 |
+| 7 | Conversion | #508 |
+| 8 | Change check | #509 |
+| 9 | Docs | this one |
 
 ## Out of scope
 

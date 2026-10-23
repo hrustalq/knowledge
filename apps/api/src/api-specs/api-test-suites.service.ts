@@ -5,11 +5,13 @@ import {
   TEST_CASE_CATALOGUE_VERSION,
   normalizeEntityKey,
   operationFingerprint,
+  testCasesFor,
   type ApiSpecDocumentResponse,
   type ApiTestCase,
   type ApiTestSuiteResponse,
 } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
+import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ApiSpecReadService } from './api-spec-read.service.js';
 
@@ -19,6 +21,22 @@ export interface SuiteOperation {
   op: ApiOperation;
   /** SHA-256 of `operationFingerprint`: unchanged by spec edits that do not reach this operation. */
   operationHash: string;
+  /** The fixtures bound to the suite (#483), suite-level first, in run order. */
+  bindings: SuiteBinding[];
+  /** The bindings' half of the cache key: '' for none. */
+  fixturesHash: string;
+}
+
+/** One fixture bound to a suite, with its default-branch head as it stands now. */
+export interface SuiteBinding {
+  /** Null for the whole suite. */
+  caseId: string | null;
+  fixtureId: string;
+  title: string;
+  headRevisionId: string | null;
+  /** The head's content hash, which is what the cache key reads. */
+  contentHash: string | null;
+  archived: boolean;
 }
 
 /**
@@ -46,11 +64,74 @@ export class ApiTestSuitesService {
     });
     if (!op) throw new NotFoundException(t('error.apiTry.operationNotInSpec', { method: '', entityKey: key }));
     const operationHash = createHash('sha256').update(operationFingerprint(spec.document, op)).digest('hex');
-    return { spec, op, operationHash };
+    const bindings = await this.bindingsOf(op.documentId, op.entityKey);
+    return { spec, op, operationHash, bindings, fixturesHash: fixturesHash(bindings) };
+  }
+
+  /** The fixtures bound to one operation's suite, in run order. A binding outlives Regenerate and spec edits. */
+  async bindingsOf(documentId: string, entityKey: string): Promise<SuiteBinding[]> {
+    const rows = await this.prisma.apiTestBinding.findMany({
+      where: { documentId, entityKey: normalizeEntityKey(entityKey) },
+      orderBy: [{ caseId: { sort: 'asc', nulls: 'first' } }, { position: 'asc' }],
+      include: { fixture: { select: { title: true, defaultBranch: true, archivedAt: true, branches: { select: { name: true, headRevisionId: true } } } } },
+    });
+    const heads = rows.map((r) => r.fixture.branches.find((b) => b.name === r.fixture.defaultBranch)?.headRevisionId ?? null);
+    const ids = heads.filter((h): h is string => h !== null);
+    const hashes = new Map(
+      (await this.prisma.documentRevision.findMany({ where: { id: { in: ids } }, select: { id: true, contentHash: true } })).map((r) => [r.id, r.contentHash]),
+    );
+    return rows.map((r, i) => ({
+      caseId: r.caseId,
+      fixtureId: r.fixtureId,
+      title: r.fixture.title,
+      headRevisionId: heads[i],
+      contentHash: heads[i] ? (hashes.get(heads[i]) ?? heads[i]) : null,
+      archived: r.fixture.archivedAt !== null,
+    }));
+  }
+
+  /**
+   * Replace one suite's bindings with `list`, in that order — what a person
+   * confirms. Every fixture must be a `test-fixture` the caller can open in
+   * the spec's workspace, and every case id one the suite's catalogue lists.
+   */
+  async setBindings(
+    scope: AccessScope,
+    at: SuiteOperation,
+    list: ReadonlyArray<{ caseId: string | null; fixtureId: string }>,
+    userId: string,
+  ): Promise<SuiteBinding[]> {
+    const ids = [...new Set(list.map((b) => b.fixtureId))];
+    const found = await this.prisma.document.findMany({
+      where: { id: { in: ids }, workspaceId: at.op.workspaceId, kind: 'test-fixture', archivedAt: null, ...visibilityWhere(scope) },
+      select: { id: true },
+    });
+    const missing = ids.filter((id) => !found.some((d) => d.id === id));
+    if (missing.length) throw new BadRequestException(t('error.apiTestSuite.bindingFixture', { id: missing[0] }));
+    const cases = new Set(testCasesFor(at.spec.document, at.op).map((c) => c.id));
+    const unknown = list.find((b) => b.caseId !== null && !cases.has(b.caseId));
+    if (unknown) throw new BadRequestException(t('error.apiTestSuite.bindingCase', { caseId: unknown.caseId! }));
+
+    const rows = [...new Map(list.map((b) => [`${b.caseId ?? ''}\u0000${b.fixtureId}`, b])).values()];
+    const where = { documentId: at.op.documentId, entityKey: at.op.entityKey };
+    await this.prisma.$transaction([
+      this.prisma.apiTestBinding.deleteMany({ where }),
+      this.prisma.apiTestBinding.createMany({
+        data: rows.map((b) => ({
+          ...where,
+          workspaceId: at.op.workspaceId,
+          caseId: b.caseId,
+          fixtureId: b.fixtureId,
+          position: rows.filter((x) => x.caseId === b.caseId).indexOf(b),
+          createdBy: userId,
+        })),
+      }),
+    ]);
+    return this.bindingsOf(at.op.documentId, at.op.entityKey);
   }
 
   find(at: SuiteOperation, agentHash: string): Promise<ApiTestSuite | null> {
-    return this.prisma.apiTestSuite.findUnique({ where: { documentId_entityKey_operationHash_catalogueVersion_agentHash: this.key(at, agentHash) } });
+    return this.prisma.apiTestSuite.findUnique({ where: { suiteKey: this.key(at, agentHash) } });
   }
 
   /** Store a suite under its key, replacing whatever that key held — which is what Regenerate is. */
@@ -64,7 +145,7 @@ export class ApiTestSuitesService {
     };
     const key = this.key(at, agentHash);
     return this.prisma.apiTestSuite.upsert({
-      where: { documentId_entityKey_operationHash_catalogueVersion_agentHash: key },
+      where: { suiteKey: key },
       create: { ...key, workspaceId: at.op.workspaceId, ...data },
       update: data,
     });
@@ -95,6 +176,15 @@ export class ApiTestSuitesService {
       operationHash: at.operationHash,
       catalogueVersion: TEST_CASE_CATALOGUE_VERSION,
       agentHash,
+      fixturesHash: at.fixturesHash,
     };
   }
+}
+
+/** Which fixture heads a suite was built against, as one hash; '' when nothing is bound, so an unbound suite keeps its key. */
+function fixturesHash(bindings: readonly SuiteBinding[]): string {
+  if (!bindings.length) return '';
+  return createHash('sha256')
+    .update(JSON.stringify(bindings.map((b) => [b.caseId, b.fixtureId, b.contentHash])))
+    .digest('hex');
 }

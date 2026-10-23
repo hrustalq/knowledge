@@ -4517,11 +4517,63 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One operation's cached QA test suite (#468), for the operation as it stands at the head. 404 until one is generated, and again after an edit to the operation. format=curl|postman answers with the suite as a file */
+        /** One operation's cached QA test suite (#468), for the operation as it stands at the head. 404 until one is generated, and again after an edit to the operation or its bound fixtures. format=curl|postman answers with the suite as a file — a bash script or a Postman collection — with the bound fixtures as setup and teardown */
         get: operations["ApiSpecsController_testSuite"];
         put?: never;
         /** Generate one operation's QA test suite (#468): the cached suite when there is one and regenerate is not set, otherwise a queued tester run (one per operation and config in flight). Needs the api-test-suites.generate capability */
         post: operations["ApiSpecsController_generateTestSuite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/test-bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The QA fixtures bound to one operation's suite (#483): suite-level setup, and per-case setup by case id. A fixture the caller cannot open is listed without its title */
+        get: operations["ApiSpecsController_testBindings"];
+        /** Replace the fixtures bound to one operation's suite (#483), in run order. Every fixture must be a test-fixture the caller can open; every case id one the suite lists. Changes the suite cache key. Needs the api-test-suites.generate capability */
+        put: operations["ApiSpecsController_setTestBindings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/test-fixture-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fixtures that could set up one operation (#483): operations of the same spec producing a value it needs (response links, then path parameters) and the fixtures calling them, in spec order or the tester's ranking. Nothing is bound */
+        get: operations["ApiSpecsController_testFixtureCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/test-fixture-candidates/rank": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the tester to rank and explain one operation's fixture candidates (#483). One run per candidate set: a set already ranked or being ranked returns that run. Needs the api-test-suites.generate capability */
+        post: operations["ApiSpecsController_rankTestFixtures"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8413,6 +8465,25 @@ export interface components {
             entityKey: string;
             /** @description Replace the cached suite instead of returning it. Absent means false. */
             regenerate?: boolean;
+        };
+        ApiTestBindingDto: {
+            /** @description A case id of the suite; absent or null binds the whole suite */
+            caseId?: string | null;
+            /**
+             * Format: uuid
+             * @description A test-fixture document
+             */
+            fixtureId: string;
+        };
+        SetApiTestBindingsDto: {
+            /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+            entityKey: string;
+            /** @description Every binding of the suite, in run order; replaces what is there. Empty unbinds all */
+            bindings: components["schemas"]["ApiTestBindingDto"][];
+        };
+        ApiTestOperationDto: {
+            /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+            entityKey: string;
         };
         ApiTryHeaderDto: {
             name: string;
@@ -23739,6 +23810,180 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["GenerateApiTestSuiteDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_testBindings: {
+        parameters: {
+            query: {
+                /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+                entityKey: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_setTestBindings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetApiTestBindingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_testFixtureCandidates: {
+        parameters: {
+            query: {
+                /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+                entityKey: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_rankTestFixtures: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiTestOperationDto"];
             };
         };
         responses: {

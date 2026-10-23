@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { JSON_SCHEMA, load } from 'js-yaml';
@@ -10,22 +11,40 @@ import {
   literalCredentialIssues,
   operationAuth,
   readTestFixture,
+  suitePrerequisites,
+  testChain,
+  type ApiTestCase,
+  type ApiTestFixtureCandidate,
+  type ApiTestPrerequisite,
+  type ChainResolver,
   type CredentialSlots,
   type FixtureCallInfo,
   type FixtureCallStep,
   type FixtureIssue,
   type FixtureIssueInfo,
   type ListTestFixturesResponse,
+  type TestChain,
+  type TestChainFixture,
   type TestFixture,
   type TestFixtureResponse,
 } from '@knowledge/contracts';
 import { listedSql } from '../common/listed-page.js';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
-import { systemScope, visibilitySql, type AccessScope } from '../permissions/access-scope.js';
+import { systemScope, visibilitySql, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { ApiSpecReadService } from './api-spec-read.service.js';
+import type { SuiteBinding, SuiteOperation } from './api-test-suites.service.js';
+
+/** A bound fixture's head, parsed, beside its binding. */
+export interface BoundFixture {
+  binding: SuiteBinding;
+  fixture: TestChainFixture;
+}
+
+/** Fixture candidates beyond this many are not offered; the tester ranks at most these. */
+const MAX_CANDIDATES = 20;
 
 /** What ingestion indexes for a fixture revision, in place of a markdown body. */
 export interface ApiFixtureProjection {
@@ -58,7 +77,7 @@ export class ApiFixturesService {
    */
   async list(
     scope: AccessScope,
-    opts: { projectId?: string; entityKey?: string; specDocumentId?: string },
+    opts: { projectId?: string; entityKey?: string; entityKeys?: string[]; specDocumentId?: string },
   ): Promise<ListTestFixturesResponse> {
     const head = Prisma.sql`b.head_revision_id`;
     const rows = await this.prisma.$queryRaw<
@@ -80,6 +99,12 @@ export class ApiFixturesService {
            opts.entityKey
              ? Prisma.sql`AND EXISTS (SELECT 1 FROM api_fixture_calls fc
                  WHERE fc.revision_id = b.head_revision_id AND fc.entity_key = ${normalizeEntityKey(opts.entityKey)})`
+             : Prisma.empty
+         }
+         ${
+           opts.entityKeys
+             ? Prisma.sql`AND EXISTS (SELECT 1 FROM api_fixture_calls fc
+                 WHERE fc.revision_id = b.head_revision_id AND fc.entity_key = ANY(${opts.entityKeys.map((k) => normalizeEntityKey(k))}::text[]))`
              : Prisma.empty
          }
          ${
@@ -130,6 +155,114 @@ export class ApiFixturesService {
       runValues: fixture ? fixtureRunValues(fixture) : { inputs: [], secrets: [] },
       issues,
     };
+  }
+
+  /**
+   * Fixtures that could set up `at`'s suite (#483): the operations of its spec
+   * that produce a value it needs (`suitePrerequisites`: links, then path
+   * parameters), and the fixtures under `scope` whose head calls one of them,
+   * closest evidence first. `hash` names this exact candidate set, so a
+   * ranking of an older set is never applied to a newer one.
+   */
+  async candidates(
+    scope: AccessScope,
+    at: SuiteOperation,
+  ): Promise<{ prerequisites: ApiTestPrerequisite[]; candidates: ApiTestFixtureCandidate[]; hash: string }> {
+    const ops = await this.prisma.apiOperation.findMany({ where: { revisionId: at.spec.revisionId }, orderBy: { createdAt: 'asc' } });
+    const found = suitePrerequisites(at.spec.document, at.op, ops);
+    const opOf = new Map(ops.map((o) => [o.entityKey, o]));
+    const prerequisites = found.map((p): ApiTestPrerequisite => {
+      const o = opOf.get(p.producer);
+      return { ...p, operation: o ? { method: o.method, path: o.path, summary: o.summary } : null };
+    });
+    const producers = [...new Set(found.map((p) => p.producer))];
+    const fixtures = producers.length ? (await this.list(scope, { entityKeys: producers })).fixtures : [];
+    const label = (key: string) => {
+      const o = opOf.get(key);
+      return o ? `${o.method ?? ''} ${o.path}`.trim() : key;
+    };
+    const candidates = fixtures
+      .map((f) => {
+        const calls = new Set(f.calls);
+        const first = prerequisites.findIndex((p) => calls.has(p.producer));
+        const p = prerequisites[first];
+        return {
+          rank: first,
+          candidate: {
+            documentId: f.documentId,
+            title: f.title,
+            headRevisionId: f.headRevisionId,
+            source: p.source,
+            producers: producers.filter((k) => calls.has(k)),
+            reason:
+              p.source === 'link'
+                ? t('agent.testerRun.reasonLink', { producer: label(p.producer) })
+                : t('agent.testerRun.reasonPathParam', { producer: label(p.producer), field: p.field ?? '', param: p.param ?? '' }),
+            explanation: null,
+            bound: at.bindings.some((b) => b.caseId === null && b.fixtureId === f.documentId),
+          } satisfies ApiTestFixtureCandidate,
+        };
+      })
+      .sort((a, b) => a.rank - b.rank)
+      .slice(0, MAX_CANDIDATES)
+      .map((x) => x.candidate);
+    const hash = createHash('sha256')
+      .update(JSON.stringify([at.op.entityKey, candidates.map((c) => [c.documentId, c.headRevisionId])]))
+      .digest('hex');
+    return { prerequisites, candidates, hash };
+  }
+
+  /**
+   * Each binding's fixture head, parsed. Refuses — never skips — a fixture
+   * the scope cannot open (403, no title) or whose head no longer reads: a
+   * suite run or exported without one of its fixtures tests something else.
+   */
+  async bound(scope: AccessScope, bindings: readonly SuiteBinding[]): Promise<BoundFixture[]> {
+    const ids = [...new Set(bindings.map((b) => b.fixtureId))];
+    const visible = await this.prisma.document.findMany({ where: { id: { in: ids }, ...visibilityWhere(scope) }, select: { id: true } });
+    if (visible.length < ids.length) throw new ForbiddenException(t('error.apiTestSuite.fixtureHidden'));
+    const parsed = new Map<string, TestFixture>();
+    for (const b of bindings) {
+      if (parsed.has(b.fixtureId)) continue;
+      const revision = b.headRevisionId ? await this.prisma.documentRevision.findUnique({ where: { id: b.headRevisionId } }) : null;
+      const { fixture, issues } = revision ? this.read(await this.storage.getObjectText(revision.s3Key)) : { fixture: null, issues: [] };
+      if (!fixture) {
+        const reason = issues[0] ? withMessage(issues[0]).message : t('error.document.noReadableRevision', { id: b.fixtureId });
+        throw new BadRequestException(t('error.apiTestSuite.fixtureInvalid', { title: b.title, reason }));
+      }
+      parsed.set(b.fixtureId, fixture);
+    }
+    return bindings.map((b) => ({ binding: b, fixture: { documentId: b.fixtureId, title: b.title, fixture: parsed.get(b.fixtureId)! } }));
+  }
+
+  /**
+   * One suite as a runnable chain (`testChain`): the bound fixtures under
+   * `scope`, each call resolved to its operation at a spec head the scope can
+   * open. A call that resolves nowhere refuses the whole chain with a 400.
+   */
+  async chain(scope: AccessScope, at: SuiteOperation, cases: readonly ApiTestCase[], title: string): Promise<TestChain> {
+    const fixtures = await this.bound(scope, at.bindings);
+    const keys = [...new Set(fixtures.flatMap((f) => stepPaths(f.fixture.fixture).map(([s]) => s.call)))];
+    const hits = keys.length ? (await this.reads.search(scope, { entityKeys: keys, limit: 200 })).operations : [];
+    const docs = new Map<string, Record<string, unknown>>();
+    for (const h of hits) if (!docs.has(h.revisionId)) docs.set(h.revisionId, (await this.reads.spec(h.documentId, h.revisionId)).document);
+    for (const f of fixtures) {
+      const broken = stepPaths(f.fixture.fixture).find(([s]) => !hits.some((h) => h.entityKey === s.call));
+      if (broken) throw new BadRequestException(t('error.apiTestSuite.fixtureBroken', { title: f.binding.title, call: broken[0].call }));
+    }
+    const resolve: ChainResolver = (key) => {
+      const op = hits.find((h) => h.entityKey === key)!;
+      return { doc: docs.get(op.revisionId)!, op };
+    };
+    const perCase: Record<string, TestChainFixture[]> = {};
+    for (const f of fixtures) if (f.binding.caseId !== null) (perCase[f.binding.caseId] ??= []).push(f.fixture);
+    return testChain({
+      title,
+      cases,
+      suite: fixtures.filter((f) => f.binding.caseId === null).map((f) => f.fixture),
+      perCase,
+      resolve,
+    });
   }
 
   /** Parse YAML/JSON and check the shape. No I/O. */

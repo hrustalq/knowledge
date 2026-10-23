@@ -271,9 +271,11 @@ are not read. A non-literal path is counted as `dynamic`, never guessed.
 Every HTTP operation card has a quick-action menu (the flask beside the lock)
 whose first item is **Generate test requests**. It writes a QA suite for the
 operation: positive and negative cases, each with a name, the rule it covers,
-the request and the expected status and body, exported as **cURL** (one
-command per case) or a **Postman Collection v2.1** (one folder, one request per
-case, the status as a `pm.test`).
+the request and the expected status and body, exported as a **bash script**
+(curl + jq) or a **Postman Collection v2.1** (one request per case, the status
+as a `pm.test`). Both exports carry the bound fixtures' setup and teardown (see
+below), which is why they come from `?format=` on the API rather than from the
+browser.
 
 **Coverage is the spec's, not the model's.** `testCasesFor` in
 `@knowledge/contracts/api/test-cases` lists the cases an operation requires —
@@ -356,14 +358,55 @@ spec change removes a called operation, the fixture shows up under **Broken
 fixtures** in knowledge health, and its read view lists the issue. Both are
 derived on read from `api_fixture_calls` against today's spec heads.
 
-Binding fixtures to suites, the runners and the `/qa` view follow in the later
-phases of #483.
+### Binding fixtures to a suite (#483, phase 2)
+
+A suite **binds** fixtures in `api_test_bindings`, keyed by spec document +
+operation entity key (+ case id), so a binding survives Regenerate and spec
+edits. A suite-level fixture runs once before the cases; a per-case one runs
+just before its case, its captures shadow the suite's for that case only, and
+its teardown runs right after. Binding is a person's act — Bind in the suite
+panel or `knowledge_set_test_fixtures` — and needs `api-test-suites.generate`.
+Every fixture must be a `test-fixture` the caller can open in the spec's
+workspace; a binding to one the reader cannot open is listed without its title.
+
+**Candidates come from the spec.** `suitePrerequisites` (contracts) finds the
+operations of the same spec that produce a value this one needs: a response
+`links` entry targeting it (by `operationId` or `operationRef`) first, then a
+path parameter matched to a non-GET operation's 2xx response field of the same
+name (a generic `id` only under its own collection: `POST /invoices` for
+`/invoices/{id}`). The candidates are the fixtures whose head calls one of
+those producers, in that order. **Ask tester** queues a `tester` run that
+reorders and explains them; its answer stays on the run (`details.fixtureRanking`)
+with the hash of the candidate set it ranked, and the candidates route applies
+it only while that set is unchanged. Nothing is bound by the model.
+
+**The cache key gains the bindings.** `api_test_suites.fixtures_hash` is the
+bound fixtures' ids and head content hashes ('' for none), so binding,
+unbinding or editing a bound fixture is a miss: the suite 404s until the next
+Generate, and only suites bound to that fixture miss. `TEST_CASE_CATALOGUE_VERSION`
+is 2. The tester is told what setup captures and may write `{{invoiceId}}`
+where a value must already exist; a placeholder naming anything not captured
+is dropped like any value that does not fit the schema.
+
+**One chain, two printers.** `testChain` (`@knowledge/contracts/api/test-chain`)
+orders setup → cases (negative before positive) → teardown, and both exports
+print it. The bash script refuses to start until every secret is exported,
+stops at the first failed setup step, runs every case, and tears down from a
+`trap` — skipping a teardown step whose setup never captured what it sends. A
+case with its own fixtures runs in a subshell. The Postman collection has Setup
+and Teardown folders, sets a collection variable per capture, jumps to
+teardown on a failed setup step, and restores shadowed variables after a case.
+Inputs carry their defaults; secrets and credential slots no fixture captures
+are variables with no value. A capture named like a credential slot (`TOKEN`)
+fills it.
+
+The runners and the `/qa` view follow in the later phases of #483.
 
 ## Surface
 
 | What | Where |
 | --- | --- |
-| Tables | `documents.kind`, `documents.spec_slug`, `api_operations`, `workspace_settings`, `merge_requests.breaking_ack_*`, `api_test_suites`, `api_fixture_calls` |
+| Tables | `documents.kind`, `documents.spec_slug`, `api_operations`, `workspace_settings`, `merge_requests.breaking_ack_*`, `api_test_suites`, `api_fixture_calls`, `api_test_bindings` |
 | Fixtures (#483) | `@knowledge/contracts/api/fixtures` (`readTestFixture`, `parseCaptureRule`, `evaluateCapture`, `resolvePlaceholders`, `literalCredentialIssues`); `ApiFixturesService` in `ApiSpecsCoreModule`; `TestFixturesController` (`GET /v1/test-fixtures`, `GET /v1/test-fixtures/:id`, viewer); web `TestFixtureEditorPage` (`/create/fixture`, `/documents/:id/fixture`) and `TestFixtureView` |
 | Vocabulary | `@knowledge/contracts/api` (`API_DOCUMENT_KINDS`, keys, `API_TRY_PROXY_MODES`, `API_BREAKING_CHANGE_POLICIES`, `API_DRIFT_KINDS`), `…/api/diff` (`API_CHANGE_RULES`), `…/api/samples` (`CODE_SAMPLE_LANGS`, generator), `…/api/test-cases` (`testCasesFor`, `buildTestSuite`, `testSuiteCurl`, `testSuitePostman`, `operationFingerprint`) |
 | Parse, project, read, diff | `api-spec.parser.ts` (`parseApiSpec`), `api-spec.projection.ts` (`renderSpecProjection`, `renderOperation`), `api-diff.ts` (`diffApiSpecs`), pure; `ApiSpecsService` (`project`), `ApiSpecReadService`, `ApiSpecDiffService` in `ApiSpecsCoreModule` (both processes) |
@@ -404,12 +447,17 @@ because a key holds `/` and `:`. A page passed to a per-document route is a 400
 | `knowledge_create_document` | unchanged guard; takes `kind` and `syntax`, so an agent can create a spec or a fixture |
 | `knowledge_list_test_fixtures` (`entityKey?`, `documentId?`) | viewer; read tool; filtered by scope |
 | `knowledge_get_test_fixture` | viewer, document; read tool; steps, resolved operations, run values, issues now |
+| `knowledge_get_test_suite` (`format?: curl \| postman`) | viewer, document; read tool; the suite, or an export with setup and teardown |
+| `knowledge_generate_test_suite` (`regenerate?`) | viewer, document + `api-test-suites.generate`; write tool |
+| `knowledge_suggest_test_fixtures` | viewer, document; read tool; prerequisites, candidates and current bindings |
+| `knowledge_set_test_fixtures` (`bindings`) | viewer, document + `api-test-suites.generate`; write tool |
 
-None of them is in `WRITE_TOOLS`, and there is no try-it tool.
+Only `knowledge_generate_test_suite` and `knowledge_set_test_fixtures` are in
+`WRITE_TOOLS`, and there is no try-it tool.
 
 Web: `components/api-reference/` (`ApiReferenceView`, `ApiOperationDetail`,
 `ApiSchemaTree`, `ApiCodeSamples`, `ApiTryConsole`, `ApiChangesPanel`,
-`ApiDriftCheck`, `ApiTestSuite` with `use-test-suite.ts`, `ApiOperationPicker`, `ApiOperationEmbed`, and the shared
+`ApiDriftCheck`, `ApiTestSuite` with `use-test-suite.ts` and `ApiSuiteSetup` with `use-suite-fixtures.ts`, `ApiOperationPicker`, `ApiOperationEmbed`, and the shared
 `ApiTabs`, `ApiCode`, `ApiTone`, `ApiMediaContent`), `pages/ApiSpecEditorPage.vue`
 (`/create/spec`, `/documents/:id/spec`), `pages/ApiSettingsPage.vue`
 (`/settings/api`), and the **API changes** tab on `MergeRequestDetailPage`,
@@ -433,6 +481,10 @@ shown only when the merge request is on a spec. In the graph view, `op:` and
   `api_test_suites`. Additive; the previous image reads neither.
 - Migration `20261205100000_api_fixture_calls` (#483) adds `api_fixture_calls`.
   Additive; the previous image never reads it.
+- Migration `20261206100000_api_test_bindings` (#483) adds `api_test_bindings`
+  and `api_test_suites.fixtures_hash` (default `''`), and swaps the suite's
+  unique index for one that includes it. v0.32.0 reads neither table, so a
+  rollback is safe.
 
 ## Deliberate deferrals
 

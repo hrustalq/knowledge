@@ -201,6 +201,35 @@ export class GenerateApiTestSuiteDto {
   regenerate?: boolean;
 }
 
+/** One operation's suite (#483): the bindings and candidate reads, and Ask tester. */
+export class ApiTestOperationDto {
+  @ApiProperty({ description: 'The operation, as its row names it (op:billing-api:post-/invoices)' })
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey!: string;
+}
+
+export class ApiTestBindingDto {
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'A case id of the suite; absent or null binds the whole suite' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200, { message: vmsg('maxLength') })
+  caseId?: string | null;
+
+  @ApiProperty({ format: 'uuid', description: 'A test-fixture document' })
+  @IsUUID()
+  fixtureId!: string;
+}
+
+export class SetApiTestBindingsDto extends ApiTestOperationDto {
+  @ApiProperty({ type: [ApiTestBindingDto], description: 'Every binding of the suite, in run order; replaces what is there. Empty unbinds all' })
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => ApiTestBindingDto)
+  bindings!: ApiTestBindingDto[];
+}
+
 export class ListTestFixturesQueryDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()

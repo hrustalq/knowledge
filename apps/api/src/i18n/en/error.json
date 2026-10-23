@@ -638,7 +638,13 @@
     "notHttp": "Only an OpenAPI operation has HTTP requests to test; an AsyncAPI spec has none.",
     "notGenerated": "No test suite has been generated for this operation as it stands. Generate one first.",
     "disabled": "The tester agent is turned off for this workspace, so no test suite can be generated.",
-    "noModel": "No model is configured for the tester agent, so no test suite can be generated."
+    "noModel": "No model is configured for the tester agent, so no test suite can be generated.",
+    "bindingFixture": "Document {id} is not a test fixture you can open in this workspace, so it cannot be bound.",
+    "bindingCase": "This suite has no case {caseId} to bind a fixture to.",
+    "fixtureHidden": "A fixture bound to this suite is one you cannot open, so the suite cannot be exported or run by you.",
+    "fixtureBroken": "The bound fixture \"{title}\" calls {call}, which no spec defines any more. Fix or unbind it first.",
+    "fixtureInvalid": "The bound fixture \"{title}\" is not valid any more: {reason}",
+    "rankNothing": "There are no fixture candidates to rank for this operation."
   },
   "testFixture": {
     "template": "A test fixture cannot start from a page template",

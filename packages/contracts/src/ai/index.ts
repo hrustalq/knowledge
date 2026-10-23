@@ -1169,7 +1169,9 @@ export type AiUsageOperation =
    */
   | 'public_ask'
   /** The `tester` filling one operation's QA test suite (#468). One row per Generate; a cached suite costs none. */
-  | 'test-suite';
+  | 'test-suite'
+  /** The `tester` ranking one operation's fixture candidates (#483). One row per Ask tester on a new candidate set. */
+  | 'test-fixture-ranking';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {
@@ -1391,6 +1393,8 @@ export interface AgentRunInput {
    * suite under the key that revision and its own agent config produce.
    */
   apiTestSuite?: { documentId: string; entityKey: string; revisionId: string };
+  /** The operation whose fixture candidates a `tester` run ranks (#483), and the candidate set it was asked about. */
+  apiFixtureRanking?: { documentId: string; entityKey: string; candidatesHash: string };
   /**
    * How far back a surveyor run reads answer feedback (docs/features/38,
    * phase 4). Absent, the worker uses `COVERAGE_WINDOW_DAYS`.
@@ -2612,6 +2616,12 @@ export interface AgentRunDetails {
    * workspace over time instead of rereading the newest pages.
    */
   glossaryScanned?: string[];
+  /**
+   * A tester run's order of one operation's fixture candidates (#483), for the
+   * candidate set it read: `candidatesHash` is what the candidates route
+   * compares, so a ranking of a set that has since changed is not applied.
+   */
+  fixtureRanking?: { candidatesHash: string; order: Array<{ documentId: string; explanation: string | null }> };
 }
 
 /**

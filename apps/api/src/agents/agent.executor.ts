@@ -57,6 +57,7 @@ import { SearchService } from '../search/search.service.js';
 import { visibilityWhere, WORKSPACE_AUDIENCE, type AccessScope } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { AccessService } from '../auth/access.service.js';
+import { ApiFixturesService } from '../api-specs/api-fixtures.service.js';
 import { ApiTestSuitesService } from '../api-specs/api-test-suites.service.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
 import { runCodeReadingLoop } from './code-reading-loop.js';
@@ -160,7 +161,15 @@ import {
 } from './digest.js';
 import { TrackerRegistry } from '../connectors/tracker-registry.service.js';
 import { MAX_SCRIBE_PAGES, SCRIBE_OUTPUT_CONTRACT, readScribeDrafts, scribeCitedIds, scribePrompt } from './scribe.js';
-import { TESTER_OUTPUT_CONTRACT, testerConfigHash, testerPrompt } from './tester.js';
+import {
+  TESTER_OUTPUT_CONTRACT,
+  TESTER_RANKING_CONTRACT,
+  boundCaptures,
+  readTesterRanking,
+  testerConfigHash,
+  testerPrompt,
+  testerRankingPrompt,
+} from './tester.js';
 
 /**
  * Agents with a background executor. Exported so the API can refuse a run at
@@ -307,6 +316,7 @@ export class AgentExecutor {
     private readonly trackers: TrackerRegistry,
     private readonly access: AccessService,
     private readonly testSuites: ApiTestSuitesService,
+    private readonly fixtures: ApiFixturesService,
   ) {}
 
   /**
@@ -475,9 +485,11 @@ export class AgentExecutor {
       // Not in RUNNABLE_AGENTS: only a `work-item.updated` trigger names a ticket (#433).
       case 'scribe':
         return this.scribe(run, agent, principal, report);
-      // Not in RUNNABLE_AGENTS: only Generate on an operation card names an operation (#468).
+      // Not in RUNNABLE_AGENTS: only Generate (#468) or Ask tester (#483) on an operation card names an operation.
       case 'tester':
-        return this.writeTestSuite(run, agent, principal, report);
+        return ((run.input ?? {}) as AgentRunInput).apiFixtureRanking
+          ? this.rankFixtures(run, agent, principal, report)
+          : this.writeTestSuite(run, agent, principal, report);
       // Deliberately not in RUNNABLE_AGENTS (docs/features/35): that set offers
       // the Run button and feeds the schedule sweeper, and a sentinel run with
       // neither a pull request nor a report has nothing to check. Only
@@ -2752,6 +2764,8 @@ ${page.markdown}`, files);
     if (at.op.workspaceId !== run.workspaceId) throw new Error(t('agent.testerRun.noOperation'));
     const cases = testCasesFor(at.spec.document, at.op);
     if (!agent.config.enabled || agent.missing.length > 0) throw new Error(t('error.apiTestSuite.noModel'));
+    // Bound fixtures (#483) as the run's owner sees them: one they cannot open fails the run.
+    const { captures, vars } = boundCaptures(await this.fixtures.bound(scope, at.bindings));
 
     await report({ stage: 'thinking', progress: 0.3 });
     const call = { config: agent.config, userId: run.createdBy, operation: 'test-suite' as const, locale: run.locale as Locale };
@@ -2759,18 +2773,67 @@ ${page.markdown}`, files);
       call,
       [
         { role: 'system', content: `${agent.instructions}\n\n${TESTER_OUTPUT_CONTRACT}${await this.guidance(run, agent)}` },
-        { role: 'user', content: testerPrompt({ method: at.op.method ?? '', path: at.op.path }, cases, operationFingerprint(at.spec.document, at.op)) },
+        {
+          role: 'user',
+          content: testerPrompt({ method: at.op.method ?? '', path: at.op.path }, cases, operationFingerprint(at.spec.document, at.op), captures),
+        },
       ],
       { json: true },
     );
     const parsed = safeJson(raw) ?? {};
     const fills = (parsed.cases && typeof parsed.cases === 'object' ? parsed.cases : {}) as Record<string, ApiTestCaseFill>;
-    const suite = buildTestSuite(at.spec.document, at.op, parsed.baseline, fills);
+    const suite = buildTestSuite(at.spec.document, at.op, parsed.baseline, fills, vars);
 
     await this.testSuites.save(at, testerConfigHash(agent), suite, { userId: run.createdBy, agentRunId: run.id });
     return {
       summary: t('agent.testerRun.summary', { count: suite.length, method: at.op.method ?? '', path: at.op.path }),
       findings: [],
+    };
+  }
+
+  /**
+   * Ask tester (#483): order one operation's fixture candidates and say why.
+   * The candidates are recomputed here under the run owner's scope, and the
+   * order is stored with the hash of the set it ranked, so the candidates
+   * route applies it only while that set is unchanged. Binds nothing.
+   */
+  private async rankFixtures(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const input = ((run.input ?? {}) as AgentRunInput).apiFixtureRanking!;
+    await this.access.requireRole(principal, run.workspaceId, 'viewer', false, { capability: 'api-test-suites.generate' });
+    const scope = await this.permissions.scopeFor(principal, run.workspaceId);
+    await this.permissions.requireLevel(scope, { type: 'document', id: input.documentId }, 'view');
+    const at = await this.testSuites.operationAt(input.documentId, input.entityKey);
+    if (at.op.workspaceId !== run.workspaceId) throw new Error(t('agent.testerRun.noOperation'));
+    const { prerequisites, candidates, hash } = await this.fixtures.candidates(scope, at);
+    if (!candidates.length) throw new Error(t('agent.testerRun.noCandidates'));
+    if (!agent.config.enabled || agent.missing.length > 0) throw new Error(t('error.apiTestSuite.noModel'));
+    const bodies = await Promise.all(
+      candidates.map(async (candidate) => ({
+        candidate,
+        fixture: await this.fixtures.get(scope, candidate.documentId).then((f) => f.fixture, () => null),
+      })),
+    );
+
+    await report({ stage: 'thinking', progress: 0.3 });
+    const op = { method: at.op.method ?? '', path: at.op.path };
+    const raw = await this.client.chat(
+      { config: agent.config, userId: run.createdBy, operation: 'test-fixture-ranking' as const, locale: run.locale as Locale },
+      [
+        { role: 'system', content: `${agent.instructions}\n\n${TESTER_RANKING_CONTRACT}${await this.guidance(run, agent)}` },
+        { role: 'user', content: testerRankingPrompt(op, prerequisites, bodies) },
+      ],
+      { json: true },
+    );
+    const order = readTesterRanking(safeJson(raw), candidates.map((c) => c.documentId));
+    return {
+      summary: t('agent.testerRun.rankSummary', { count: order.length, ...op }),
+      findings: [],
+      details: { fixtureRanking: { candidatesHash: hash, order } },
     };
   }
 

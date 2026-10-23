@@ -5,35 +5,37 @@
  * A case is one row — expected status, name, rule — that opens in place to
  * what it checks and its curl command.
  *
- * Both exports are printed here from the stored cases by the same contracts
- * printers the API's `?format=` uses, so the file and the screen cannot
- * disagree, and a download is not a second request.
+ * Both exports come from the API's `?format=`: with fixtures bound (#483)
+ * they carry the fixtures' setup and teardown, which only the server can
+ * resolve against the specs the caller may open. Above the cases sits the
+ * suite's setup; inside a case, that case's own.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, ChevronRight, Copy, Download, Loader2, RefreshCw } from 'lucide-vue-next'
-import { renderCodeSample, testSuiteCurl, testSuitePostman, type ApiOperationInfo, type ApiTestCase, type ApiTestSuiteResponse } from '@knowledge/contracts'
+import { RouterLink } from 'vue-router'
+import { ChevronRight, Download, Loader2, RefreshCw, X } from 'lucide-vue-next'
+import { renderCodeSample, type ApiOperationInfo, type ApiTestCase, type ApiTestSuiteFormat, type ApiTestSuiteResponse } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import { Collapse } from '@/components/ui/collapse'
 import { statusTone } from '@/lib/api-spec'
-import { saveFile } from '@/lib/api'
+import { apiFetchBlob, saveFile } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
-import { useCopy } from '@/lib/use-copy'
 import ApiCode from './ApiCode.vue'
+import ApiSuiteSetup from './ApiSuiteSetup.vue'
 import ApiTone from './ApiTone.vue'
+import type { SuiteFixtures } from './use-suite-fixtures'
 
 const props = defineProps<{
   operation: ApiOperationInfo
-  specTitle: string
   suite: ApiTestSuiteResponse | undefined
   generating: boolean
   failure: string | null
   loadError: string | null
   canGenerate: boolean
+  fixtures: SuiteFixtures
 }>()
 const emit = defineEmits<{ generate: [regenerate: boolean] }>()
 const { t } = useI18n()
-const { state: copyState, copy } = useCopy()
 const uid = useId()
 
 const groups = computed(() =>
@@ -41,7 +43,6 @@ const groups = computed(() =>
     .map((kind) => ({ kind, cases: props.suite?.cases.filter((c) => c.kind === kind) ?? [] }))
     .filter((g) => g.cases.length > 0),
 )
-const label = computed(() => `${props.operation.method ?? ''} ${props.operation.path}`)
 /** Only a suite whose requests carry a credential placeholder needs the note about filling one. */
 const usesCredentials = computed(() =>
   !!props.suite?.cases.some((c) => [...c.request.headers, ...c.request.query].some((x) => x.value.some((p) => typeof p !== 'string'))),
@@ -55,11 +56,32 @@ function toggle(id: string) {
   open.value = next
 }
 
-function downloadPostman() {
-  if (!props.suite) return
-  const collection = testSuitePostman({ title: `${props.specTitle} — ${label.value}`, folder: label.value, cases: props.suite.cases })
-  const name = label.value.toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '')
-  saveFile(new Blob([JSON.stringify(collection, null, 2)], { type: 'application/json' }), `${name}.postman_collection.json`)
+const downloading = ref<ApiTestSuiteFormat | null>(null)
+const downloadError = ref<string | null>(null)
+async function download(format: ApiTestSuiteFormat) {
+  downloading.value = format
+  downloadError.value = null
+  try {
+    const query = new URLSearchParams({ entityKey: props.operation.entityKey, format })
+    const { blob, filename } = await apiFetchBlob(`/v1/api-specs/${props.operation.documentId}/test-suite?${query}`)
+    saveFile(blob, filename ?? (format === 'curl' ? 'suite.sh' : 'suite.postman_collection.json'))
+  } catch (e) {
+    downloadError.value = (e as Error).message
+  } finally {
+    downloading.value = null
+  }
+}
+
+/** One case's own fixtures, run just before it. */
+const caseBound = (c: ApiTestCase) => props.fixtures.bindings.value?.cases[c.id] ?? []
+const caseAddable = (c: ApiTestCase) => {
+  const taken = new Set(caseBound(c).map((b) => b.fixtureId))
+  return props.fixtures.library.value.filter((f) => !taken.has(f.documentId))
+}
+function bindToCase(c: ApiTestCase, e: Event) {
+  const select = e.target as HTMLSelectElement
+  if (select.value) void props.fixtures.bind(select.value, c.id)
+  select.value = ''
 }
 
 const ruleLabel = (c: ApiTestCase) => t(`apiTests.rule.${c.rule}`)
@@ -79,13 +101,14 @@ const domId = (c: ApiTestCase) => `${uid}-${c.id.replace(/[^\w-]/gu, '_')}`
           {{ t('apiTests.generated', { when: formatDateTime(suite.generatedAt), revision: suite.revisionId.slice(0, 8) }) }}
         </p>
         <div class="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" @click="copy(testSuiteCurl(suite.cases))">
-            <Check v-if="copyState === 'copied'" class="size-3.5" aria-hidden="true" />
-            <Copy v-else class="size-3.5" aria-hidden="true" />
-            {{ copyState === 'copied' ? t('apiTests.copied') : copyState === 'failed' ? t('apiTests.copyFailed') : t('apiTests.copyCurl') }}
+          <Button size="sm" variant="outline" :disabled="downloading !== null" @click="download('curl')">
+            <Loader2 v-if="downloading === 'curl'" class="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            <Download v-else class="size-3.5" aria-hidden="true" />
+            {{ t('apiTests.downloadScript') }}
           </Button>
-          <Button size="sm" variant="outline" @click="downloadPostman">
-            <Download class="size-3.5" aria-hidden="true" />
+          <Button size="sm" variant="outline" :disabled="downloading !== null" @click="download('postman')">
+            <Loader2 v-if="downloading === 'postman'" class="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            <Download v-else class="size-3.5" aria-hidden="true" />
             {{ t('apiTests.downloadPostman') }}
           </Button>
           <Button
@@ -100,6 +123,17 @@ const domId = (c: ApiTestCase) => `${uid}-${c.id.replace(/[^\w-]/gu, '_')}`
           </Button>
         </div>
       </div>
+
+      <p v-if="downloadError" class="kn-ts-status kn-ts-status--error" role="alert">{{ downloadError }}</p>
+
+      <ApiSuiteSetup
+        :fixtures="fixtures"
+        :can-bind="canGenerate"
+        :has-suite="!!suite"
+        :can-generate="canGenerate"
+        :generating="generating"
+        @generate="emit('generate', false)"
+      />
 
       <p v-if="generating" class="kn-ts-status" role="status">
         <Loader2 class="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -140,6 +174,33 @@ const domId = (c: ApiTestCase) => `${uid}-${c.id.replace(/[^\w-]/gu, '_')}`
                   <span class="font-medium text-foreground">{{ t('apiTests.expect', { status: c.expected.status }) }}</span>
                   {{ c.expected.expectation || c.expected.description }}
                 </p>
+                <div v-if="caseBound(c).length || (canGenerate && caseAddable(c).length)" class="kn-ts-case-setup">
+                  <span class="kn-ts-case-setup-label">{{ t('apiTests.setup.forCase') }}</span>
+                  <span v-for="b in caseBound(c)" :key="b.fixtureId" class="kn-ts-case-chip">
+                    <RouterLink v-if="b.title" :to="`/documents/${b.fixtureId}`">{{ b.title }}</RouterLink>
+                    <span v-else>{{ t('apiTests.setup.hidden') }}</span>
+                    <button
+                      v-if="canGenerate"
+                      type="button"
+                      class="kn-ts-case-chip-x"
+                      :disabled="fixtures.saving.value"
+                      :aria-label="t('apiTests.setup.unbind', { name: b.title ?? t('apiTests.setup.hidden') })"
+                      @click="fixtures.unbind(b.fixtureId, c.id)"
+                    >
+                      <X class="size-3" aria-hidden="true" />
+                    </button>
+                  </span>
+                  <select
+                    v-if="canGenerate && caseAddable(c).length"
+                    class="kn-setup-select kn-ts-case-add"
+                    :aria-label="t('apiTests.setup.addToCase', { name: c.name })"
+                    :disabled="fixtures.saving.value"
+                    @change="bindToCase(c, $event)"
+                  >
+                    <option value="" selected>{{ t('apiTests.setup.addPlaceholder') }}</option>
+                    <option v-for="f in caseAddable(c)" :key="f.documentId" :value="f.documentId">{{ f.title }}</option>
+                  </select>
+                </div>
                 <ApiCode v-if="open.has(c.id)" :code="renderCodeSample('curl', c.request)" lang="bash" :label="t('apiTests.curlLabel')" />
                 <ApiCode
                   v-if="open.has(c.id) && c.expected.example != null"
@@ -254,6 +315,52 @@ const domId = (c: ApiTestCase) => `${uid}-${c.id.replace(/[^\w-]/gu, '_')}`
   padding: 0.15rem 0.4rem 0.9rem 2rem;
   font-size: var(--kn-text-sm);
   line-height: 1.55;
+}
+.kn-ts-case-setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--kn-text-xs);
+}
+.kn-ts-case-setup-label {
+  color: var(--muted-foreground);
+}
+.kn-ts-case-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0.25rem 0.1rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--foreground);
+}
+.kn-ts-case-chip a:hover {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.kn-ts-case-chip-x {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+}
+.kn-ts-case-chip-x:hover {
+  background: color-mix(in oklab, var(--kn-accent) 10%, transparent);
+  color: var(--foreground);
+}
+.kn-ts-case-chip-x:focus-visible,
+.kn-ts-case-chip a:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.kn-ts-case-add {
+  flex: 0 1 14rem;
+  height: 1.75rem;
+  font-size: var(--kn-text-xs);
 }
 @container kn-op (max-width: 34rem) {
   .kn-ts-case-head {

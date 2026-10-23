@@ -14,6 +14,7 @@ export * from '@knowledge/contracts/api/samples';
 export * from '@knowledge/contracts/api/diff';
 export * from '@knowledge/contracts/api/test-cases';
 export * from '@knowledge/contracts/api/fixtures';
+export * from '@knowledge/contracts/api/test-chain';
 export * from '@knowledge/contracts/reviews';
 export * from '@knowledge/contracts/identity';
 export * from '@knowledge/contracts/notifications';

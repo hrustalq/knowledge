@@ -17,6 +17,22 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Test fixtures set up QA test suites (#483, phase 2). An operation's **Test requests** section now
+  opens with **Setup**: the fixtures bound to the suite, run once before its cases, and fixtures the
+  spec suggests. A suggestion is a fixture that calls an operation producing a value this one needs:
+  one the spec's response `links` point here from first, then one whose response carries the path
+  parameter (`POST /invoices` returning `id` for `GET /invoices/{id}`). **Ask tester** has the tester
+  agent order the suggestions and explain each; nothing is bound until you press **Bind**. Any fixture
+  can also be bound from the list, to the whole suite or, inside a case, to that case only (its
+  captures replace the suite's for that case). Generate then writes cases that use what setup
+  captures, such as `/invoices/{{invoiceId}}`. Binding, unbinding or editing a bound fixture means the
+  suite has to be generated again. **Download script** (replacing Copy cURL) gives a bash script that
+  checks every secret is exported, runs setup, every case, and teardown on exit even after a failure,
+  and exits non-zero when anything failed. It needs curl and jq. The Postman collection gains Setup
+  and Teardown folders that pass captured values between requests. Neither file contains a secret
+  value. Binding needs the same permission as generating. Agents get `knowledge_get_test_suite` (JSON,
+  script or collection), `knowledge_generate_test_suite`, `knowledge_suggest_test_fixtures` and
+  `knowledge_set_test_fixtures`; the generate and set tools are hidden from read-only keys.
 - QA test fixtures (#483, phase 1). A new document kind, **Test fixture**, holds what a test needs
   before it can run: calls to any operation in any spec (log in, create the invoice), values captured
   from their responses (`$.id`, `$.items[0].id`, `header:Location`) and reused later as `{{invoiceId}}`,
@@ -137,6 +153,10 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261206100000_api_test_bindings` (#483) adds the `api_test_bindings` table and
+  `api_test_suites.fixtures_hash` (text, default `''`), and replaces the suite cache's unique index
+  with one that includes it. v0.32.0 reads neither table, so a rollback is safe. The case catalogue
+  moves to version 2, so every suite generated before this release is generated again on next use.
 - Migration `20261205100000_api_fixture_calls` (#483) adds the `api_fixture_calls` table, one row
   per call step of an indexed fixture revision. It is a new table the previous release never reads,
   so a rollback keeps working for everything else. A fixture created on this release does not render
@@ -162,6 +182,9 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Generating test requests on a spec opened from another workspace's link no longer spins forever
+  (#483). The panel watched the tester run in the workspace selected in the sidebar instead of the
+  spec's own.
 - Two mermaid diagrams on one page no longer draw into each other (#476). When two blocks rendered in
   the same millisecond they got the same id: one came out empty and the other held both diagrams'
   shapes. A mermaid block that fails to parse no longer leaves a "Syntax error in text" bomb pinned

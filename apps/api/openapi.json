@@ -10320,6 +10320,210 @@
         ]
       }
     },
+    "/v1/embeds/figma/files": {
+      "get": {
+        "operationId": "FigmaPickerController_files",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FigmaPickerFilesResponseDto"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Figma files the workspace may embed",
+        "tags": [
+          "embeds"
+        ]
+      }
+    },
+    "/v1/embeds/figma/files/{fileKey}": {
+      "get": {
+        "operationId": "FigmaPickerController_file",
+        "parameters": [
+          {
+            "name": "fileKey",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FigmaPickerFileResponseDto"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A Figma file’s pages and top-level frames, with thumbnails, at its current version",
+        "tags": [
+          "embeds"
+        ]
+      }
+    },
+    "/v1/embeds/figma/resolve": {
+      "post": {
+        "operationId": "FigmaPickerController_resolve",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FigmaResolveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FigmaResolveResponseDto"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pin a pasted Figma link to the file’s current version",
+        "tags": [
+          "embeds"
+        ]
+      }
+    },
     "/v1/me/avatar": {
       "post": {
         "operationId": "AvatarsController_reserveMine",
@@ -35078,6 +35282,157 @@
         },
         "required": [
           "items"
+        ]
+      },
+      "FigmaPickerFileEntryDto": {
+        "type": "object",
+        "properties": {
+          "fileKey": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fileKey",
+          "name"
+        ]
+      },
+      "FigmaPickerFilesResponseDto": {
+        "type": "object",
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FigmaPickerFileEntryDto"
+            }
+          }
+        },
+        "required": [
+          "connected",
+          "files"
+        ]
+      },
+      "FigmaPickerFrameDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "thumbnailUrl"
+        ]
+      },
+      "FigmaPickerPageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "frames": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FigmaPickerFrameDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "frames"
+        ]
+      },
+      "FigmaPickerFileResponseDto": {
+        "type": "object",
+        "properties": {
+          "fileKey": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "board": {
+            "type": "boolean"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FigmaPickerPageDto"
+            }
+          }
+        },
+        "required": [
+          "fileKey",
+          "name",
+          "version",
+          "board",
+          "pages"
+        ]
+      },
+      "FigmaResolveDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "description": "A Figma design, prototype, Dev Mode or FigJam link"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "url"
+        ]
+      },
+      "FigmaResolveResponseDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "url",
+          "version",
+          "name",
+          "allowed"
         ]
       },
       "CreateAvatarUploadDto": {

@@ -17,6 +17,14 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Authors can embed Figma frames from the editor (#470, phase 4). `/figma` (also `/макет`) opens a
+  picker: choose an allowlisted file, tick frames from its pages, or paste a "Copy link to selection"
+  link for a deeper layer; then reorder (drag, or the arrow buttons), caption each frame and the group,
+  and pick Strip or Grid. Up to 24 frames per group, each pinned to the file's current version. The
+  pencil on a group reopens it. A Figma link pasted alone on an empty line becomes a group straight
+  away, pinned and captioned with the frame's name; **Keep as link** in the toast, or undo, turns it
+  back. The picker loads only when opened, and every Figma call goes through the API, which holds the
+  token. Without a Figma connector the picker says so and links to connectors.
 - Embedded Figma frames show their snapshots (#470, phase 3). When a page is indexed, the worker
   records each item it embeds and renders every pinned one through the Figma connector: a PNG of
   that node at its pinned version, 2× and at most 4096 px on the long side. The snapshot is stored once

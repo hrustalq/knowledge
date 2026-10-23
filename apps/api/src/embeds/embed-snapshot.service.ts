@@ -1,15 +1,14 @@
 import { createHash } from 'node:crypto';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Connector } from '@prisma/client';
 import type { Env } from '../config/env.js';
-import { ConnectorsService } from '../connectors/connectors.service.js';
 import { connectorFetch, type ConnectorContext } from '../connectors/adapters/connector.types.js';
-import { figmaAllowedFiles, figmaGet } from '../connectors/adapters/figma.js';
+import { figmaGet } from '../connectors/adapters/figma.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { embedSnapshotKey, type EmbedSnapshotJob } from './embeds.constants.js';
-import { EMBED_RETRY_MS, NOT_ALLOWLISTED, embedFileAllowed } from './embeds.service.js';
+import { EMBED_RETRY_MS, NOT_ALLOWLISTED } from './embeds.service.js';
+import { FigmaFilesService } from './figma-files.service.js';
 
 /** The slice of a Figma node this file reads. */
 export interface FigmaNode {
@@ -55,22 +54,19 @@ export function figmaRenderScale(box: { width: number; height: number } | null |
  */
 @Injectable()
 export class EmbedSnapshotService {
-  private readonly logger = new Logger(EmbedSnapshotService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
-    private readonly connectors: ConnectorsService,
+    private readonly files: FigmaFilesService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
   async render(job: EmbedSnapshotJob): Promise<void> {
     const where = { workspaceId_provider_fileKey_nodeId_version: { ...job, provider: 'figma' } };
     if ((await this.prisma.embedNode.findUnique({ where }))?.snapshotKey) return;
-    const resolved = await this.resolveFile(job.workspaceId, job.fileKey);
-    if (!resolved) return this.fail(job, NOT_ALLOWLISTED, 60 * 60_000);
+    const ctx = await this.files.contextFor(job.workspaceId, job.fileKey);
+    if (!ctx) return this.fail(job, NOT_ALLOWLISTED, 60 * 60_000);
     try {
-      const ctx = await this.connectors.contextFor(resolved.connector, async () => undefined);
       const rendered = job.nodeId ? await this.renderNode(ctx, job) : await this.renderFile(ctx, job);
       const key = embedSnapshotKey(job);
       await this.storage.putObjectBytes(key, rendered.png, 'image/png');
@@ -79,39 +75,6 @@ export class EmbedSnapshotService {
     } catch (err) {
       await this.fail(job, (err as Error).message.slice(0, 300), EMBED_RETRY_MS);
     }
-  }
-
-  /**
-   * The file's row, refreshed from the allowlist when it is missing or its
-   * connector no longer reaches it. Listing is the only way to learn a file's
-   * project; each enabled Figma connector is listed until one reaches the file.
-   */
-  private async resolveFile(workspaceId: string, fileKey: string): Promise<{ connector: Connector } | null> {
-    const connectors = await this.prisma.connector.findMany({ where: { workspaceId, kind: 'figma', enabled: true }, orderBy: { createdAt: 'asc' } });
-    const file = await this.prisma.embedFile.findUnique({ where: { workspaceId_provider_fileKey: { workspaceId, provider: 'figma', fileKey } } });
-    const current = connectors.find((c) => c.id === file?.connectorId);
-    if (file && current && embedFileAllowed(file, current)) return { connector: current };
-    for (const connector of connectors) {
-      const ctx = await this.connectors.contextFor(connector, async () => undefined);
-      const files = await figmaAllowedFiles(ctx).catch((err: unknown) => {
-        this.logger.warn(`Figma allowlist of connector ${connector.id} could not be listed: ${(err as Error).message}`);
-        return null;
-      });
-      if (!files) continue;
-      // The listing is the truth for this connector: rows it no longer reaches go.
-      await this.prisma.$transaction([
-        this.prisma.embedFile.deleteMany({ where: { connectorId: connector.id, fileKey: { notIn: files.map((f) => f.fileKey) } } }),
-        ...files.map((f) =>
-          this.prisma.embedFile.upsert({
-            where: { workspaceId_provider_fileKey: { workspaceId, provider: 'figma', fileKey: f.fileKey } },
-            create: { workspaceId, provider: 'figma', ...f, connectorId: connector.id },
-            update: { name: f.name, projectId: f.projectId, teamId: f.teamId, connectorId: connector.id, checkedAt: new Date() },
-          }),
-        ),
-      ]);
-      if (files.some((f) => f.fileKey === fileKey)) return { connector };
-    }
-    return null;
   }
 
   private async renderNode(ctx: ConnectorContext, job: EmbedSnapshotJob) {

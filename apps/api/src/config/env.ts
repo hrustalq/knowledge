@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_EMBED_MAX_ITEMS } from '@knowledge/contracts/embeds';
 
 /**
  * An env flag, spelled out.
@@ -308,7 +309,7 @@ export const envSchema = z.object({
   EXPORT_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
   // ---- Embeds (#470, docs/features/64) ----
   /** Items per embed group; more stay links, with a warning on the revision. */
-  EMBED_MAX_ITEMS: z.coerce.number().int().positive().default(24),
+  EMBED_MAX_ITEMS: z.coerce.number().int().positive().default(DEFAULT_EMBED_MAX_ITEMS),
   /** Figma render scale for a snapshot, before the pixel cap below. */
   EMBED_SNAPSHOT_SCALE: z.coerce.number().positive().max(4).default(2),
   /** Longest side of a snapshot, in pixels. */

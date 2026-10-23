@@ -3132,6 +3132,36 @@
     },
     {
       "method": "GET",
+      "path": "/v1/embeds/figma/files",
+      "tag": "embeds",
+      "summary": "Figma files the workspace may embed",
+      "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/embeds/figma/files/{fileKey}",
+      "tag": "embeds",
+      "summary": "A Figma file’s pages and top-level frames, with thumbnails, at its current version",
+      "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/embeds/figma/resolve",
+      "tag": "embeds",
+      "summary": "Pin a pasted Figma link to the file’s current version",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/entities",
       "tag": "entities",
       "summary": "List workspace entities with relation degree",

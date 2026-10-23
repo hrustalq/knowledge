@@ -2002,6 +2002,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/embeds/figma/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Figma files the workspace may embed */
+        get: operations["FigmaPickerController_files"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/embeds/figma/files/{fileKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A Figma file’s pages and top-level frames, with thumbnails, at its current version */
+        get: operations["FigmaPickerController_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/embeds/figma/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pin a pasted Figma link to the file’s current version */
+        post: operations["FigmaPickerController_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/avatar": {
         parameters: {
             query?: never;
@@ -7436,6 +7487,44 @@ export interface components {
         };
         DocumentEmbedsResponseDto: {
             items: components["schemas"]["EmbedItemStatusDto"][];
+        };
+        FigmaPickerFileEntryDto: {
+            fileKey: string;
+            name: string;
+        };
+        FigmaPickerFilesResponseDto: {
+            connected: boolean;
+            files: components["schemas"]["FigmaPickerFileEntryDto"][];
+        };
+        FigmaPickerFrameDto: {
+            id: string;
+            name: string;
+            type: string;
+            thumbnailUrl: string | null;
+        };
+        FigmaPickerPageDto: {
+            id: string;
+            name: string;
+            frames: components["schemas"]["FigmaPickerFrameDto"][];
+        };
+        FigmaPickerFileResponseDto: {
+            fileKey: string;
+            name: string;
+            version: string;
+            board: boolean;
+            pages: components["schemas"]["FigmaPickerPageDto"][];
+        };
+        FigmaResolveDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description A Figma design, prototype, Dev Mode or FigJam link */
+            url: string;
+        };
+        FigmaResolveResponseDto: {
+            url: string;
+            version: string | null;
+            name: string | null;
+            allowed: boolean;
         };
         CreateAvatarUploadDto: {
             filename: string;
@@ -15914,6 +16003,136 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentEmbedsResponseDto"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    FigmaPickerController_files: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FigmaPickerFilesResponseDto"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    FigmaPickerController_file: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                fileKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FigmaPickerFileResponseDto"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    FigmaPickerController_resolve: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FigmaResolveDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FigmaResolveResponseDto"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

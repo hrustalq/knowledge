@@ -3395,7 +3395,10 @@
       "keepAsLink": "Keep as link",
       "pasted": "Embedded the Figma frame",
       "pastedNotAllowed": "Embedded as a link: this file is not in a Figma connector’s allowlist",
-      "pastedUnpinned": "Embedded, but Figma could not be reached to pin it"
+      "pastedUnpinned": "Embedded, but Figma could not be reached to pin it",
+      "changed": "Design changed in Figma since this was pinned",
+      "update": "Update",
+      "updateNamed": "Pin {name} to the current design"
     },
     "embedPicker": {
       "title": "Embed Figma frames",
@@ -4639,7 +4642,8 @@
       "unread": "Unread",
       "dead": "Dead",
       "archived": "Archived",
-      "handed-off": "Handed off"
+      "handed-off": "Handed off",
+      "stale-mockups": "Changed designs"
     },
     "presetHint": {
       "all": "Every live page",
@@ -4656,7 +4660,8 @@
       "broken-calls": "A test fixture calls an operation no spec defines any more",
       "unread": "Older than the read window, and nobody opened it in the app during it",
       "dead": "Unread, and no search returned it either: a candidate to archive",
-      "archived": "Put away; hidden from lists, search and the assistant"
+      "archived": "Put away; hidden from lists, search and the assistant",
+      "stale-mockups": "A Figma frame the page embeds changed since it was pinned"
     },
     "search": "Search by title…",
     "owner": {

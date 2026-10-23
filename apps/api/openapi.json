@@ -25856,7 +25856,8 @@
                 "unread",
                 "dead",
                 "archived",
-                "handed-off"
+                "handed-off",
+                "stale-mockups"
               ]
             }
           },
@@ -35341,6 +35342,10 @@
           "height": {
             "type": "number",
             "nullable": true
+          },
+          "changed": {
+            "type": "boolean",
+            "description": "The node changed in Figma since this version was pinned"
           }
         },
         "required": [
@@ -35350,7 +35355,8 @@
           "state",
           "name",
           "width",
-          "height"
+          "height",
+          "changed"
         ]
       },
       "DocumentEmbedsResponseDto": {

@@ -164,6 +164,12 @@ export interface EmbedItemStatus {
   /** The node's size at 1×, for the tile's aspect ratio. */
   width: number | null;
   height: number | null;
+  /**
+   * The node itself changed in Figma since this version was pinned (its
+   * subtree hash differs; edits elsewhere in the file do not count). Derived
+   * from the connector's last change check, never stored.
+   */
+  changed: boolean;
 }
 
 export interface DocumentEmbedsResponse {

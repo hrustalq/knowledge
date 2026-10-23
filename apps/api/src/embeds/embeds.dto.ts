@@ -10,6 +10,7 @@ export class EmbedItemStatusDto {
   @ApiProperty({ type: String, nullable: true }) name!: string | null;
   @ApiProperty({ type: Number, nullable: true }) width!: number | null;
   @ApiProperty({ type: Number, nullable: true }) height!: number | null;
+  @ApiProperty({ description: 'The node changed in Figma since this version was pinned' }) changed!: boolean;
 }
 
 export class DocumentEmbedsResponseDto {

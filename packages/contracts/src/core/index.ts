@@ -791,6 +791,8 @@ export const HEALTH_FILTERS = [
   'archived',
   // #424: pages with a ticket handed off for their flag or for the page.
   'handed-off',
+  // #470: a page whose embedded design changed in Figma since it was pinned.
+  'stale-mockups',
 ] as const;
 export type HealthFilter = (typeof HEALTH_FILTERS)[number];
 

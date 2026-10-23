@@ -33,6 +33,7 @@ import { quietPageSql, readSignalsColumnsSql, readSignalsJoinSql } from '../anal
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { brokenCallsSql } from '../api-specs/api-fixtures.service.js';
+import { staleMockupsSql } from '../embeds/embeds.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { VerificationPolicyService } from './verification-policy.service.js';
 import { VerificationService } from './verification.service.js';
@@ -272,6 +273,8 @@ export class KnowledgeHealthService {
              COALESCE(cd.missing_paths, '{}') AS missing_paths,
              -- #483: a fixture calling an operation no spec head defines.
              ${brokenCallsSql(Prisma.sql`b.head_revision_id`)} AS broken_calls,
+             -- #470: an embedded design changed in Figma since the head pinned it.
+             ${staleMockupsSql(Prisma.sql`b.head_revision_id`)} AS stale_mockups,
              d.created_at, ${readSignalsColumnsSql(access.workspaceId, this.readSince(now))},
              CASE
                WHEN d.verification_flag = 'outdated' THEN 'outdated'
@@ -383,6 +386,8 @@ export function healthFilterSql(
       return Prisma.sql`${live} AND cardinality(r.missing_paths) > 0`;
     case 'broken-calls':
       return Prisma.sql`${live} AND cardinality(r.broken_calls) > 0`;
+    case 'stale-mockups':
+      return Prisma.sql`${live} AND r.stale_mockups`;
     case 'handed-off':
       return Prisma.sql`${live} AND EXISTS (
         SELECT 1 FROM connector_work_items w

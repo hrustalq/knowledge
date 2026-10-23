@@ -148,9 +148,10 @@
 }
 .markdown-body hr, .kn-prose hr { border: none; border-top: 1px solid var(--border); margin: 1.75em 0; }
 .markdown-body img, .kn-prose img { max-width: 100%; border-radius: 8px; }
-/* A read-mode image opens the lightbox (#467, lib/image-gallery). */
-[data-kn-zoom] { cursor: zoom-in; }
-[data-kn-zoom]:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+/* A read-mode image or diagram opens a lightbox (#467, #476; lib/image-gallery, lib/diagram-gallery). */
+[data-kn-zoom], [data-kn-diagram] { cursor: zoom-in; }
+[data-kn-zoom]:focus-visible, [data-kn-diagram]:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+[data-kn-diagram] { border-radius: 8px; }
 .markdown-body mark, .kn-prose mark {
   background: color-mix(in oklch, var(--kn-panel-warning) 30%, transparent);
   color: inherit;
@@ -930,25 +931,71 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-mermaid-grid { display: grid; }
 .kn-mermaid-grid[data-editing='true'] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 @media (max-width: 56rem) { .kn-mermaid-grid[data-editing='true'] { grid-template-columns: minmax(0, 1fr); } }
-.kn-mermaid-source { border-right: 1px solid var(--border); background: color-mix(in oklch, var(--foreground) 3%, transparent); }
-.kn-mermaid-textarea {
-  width: 100%;
-  min-height: 12rem;
-  resize: vertical;
-  padding: 0.85rem;
-  background: transparent;
+.kn-mermaid-source {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+  background: color-mix(in oklch, var(--foreground) 3%, transparent);
+}
+/* Gutter, error band and text share one font and line height, so they line up
+   without measuring. The textarea is as many rows as the source has lines
+   (MermaidNode), so it grows with the source instead of scrolling inside it. */
+.kn-mermaid-code {
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: var(--kn-text-ui);
   line-height: 1.6;
+}
+.kn-mermaid-code[data-error-line]::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset-inline: 0;
+  top: calc(0.85rem + (var(--kn-error-line) - 1) * 1lh);
+  height: 1lh;
+  background: color-mix(in oklch, var(--destructive) 12%, transparent);
+  pointer-events: none;
+}
+.kn-mermaid-lines {
+  display: flex;
+  flex-direction: column;
+  padding: 0.85rem 0.55rem 0.85rem 0.85rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in oklch, var(--muted-foreground) 70%, transparent);
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+.kn-mermaid-lines [data-error] { color: var(--destructive); font-weight: 600; }
+.kn-mermaid-textarea {
+  width: 100%;
+  resize: none;
+  overflow: auto hidden;
+  white-space: pre;
+  padding: 0.85rem;
+  background: transparent;
+  font: inherit;
   outline: none;
   border: none;
 }
-.kn-mermaid-error {
-  padding: 0.4rem 0.85rem 0.7rem;
+.kn-mermaid-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  min-height: 2.1rem;
+  padding: 0.45rem 0.85rem 0.6rem;
   font-size: var(--kn-text-xs);
-  color: var(--destructive);
+  color: var(--muted-foreground);
   border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
 }
+.kn-mermaid-status[data-state='error'] { color: var(--destructive); }
+.kn-mermaid-status svg { margin-top: 0.15em; }
 .kn-mermaid-preview,
 .kn-mermaid-figure { display: flex; justify-content: center; padding: 1.1rem; overflow-x: auto; }
 .kn-mermaid-preview svg,

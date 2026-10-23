@@ -17,6 +17,19 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Diagrams open full-screen (#476). Clicking, tapping or pressing Enter on a rendered mermaid
+  diagram of any type, or on a whiteboard drawing, opens it scaled to the screen. This works in a
+  page, a comment, a merge request, an assistant answer, a share link and a published site. The
+  preview keeps the page's theme and follows a theme switch. It shows the SVG the page already drew,
+  so it sends no request, and stays sharp at any zoom. **+** / **−** (keyboard or header buttons),
+  Ctrl/⌘ + wheel and pinch zoom to at least 400%. **0** or the percentage fits it again. Zoomed, the
+  diagram is grabbed: a drag or the wheel moves it. ←/→ and the side buttons step through the page's
+  diagrams ("2 / 5"), separately from its images. Escape, ✕ or a click beside the diagram returns
+  focus and scroll position. A block that failed to parse opens nothing, and edit mode is unchanged.
+- The mermaid source editor numbers its lines and marks the one the parser failed on (#476). The
+  status under the source says what the parser expected there, or which diagram type parsed. The
+  source box now grows with the diagram source instead of scrolling inside a fixed 12-line box.
+
 - Every table row and column has its own handle in the editor (#471). A grip on the table's left
   border acts on a row, and one on its top border acts on a column. They show for the row and column
   under the pointer or the caret, and its menu inserts beside it or deletes it, whichever cell the caret is in.
@@ -110,6 +123,13 @@ in the pull request that introduces them — see
   searchable Time/Mattermost channel, at the first message it keeps there, with two calls to the chat
   server. A team renamed after that keeps the old name in the column. Set the column to `NULL` and the
   next message resolves the new name.
+
+### Fixed
+
+- Two mermaid diagrams on one page no longer draw into each other (#476). When two blocks rendered in
+  the same millisecond they got the same id: one came out empty and the other held both diagrams'
+  shapes. A mermaid block that fails to parse no longer leaves a "Syntax error in text" bomb pinned
+  to the bottom of the page.
 
 ## [0.32.1] — 2026-10-22
 

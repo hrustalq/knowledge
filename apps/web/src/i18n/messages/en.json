@@ -3340,6 +3340,9 @@
     "deleteDiagram": "Delete diagram",
     "editSource": "Edit source",
     "mermaidSource": "Mermaid diagram source",
+    "mermaidErrorAt": "Line {line}: {message}",
+    "mermaidValid": "Valid · {type}",
+    "mermaidInvalid": "The diagram could not be parsed",
     "done": "Done",
     "collapsePreview": "Collapse preview",
     "expandPreview": "Expand preview",
@@ -6547,5 +6550,16 @@
     "actualSize": "Actual size",
     "previous": "Previous image",
     "next": "Next image"
+  },
+  "diagramViewer": {
+    "title": "Diagram preview",
+    "hint": "Click the diagram to see it at its own size, drag to move around it, use + and − or Ctrl and the wheel to zoom, 0 to fit, and the arrow keys to go to the next or previous diagram.",
+    "open": "Open diagram",
+    "position": "Diagram {n} of {total}",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit to screen ({percent}%)",
+    "previous": "Previous diagram",
+    "next": "Next diagram"
   }
 }

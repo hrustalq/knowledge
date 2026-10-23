@@ -7,6 +7,7 @@ import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { Check, PenLine, Trash2 } from 'lucide-vue-next'
 import { parseScene, renderSceneToSvg, serializeScene, emptyScene } from '@/lib/markdown/drawing'
 import Whiteboard from '../Whiteboard.vue'
+import { diagramAttrs } from '@/lib/diagram-gallery'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -20,6 +21,11 @@ const sceneJson = computed<string>(
 const preview = computed(() => renderSceneToSvg(parseScene(sceneJson.value)))
 const isEmpty = computed(() => parseScene(sceneJson.value).els.length === 0)
 
+/** Read mode opens the page's lightbox (#476), as MermaidNode does. */
+function zoomAttrs() {
+  return props.editor.isEditable ? {} : diagramAttrs(t)
+}
+
 function update(next: string) {
   props.updateAttributes({ scene: next })
 }
@@ -29,7 +35,7 @@ function update(next: string) {
   <NodeViewWrapper class="kn-block kn-drawing" :data-selected="selected" :data-editing="editing">
     <div v-if="!editing" class="kn-drawing-view" @dblclick="editor.isEditable && (editing = true)">
       <!-- eslint-disable-next-line vue/no-v-html -- SVG built from our own scene model -->
-      <div v-if="!isEmpty" class="kn-drawing-canvas" v-html="preview" />
+      <div v-if="!isEmpty" class="kn-drawing-canvas" v-bind="zoomAttrs()" v-html="preview" />
       <div v-else class="kn-drawing-placeholder">
         <PenLine class="size-5 opacity-50" />
         <span>{{ t('editor.emptyDiagram') }}</span>

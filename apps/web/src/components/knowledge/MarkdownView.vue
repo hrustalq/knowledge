@@ -22,12 +22,14 @@ import { mayContainPageRef } from '@/lib/page-refs'
 import { usePageRefsStore } from '@/stores/page-refs'
 import { resolveAssetUrl } from '@/lib/api'
 import { useTheme } from '@/lib/theme'
-import { mermaidConfig } from '@/lib/mermaid'
+import { mermaidConfig, mermaidSvg } from '@/lib/mermaid'
 import { createRevealTracker, wrapRuns } from '@/lib/stream-reveal'
 import { markZoomable } from '@/lib/image-gallery'
-import ImageLightbox from '@/components/ui/image-lightbox/ImageLightbox.vue'
+import { markDiagrams } from '@/lib/diagram-gallery'
+import ImageLightbox from '@/components/ui/lightbox/ImageLightbox.vue'
+import DiagramLightbox from '@/components/ui/lightbox/DiagramLightbox.vue'
 
-// Two roots (the body and the lightbox), so a parent's class lands on the body by hand.
+// Several roots (the body and the lightboxes), so a parent's class lands on the body by hand.
 defineOptions({ inheritAttrs: false })
 
 interface MarkdownHeading { id: string; text: string; level: number }
@@ -57,8 +59,6 @@ const { t } = useI18n()
 const host = ref<HTMLElement | null>(null)
 const html = ref('')
 const theme = useTheme()
-
-let mermaidSeq = 0
 
 /**
  * Page references by title need the roster, and the roster costs a request —
@@ -102,7 +102,10 @@ async function render() {
   renderFiles()
   renderToc(headings)
   await renderMermaid()
-  if (host.value) emit('rendered', host.value)
+  if (!host.value) return
+  // Last, once every diagram is drawn: DiagramLightbox reads the marks as "done".
+  markDiagrams(host.value, t)
+  emit('rendered', host.value)
 }
 
 function collectHeadings(): MarkdownHeading[] {
@@ -248,7 +251,7 @@ async function renderMermaid() {
   for (const block of blocks) {
     const source = block.textContent ?? ''
     try {
-      const { svg } = await mermaid.render(`mmd-${Date.now()}-${mermaidSeq++}`, source)
+      const { svg } = await mermaidSvg(mermaid, source)
       const wrap = document.createElement('div')
       wrap.className = 'kn-mermaid-figure'
       wrap.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
@@ -277,4 +280,5 @@ watch([() => props.markdown, () => props.streaming, theme.isDark], () => void re
     v-html="html"
   />
   <ImageLightbox :root="host" />
+  <DiagramLightbox :root="host" />
 </template>

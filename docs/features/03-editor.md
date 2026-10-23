@@ -145,3 +145,32 @@ grip outlines its target before anything is deleted.
   review mode, under the same gate as the table bar.
 - **Collab.** A delete or insert is one transaction, so per-peer undo restores
   it for the person who made it.
+
+### Embed groups — `EmbedNode.vue`, `lib/embeds.ts` (#470)
+
+A `knEmbed` atom holds an ordered group of external items, each
+`{ url, version, caption }`, plus a group caption and a layout (`strip` or
+`grid`). It is written as one raw HTML block, so any markdown renderer still
+shows captioned links:
+
+```html
+<figure data-kn-embed="strip">
+<a href="https://www.figma.com/design/AbC123/?node-id=12-34" data-kn-version="2083951442">Sign-in</a>
+<figcaption>Sign-in flow</figcaption>
+</figure>
+```
+
+- **Round trip.** `embedItemsOf` / `embedCaptionOf` (`@knowledge/editor-schema/nodes`)
+  read a figure for the parse rule, `MarkdownView` and the public renderer
+  alike. Item URLs are canonicalized by `parseEmbedUrl` (contracts) on parse.
+  An item no provider claims, or with no version, is kept as written. The
+  turndown rule writes the group with no blank line inside, because CommonMark
+  ends an HTML block at one. The `<a>` text is the caption, or the URL when
+  there is none.
+- **Tested** in `lib/markdown/embed.spec.ts` (URL parsing, canonical
+  spelling, round trip, escaping, sanitizer) and through a shared draft in
+  `markdown-roundtrip-collab.spec.ts`, since `items` is an array attribute.
+- **Rendering.** The node view and the read view build the same tiles from
+  `embedTile`. Public surfaces show captions and a placeholder, never a link.
+  Snapshots, the picker and the change check are the later phases of
+  [64](64-embeds.md).

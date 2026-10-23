@@ -9,6 +9,7 @@
     "open": "Открыть",
     "download": "Скачать",
     "pdfFallback": "Скачать PDF",
+    "embedUnavailable": "Макет недоступен публично",
     "toggleTheme": "Переключить тёмную тему",
     "sharedWithYou": "Общедоступная страница",
     "lockedTitle": "Страница защищена паролем",

@@ -21,6 +21,7 @@ const options: PublicRenderOptions = {
     open: 'Open',
     download: 'Download',
     pdfFallback: 'Download the PDF',
+    embedUnavailable: 'Mockup not available publicly',
     formatBytes: (n) => `${n} B`,
   },
 }
@@ -83,5 +84,17 @@ describe('renderPublicMarkdown', () => {
     expect(description.length).toBeLessThanOrEqual(160)
     expect(description.endsWith('…')).toBe(true)
     expect(renderPublicMarkdown('Short **intro**.', options).description).toBe('Short intro.')
+  })
+
+  it('shows an embed\'s captions and no Figma link (#470)', () => {
+    const { html } = renderPublicMarkdown(
+      '<figure data-kn-embed="grid">\n<a href="https://www.figma.com/design/AbCdEfGhIj12/?node-id=1-2" data-kn-version="7">Sign-in</a>\n<figcaption>Flow</figcaption>\n</figure>',
+      options,
+    )
+    expect(html).not.toContain('figma.com')
+    expect(html).not.toContain('AbCdEfGhIj12')
+    expect(html).toContain('Sign-in')
+    expect(html).toContain('Mockup not available publicly')
+    expect(html).toContain('<figcaption class="kn-embed-figcaption">Flow</figcaption>')
   })
 })

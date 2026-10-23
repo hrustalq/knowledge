@@ -17,6 +17,14 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Pages can hold an embed group (#470, phase 1): one block of Figma frames, written in markdown as
+  `<figure data-kn-embed="strip|grid">` with one link per frame (its canonical Figma URL and a pinned
+  `data-kn-version`) and an optional `<figcaption>`. The reader and the editor show the group as
+  captioned tiles in a strip or a grid; an item no provider claims, or one with no pinned version,
+  is kept and shown as a plain link. Figma links are canonicalized, so two links to one node read
+  the same. Share links and published sites show the captions and "Mockup not available publicly",
+  never the Figma links, since a link reveals the file key. Inserting from the editor, snapshots and
+  the Figma connector arrive in later phases. Feature doc 64 has the plan.
 - Agents see where a search hit sits (#475, phase 6). Ask's `search_knowledge` and MCP
   `knowledge_search` return each result's `layer` and `communityPath`. Ask's `global_overview`
   and MCP `knowledge_global_overview` take an optional `level` (0, the finest, by default; 1 and 2

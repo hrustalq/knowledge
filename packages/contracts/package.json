@@ -28,7 +28,8 @@
     "./quality": "./src/quality/index.ts",
     "./observability": "./src/observability/index.ts",
     "./analytics": "./src/analytics/index.ts",
-    "./flows": "./src/flows/index.ts"
+    "./flows": "./src/flows/index.ts",
+    "./embeds": "./src/embeds/index.ts"
   },
   "scripts": {
     "lint": "echo contracts: no lint",

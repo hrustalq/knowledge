@@ -3362,6 +3362,13 @@
     "downloadNamed": "Download {name}",
     "removeAttachment": "Remove attachment",
     "pdfUnsupported": "This browser cannot display PDFs inline.",
+    "embed": {
+      "label": "Design embed",
+      "untitled": "No caption",
+      "wholeFile": "whole file",
+      "notPinned": "not pinned",
+      "remove": "Remove embed"
+    },
     "previewOf": "Preview of {name}",
     "tocEmpty": "Headings you add will appear here.",
     "discardBody": "This page has edits that were never published, so they exist only in this tab. Leaving now throws them away.",

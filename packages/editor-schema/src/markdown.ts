@@ -252,6 +252,8 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
     'data-kn-user',
     'data-kn-width',
     'data-kn-wrap',
+    'data-kn-embed',
+    'data-kn-version',
     'data-kn-agent',
     'data-kn-api',
     'data-kn-path',

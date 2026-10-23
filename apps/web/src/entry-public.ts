@@ -142,6 +142,7 @@ function labelsFor(locale: Locale): PublicRenderOptions['labels'] {
     open: messages.open,
     download: messages.download,
     pdfFallback: messages.pdfFallback,
+    embedUnavailable: messages.embedUnavailable,
     formatBytes: (n) => formatBytes(n, locale),
   }
 }

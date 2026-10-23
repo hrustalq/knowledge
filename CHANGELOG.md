@@ -17,6 +17,13 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Images open in a full-screen preview (#467). Click, tap or press Enter on an image in a page, a
+  comment, a merge request, a share link or a published site. The preview shows the image's alt text
+  as a caption. Clicking the image toggles between fit and actual size at the clicked point. A drag
+  pans, a pinch zooms on touch, and ←/→ or the side buttons move between the page's images. Escape,
+  ✕ or a click beside the image returns you to the same place on the page. An image inside a link
+  still follows the link, and edit mode is unchanged.
+
 - Microsoft Teams is a chat-bot platform (#381). Connect an Azure Bot (single tenant) with its app ID,
   tenant ID and a client secret under Settings → Chat bots, set the address shown on the bot's card as
   its messaging endpoint, and install it in Teams with an app package that grants

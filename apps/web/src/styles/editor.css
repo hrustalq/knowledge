@@ -1653,6 +1653,11 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
  * assistant's margin rule. The read view keeps its measure. */
 .kn-page-editor { --kn-measure: none; }
 .kn-page-editor .kn-editor-content { padding-inline: clamp(1.75rem, 3.5vw, 3.5rem); }
+/* No hover, no block handles: a phone keeps the app's 1rem gutter, which still
+ * holds the assistant's margin rule (0.85rem in). */
+@media (hover: none) {
+  .kn-page-editor .kn-editor-content { padding-inline: 1rem; }
+}
 .kn-dirty-dot {
   width: 0.45rem;
   height: 0.45rem;

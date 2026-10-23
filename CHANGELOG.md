@@ -262,6 +262,9 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- On a phone, the page editor no longer leaves a wide blank margin on each side of the text
+  (#499). It reserved 28 px for drag handles that never appear on a touch screen. It now uses the
+  app's 16 px gutter there; desktop keeps its margin.
 - Generating test requests on a spec opened from another workspace's link no longer spins forever
   (#483). The panel watched the tester run in the workspace selected in the sidebar instead of the
   spec's own.

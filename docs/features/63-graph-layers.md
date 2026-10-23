@@ -105,9 +105,14 @@ it left out:
 2. Each level's communities become the nodes of the next. Two nodes are linked
    by the sum of the page-pair weights between them, and a node's internal
    weight becomes a self-loop, so modularity is computed on the same total.
-3. Louvain runs again. The run stops when a pass moves nobody (modularity
-   stopped rising) or after **three levels** (0, 1, 2). The cap is a constant,
-   not an env var: a level nobody reads costs model calls.
+3. Louvain runs again, at **half the previous level's resolution** (level L
+   uses γ = 0.5^L in generalised modularity). At resolution 1 a converged
+   level 0 is already a modularity optimum, so plain aggregation merges almost
+   nothing. Prototyping on four triangles of pages, paired by strong bridges,
+   produced no level 1 at all. Lowering γ per level is the standard way to ask
+   for the coarser grouping. The run stops when a level merges nothing or
+   after **three levels** (0, 1, 2). The cap is a constant, not an env var: a
+   level nobody reads costs model calls.
 4. An upper community is kept only if it merges at least two communities of
    the level below. A community not merged that way has no parent, which makes
    it a root.
@@ -291,9 +296,10 @@ broad set shows it is needed.
 returns today. A model asks for a coarser level explicitly, and the tool
 description says when to.
 
-**Three levels, constant.** Louvain on the graphs we see stops moving after
-two aggregations. A deeper tree would mostly be single-child chains that the
-"merges at least two" rule drops anyway.
+**Three levels, constant, at halving resolution.** "Repeat until modularity
+stops rising" never rises at resolution 1 after a converged level 0, so each
+level halves γ instead. A fourth level would be at γ = 0.125, which merges
+nearly everything into one root that answers no question.
 
 ## Phases
 

@@ -1,4 +1,8 @@
 {
+  "embed": {
+    "notAllowlisted": "This Figma file is not in any Figma connector’s allowlist",
+    "notFigma": "Not a Figma design, prototype or FigJam link"
+  },
   "internal": "Internal server error",
   "payloadTooLarge": "Request body is too large. Split the content, or attach a file instead of pasting its contents.",
   "invalidUuid": "{subject} must be a UUID",

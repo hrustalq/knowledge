@@ -16,6 +16,12 @@ export function asEmbedLayout(value: unknown): EmbedLayout {
   return value === 'grid' ? 'grid' : 'strip';
 }
 
+/**
+ * Items per group when `EMBED_MAX_ITEMS` is unset. The picker stops here; the
+ * API warns past the env value on any write path.
+ */
+export const DEFAULT_EMBED_MAX_ITEMS = 24;
+
 /** One item as the markdown stores it. `url` is canonical when a provider claims it, verbatim otherwise. */
 export interface EmbedItem {
   url: string;
@@ -165,4 +171,43 @@ export function embedStatusKey(fileKey: string, nodeId: string | null, version: 
 /** The snapshot route, relative to the API root; `_` stands for a whole-file item. */
 export function embedSnapshotPath(documentId: string, fileKey: string, nodeId: string | null, version: string): string {
   return `/v1/documents/${documentId}/embeds/${encodeURIComponent(fileKey)}/${encodeURIComponent(nodeId || '_')}/${encodeURIComponent(version)}`;
+}
+
+// ---------------------------------------------------------------- picker
+
+// GET /v1/embeds/figma/files?workspaceId=
+export interface FigmaPickerFilesResponse {
+  /** False when the workspace has no enabled Figma connector: the picker says so. */
+  connected: boolean;
+  files: Array<{ fileKey: string; name: string }>;
+}
+
+// GET /v1/embeds/figma/files/:fileKey?workspaceId=
+export interface FigmaPickerFileResponse {
+  fileKey: string;
+  name: string;
+  /** The file's current version: what a picked item pins. */
+  version: string;
+  board: boolean;
+  pages: Array<{
+    id: string;
+    name: string;
+    frames: Array<{ id: string; name: string; type: string; thumbnailUrl: string | null }>;
+  }>;
+}
+
+// POST /v1/embeds/figma/resolve
+export interface FigmaResolveRequest {
+  workspaceId: string;
+  url: string;
+}
+
+export interface FigmaResolveResponse {
+  /** Canonical spelling of the pasted link. */
+  url: string;
+  /** The file's current version, pinned; null when the allowlist does not reach the file. */
+  version: string | null;
+  /** The node's (or file's) name in Figma, offered as the caption. */
+  name: string | null;
+  allowed: boolean;
 }

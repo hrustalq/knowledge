@@ -6,7 +6,7 @@
 // link. The markup and classes match the read view's (MarkdownView).
 import { computed, ref } from 'vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
-import { ExternalLink, Play, Trash2, X } from 'lucide-vue-next'
+import { ExternalLink, Pencil, Play, Trash2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { embedSnapshotPath, embedStatusKey, type EmbedItem } from '@knowledge/contracts'
 import { resolveAssetUrl } from '@/lib/api'
@@ -104,15 +104,19 @@ function note(tile: (typeof tiles.value)[number]): string | null {
         </button>
         </div>
       </div>
-      <button
-        v-if="editor.isEditable"
-        type="button"
-        class="kn-embed-remove"
-        :aria-label="t('editor.embed.remove')"
-        @click="deleteNode()"
-      >
-        <Trash2 class="size-3.5" />
-      </button>
+      <span v-if="editor.isEditable" class="kn-embed-actions">
+        <button
+          v-if="extension.options.onEdit"
+          type="button"
+          :aria-label="t('editor.embed.edit')"
+          @click="extension.options.onEdit(getPos(), node.attrs)"
+        >
+          <Pencil class="size-3.5" />
+        </button>
+        <button type="button" class="kn-embed-remove" :aria-label="t('editor.embed.remove')" @click="deleteNode()">
+          <Trash2 class="size-3.5" />
+        </button>
+      </span>
     </div>
     <figcaption v-if="node.attrs.caption" class="kn-embed-figcaption">{{ node.attrs.caption }}</figcaption>
   </NodeViewWrapper>

@@ -659,6 +659,10 @@ export type I18nTranslations = {
         };
     };
     "error": {
+        "embed": {
+            "notAllowlisted": string;
+            "notFigma": string;
+        };
         "internal": string;
         "payloadTooLarge": string;
         "invalidUuid": string;

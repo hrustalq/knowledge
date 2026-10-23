@@ -10,6 +10,9 @@ vi.mock('../src/common/safe-fetch.js', () => ({ safeFetch: vi.fn() }));
 const { safeFetch } = await import('../src/common/safe-fetch.js');
 const { EmbedsService, embedFileAllowed, stateOf, NOT_ALLOWLISTED } = await import('../src/embeds/embeds.service.js');
 const { EmbedSnapshotService, figmaNodeText, figmaRenderScale } = await import('../src/embeds/embed-snapshot.service.js');
+const { FigmaFilesService } = await import('../src/embeds/figma-files.service.js');
+const snapshots = (prisma: unknown, storage: unknown, connectors: unknown) =>
+  new EmbedSnapshotService(prisma as never, storage as never, new FigmaFilesService(prisma as never, connectors as never), config);
 const { embedSnapshotKey } = await import('../src/embeds/embeds.constants.js');
 const mockFetch = vi.mocked(safeFetch);
 
@@ -164,7 +167,7 @@ describe('EmbedSnapshotService.render', () => {
       if (u.host === 'figma-renders.example') return new Response(new Uint8Array([137, 80, 78, 71]));
       throw new Error(`unexpected ${u}`);
     });
-    const service = new EmbedSnapshotService(prisma as never, storage as never, connectors as never, config);
+    const service = snapshots(prisma, storage, connectors);
     const job = { workspaceId: WS, fileKey: KEY, nodeId: '1:2', version: '7' };
     await service.render(job);
 
@@ -180,7 +183,7 @@ describe('EmbedSnapshotService.render', () => {
     const prisma = fakePrisma({ connectors: [figma({ allowlist: 'project:222' })] });
     const connectors = { contextFor: vi.fn(async (row: { config: unknown }) => ({ config: row.config, credential: 'x', allowPrivate: false, debug: () => undefined })) };
     mockFetch.mockResolvedValue(json({ files: [] }));
-    const service = new EmbedSnapshotService(prisma as never, { putObjectBytes: vi.fn() } as never, connectors as never, config);
+    const service = snapshots(prisma, { putObjectBytes: vi.fn() }, connectors);
     await service.render({ workspaceId: WS, fileKey: KEY, nodeId: '1:2', version: '7' });
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect((prisma.embedNode.upsert.mock.calls[0]![0] as { create: Record<string, unknown> }).create.error).toBe(NOT_ALLOWLISTED);
@@ -193,10 +196,81 @@ describe('EmbedSnapshotService.render', () => {
     });
     const connectors = { contextFor: vi.fn(async () => ({ config: {}, credential: 'x', allowPrivate: false, debug: () => undefined })) };
     mockFetch.mockResolvedValue(new Response('{"err":"Invalid token"}', { status: 403 }));
-    const service = new EmbedSnapshotService(prisma as never, { putObjectBytes: vi.fn() } as never, connectors as never, config);
+    const service = snapshots(prisma, { putObjectBytes: vi.fn() }, connectors);
     await expect(service.render({ workspaceId: WS, fileKey: KEY, nodeId: '1:2', version: '7' })).resolves.toBeUndefined();
     const saved = (prisma.embedNode.upsert.mock.calls[0]![0] as { create: Record<string, unknown> }).create;
     expect(saved.error).toMatch(/403/);
     expect(saved.retryAt).toBeInstanceOf(Date);
+  });
+});
+
+describe('FigmaFilesService (the picker)', () => {
+  const connectors = { contextFor: vi.fn(async (row: { config: unknown }) => ({ config: row.config, credential: 'x', allowPrivate: false, debug: () => undefined })) };
+  const allowed = () =>
+    fakePrisma({
+      connectors: [{ ...figma({ allowlist: 'project:222' }), workspaceId: WS }],
+      files: [{ fileKey: KEY, projectId: '222', teamId: null, connectorId: 'c1' }],
+    });
+
+  it('lists each page’s pickable top-level children with thumbnails at the current version', async () => {
+    mockFetch.mockImplementation(async (url) => {
+      const u = new URL(String(url));
+      if (u.pathname === `/v1/files/${KEY}`) {
+        return json({
+          name: 'App',
+          version: '9',
+          document: {
+            children: [
+              { id: '0:1', name: 'Auth', children: [{ id: '1:2', name: 'Sign-in', type: 'FRAME' }, { id: '1:9', name: 'note', type: 'TEXT' }, { id: '1:5', name: 'Flows', type: 'SECTION' }] },
+            ],
+          },
+        });
+      }
+      if (u.pathname === `/v1/images/${KEY}`) {
+        expect(u.searchParams.get('version')).toBe('9');
+        return json({ images: { '1:2': 'https://figma-renders.example/a.png', '1:5': null } });
+      }
+      throw new Error(`unexpected ${u}`);
+    });
+    const service = new FigmaFilesService(allowed() as never, connectors as never);
+    await expect(service.frames(WS, KEY)).resolves.toEqual({
+      fileKey: KEY,
+      name: 'App',
+      version: '9',
+      board: false,
+      pages: [
+        {
+          id: '0:1',
+          name: 'Auth',
+          frames: [
+            { id: '1:2', name: 'Sign-in', type: 'FRAME', thumbnailUrl: 'https://figma-renders.example/a.png' },
+            { id: '1:5', name: 'Flows', type: 'SECTION', thumbnailUrl: null },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('pins a pasted node link to the current version with the node’s name', async () => {
+    mockFetch.mockResolvedValueOnce(json({ version: '9', nodes: { '12:34': { document: { name: 'Sign-in / error' } } } }));
+    const service = new FigmaFilesService(allowed() as never, connectors as never);
+    await expect(service.resolve(WS, `https://www.figma.com/design/${KEY}/App?node-id=12-34&t=x`)).resolves.toEqual({
+      url: `https://www.figma.com/design/${KEY}/?node-id=12-34`,
+      version: '9',
+      name: 'Sign-in / error',
+      allowed: true,
+    });
+  });
+
+  it('keeps a link outside every allowlist unpinned, and refuses a non-Figma one', async () => {
+    mockFetch.mockResolvedValue(json({ files: [] }));
+    const service = new FigmaFilesService(fakePrisma({ connectors: [{ ...figma({ allowlist: 'project:222' }), workspaceId: WS }] }) as never, connectors as never);
+    await expect(service.resolve(WS, `https://www.figma.com/design/${KEY}/`)).resolves.toEqual({
+      url: `https://www.figma.com/design/${KEY}/`,
+      version: null,
+      name: null,
+      allowed: false,
+    });
+    await expect(service.resolve(WS, 'https://example.com/x')).resolves.toBeNull();
   });
 });

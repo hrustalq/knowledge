@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { ConnectorsCoreModule } from '../connectors/connectors-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { EmbedsCoreModule } from './embeds-core.module.js';
+import { EmbedsFigmaModule } from './embeds-figma.module.js';
 import { EmbedSnapshotService } from './embed-snapshot.service.js';
 import { EmbedsProcessor } from './embeds.processor.js';
 
@@ -11,7 +11,7 @@ import { EmbedsProcessor } from './embeds.processor.js';
  * it into AppModule would make the API process render snapshots.
  */
 @Module({
-  imports: [PrismaModule, StorageModule, ConnectorsCoreModule, EmbedsCoreModule],
+  imports: [PrismaModule, StorageModule, EmbedsFigmaModule, EmbedsCoreModule],
   providers: [EmbedSnapshotService, EmbedsProcessor],
 })
 export class EmbedsWorkerModule {}

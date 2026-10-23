@@ -305,6 +305,15 @@ ${feedbackStep}${reportStep}${flagStep}
 - ${toolRef('knowledge_list_documents')} — the page tree of a workspace or project.
 - ${toolRef('knowledge_get_workspace_graph')} — every page and entity with typed edges; pages of degree 0 are orphans.
 
+### Designs embedded in pages
+
+A page can embed Figma frames: a \`<figure data-kn-embed>\` of links, each pinned to a version with \`data-kn-version\`.
+
+- ${toolRef('knowledge_get_embed')} — one group of a page: canonical node URLs, captions, frame names, the frames' text
+  and the snapshot images. To implement a screen, pass those node URLs to Figma's own Dev Mode MCP for layers and CSS.
+- ${toolRef('knowledge_find_embeds')} — which pages embed a Figma file or frame (pass the Figma link). Use it before
+  changing a screen, to find every page that documents it.
+
 ### House style and page quality
 
 - ${toolRef('knowledge_lint_draft')} — check markdown against the styleguide of its project before you write it. Each

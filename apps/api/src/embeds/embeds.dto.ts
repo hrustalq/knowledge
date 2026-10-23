@@ -1,5 +1,5 @@
-import { IsString, IsUUID, MaxLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { EMBED_ITEM_STATES, type EmbedItemState } from '@knowledge/contracts';
 
 export class EmbedItemStatusDto {
@@ -69,4 +69,44 @@ export class FigmaResolveResponseDto {
   @ApiProperty({ type: String, nullable: true }) version!: string | null;
   @ApiProperty({ type: String, nullable: true }) name!: string | null;
   @ApiProperty() allowed!: boolean;
+}
+
+export class EmbedUsagesQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ description: 'A Figma link; a frame link narrows to that frame' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  figmaUrl?: string;
+
+  @ApiPropertyOptional({ description: 'A Figma file key, when there is no link' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  fileKey?: string;
+}
+
+export class EmbedUsageItemDto {
+  @ApiProperty() url!: string;
+  @ApiProperty() caption!: string;
+  @ApiProperty({ type: String, nullable: true }) version!: string | null;
+}
+
+export class EmbedUsageGroupDto {
+  @ApiProperty() group!: number;
+  @ApiProperty({ type: [EmbedUsageItemDto] }) items!: EmbedUsageItemDto[];
+}
+
+export class EmbedUsagePageDto {
+  @ApiProperty() documentId!: string;
+  @ApiProperty() title!: string;
+  @ApiProperty() revisionId!: string;
+  @ApiProperty({ type: [EmbedUsageGroupDto] }) groups!: EmbedUsageGroupDto[];
+}
+
+export class EmbedUsagesResponseDto {
+  @ApiProperty({ type: [EmbedUsagePageDto] }) pages!: EmbedUsagePageDto[];
 }

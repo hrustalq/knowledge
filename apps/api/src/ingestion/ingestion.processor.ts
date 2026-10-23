@@ -205,8 +205,10 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       });
       mark('embeds');
 
-      // 4. Chunk
-      const drafts = chunkSections(sections);
+      // 4. Chunk. An embedded design's frame names and text layers (#470)
+      //    follow the page's own chunks, one chunk per item, from the cache.
+      const prose = chunkSections(sections);
+      const drafts = [...prose, ...(await this.embeds.chunksFor(revision.id, prose.length))];
       mark('chunk', drafts.length);
 
       // 5. Embed — as title + heading breadcrumb + body, never the bare body

@@ -17,6 +17,15 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Agents and search can see into embedded designs (#470, phase 5). A pinned Figma frame's name and
+  text layers are indexed as their own chunks after the page's text, so a search for words that appear
+  only in a frame finds the page. They are read from the snapshot cache, and once a frame renders its
+  pages are reindexed. A frame whose project leaves the allowlist drops out of the index at the page's
+  next reindex. Two read-only MCP tools: `knowledge_get_embed` returns one group of a page (canonical
+  node URLs, captions, frame names, the text marked untrusted, and up to 8 snapshot images) for an agent
+  to hand to Figma's Dev Mode MCP. `knowledge_find_embeds` returns the pages whose current version
+  embeds a Figma file or frame, only those the caller may open. `GET /v1/embeds/usages` is its REST twin.
+  Published-site search matches captions and never the Figma links.
 - Authors can embed Figma frames from the editor (#470, phase 4). `/figma` (also `/макет`) opens a
   picker: choose an allowlisted file, tick frames from its pages, or paste a "Copy link to selection"
   link for a deeper layer; then reorder (drag, or the arrow buttons), caption each frame and the group,

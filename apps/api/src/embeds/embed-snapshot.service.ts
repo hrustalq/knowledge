@@ -9,6 +9,7 @@ import { StorageService } from '../storage/storage.service.js';
 import { embedSnapshotKey, type EmbedSnapshotJob } from './embeds.constants.js';
 import { EMBED_RETRY_MS, NOT_ALLOWLISTED } from './embeds.service.js';
 import { FigmaFilesService } from './figma-files.service.js';
+import { IngestionProducer } from '../ingestion/ingestion.producer.js';
 
 /** The slice of a Figma node this file reads. */
 export interface FigmaNode {
@@ -58,6 +59,7 @@ export class EmbedSnapshotService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly files: FigmaFilesService,
+    private readonly ingestion: IngestionProducer,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -72,6 +74,9 @@ export class EmbedSnapshotService {
       await this.storage.putObjectBytes(key, rendered.png, 'image/png');
       const data = { ...rendered.meta, snapshotKey: key, error: null, retryAt: null };
       await this.prisma.embedNode.upsert({ where, create: { ...job, provider: 'figma', ...data }, update: data });
+      // The frame's text joins search only through a reindex of the pages
+      // that pin it: indexing reads the cache and never waits on a render.
+      if (rendered.meta.text || rendered.meta.name) await this.reindexPinning(job);
     } catch (err) {
       await this.fail(job, (err as Error).message.slice(0, 300), EMBED_RETRY_MS);
     }
@@ -120,6 +125,35 @@ export class EmbedSnapshotService {
   private async download(ctx: ConnectorContext, url: string): Promise<Uint8Array> {
     const res = await connectorFetch(url, { signal: ctx.signal }, ctx);
     return new Uint8Array(await res.arrayBuffer());
+  }
+
+  /**
+   * Reindex the branch heads that pin this item, through the outbox exactly as
+   * a manual reindex does. Runs once per item: a rendered item returns early
+   * from `render`, so a reindex never loops back into another one.
+   */
+  private async reindexPinning(job: EmbedSnapshotJob): Promise<void> {
+    const heads = await this.prisma.$queryRaw<Array<{ id: string; document_id: string; s3_key: string; title: string }>>`
+      SELECT DISTINCT r.id, r.document_id, r.s3_key, d.title
+        FROM revision_embeds re
+        JOIN document_branches b ON b.head_revision_id = re.revision_id
+        JOIN document_revisions r ON r.id = re.revision_id
+        JOIN documents d ON d.id = r.document_id
+       WHERE re.workspace_id = ${job.workspaceId}::uuid AND re.file_key = ${job.fileKey}
+         AND re.node_id = ${job.nodeId} AND re.version = ${job.version}
+         AND r.status IN ('indexed', 'failed')`;
+    for (const rev of heads) {
+      const row = await this.prisma.ingestionJob.create({
+        data: {
+          workspaceId: job.workspaceId,
+          revisionId: rev.id,
+          type: 'reindex',
+          status: 'queued',
+          payload: { documentId: rev.document_id, revisionId: rev.id, s3Key: rev.s3_key, title: rev.title, reason: 'embed rendered' },
+        },
+      });
+      await this.ingestion.enqueue(row.id).catch(() => undefined); // the outbox sweeper re-enqueues
+    }
   }
 
   private async fail(job: EmbedSnapshotJob, error: string, retryInMs: number): Promise<void> {

@@ -251,3 +251,19 @@ export class ListTestFixturesQueryDto {
   @IsUUID()
   specDocumentId?: string;
 }
+
+export class QaOverviewQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: "Only this project's specs" })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: "Only this spec document's operations" })
+  @IsOptional()
+  @IsUUID()
+  documentId?: string;
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
 import {
+  qaSuiteStatusFor,
   evaluateCapture,
   fixtureCallKey,
   fixtureRunValues,
@@ -255,5 +256,23 @@ describe('fixture bindings (#483, phase 2)', () => {
     expect(WRITE_TOOLS.has('knowledge_get_test_suite')).toBe(false);
     expect(WRITE_TOOLS.has('knowledge_suggest_test_fixtures')).toBe(false);
     expect(WRITE_TOOLS.has('knowledge_get_test_run_plan')).toBe(false);
+  });
+});
+
+describe('the QA overview (#483, phase 4)', () => {
+  const at = (o: Partial<Parameters<typeof qaSuiteStatusFor>[0]>) =>
+    qaSuiteStatusFor({ suite: 'current', prerequisites: 0, suiteBindings: 0, reviewFixtures: 0, ...o });
+
+  it('ranks a fixture needing review above everything, then a missing or outdated suite, then unbound setup', () => {
+    expect(at({ suite: 'none', reviewFixtures: 1 })).toBe('review');
+    expect(at({ suite: 'none', prerequisites: 2 })).toBe('none');
+    expect(at({ suite: 'outdated', prerequisites: 2 })).toBe('outdated');
+    expect(at({ prerequisites: 2 })).toBe('unbound');
+    expect(at({ prerequisites: 2, suiteBindings: 1 })).toBe('ready');
+    expect(at({})).toBe('ready');
+  });
+
+  it('is a read tool', () => {
+    expect(WRITE_TOOLS.has('knowledge_qa_overview')).toBe(false);
   });
 });

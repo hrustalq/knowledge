@@ -1,8 +1,15 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  QA_SUITE_STATUSES,
+  TEST_CASE_CATALOGUE_VERSION,
+  qaSuiteStatusFor,
+  suitePrerequisites,
   testSuiteCurl,
   testSuitePostman,
+  type QaOperationRow,
+  type QaOverviewResponse,
+  type QaSuiteState,
   type AgentRunDetails,
   type AgentRunInput,
   type ApiTestBindingInfo,
@@ -24,7 +31,15 @@ import { t } from '../i18n/t.js';
 import { canSee, type AccessScope } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ApiFixturesService } from './api-fixtures.service.js';
-import { ApiTestSuitesService, type SuiteBinding, type SuiteOperation } from './api-test-suites.service.js';
+import { ApiSpecReadService } from './api-spec-read.service.js';
+import {
+  ApiTestSuitesService,
+  fixturesHash,
+  operationHash,
+  suiteId,
+  type SuiteBinding,
+  type SuiteOperation,
+} from './api-test-suites.service.js';
 
 const TESTER = 'tester';
 
@@ -45,6 +60,7 @@ export class ApiTestSuiteRequestsService {
     private readonly prisma: PrismaService,
     private readonly suites: ApiTestSuitesService,
     private readonly fixtures: ApiFixturesService,
+    private readonly reads: ApiSpecReadService,
     private readonly registry: AgentRegistryService,
     private readonly producer: AgentProducer,
     private readonly usage: AiUsageService,
@@ -146,6 +162,89 @@ export class ApiTestSuiteRequestsService {
     });
     if (!started.existing) await this.producer.enqueue(started.runId);
     return started;
+  }
+
+  /**
+   * /qa (#483, phase 4): every HTTP operation at the head of each OpenAPI spec
+   * under `scope`, with its suite's state and what its setup lacks. Read from
+   * rows that already exist — suites, bindings, fixture calls — and one spec
+   * read per spec for the operation hash and the prerequisites, so the suite
+   * state is the cache key the suite panel checks, never a second answer.
+   */
+  async overview(scope: AccessScope, opts: { projectId?: string; documentId?: string }): Promise<QaOverviewResponse> {
+    const specs = (await this.reads.list(scope, opts.projectId)).specs.filter(
+      (s) => s.kind === 'openapi' && s.headRevisionId && (!opts.documentId || s.documentId === opts.documentId),
+    );
+    const ids = specs.map((s) => s.documentId);
+    const [ops, bindings, suites, agent] = await Promise.all([
+      this.prisma.apiOperation.findMany({
+        where: { revisionId: { in: specs.map((s) => s.headRevisionId!) }, protocol: 'http' },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.suites.bindingsOfSpecs(ids),
+      ids.length
+        ? this.prisma.$queryRaw<Array<SuiteKeyRow & { cases: number }>>`
+            SELECT document_id, entity_key, operation_hash, catalogue_version, agent_hash, fixtures_hash,
+                   jsonb_array_length(cases) AS cases
+              FROM api_test_suites WHERE document_id = ANY(${ids}::uuid[])`
+        : [],
+      this.registry.resolve(scope.workspaceId, TESTER),
+    ]);
+    const agentHash = testerConfigHash(agent);
+    const storedOf = new Map<string, typeof suites>();
+    for (const s of suites) {
+      const id = suiteId(s.document_id, s.entity_key);
+      storedOf.set(id, [...(storedOf.get(id) ?? []), s]);
+    }
+    const fixtureIds = [...new Set([...bindings.values()].flat().map((b) => b.fixtureId))];
+    const [broken, calling] = await Promise.all([
+      this.fixtures.withBrokenCalls(fixtureIds),
+      this.fixtures.countCalling(scope, [...new Set(ops.map((o) => o.entityKey))]),
+    ]);
+
+    const rows: QaOperationRow[] = [];
+    for (const spec of specs) {
+      const own = ops.filter((o) => o.revisionId === spec.headRevisionId);
+      if (!own.length) continue;
+      // A spec whose source no longer reads is left out rather than failing the page.
+      const doc = await this.reads.spec(spec.documentId, spec.headRevisionId!).then((s) => s.document, () => null);
+      if (!doc) continue;
+      for (const op of own) {
+        const id = suiteId(op.documentId, op.entityKey);
+        const bound = bindings.get(id) ?? [];
+        const stored = storedOf.get(id) ?? [];
+        const key = { operationHash: operationHash(doc, op), fixturesHash: fixturesHash(bound) };
+        const current = stored.find(
+          (s) =>
+            s.operation_hash === key.operationHash &&
+            s.catalogue_version === TEST_CASE_CATALOGUE_VERSION &&
+            s.agent_hash === agentHash &&
+            s.fixtures_hash === key.fixturesHash,
+        );
+        const state: QaSuiteState = current ? 'current' : stored.length ? 'outdated' : 'none';
+        const prerequisites = suitePrerequisites(doc, op, own).length;
+        const suiteBindings = bound.filter((b) => b.caseId === null).length;
+        const reviewFixtures = new Set(bound.filter((b) => b.archived || broken.has(b.fixtureId)).map((b) => b.fixtureId)).size;
+        rows.push({
+          documentId: op.documentId,
+          specTitle: spec.title,
+          entityKey: op.entityKey,
+          method: op.method,
+          path: op.path,
+          summary: op.summary,
+          deprecated: op.deprecated,
+          status: qaSuiteStatusFor({ suite: state, prerequisites, suiteBindings, reviewFixtures }),
+          suite: { state, cases: current?.cases ?? null },
+          prerequisites,
+          bound: { suite: suiteBindings, cases: bound.length - suiteBindings },
+          reviewFixtures,
+          fixtures: calling.get(op.entityKey) ?? 0,
+        });
+      }
+    }
+    // Stable: within one status, specs by title and operations in spec order.
+    rows.sort((a, b) => QA_SUITE_STATUSES.indexOf(a.status) - QA_SUITE_STATUSES.indexOf(b.status));
+    return { operations: rows, specs: specs.length };
   }
 
   /** The fixtures bound to one operation's suite. A fixture the scope cannot open keeps its row but loses its title. */
@@ -250,6 +349,15 @@ export class ApiTestSuiteRequestsService {
     const at = await this.suites.operationAt(documentId, entityKey);
     return { at, agent: await this.registry.resolve(at.op.workspaceId, TESTER) };
   }
+}
+
+interface SuiteKeyRow {
+  document_id: string;
+  entity_key: string;
+  operation_hash: string;
+  catalogue_version: number;
+  agent_hash: string;
+  fixtures_hash: string;
 }
 
 /** One ranking run per candidate set: the set's hash is the run's subject. */

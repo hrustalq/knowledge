@@ -134,6 +134,37 @@ export class ApiFixturesService {
     };
   }
 
+  /**
+   * How many fixtures under `scope` call each key at their head — the same
+   * predicates as `list`, so a count and the list it opens agree.
+   */
+  async countCalling(scope: AccessScope, entityKeys: string[]): Promise<Map<string, number>> {
+    if (!entityKeys.length) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ entity_key: string; n: number }>>`
+      SELECT fc.entity_key, count(DISTINCT d.id)::int AS n
+        FROM api_fixture_calls fc
+        JOIN documents d ON d.id = fc.document_id
+        JOIN document_branches b ON b.document_id = d.id AND b.name = d.default_branch AND b.head_revision_id = fc.revision_id
+       WHERE fc.workspace_id = ${scope.workspaceId}::uuid
+         AND fc.entity_key = ANY(${entityKeys}::text[])
+         AND d.archived_at IS NULL
+         AND ${listedSql('d')}
+         AND ${visibilitySql(scope, 'd')}
+       GROUP BY fc.entity_key`;
+    return new Map(rows.map((r) => [r.entity_key, r.n]));
+  }
+
+  /** Of these fixtures, the ones whose head calls an operation no spec head defines (`brokenCallsSql`). Unscoped: a fact about the workspace. */
+  async withBrokenCalls(ids: string[]): Promise<Set<string>> {
+    if (!ids.length) return new Set();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT d.id FROM documents d
+        JOIN document_branches b ON b.document_id = d.id AND b.name = d.default_branch
+       WHERE d.id = ANY(${ids}::uuid[])
+         AND cardinality(${brokenCallsSql(Prisma.sql`b.head_revision_id`)}) > 0`;
+    return new Set(rows.map((r) => r.id));
+  }
+
   /** One fixture revision (the head by default), parsed and checked against today's specs under `scope`. */
   async get(scope: AccessScope, documentId: string, revisionId?: string): Promise<TestFixtureResponse> {
     const doc = await this.prisma.document.findUnique({

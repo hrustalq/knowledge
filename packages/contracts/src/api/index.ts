@@ -311,6 +311,58 @@ export interface RankApiTestFixturesResponse {
   existing: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// QA overview (#483, phase 4)
+// ---------------------------------------------------------------------------
+
+/** One operation's QA state, worst first — the order /qa sorts by. */
+export const QA_SUITE_STATUSES = ['review', 'unbound', 'outdated', 'none', 'ready'] as const;
+export type QaSuiteStatus = (typeof QA_SUITE_STATUSES)[number];
+
+/** Whether a suite is stored for the operation, and whether it matches the cache key as things stand now. */
+export type QaSuiteState = 'none' | 'outdated' | 'current';
+
+/**
+ * Derived on read, never stored. A bound fixture needing review outranks the
+ * rest — regenerating does not fix it. Without a current suite, Generate is
+ * the next step whatever the setup; with one, prerequisites the spec names
+ * but no suite-level fixture covers are what is missing.
+ */
+export function qaSuiteStatusFor(s: { suite: QaSuiteState; prerequisites: number; suiteBindings: number; reviewFixtures: number }): QaSuiteStatus {
+  if (s.reviewFixtures > 0) return 'review';
+  if (s.suite === 'none') return 'none';
+  if (s.suite === 'outdated') return 'outdated';
+  return s.prerequisites > 0 && s.suiteBindings === 0 ? 'unbound' : 'ready';
+}
+
+/** One HTTP operation at its spec's head, as /qa lists it. */
+export interface QaOperationRow {
+  documentId: string;
+  specTitle: string;
+  entityKey: string;
+  method: string | null;
+  path: string;
+  summary: string | null;
+  deprecated: boolean;
+  status: QaSuiteStatus;
+  suite: { state: QaSuiteState; cases: number | null };
+  /** Operations of the same spec producing a value this one needs (`suitePrerequisites`). */
+  prerequisites: number;
+  /** Fixtures bound to the whole suite, and to single cases. */
+  bound: { suite: number; cases: number };
+  /** Bound fixtures that are archived or call an operation no spec head defines. Counted even when the reader cannot open them. */
+  reviewFixtures: number;
+  /** Fixtures the reader may open whose head calls this operation. */
+  fixtures: number;
+}
+
+/** GET /v1/qa/overview — every HTTP operation of the OpenAPI specs in scope, worst first. */
+export interface QaOverviewResponse {
+  operations: QaOperationRow[];
+  /** OpenAPI specs read; 0 means there is nothing to test yet. */
+  specs: number;
+}
+
 /**
  * How far the try-it proxy reaches. `allowlist` reuses the workspace's source
  * policies (docs/features/25), so there is one host list, not two.

@@ -15,6 +15,7 @@ import type {
   ListApiOperationsResponse,
   ListApiSpecsResponse,
   ListTestFixturesResponse,
+  QaOverviewResponse,
   RankApiTestFixturesResponse,
   SearchApiOperationsResponse,
   TestFixtureResponse,
@@ -41,6 +42,7 @@ import {
   GenerateApiTestSuiteDto,
   ListApiSpecsQueryDto,
   ListTestFixturesQueryDto,
+  QaOverviewQueryDto,
   SearchApiOperationsQueryDto,
   SetApiTestBindingsDto,
   UpdateApiSettingsDto,
@@ -384,5 +386,27 @@ export class TestFixturesController {
     @Query() query: ApiSpecRevisionQueryDto,
   ): Promise<TestFixtureResponse> {
     return this.fixtures.get(await this.permissions.scopeForDocument(principal, id), id, query.revisionId);
+  }
+}
+
+/** The QA view (#483, phase 4): workspace-level and scope-filtered, so a guest may call it. */
+@ApiTags('api-specs')
+@Controller('v1/qa')
+export class QaController {
+  constructor(
+    private readonly testSuites: ApiTestSuiteRequestsService,
+    private readonly permissions: PermissionService,
+  ) {}
+
+  @Get('overview')
+  @Access('viewer', 'query', { guests: true })
+  @ApiOperation({
+    summary:
+      'Every HTTP operation of the OpenAPI specs the caller may open, worst first: whether its QA suite is ' +
+      'generated and current, its setup prerequisites and bindings, bound fixtures needing review, and how many ' +
+      'fixtures call it',
+  })
+  async overview(@CurrentPrincipal() principal: Principal, @Query() query: QaOverviewQueryDto): Promise<QaOverviewResponse> {
+    return this.testSuites.overview(await this.permissions.scopeFor(principal, query.workspaceId), query);
   }
 }

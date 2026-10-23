@@ -13,6 +13,8 @@ import {
   readTestFixture,
   suitePrerequisites,
   testChain,
+  testRunPlan,
+  apiServerOptions,
   type ApiTestCase,
   type ApiTestFixtureCandidate,
   type ApiTestPrerequisite,
@@ -27,6 +29,7 @@ import {
   type TestChainFixture,
   type TestFixture,
   type TestFixtureResponse,
+  type TestRunPlan,
 } from '@knowledge/contracts';
 import { listedSql } from '../common/listed-page.js';
 import type { Env } from '../config/env.js';
@@ -241,6 +244,27 @@ export class ApiFixturesService {
    * open. A call that resolves nowhere refuses the whole chain with a 400.
    */
   async chain(scope: AccessScope, at: SuiteOperation, cases: readonly ApiTestCase[], title: string): Promise<TestChain> {
+    return (await this.build(scope, at, cases, title)).chain;
+  }
+
+  /**
+   * The chain as a run plan (phase 3): each call names the spec revision that
+   * defines it, which is where the runner proxies it, and the server its URL
+   * starts with.
+   */
+  async plan(scope: AccessScope, at: SuiteOperation, cases: readonly ApiTestCase[], title: string): Promise<TestRunPlan> {
+    const { chain, hits, docs } = await this.build(scope, at, cases, title);
+    const server = (doc: Record<string, unknown>) => (apiServerOptions(doc)[0]?.url ?? '').replace(/\/+$/u, '');
+    return testRunPlan(chain, { documentId: at.op.documentId, entityKey: at.op.entityKey }, (key) => {
+      if (key === null) {
+        return { documentId: at.op.documentId, revisionId: at.spec.revisionId, entityKey: at.op.entityKey, server: server(at.spec.document) };
+      }
+      const h = hits.find((x) => x.entityKey === key)!;
+      return { documentId: h.documentId, revisionId: h.revisionId, entityKey: h.entityKey, server: server(docs.get(h.revisionId)!) };
+    });
+  }
+
+  private async build(scope: AccessScope, at: SuiteOperation, cases: readonly ApiTestCase[], title: string) {
     const fixtures = await this.bound(scope, at.bindings);
     const keys = [...new Set(fixtures.flatMap((f) => stepPaths(f.fixture.fixture).map(([s]) => s.call)))];
     const hits = keys.length ? (await this.reads.search(scope, { entityKeys: keys, limit: 200 })).operations : [];
@@ -256,13 +280,14 @@ export class ApiFixturesService {
     };
     const perCase: Record<string, TestChainFixture[]> = {};
     for (const f of fixtures) if (f.binding.caseId !== null) (perCase[f.binding.caseId] ??= []).push(f.fixture);
-    return testChain({
+    const chain = testChain({
       title,
       cases,
       suite: fixtures.filter((f) => f.binding.caseId === null).map((f) => f.fixture),
       perCase,
       resolve,
     });
+    return { chain, hits, docs };
   }
 
   /** Parse YAML/JSON and check the shape. No I/O. */

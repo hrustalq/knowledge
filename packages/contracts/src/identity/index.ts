@@ -26,6 +26,8 @@ export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 export const MEMBER_CAPABILITIES = [
   /** Generate and regenerate an operation's QA test suite (spends the AI budget). */
   'api-test-suites.generate',
+  /** Run a suite against a real server: the browser runner, its proxied steps and the run plan (#483). */
+  'api-test-suites.run',
 ] as const;
 export type MemberCapability = (typeof MEMBER_CAPABILITIES)[number];
 

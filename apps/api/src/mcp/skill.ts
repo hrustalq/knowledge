@@ -355,6 +355,15 @@ A component page declares its code in a \`component:\` frontmatter block (\`path
       : ''
   }
 
+### API tests
+
+An OpenAPI operation can have a QA suite: positive and negative cases, with test fixtures (pages of
+\`kind: test-fixture\`) bound as setup and teardown. ${toolRef('knowledge_get_test_suite')} reads it, or exports it as a
+bash script or a Postman collection; ${toolRef('knowledge_suggest_test_fixtures')} says what to call before testing it.
+To run it yourself, ${toolRef('knowledge_get_test_run_plan')} returns the ordered requests with \`{{placeholders}}\`:
+supply its \`secrets\` and \`inputs\`, send each request with your own HTTP client, capture as each step says, and run
+teardown even after a failure. The plan never contains a credential; never write one into a page or a fixture.
+
 ${writeFlows}
 ${questionFlows}${captureMemory}${plainMarkdown}
 ${renderMcpLearnings(input.learnings, 'markdown')}## Rules

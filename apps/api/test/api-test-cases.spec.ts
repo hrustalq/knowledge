@@ -2,10 +2,15 @@ import { assert, describe, expect, it } from 'vitest';
 import {
   buildTestSuite,
   conformsToSchema,
+  fillRunRequest,
+  isSecretName,
   operationFingerprint,
   readTestFixture,
+  runTestPlan,
   suitePrerequisites,
   testChain,
+  testRunPlan,
+  type TestRunRequest,
   testCaseRequest,
   testCasesFor,
   testSuiteCurl,
@@ -338,6 +343,106 @@ describe('testChain', () => {
     const folder = col.item[1].item.find((i) => i.item)!;
     expect(folder.item![0].event[0].listen).toBe('prerequest');
     expect(folder.item!.at(-1)!.event.at(-1)!.script.exec.at(-1)).toContain('pm.collectionVariables.unset(k)');
+  });
+});
+
+describe('runTestPlan', () => {
+  const fixture = readTestFixture({
+    fixture: 1,
+    steps: [
+      { id: 'login', call: 'op:billing:post-/sessions', request: { body: { password: '{{secret.qaPassword}}' } }, expect: 201, capture: { TOKEN: '$.accessToken' } },
+      { id: 'invoice', call: 'op:billing:post-/invoices', expect: 201, capture: { invoiceId: '$.id' } },
+      { id: 'kyc', manual: 'A merchant with KYC approved exists.' },
+    ],
+    teardown: [{ call: 'op:billing:delete-/invoices/{id}', request: { path: { id: '{{invoiceId}}' } } }],
+  }).fixture!;
+  const resolve = (key: string) => ({ doc: SHOP, op: ROWS.find((x) => x.entityKey === key)! });
+  const cases = buildTestSuite(SHOP, GET, { path: { id: '{{invoiceId}}' } }, {}, { suite: ['invoiceId'] });
+  const chain = testChain({ title: 't', cases, suite: [{ documentId: 'f1', title: 'Draft invoice', fixture }], resolve });
+  const plan = testRunPlan(chain, { documentId: 'spec', entityKey: GET.entityKey }, (key) => ({
+    documentId: 'spec',
+    revisionId: 'r1',
+    entityKey: key ?? GET.entityKey,
+    server: 'https://api.example.com',
+  }));
+
+  /** A fake billing API: the session and invoice it hands out are the only ones it knows. */
+  const api = (loginStatus = 201) => {
+    const sent: TestRunRequest[] = [];
+    const send = async (_key: string, _target: unknown, r: TestRunRequest) => {
+      sent.push(r);
+      const authed = r.headers.some((h) => h.name === 'Authorization' && h.value === 'Bearer tok');
+      const at = `${r.method} ${new URL(r.url).pathname}`;
+      const reply = (status: number, body: unknown = {}) => ({ status, headers: [], body: JSON.stringify(body) });
+      if (at === 'POST /sessions') return reply(loginStatus, JSON.parse(r.body ?? '{}').password === 'pw' ? { accessToken: 'tok' } : {});
+      if (!authed) return reply(401);
+      if (at === 'POST /invoices') return reply(201, { id: 'inv 9' });
+      if (at === 'GET /invoices/inv%209') return reply(200);
+      if (at === 'DELETE /invoices/inv%209') return reply(204);
+      return reply(404);
+    };
+    return { sent, send };
+  };
+
+  it('flattens the chain to placeholders and names where each call goes', () => {
+    const ok = plan.cases.find((c) => c.kind === 'positive')!;
+    expect(ok.request.url).toBe('https://api.example.com/invoices/{{invoiceId}}');
+    expect(ok.request.headers).toContainEqual({ name: 'Authorization', value: 'Bearer {{TOKEN}}' });
+    expect(plan.setup[0].kind === 'call' && plan.setup[0].target.entityKey).toBe('op:billing:post-/sessions');
+    expect(plan.secrets).toEqual(['secret.qaPassword']);
+    expect(JSON.stringify(plan)).not.toContain('"pw"');
+  });
+
+  it('runs setup, the cases with what setup captured, and teardown', async () => {
+    const { sent, send } = api();
+    const results = await runTestPlan(plan, { 'secret.qaPassword': 'pw' }, send);
+    expect(results.get('setup/f1:login')).toMatchObject({ outcome: 'pass', status: 201, captures: { TOKEN: 'tok' } });
+    expect(results.get('setup/f1:kyc')!.outcome).toBe('manual');
+    const ok = plan.cases.find((c) => c.kind === 'positive')!;
+    expect(results.get(`case/${ok.id}`)).toMatchObject({ outcome: 'pass', status: 200 });
+    expect(sent.at(-1)).toMatchObject({ method: 'DELETE', url: 'https://api.example.com/invoices/inv%209' });
+    expect(isSecretName('TOKEN') && isSecretName('secret.qaPassword') && !isSecretName('invoiceId')).toBe(true);
+  });
+
+  it('stops every case when setup fails and skips a teardown step setup never fed', async () => {
+    const { sent, send } = api(500);
+    const results = await runTestPlan(plan, { 'secret.qaPassword': 'pw' }, send);
+    expect(results.get('setup/f1:login')).toMatchObject({ outcome: 'fail', status: 500 });
+    expect(results.get('setup/f1:invoice')!.outcome).toBe('not-run');
+    for (const c of plan.cases) expect(results.get(`case/${c.id}`)!.outcome).toBe('not-run');
+    expect(results.get('teardown/f1:teardown-1')).toMatchObject({ outcome: 'skipped', reason: 'missing:invoiceId' });
+    expect(sent).toHaveLength(1);
+  });
+
+  it('still tears down after Stop', async () => {
+    const { sent, send } = api();
+    const stop = new AbortController();
+    const results = await runTestPlan(plan, { 'secret.qaPassword': 'pw' }, async (k, t, r) => {
+      if (k === 'setup/f1:invoice') stop.abort();
+      return send(k, t, r);
+    }, undefined, stop.signal);
+    for (const c of plan.cases) expect(results.get(`case/${c.id}`)!.outcome).toBe('not-run');
+    expect(sent.at(-1)!.method).toBe('DELETE');
+  });
+
+  it('fills placeholders: encoded in the URL, escaped in JSON, a header with an empty slot left out', () => {
+    const { request, missing } = fillRunRequest(
+      {
+        method: 'POST',
+        url: 'https://x.test/a/{{id}}?q={{q}}',
+        headers: [
+          { name: 'Content-Type', value: 'application/json' },
+          { name: 'Authorization', value: 'Bearer {{TOKEN}}' },
+        ],
+        body: '{"note": "{{note}}"}',
+      },
+      { id: 'a/b', q: 'x&y', note: 'say "hi"', TOKEN: '' },
+    );
+    expect(missing).toEqual([]);
+    expect(request.url).toBe('https://x.test/a/a%2Fb?q=x%26y');
+    expect(request.headers.map((h) => h.name)).toEqual(['Content-Type']);
+    expect(JSON.parse(request.body!)).toEqual({ note: 'say "hi"' });
+    expect(fillRunRequest({ method: 'GET', url: '/{{gone}}', headers: [], body: null }, {}).missing).toEqual(['gone']);
   });
 });
 

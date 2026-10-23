@@ -17,6 +17,18 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Run a QA test suite against a real server (#483, phase 3). **Run suite** in an operation's **Test
+  requests** section runs the suite's setup once, every case (negative ones first, each with its own
+  setup and teardown), then teardown, which also runs after a failure or **Stop**. Requests go from
+  your browser or, where the workspace allows it, through the try-it proxy, to the server picked in
+  Try it (the run form can switch the suite's own). The form asks for the secrets and inputs the
+  suite needs; credentials start from what Try it holds, and nothing typed is stored. Each step and
+  case shows the expected and actual status, the time, and what it captured, with secret values
+  hidden. A failed setup step marks the cases as not run. When the proxy's rate limit is reached, the
+  run waits and carries on. Running needs a new permission, **Run API tests**, granted per member on
+  Access control (admins have it), next to the renamed **Generate API tests**. Agents get
+  `knowledge_get_test_run_plan`: the same ordered requests with placeholders, to send with their own
+  HTTP client. It never contains a credential.
 - Test fixtures set up QA test suites (#483, phase 2). An operation's **Test requests** section now
   opens with **Setup**: the fixtures bound to the suite, run once before its cases, and fixtures the
   spec suggests. A suggestion is a fixture that calls an operation producing a value this one needs:

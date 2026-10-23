@@ -66,6 +66,7 @@ const openResponses = ref(new Set((view.value?.responses ?? []).filter((r) => r.
  */
 const auth = useAuthStore()
 const canGenerate = computed(() => auth.can('api-test-suites.generate'))
+const canRun = computed(() => auth.can('api-test-suites.run'))
 const tests = useTestSuite(() => props.workspaceId, () => props.operation.documentId, () => props.operation.entityKey, toRef(props, 'open'))
 /** The suite's fixtures (#483): read with the suite, for an open HTTP card only. */
 const fixtures = useSuiteFixtures(
@@ -275,12 +276,15 @@ function toggleResponse(r: ResponseView) {
               view.protocol === 'http' &&
               (tests.suite.value || tests.generating.value || tests.failure.value !== null || tests.loadError.value || fixtures.hasAny.value)
             "
+            :document="document"
+            :workspace-id="workspaceId"
             :operation="operation"
             :suite="tests.suite.value"
             :generating="tests.generating.value"
             :failure="tests.failure.value"
             :load-error="tests.loadError.value"
             :can-generate="canGenerate"
+            :can-run="canRun"
             :fixtures="fixtures"
             @generate="generateTests"
           />

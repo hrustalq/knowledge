@@ -367,9 +367,10 @@ the graph an arbitrary question. It is fenced on five sides:
 
 `workspace_members.capabilities` is a JSON array of grained permissions,
 checked against the closed `MEMBER_CAPABILITIES` catalogue in
-`@knowledge/contracts/identity`. Its one value so far is
-`api-test-suites.generate` ([52](../features/52-api-reference.md#test-suites-468)).
-Like `trusted_operator` it is independent of role — a viewer may hold one and
+`@knowledge/contracts/identity`: `api-test-suites.generate`
+([52](../features/52-api-reference.md#test-suites-468)) and `api-test-suites.run`
+([52](../features/52-api-reference.md#running-a-suite-483-phase-3)), one column
+each on the access-control page. Like `trusted_operator` it is independent of role — a viewer may hold one and
 an editor may not — and unlike it, it comes from a catalogue, so the next one
 is a constant, not a column.
 

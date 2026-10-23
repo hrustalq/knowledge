@@ -13,6 +13,7 @@ import {
   type ApiTestSuiteResponse,
   type GenerateApiTestSuiteResponse,
   type RankApiTestFixturesResponse,
+  type TestRunPlan,
 } from '@knowledge/contracts';
 import { AgentProducer } from '../agents/agent.producer.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
@@ -77,6 +78,15 @@ export class ApiTestSuiteRequestsService {
       filename: `${name}.postman_collection.json`,
       contentType: 'application/json; charset=utf-8',
     };
+  }
+
+  /**
+   * The cached suite as a run plan (#483, phase 3) for the browser runner or
+   * an agent's own HTTP client. Placeholders only: a run supplies the values.
+   */
+  async plan(scope: AccessScope, documentId: string, entityKey: string): Promise<TestRunPlan> {
+    const { suite, at } = await this.cached(documentId, entityKey);
+    return this.fixtures.plan(scope, at, suite.cases, `${at.spec.title} — ${at.op.method} ${at.op.path}`);
   }
 
   async generate(principal: Principal, documentId: string, entityKey: string, regenerate: boolean): Promise<GenerateApiTestSuiteResponse> {

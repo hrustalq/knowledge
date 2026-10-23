@@ -3383,7 +3383,14 @@
       "untitled": "No caption",
       "wholeFile": "whole file",
       "notPinned": "not pinned",
-      "remove": "Remove embed"
+      "remove": "Remove embed",
+      "rendering": "rendering…",
+      "afterPublish": "snapshot after publishing",
+      "unavailable": "not in the Figma allowlist",
+      "failed": "snapshot failed, retrying",
+      "openLive": "Open live",
+      "openLiveNamed": "Open {name} live in Figma",
+      "closeLive": "Close the live frame"
     },
     "previewOf": "Preview of {name}",
     "tocEmpty": "Headings you add will appear here.",

@@ -123,3 +123,46 @@ export function figmaTokenExpiry(value: string | null | undefined, now: Date = n
   if (left <= 0) return 'expired';
   return left <= FIGMA_TOKEN_WARN_DAYS * 86_400_000 ? 'soon' : 'ok';
 }
+
+// ------------------------------------------------------------- snapshots
+
+/**
+ * What the reader can show for one pinned item (#470), derived on read:
+ * `ready` — the snapshot is served; `rendering` — not yet, and queued;
+ * `unavailable` — no Figma connector, or the file is outside its allowlist;
+ * `failed` — Figma refused it, retried later.
+ */
+export const EMBED_ITEM_STATES = ['ready', 'rendering', 'unavailable', 'failed'] as const;
+export type EmbedItemState = (typeof EMBED_ITEM_STATES)[number];
+
+/** What the markdown itself got wrong, stored on `revision_embeds.warning`. */
+export const EMBED_WARNINGS = ['unknown-provider', 'unpinned', 'over-limit'] as const;
+export type EmbedWarning = (typeof EMBED_WARNINGS)[number];
+
+// GET /v1/documents/:id/embeds
+export interface EmbedItemStatus {
+  fileKey: string;
+  /** '' for a whole-file item. */
+  nodeId: string;
+  version: string;
+  state: EmbedItemState;
+  /** The frame's name in Figma, once rendered. */
+  name: string | null;
+  /** The node's size at 1×, for the tile's aspect ratio. */
+  width: number | null;
+  height: number | null;
+}
+
+export interface DocumentEmbedsResponse {
+  items: EmbedItemStatus[];
+}
+
+/** The key one status row answers for: a pinned provider item. */
+export function embedStatusKey(fileKey: string, nodeId: string | null, version: string): string {
+  return `${fileKey}/${nodeId || '_'}/${version}`;
+}
+
+/** The snapshot route, relative to the API root; `_` stands for a whole-file item. */
+export function embedSnapshotPath(documentId: string, fileKey: string, nodeId: string | null, version: string): string {
+  return `/v1/documents/${documentId}/embeds/${encodeURIComponent(fileKey)}/${encodeURIComponent(nodeId || '_')}/${encodeURIComponent(version)}`;
+}

@@ -306,6 +306,15 @@ export const envSchema = z.object({
   EXPORT_CONCURRENCY: z.coerce.number().int().positive().default(2),
   /** Wall-clock ceiling for rendering and converting one export; past twice this the sweeper fails it. */
   EXPORT_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
+  // ---- Embeds (#470, docs/features/64) ----
+  /** Items per embed group; more stay links, with a warning on the revision. */
+  EMBED_MAX_ITEMS: z.coerce.number().int().positive().default(24),
+  /** Figma render scale for a snapshot, before the pixel cap below. */
+  EMBED_SNAPSHOT_SCALE: z.coerce.number().positive().max(4).default(2),
+  /** Longest side of a snapshot, in pixels. */
+  EMBED_SNAPSHOT_MAX_PX: z.coerce.number().int().positive().default(4096),
+  /** Text layers kept per item, in bytes. */
+  EMBED_TEXT_MAX_BYTES: z.coerce.number().int().positive().default(2048),
   /** Cap on pages in one llms-full.txt; past it the dump ends with a truncation marker. */
   LLMS_FULL_MAX_DOCS: z.coerce.number().int().positive().default(2000),
   /** Cap on bytes streamed in one llms-full.txt (20 MB). */

@@ -13,6 +13,7 @@ import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { EMBEDDING_PROVIDER, embeddingSignature, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { INGESTION_QUEUE } from './ingestion.constants.js';
+import { EmbedsService } from '../embeds/embeds.service.js';
 import { chunkEmbedText, chunkSections, splitMarkdown } from './markdown.js';
 import { extractFrontmatterFacts } from './relations.js';
 import { ExtractorFactory } from '../extraction/extractor-factory.service.js';
@@ -47,6 +48,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     private readonly apiSpecs: ApiSpecsService,
     private readonly conflicts: ConflictsService,
     private readonly apiFixtures: ApiFixturesService,
+    private readonly embeds: EmbedsService,
   ) {
     super();
   }
@@ -191,6 +193,18 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       });
       mark('normalize', sections.length);
 
+      // 3b. #470: the embed items this revision references, for every revision
+      //     (an old one keeps showing what it pinned). Early, and before the
+      //     embedder: the page's snapshots must not wait on a model being up.
+      //     Records and queues renders only — indexing never calls Figma.
+      await this.embeds.recordRevision({
+        workspaceId: revision.document.workspaceId,
+        documentId: revision.documentId,
+        revisionId: revision.id,
+        markdown: parsed.content,
+      });
+      mark('embeds');
+
       // 4. Chunk
       const drafts = chunkSections(sections);
       mark('chunk', drafts.length);
@@ -314,6 +328,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         }
       }
       mark('component');
+
 
       // 8. Inferred relation extraction (plan.md §11 Phase 4): LLM-derived
       //    edges tagged 'inferred' with confidence + source chunk. Non-fatal —

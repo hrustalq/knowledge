@@ -14,6 +14,7 @@ import { GraphQueryModule } from './graph/graph-query.module.js';
 import { IngestionAdminModule } from './ingestion/ingestion-admin.module.js';
 import { DocumentsModule } from './documents/documents.module.js';
 import { AttachmentsModule } from './attachments/attachments.module.js';
+import { EmbedsModule } from './embeds/embeds.module.js';
 import { AvatarsModule } from './avatars/avatars.module.js';
 import { SearchModule } from './search/search.module.js';
 import { EntitiesModule } from './entities/entities.module.js';
@@ -66,6 +67,7 @@ import { ChatModule } from './chat/chat.module.js';
     ProjectsModule,
     DocumentsModule,
     AttachmentsModule,
+    EmbedsModule,
     AvatarsModule,
     SearchModule,
     EntitiesModule,

@@ -189,6 +189,7 @@ export class ProjectCascadeService {
     // no longer resolves, which is the failure mode this whole method exists
     // to avoid.
     await tx.glossaryExclusion.deleteMany({ where: docs });
+    await tx.revisionEmbed.deleteMany({ where: docs });
     await tx.connectorLink.deleteMany({ where: docs });
     await tx.connectorConflict.deleteMany({ where: docs });
     await tx.notification.deleteMany({ where: docs });

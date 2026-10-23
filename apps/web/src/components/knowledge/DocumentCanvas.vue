@@ -26,7 +26,7 @@
  */
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRef, watch } from 'vue'
 import { MessageSquarePlus, X } from 'lucide-vue-next'
 import type {
   GlossaryExclusion,
@@ -37,6 +37,7 @@ import type {
 } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import RichEditor from '@/components/editor/RichEditor.vue'
+import { EMBED_DOCUMENT } from '@/components/editor/use-embed-status'
 import ImageLightbox from '@/components/ui/lightbox/ImageLightbox.vue'
 import DiagramLightbox from '@/components/ui/lightbox/DiagramLightbox.vue'
 import {
@@ -206,6 +207,8 @@ async function loadExclusions() {
   }
 }
 watch(() => props.documentId, () => void loadExclusions(), { immediate: true })
+// Embed groups show this page's snapshots (#470).
+provide(EMBED_DOCUMENT, toRef(props, 'documentId'))
 
 /**
  * Record the occurrence under the card as "not this term".

@@ -4,7 +4,8 @@ import DOMPurify from 'dompurify'
 import { canonicalEmbedUrl, parseEmbedUrl } from '@knowledge/contracts/embeds'
 import { editorSchema, parseMarkdown } from '@knowledge/editor-schema'
 import { docToMarkdown } from '@knowledge/editor-schema/serialize'
-import { SANITIZE_CONFIG, markdownToHtml } from './render'
+import { SANITIZE_CONFIG, embedGroupsOf, markdownToHtml } from './render'
+import { embedCaptionOf, embedItemsOf } from './nodes'
 
 // The embed block (#470, docs/features/64): one URL matcher, and markdown that
 // carries captioned links and pinned versions, never an image.
@@ -79,5 +80,32 @@ describe('the embed block in markdown', () => {
     expect(html).toContain('<figure data-kn-embed="grid">')
     expect(html).toContain('data-kn-version="7"')
     expect(html).toContain('<figcaption>C</figcaption>')
+  })
+})
+
+describe('embedGroupsOf (#470, no DOM)', () => {
+  const figure = (html: string) => {
+    const host = document.createElement('div')
+    host.innerHTML = markdownToHtml(html)
+    return [...host.querySelectorAll('figure[data-kn-embed]')].map((f) => ({
+      layout: f.getAttribute('data-kn-embed') === 'grid' ? 'grid' : 'strip',
+      caption: embedCaptionOf(f),
+      items: embedItemsOf(f),
+    }))
+  }
+
+  it.each([
+    [
+      'canonical',
+      `<figure data-kn-embed="grid">\n<a href="https://figma.com/file/${KEY}/X?node-id=1-2" data-kn-version="7">Sign &amp; in</a>\n<a href='https://example.com/a'>https://example.com/a</a>\n<figcaption>Flow <b>one</b></figcaption>\n</figure>`,
+    ],
+    ['split by blank lines', `Intro.\n\n<figure data-kn-embed>\n\n<a href="https://www.figma.com/board/${KEY}/" data-kn-version="1">Board</a>\n\n</figure>\n\nAfter.`],
+    ['inside a panel', `> [!note]\n> <figure data-kn-embed="strip"><a href="https://www.figma.com/design/${KEY}/">x</a></figure>`],
+  ])('agrees with the DOM reader: %s', (_name, md) => {
+    expect(embedGroupsOf(md)).toEqual(figure(md))
+  })
+
+  it('ignores a figure inside a code fence', () => {
+    expect(embedGroupsOf('```html\n<figure data-kn-embed="grid"><a href="https://www.figma.com/design/AbCdEfGhIj12/">x</a></figure>\n```')).toEqual([])
   })
 })

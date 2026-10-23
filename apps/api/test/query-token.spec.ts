@@ -213,6 +213,7 @@ describe('opt-in allowlists', () => {
       'AttachmentsController.content',
       'AvatarsController.projectAvatar',
       'AvatarsController.userAvatar',
+      'EmbedsController.snapshot',
       'ImportController.image',
     ]);
   }, 30_000);

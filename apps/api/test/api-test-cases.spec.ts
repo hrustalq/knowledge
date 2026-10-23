@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 import {
   buildTestSuite,
   conformsToSchema,
   operationFingerprint,
+  readTestFixture,
+  suitePrerequisites,
+  testChain,
   testCaseRequest,
   testCasesFor,
   testSuiteCurl,
@@ -154,27 +157,187 @@ describe('building a suite', () => {
   });
 });
 
-describe('exports', () => {
+describe('exports without fixtures', () => {
   const suite = buildTestSuite(SPEC, OP, { body: { amount: 120, currency: 'EUR' } }, { 'pattern:match:body.ref': { value: 'INV-1' } });
+  const chain = testChain({ title: 'Billing', cases: suite, suite: [], resolve: () => assert.fail('no calls') });
 
-  it('prints one curl command per case, credentials as $TOKEN', () => {
-    const out = testSuiteCurl(suite);
-    expect(out.match(/^curl /gmu)).toHaveLength(suite.length);
-    expect(out).toContain('# Set $TOKEN before running.');
+  it('prints one curl call per case, credentials as $TOKEN', () => {
+    const out = testSuiteCurl(chain);
+    expect(out.match(/^call '/gmu)).toHaveLength(suite.length);
+    expect(out).toContain('# Export $TOKEN before running.');
     expect(out).toContain('"Authorization: Bearer $TOKEN"');
   });
 
   it('writes a Postman v2.1 collection with a status test per request and no credential value', () => {
-    const col = testSuitePostman({ title: 'Billing — test requests', folder: 'POST /invoices/{id}', cases: suite }) as {
+    const col = testSuitePostman(chain, 'POST /invoices/{id}') as {
       info: { schema: string };
       item: Array<{ item: Array<{ request: { header: Array<{ value: string }> }; event: Array<{ script: { exec: string[] } }> }> }>;
       variable: Array<{ key: string; value: string }>;
     };
     expect(col.info.schema).toBe('https://schema.getpostman.com/json/collection/v2.1.0/collection.json');
+    expect(col.item).toHaveLength(1);
     expect(col.item[0].item).toHaveLength(suite.length);
-    expect(col.item[0].item[0].request.header).toContainEqual({ key: 'Authorization', value: 'Bearer {{token}}' });
-    expect(col.item[0].item[0].event[0].script.exec[0]).toContain('pm.response.to.have.status(200)');
-    expect(col.variable).toEqual([{ key: 'token', value: '' }]);
+    expect(col.item[0].item.at(-1)!.request.header).toContainEqual({ key: 'Authorization', value: 'Bearer {{TOKEN}}' });
+    expect(col.variable).toEqual([{ key: 'TOKEN', value: '' }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fixtures (#483): prerequisites, captured variables, the chain and its exports
+// ---------------------------------------------------------------------------
+
+const SHOP = {
+  openapi: '3.1.0',
+  info: { title: 'Billing', version: '1' },
+  servers: [{ url: 'https://api.example.com' }],
+  security: [{ bearer: [] }],
+  components: { securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } } },
+  paths: {
+    '/invoices': {
+      post: {
+        operationId: 'createInvoice',
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { amount: { type: 'integer' } } } } } },
+        responses: {
+          '201': {
+            description: 'Created',
+            content: { 'application/json': { schema: { type: 'object', properties: { id: { type: 'string' } } } } },
+            links: { GetInvoice: { operationId: 'getInvoice', parameters: { id: '$response.body#/id' } } },
+          },
+        },
+      },
+    },
+    '/customers': {
+      post: { responses: { '201': { description: 'Created', content: { 'application/json': { schema: { type: 'object', properties: { id: { type: 'string' } } } } } } } },
+    },
+    '/invoices/{id}': {
+      get: {
+        operationId: 'getInvoice',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: { '200': { description: 'The invoice' }, '404': { description: 'No such invoice' } },
+      },
+      delete: { parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '204': { description: 'Gone' } } },
+    },
+    '/sessions': {
+      post: {
+        security: [],
+        requestBody: { content: { 'application/json': { schema: { type: 'object' } } } },
+        responses: { '201': { description: 'Logged in' } },
+      },
+    },
+  },
+};
+const row = (method: string, path: string, operationId: string | null = null) => ({
+  method,
+  path,
+  operationId,
+  pointer: `/paths/${path.replace(/\//gu, '~1')}/${method.toLowerCase()}`,
+  entityKey: `op:billing:${method.toLowerCase()}-${path.replace(/\{[^}]*\}/gu, '{}')}`,
+});
+const GET = row('GET', '/invoices/{id}', 'getInvoice');
+const CREATE = row('POST', '/invoices', 'createInvoice');
+const ROWS = [CREATE, row('POST', '/customers'), GET, row('DELETE', '/invoices/{id}'), row('POST', '/sessions')];
+
+describe('suitePrerequisites', () => {
+  it('keeps the declared link over the path-param match, and matches a generic id only under its collection', () => {
+    expect(suitePrerequisites(SHOP, GET, ROWS)).toEqual([{ source: 'link', producer: CREATE.entityKey, param: 'id', field: 'id' }]);
+  });
+
+  it('finds the path-param producer without a link', () => {
+    const noLinks = structuredClone(SHOP) as typeof SHOP;
+    delete (noLinks.paths['/invoices'].post.responses['201'] as { links?: unknown }).links;
+    expect(suitePrerequisites(noLinks, GET, ROWS).map((p) => [p.source, p.producer])).toEqual([['path-param', CREATE.entityKey]]);
+  });
+});
+
+describe('captured variables in a suite', () => {
+  it('lets the baseline use a bound capture where a literal must fit the schema', () => {
+    const vars = { suite: ['invoiceId'] };
+    const suite = buildTestSuite(SHOP, GET, { path: { id: '{{invoiceId}}' } }, { 'documented-error:404': { path: { id: '999999' } } }, vars);
+    expect(suite.find((c) => c.id === 'success:200')!.request.url).toBe('https://api.example.com/invoices/{{invoiceId}}');
+    expect(suite.find((c) => c.id === 'documented-error:404')!.request.url).toBe('https://api.example.com/invoices/999999');
+  });
+
+  it('drops a placeholder naming nothing bound', () => {
+    const suite = buildTestSuite(SHOP, GET, { path: { id: '{{nobody}}' } }, {}, { suite: ['invoiceId'] });
+    expect(suite.find((c) => c.id === 'success:200')!.request.url).not.toContain('nobody');
+  });
+});
+
+describe('testChain', () => {
+  const fixture = readTestFixture({
+    fixture: 1,
+    inputs: { amount: 100 },
+    steps: [
+      { id: 'login', call: 'op:billing:post-/sessions', request: { body: { password: '{{secret.qaPassword}}' } }, expect: 201, capture: { TOKEN: '$.accessToken' } },
+      { id: 'invoice', call: 'op:billing:post-/invoices', request: { body: { amount: '{{input.amount}}' } }, expect: 201, capture: { invoiceId: '$.id', where: 'header:Location' } },
+      { id: 'kyc', manual: 'A merchant with KYC approved exists.' },
+    ],
+    teardown: [{ call: 'op:billing:delete-/invoices/{id}', request: { path: { id: '{{invoiceId}}' } } }],
+  }).fixture!;
+  const resolve = (key: string) => {
+    const r = ROWS.find((x) => x.entityKey === key)!;
+    return { doc: SHOP, op: r };
+  };
+  const cases = buildTestSuite(SHOP, GET, { path: { id: '{{invoiceId}}' } }, {}, { suite: ['invoiceId'] });
+  const chain = testChain({ title: 'Billing — GET /invoices/{id}', cases, suite: [{ documentId: 'f1', title: 'Draft invoice', fixture }], resolve });
+
+  it('runs setup, negative cases before positive ones, then teardown', () => {
+    expect(chain.setup.map((s) => s.stepId)).toEqual(['login', 'invoice', 'kyc']);
+    expect(chain.cases.map((c) => c.case.kind)).toEqual([...chain.cases.map((c) => c.case.kind)].sort((a, b) => (a === 'negative' ? -1 : b === 'negative' ? 1 : 0)));
+    expect(chain.teardown.map((s) => s.stepId)).toEqual(['teardown-1']);
+  });
+
+  it('asks a run for the secret, not for what setup captures', () => {
+    expect(chain.secrets).toEqual(['secret.qaPassword']);
+    expect(chain.inputs).toEqual({ amount: 100 });
+  });
+
+  it('prints a bash script that captures with jq, stops on a failed setup step and tears down on exit', () => {
+    const sh = testSuiteCurl(chain);
+    expect(sh).toContain("TOKEN=$(jq -r '.[\"accessToken\"] // empty' \"$tmp/body\")");
+    expect(sh).toContain('if [ -n "${TOKEN:-}" ] && [ -n "${invoiceId:-}" ]; then');
+    expect(sh).toContain("where=$(header 'Location')");
+    expect(sh).toContain('trap teardown EXIT');
+    expect(sh).toContain('# Manual (Draft invoice › kyc): A merchant with KYC approved exists.');
+    expect(sh).toContain('"https://api.example.com/invoices/$invoiceId"');
+    expect(sh).toContain(': "${input_amount:=100}"');
+    expect(sh).toContain('  \\"amount\\": \\"$input_amount\\"\n}" || exit 1');
+    expect(sh).toContain('# Export $secret_qaPassword before running.');
+    expect(sh).not.toContain('secret_qaPassword=');
+  });
+
+  it('writes Setup and Teardown folders to Postman, a capture as a collection variable, no secret value', () => {
+    const col = testSuitePostman(chain, 'GET /invoices/{id}') as {
+      item: Array<{ name: string; description?: string; item: Array<{ name: string; request: { url: string }; event: Array<{ script: { exec: string[] } }> }> }>;
+      variable: Array<{ key: string; value: string }>;
+    };
+    expect(col.item.map((f) => f.name)).toEqual(['Setup', 'GET /invoices/{id}', 'Teardown']);
+    const setup = col.item[0];
+    expect(setup.description).toContain('KYC approved');
+    expect(setup.item[1].event[0].script.exec.join('\n')).toContain('pm.collectionVariables.set("invoiceId", pm.response.json()["id"]);');
+    expect(setup.item[0].event[0].script.exec.join('\n')).toContain('postman.setNextRequest("Teardown 1. Draft invoice › teardown-1")');
+    expect(col.item[1].item.find((i) => i.name.includes('success'))!.request.url).toBe('https://api.example.com/invoices/{{invoiceId}}');
+    expect(col.variable).toEqual([
+      { key: 'input.amount', value: '100' },
+      { key: 'secret.qaPassword', value: '' },
+    ]);
+  });
+
+  it('runs a case\'s own fixture in a subshell and restores shadowed captures in Postman', () => {
+    const own = testChain({
+      title: 't',
+      cases,
+      suite: [{ documentId: 'f1', title: 'Draft invoice', fixture }],
+      perCase: { 'documented-error:404': [{ documentId: 'f2', title: 'Other', fixture }] },
+      resolve,
+    });
+    const c = own.cases.find((x) => x.case.id === 'documented-error:404')!;
+    expect(c.captures).toEqual(['TOKEN', 'invoiceId', 'where']);
+    expect(testSuiteCurl(own)).toContain(') || failed=1');
+    const col = testSuitePostman(own, 'x') as { item: Array<{ item: Array<{ name: string; item?: Array<{ event: Array<{ listen: string; script: { exec: string[] } }> }> }> }> };
+    const folder = col.item[1].item.find((i) => i.item)!;
+    expect(folder.item![0].event[0].listen).toBe('prerequest');
+    expect(folder.item!.at(-1)!.event.at(-1)!.script.exec.at(-1)).toContain('pm.collectionVariables.unset(k)');
   });
 });
 

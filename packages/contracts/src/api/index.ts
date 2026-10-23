@@ -2,7 +2,7 @@ import type { ApiDocumentKind } from '@knowledge/contracts/core';
 import { normalizeEntityKey } from '@knowledge/contracts/graph';
 import type { ApiSpecDiff, ApiSpecDiffSummary } from '@knowledge/contracts/api/diff';
 import type { CodeSample } from '@knowledge/contracts/api/samples';
-import type { ApiTestCase } from '@knowledge/contracts/api/test-cases';
+import type { ApiTestCase, SuitePrerequisite, SuitePrerequisiteSource } from '@knowledge/contracts/api/test-cases';
 
 // ---------------------------------------------------------------------------
 // API reference documents (#78).
@@ -246,6 +246,68 @@ export interface GenerateApiTestSuiteResponse {
   suite: ApiTestSuiteResponse | null;
   runId: string | null;
   /** True when a run for the same operation and config was already in flight, and that run is returned. */
+  existing: boolean;
+}
+
+/** One fixture bound to a suite (#483). */
+export interface ApiTestBindingInfo {
+  fixtureId: string;
+  /** Null when the caller cannot open the fixture: a binding never leaks a title. */
+  title: string | null;
+  headRevisionId: string | null;
+  /** The fixture was archived after it was bound; it still runs until unbound. */
+  archived: boolean;
+}
+
+/** GET /v1/api-specs/:documentId/test-bindings — the fixtures that set up one operation's suite. */
+export interface ApiTestBindingsResponse {
+  documentId: string;
+  entityKey: string;
+  /** Run once, before every case. */
+  suite: ApiTestBindingInfo[];
+  /** Case id → fixtures run just before that case; their captures shadow the suite's for it. */
+  cases: Record<string, ApiTestBindingInfo[]>;
+}
+
+/** One operation of the same spec that produces a value the suite needs, with the fixtures already calling it. */
+export interface ApiTestPrerequisite extends SuitePrerequisite {
+  operation: { method: string | null; path: string; summary: string | null } | null;
+}
+
+/** A fixture offered as setup: it calls a producer of a value the operation needs. */
+export interface ApiTestFixtureCandidate {
+  documentId: string;
+  title: string;
+  headRevisionId: string | null;
+  /** The strongest evidence among the producers it calls. */
+  source: SuitePrerequisiteSource;
+  /** The producer keys it calls. */
+  producers: string[];
+  /** Why it is offered, from the spec. */
+  reason: string;
+  /** The tester's words, once a ranking run for this exact candidate set succeeded. */
+  explanation: string | null;
+  /** Already bound to the whole suite. */
+  bound: boolean;
+}
+
+/** Where the tester's ranking of this candidate set stands. */
+export type ApiTestRankingStatus = 'none' | 'pending' | 'ready' | 'failed';
+
+/** GET /v1/api-specs/:documentId/test-fixture-candidates */
+export interface ApiTestFixtureCandidatesResponse {
+  documentId: string;
+  entityKey: string;
+  prerequisites: ApiTestPrerequisite[];
+  /** Spec order (links, then path parameters), or the tester's when `ranking.status` is `ready`. Nothing here is bound. */
+  candidates: ApiTestFixtureCandidate[];
+  ranking: { status: ApiTestRankingStatus; runId: string | null };
+}
+
+/** POST /v1/api-specs/:documentId/test-fixture-candidates/rank — the tester run ranking the current candidate set. */
+export interface RankApiTestFixturesResponse {
+  runId: string | null;
+  /** True when a run for the same candidate set was already in flight (or done), and that run is returned. */
   existing: boolean;
 }
 

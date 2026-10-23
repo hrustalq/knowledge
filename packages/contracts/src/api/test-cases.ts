@@ -1,11 +1,9 @@
 import {
   derefSpec,
   exampleForSchema,
-  fullUrl,
   isJsonType,
   operationAuth,
   parametersOf,
-  renderCodeSample,
   resolveSpecPointer,
   sampleRequestFor,
   type SampleInputs,
@@ -26,9 +24,38 @@ import {
 // Bump TEST_CASE_CATALOGUE_VERSION whenever the case list or a case's request
 // changes shape: it is part of the cache key, so every stored suite built by
 // the older catalogue is regenerated rather than served.
+//
+// A suite with bound fixtures (#483) may use what their setup captures: a
+// value that is exactly `{{invoiceId}}` stands for that capture wherever a
+// literal would have to fit the schema, and a placeholder naming anything
+// else is dropped like any other value that does not fit.
 // ---------------------------------------------------------------------------
 
-export const TEST_CASE_CATALOGUE_VERSION = 1;
+/** 2: case requests may carry `{{var}}` captures of bound fixtures (#483). */
+export const TEST_CASE_CATALOGUE_VERSION = 2;
+
+/** What bound fixtures capture, for the whole suite and per case id. */
+export interface TestSuiteVariables {
+  suite: readonly string[];
+  cases?: Readonly<Record<string, readonly string[]>>;
+}
+
+const NO_VARS: ReadonlySet<string> = new Set();
+
+/** Is `v` exactly one placeholder naming a known capture? */
+const isVarRef = (v: unknown, vars: ReadonlySet<string>): boolean => {
+  if (typeof v !== 'string' || !vars.size) return false;
+  const m = /^\{\{\s*([^{}]*?)\s*\}\}$/u.exec(v);
+  return !!m && vars.has(m[1]);
+};
+
+/**
+ * Does every placeholder in `v` name a known capture? `{{input.x}}` and
+ * `{{secret.x}}` belong to fixtures, never to a case. Matched here rather than
+ * through `…/api/fixtures`, whose import of `…/api` would close a cycle.
+ */
+const onlyKnownVars = (v: unknown, vars: ReadonlySet<string>): boolean =>
+  [...(JSON.stringify(v) ?? '').matchAll(/\{\{\s*([^{}]*?)\s*\}\}/gu)].every((m) => vars.has(m[1]));
 
 /** The rules a case covers. Closed: `testCasesFor` emits exactly these and the web labels them. */
 export const API_TEST_RULES = [
@@ -306,8 +333,13 @@ export function testCasesFor(doc: Json, op: Op): ApiTestCaseSpec[] {
 // The baseline: the model's realistic values, kept only where they fit
 // ---------------------------------------------------------------------------
 
-/** Does `value` satisfy the rules `testCasesFor` covers? Wire values (`path`, `query`, `header`) arrive as text. */
-export function conformsToSchema(doc: Json, schema: unknown, value: unknown, wire = false, depth = 0): boolean {
+/**
+ * Does `value` satisfy the rules `testCasesFor` covers? Wire values (`path`,
+ * `query`, `header`) arrive as text. A placeholder for a capture in `vars`
+ * fits anywhere: its value is the server's, not ours to check.
+ */
+export function conformsToSchema(doc: Json, schema: unknown, value: unknown, wire = false, depth = 0, vars = NO_VARS): boolean {
+  if (isVarRef(value, vars)) return true;
   const node = flatten(doc, schema);
   if (!node || depth > MAX_FIELD_DEPTH) return true;
   const type = typeOf(node);
@@ -343,7 +375,7 @@ export function conformsToSchema(doc: Json, schema: unknown, value: unknown, wir
         const prop = derefSpec(doc, props[name]).node;
         if (!(isObj(prop) && prop.readOnly === true)) return false;
       }
-      return Object.entries(v).every(([k, x]) => props[k] === undefined || conformsToSchema(doc, props[k], x, false, depth + 1));
+      return Object.entries(v).every(([k, x]) => props[k] === undefined || conformsToSchema(doc, props[k], x, false, depth + 1, vars));
     }
     default:
       return true;
@@ -357,7 +389,7 @@ const asStrings = (v: unknown): Record<string, string> =>
  * The inputs every case starts from: the model's values for parameters and
  * body where they satisfy the schema, the spec's examples everywhere else.
  */
-export function testBaseline(doc: Json, op: Op, proposed: unknown): SampleInputs {
+export function testBaseline(doc: Json, op: Op, proposed: unknown, vars = NO_VARS): SampleInputs {
   const raw = derefSpec(doc, resolveSpecPointer(doc, op.pointer)).node;
   if (!isObj(raw)) return {};
   const p = isObj(proposed) ? proposed : {};
@@ -367,11 +399,14 @@ export function testBaseline(doc: Json, op: Op, proposed: unknown): SampleInputs
     Object.fromEntries(
       Object.entries(asStrings(given)).filter(([name, value]) => {
         const def = params.find((x) => x.in === loc && x.name.toLowerCase() === name.toLowerCase());
-        return def && conformsToSchema(doc, def.schema, value, true);
+        return def && onlyKnownVars(value, vars) && conformsToSchema(doc, def.schema, value, true, 0, vars);
       }),
     );
   const body = jsonBody(doc, raw);
-  const json = body && p.body !== undefined && conformsToSchema(doc, body.schema, p.body) ? JSON.stringify(p.body, null, 2) : undefined;
+  const json =
+    body && p.body !== undefined && onlyKnownVars(p.body, vars) && conformsToSchema(doc, body.schema, p.body, false, 0, vars)
+      ? JSON.stringify(p.body, null, 2)
+      : undefined;
   return {
     path: pick('path', p.path),
     query: pick('query', p.query),
@@ -404,11 +439,19 @@ const scalarText = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v
  * when a case needs a value nobody supplied that fits — a suite is refused
  * rather than stored with a case that does not test what it says.
  */
-export function testCaseRequest(doc: Json, op: Op, c: ApiTestCaseSpec, baseline: SampleInputs, fill: ApiTestCaseFill = {}): SampleRequest {
+export function testCaseRequest(
+  doc: Json,
+  op: Op,
+  c: ApiTestCaseSpec,
+  baseline: SampleInputs,
+  fill: ApiTestCaseFill = {},
+  vars = NO_VARS,
+): SampleRequest {
   const inputs: SampleInputs = { ...baseline, path: { ...baseline.path }, query: { ...baseline.query }, headers: { ...baseline.headers } };
   if (c.rule === 'documented-error') {
-    Object.assign(inputs.path!, asStrings(fill.path));
-    Object.assign(inputs.query!, asStrings(fill.query));
+    const known = (given: unknown) => Object.fromEntries(Object.entries(asStrings(given)).filter(([, v]) => onlyKnownVars(v, vars)));
+    Object.assign(inputs.path!, known(fill.path));
+    Object.assign(inputs.query!, known(fill.query));
   }
   const m = c.mutation;
   if (m.op === 'set' || m.op === 'omit') {
@@ -471,12 +514,21 @@ function defaultName(c: ApiTestCaseSpec): string {
  * The whole suite: every listed case, named by the model where it named it
  * and by the catalogue where it did not, with its request built from the
  * baseline. `fills` is keyed by case id; ids the catalogue does not list are
- * ignored.
+ * ignored. `vars` are the bound fixtures' captures: the baseline may use the
+ * suite's, a documented-error case its own as well.
  */
-export function buildTestSuite(doc: Json, op: Op, proposedBaseline: unknown, fills: Record<string, ApiTestCaseFill> = {}): ApiTestCase[] {
-  const baseline = testBaseline(doc, op, proposedBaseline);
+export function buildTestSuite(
+  doc: Json,
+  op: Op,
+  proposedBaseline: unknown,
+  fills: Record<string, ApiTestCaseFill> = {},
+  vars: TestSuiteVariables = { suite: [] },
+): ApiTestCase[] {
+  const suiteVars = new Set(vars.suite);
+  const baseline = testBaseline(doc, op, proposedBaseline, suiteVars);
   return testCasesFor(doc, op).map((c) => {
     const fill = isObj(fills[c.id]) ? fills[c.id] : {};
+    const caseVars = new Set([...suiteVars, ...(vars.cases?.[c.id] ?? [])]);
     const spec = expectedFor(doc, op, c.expectedStatus);
     return {
       id: c.id,
@@ -485,79 +537,115 @@ export function buildTestSuite(doc: Json, op: Op, proposedBaseline: unknown, fil
       target: c.target,
       name: text(fill.name, 200) ?? defaultName(c),
       description: text(fill.description, 1_000) ?? '',
-      request: testCaseRequest(doc, op, c, baseline, fill),
+      request: testCaseRequest(doc, op, c, baseline, fill, caseVars),
       expected: { status: c.expectedStatus, description: spec.description, expectation: text(fill.expectation, 1_000), example: spec.example },
     };
   });
 }
 
 // ---------------------------------------------------------------------------
-// Export: cURL and Postman Collection v2.1
+// Prerequisites (#483): which operations of the same spec produce a value
+// this one needs, so the fixtures calling them can be offered as setup.
 // ---------------------------------------------------------------------------
 
-/** One `curl` command per case, printed by the samples' own printer, each headed by what it expects. */
-export function testSuiteCurl(cases: readonly ApiTestCase[]): string {
-  const envs = [...new Set(cases.flatMap((c) => envsOf(c.request)))];
-  const head = envs.length ? [`# Set ${envs.map((e) => `$${e}`).join(', ')} before running.`] : [];
-  return [
-    ...head,
-    ...cases.map((c) => [`# ${c.name}`, `# ${c.kind}, ${c.rule}: expects ${c.expected.status}`, renderCodeSample('curl', c.request)].join('\n')),
-  ].join('\n\n') + '\n';
+export type SuitePrerequisiteSource = 'link' | 'path-param';
+
+export interface SuitePrerequisite {
+  source: SuitePrerequisiteSource;
+  /** The producing operation's entity key. */
+  producer: string;
+  /** The path parameter it fills, when the spec says which. */
+  param: string | null;
+  /** The producer's response field that carries the value: `id`, `data.id`. */
+  field: string | null;
 }
 
-function envsOf(req: SampleRequest): string[] {
-  return [...req.query, ...req.headers].flatMap((x) => x.value.flatMap((p) => (typeof p === 'string' ? [] : [p.env])));
+type OpRow = Op & { entityKey: string; operationId?: string | null };
+
+/** `/invoices/{id}/` → `/invoices/{}`. Not `normalizeApiPath`: importing `…/api` here would close a cycle. */
+const pathShape = (p: string) => p.replace(/\{[^}]*\}/gu, '{}').replace(/\/+$/u, '') || '/';
+
+/** `$response.body#/data/id` → `data.id`; null for anything not read from the body. */
+function linkField(expr: unknown): string | null {
+  const m = typeof expr === 'string' ? /^\$response\.body#\/(.+)$/u.exec(expr.trim()) : null;
+  return m ? m[1].split('/').map((x) => x.replace(/~1/gu, '/').replace(/~0/gu, '~')).join('.') : null;
 }
 
-const postmanVar = (env: string) => env.toLowerCase();
-const postmanText = (t: SampleText) => t.map((p) => (typeof p === 'string' ? p : `{{${postmanVar(p.env)}}}`)).join('');
+/** Each 2xx response of an operation, dereferenced. */
+function successResponses(doc: Json, op: Op): Json[] {
+  const raw = derefSpec(doc, resolveSpecPointer(doc, op.pointer)).node;
+  const responses = isObj(raw) && isObj(raw.responses) ? raw.responses : {};
+  return Object.entries(responses)
+    .filter(([s]) => isSuccess(s))
+    .map(([, r]) => derefSpec(doc, r).node)
+    .filter(isObj);
+}
 
-function statusTest(status: string): string {
-  const range = /^([1-5])XX$/iu.exec(status);
-  const check = range
-    ? `pm.expect(pm.response.code).to.be.within(${range[1]}00, ${range[1]}99);`
-    : `pm.response.to.have.status(${Number(status)});`;
-  return `pm.test(${JSON.stringify(`Status is ${status.toUpperCase()}`)}, function () { ${check} });`;
+/** Top-level property names of an operation's 2xx JSON response bodies. */
+function responseFields(doc: Json, op: Op): string[] {
+  const out = new Set<string>();
+  for (const res of successResponses(doc, op)) {
+    const content = isObj(res.content) ? res.content : {};
+    for (const [type, media] of Object.entries(content)) {
+      if (!isJsonType(type) || !isObj(media)) continue;
+      const node = flatten(doc, media.schema);
+      if (node && isObj(node.properties)) for (const k of Object.keys(node.properties)) out.add(k);
+    }
+  }
+  return [...out];
 }
 
 /**
- * A Postman Collection v2.1: one folder for the operation, one request per
- * case, the expected status as a `pm.test`. Credentials are collection
- * variables with no value (`{{token}}`), never a value.
+ * The operations of one spec that produce a value `target` needs, closest
+ * evidence first: a response `links` entry the spec declares to `target`
+ * (by operationId or operationRef), then, per path parameter, a non-GET
+ * operation whose 2xx response carries a field of that name. A generic `id`
+ * only matches the collection the parameter sits under (`POST /invoices` for
+ * `/invoices/{id}`); a specific name (`invoiceId`) matches anywhere.
  */
-export function testSuitePostman(opts: { title: string; folder: string; cases: readonly ApiTestCase[] }): Record<string, unknown> {
-  const envs = [...new Set(opts.cases.flatMap((c) => envsOf(c.request)))];
-  return {
-    info: {
-      name: opts.title,
-      schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
-    },
-    item: [
-      {
-        name: opts.folder,
-        item: opts.cases.map((c) => ({
-          name: c.name,
-          request: {
-            method: c.request.method,
-            header: c.request.headers.map((h) => ({ key: h.name, value: postmanText(h.value) })),
-            url: postmanText(fullUrl(c.request)),
-            ...(c.request.body
-              ? {
-                  body: {
-                    mode: 'raw',
-                    raw: c.request.body.text,
-                    options: { raw: { language: isJsonType(c.request.body.contentType) ? 'json' : 'text' } },
-                  },
-                }
-              : {}),
-            ...(c.description ? { description: c.description } : {}),
-          },
-          event: [{ listen: 'test', script: { type: 'text/javascript', exec: [statusTest(c.expected.status)] } }],
-        })),
-      },
-    ],
-    variable: envs.map((e) => ({ key: postmanVar(e), value: '' })),
+export function suitePrerequisites(doc: Json, target: OpRow, ops: readonly OpRow[]): SuitePrerequisite[] {
+  const out: SuitePrerequisite[] = [];
+  const seen = new Set<string>();
+  const add = (p: SuitePrerequisite) => {
+    const key = `${p.producer}\u0000${p.param ?? ''}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(p);
   };
+  const others = ops.filter((o) => o.entityKey !== target.entityKey && o.protocol !== 'async' && o.method);
+
+  for (const o of others) {
+    for (const res of successResponses(doc, o)) {
+      for (const raw of Object.values(isObj(res.links) ? res.links : {})) {
+        const link = derefSpec(doc, raw).node;
+        if (!isObj(link)) continue;
+        const ref = typeof link.operationRef === 'string' ? link.operationRef.replace(/^#/u, '') : null;
+        const hit = (target.operationId && link.operationId === target.operationId) || (ref && ref === target.pointer);
+        if (!hit) continue;
+        const params = Object.entries(isObj(link.parameters) ? link.parameters : {});
+        if (!params.length) add({ source: 'link', producer: o.entityKey, param: null, field: null });
+        for (const [name, expr] of params) add({ source: 'link', producer: o.entityKey, param: name.replace(/^path\./u, ''), field: linkField(expr) });
+      }
+    }
+  }
+
+  for (const m of target.path.matchAll(/\{([^}]+)\}/gu)) {
+    const param = m[1];
+    const collection = pathShape(target.path.slice(0, m.index));
+    const ranked: Array<[number, SuitePrerequisite]> = [];
+    for (const o of others) {
+      if (o.method!.toUpperCase() === 'GET') continue;
+      const fields = responseFields(doc, o);
+      const exact = fields.find((f) => f.toLowerCase() === param.toLowerCase());
+      const under = pathShape(o.path) === collection;
+      const field = exact ?? (under && /id$/iu.test(param) ? fields.find((f) => f === 'id') : undefined);
+      if (field && (under || field.toLowerCase() !== 'id')) {
+        ranked.push([under ? 0 : 1, { source: 'path-param', producer: o.entityKey, param, field }]);
+      }
+    }
+    ranked.sort((a, b) => a[0] - b[0]).forEach(([, p]) => add(p));
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,7 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { AgentRunSummary, ApiTestSuiteResponse, GenerateApiTestSuiteResponse } from '@knowledge/contracts'
-import { apiQueryOptions, useApiMutation } from '@/api/queries'
-import { ApiError, getWorkspaceId } from '@/lib/api'
+import { apiQueryOptions, isApiRequestError, useApiMutation } from '@/api/queries'
 
 const POLL_MS = 2_500
 
@@ -15,7 +14,7 @@ const finished = (r: AgentRunSummary | undefined) =>
  * otherwise polls the `tester` run it started (the drift check's pattern)
  * and reads the suite again once that run succeeds.
  */
-export function useTestSuite(documentId: () => string, entityKey: () => string, active: Ref<boolean>) {
+export function useTestSuite(workspaceId: () => string, documentId: () => string, entityKey: () => string, active: Ref<boolean>) {
   const client = useQueryClient()
   const options = computed(() =>
     apiQueryOptions('/v1/api-specs/{id}/test-suite', { path: { id: documentId() }, query: { entityKey: entityKey() } }),
@@ -25,13 +24,14 @@ export function useTestSuite(documentId: () => string, entityKey: () => string, 
   /** A 404 is "not generated yet", not an error. */
   const loadError = computed(() => {
     const e = suiteQuery.error.value
-    return e && !(e instanceof ApiError && e.status === 404) ? e.message : null
+    return e && !(isApiRequestError(e) && e.status === 404) ? e.message : null
   })
 
   const runId = ref<string | null>(null)
   const runQuery = useQuery(
     computed(() => ({
-      ...apiQueryOptions('/v1/ai/agents/runs/{id}', { path: { id: runId.value ?? '' }, query: { workspaceId: getWorkspaceId() } }),
+      // The spec's workspace, which owns the run — not whichever one is selected.
+      ...apiQueryOptions('/v1/ai/agents/runs/{id}', { path: { id: runId.value ?? '' }, query: { workspaceId: workspaceId() } }),
       enabled: !!runId.value,
       refetchInterval: (q: { state: { data: unknown } }) => (finished(q.state.data as AgentRunSummary | undefined) ? false : POLL_MS),
     })),
@@ -68,5 +68,5 @@ export function useTestSuite(documentId: () => string, entityKey: () => string, 
     }
   }
 
-  return { suite, loadError, generating, failure, generate }
+  return { suite, loadError, generating, failure, generate, queryKey: () => options.value.queryKey }
 }

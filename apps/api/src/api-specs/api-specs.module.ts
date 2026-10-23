@@ -11,7 +11,7 @@ import { ApiDriftCheckService } from './api-drift-check.service.js';
 import { ApiSettingsService } from './api-settings.service.js';
 import { ApiOperationsController, ApiSettingsController, ApiSpecsController, TestFixturesController } from './api-specs.controller.js';
 import { ApiSpecsCoreModule } from './api-specs-core.module.js';
-import { ApiTestSuiteRequestsService } from './api-test-suite-requests.service.js';
+import { ApiTestSuitesModule } from './api-test-suites.module.js';
 import { ApiTryService } from './api-try.service.js';
 
 /**
@@ -22,9 +22,9 @@ import { ApiTryService } from './api-try.service.js';
  * provided here rather than imported, since that module carries controllers.
  */
 @Module({
-  imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, ApiSpecsCoreModule, AiCoreModule, AgentCoreModule, AgentQueueModule],
+  imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, ApiSpecsCoreModule, ApiTestSuitesModule, AiCoreModule, AgentCoreModule, AgentQueueModule],
   controllers: [ApiSpecsController, ApiOperationsController, ApiSettingsController, TestFixturesController],
-  providers: [ApiSettingsService, ApiTryService, ApiDriftCheckService, ApiTestSuiteRequestsService, PublicStore, PublicRateLimiter],
+  providers: [ApiSettingsService, ApiTryService, ApiDriftCheckService, PublicStore, PublicRateLimiter],
   exports: [ApiSpecsCoreModule],
 })
 export class ApiSpecsModule {}

@@ -294,6 +294,10 @@ export type I18nTranslations = {
         "testerRun": {
             "noOperation": string;
             "summary": string;
+            "noCandidates": string;
+            "reasonLink": string;
+            "reasonPathParam": string;
+            "rankSummary": string;
         };
         "scribeRun": {
             "noTicket": string;
@@ -1296,6 +1300,12 @@ export type I18nTranslations = {
             "notGenerated": string;
             "disabled": string;
             "noModel": string;
+            "bindingFixture": string;
+            "bindingCase": string;
+            "fixtureHidden": string;
+            "fixtureBroken": string;
+            "fixtureInvalid": string;
+            "rankNothing": string;
         };
         "testFixture": {
             "template": string;

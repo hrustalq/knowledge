@@ -16,6 +16,7 @@ import {
 import { ApiFixturesService, renderFixtureProjection } from '../src/api-specs/api-fixtures.service.js';
 import { systemScope } from '../src/permissions/access-scope.js';
 import { WRITE_TOOLS } from '../src/mcp/mcp-tools.js';
+import { boundCaptures, readTesterRanking } from '../src/agents/tester.js';
 
 /** QA test fixtures (#483, phase 1): the kind, the shape check, captures, credentials, and the finalize check. */
 
@@ -215,5 +216,43 @@ describe('ApiFixturesService', () => {
   it('keeps the fixture tools read-only', () => {
     expect(WRITE_TOOLS.has('knowledge_list_test_fixtures')).toBe(false);
     expect(WRITE_TOOLS.has('knowledge_get_test_fixture')).toBe(false);
+  });
+});
+
+/** Phase 2: bindings, what the tester is told, its ranking, and which suite tools write. */
+describe('fixture bindings (#483, phase 2)', () => {
+  const { fixture } = readTestFixture(INVOICE);
+  const bound = (caseId: string | null) => ({
+    binding: { caseId, fixtureId: 'f1', title: 'Draft invoice', headRevisionId: 'r1', contentHash: 'h', archived: false },
+    fixture: { documentId: 'f1', title: 'Draft invoice', fixture: fixture! },
+  });
+
+  it('tells the tester what setup captures, per suite and per case, never teardown', () => {
+    const { vars, captures } = boundCaptures([bound(null), bound('documented-error:404')]);
+    expect(vars.suite).toEqual(Object.keys(Object.assign({}, ...fixture!.steps.map((s) => ('capture' in s ? s.capture : {})))));
+    expect(vars.cases).toEqual({ 'documented-error:404': vars.suite });
+    expect(captures.suite.every((c) => c.fixture === 'Draft invoice' && c.step !== 'teardown-1')).toBe(true);
+  });
+
+  it('keeps the ranking honest: known ids once, the rest appended unexplained', () => {
+    const parsed = {
+      ranking: [
+        { documentId: 'b', explanation: 'Creates the invoice.' },
+        { documentId: 'zzz', explanation: 'invented' },
+        { documentId: 'b', explanation: 'again' },
+      ],
+    };
+    expect(readTesterRanking(parsed, ['a', 'b'])).toEqual([
+      { documentId: 'b', explanation: 'Creates the invoice.' },
+      { documentId: 'a', explanation: null },
+    ]);
+    expect(readTesterRanking('nonsense', ['a'])).toEqual([{ documentId: 'a', explanation: null }]);
+  });
+
+  it('hides Generate and binding from read-only keys, not the reads', () => {
+    expect(WRITE_TOOLS.has('knowledge_generate_test_suite')).toBe(true);
+    expect(WRITE_TOOLS.has('knowledge_set_test_fixtures')).toBe(true);
+    expect(WRITE_TOOLS.has('knowledge_get_test_suite')).toBe(false);
+    expect(WRITE_TOOLS.has('knowledge_suggest_test_fixtures')).toBe(false);
   });
 });

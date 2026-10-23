@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import type {
@@ -7,12 +7,15 @@ import type {
   ApiSettingsResponse,
   ApiSpecDiff,
   ApiSpecDocumentResponse,
+  ApiTestBindingsResponse,
+  ApiTestFixtureCandidatesResponse,
   ApiTestSuiteResponse,
   ApiTryResponse,
   GenerateApiTestSuiteResponse,
   ListApiOperationsResponse,
   ListApiSpecsResponse,
   ListTestFixturesResponse,
+  RankApiTestFixturesResponse,
   SearchApiOperationsResponse,
   TestFixtureResponse,
 } from '@knowledge/contracts';
@@ -31,12 +34,14 @@ import {
   ApiSamplesQueryDto,
   ApiSpecDiffQueryDto,
   ApiSpecRevisionQueryDto,
+  ApiTestOperationDto,
   ApiTestSuiteQueryDto,
   ApiTryRequestDto,
   GenerateApiTestSuiteDto,
   ListApiSpecsQueryDto,
   ListTestFixturesQueryDto,
   SearchApiOperationsQueryDto,
+  SetApiTestBindingsDto,
   UpdateApiSettingsDto,
 } from './api-specs.dto.js';
 
@@ -119,15 +124,18 @@ export class ApiSpecsController {
   @ApiOperation({
     summary:
       "One operation's cached QA test suite (#468), for the operation as it stands at the head. 404 until one is " +
-      'generated, and again after an edit to the operation. format=curl|postman answers with the suite as a file',
+      'generated, and again after an edit to the operation or its bound fixtures. format=curl|postman answers with ' +
+      'the suite as a file — a bash script or a Postman collection — with the bound fixtures as setup and teardown',
   })
   async testSuite(
+    @CurrentPrincipal() principal: Principal,
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: ApiTestSuiteQueryDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiTestSuiteResponse | string> {
     if (!query.format) return this.testSuites.get(id, query.entityKey);
-    const file = await this.testSuites.export(id, query.entityKey, query.format);
+    const scope = await this.permissions.scopeForDocument(principal, id);
+    const file = await this.testSuites.export(scope, id, query.entityKey, query.format);
     res.setHeader('Content-Type', file.contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
     return file.body;
@@ -150,6 +158,72 @@ export class ApiSpecsController {
     @Body() dto: GenerateApiTestSuiteDto,
   ): Promise<GenerateApiTestSuiteResponse> {
     return this.testSuites.generate(principal, id, dto.entityKey, dto.regenerate === true);
+  }
+
+  @Get(':id/test-bindings')
+  @Access('viewer', 'document')
+  @ApiOperation({
+    summary:
+      "The QA fixtures bound to one operation's suite (#483): suite-level setup, and per-case setup by case id. A " +
+      'fixture the caller cannot open is listed without its title',
+  })
+  async testBindings(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ApiTestOperationDto,
+  ): Promise<ApiTestBindingsResponse> {
+    return this.testSuites.bindings(await this.permissions.scopeForDocument(principal, id), id, query.entityKey);
+  }
+
+  // Viewer + capability, like Generate: binding writes no page.
+  @Put(':id/test-bindings')
+  @Access('viewer', 'document', { capability: 'api-test-suites.generate' })
+  @ApiOperation({
+    summary:
+      "Replace the fixtures bound to one operation's suite (#483), in run order. Every fixture must be a test-fixture " +
+      'the caller can open; every case id one the suite lists. Changes the suite cache key. Needs the ' +
+      'api-test-suites.generate capability',
+  })
+  async setTestBindings(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetApiTestBindingsDto,
+  ): Promise<ApiTestBindingsResponse> {
+    const scope = await this.permissions.scopeForDocument(principal, id);
+    const list = dto.bindings.map((b) => ({ caseId: b.caseId ?? null, fixtureId: b.fixtureId }));
+    return this.testSuites.setBindings(principal, scope, id, dto.entityKey, list);
+  }
+
+  @Get(':id/test-fixture-candidates')
+  @Access('viewer', 'document')
+  @ApiOperation({
+    summary:
+      'Fixtures that could set up one operation (#483): operations of the same spec producing a value it needs ' +
+      "(response links, then path parameters) and the fixtures calling them, in spec order or the tester's ranking. " +
+      'Nothing is bound',
+  })
+  async testFixtureCandidates(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ApiTestOperationDto,
+  ): Promise<ApiTestFixtureCandidatesResponse> {
+    return this.testSuites.candidates(await this.permissions.scopeForDocument(principal, id), id, query.entityKey);
+  }
+
+  @Post(':id/test-fixture-candidates/rank')
+  @HttpCode(200)
+  @Access('viewer', 'document', { capability: 'api-test-suites.generate' })
+  @ApiOperation({
+    summary:
+      "Ask the tester to rank and explain one operation's fixture candidates (#483). One run per candidate set: a set " +
+      'already ranked or being ranked returns that run. Needs the api-test-suites.generate capability',
+  })
+  async rankTestFixtures(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApiTestOperationDto,
+  ): Promise<RankApiTestFixturesResponse> {
+    return this.testSuites.rank(principal, await this.permissions.scopeForDocument(principal, id), id, dto.entityKey);
   }
 
   @Post(':id/try')

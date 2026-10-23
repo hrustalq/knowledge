@@ -17,6 +17,13 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Communities now form a tree (#475, phase 2). The atlas agent groups related pages as before, then
+  groups those groups into broader areas, up to three levels. Each area above the finest is
+  summarised from the summaries of the groups it contains. `GET /v1/graph/communities` takes
+  `level` (0 = finest, the default and today's answer), and every community it returns carries its
+  `level` and `parentId`. A reader still sees a community only if they may open every page beneath
+  it, at every level. The first atlas run after the deploy rebuilds once, even on an unchanged
+  graph. One `COMMUNITY_MAX_PER_RUN` budget covers all levels, finest first.
 - Run a QA suite on the server (#483, phase 5). Where the deployment allows it and an admin turns
   it on in **Settings → API**, the run panel gains a **Server** route: pick a **test environment**
   and the worker runs setup, every case and teardown, then the panel shows the results in the

@@ -38,12 +38,12 @@ import { LISTED_PAGE } from '../common/listed-page.js';
 import { normalizeRelation } from '../common/relations.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { GraphService } from '../graph/graph.service.js';
+import { GraphService, type StoredCommunity } from '../graph/graph.service.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { AssistantClient, ProviderAccountError } from '../assistant/assistant.client.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { candidatePairs, conflictFingerprint, quoteIn, readJudgement } from './contradiction.js';
-import { graphFingerprint, groupCommunities, louvain, pagePairs } from './communities.js';
+import { communityHierarchy, graphFingerprint, pagePairs } from './communities.js';
 import { AssistantReadToolsService } from '../assistant/assistant-read-tools.service.js';
 import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
@@ -666,11 +666,14 @@ export class AgentExecutor {
   /**
    * The atlas (#81, phase 7): communities of pages for global questions. The
    * grouping is deterministic — Louvain over the page-to-page projection of
-   * the live graph, as the run's audience may see it — and skipped outright
-   * when the projection's fingerprint is the one the stored communities were
-   * built from. The model summarises each community from its pages' titles
-   * and opening excerpts; each summary is embedded so a question can find it.
-   * Written whole at the end, so a failed run leaves the last good set.
+   * the live graph, as the run's audience may see it, repeated on the
+   * aggregated graph for the levels above (#475) — and skipped outright when
+   * the projection's fingerprint is the one the stored communities were built
+   * from. The model summarises each level-0 community from its pages' titles
+   * and opening excerpts, and each community above from its children's
+   * summaries; each summary is embedded so a question can find it. One
+   * COMMUNITY_MAX_PER_RUN budget across levels, finest first. Written whole at
+   * the end, so a failed run leaves the last good set.
    */
   private async chart(
     run: AgentRun,
@@ -690,12 +693,14 @@ export class AgentExecutor {
     if ((await this.graph.communityFingerprint(run.workspaceId)) === fingerprint) {
       return { summary: t('agent.charting.unchanged'), findings: [] };
     }
-    const groups = groupCommunities(louvain(pairs), 2).slice(0, this.config.get('COMMUNITY_MAX_PER_RUN', { infer: true }));
-    if (groups.length === 0) return { summary: t('agent.charting.noCommunities'), findings: [] };
+    const tree = communityHierarchy(pairs);
+    if (tree.length === 0) return { summary: t('agent.charting.noCommunities'), findings: [] };
+    const budget = this.config.get('COMMUNITY_MAX_PER_RUN', { infer: true });
 
     // Titles from PG under the run's scope (#76); an opening excerpt per page
     // from its live chunks — the first chunk is the page's own introduction.
-    const memberIds = [...new Set(groups.flat())];
+    // Level 0 holds every page of the tree.
+    const memberIds = tree.filter((n) => n.level === 0).flatMap((n) => n.members);
     const docs = await this.prisma.document.findMany({
       where: { id: { in: memberIds }, workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
       select: { id: true, title: true },
@@ -709,26 +714,41 @@ export class AgentExecutor {
 
     const call = { config: agent.config, userId: run.createdBy, operation: 'community' as const, locale: run.locale as Locale };
     const system = agent.instructions + (await this.guidance(run, agent));
-    const built: Array<{ communityId: string; title: string; summary: string; members: string[]; embedding: number[] }> = [];
+    const built = new Map<string, StoredCommunity & { embedding: number[] }>();
+    let attempted = 0;
     let partial = false;
-    for (const [i, members] of groups.entries()) {
-      const pages = members.filter((m) => titleOf.has(m));
-      if (pages.length < 2) continue;
-      await report({ stage: 'summarising', progress: 0.1 + (0.85 * i) / groups.length });
-      const listing = pages
-        .slice(0, 25)
-        .map((id) => `## ${titleOf.get(id)}\n${wrapUntrusted((opening.get(id)?.text ?? '').slice(0, 600), 'atlas', 'page')}`)
-        .join('\n\n');
+    for (const node of tree) {
+      if (attempted >= budget) break;
+      const pages = node.members.filter((m) => titleOf.has(m));
+      // An upper community is written from its children's summaries, so it
+      // needs two of them; level 0 needs two pages.
+      const children = node.children.flatMap((id) => built.get(id) ?? []);
+      if (node.level === 0 ? pages.length < 2 : children.length < 2) continue;
+      attempted++;
+      await report({ stage: 'summarising', progress: 0.1 + (0.85 * attempted) / Math.min(budget, tree.length) });
+      const listing = (
+        node.level === 0
+          ? pages.slice(0, 25).map((id) => `## ${titleOf.get(id)}\n${wrapUntrusted((opening.get(id)?.text ?? '').slice(0, 600), 'atlas', 'page')}`)
+          : children.slice(0, 25).map((c) => `## ${c.title}\n${wrapUntrusted(c.summary, 'atlas', 'page')}`)
+      ).join('\n\n');
       try {
         const raw = await this.client.chat(call, [{ role: 'system', content: system }, { role: 'user', content: listing }], { json: true });
         const parsed = safeJson(raw);
         const title = typeof parsed?.title === 'string' ? parsed.title.trim().slice(0, 120) : '';
         const summary = typeof parsed?.summary === 'string' ? parsed.summary.trim().slice(0, 2_000) : '';
         if (!title || !summary) continue;
-        built.push({ communityId: members[0]!, title, summary, members: pages, embedding: await this.embedding.embed(`${title}\n${summary}`) });
+        built.set(node.id, {
+          communityId: node.id,
+          level: node.level,
+          parentId: node.parentId,
+          title,
+          summary,
+          members: pages,
+          embedding: await this.embedding.embed(`${title}\n${summary}`),
+        });
       } catch (error) {
         if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
-          await report({ warning: t('agent.charting.budgetSpent', { done: built.length }) });
+          await report({ warning: t('agent.charting.budgetSpent', { done: built.size }) });
           partial = true;
           break;
         }
@@ -740,10 +760,14 @@ export class AgentExecutor {
         this.logger.warn(`Atlas could not summarise one community: ${String(error)}`);
       }
     }
-    if (built.length === 0) return { summary: t('agent.charting.noneWritten'), findings: [] };
+    if (built.size === 0) return { summary: t('agent.charting.noneWritten'), findings: [] };
+    // A parent the budget or the model left unwritten makes its children
+    // roots, so every stored non-root has a stored parent.
+    const written = [...built.values()].map((c) => ({ ...c, parentId: c.parentId && built.has(c.parentId) ? c.parentId : null }));
     // A partial set is stored but not fingerprinted, so the next run finishes it.
-    await this.graph.replaceCommunities(run.workspaceId, built, partial ? '' : fingerprint);
-    return { summary: t('agent.charting.summary', { n: built.length, pages: built.reduce((s, c) => s + c.members.length, 0) }), findings: [] };
+    await this.graph.replaceCommunities(run.workspaceId, written, partial ? '' : fingerprint);
+    const pages = new Set(written.flatMap((c) => c.members)).size;
+    return { summary: t('agent.charting.summary', { n: written.length, pages }), findings: [] };
   }
 
   private async curate(

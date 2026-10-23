@@ -379,6 +379,10 @@ export interface ListConflictsResponse {
 /** One community of pages and what they are about, for global questions. */
 export interface CommunitySummaryDto {
   communityId: string;
+  /** 0 = finest; each level above merges communities of the levels below (#475). */
+  level: number;
+  /** The community this one merged into; null for a root. */
+  parentId: string | null;
   title: string;
   /** Written by the atlas agent from the member pages; a summary, not a source. */
   summary: string;
@@ -388,7 +392,7 @@ export interface CommunitySummaryDto {
   score: number;
 }
 
-// GET /v1/graph/communities?workspaceId=&q=&limit=
+// GET /v1/graph/communities?workspaceId=&q=&limit=&level=
 export interface ListCommunitiesResponse {
   communities: CommunitySummaryDto[];
 }

@@ -82,11 +82,13 @@ export class AclGuard implements CanActivate {
       // route as well as the workspace role (#76).
       await this.permissions.requireResource(principal, workspaceId, resource, spec.role, spec.operator, {
         capture: spec.capture === true,
+        capability: spec.capability,
       });
     } else {
       await this.access.requireRole(principal, workspaceId, spec.role, spec.operator, {
         allowGuest: spec.guests === true,
         capture: spec.capture === true,
+        capability: spec.capability,
       });
     }
     return true;

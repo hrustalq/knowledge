@@ -17,6 +17,19 @@ in the pull request that introduces them — see
 
 ### Added
 
+- API operations can generate their QA test requests (#468). On an HTTP operation of an OpenAPI
+  spec, the flask menu beside the lock offers **Generate test requests**: one positive case per
+  documented success, and a negative case for every required parameter or body field left out,
+  every type violation, every value outside an enum, both sides of every minimum, maximum, length
+  and pattern, missing credentials and every documented error status. The cases come from the spec;
+  the new `tester` agent only fills in realistic values and names. Copy the suite as cURL commands or
+  download it as a Postman collection; credentials are always placeholders (`$TOKEN`, `{{token}}`).
+  A suite is cached until the operation, the tester's settings or the case rules change, so opening
+  it again costs no model call; **Regenerate** replaces it. Reading and exporting a suite needs only
+  viewer on the spec. Generating needs the new member permission **Allow generating API test
+  suites**, which an admin grants when adding a member or on Access control. It is independent of
+  role, and admins always have it. `GET`/`POST /v1/api-specs/:id/test-suite`.
+
 - Images open in a full-screen preview (#467). Click, tap or press Enter on an image in a page, a
   comment, a merge request, a share link or a published site. The preview shows the image's alt text
   as a caption. Clicking the image toggles between fit and actual size at the clicked point. A drag
@@ -72,6 +85,11 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261204100000_api_test_suites` adds `workspace_members.capabilities` (JSONB, default `[]`)
+  and the `api_test_suites` table. Both are additive and the previous release reads neither, so a
+  rollback keeps working; a permission granted on this release is simply not checked by the previous
+  one, which has no Generate. Existing members start without the permission; grant it on Access
+  control. No new env var. Each generation is billed to the person as `test-suite` in AI usage.
 - Migration `20261203100000_connector_harvests` adds the `connector_harvests` table, one row per
   harvested issue. It is a new table the previous release never reads, so a rollback keeps working; a
   Linear connector saved on this release is unknown to the previous one and shows as an unknown kind.

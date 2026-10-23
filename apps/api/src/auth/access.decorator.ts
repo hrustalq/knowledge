@@ -1,5 +1,5 @@
 import { SetMetadata, createParamDecorator, type ExecutionContext } from '@nestjs/common';
-import type { WorkspaceRole } from '@knowledge/contracts';
+import type { MemberCapability, WorkspaceRole } from '@knowledge/contracts';
 
 export const ACCESS_META = 'knowledge:access';
 export const PUBLIC_META = 'knowledge:public';
@@ -67,13 +67,18 @@ export interface AccessSpec {
    * that writes a default branch, merges or approves. Absent unless set.
    */
   capture?: true;
+  /**
+   * Additionally require a member capability (#468), like `operator` but
+   * from the closed MEMBER_CAPABILITIES catalogue. Absent unless set.
+   */
+  capability?: MemberCapability;
 }
 
 /** Declare a route's ACL: minimum workspace role + where the workspace id comes from. */
 export const Access = (
   role: WorkspaceRole,
   source: WorkspaceSource,
-  opts?: { operator?: boolean; guests?: boolean; capture?: boolean },
+  opts?: { operator?: boolean; guests?: boolean; capture?: boolean; capability?: MemberCapability },
 ) =>
   SetMetadata(ACCESS_META, {
     role,
@@ -81,6 +86,7 @@ export const Access = (
     operator: opts?.operator ?? false,
     ...(opts?.guests ? { guests: true as const } : {}),
     ...(opts?.capture ? { capture: true as const } : {}),
+    ...(opts?.capability ? { capability: opts.capability } : {}),
   } satisfies AccessSpec);
 
 /** Route reachable without authentication (health checks, login/signup/reset). */

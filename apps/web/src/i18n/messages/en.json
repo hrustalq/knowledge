@@ -2416,6 +2416,7 @@
       "glossary": "Glossary",
       "public_ask": "Site Ask",
       "chat-capture": "Saved from chat",
+      "test-suite": "Test suite",
       "component-draft": "Component draft",
       "lint": "Lint",
       "contradiction": "Contradiction check",
@@ -3052,6 +3053,11 @@
     },
     "roleFor": "Role for {name}",
     "trustedOperatorFor": "Trusted operator for {name}",
+    "testSuites": "API test suites",
+    "testSuitesFor": "Can generate API test suites: {name}",
+    "implicitForAdmins": "Included for admins",
+    "testSuitesGrant": "Allow generating API test suites",
+    "testSuitesHint": "Generate and regenerate the test requests of an API operation. Each generation spends this person's AI budget. Independent of role; admins always have it.",
     "groups": {
       "hint": "A group is a named set of members. Page and project restrictions are granted to groups as well as to people, so a team is added once rather than person by person.",
       "new": "New group",
@@ -5580,6 +5586,44 @@
     "fromSpecLabelled": "“{label}”, written by the spec’s author — it does not follow the values in the console.",
     "copyJson": "Copy JSON"
   },
+  "apiTests": {
+    "title": "Test requests",
+    "menu": "Quick actions",
+    "generate": "Generate test requests",
+    "generateHint": "Positive and negative cases derived from the spec, as cURL or Postman",
+    "regenerate": "Regenerate",
+    "noCapability": "Needs the permission to generate test suites. A workspace admin grants it on Access control.",
+    "generated": "Generated {when} from revision {revision}",
+    "copyCurl": "Copy cURL",
+    "copied": "Copied",
+    "copyFailed": "Copy failed",
+    "downloadPostman": "Download Postman",
+    "generating": "Writing test requests…",
+    "regenerating": "Writing a new suite. The current one stays until it is ready.",
+    "failed": "The test requests could not be generated.",
+    "retry": "Try again",
+    "credentials": "Credentials are placeholders: set $TOKEN (or $API_KEY) before running a command, or fill the collection variables in Postman.",
+    "expect": "Expect {status}:",
+    "expectedBody": "Expected body · {status}",
+    "curlLabel": "curl command",
+    "kind": {
+      "positive": "Positive",
+      "negative": "Negative"
+    },
+    "rule": {
+      "success": "Success",
+      "missing-required": "Required value left out",
+      "wrong-type": "Wrong type",
+      "enum-outside": "Value outside the allowed set",
+      "minimum": "Minimum",
+      "maximum": "Maximum",
+      "min-length": "Minimum length",
+      "max-length": "Maximum length",
+      "pattern": "Pattern",
+      "missing-credentials": "No credentials",
+      "documented-error": "Documented error"
+    }
+  },
   "apiTry": {
     "open": "Try it",
     "close": "Close",
@@ -5927,7 +5971,8 @@
         "chat_listen_enabled": "Chat messages kept for /capture",
         "chat_listen_disabled": "Chat messages no longer kept for /capture",
         "chat_auto_harvest_enabled": "Automatic thread harvest turned on",
-        "chat_auto_harvest_disabled": "Automatic thread harvest turned off"
+        "chat_auto_harvest_disabled": "Automatic thread harvest turned off",
+        "member_capabilities_changed": "Member capabilities changed"
       }
     },
     "tabs": {

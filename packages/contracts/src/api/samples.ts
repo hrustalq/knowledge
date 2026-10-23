@@ -194,7 +194,7 @@ export function exampleForSchema(doc: unknown, schema: unknown, depth = 0, chain
   return null;
 }
 
-interface ParamDef {
+export interface ParamDef {
   name: string;
   in: string;
   required: boolean;
@@ -203,7 +203,7 @@ interface ParamDef {
 }
 
 /** Path-level parameters, overridden by the operation's own of the same name + location. */
-function parametersOf(doc: Json, op: Json, pathItem: unknown): ParamDef[] {
+export function parametersOf(doc: Json, op: Json, pathItem: unknown): ParamDef[] {
   const read = (list: unknown) =>
     (Array.isArray(list) ? list : [])
       .map((p) => derefSpec(doc, p).node)
@@ -286,7 +286,7 @@ function authFor(doc: Json, op: { pointer: string }): { headers: SampleRequest['
   return { headers, query };
 }
 
-const isJsonType = (t: string) => /[/+]json\b/iu.test(t);
+export const isJsonType = (t: string) => /[/+]json\b/iu.test(t);
 
 /**
  * The request an operation's sample describes: the console's values where it
@@ -373,7 +373,7 @@ function bodyFor(doc: Json, op: Json, inputs: SampleInputs): SampleRequest['body
 // ---------------------------------------------------------------------------
 
 /** The URL with its query, as one text: literal runs encoded, env parts kept. */
-function fullUrl(req: SampleRequest, withQuery = true): SampleText {
+export function fullUrl(req: SampleRequest, withQuery = true): SampleText {
   const out: SampleText = [req.url];
   if (withQuery) {
     req.query.forEach((q, i) => {

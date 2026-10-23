@@ -1,4 +1,4 @@
-import { membershipSourceOf, type MeResponse, type WorkspaceRole } from '@knowledge/contracts';
+import { memberCapabilitiesOf, membershipSourceOf, type MeResponse, type WorkspaceRole } from '@knowledge/contracts';
 import type { WorkspaceMember } from '@prisma/client';
 import type { Principal } from './principal.js';
 
@@ -9,7 +9,7 @@ import type { Principal } from './principal.js';
  */
 export function toMeResponse(
   principal: Principal,
-  memberships: Pick<WorkspaceMember, 'workspaceId' | 'role' | 'trustedOperator' | 'source'>[],
+  memberships: Pick<WorkspaceMember, 'workspaceId' | 'role' | 'trustedOperator' | 'capabilities' | 'source'>[],
   verificationRequired: boolean,
 ): MeResponse {
   return {
@@ -27,6 +27,7 @@ export function toMeResponse(
       workspaceId: m.workspaceId,
       role: m.role as WorkspaceRole,
       trustedOperator: m.trustedOperator,
+      capabilities: memberCapabilitiesOf(m.capabilities),
       source: membershipSourceOf(m.source),
     })),
   };

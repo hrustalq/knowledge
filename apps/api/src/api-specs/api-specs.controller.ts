@@ -1,12 +1,15 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
+import { ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import type {
   ApiDriftCheckResponse,
   ApiOperationSamplesResponse,
   ApiSettingsResponse,
   ApiSpecDiff,
   ApiSpecDocumentResponse,
+  ApiTestSuiteResponse,
   ApiTryResponse,
+  GenerateApiTestSuiteResponse,
   ListApiOperationsResponse,
   ListApiSpecsResponse,
   SearchApiOperationsResponse,
@@ -19,12 +22,15 @@ import { ApiDriftCheckService } from './api-drift-check.service.js';
 import { ApiSpecDiffService } from './api-spec-diff.service.js';
 import { ApiSpecReadService } from './api-spec-read.service.js';
 import { ApiSettingsService } from './api-settings.service.js';
+import { ApiTestSuiteRequestsService } from './api-test-suite-requests.service.js';
 import { ApiTryService } from './api-try.service.js';
 import {
   ApiSamplesQueryDto,
   ApiSpecDiffQueryDto,
   ApiSpecRevisionQueryDto,
+  ApiTestSuiteQueryDto,
   ApiTryRequestDto,
+  GenerateApiTestSuiteDto,
   ListApiSpecsQueryDto,
   SearchApiOperationsQueryDto,
   UpdateApiSettingsDto,
@@ -45,6 +51,7 @@ export class ApiSpecsController {
     private readonly tries: ApiTryService,
     private readonly diffs: ApiSpecDiffService,
     private readonly driftChecks: ApiDriftCheckService,
+    private readonly testSuites: ApiTestSuiteRequestsService,
   ) {}
 
   @Get()
@@ -99,6 +106,46 @@ export class ApiSpecsController {
   })
   samples(@Param('id', ParseUUIDPipe) id: string, @Query() query: ApiSamplesQueryDto): Promise<ApiOperationSamplesResponse> {
     return this.reads.samples(id, query);
+  }
+
+  @Get(':id/test-suite')
+  @Access('viewer', 'document')
+  @ApiProduces('application/json', 'text/x-shellscript')
+  @ApiOkResponse({ description: 'The suite as JSON; with format, a file to download' })
+  @ApiOperation({
+    summary:
+      "One operation's cached QA test suite (#468), for the operation as it stands at the head. 404 until one is " +
+      'generated, and again after an edit to the operation. format=curl|postman answers with the suite as a file',
+  })
+  async testSuite(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ApiTestSuiteQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<ApiTestSuiteResponse | string> {
+    if (!query.format) return this.testSuites.get(id, query.entityKey);
+    const file = await this.testSuites.export(id, query.entityKey, query.format);
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    return file.body;
+  }
+
+  // Viewer, not editor: generating writes no page. The capability is the gate,
+  // and the tester run checks it again when it executes.
+  @Post(':id/test-suite')
+  @HttpCode(200)
+  @Access('viewer', 'document', { capability: 'api-test-suites.generate' })
+  @ApiOperation({
+    summary:
+      "Generate one operation's QA test suite (#468): the cached suite when there is one and regenerate is not " +
+      'set, otherwise a queued tester run (one per operation and config in flight). Needs the ' +
+      'api-test-suites.generate capability',
+  })
+  generateTestSuite(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: GenerateApiTestSuiteDto,
+  ): Promise<GenerateApiTestSuiteResponse> {
+    return this.testSuites.generate(principal, id, dto.entityKey, dto.regenerate === true);
   }
 
   @Post(':id/try')

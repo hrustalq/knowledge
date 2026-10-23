@@ -289,6 +289,12 @@ export type I18nTranslations = {
         "coachDesc": string;
         "scribe": string;
         "scribeDesc": string;
+        "tester": string;
+        "testerDesc": string;
+        "testerRun": {
+            "noOperation": string;
+            "summary": string;
+        };
         "scribeRun": {
             "noTicket": string;
             "ticketGone": string;
@@ -673,6 +679,7 @@ export type I18nTranslations = {
             "roleRequired": string;
             "runOwnerUnavailable": string;
             "trustedOperatorRequired": string;
+            "capabilityRequired": string;
             "noApiKeyInDevMode": string;
             "apiKeyWorkspace": string;
             "apiKeyReadOnly": string;
@@ -1283,6 +1290,12 @@ export type I18nTranslations = {
             "driftNoRepository": string;
             "driftNotHttp": string;
             "driftDisabled": string;
+        };
+        "apiTestSuite": {
+            "notHttp": string;
+            "notGenerated": string;
+            "disabled": string;
+            "noModel": string;
         };
         "apiTry": {
             "disabled": string;

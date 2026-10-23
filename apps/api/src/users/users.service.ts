@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  memberCapabilitiesOf,
   membershipSourceOf,
   type ListSessionsResponse,
   type ListUsersResponse,
@@ -169,6 +170,7 @@ export class UsersService {
         workspaceId: m.workspaceId,
         role: m.role as WorkspaceRole,
         trustedOperator: m.trustedOperator,
+        capabilities: memberCapabilitiesOf(m.capabilities),
         source: membershipSourceOf(m.source),
       })),
     };

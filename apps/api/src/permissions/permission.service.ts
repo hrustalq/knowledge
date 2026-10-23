@@ -6,6 +6,7 @@ import {
   type AccessLevel,
   type AccessResourceType,
   type EffectiveAccessLevel,
+  type MemberCapability,
   type WorkspaceRole,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
@@ -140,7 +141,7 @@ export class PermissionService {
     resource: AccessResource,
     role: WorkspaceRole,
     operator: boolean,
-    opts: { capture?: boolean } = {},
+    opts: { capture?: boolean; capability?: MemberCapability } = {},
   ): Promise<void> {
     if (principal.apiKey) this.access.requireKeyAllows(principal.apiKey, workspaceId, role, opts);
     if (principal.mode === 'dev') return;
@@ -148,7 +149,7 @@ export class PermissionService {
     // requireKeyAllows has just let a capture key through for this call, so its
     // page level is the person's own, not capped at view.
     const scope = opts.capture && principal.apiKey?.scope === 'capture' ? { ...read, readOnly: false } : read;
-    if (!scope.guest || ROLE_ORDER[role] > ROLE_ORDER.editor || operator) {
+    if (!scope.guest || ROLE_ORDER[role] > ROLE_ORDER.editor || operator || opts.capability) {
       await this.access.requireRole(principal, workspaceId, role, operator, opts);
     }
 

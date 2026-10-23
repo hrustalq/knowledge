@@ -24,6 +24,7 @@
     "roleRequired": "Requires the {role} role in workspace {workspaceId} (current role: {currentRole})",
     "runOwnerUnavailable": "The user this run belongs to no longer exists or is disabled",
     "trustedOperatorRequired": "Requires trusted-operator membership (plan.md §9 query_graph gate)",
+    "capabilityRequired": "Requires the {capability} permission, which a workspace admin grants on the access control page",
     "noApiKeyInDevMode": "API keys belong to a real account. Run the API with AUTH_MODE=api-key to mint one.",
     "apiKeyWorkspace": "This API key is limited to another workspace ({workspaceId} is outside it).",
     "apiKeyReadOnly": "This API key is read-only; {role} access needs a key with write scope.",
@@ -632,6 +633,12 @@
     "driftNoRepository": "This spec is not synced from a connected repository, so there is no code to compare it with.",
     "driftNotHttp": "Only an OpenAPI spec describes HTTP routes; an AsyncAPI spec has nothing to compare with the code.",
     "driftDisabled": "The sentinel agent is turned off for this workspace, so no drift check can run."
+  },
+  "apiTestSuite": {
+    "notHttp": "Only an OpenAPI operation has HTTP requests to test; an AsyncAPI spec has none.",
+    "notGenerated": "No test suite has been generated for this operation as it stands. Generate one first.",
+    "disabled": "The tester agent is turned off for this workspace, so no test suite can be generated.",
+    "noModel": "No model is configured for the tester agent, so no test suite can be generated."
   },
   "apiTry": {
     "disabled": "The try-it proxy is off for this workspace. Send the request from your browser instead.",

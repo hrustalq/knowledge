@@ -2053,6 +2053,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/embeds/usages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pages whose current version embeds a Figma file or frame */
+        get: operations["EmbedUsagesController_usages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/avatar": {
         parameters: {
             query?: never;
@@ -7525,6 +7542,24 @@ export interface components {
             version: string | null;
             name: string | null;
             allowed: boolean;
+        };
+        EmbedUsageItemDto: {
+            url: string;
+            caption: string;
+            version: string | null;
+        };
+        EmbedUsageGroupDto: {
+            group: number;
+            items: components["schemas"]["EmbedUsageItemDto"][];
+        };
+        EmbedUsagePageDto: {
+            documentId: string;
+            title: string;
+            revisionId: string;
+            groups: components["schemas"]["EmbedUsageGroupDto"][];
+        };
+        EmbedUsagesResponseDto: {
+            pages: components["schemas"]["EmbedUsagePageDto"][];
         };
         CreateAvatarUploadDto: {
             filename: string;
@@ -16133,6 +16168,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FigmaResolveResponseDto"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    EmbedUsagesController_usages: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description A Figma link; a frame link narrows to that frame */
+                figmaUrl?: string;
+                /** @description A Figma file key, when there is no link */
+                fileKey?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbedUsagesResponseDto"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

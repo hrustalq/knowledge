@@ -37,6 +37,7 @@ import { CommunitiesCoreModule } from '../communities/communities-core.module.js
 import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
 import { ChatSearchCoreModule } from '../chat/chat-search-core.module.js';
 import { FlowsCoreModule } from '../flows/flows-core.module.js';
+import { EmbedsCoreModule } from '../embeds/embeds-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -101,6 +102,8 @@ import { McpService } from './mcp.service.js';
     ComponentDraftsModule,
     // knowledge_list_api_operations / knowledge_get_api_operation (#78). Controller-free and read-only.
     ApiSpecsCoreModule,
+    // knowledge_get_embed / knowledge_find_embeds (#470).
+    EmbedsCoreModule,
     // The QA suite tools (#483): read, export, bind, rank, Generate. Controller-free; API-side, as Generate queues a run.
     ApiTestSuitesModule,
     // knowledge_get_test_run (#483, phase 5): the server runner's records. Controller-free.

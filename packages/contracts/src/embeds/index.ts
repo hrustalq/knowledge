@@ -211,3 +211,14 @@ export interface FigmaResolveResponse {
   name: string | null;
   allowed: boolean;
 }
+
+// GET /v1/embeds/usages?workspaceId=&figmaUrl=|fileKey=
+export interface EmbedUsagesResponse {
+  pages: Array<{
+    documentId: string;
+    title: string;
+    revisionId: string;
+    /** Each matching group of the page's current version, with all of its items. */
+    groups: Array<{ group: number; items: Array<{ url: string; caption: string; version: string | null }> }>;
+  }>;
+}

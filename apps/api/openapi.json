@@ -10524,6 +10524,89 @@
         ]
       }
     },
+    "/v1/embeds/usages": {
+      "get": {
+        "operationId": "EmbedUsagesController_usages",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "figmaUrl",
+            "required": false,
+            "in": "query",
+            "description": "A Figma link; a frame link narrows to that frame",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileKey",
+            "required": false,
+            "in": "query",
+            "description": "A Figma file key, when there is no link",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbedUsagesResponseDto"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pages whose current version embeds a Figma file or frame",
+        "tags": [
+          "embeds"
+        ]
+      }
+    },
     "/v1/me/avatar": {
       "post": {
         "operationId": "AvatarsController_reserveMine",
@@ -35433,6 +35516,84 @@
           "version",
           "name",
           "allowed"
+        ]
+      },
+      "EmbedUsageItemDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "url",
+          "caption",
+          "version"
+        ]
+      },
+      "EmbedUsageGroupDto": {
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "number"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbedUsageItemDto"
+            }
+          }
+        },
+        "required": [
+          "group",
+          "items"
+        ]
+      },
+      "EmbedUsagePageDto": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "string"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbedUsageGroupDto"
+            }
+          }
+        },
+        "required": [
+          "documentId",
+          "title",
+          "revisionId",
+          "groups"
+        ]
+      },
+      "EmbedUsagesResponseDto": {
+        "type": "object",
+        "properties": {
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbedUsagePageDto"
+            }
+          }
+        },
+        "required": [
+          "pages"
         ]
       },
       "CreateAvatarUploadDto": {

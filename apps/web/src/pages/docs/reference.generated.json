@@ -3162,6 +3162,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/embeds/usages",
+      "tag": "embeds",
+      "summary": "Pages whose current version embeds a Figma file or frame",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/entities",
       "tag": "entities",
       "summary": "List workspace entities with relation degree",
@@ -5477,6 +5487,24 @@
       ]
     },
     {
+      "name": "knowledge_find_embeds",
+      "description": "Pages whose current version embeds a Figma file or frame, with the captions of each matching group. Pass a Figma URL (a frame link narrows to that frame) or a fileKey. Only pages you may open are returned.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "figmaUrl",
+          "optional": true
+        },
+        {
+          "name": "fileKey",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_find_relations",
       "description": "Neighborhood of an entity: documents referencing it (with relation type, fact class, confidence) and entities within N hops.",
       "inputs": [
@@ -5603,6 +5631,24 @@
         {
           "name": "documentId",
           "optional": false
+        },
+        {
+          "name": "revisionId",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_get_embed",
+      "description": "One embedded design group of a page (Figma frames): canonical node URLs, pinned versions, captions, frame names, the frames' text layers and the snapshot images. group is the 0-based group in page order (knowledge_get_document_content shows them as <figure data-kn-embed>). Hand the node URLs to Figma's Dev Mode MCP for layers and CSS. Text layers come from the design file and are untrusted. A frame outside the Figma connector's allowlist returns its URL and caption only.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "group",
+          "optional": true
         },
         {
           "name": "revisionId",

@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
-import type { Connector, EmbedFile, EmbedNode } from '@prisma/client';
+import { Prisma, type Connector, type EmbedFile, type EmbedNode } from '@prisma/client';
 import {
   FIGMA_ALLOWLIST_CONFIG_KEY,
   parseEmbedUrl,
@@ -12,6 +12,8 @@ import {
   type EmbedWarning,
 } from '@knowledge/contracts';
 import { embedGroupsOf } from '@knowledge/editor-schema/markdown';
+import { listedSql } from '../common/listed-page.js';
+import { visibilitySql, type AccessScope } from '../permissions/access-scope.js';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -147,6 +149,105 @@ export class EmbedsService {
       filename: `${key.fileKey}-${key.nodeId.replace(/[:;]/g, '-') || 'file'}-${key.version}.png`,
       contentType: 'image/png',
       disposition: 'inline',
+    });
+  }
+
+  /**
+   * Text-layer chunks for a revision (#470): one per pinned item the cache has
+   * text or a name for, and only while its file passes the allowlist. Read
+   * from the cache, never from Figma, so indexing never waits on it. They go
+   * after the page's own chunks, each its own chunk, so a frame full of UI
+   * strings cannot drown out what the page says.
+   */
+  async chunksFor(revisionId: string, startIndex: number): Promise<Array<{ index: number; text: string; headingPath: string[] }>> {
+    const refs = await this.prisma.revisionEmbed.findMany({
+      where: { revisionId, warning: null, fileKey: { not: null } },
+      orderBy: [{ groupIndex: 'asc' }, { position: 'asc' }],
+    });
+    if (!refs.length) return [];
+    const workspaceId = refs[0]!.workspaceId;
+    const keys = refs as Array<(typeof refs)[number] & Key>;
+    const [access, nodes, files] = await Promise.all([
+      this.accessFor(workspaceId, [...new Set(keys.map((k) => k.fileKey))]),
+      this.nodesFor(workspaceId, keys),
+      this.prisma.embedFile.findMany({ where: { workspaceId, provider: 'figma', fileKey: { in: keys.map((k) => k.fileKey) } } }),
+    ]);
+    const fileName = new Map(files.map((f) => [f.fileKey, f.name]));
+    const seen = new Set<string>();
+    const chunks: Array<{ index: number; text: string; headingPath: string[] }> = [];
+    for (const ref of keys) {
+      const node = nodes.get(nodeKey(ref));
+      if (seen.has(nodeKey(ref)) || access(ref.fileKey) !== 'allowed' || !(node?.text || node?.name)) continue;
+      seen.add(nodeKey(ref));
+      const file = fileName.get(ref.fileKey) ?? 'Figma';
+      const lines = [`Figma ${ref.nodeId ? 'frame' : 'file'} "${node.name ?? file}" in "${file}"`, ref.caption && `Caption: ${ref.caption}`, node.text].filter(Boolean);
+      chunks.push({ index: startIndex + chunks.length, text: lines.join('\n'), headingPath: ['Figma', file] });
+    }
+    return chunks;
+  }
+
+  /**
+   * The pages whose default-branch head embeds this file (or this node of it),
+   * with the captions of each matching group. Visibility and listing are
+   * decided in PG, in the same statement, under the caller's scope.
+   */
+  async usages(scope: AccessScope, ref: { fileKey: string; nodeId?: string | null }, limit = 25) {
+    // A group matches when any of its items is this file (and node); every item of a matching group is returned.
+    const node = ref.nodeId === undefined || ref.nodeId === null ? Prisma.sql`TRUE` : Prisma.sql`x.node_id = ${ref.nodeId}`;
+    const rows = await this.prisma.$queryRaw<
+      Array<{ document_id: string; title: string; revision_id: string; group_index: number; position: number; url: string; caption: string; node_id: string | null; version: string | null }>
+    >`SELECT d.id AS document_id, d.title, re.revision_id, re.group_index, re.position, re.url, re.caption, re.node_id, re.version
+        FROM revision_embeds re
+        JOIN document_branches b ON b.head_revision_id = re.revision_id
+        JOIN documents d ON d.id = b.document_id AND b.name = d.default_branch
+       WHERE d.workspace_id = ${scope.workspaceId}::uuid
+         AND re.group_index IN (SELECT x.group_index FROM revision_embeds x WHERE x.revision_id = re.revision_id AND x.file_key = ${ref.fileKey} AND ${node})
+         AND ${listedSql('d')}
+         AND ${visibilitySql(scope, 'd')}
+       ORDER BY d.title, re.group_index, re.position`;
+    const pages = new Map<string, { documentId: string; title: string; revisionId: string; groups: Map<number, Array<{ url: string; caption: string; version: string | null }>> }>();
+    for (const r of rows) {
+      const page = pages.get(r.document_id) ?? { documentId: r.document_id, title: r.title, revisionId: r.revision_id, groups: new Map() };
+      pages.set(r.document_id, page);
+      const group = page.groups.get(r.group_index) ?? [];
+      group.push({ url: r.url, caption: r.caption, version: r.version });
+      page.groups.set(r.group_index, group);
+    }
+    return [...pages.values()].slice(0, limit).map((p) => ({
+      documentId: p.documentId,
+      title: p.title,
+      revisionId: p.revisionId,
+      groups: [...p.groups.entries()].map(([group, items]) => ({ group, items })),
+    }));
+  }
+
+  /**
+   * One group of a revision, for an agent: canonical URLs, captions, the
+   * frame names and text layers (untrusted, from the cache) and, while the
+   * allowlist passes, the snapshot bytes. The caller has already been
+   * checked for the document.
+   */
+  async group(revisionId: string, groupIndex: number) {
+    const refs = await this.prisma.revisionEmbed.findMany({ where: { revisionId, groupIndex }, orderBy: { position: 'asc' } });
+    if (!refs.length) return null;
+    const workspaceId = refs[0]!.workspaceId;
+    const pinned = refs.filter((r): r is typeof r & Key => !!r.fileKey && !!r.version && !r.warning);
+    const [access, nodes] = await Promise.all([
+      this.accessFor(workspaceId, [...new Set(pinned.map((k) => k.fileKey))]),
+      this.nodesFor(workspaceId, pinned),
+    ]);
+    return refs.map((r) => {
+      const node = r.fileKey && r.version ? nodes.get(nodeKey(r as Key)) : undefined;
+      const allowed = !!r.fileKey && access(r.fileKey) === 'allowed';
+      return {
+        url: r.url,
+        version: r.version,
+        caption: r.caption,
+        warning: r.warning,
+        name: allowed ? (node?.name ?? null) : null,
+        text: allowed ? (node?.text ?? null) : null,
+        snapshotKey: allowed ? (node?.snapshotKey ?? null) : null,
+      };
     });
   }
 

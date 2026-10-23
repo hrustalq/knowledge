@@ -12,7 +12,8 @@ const { EmbedsService, embedFileAllowed, stateOf, NOT_ALLOWLISTED } = await impo
 const { EmbedSnapshotService, figmaNodeText, figmaRenderScale } = await import('../src/embeds/embed-snapshot.service.js');
 const { FigmaFilesService } = await import('../src/embeds/figma-files.service.js');
 const snapshots = (prisma: unknown, storage: unknown, connectors: unknown) =>
-  new EmbedSnapshotService(prisma as never, storage as never, new FigmaFilesService(prisma as never, connectors as never), config);
+  new EmbedSnapshotService(prisma as never, storage as never, new FigmaFilesService(prisma as never, connectors as never), ingestion as never, config);
+const ingestion = { enqueue: vi.fn(async () => undefined) };
 const { embedSnapshotKey } = await import('../src/embeds/embeds.constants.js');
 const mockFetch = vi.mocked(safeFetch);
 
@@ -71,9 +72,11 @@ describe('figma helpers', () => {
   });
 });
 
-function fakePrisma(state: { refs?: unknown[]; ref?: unknown; node?: unknown; files?: unknown[]; connectors?: unknown[] } = {}) {
+function fakePrisma(state: { refs?: unknown[]; ref?: unknown; node?: unknown; files?: unknown[]; connectors?: unknown[]; heads?: unknown[] } = {}) {
   return {
     $transaction: vi.fn(async (ops: unknown[]) => ops),
+    $queryRaw: vi.fn(async () => state.heads ?? []),
+    ingestionJob: { create: vi.fn(async () => ({ id: 'job-1' })) },
     revisionEmbed: {
       deleteMany: vi.fn(() => 'delete'),
       createMany: vi.fn((args: unknown) => args),
@@ -150,7 +153,7 @@ describe('EmbedsService', () => {
 
 describe('EmbedSnapshotService.render', () => {
   it('lists the allowlist, renders the pinned node and stores it content-addressed', async () => {
-    const prisma = fakePrisma({ connectors: [figma({ allowlist: 'project:222' })] });
+    const prisma = fakePrisma({ connectors: [figma({ allowlist: 'project:222' })], heads: [{ id: 'r1', document_id: DOC, s3_key: 'k', title: 'Page' }] });
     const storage = { putObjectBytes: vi.fn(async () => undefined) };
     const connectors = { contextFor: vi.fn(async (row: { config: unknown }) => ({ config: row.config, credential: 'figd_x', allowPrivate: false, debug: () => undefined })) };
     mockFetch.mockImplementation(async (url) => {
@@ -177,6 +180,11 @@ describe('EmbedSnapshotService.render', () => {
     const saved = (prisma.embedNode.upsert.mock.calls[0]![0] as { create: Record<string, unknown> }).create;
     expect(saved).toMatchObject({ name: 'Sign-in', text: 'Email', width: 390, height: 844, snapshotKey: embedSnapshotKey(job), error: null });
     expect(saved.subtreeHash).toMatch(/^[0-9a-f]{64}$/);
+    // Its text joins search through a reindex of the head that pins it.
+    expect(prisma.ingestionJob.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ revisionId: 'r1', type: 'reindex', payload: expect.objectContaining({ reason: 'embed rendered' }) }),
+    });
+    expect(ingestion.enqueue).toHaveBeenCalledWith('job-1');
   });
 
   it('records a file the allowlist does not reach, and calls Figma for nothing else', async () => {
@@ -272,5 +280,39 @@ describe('FigmaFilesService (the picker)', () => {
       allowed: false,
     });
     await expect(service.resolve(WS, 'https://example.com/x')).resolves.toBeNull();
+  });
+});
+
+describe('EmbedsService for search and agents', () => {
+  const file = { fileKey: KEY, name: 'App design', projectId: '222', teamId: null, connectorId: 'c1' };
+  const ref = (over: Record<string, unknown>) => ({ workspaceId: WS, fileKey: KEY, nodeId: '1:2', version: '7', caption: '', warning: null, groupIndex: 0, position: 0, url: 'u', ...over });
+
+  it('turns cached text into one chunk per pinned item after the page’s own, and skips a file the allowlist no longer reaches', async () => {
+    const node = { fileKey: KEY, nodeId: '1:2', version: '7', name: 'Sign-in', text: 'Email\nPassword', snapshotKey: 'k', error: null, retryAt: null };
+    const prisma = fakePrisma({ refs: [ref({ caption: 'Empty state' }), ref({ position: 1 })], node, files: [file], connectors: [figma({ allowlist: 'project:222' })] });
+    const service = new EmbedsService(prisma as never, {} as never, config, {} as never);
+    await expect(service.chunksFor('r1', 4)).resolves.toEqual([
+      { index: 4, text: 'Figma frame "Sign-in" in "App design"\nCaption: Empty state\nEmail\nPassword', headingPath: ['Figma', 'App design'] },
+    ]);
+    const revoked = fakePrisma({ refs: [ref({})], node, files: [file], connectors: [figma({ allowlist: 'project:999' })] });
+    await expect(new EmbedsService(revoked as never, {} as never, config, {} as never).chunksFor('r1', 4)).resolves.toEqual([]);
+  });
+
+  it('finds pages through the caller’s scope and groups their items', async () => {
+    const prisma = fakePrisma();
+    prisma.$queryRaw.mockResolvedValueOnce([
+      { document_id: DOC, title: 'Checkout', revision_id: 'r1', group_index: 1, position: 0, url: 'a', caption: 'Cart', node_id: '1:2', version: '7' },
+      { document_id: DOC, title: 'Checkout', revision_id: 'r1', group_index: 1, position: 1, url: 'b', caption: '', node_id: '1:3', version: '7' },
+    ]);
+    const service = new EmbedsService(prisma as never, {} as never, config, {} as never);
+    const scope = { workspaceId: WS, bypass: false, denied: new Set(['33333333-3333-4333-8333-333333333333']), guest: false } as never;
+    await expect(service.usages(scope, { fileKey: KEY, nodeId: '1:2' })).resolves.toEqual([
+      { documentId: DOC, title: 'Checkout', revisionId: 'r1', groups: [{ group: 1, items: [{ url: 'a', caption: 'Cart', version: '7' }, { url: 'b', caption: '', version: '7' }] }] },
+    ]);
+    // The tagged template's strings plus every interpolated Prisma.Sql fragment, as one statement.
+    const [strings, ...values] = prisma.$queryRaw.mock.calls[0] as [TemplateStringsArray, ...unknown[]];
+    const text = [...strings, ...values.map((v) => (v && typeof v === 'object' && 'sql' in v ? String((v as { sql: string }).sql) : ''))].join(' ');
+    expect(text).toContain('pending_merge_request_id IS NULL');
+    expect(text).toContain('restricted_by');
   });
 });

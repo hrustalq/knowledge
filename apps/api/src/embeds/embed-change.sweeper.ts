@@ -6,9 +6,12 @@ import { ConnectorsService } from '../connectors/connectors.service.js';
 import { figmaGet } from '../connectors/adapters/figma.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { figmaSubtreeHash, type FigmaNode } from './embed-snapshot.service.js';
+import { EmbedsService } from './embeds.service.js';
 
 /** How often the due check runs; each Figma connector is due every EMBED_CHECK_INTERVAL_HOURS. */
 const TICK_MS = 5 * 60_000;
+/** Failed renders re-queued per tick; the rest wait for the next one. */
+const RETRIES_PER_TICK = 200;
 /** Nodes asked for per Figma call: `ids` rides in the query string. */
 const IDS_PER_CALL = 50;
 
@@ -30,6 +33,7 @@ export class EmbedChangeSweeper implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly connectors: ConnectorsService,
+    private readonly embeds: EmbedsService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -56,9 +60,32 @@ export class EmbedChangeSweeper implements OnModuleInit, OnModuleDestroy {
         // Stamped whatever happened: a token Figma refuses is retried next interval, not every tick.
         await this.prisma.connector.update({ where: { id: connector.id }, data: { lastSyncedAt: now } });
       }
+      await this.retryRenders(now);
     } finally {
       this.running = false;
     }
+  }
+
+  /**
+   * Renders that failed (Figma down, a token refused) and whose retry time has
+   * passed, queued again on every tick — so a page nobody opens still gets its
+   * snapshot and, once rendered, its frame text in search. A render that keeps
+   * failing pushes its own retry time out, which bounds the calls.
+   */
+  async retryRenders(now: Date): Promise<number> {
+    const due = await this.prisma.embedNode.findMany({
+      where: { snapshotKey: null, retryAt: { lte: now } },
+      select: { workspaceId: true, fileKey: true, nodeId: true, version: true },
+      take: RETRIES_PER_TICK,
+    });
+    const byWorkspace = new Map<string, typeof due>();
+    for (const row of due) byWorkspace.set(row.workspaceId, [...(byWorkspace.get(row.workspaceId) ?? []), row]);
+    for (const [workspaceId, rows] of byWorkspace) {
+      await this.embeds.enqueue(workspaceId, rows).catch((err: unknown) =>
+        this.logger.warn(`Embed renders could not be re-queued: ${(err as Error).message}`),
+      );
+    }
+    return due.length;
   }
 
   /** One connector: every node the workspace's current pages pin, in files this connector reaches. */

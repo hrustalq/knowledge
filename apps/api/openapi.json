@@ -10256,6 +10256,70 @@
         ]
       }
     },
+    "/v1/documents/{id}/embeds": {
+      "get": {
+        "operationId": "EmbedsController_status",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentEmbedsResponseDto"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What the reader can show of each pinned embed item on a page",
+        "tags": [
+          "embeds"
+        ]
+      }
+    },
     "/v1/me/avatar": {
       "post": {
         "operationId": "AvatarsController_reserveMine",
@@ -34955,6 +35019,65 @@
         "required": [
           "filename",
           "contentType"
+        ]
+      },
+      "EmbedItemStatusDto": {
+        "type": "object",
+        "properties": {
+          "fileKey": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string",
+            "description": "'' for a whole-file item"
+          },
+          "version": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "rendering",
+              "unavailable",
+              "failed"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "width": {
+            "type": "number",
+            "nullable": true
+          },
+          "height": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "fileKey",
+          "nodeId",
+          "version",
+          "state",
+          "name",
+          "width",
+          "height"
+        ]
+      },
+      "DocumentEmbedsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbedItemStatusDto"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "CreateAvatarUploadDto": {

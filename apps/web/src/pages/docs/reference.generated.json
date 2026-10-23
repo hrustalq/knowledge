@@ -3122,6 +3122,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/documents/{id}/embeds",
+      "tag": "embeds",
+      "summary": "What the reader can show of each pinned embed item on a page",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/entities",
       "tag": "entities",
       "summary": "List workspace entities with relation degree",

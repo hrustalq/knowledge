@@ -28,7 +28,7 @@
 // when the page is created. `/template` inserts one at the cursor of any page,
 // and "Save as template" goes the other way.
 import { useI18n } from 'vue-i18n'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { onKeyStroke, useStorage } from '@vueuse/core'
@@ -133,6 +133,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import RichEditor from '@/components/editor/RichEditor.vue'
+import { EMBED_DOCUMENT } from '@/components/editor/use-embed-status'
 import ApiOperationPicker, { type PickedOperation } from '@/components/api-reference/ApiOperationPicker.vue'
 import ApiOperationRef from '@/components/api-reference/ApiOperationRef.vue'
 import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/components/templates/SaveAsTemplateDialog.vue'
@@ -156,6 +157,8 @@ const templates = useTemplatesStore()
 const auth = useAuthStore()
 
 const editId = ref<string | null>((route.params.id as string | undefined) ?? null)
+// Embed groups show the snapshots of what this page has published (#470).
+provide(EMBED_DOCUMENT, editId)
 const isEdit = computed(() => editId.value !== null)
 
 const title = ref('')

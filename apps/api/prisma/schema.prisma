@@ -4103,3 +4103,80 @@ model McpToolCall {
   @@index([apiKeyId, createdAt])
   @@map("mcp_tool_calls")
 }
+
+/// Embeds (#470, docs/features/64). Which Figma files a connector's allowlist
+/// reaches, as last listed: Figma's file metadata does not name a file's
+/// project, so membership is resolved by listing the allowlisted projects. The
+/// read-time check is this row + its connector's current allowlist. Mutable;
+/// re-listed when a file is not found or the row is stale.
+model EmbedFile {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  provider    String   @default("figma")
+  fileKey     String   @map("file_key")
+  name        String
+  connectorId String   @map("connector_id") @db.Uuid
+  projectId   String   @map("project_id")
+  teamId      String?  @map("team_id")
+  checkedAt   DateTime @default(now()) @map("checked_at") @db.Timestamptz
+
+  @@unique([workspaceId, provider, fileKey])
+  @@index([connectorId])
+  @@map("embed_files")
+}
+
+/// One pinned item, rendered (#470). Content-addressed by (workspace, provider,
+/// file, node, version) and shared by every page and revision that references
+/// it; immutable once rendered, because a pinned version never changes. A
+/// failed render is a row with `error` and `retryAt`, not a missing row.
+/// `nodeId` is '' for a whole-file item.
+model EmbedNode {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  provider    String    @default("figma")
+  fileKey     String    @map("file_key")
+  nodeId      String    @map("node_id")
+  version     String
+  name        String?
+  /// Text layers of the node, deduplicated and capped (EMBED_TEXT_MAX_BYTES). Untrusted.
+  text        String?
+  subtreeHash String?   @map("subtree_hash")
+  snapshotKey String?   @map("snapshot_key")
+  width       Int?
+  height      Int?
+  error       String?
+  retryAt     DateTime? @map("retry_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([workspaceId, provider, fileKey, nodeId, version])
+  @@map("embed_nodes")
+}
+
+/// What a revision embeds (#470), written by the ingestion worker from the
+/// revision's markdown: one row per item, in group and position order. The
+/// snapshot route serves an item only when a row ties it to the document.
+/// `warning` is what the markdown itself got wrong (unknown-provider,
+/// unpinned, over-limit); allowlist state is derived on read, never stored.
+/// No FK, as for revision_diffs: the project cascade deletes it explicitly.
+model RevisionEmbed {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  documentId  String  @map("document_id") @db.Uuid
+  revisionId  String  @map("revision_id") @db.Uuid
+  groupIndex  Int     @map("group_index")
+  position    Int
+  url         String
+  provider    String?
+  fileKey     String? @map("file_key")
+  /// '' for a whole-file item; null when no provider claims the URL.
+  nodeId      String? @map("node_id")
+  version     String?
+  caption     String  @default("")
+  warning     String?
+
+  @@unique([revisionId, groupIndex, position])
+  @@index([documentId, fileKey, nodeId, version])
+  @@index([workspaceId, fileKey])
+  @@map("revision_embeds")
+}

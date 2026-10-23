@@ -17,6 +17,17 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Embedded Figma frames show their snapshots (#470, phase 3). When a page is indexed, the worker
+  records each item it embeds and renders every pinned one through the Figma connector: a PNG of
+  that node at its pinned version, 2× and at most 4096 px on the long side. The snapshot is stored once
+  and shared by every page and revision that pins the same node and version. The reader and the editor
+  show the snapshots, with a shimmer while one renders. **Open live** mounts Figma's own embed of the
+  frame on demand. A snapshot is served only to a reader of a page whose revision references it,
+  and only while the file's project or team is on an enabled Figma connector's allowlist. Removing
+  the project hides it everywhere, old revisions included, and adding it back restores it. Editors
+  see why an item is only a link: not pinned, not in the allowlist, not yet published, or the render
+  failed (retried after 15 minutes). Recording happens before embedding, so a page's snapshots never
+  wait on the embedder, and indexing never calls Figma.
 - A **Figma** connector (#470, phase 2). An admin adds it under **Settings → Connectors** with a
   Figma personal access token and an allowlist of Figma team and project links (or `team:<id>`,
   `project:<id>`); only files in those teams and projects will be embeddable. It syncs no pages.
@@ -238,6 +249,11 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261209100000_embeds` adds three tables (`embed_files`, `embed_nodes`,
+  `revision_embeds`) with no backfill; a rollback to the previous image leaves them unused. New env
+  vars, all with defaults: `EMBED_MAX_ITEMS` (24), `EMBED_SNAPSHOT_SCALE` (2), `EMBED_SNAPSHOT_MAX_PX`
+  (4096), `EMBED_TEXT_MAX_BYTES` (2048). Snapshots are stored under
+  `workspaces/{ws}/embeds/figma/` in the bucket (#470).
 - Migration `20261208100000_community_prior_knobs` adds three nullable columns to
   `knowledge_health_settings` (#475). The previous image never reads them, so a code rollback is
   safe.

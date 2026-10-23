@@ -7,6 +7,7 @@
 import { Marked, type Token, type Tokens, type TokensList } from 'marked';
 import { slugifyPath } from '@knowledge/contracts/publishing';
 import { pageTitleHref, type PageRefResolver } from '@knowledge/contracts';
+import { asEmbedLayout, canonicalizeEmbedUrl, type EmbedItem, type EmbedLayout } from '@knowledge/contracts/embeds';
 import {
   KN,
   diagramLayoutAttrs,
@@ -227,6 +228,79 @@ export function markdownToHtml(md: string, options: RenderOptions = {}): string 
  */
 export function markdownTokens(md: string): TokensList {
   return marked.lexer(md ?? '');
+}
+
+/* ------------------------------------------------------------------ embeds */
+
+export interface EmbedGroup {
+  layout: EmbedLayout;
+  caption: string;
+  items: EmbedItem[];
+}
+
+const FIGURE_OPEN_RE = new RegExp(`<figure\\b[^>]*\\b${KN.embed}\\b`, 'i');
+
+/**
+ * The embed groups of a page, in order, read from its markdown without a DOM
+ * (#470) — the ingestion worker records them, and agents read them, on the
+ * server. It walks the lexer's tokens, so a figure inside a code fence is not
+ * a group, and it follows a group that blank lines split into several tokens.
+ * Agrees with `embedItemsOf` / `embedCaptionOf`, which read the rendered DOM.
+ */
+export function embedGroupsOf(md: string): EmbedGroup[] {
+  const groups: EmbedGroup[] = [];
+  const walk = (tokens: Token[]) => {
+    let open: string | null = null;
+    for (const token of tokens) {
+      if (open !== null) {
+        open += token.raw;
+        if (/<\/figure>/i.test(token.raw)) {
+          groups.push(parseFigure(open));
+          open = null;
+        }
+        continue;
+      }
+      if (token.type === 'html' && FIGURE_OPEN_RE.test(token.raw)) {
+        if (/<\/figure>/i.test(token.raw)) groups.push(parseFigure(token.raw));
+        else open = token.raw;
+        continue;
+      }
+      const nested = (token as { tokens?: Token[] }).tokens;
+      if (token.type === 'blockquote' && nested) walk(nested);
+      if (token.type === 'list') for (const item of (token as Tokens.List).items) walk(item.tokens);
+    }
+    // An unclosed figure still holds what it holds; the browser closes it too.
+    if (open !== null) groups.push(parseFigure(open));
+  };
+  walk(marked.lexer(md ?? ''));
+  return groups;
+}
+
+function parseFigure(html: string): EmbedGroup {
+  const items = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)].map(([, attrs, inner]): EmbedItem => {
+    const href = (attrOf(attrs!, 'href') ?? '').trim();
+    const url = canonicalizeEmbedUrl(href);
+    const text = textOf(inner!);
+    return { url, version: attrOf(attrs!, KN.version) || null, caption: text === href || text === url ? '' : text };
+  });
+  const caption = /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/i.exec(html)?.[1];
+  const openTag = /<figure\b[^>]*>/i.exec(html)?.[0] ?? '';
+  return { layout: asEmbedLayout(attrOf(openTag, KN.embed)), caption: caption ? textOf(caption) : '', items };
+}
+
+function attrOf(attrs: string, name: string): string | null {
+  const match = new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i').exec(attrs);
+  return match ? decodeEntities(match[1] ?? match[2] ?? match[3] ?? '') : null;
+}
+
+function textOf(html: string): string {
+  return decodeEntities(html.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
+}
+
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'", nbsp: ' ' };
+
+function decodeEntities(text: string): string {
+  return text.replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/g, (_, name: string) => ENTITIES[name]!);
 }
 
 /**

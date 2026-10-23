@@ -202,6 +202,8 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       { record: vi.fn(async () => false), rebuild: vi.fn() } as never,
       apiSpecs as never,
       conflicts as never,
+      undefined as never,
+      { recordRevision: vi.fn(async () => undefined) } as never,
     );
     return { processor, graph, fulltext, conflicts };
   }

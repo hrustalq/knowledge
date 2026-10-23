@@ -143,6 +143,8 @@ function renderPdf(req: ExportRenderRequest, deps: ExportRenderDeps): ExportRend
     const body = renderPublicMarkdown(p.markdown, {
       pageHref: (id) => (inExport.has(id) ? `#${anchor(id)}` : null),
       attachmentHref: (id) => req.assets[id] ?? null,
+      // An embedded design's snapshot travels as an asset keyed by its item id (#470).
+      embedSrc: (id) => req.assets[id] ?? null,
       // Pages share one document: `#install` on two pages must not collide.
       idPrefix: `p${i}-`,
       labels,
@@ -222,6 +224,7 @@ function renderBundle(req: ExportRenderRequest, deps: ExportRenderDeps): ExportR
         return target ? relativeHref(page.path, target) : null
       },
       attachmentHref: (id) => (req.assets[id] ? relativeHref(page.path, req.assets[id]) : null),
+      embedSrc: (id) => (req.assets[id] ? relativeHref(page.path, req.assets[id]) : null),
       labels,
     }),
   )

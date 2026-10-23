@@ -9020,6 +9020,8 @@ export interface components {
             allowPasswordlessShares?: boolean | null;
             /** @description Allow publishing a project as a public docs site; null goes back to the default (off) */
             allowPublicSites?: boolean | null;
+            /** @description Show embedded designs' snapshots on share links and published sites; null goes back to the default (off) */
+            allowPublicEmbeds?: boolean | null;
         };
         CreateSiteDto: {
             /** @description 2–40 lowercase letters, digits and hyphens: `<slug>.PUBLISH_BASE_DOMAIN` or `/pub/<slug>` */

@@ -17,6 +17,15 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Embedded designs on public pages and in exports (#470, phase 6). A new switch, **Settings → Publishing
+  → Show embedded designs publicly** (off by default), lets share links and published sites show the
+  snapshots of embedded Figma frames. Off, they show the captions and "Mockup not available publicly".
+  On or off, no public page carries a Figma link, since a link reveals the file: the page's markup sent to
+  the reader, a published site's `.md` and `llms-full.txt`, and a share link's download all replace each
+  group with its captions. With the switch on, each visible frame carries an opaque id that a public route
+  turns into its snapshot, after the link's or the site's own checks and the Figma allowlist. A member's
+  export (HTML, PDF, Word) always shows the snapshots; a share link's export follows the switch. The Live
+  frame is never offered publicly.
 - Agents and search can see into embedded designs (#470, phase 5). A pinned Figma frame's name and
   text layers are indexed as their own chunks after the page's text, so a search for words that appear
   only in a frame finds the page. They are read from the snapshot cache, and once a frame renders its
@@ -266,6 +275,8 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261210100000_public_embeds` adds one nullable column, `publishing_settings.allow_public_embeds`;
+  a rollback to the previous image leaves it unread (#470).
 - Migration `20261209100000_embeds` adds three tables (`embed_files`, `embed_nodes`,
   `revision_embeds`) with no backfill; a rollback to the previous image leaves them unused. New env
   vars, all with defaults: `EMBED_MAX_ITEMS` (24), `EMBED_SNAPSHOT_SCALE` (2), `EMBED_SNAPSHOT_MAX_PX`

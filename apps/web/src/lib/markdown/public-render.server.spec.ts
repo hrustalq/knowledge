@@ -86,15 +86,32 @@ describe('renderPublicMarkdown', () => {
     expect(renderPublicMarkdown('Short **intro**.', options).description).toBe('Short intro.')
   })
 
-  it('shows an embed\'s captions and no Figma link (#470)', () => {
+  it('shows an embed\'s captions and the placeholder, and never a link (#470)', () => {
     const { html } = renderPublicMarkdown(
-      '<figure data-kn-embed="grid">\n<a href="https://www.figma.com/design/AbCdEfGhIj12/?node-id=1-2" data-kn-version="7">Sign-in</a>\n<figcaption>Flow</figcaption>\n</figure>',
+      '<figure data-kn-embed="grid"><a>Sign-in</a><a data-kn-item="44444444-4444-4444-8444-444444444444">Error</a><figcaption>Flow</figcaption></figure>',
+      options,
+    )
+    expect(html).not.toContain('<a')
+    expect(html).toContain('Sign-in')
+    expect(html.match(/Mockup not available publicly/g)).toHaveLength(2)
+    expect(html).toContain('<figcaption class="kn-embed-figcaption">Flow</figcaption>')
+  })
+
+  it('shows a snapshot where the API handed out an item id and the caller has a route for it', () => {
+    const { html } = renderPublicMarkdown(
+      '<figure data-kn-embed="strip"><a>Sign-in</a><a data-kn-item="44444444-4444-4444-8444-444444444444">Error</a></figure>',
+      { ...options, embedSrc: (id) => `/api/v1/public/shares/kp_t/embeds/${id}` },
+    )
+    expect(html).toContain('<img src="/api/v1/public/shares/kp_t/embeds/44444444-4444-4444-8444-444444444444" alt="Error"')
+    expect(html.match(/Mockup not available publicly/g)).toHaveLength(1)
+  })
+
+  it('drops a caption that is a URL, as raw markdown spells an uncaptioned item (#470)', () => {
+    const { html } = renderPublicMarkdown(
+      '<figure data-kn-embed><a href="https://www.figma.com/board/AbCdEfGhIj12/">https://www.figma.com/board/AbCdEfGhIj12/</a></figure>',
       options,
     )
     expect(html).not.toContain('figma.com')
-    expect(html).not.toContain('AbCdEfGhIj12')
-    expect(html).toContain('Sign-in')
     expect(html).toContain('Mockup not available publicly')
-    expect(html).toContain('<figcaption class="kn-embed-figcaption">Flow</figcaption>')
   })
 })

@@ -11,7 +11,8 @@ import {
   type EmbedItemStatus,
   type EmbedWarning,
 } from '@knowledge/contracts';
-import { embedGroupsOf } from '@knowledge/editor-schema/markdown';
+import { embedGroupsOf, rewriteEmbedGroups } from '@knowledge/editor-schema/markdown';
+import { KN, escapeHtml } from '@knowledge/editor-schema/nodes';
 import { listedSql } from '../common/listed-page.js';
 import { visibilitySql, type AccessScope } from '../permissions/access-scope.js';
 import type { Env } from '../config/env.js';
@@ -249,6 +250,58 @@ export class EmbedsService {
         snapshotKey: allowed ? (node?.snapshotKey ?? null) : null,
       };
     });
+  }
+
+  /**
+   * A revision's markdown as a public surface may carry it (#470): every group
+   * rewritten so no Figma URL survives — a link reveals the file key. With
+   * `snapshots`, an item whose snapshot the reader may see becomes an opaque
+   * `data-kn-item` (its `revision_embeds` id), which the public snapshot route
+   * resolves after its own scope checks; every other item keeps its caption.
+   */
+  async publicMarkdown(markdown: string, revisionId: string, snapshots: boolean): Promise<string> {
+    if (!embedGroupsOf(markdown).length) return markdown;
+    const rows = await this.prisma.revisionEmbed.findMany({ where: { revisionId } });
+    const ready = snapshots ? await this.readyIds(rows) : new Set<string>();
+    const idOf = new Map(rows.map((r) => [`${r.groupIndex}/${r.position}`, r.id]));
+    return rewriteEmbedGroups(markdown, (group, index) => {
+      const items = group.items.map((item, position) => {
+        const id = idOf.get(`${index}/${position}`);
+        const attr = id && ready.has(id) ? ` ${KN.item}="${id}"` : '';
+        // An <a> with no href: every reader of a group still sees an item, and nothing links out.
+        return `<a${attr}>${escapeHtml(item.caption)}</a>`;
+      });
+      const caption = group.caption ? `<figcaption>${escapeHtml(group.caption)}</figcaption>` : '';
+      return `<figure ${KN.embed}="${group.layout}">${items.join('')}${caption}</figure>`;
+    });
+  }
+
+  /** Revision items whose snapshot exists and whose file passes the allowlist now. */
+  private async readyIds(rows: Array<{ id: string; workspaceId: string; fileKey: string | null; nodeId: string | null; version: string | null; warning: string | null }>): Promise<Set<string>> {
+    const pinned = rows.filter((r): r is typeof r & Key => !!r.fileKey && !!r.version && r.nodeId !== null && !r.warning);
+    if (!pinned.length) return new Set();
+    const workspaceId = pinned[0]!.workspaceId;
+    const [access, nodes] = await Promise.all([this.accessFor(workspaceId, [...new Set(pinned.map((r) => r.fileKey))]), this.nodesFor(workspaceId, pinned)]);
+    return new Set(pinned.filter((r) => access(r.fileKey) === 'allowed' && nodes.get(nodeKey(r))?.snapshotKey).map((r) => r.id));
+  }
+
+  /**
+   * The snapshots an export packages for these revisions (#470): one per
+   * item a reader may see now, keyed by the item's opaque id — the id
+   * `publicMarkdown` puts on it, so a renderer finds its image by that id.
+   */
+  async exportSnapshots(revisionIds: string[]): Promise<Array<{ id: string; documentId: string; snapshotKey: string }>> {
+    const rows = await this.prisma.revisionEmbed.findMany({ where: { revisionId: { in: revisionIds } } });
+    if (!rows.length) return [];
+    const ready = await this.readyIds(rows);
+    const pinned = rows.filter((r) => ready.has(r.id)) as Array<(typeof rows)[number] & Key>;
+    const nodes = await this.nodesFor(pinned[0]?.workspaceId ?? '', pinned);
+    return pinned.map((r) => ({ id: r.id, documentId: r.documentId, snapshotKey: nodes.get(nodeKey(r))!.snapshotKey! }));
+  }
+
+  /** One `revision_embeds` row by its opaque id, for a public route to check its own scope against. */
+  publicItem(itemId: string) {
+    return this.prisma.revisionEmbed.findUnique({ where: { id: itemId }, select: { documentId: true, revisionId: true, fileKey: true, nodeId: true, version: true, warning: true } });
   }
 
   /** Queue a render per item; the job id is the item, so a repeat collapses into the one job. */

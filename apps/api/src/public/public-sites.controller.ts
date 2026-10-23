@@ -394,6 +394,19 @@ export class PublicSitesController {
     return { url: await this.sites.logoUrl(siteId), statusCode: 302 };
   }
 
+  /** An embedded design's snapshot (#470), by the opaque item id the page carries. */
+  @Get(':siteId/versions/:versionId/embeds/:itemId')
+  @Redirect(undefined, 302)
+  @ApiExcludeEndpoint() // binary redirect
+  async embed(
+    @Param('siteId', ParseUUIDPipe) siteId: string,
+    @Param('versionId', ParseUUIDPipe) versionId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Req() req: Request,
+  ): Promise<{ url: string; statusCode: number }> {
+    return { url: await this.sites.embedUrl(siteId, versionId, itemId, req.headers.cookie), statusCode: 302 };
+  }
+
   @Get(':siteId/versions/:versionId/attachments/:attachmentId')
   @Redirect(undefined, 302)
   @ApiExcludeEndpoint() // binary redirect

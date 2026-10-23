@@ -4,7 +4,7 @@ import DOMPurify from 'dompurify'
 import { canonicalEmbedUrl, parseEmbedUrl } from '@knowledge/contracts/embeds'
 import { editorSchema, parseMarkdown } from '@knowledge/editor-schema'
 import { docToMarkdown } from '@knowledge/editor-schema/serialize'
-import { SANITIZE_CONFIG, embedGroupsOf, markdownToHtml } from './render'
+import { SANITIZE_CONFIG, embedGroupsOf, markdownToHtml, rewriteEmbedGroups } from './render'
 import { embedCaptionOf, embedItemsOf } from './nodes'
 
 // The embed block (#470, docs/features/64): one URL matcher, and markdown that
@@ -107,5 +107,37 @@ describe('embedGroupsOf (#470, no DOM)', () => {
 
   it('ignores a figure inside a code fence', () => {
     expect(embedGroupsOf('```html\n<figure data-kn-embed="grid"><a href="https://www.figma.com/design/AbCdEfGhIj12/">x</a></figure>\n```')).toEqual([])
+  })
+})
+
+describe('rewriteEmbedGroups (#470)', () => {
+  const page = [
+    '# Title',
+    '',
+    `<figure data-kn-embed="grid">\n<a href="https://www.figma.com/design/${KEY}/?node-id=1-2" data-kn-version="7">One</a>\n</figure>`,
+    '',
+    '```html\n<figure data-kn-embed><a href="https://www.figma.com/design/KEEP12345678/">code</a></figure>\n```',
+    '',
+    `> [!note]\n> <figure data-kn-embed="strip"><a href="https://www.figma.com/design/${KEY}/?node-id=3-4">Quoted</a></figure>`,
+    '',
+    `<figure data-kn-embed>\n\n<a href="https://www.figma.com/board/${KEY}/" data-kn-version="1">Split</a>\n\n</figure>`,
+    '',
+    'End.',
+  ].join('\n')
+
+  it('replaces every group, numbered as embedGroupsOf numbers them, and leaves code and prose alone', () => {
+    const seen: string[] = []
+    const out = rewriteEmbedGroups(page, (group, i) => {
+      seen.push(`${i}:${group.items.map((it) => it.caption).join(',')}`)
+      return `<figure data-kn-embed="${group.layout}"><span>G${i}</span></figure>`
+    })
+    expect(seen).toEqual(['0:One', '1:Quoted', '2:Split'])
+    expect(embedGroupsOf(page).map((g) => g.items.map((it) => it.caption).join(','))).toEqual(['One', 'Quoted', 'Split'])
+    expect(out).not.toContain(KEY)
+    expect(out).toContain('KEEP12345678')
+    expect(out).toContain('# Title')
+    expect(out).toContain('End.')
+    expect(out).toContain('> [!note]')
+    expect(embedGroupsOf(out)).toHaveLength(3)
   })
 })

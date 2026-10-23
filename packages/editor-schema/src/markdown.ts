@@ -276,6 +276,43 @@ export function embedGroupsOf(md: string): EmbedGroup[] {
   return groups;
 }
 
+const FIGURE_BLOCK_RE = new RegExp(`<figure\\b[^>]*\\b${KN.embed}\\b[\\s\\S]*?(?:</figure>|$)`, 'gi');
+
+/**
+ * The markdown with every embed group replaced by what `rewrite` returns for
+ * it, numbered exactly as `embedGroupsOf` numbers them (#470). Public surfaces
+ * use it so a page's markup never carries a Figma URL — a link reveals the
+ * file key. A group split by blank lines is replaced whole; one inside a
+ * quote or a list is replaced inside its block; a figure in a code fence is
+ * left alone, as it is not a group.
+ */
+export function rewriteEmbedGroups(md: string, rewrite: (group: EmbedGroup, index: number) => string): string {
+  let index = 0;
+  let out = '';
+  let open: string | null = null;
+  for (const token of marked.lexer(md ?? '')) {
+    if (open !== null) {
+      open += token.raw;
+      if (/<\/figure>/i.test(token.raw)) {
+        out += `${rewrite(parseFigure(open), index++)}\n\n`;
+        open = null;
+      }
+      continue;
+    }
+    if (token.type === 'html' && FIGURE_OPEN_RE.test(token.raw)) {
+      if (/<\/figure>/i.test(token.raw)) out += `${rewrite(parseFigure(token.raw), index++)}\n\n`;
+      else open = token.raw;
+      continue;
+    }
+    if (token.type === 'blockquote' || token.type === 'list') {
+      out += token.raw.replace(FIGURE_BLOCK_RE, (figure) => rewrite(parseFigure(figure.replace(/^\s*>\s?/gm, '')), index++));
+      continue;
+    }
+    out += token.raw;
+  }
+  return open !== null ? `${out}${rewrite(parseFigure(open), index)}\n` : out;
+}
+
 function parseFigure(html: string): EmbedGroup {
   const items = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)].map(([, attrs, inner]): EmbedItem => {
     const href = (attrOf(attrs!, 'href') ?? '').trim();
@@ -328,6 +365,7 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
     'data-kn-wrap',
     'data-kn-embed',
     'data-kn-version',
+    'data-kn-item',
     'data-kn-agent',
     'data-kn-api',
     'data-kn-path',

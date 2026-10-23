@@ -136,6 +136,18 @@ export class PublicSharesController {
     return { url, statusCode: 302 };
   }
 
+  /** An embedded design's snapshot (#470), by the opaque item id the page carries. */
+  @Get(':token/embeds/:itemId')
+  @Redirect(undefined, 302)
+  @ApiExcludeEndpoint() // binary redirect
+  async embed(
+    @Param('token') token: string,
+    @Param('itemId') itemId: string,
+    @Req() req: Request,
+  ): Promise<{ url: string; statusCode: number }> {
+    return { url: await this.shares.embedUrl(token, itemId, req.headers.cookie), statusCode: 302 };
+  }
+
   @Get(':token/attachments/:attachmentId')
   @Redirect(undefined, 302)
   @ApiExcludeEndpoint() // binary redirect; not useful in the generated client

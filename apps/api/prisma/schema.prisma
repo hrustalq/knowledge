@@ -2963,6 +2963,8 @@ model PublishingSettings {
   allowPasswordlessShares Boolean? @map("allow_passwordless_shares")
   /// Allow publishing a project as a public docs site (docs/features/44).
   allowPublicSites        Boolean? @map("allow_public_sites")
+  /// Show embedded designs' snapshots on share links and published sites (#470). Never their Figma links.
+  allowPublicEmbeds       Boolean? @map("allow_public_embeds")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("publishing_settings")

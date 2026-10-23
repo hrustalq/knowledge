@@ -182,6 +182,7 @@ function reader(envOverrides: Record<string, unknown> = {}) {
     avatars as never,
     config as never,
     sessions as never,
+    { publicMarkdown: vi.fn(async (md: string) => md), exportSnapshots: vi.fn(async () => []) } as never,
   );
   return { prisma, service, documents, attachments, sessions };
 }
@@ -491,7 +492,7 @@ describe('PublicSitesService.hostAllowed (Caddy on-demand TLS ask)', () => {
 function files(envOverrides: Record<string, unknown> = {}) {
   const r = reader(envOverrides);
   const config = env(envOverrides);
-  const service = new PublicSiteFilesService(r.service, r.prisma as never, r.documents as never, config as never);
+  const service = new PublicSiteFilesService(r.service, r.prisma as never, r.documents as never, config as never, { publicMarkdown: vi.fn(async (md: string) => md), exportSnapshots: vi.fn(async () => []) } as never);
   return { ...r, files: service };
 }
 

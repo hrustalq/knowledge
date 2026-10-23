@@ -50,6 +50,8 @@ export const KN = {
   // each item's pinned provider version rides on its link.
   embed: 'data-kn-embed',
   version: 'data-kn-version',
+  // On a public page only: an item's opaque id, in place of its Figma link.
+  item: 'data-kn-item',
   // Taken from contracts rather than spelled here: the API parses this
   // attribute out of comment bodies to find out which agent was tagged, so the
   // writer and the reader must not be able to drift apart.

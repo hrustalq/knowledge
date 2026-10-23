@@ -1089,6 +1089,68 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-file-pdf { display: block; width: 100%; height: min(70vh, 40rem); border: none; background: var(--muted); }
 .kn-file-fallback { padding: 2rem; text-align: center; font-size: var(--kn-text-sm); color: var(--muted-foreground); }
 
+/* Embed groups (#470): no frame of their own — the tiles carry the hairline,
+   so a group never reads as a card holding cards. The editor's node view and
+   the read view's rendered figure share every class. */
+.kn-embed { margin-block: var(--kn-block-gap); position: relative; }
+.kn-embed-items { display: flex; gap: 0.6rem; }
+.kn-embed[data-kn-embed='strip'] .kn-embed-items {
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: 0.25rem;
+}
+.kn-embed[data-kn-embed='strip'] .kn-embed-item { flex: 0 0 min(16rem, 80%); scroll-snap-align: start; }
+.kn-embed[data-kn-embed='grid'] .kn-embed-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(13rem, 100%), 1fr)); }
+.kn-embed-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--foreground);
+  text-decoration: none;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+/* Beats `.kn-prose a`: a tile is a target, not a link inside prose. */
+.kn-embed a.kn-embed-item { color: var(--foreground); text-decoration: none; }
+.kn-embed a.kn-embed-item:hover { border-color: color-mix(in oklch, var(--primary) 45%, var(--border)); background: color-mix(in oklch, var(--primary) 3%, var(--card)); }
+.kn-embed a.kn-embed-item:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.kn-embed-caption { font-size: var(--kn-text-sm); font-weight: 540; line-height: 1.35; overflow-wrap: anywhere; }
+.kn-embed-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: var(--kn-text-xs);
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kn-embed-out { width: 0.75rem; height: 0.75rem; flex: none; opacity: 0.7; }
+.kn-embed-figcaption { margin-top: 0.45rem; font-size: var(--kn-text-sm); color: var(--muted-foreground); }
+.kn-embed[data-selected='true'] .kn-embed-item { border-color: var(--ring); }
+.kn-embed-remove {
+  position: absolute;
+  top: -0.6rem;
+  right: -0.6rem;
+  display: inline-flex;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.kn-embed:hover .kn-embed-remove, .kn-embed[data-selected='true'] .kn-embed-remove, .kn-embed-remove:focus-visible { opacity: 1; }
+.kn-embed-remove:hover { color: var(--destructive); }
+@media (hover: none) { .kn-embed-remove { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .kn-embed-item, .kn-embed-remove { transition: none; } }
+
 .kn-toc { padding: 0.75rem 0.95rem; background: color-mix(in oklch, var(--foreground) 2.5%, var(--card)); }
 .kn-toc-head {
   display: flex;

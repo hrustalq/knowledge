@@ -58,6 +58,7 @@ function labelsFor(locale: Locale): PublicRenderOptions['labels'] {
     open: reader.open,
     download: reader.download,
     pdfFallback: reader.pdfFallback,
+    embedUnavailable: reader.embedUnavailable,
     formatBytes: (n) => formatBytes(n, locale),
   }
 }

@@ -9,6 +9,7 @@
     "open": "Open",
     "download": "Download",
     "pdfFallback": "Download the PDF",
+    "embedUnavailable": "Mockup not available publicly",
     "toggleTheme": "Toggle dark mode",
     "sharedWithYou": "Shared page",
     "lockedTitle": "This page is password-protected",

@@ -29,6 +29,9 @@ const FIXTURES: Record<string, string> = {
   file: '<div data-kn-file="f1" data-kn-name="spec.pdf" data-kn-mime="application/pdf" data-kn-size="2048"><a href="/v1/attachments/f1">spec.pdf</a></div>\n',
   image: '<img src="/v1/attachments/i1" alt="diagram" width="320" />\n\n![plain](/v1/attachments/i2)\n',
   status: 'State: <span data-kn-status="green">DONE</span>\n',
+  // An array attribute (#470): Y.XmlElement must carry it as JSON.
+  embed:
+    '<figure data-kn-embed="grid">\n<a href="https://www.figma.com/design/AbCdEfGhIj12/?node-id=12-34" data-kn-version="2083951442">Sign-in</a>\n<a href="https://www.figma.com/board/XyZ7890abcd/">https://www.figma.com/board/XyZ7890abcd/</a>\n<figcaption>Flow</figcaption>\n</figure>\n',
   mentions:
     'Ask <span data-kn-user="00000000-0000-4000-8000-000000000001">@Ada</span> and <span data-kn-agent="reviewer">@Reviewer</span>, see <span data-kn-doc="00000000-0000-4000-8000-000000000002">@Billing</span>.\n',
 }

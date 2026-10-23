@@ -29,7 +29,8 @@ import createDOMPurify, { type WindowLike } from 'dompurify'
 import { parseAttachmentPath } from '@knowledge/contracts/publishing'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from './render'
 import { parseScene, renderSceneToSvg } from './drawing'
-import { KN, attachmentKind, carryDiagramLayout, escapeHtml } from './nodes'
+import { asEmbedLayout } from '@knowledge/contracts/embeds'
+import { KN, attachmentKind, carryDiagramLayout, embedCaptionOf, embedItemsOf, escapeHtml } from './nodes'
 
 export interface PublicHeading {
   id: string
@@ -61,6 +62,8 @@ export interface PublicRenderOptions {
     open: string
     download: string
     pdfFallback: string
+    /** In place of an embed's frames where the public may not see them (#470). */
+    embedUnavailable: string
     formatBytes: (bytes: number) => string
   }
 }
@@ -85,6 +88,8 @@ export function renderPublicMarkdown(markdown: string, options: PublicRenderOpti
   const host = doc.createElement('div')
   host.innerHTML = purify.sanitize(markdownToHtml(markdown ?? ''), { ...SANITIZE_CONFIG }) as unknown as string
 
+  // First, before links are rewritten: an embed's links must never reach a reader.
+  renderEmbeds(host, doc, options)
   const headings = assignHeadingIds(host, options.idPrefix ?? '')
   wrapTables(host, doc)
   focusScrollers(host)
@@ -239,6 +244,35 @@ function renderFiles(root: HTMLElement, doc: Document, options: PublicRenderOpti
           : ''
       }`
     node.replaceWith(card)
+  }
+}
+
+/**
+ * Embed groups (#470) without their frames or links: a Figma link reveals the
+ * file key, so the public reader gets the captions and a placeholder only.
+ */
+function renderEmbeds(root: HTMLElement, doc: Document, options: PublicRenderOptions) {
+  for (const figure of root.querySelectorAll<HTMLElement>(`figure[${KN.embed}]`)) {
+    const out = doc.createElement('figure')
+    out.className = 'kn-embed'
+    out.setAttribute(KN.embed, asEmbedLayout(figure.getAttribute(KN.embed)))
+    const list = doc.createElement('div')
+    list.className = 'kn-embed-items'
+    for (const item of embedItemsOf(figure)) {
+      const tile = doc.createElement('span')
+      tile.className = 'kn-embed-item'
+      tile.innerHTML = `${item.caption ? `<span class="kn-embed-caption">${escapeHtml(item.caption)}</span>` : ''}<span class="kn-embed-meta">${escapeHtml(options.labels.embedUnavailable)}</span>`
+      list.append(tile)
+    }
+    out.append(list)
+    const caption = embedCaptionOf(figure)
+    if (caption) {
+      const fc = doc.createElement('figcaption')
+      fc.className = 'kn-embed-figcaption'
+      fc.textContent = caption
+      out.append(fc)
+    }
+    figure.replaceWith(out)
   }
 }
 

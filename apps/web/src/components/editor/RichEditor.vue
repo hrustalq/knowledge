@@ -64,7 +64,7 @@ import { fromWatch } from '@/lib/rx-vue'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/lib/markdown/nodes'
 import { Layout, LayoutColumn, Expand, Panel, TableOfContents } from './extensions/blocks'
 import { ApiContract, ApiSection } from './extensions/api'
-import { Drawing, FileEmbed, Mermaid, ResizableImage } from './extensions/media'
+import { Drawing, Embed, FileEmbed, Mermaid, ResizableImage } from './extensions/media'
 import { AgentMention, DocMention, StatusMark, UserMention } from './extensions/inline'
 import { createSuggestionExtension, type SuggestionSession } from './extensions/suggestion'
 import {
@@ -666,6 +666,7 @@ onMounted(() => {
       Mermaid,
       Drawing,
       FileEmbed,
+      Embed,
       ResizableImage.configure(IMAGE_OPTIONS),
       StatusMark,
       DocMention,

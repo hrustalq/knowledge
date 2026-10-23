@@ -5,6 +5,7 @@ import {
   API_PATH_ATTR,
   API_SECTION_ATTR,
 } from '@knowledge/contracts';
+import { canonicalizeEmbedUrl, type EmbedItem } from '@knowledge/contracts/embeds';
 
 export {
   API_SECTIONS,
@@ -45,6 +46,10 @@ export const KN = {
   // A diagram's size and placement (#476): see diagramLayoutFromInfo.
   width: 'data-kn-width',
   wrap: 'data-kn-wrap',
+  // An embed group (#470): the attribute's value is the group's layout, and
+  // each item's pinned provider version rides on its link.
+  embed: 'data-kn-embed',
+  version: 'data-kn-version',
   // Taken from contracts rather than spelled here: the API parses this
   // attribute out of comment bodies to find out which agent was tagged, so the
   // writer and the reader must not be able to drift apart.
@@ -158,4 +163,31 @@ export function diagramLayoutAttrs({ width, wrap }: DiagramLayout): Record<strin
 /** Carry a block's layout onto the element a read view replaces it with (the rendered figure). */
 export function carryDiagramLayout(from: Element, to: Element): void {
   for (const [name, value] of Object.entries(diagramLayoutAttrs(diagramLayoutOf(from)))) to.setAttribute(name, value);
+}
+
+/* ------------------------------------------------------------------ embeds */
+
+function oneLine(text: string | null | undefined): string {
+  return (text ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * An embed group's items, read from its `<figure>` (#470). One reader for the
+ * editor's parse rule, the read view and the public renderer, so all three
+ * agree on what a group holds. Every `<a>` is an item — one no provider claims
+ * or one with no version is kept, never dropped.
+ */
+export function embedItemsOf(figure: Element): EmbedItem[] {
+  return [...figure.querySelectorAll('a')].map((a) => {
+    const href = (a.getAttribute('href') ?? '').trim();
+    const url = canonicalizeEmbedUrl(href);
+    const text = oneLine(a.textContent);
+    // The serializer writes the URL as the text of an uncaptioned item.
+    return { url, version: a.getAttribute(KN.version) || null, caption: text === href || text === url ? '' : text };
+  });
+}
+
+/** The group's own caption: its `<figcaption>`, on one line. */
+export function embedCaptionOf(figure: Element): string {
+  return oneLine(figure.querySelector('figcaption')?.textContent);
 }

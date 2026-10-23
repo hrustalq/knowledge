@@ -16,7 +16,8 @@ import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from '@/lib/markdown/render'
 import { parseScene, renderSceneToSvg } from '@/lib/markdown/drawing'
-import { KN, attachmentKind, carryDiagramLayout, escapeHtml } from '@/lib/markdown/nodes'
+import { KN, attachmentKind, carryDiagramLayout, embedItemsOf, escapeHtml } from '@/lib/markdown/nodes'
+import { embedTile } from '@/lib/embeds'
 import { formatBytes } from '@/lib/format'
 import { mayContainPageRef } from '@/lib/page-refs'
 import { usePageRefsStore } from '@/stores/page-refs'
@@ -100,6 +101,7 @@ async function render() {
   resolveAssets()
   renderDrawings()
   renderFiles()
+  renderEmbeds()
   renderToc(headings)
   await renderMermaid()
   if (!host.value) return
@@ -221,6 +223,32 @@ function renderFiles() {
           : ''
       }`
     node.replaceWith(card)
+  }
+}
+
+/** Embed groups (#470) as the editor draws them: captioned link tiles, built from the items, never the raw markup. */
+function renderEmbeds() {
+  const root = host.value
+  if (!root) return
+  for (const figure of root.querySelectorAll<HTMLElement>(`figure[${KN.embed}]`)) {
+    const list = document.createElement('div')
+    list.className = 'kn-embed-items'
+    for (const item of embedItemsOf(figure)) {
+      const tile = embedTile(item, t('editor.embed.wholeFile'))
+      const el = document.createElement(tile.href ? 'a' : 'span')
+      el.className = 'kn-embed-item'
+      if (tile.href) {
+        el.setAttribute('href', tile.href)
+        el.setAttribute('target', '_blank')
+        el.setAttribute('rel', 'noopener noreferrer nofollow')
+      }
+      el.innerHTML = `<span class="kn-embed-caption">${escapeHtml(tile.caption || t('editor.embed.untitled'))}</span><span class="kn-embed-meta">${escapeHtml(tile.meta)}</span>`
+      list.append(el)
+    }
+    figure.classList.add('kn-embed')
+    figure.querySelectorAll(':scope > :not(figcaption)').forEach((el) => el.remove())
+    figure.querySelector('figcaption')?.classList.add('kn-embed-figcaption')
+    figure.prepend(list)
   }
 }
 

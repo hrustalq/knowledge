@@ -13,7 +13,8 @@
  * expects and `markdown.ts` produces. Change one, change all three.
  */
 import { Mark, Node, getSchema, mergeAttributes, type AnyExtension } from '@tiptap/core';
-import { DOMParser as PMDOMParser, type Node as PMNode, type Schema } from '@tiptap/pm/model';
+import { DOMParser as PMDOMParser, type DOMOutputSpec, type Node as PMNode, type Schema } from '@tiptap/pm/model';
+import { asEmbedLayout, type EmbedItem, type EmbedLayout } from '@knowledge/contracts/embeds';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Highlight from '@tiptap/extension-highlight';
@@ -28,6 +29,8 @@ import {
   asDiagramWrap,
   diagramLayoutAttrs,
   diagramLayoutOf,
+  embedCaptionOf,
+  embedItemsOf,
   isApiSection,
   isHttpMethod,
   isPanelType,
@@ -425,6 +428,65 @@ export const FileEmbed = Node.create({
 });
 
 /**
+ * An embed group (#470, docs/features/64): an ordered list of external items,
+ * each pinned to a provider version, with a caption per item and one for the
+ * group. An atom with its items as an attribute, not child nodes: the group is
+ * edited through its own view (reorder, captions, layout), and the stored
+ * markdown is `<figure data-kn-embed>` of plain `<a>` links, so every renderer
+ * that knows nothing of embeds still shows the captions and the links.
+ *
+ * Every `<a>` is kept, including one no provider claims or one with no
+ * version — a write is never rejected over an embed; the reader shows such an
+ * item as a link and the revision records a warning.
+ */
+export const Embed = Node.create({
+  name: 'knEmbed',
+  group: 'block',
+  atom: true,
+  selectable: true,
+  draggable: true,
+
+  addAttributes() {
+    return {
+      layout: {
+        default: 'strip' as EmbedLayout,
+        parseHTML: (element) => asEmbedLayout(element.getAttribute(KN.embed)),
+        renderHTML: () => ({}),
+      },
+      caption: {
+        default: '',
+        parseHTML: (element) => embedCaptionOf(element),
+        renderHTML: () => ({}),
+      },
+      items: {
+        default: [] as EmbedItem[],
+        parseHTML: (element) => embedItemsOf(element),
+        renderHTML: () => ({}),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: `figure[${KN.embed}]` }];
+  },
+
+  renderHTML({ node }) {
+    const items = (node.attrs.items as EmbedItem[]) ?? [];
+    const caption = node.attrs.caption as string;
+    return [
+      'figure',
+      { [KN.embed]: asEmbedLayout(node.attrs.layout) },
+      ...items.map((item) => [
+        'a',
+        { href: item.url, ...(item.version ? { [KN.version]: item.version } : {}) },
+        item.caption || item.url,
+      ]),
+      ...(caption ? [['figcaption', {}, caption]] : []),
+    ] as unknown as DOMOutputSpec;
+  },
+});
+
+/**
  * Images gain a persisted width. Width is the one image property markdown
  * cannot carry, so the serializer switches that image to an `<img>` tag —
  * resizing is real authored intent, not a view preference.
@@ -648,6 +710,7 @@ export const editorSchema = getSchema([
   Mermaid,
   Drawing,
   FileEmbed,
+  Embed,
   ResizableImage.configure(IMAGE_OPTIONS),
   StatusMark,
   DocMention,

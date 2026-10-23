@@ -7,7 +7,14 @@
 import { Marked, type Token, type Tokens, type TokensList } from 'marked';
 import { slugifyPath } from '@knowledge/contracts/publishing';
 import { pageTitleHref, type PageRefResolver } from '@knowledge/contracts';
-import { KN, escapeHtml, isPanelType, type PanelType } from '@knowledge/editor-schema/nodes';
+import {
+  KN,
+  diagramLayoutAttrs,
+  diagramLayoutFromInfo,
+  escapeHtml,
+  isPanelType,
+  type PanelType,
+} from '@knowledge/editor-schema/nodes';
 
 export type { PageRefResolver, Token, Tokens, TokensList };
 
@@ -57,11 +64,11 @@ marked.use({
     /** Fenced blocks: `mermaid` and `drawing` become rich nodes, everything else stays code. */
     code(token: Tokens.Code): string {
       const lang = (token.lang ?? '').trim().split(/\s+/)[0].toLowerCase();
-      if (lang === 'mermaid') {
-        return `<div ${KN.mermaid}="1"><pre>${escapeHtml(token.text)}</pre></div>`;
-      }
-      if (lang === 'drawing') {
-        return `<div ${KN.drawing}="1"><pre>${escapeHtml(token.text)}</pre></div>`;
+      if (lang === 'mermaid' || lang === 'drawing') {
+        const layout = Object.entries(diagramLayoutAttrs(diagramLayoutFromInfo(token.lang ?? '')))
+          .map(([name, value]) => ` ${name}="${escapeHtml(value)}"`)
+          .join('');
+        return `<div ${lang === 'mermaid' ? KN.mermaid : KN.drawing}="1"${layout}><pre>${escapeHtml(token.text)}</pre></div>`;
       }
       const cls = lang ? ` class="language-${escapeHtml(lang)}"` : '';
       return `<pre><code${cls}>${escapeHtml(token.text)}</code></pre>`;
@@ -243,6 +250,8 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
     'data-kn-toc',
     'data-kn-mention',
     'data-kn-user',
+    'data-kn-width',
+    'data-kn-wrap',
     'data-kn-agent',
     'data-kn-api',
     'data-kn-path',

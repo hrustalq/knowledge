@@ -16,7 +16,7 @@ import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from '@/lib/markdown/render'
 import { parseScene, renderSceneToSvg } from '@/lib/markdown/drawing'
-import { KN, attachmentKind, escapeHtml } from '@/lib/markdown/nodes'
+import { KN, attachmentKind, carryDiagramLayout, escapeHtml } from '@/lib/markdown/nodes'
 import { formatBytes } from '@/lib/format'
 import { mayContainPageRef } from '@/lib/page-refs'
 import { usePageRefsStore } from '@/stores/page-refs'
@@ -185,6 +185,7 @@ function renderDrawings() {
     wrap.innerHTML = DOMPurify.sanitize(renderSceneToSvg(scene), {
       USE_PROFILES: { svg: true, svgFilters: true },
     })
+    carryDiagramLayout(node, wrap)
     node.replaceWith(wrap)
   }
 }
@@ -255,6 +256,7 @@ async function renderMermaid() {
       const wrap = document.createElement('div')
       wrap.className = 'kn-mermaid-figure'
       wrap.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+      carryDiagramLayout(block, wrap)
       block.replaceWith(wrap)
     } catch {
       // Leave the source visible and flagged rather than swallowing the block:

@@ -10,7 +10,7 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
-import { KN } from '@/lib/markdown/nodes'
+import { KN, carryDiagramLayout } from '@/lib/markdown/nodes'
 import { useTheme } from '@/lib/theme'
 import { mermaidConfig, mermaidSvg } from '@/lib/mermaid'
 import { markZoomable } from '@/lib/image-gallery'
@@ -39,6 +39,7 @@ async function renderMermaid() {
       const wrap = document.createElement('div')
       wrap.className = 'kn-mermaid-figure'
       wrap.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+      carryDiagramLayout(block, wrap)
       block.replaceWith(wrap)
     } catch {
       block.classList.add('kn-mermaid-broken')

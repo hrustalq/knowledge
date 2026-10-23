@@ -119,6 +119,9 @@ const MERMAID_UPGRADE = `(function () {
         var figure = document.createElement('div');
         figure.className = 'kn-mermaid-figure';
         figure.innerHTML = out.svg;
+        ['${KN.width}', '${KN.wrap}', 'style'].forEach(function (name) {
+          if (block.hasAttribute(name)) figure.setAttribute(name, block.getAttribute(name));
+        });
         block.replaceWith(figure);
       }, function () { block.classList.add('kn-mermaid-broken'); });
     });

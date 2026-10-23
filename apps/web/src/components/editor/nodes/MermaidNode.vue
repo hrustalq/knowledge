@@ -12,6 +12,8 @@ import { Check, CircleCheck, CircleX, Code2, Trash2 } from 'lucide-vue-next'
 import { useTheme } from '@/lib/theme'
 import { mermaidConfig, mermaidProblem, mermaidSvg, type MermaidProblem } from '@/lib/mermaid'
 import { diagramAttrs } from '@/lib/diagram-gallery'
+import { useDiagramLayout } from './diagram-layout'
+import DiagramPlacement from './DiagramPlacement.vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -24,6 +26,7 @@ const problem = ref<MermaidProblem | null>(null)
 const draft = ref<string>((props.node.attrs.code as string) ?? '')
 const theme = useTheme()
 const statusId = useId()
+const { wrap, layoutAttrs, resize, place } = useDiagramLayout(props, editing)
 
 /** One gutter number per source line; the textarea is that many rows, so it never scrolls inside the block. */
 const lineCount = computed(() => draft.value.split('\n').length)
@@ -75,7 +78,7 @@ function onInput() {
 </script>
 
 <template>
-  <NodeViewWrapper class="kn-block kn-mermaid" :data-selected="selected" :data-editing="editing">
+  <NodeViewWrapper class="kn-block kn-mermaid" v-bind="layoutAttrs" :data-selected="selected" :data-editing="editing">
     <div class="kn-mermaid-grid" :data-editing="editing">
       <div v-if="editing" class="kn-mermaid-source" contenteditable="false">
         <div class="kn-mermaid-code" :data-error-line="problem?.line || undefined" :style="problem?.line ? { '--kn-error-line': problem.line } : undefined">
@@ -114,9 +117,14 @@ function onInput() {
       <div class="kn-mermaid-preview" v-bind="zoomAttrs()" v-html="svg" @dblclick="editor.isEditable && (editing = true)" />
     </div>
 
+    <template v-if="editor.isEditable && !editing">
+      <span class="kn-resize-grip" data-side="left" @pointerdown="resize($event, 'left')" />
+      <span class="kn-resize-grip" data-side="right" @pointerdown="resize($event, 'right')" />
+    </template>
     <div v-if="editor.isEditable" class="kn-block-actions" contenteditable="false">
       <button v-if="!editing" type="button" @click="editing = true"><Code2 class="size-3.5" /> {{ t('editor.editSource') }}</button>
       <button v-else type="button" @click="editing = false"><Check class="size-3.5" /> {{ t('editor.done') }}</button>
+      <DiagramPlacement v-if="!editing" :wrap="wrap" @place="place" />
       <button type="button" :aria-label="t('editor.deleteDiagram')" @click="deleteNode()"><Trash2 class="size-3.5" /></button>
     </div>
   </NodeViewWrapper>

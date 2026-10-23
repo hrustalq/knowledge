@@ -927,6 +927,40 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   box-shadow: 0 4px 12px -8px oklch(0 0 0 / 0.5);
 }
 .kn-block-actions button:hover { color: var(--foreground); background: var(--accent); }
+.kn-block-actions button[aria-pressed='true'] { color: var(--foreground); background: var(--accent); }
+.kn-block-actions-group { display: inline-flex; }
+.kn-block-actions-group button { border-radius: 0; }
+.kn-block-actions-group button:first-child { border-radius: 7px 0 0 7px; }
+.kn-block-actions-group button:last-child { border-radius: 0 7px 7px 0; }
+.kn-block-actions-group button + button { border-left-width: 0; }
+/* A diagram can be resized down to 160px: its bar wraps rather than being clipped by the card. */
+:is(.kn-mermaid, .kn-drawing) > .kn-block-actions { left: 0.5rem; flex-wrap: wrap; justify-content: flex-end; pointer-events: none; }
+:is(.kn-mermaid, .kn-drawing) > .kn-block-actions > * { pointer-events: auto; }
+
+/* Diagram size and placement (#476), stored in the fence's info string. The
+   editor's node and the read view's rendered figure carry the same attributes,
+   so a page reads as it was edited. Centred is the default: a sized diagram
+   sits in the middle of its own line. A wrapped one floats with the text beside
+   it (half the column unless resized, never more than 70%), and headings start
+   below it. Under 40rem there is no room beside it, so it falls back to full width. */
+:is(.kn-mermaid, .kn-drawing, .kn-mermaid-figure, .kn-drawing-canvas) {
+  width: var(--kn-diagram-width, auto);
+  max-width: 100%;
+  margin-inline: auto;
+}
+/* Centred means a line of its own: it starts below a floated neighbour instead of squeezing beside it. */
+:is(.kn-mermaid, .kn-drawing, .kn-mermaid-figure, .kn-drawing-canvas):not([data-kn-wrap]) { clear: both; }
+:is(.kn-mermaid, .kn-drawing, .kn-mermaid-figure, .kn-drawing-canvas)[data-kn-wrap] {
+  width: var(--kn-diagram-width, 50%);
+  max-width: 70%;
+}
+[data-kn-wrap='left'] { float: left; margin: 0.25rem 1.5rem 0.75rem 0; }
+[data-kn-wrap='right'] { float: right; margin: 0.25rem 0 0.75rem 1.5rem; }
+:is(.markdown-body, .kn-prose, .ProseMirror) :is(h1, h2, h3, h4) { clear: both; }
+@media (max-width: 40rem) {
+  [data-kn-wrap] { float: none; margin-inline: 0; }
+  :is(.kn-mermaid, .kn-drawing, .kn-mermaid-figure, .kn-drawing-canvas)[data-kn-wrap] { width: auto; max-width: 100%; }
+}
 
 .kn-mermaid-grid { display: grid; }
 .kn-mermaid-grid[data-editing='true'] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -1084,7 +1118,7 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-image { position: relative; display: block; margin-block: var(--kn-block-gap); width: fit-content; max-width: 100%; }
 .kn-image img { display: block; width: var(--kn-image-width, auto); max-width: 100%; border-radius: 8px; }
 .kn-image[data-selected='true'] img { outline: 2px solid var(--ring); outline-offset: 2px; }
-.kn-image-grip {
+.kn-resize-grip {
   position: absolute;
   top: 50%;
   width: 0.4rem;
@@ -1096,9 +1130,13 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   cursor: ew-resize;
   transition: opacity 140ms ease;
 }
-.kn-image:hover .kn-image-grip { opacity: 0.85; }
-.kn-image-grip[data-side='left'] { left: -0.2rem; }
-.kn-image-grip[data-side='right'] { right: -0.2rem; }
+:is(.kn-image, .kn-mermaid, .kn-drawing):hover .kn-resize-grip { opacity: 0.85; }
+.kn-resize-grip[data-side='left'] { left: -0.2rem; }
+.kn-resize-grip[data-side='right'] { right: -0.2rem; }
+/* A diagram is a bordered card that clips its overflow, so its grips sit just inside the border. */
+.kn-block > .kn-resize-grip { z-index: 1; }
+.kn-block > .kn-resize-grip[data-side='left'] { left: 0.2rem; }
+.kn-block > .kn-resize-grip[data-side='right'] { right: 0.2rem; }
 
 /* ---------------------------------------------------------------- editor */
 
@@ -1516,7 +1554,7 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   .kn-block-actions,
   .kn-panel-switch,
   .kn-layout-switch,
-  .kn-image-grip,
+  .kn-resize-grip,
   .markdown-body summary::before { transition: none; }
 }
 

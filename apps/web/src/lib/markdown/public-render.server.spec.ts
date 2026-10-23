@@ -32,6 +32,16 @@ describe('renderPublicMarkdown', () => {
     expect(headings.map((h) => h.id)).toEqual(['install', 'install-1', 'настройка'])
   })
 
+  it('keeps a diagram\'s size and placement on what the reader is served (#476)', () => {
+    const { html } = renderPublicMarkdown(
+      '```drawing width=320 wrap=left\n{"v":1,"w":720,"h":300,"els":[]}\n```\n\n```mermaid wrap=right\ngraph TD; A-->B\n```',
+      options,
+    )
+    expect(html).toMatch(/<div class="kn-drawing-canvas" data-kn-width="320" style="--kn-diagram-width: 320px" data-kn-wrap="left">/)
+    // Mermaid is drawn in the browser (PublicMarkdown), so its block carries the layout until then.
+    expect(html).toMatch(/<div data-kn-mermaid="1" data-kn-wrap="right">/)
+  })
+
   it('sanitizes with the app config: scripts and handlers go, rich-block attributes stay', () => {
     const { html } = renderPublicMarkdown(
       '<img src=x onerror="alert(1)"><script>alert(2)</script>\n\n> [!WARNING]\n> careful',

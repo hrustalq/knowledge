@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { resolveAssetUrl } from '@/lib/api'
 import { ZOOM_ATTR, zoomLabel } from '@/lib/image-gallery'
+import { startWidthDrag } from './width-drag'
 
 const props = defineProps(nodeViewProps)
 const { t } = useI18n()
@@ -32,29 +33,12 @@ function zoomAttrs() {
 }
 
 function startResize(event: PointerEvent, side: 'left' | 'right') {
-  if (!props.editor.isEditable) return
-  event.preventDefault()
   const host = figure.value
-  if (!host) return
-  const startX = event.clientX
-  const startWidth = host.querySelector('img')?.getBoundingClientRect().width ?? 320
-  const max = host.parentElement?.getBoundingClientRect().width ?? 720
-  const target = event.currentTarget as Element
-  target.setPointerCapture?.(event.pointerId)
-
-  const onMove = (moveEvent: PointerEvent) => {
-    const delta = (moveEvent.clientX - startX) * (side === 'left' ? -1 : 1)
-    const next = Math.round(Math.max(80, Math.min(max, startWidth + delta)))
-    host.style.setProperty('--kn-image-width', `${next}px`)
-  }
-  const onUp = () => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    const final = host.style.getPropertyValue('--kn-image-width')
-    if (final) props.updateAttributes({ width: Number.parseInt(final, 10) })
-  }
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
+  if (!props.editor.isEditable || !host) return
+  const start = host.querySelector('img')?.getBoundingClientRect().width ?? 320
+  startWidthDrag(event, { side, host, cssVar: '--kn-image-width', start, min: 80 }, (width) =>
+    props.updateAttributes({ width }),
+  )
 }
 </script>
 
@@ -79,8 +63,8 @@ function startResize(event: PointerEvent, side: 'left' | 'right') {
       v-bind="zoomAttrs()"
     />
     <template v-if="editor.isEditable">
-      <span class="kn-image-grip" data-side="left" @pointerdown="startResize($event, 'left')" />
-      <span class="kn-image-grip" data-side="right" @pointerdown="startResize($event, 'right')" />
+      <span class="kn-resize-grip" data-side="left" @pointerdown="startResize($event, 'left')" />
+      <span class="kn-resize-grip" data-side="right" @pointerdown="startResize($event, 'right')" />
     </template>
   </NodeViewWrapper>
 </template>

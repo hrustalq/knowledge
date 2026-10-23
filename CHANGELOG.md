@@ -26,6 +26,14 @@ in the pull request that introduces them — see
   diagram is grabbed: a drag or the wheel moves it. ←/→ and the side buttons step through the page's
   diagrams ("2 / 5"), separately from its images. Escape, ✕ or a click beside the diagram returns
   focus and scroll position. A block that failed to parse opens nothing, and edit mode is unchanged.
+- Mermaid diagrams and drawings can be resized and set beside the text (#476). In the editor, side
+  grips drag a diagram's width, and three buttons in its action bar place it left or right with the
+  text wrapping around it, or centred on a line of its own (the default). A wrapped diagram takes
+  half the column unless resized and never more than 70%. Headings and centred diagrams start below
+  it, and under 40rem it falls back to full width. The layout is stored in the fence's info string
+  (```` ```mermaid width=480 wrap=right ````), so the diagram source is unchanged and an unsized,
+  centred diagram is written exactly as before. Pages, comments, share links, published sites and
+  HTML/PDF exports all lay it out the same way. Word export ignores it.
 - The mermaid source editor numbers its lines and marks the one the parser failed on (#476). The
   status under the source says what the parser expected there, or which diagram type parsed. The
   source box now grows with the diagram source instead of scrolling inside a fixed 12-line box.

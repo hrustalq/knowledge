@@ -43,7 +43,8 @@ function walk(tokens: Token[], headings: string[], body: string[]): void {
         body.push(inline(token.tokens ?? [], token.text));
         break;
       case 'code':
-        if (token.lang !== 'mermaid') body.push(token.text);
+        // First word only: the info string also carries a diagram's layout (#476).
+        if ((token.lang ?? '').trim().split(/\s+/)[0] !== 'mermaid') body.push(token.text);
         break;
       case 'blockquote':
         walk(token.tokens ?? [], headings, body);

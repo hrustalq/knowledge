@@ -69,7 +69,7 @@ in the pull request that introduces them — see
   and only while the file's project or team is on an enabled Figma connector's allowlist. Removing
   the project hides it everywhere, old revisions included, and adding it back restores it. Editors
   see why an item is only a link: not pinned, not in the allowlist, not yet published, or the render
-  failed (retried after 15 minutes). Recording happens before embedding, so a page's snapshots never
+  failed (retried by the worker every 15 minutes, whether or not anyone opens the page). Recording happens before embedding, so a page's snapshots never
   wait on the embedder, and indexing never calls Figma.
 - A **Figma** connector (#470, phase 2). An admin adds it under **Settings → Connectors** with a
   Figma personal access token and an allowlist of Figma team and project links (or `team:<id>`,

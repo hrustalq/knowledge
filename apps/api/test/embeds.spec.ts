@@ -386,6 +386,8 @@ describe('the change check (#470, phase 8)', () => {
       connector: { findMany: vi.fn(async () => [connector]), update: vi.fn(async ({ data }: { data: { lastSyncedAt: Date } }) => (connector.lastSyncedAt = data.lastSyncedAt)) },
       $queryRaw: vi.fn(async () => [{ file_key: KEY, node_id: '1:2' }, { file_key: KEY, node_id: '9:9' }]),
       embedNodeHead: { upsert: vi.fn(async () => undefined) },
+      // A render that failed earlier and is due again (#470, AC: text appears after the next tick).
+      embedNode: { findMany: vi.fn(async () => [{ workspaceId: WS, fileKey: KEY, nodeId: '1:2', version: '7' }]) },
     };
     mockFetch.mockImplementation(async (url) => {
       const u = new URL(String(url));
@@ -393,9 +395,11 @@ describe('the change check (#470, phase 8)', () => {
       expect(u.searchParams.get('version')).toBeNull();
       return json({ version: '99', nodes: { '1:2': { document: node }, '9:9': null } });
     });
+    const embeds = { enqueue: vi.fn(async () => undefined) };
     const sweeper = new EmbedChangeSweeper(
       prisma as never,
       { contextFor: vi.fn(async () => ({ config: {}, credential: 'x', allowPrivate: false, debug: () => undefined })) } as never,
+      embeds as never,
       { get: () => 6 } as never,
     );
     const now = new Date('2026-10-24T00:00:00Z');
@@ -406,6 +410,8 @@ describe('the change check (#470, phase 8)', () => {
       expect.objectContaining({ nodeId: '9:9', currentHash: 'deleted' }),
     ]);
     expect(connector.lastSyncedAt).toEqual(now);
+    expect(prisma.embedNode.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { snapshotKey: null, retryAt: { lte: now } } }));
+    expect(embeds.enqueue).toHaveBeenCalledWith(WS, [{ workspaceId: WS, fileKey: KEY, nodeId: '1:2', version: '7' }]);
     // Not due again within the interval.
     await sweeper.sweep(new Date(now.getTime() + 60 * 60_000));
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);

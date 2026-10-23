@@ -6,10 +6,13 @@
 // link. The markup and classes match the read view's (MarkdownView).
 import { computed, ref } from 'vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
-import { ExternalLink, Pencil, Play, Trash2, X } from 'lucide-vue-next'
+import { ExternalLink, Pencil, Play, RefreshCw, Trash2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { embedSnapshotPath, embedStatusKey, type EmbedItem } from '@knowledge/contracts'
-import { resolveAssetUrl } from '@/lib/api'
+import { getWorkspaceId, resolveAssetUrl } from '@/lib/api'
+import { api } from '@/api/client'
+import { toast } from 'vue-sonner'
+import { errorMessage } from '@/api/errors'
 import { embedTile, figmaLiveUrl } from '@/lib/embeds'
 import { useEmbedStatus } from '../use-embed-status'
 
@@ -35,9 +38,35 @@ const tiles = computed(() =>
       src,
       ratio: status?.width && status.height ? `${status.width} / ${status.height}` : undefined,
       liveUrl: tile.ref && documentId.value ? figmaLiveUrl(item.url) : null,
+      changed: !!status?.changed,
     }
   }),
 )
+
+/**
+ * Re-pin one item to its file's current version (#470): an ordinary edit, so
+ * the revision diff shows only the version changing. Also how an unpinned
+ * item gets its first version.
+ */
+const updating = ref<number | null>(null)
+async function update(index: number) {
+  const items = (props.node.attrs.items as EmbedItem[]) ?? []
+  const item = items[index]
+  if (!item || updating.value !== null) return
+  updating.value = index
+  try {
+    const res = await api.post('/v1/embeds/figma/resolve', { body: { workspaceId: getWorkspaceId(), url: item.url } })
+    if (!res.allowed || !res.version) {
+      toast(t('editor.embed.pastedNotAllowed'))
+      return
+    }
+    props.updateAttributes({ items: items.map((it, i) => (i === index ? { ...it, version: res.version, caption: it.caption || res.name || '' } : it)) })
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  } finally {
+    updating.value = null
+  }
+}
 
 /** Editors learn why a tile is only a link; readers just see the link. */
 function note(tile: (typeof tiles.value)[number]): string | null {
@@ -92,7 +121,18 @@ function note(tile: (typeof tiles.value)[number]): string | null {
             {{ tile.meta }}<template v-if="note(tile)"> · {{ note(tile) }}</template>
             <ExternalLink v-if="tile.href" class="kn-embed-out" aria-hidden="true" />
           </span>
+          <span v-if="tile.changed" class="kn-embed-changed">{{ t('editor.embed.changed') }}</span>
         </component>
+        <button
+          v-if="editor.isEditable && (tile.changed || tile.unpinned)"
+          type="button"
+          class="kn-embed-live-toggle"
+          :disabled="updating !== null"
+          :aria-label="t('editor.embed.updateNamed', { name: tile.title })"
+          @click="update(i)"
+        >
+          <RefreshCw class="size-3" :class="{ 'animate-spin': updating === i }" aria-hidden="true" /> {{ t('editor.embed.update') }}
+        </button>
         <button
           v-if="tile.liveUrl && live !== i"
           type="button"

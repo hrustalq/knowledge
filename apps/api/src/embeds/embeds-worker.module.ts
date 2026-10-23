@@ -6,6 +6,7 @@ import { ConnectorsCoreModule } from '../connectors/connectors-core.module.js';
 import { IngestionModule } from '../ingestion/ingestion.module.js';
 import { EmbedSnapshotService } from './embed-snapshot.service.js';
 import { EmbedsProcessor } from './embeds.processor.js';
+import { EmbedChangeSweeper } from './embed-change.sweeper.js';
 
 /**
  * Consumer side of embeds — imported ONLY by the worker entrypoint. Importing
@@ -13,6 +14,6 @@ import { EmbedsProcessor } from './embeds.processor.js';
  */
 @Module({
   imports: [PrismaModule, StorageModule, IngestionModule, ConnectorsCoreModule, EmbedsCoreModule],
-  providers: [EmbedSnapshotService, EmbedsProcessor],
+  providers: [EmbedSnapshotService, EmbedsProcessor, EmbedChangeSweeper],
 })
 export class EmbedsWorkerModule {}

@@ -96,7 +96,7 @@ export class EmbedsService {
     const workspaceId = refs[0]!.workspaceId;
     const keys = refs as Array<{ workspaceId: string } & Key>;
     const access = await this.accessFor(workspaceId, [...new Set(keys.map((k) => k.fileKey))]);
-    const nodes = await this.nodesFor(workspaceId, keys);
+    const [nodes, heads] = await Promise.all([this.nodesFor(workspaceId, keys), this.headsFor(workspaceId, keys)]);
     const now = Date.now();
     const queue: Key[] = [];
     const out = keys.map((key): EmbedItemStatus => {
@@ -111,6 +111,7 @@ export class EmbedsService {
         name: node?.name ?? null,
         width: node?.width ?? null,
         height: node?.height ?? null,
+        changed: designChanged(node, heads.get(`${key.fileKey}/${key.nodeId}`)),
       };
     });
     await this.enqueue(workspaceId, queue).catch(() => undefined);
@@ -326,12 +327,39 @@ export class EmbedsService {
     };
   }
 
+  private async headsFor(workspaceId: string, keys: Key[]): Promise<Map<string, { currentHash: string }>> {
+    const rows = await this.prisma.embedNodeHead.findMany({
+      where: { workspaceId, provider: 'figma', OR: keys.map((k) => ({ fileKey: k.fileKey, nodeId: k.nodeId })) },
+    });
+    return new Map(rows.map((r) => [`${r.fileKey}/${r.nodeId}`, r]));
+  }
+
   private async nodesFor(workspaceId: string, keys: Key[]): Promise<Map<string, EmbedNode>> {
     const rows = await this.prisma.embedNode.findMany({
       where: { workspaceId, provider: 'figma', OR: keys.map((k) => ({ fileKey: k.fileKey, nodeId: k.nodeId, version: k.version })) },
     });
     return new Map(rows.map((r) => [nodeKey(r), r]));
   }
+}
+
+/**
+ * The node changed in Figma since this version was pinned: both hashes are
+ * known and differ. One predicate, mirrored by `staleMockupsSql`.
+ */
+export function designChanged(node: { subtreeHash: string | null } | undefined, head: { currentHash: string } | undefined): boolean {
+  return !!node?.subtreeHash && !!head && head.currentHash !== node.subtreeHash;
+}
+
+/** `designChanged` in SQL: a page whose head pins a node that changed since (#470, the `stale-mockups` filter). */
+export function staleMockupsSql(headRevision: Prisma.Sql): Prisma.Sql {
+  return Prisma.sql`EXISTS (
+    SELECT 1 FROM revision_embeds re
+      JOIN embed_nodes n ON n.workspace_id = re.workspace_id AND n.provider = 'figma' AND n.file_key = re.file_key
+                        AND n.node_id = re.node_id AND n.version = re.version
+      JOIN embed_node_heads h ON h.workspace_id = re.workspace_id AND h.provider = 'figma' AND h.file_key = re.file_key
+                             AND h.node_id = re.node_id
+     WHERE re.revision_id = ${headRevision} AND re.warning IS NULL
+       AND n.subtree_hash IS NOT NULL AND h.current_hash <> n.subtree_hash)`;
 }
 
 function nodeKey(key: Key): string {

@@ -17,6 +17,14 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Embedded designs say when Figma moved on (#470, phase 8). Every `EMBED_CHECK_INTERVAL_HOURS` (6 by
+  default) each enabled Figma connector checks the frames that pages' current versions pin, against the
+  file's current version. A frame counts as changed only when its own subtree changed; edits elsewhere in
+  the file do not count. A changed frame shows "Design changed in Figma since this was pinned" in the
+  reader and the editor, and editors get **Update**, which pins it to the current design as an ordinary
+  edit (the revision diff shows only the version). Update also pins an item that was never pinned.
+  **Knowledge health** gains a **Changed designs** filter. Nothing flags a page and nothing opens a merge
+  request on its own. A frame deleted in Figma reads as changed.
 - Figma embeds survive connectors and imports (#470, phase 7). On pull, a Notion **Embed** block with a
   Figma link, a Confluence smart link shown as an embed, a Confluence macro wrapping a Figma link, a Figma
   `<iframe>` in an imported HTML page, and a Figma link alone on its line in a git repository all arrive
@@ -284,6 +292,8 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261211100000_embed_node_heads` adds one table, `embed_node_heads`, with no backfill; a
+  rollback leaves it unread. New env var `EMBED_CHECK_INTERVAL_HOURS` (default 6) (#470).
 - Migration `20261210100000_public_embeds` adds one nullable column, `publishing_settings.allow_public_embeds`;
   a rollback to the previous image leaves it unread (#470).
 - Migration `20261209100000_embeds` adds three tables (`embed_files`, `embed_nodes`,

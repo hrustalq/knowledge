@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 /**
  * Embed snapshots (#470, docs/features/64): what a revision records, the one
@@ -360,5 +361,55 @@ describe('EmbedsService.publicMarkdown (#470)', () => {
     await expect(service().publicMarkdown('Just prose with https://www.figma.com/design/X/.', 'r1', true)).resolves.toBe(
       'Just prose with https://www.figma.com/design/X/.',
     );
+  });
+});
+
+describe('the change check (#470, phase 8)', () => {
+  it('calls a node changed only when both hashes are known and differ', async () => {
+    const { designChanged, staleMockupsSql } = await import('../src/embeds/embeds.service.js');
+    expect(designChanged({ subtreeHash: 'a' }, { currentHash: 'b' })).toBe(true);
+    expect(designChanged({ subtreeHash: 'a' }, { currentHash: 'a' })).toBe(false);
+    expect(designChanged({ subtreeHash: null }, { currentHash: 'b' })).toBe(false);
+    expect(designChanged({ subtreeHash: 'a' }, undefined)).toBe(false);
+    // The SQL twin compares the same two columns.
+    const sql = staleMockupsSql(Prisma.sql`b.head_revision_id`).sql;
+    expect(sql).toContain('h.current_hash <> n.subtree_hash');
+    expect(sql).toContain('n.subtree_hash IS NOT NULL');
+  });
+
+  it('checks a due connector, hashes each pinned node at the current version, and waits out the interval', async () => {
+    const { EmbedChangeSweeper } = await import('../src/embeds/embed-change.sweeper.js');
+    const { figmaSubtreeHash } = await import('../src/embeds/embed-snapshot.service.js');
+    const node = { type: 'FRAME', name: 'Sign-in', children: [{ type: 'TEXT', characters: 'Email' }] };
+    const connector = { id: 'c1', kind: 'figma', enabled: true, workspaceId: WS, config: {}, lastSyncedAt: null as Date | null };
+    const prisma = {
+      connector: { findMany: vi.fn(async () => [connector]), update: vi.fn(async ({ data }: { data: { lastSyncedAt: Date } }) => (connector.lastSyncedAt = data.lastSyncedAt)) },
+      $queryRaw: vi.fn(async () => [{ file_key: KEY, node_id: '1:2' }, { file_key: KEY, node_id: '9:9' }]),
+      embedNodeHead: { upsert: vi.fn(async () => undefined) },
+    };
+    mockFetch.mockImplementation(async (url) => {
+      const u = new URL(String(url));
+      expect(u.pathname).toBe(`/v1/files/${KEY}/nodes`);
+      expect(u.searchParams.get('version')).toBeNull();
+      return json({ version: '99', nodes: { '1:2': { document: node }, '9:9': null } });
+    });
+    const sweeper = new EmbedChangeSweeper(
+      prisma as never,
+      { contextFor: vi.fn(async () => ({ config: {}, credential: 'x', allowPrivate: false, debug: () => undefined })) } as never,
+      { get: () => 6 } as never,
+    );
+    const now = new Date('2026-10-24T00:00:00Z');
+    await sweeper.sweep(now);
+    const upserts = prisma.embedNodeHead.upsert.mock.calls.map((c) => (c[0] as { create: Record<string, unknown> }).create);
+    expect(upserts).toEqual([
+      expect.objectContaining({ nodeId: '1:2', currentVersion: '99', currentHash: figmaSubtreeHash(node) }),
+      expect.objectContaining({ nodeId: '9:9', currentHash: 'deleted' }),
+    ]);
+    expect(connector.lastSyncedAt).toEqual(now);
+    // Not due again within the interval.
+    await sweeper.sweep(new Date(now.getTime() + 60 * 60_000));
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    await sweeper.sweep(new Date(now.getTime() + 7 * 3_600_000));
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
   });
 });

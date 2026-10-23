@@ -20,6 +20,15 @@ export interface FigmaNode {
   children?: FigmaNode[];
 }
 
+/**
+ * A node's subtree hash: what "the design changed" compares. One function for
+ * the render (the pinned hash) and the change check (the current one), so the
+ * two can only differ when the node does.
+ */
+export function figmaSubtreeHash(node: FigmaNode): string {
+  return createHash('sha256').update(JSON.stringify(node)).digest('hex');
+}
+
 /** Text layers in reading order, deduplicated, cut to `maxBytes` of UTF-8. */
 export function figmaNodeText(node: FigmaNode, maxBytes: number): string {
   const seen = new Set<string>();
@@ -104,7 +113,7 @@ export class EmbedSnapshotService {
       meta: {
         name: node.name ?? null,
         text: figmaNodeText(node, this.config.get('EMBED_TEXT_MAX_BYTES', { infer: true })) || null,
-        subtreeHash: createHash('sha256').update(JSON.stringify(node)).digest('hex'),
+        subtreeHash: figmaSubtreeHash(node),
         width: box ? Math.round(box.width) : null,
         height: box ? Math.round(box.height) : null,
       },

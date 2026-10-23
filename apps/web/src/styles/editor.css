@@ -1154,6 +1154,16 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.kn-embed-changed {
+  align-self: flex-start;
+  margin-top: 0.15rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: var(--kn-text-xs);
+  color: var(--foreground);
+  background: color-mix(in oklch, var(--kn-panel-warning) 18%, transparent);
+  border: 1px solid color-mix(in oklch, var(--kn-panel-warning) 45%, transparent);
+}
 .kn-embed-out { width: 0.75rem; height: 0.75rem; flex: none; opacity: 0.7; }
 .kn-embed-live-toggle, .kn-embed-close {
   display: inline-flex;

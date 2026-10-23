@@ -316,6 +316,8 @@ export const envSchema = z.object({
   EMBED_SNAPSHOT_MAX_PX: z.coerce.number().int().positive().default(4096),
   /** Text layers kept per item, in bytes. */
   EMBED_TEXT_MAX_BYTES: z.coerce.number().int().positive().default(2048),
+  /** Hours between a Figma connector's checks of pinned frames for design changes. */
+  EMBED_CHECK_INTERVAL_HOURS: z.coerce.number().positive().default(6),
   /** Cap on pages in one llms-full.txt; past it the dump ends with a truncation marker. */
   LLMS_FULL_MAX_DOCS: z.coerce.number().int().positive().default(2000),
   /** Cap on bytes streamed in one llms-full.txt (20 MB). */

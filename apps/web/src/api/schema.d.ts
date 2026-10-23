@@ -7501,6 +7501,8 @@ export interface components {
             name: string | null;
             width: number | null;
             height: number | null;
+            /** @description The node changed in Figma since this version was pinned */
+            changed: boolean;
         };
         DocumentEmbedsResponseDto: {
             items: components["schemas"]["EmbedItemStatusDto"][];
@@ -26184,7 +26186,7 @@ export interface operations {
                 workspaceId: string;
                 projectId?: string;
                 /** @description Omitted lists every live page */
-                filter?: "stale" | "unowned" | "empty" | "expired" | "edited" | "outdated" | "requested" | "flagged" | "inactive" | "missing-paths" | "broken-calls" | "unread" | "dead" | "archived" | "handed-off";
+                filter?: "stale" | "unowned" | "empty" | "expired" | "edited" | "outdated" | "requested" | "flagged" | "inactive" | "missing-paths" | "broken-calls" | "unread" | "dead" | "archived" | "handed-off" | "stale-mockups";
                 /** @description Only pages owned by this member */
                 ownerId?: string;
                 /** @description Title substring, case-insensitive */

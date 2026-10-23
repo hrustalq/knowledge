@@ -16,6 +16,7 @@ import { ConnectorSyncService } from './connector-sync.service.js';
 import { ConnectorsService } from './connectors.service.js';
 import { GithubCoreModule } from './github/github-core.module.js';
 import { RepoWikiService } from './repo-wiki.service.js';
+import { FigmaFilesService } from '../embeds/figma-files.service.js';
 
 /**
  * Connector configuration, credentials, links and the sync engine, with no
@@ -51,6 +52,8 @@ import { RepoWikiService } from './repo-wiki.service.js';
     ConnectorSyncService,
     RepoWikiService,
     CodeImportsService,
+    // The Figma connector's files and calls (#470): the embed picker and renderer, and pinning on pull.
+    FigmaFilesService,
   ],
   exports: [
     ConnectorsService,
@@ -65,6 +68,7 @@ import { RepoWikiService } from './repo-wiki.service.js';
     // The code-usage index (#236): written by the pull, read by the usage
     // routes and MCP tools of later phases.
     CodeImportsService,
+    FigmaFilesService,
   ],
 })
 export class ConnectorsCoreModule {}

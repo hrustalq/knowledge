@@ -1,5 +1,7 @@
 import TurndownService from 'turndown';
 import { Defuddle } from 'defuddle/node';
+import { canonicalEmbedUrl, parseEmbedUrl } from '@knowledge/contracts';
+import { embedGroupMarkup } from '@knowledge/editor-schema/markdown';
 import { countWords } from './parser.types.js';
 
 /**
@@ -29,6 +31,50 @@ turndown.keep(['u', 'mark', 'sub', 'sup']);
 // text, so without this the page title arrives twice — once as the title and
 // again as the first line of the body.
 turndown.remove(['head', 'title', 'meta', 'link', 'script', 'style', 'noscript', 'nav', 'header', 'footer', 'aside', 'form', 'iframe']);
+
+/**
+ * Figma embeds (#470) become an embed group before the iframe rule removes
+ * them: Figma's own iframe, a Confluence Cloud smart link shown as an embed,
+ * and a Confluence macro whose parameter is a Figma link. The version is left
+ * unpinned here; a connector pull pins it, and anything else warns until an
+ * editor does.
+ */
+function figmaGroup(url: string | null | undefined, caption = ''): string | null {
+  const ref = url ? parseEmbedUrl(url) : null;
+  if (!ref) return null;
+  return `\n\n${embedGroupMarkup({ layout: 'strip', caption, items: [{ url: canonicalEmbedUrl(ref), version: null, caption: '' }] })}\n\n`;
+}
+
+turndown.addRule('knFigmaIframe', {
+  filter: (node) => node.nodeName === 'IFRAME' && !!figmaGroup((node as HTMLElement).getAttribute('src')),
+  replacement: (_content, node) => figmaGroup((node as HTMLElement).getAttribute('src'), (node as HTMLElement).getAttribute('title') ?? '') ?? '',
+});
+
+turndown.addRule('knFigmaSmartLink', {
+  filter: (node) =>
+    node.nodeName === 'A' &&
+    /^(embed|block)$/.test((node as HTMLElement).getAttribute('data-card-appearance') ?? '') &&
+    !!figmaGroup((node as HTMLElement).getAttribute('href')),
+  replacement: (_content, node) => figmaGroup((node as HTMLElement).getAttribute('href')) ?? '',
+});
+
+turndown.addRule('knFigmaMacro', {
+  filter: (node) => node.nodeName === 'AC:STRUCTURED-MACRO' && !!figmaUrlIn(node),
+  replacement: (_content, node) => figmaGroup(figmaUrlIn(node)) ?? '',
+});
+
+/** The first Figma link a macro carries, in a parameter's text or an `ri:url`. */
+export function figmaUrlIn(node: Node): string | null {
+  const found = [node, ...descendants(node)]
+    .flatMap((n) => [(n as Element).getAttribute?.('ri:value'), n.nodeType === 3 ? n.textContent : null])
+    .map((v) => (v ?? '').trim())
+    .find((v) => !!parseEmbedUrl(v));
+  return found ?? null;
+}
+
+function descendants(node: Node): Node[] {
+  return [...(node.childNodes ?? [])].flatMap((child) => [child, ...descendants(child)]);
+}
 
 function children(node: Node): Element[] {
   return [...(node.childNodes ?? [])].filter((n): n is Element => n.nodeType === 1);

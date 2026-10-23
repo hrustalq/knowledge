@@ -633,7 +633,7 @@ function engine(options: { aclMode?: string } = {}) {
     { changed: async () => undefined } as never,
   );
   const discovery = new ConnectorDiscoveryService(prisma as never, config as never);
-  const staging = new ConnectorStagingService(prisma as never, documents as never, storage as never, acl);
+  const staging = new ConnectorStagingService(prisma as never, documents as never, storage as never, acl, { pinMarkdown: async (_ws: string, md: string) => md } as never);
   const sync = new ConnectorSyncService(
     prisma as never,
     config as never,

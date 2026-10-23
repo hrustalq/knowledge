@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Connector } from '@prisma/client';
 import { canonicalEmbedUrl, parseEmbedUrl, type EmbedRef } from '@knowledge/contracts';
+import { embedGroupMarkup, embedGroupsOf, rewriteEmbedGroups } from '@knowledge/editor-schema/markdown';
 import { ConnectorsService } from '../connectors/connectors.service.js';
 import type { ConnectorContext } from '../connectors/adapters/connector.types.js';
 import { figmaAllowedFiles, figmaGet } from '../connectors/adapters/figma.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { embedFileAllowed } from './embeds.service.js';
+import { embedFileAllowed } from './embed-access.js';
 
 /** A frame, section or page child the picker can offer (#470). */
 export interface FigmaFrameEntry {
@@ -111,6 +112,34 @@ export class FigmaFilesService {
     if (!ctx) return { url: canonical, version: null, name: null, allowed: false };
     const { version, name } = await this.pin(ctx, ref);
     return { url: canonical, version, name, allowed: true };
+  }
+
+  /**
+   * Pin every unpinned Figma item in a pulled page to its file's current
+   * version (#470). An item no allowlist reaches, or that Figma refuses, stays
+   * unpinned — kept, shown as a link, warned — so a pull never fails over one.
+   */
+  async pinMarkdown(workspaceId: string, markdown: string): Promise<string> {
+    const unpinned = embedGroupsOf(markdown).some((g) => g.items.some((i) => !i.version && parseEmbedUrl(i.url)));
+    if (!unpinned) return markdown;
+    const versions = new Map<string, { version: string; name: string | null } | null>();
+    for (const group of embedGroupsOf(markdown)) {
+      for (const item of group.items) {
+        const ref = parseEmbedUrl(item.url);
+        if (!ref || item.version || versions.has(item.url)) continue;
+        const ctx = await this.contextFor(workspaceId, ref.fileKey);
+        versions.set(item.url, ctx ? await this.pin(ctx, ref).catch(() => null) : null);
+      }
+    }
+    return rewriteEmbedGroups(markdown, (group) =>
+      embedGroupMarkup({
+        ...group,
+        items: group.items.map((item) => {
+          const pinned = item.version ? null : versions.get(item.url);
+          return pinned ? { ...item, version: pinned.version, caption: item.caption || pinned.name || '' } : item;
+        }),
+      }),
+    );
   }
 
   /** The file's current version and the item's name. */

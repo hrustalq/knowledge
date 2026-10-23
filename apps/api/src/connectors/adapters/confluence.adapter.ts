@@ -380,6 +380,12 @@ function nextCursor(body: ConfluenceList<unknown>): string | null {
 
 export function countMacros(storage: string): string[] {
   const names = new Set<string>();
-  for (const m of storage.matchAll(/<ac:structured-macro[^>]*ac:name="([^"]+)"/g)) names.add(m[1]);
+  // A macro that only wraps a Figma link is carried over as an embed group (#470), so it is not "lost".
+  for (const m of storage.matchAll(/<ac:structured-macro[^>]*ac:name="([^"]+)"/g)) {
+    const end = storage.indexOf('</ac:structured-macro>', m.index);
+    if (!FIGMA_LINK_RE.test(storage.slice(m.index, end < 0 ? m.index + m[0].length : end))) names.add(m[1]);
+  }
   return [...names].slice(0, 10);
 }
+
+const FIGMA_LINK_RE = /https:\/\/(?:www\.|embed\.)?figma\.com\/(?:design|file|proto|board|embed)\b/;

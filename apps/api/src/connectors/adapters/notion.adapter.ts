@@ -1,3 +1,5 @@
+import { canonicalEmbedUrl, parseEmbedUrl } from '@knowledge/contracts';
+import { embedGroupMarkup, embedGroupsOf } from '@knowledge/editor-schema/markdown';
 import { Injectable } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
@@ -264,7 +266,7 @@ function isListBlock(block: NotionBlock): boolean {
 }
 
 /** Returns null for a block with no markdown equivalent, recording its type. */
-function renderBlock(block: NotionBlock, unsupported: Set<string>): string | null {
+export function renderBlock(block: NotionBlock, unsupported: Set<string>): string | null {
   const type = block.type;
   const data = (block as unknown as Record<string, { rich_text?: NotionRichText[] } | undefined>)[type];
   const text = richText(data?.rich_text);
@@ -298,6 +300,19 @@ function renderBlock(block: NotionBlock, unsupported: Set<string>): string | nul
     }
     case 'bookmark':
       return block.bookmark?.url ? `[${block.bookmark.url}](${block.bookmark.url})` : null;
+    case 'embed': {
+      // A Figma embed becomes an embed group (#470), pinned by the sync; any other embed has no equivalent.
+      const ref = block.embed?.url ? parseEmbedUrl(block.embed.url) : null;
+      if (!ref) {
+        unsupported.add(type);
+        return null;
+      }
+      return embedGroupMarkup({
+        layout: 'strip',
+        caption: richText(block.embed?.caption).replace(/\s+/g, ' ').trim(),
+        items: [{ url: canonicalEmbedUrl(ref), version: null, caption: '' }],
+      });
+    }
     case 'toggle':
       // Rendered as its summary; children are appended by the caller.
       return text;
@@ -337,6 +352,20 @@ export function markdownToBlocks(markdown: string): NotionBlockInput[] {
     if (/^---+$/.test(line.trim())) {
       blocks.push({ object: 'block', type: 'divider', divider: {} });
       i += 1;
+      continue;
+    }
+    // An embed group (#470): each item as Notion's own embed, the group caption as a paragraph after.
+    // The layout has no Notion equivalent and is lost.
+    if (/^<figure\b[^>]*\bdata-kn-embed\b/.test(line.trim())) {
+      const body: string[] = [];
+      while (i < lines.length) {
+        body.push(lines[i]);
+        if (/<\/figure>/.test(lines[i++])) break;
+      }
+      for (const group of embedGroupsOf(body.join('\n'))) {
+        for (const item of group.items) blocks.push({ object: 'block', type: 'embed', embed: { url: item.url } });
+        if (group.caption) blocks.push(para(group.caption));
+      }
       continue;
     }
     const fence = /^```(\w*)/.exec(line);
@@ -442,7 +471,7 @@ interface NotionPage {
   last_edited_time?: string;
   properties?: Record<string, { type?: string; title?: NotionRichText[] } | undefined>;
 }
-interface NotionBlock {
+export interface NotionBlock {
   id: string;
   type: string;
   has_children?: boolean;
@@ -454,6 +483,7 @@ interface NotionBlock {
     file?: { url?: string };
   };
   bookmark?: { url?: string };
+  embed?: { url?: string; caption?: NotionRichText[] };
 }
 interface NotionRichText {
   plain_text?: string;

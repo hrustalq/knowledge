@@ -17,6 +17,15 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Figma embeds survive connectors and imports (#470, phase 7). On pull, a Notion **Embed** block with a
+  Figma link, a Confluence smart link shown as an embed, a Confluence macro wrapping a Figma link, a Figma
+  `<iframe>` in an imported HTML page, and a Figma link alone on its line in a git repository all arrive
+  as an embed group. A connector pull pins each frame to its file's current version and takes its name as
+  the caption; a frame outside the allowlist stays an unpinned link. A Confluence macro carried over this
+  way is no longer listed as lost. On push, each frame goes back as Notion's own embed block or a Confluence
+  smart link shown as an embed, with the group caption as a paragraph; the strip or grid layout has no
+  equivalent there and is lost. Figma's embed URLs (`figma.com/embed?url=…`, `embed.figma.com/…`) are now
+  read as the frame they show.
 - Embedded designs on public pages and in exports (#470, phase 6). A new switch, **Settings → Publishing
   → Show embedded designs publicly** (off by default), lets share links and published sites show the
   snapshots of embedded Figma frames. Off, they show the captions and "Mockup not available publicly".

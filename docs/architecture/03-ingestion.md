@@ -59,7 +59,8 @@ in the codebase, so they are worth keeping stable:
 | 1     | Fetch raw bytes — `storage.getObjectText(revision.s3Key)`                | `fetch`      |
 | 2     | Parse with gray-matter (`matter(raw)`); non-markdown/non-`text/*` is rejected. A spec document parses by its kind instead (below) | —       |
 | 3     | Normalize via `splitMarkdown`, persist `normalized.json` beside the source | `normalize` |
-| 4     | Chunk — `chunkSections(sections)`                                        | `chunk`      |
+| 3b    | Embed groups — record `revision_embeds`, queue snapshot renders (#470)   | `embeds`     |
+| 4     | Chunk — `chunkSections(sections)`, then one chunk per embedded frame     | `chunk`      |
 | 5     | Embed — title + heading breadcrumb + body, in slices of 32               | `embed`      |
 | 6     | Index into the graph store — `graph.upsertRevisionChunks`                | `graph`      |
 | 6b    | Optional BM25 mirror — `fulltext.indexRevisionChunks`, non-fatal         | `fulltext`   |
@@ -109,6 +110,23 @@ deletes the revision's `Chunk` rows and its `DocumentRevision` vertex before
 recreating them, so running it twice converges rather than duplicating. Chunks
 carry no system time, so recreating them loses nothing. Relation edges are
 different; see the next paragraphs.
+
+**Embedded designs** (#470, [feature 64](../features/64-embeds.md)). Step 3b
+reads the page's embed groups with `embedGroupsOf` (no DOM) and rewrites the
+revision's `revision_embeds` rows, one per item, each with a `warning` for what
+the markdown got wrong (`unknown-provider`, `unpinned`, `over-limit`). It then
+queues one render per pinned item on the `embeds` queue; the job id is the item,
+so every page pinning the same node at the same version shares one render. It
+runs before the embedder so a page's snapshots never wait on a model, and it
+never calls Figma. Step 4 appends, after the page's own chunks, one chunk per
+pinned item whose file still passes the allowlist and whose cache row has a name
+or text: `Figma frame "<name>" in "<file>"`, the caption, the text layers, under
+heading path `Figma > <file>`. The render job (`EmbedSnapshotService`, worker
+only) resolves the file through the Figma connector's allowlist, writes the PNG
+and the `embed_nodes` cache row, and, when it stored a name or text, reindexes
+the default-branch heads that pin the item through this same outbox (`reason:
+'embed rendered'`). A rendered item returns early from the job, so that reindex
+cannot loop.
 
 **Valid time is stamped after every job** (#81). `stampValidity` reads the
 page's finalized revisions from PG (`loadRevisionStamps`) and rewrites the
@@ -393,6 +411,8 @@ rows with ids of their own.
 | `code_imports`, `code_files` | A codebase connector's head: importer → imported file with the names taken, and every file. Replaced whole per pull, in one transaction (feature 51).        |
 | `component_declarations` | One row per page with a `component:` block: resolved connector, paths, symbols, warning, `missing_paths`. Written by ingestion, re-resolved per pull.       |
 | `documents.kind`, `documents.spec_slug` | `page` \| `openapi` \| `asyncapi`, default `page`. The slug is pinned at a spec's first indexed revision (feature 52). |
+| `revision_embeds` | One row per embed item per revision (#470): group, position, URL, file/node/version, caption, `warning`. Rewritten per revision; no FK, deleted by the project cascade. |
+| `embed_nodes`, `embed_files`, `embed_node_heads` | The snapshot cache (immutable per pinned version), the allowlist's files as last listed, and each pinned node's current hash from the change check (feature 64). |
 | `api_operations` | One row per operation or channel per revision: protocol, method, path, `entity_key`, summary, tags, `pointer`. A projection, replaced per revision; unique on `(revision_id, entity_key, method)`, because an AsyncAPI channel carries both a send and a receive. |
 
 Chunks, vectors and relation edges live in ArcadeDB, reached only through
@@ -418,6 +438,8 @@ workspace.
 | `IngestionModule`       | Producer only (`IngestionProducer`, queue registration) | API and worker                 |
 | `IngestionWorkerModule` | `IngestionProcessor`, `OutboxSweeper`, `StaleSweeper`   | the worker entrypoint **only** |
 | `IngestionAdminModule`  | `IngestionController`, `IngestionAdminService`          | `AppModule` and `McpModule`    |
+| `EmbedsCoreModule`      | `EmbedsService`, the `embeds` queue (#470)              | API, worker, MCP, public       |
+| `EmbedsWorkerModule`    | `EmbedSnapshotService`, `EmbedsProcessor`, `EmbedChangeSweeper` | the worker entrypoint **only** |
 
 `IngestionWorkerModule` must never be imported into `AppModule` — the API
 process would start consuming jobs. This is verifiable rather than a convention:

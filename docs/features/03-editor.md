@@ -171,6 +171,9 @@ shows captioned links:
   spelling, round trip, escaping, sanitizer) and through a shared draft in
   `markdown-roundtrip-collab.spec.ts`, since `items` is an array attribute.
 - **Rendering.** The node view and the read view build the same tiles from
-  `embedTile`. Public surfaces show captions and a placeholder, never a link.
-  Snapshots, the picker and the change check are the later phases of
-  [64](64-embeds.md).
+  `embedTile`, with the page's snapshots from `GET /v1/documents/:id/embeds`.
+  Public surfaces never get a link; see [64](64-embeds.md).
+- **Authoring.** `/figma` opens `EmbedPickerDialog.vue` (a lazy `import()`), a
+  Figma link pasted alone on an empty line becomes a group (the paste rule in
+  `extensions/media.ts`, tested in `embed-paste.spec.ts`), the pencil reopens
+  the picker, and **Update** re-pins a changed or unpinned item.

@@ -15,8 +15,7 @@
  *
  * Zoom is a transform over the fitted image: scale 1 is "fit", the natural
  * size is `naturalWidth / offsetWidth`. A click toggles between the two at the
- * clicked point, one pointer pans, two pinch. No pan/zoom library: the whole
- * model is a scale, an offset and a clamp.
+ * clicked point, one pointer pans, two pinch (./lightbox).
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -24,6 +23,7 @@ import { useEventListener } from '@vueuse/core'
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { galleryFrom, zoomableAt, type GalleryImage } from '@/lib/image-gallery'
+import { headerButton, navButton, usePanZoom } from './lightbox'
 
 const props = defineProps<{ root: HTMLElement | null }>()
 
@@ -54,9 +54,7 @@ useEventListener(() => props.root, ['click', 'keydown'], (event: MouseEvent | Ke
 function go(next: number) {
   if (next < 0 || next >= images.value.length) return
   index.value = next
-  scale.value = 1
-  tx.value = 0
-  ty.value = 0
+  reset()
   canZoom.value = false
 }
 
@@ -70,105 +68,32 @@ function onKeydown(event: KeyboardEvent) {
 // ── zoom & pan ────────────────────────────────────────────────────────────
 const stage = ref<HTMLElement | null>(null)
 const image = ref<HTMLImageElement | null>(null)
-const scale = ref(1)
-const tx = ref(0)
-const ty = ref(0)
 /** The image is larger than it is drawn at fit, so 1:1 shows more. */
 const canZoom = ref(false)
-const zoomed = computed(() => scale.value > 1)
 
 const naturalScale = () => (image.value ? image.value.naturalWidth / image.value.offsetWidth : 1)
+
+const { scale, tx, ty, dragging, zoomed, reset, zoomTo, wasDrag, onPointerDown, onPointerMove, onPointerUp } = usePanZoom(
+  stage,
+  () => ({ w: image.value?.offsetWidth ?? 0, h: image.value?.offsetHeight ?? 0 }),
+  () => Math.max(naturalScale(), 2),
+)
 
 function onImageLoad() {
   canZoom.value = naturalScale() > 1.05
 }
 
-/** Scale to `next`, keeping the point under (cx, cy) where it is. */
-function zoomTo(next: number, cx: number, cy: number) {
-  const box = stage.value?.getBoundingClientRect()
-  if (!box) return
-  const fx = cx - (box.left + box.width / 2)
-  const fy = cy - (box.top + box.height / 2)
-  const k = next / scale.value
-  tx.value = fx - (fx - tx.value) * k
-  ty.value = fy - (fy - ty.value) * k
-  scale.value = next
-  clamp()
-}
-
-/** Never let an edge come further in than the stage's: no empty margin to pan into. */
-function clamp() {
-  const img = image.value
-  const box = stage.value
-  if (!img || !box) return
-  const mx = Math.max(0, (img.offsetWidth * scale.value - box.clientWidth) / 2)
-  const my = Math.max(0, (img.offsetHeight * scale.value - box.clientHeight) / 2)
-  tx.value = Math.min(mx, Math.max(-mx, tx.value))
-  ty.value = Math.min(my, Math.max(-my, ty.value))
-}
-
 function toggleZoom(cx?: number, cy?: number) {
   if (!canZoom.value) return
-  const box = stage.value!.getBoundingClientRect()
-  zoomTo(zoomed.value ? 1 : naturalScale(), cx ?? box.left + box.width / 2, cy ?? box.top + box.height / 2)
-}
-
-// Pointers on the stage. Not captured: a captured pointer retargets the click
-// to the stage, and the click is how a tap on the image is told from a tap
-// beside it. The stage is the whole screen, so the pointer cannot leave it.
-const pointers = new Map<number, { x: number; y: number }>()
-const dragging = ref(false)
-let moved = false
-
-function onPointerDown(event: PointerEvent) {
-  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
-  if (pointers.size === 1) moved = false
-}
-
-function onPointerMove(event: PointerEvent) {
-  const last = pointers.get(event.pointerId)
-  if (!last) return
-  const [a, b] = [...pointers.values()]
-  if (pointers.size === 2 && a && b) {
-    const before = { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
-    last.x = event.clientX
-    last.y = event.clientY
-    const d = Math.hypot(a.x - b.x, a.y - b.y)
-    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
-    tx.value += mid.x - before.x
-    ty.value += mid.y - before.y
-    const max = Math.max(naturalScale(), 2)
-    zoomTo(Math.min(max, Math.max(1, (scale.value * d) / (before.d || d))), mid.x, mid.y)
-    moved = dragging.value = true
-    return
-  }
-  const dx = event.clientX - last.x
-  const dy = event.clientY - last.y
-  last.x = event.clientX
-  last.y = event.clientY
-  if (!zoomed.value || (!moved && Math.hypot(dx, dy) < 3)) return
-  tx.value += dx
-  ty.value += dy
-  clamp()
-  moved = dragging.value = true
-}
-
-function onPointerUp(event: PointerEvent) {
-  pointers.delete(event.pointerId)
-  if (pointers.size === 0) dragging.value = false
+  zoomTo(zoomed.value ? 1 : naturalScale(), cx, cy)
 }
 
 function onStageClick(event: MouseEvent) {
-  if (moved) return
+  if (wasDrag()) return
   if (event.target === image.value) toggleZoom(event.clientX, event.clientY)
   // The empty stage is the backdrop: a click there leaves, like outside any dialog.
   else if (event.target === stage.value) open.value = false
 }
-
-const navButton =
-  'absolute top-1/2 z-10 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-muted/80 text-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-0'
-const headerButton =
-  'grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-3 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40'
 </script>
 
 <template>

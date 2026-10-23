@@ -21,6 +21,9 @@ const FIXTURES: Record<string, string> = {
   toc: '<div data-kn-toc="1"></div>\n\n## H2\n',
   api: '<div data-kn-api="POST" data-kn-path="/invoices/{id}" data-kn-op="op:billing:post-/invoices">\n\n### POST /invoices/{id}\n\n<div data-kn-api-section="summary">\n\nBills a customer.\n\n</div>\n\n</div>\n',
   mermaid: '```mermaid\ngraph TD; A-->B\n```\n',
+  // Size and placement ride in the info string (#476).
+  mermaidLaidOut: '```mermaid width=480 wrap=right\ngraph TD; A-->B\n```\n',
+  drawingLaidOut: '```drawing wrap=left\n{"v":1,"w":720,"h":300,"els":[]}\n```\n',
   drawing:
     '```drawing\n{"type":"excalidraw","version":2,"elements":[{"id":"r1","type":"rectangle","x":1,"y":2}],"appState":{}}\n```\n',
   file: '<div data-kn-file="f1" data-kn-name="spec.pdf" data-kn-mime="application/pdf" data-kn-size="2048"><a href="/v1/attachments/f1">spec.pdf</a></div>\n',
@@ -73,6 +76,14 @@ describe('markdown through a shared draft', () => {
       expect(md(back)).toBe(md(doc))
     })
   }
+
+  it('keeps a diagram\'s size and placement in its fence, and writes nothing for the default', () => {
+    const doc = toDoc(FIXTURES.mermaidLaidOut!)
+    expect(doc.firstChild!.attrs).toMatchObject({ width: 480, wrap: 'right' })
+    expect(md(doc)).toContain('```mermaid width=480 wrap=right\n')
+    expect(md(toDoc(FIXTURES.drawingLaidOut!))).toContain('```drawing wrap=left\n')
+    expect(md(toDoc(FIXTURES.mermaid!))).toContain('```mermaid\n')
+  })
 
   it('concurrent edits in one table cell and a panel merge into markdown that re-parses to itself', () => {
     const a = prosemirrorToYDoc(toDoc(`${FIXTURES.table}\n${FIXTURES.panel}`), BODY_FIELD)

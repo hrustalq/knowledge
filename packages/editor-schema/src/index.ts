@@ -25,11 +25,15 @@ import { createLowlight } from 'lowlight';
 import { markdownToHtml } from '@knowledge/editor-schema/markdown';
 import {
   KN,
+  asDiagramWrap,
+  diagramLayoutAttrs,
+  diagramLayoutOf,
   isApiSection,
   isHttpMethod,
   isPanelType,
   isStatusColor,
   type ApiSectionKind,
+  type DiagramLayout,
   type HttpMethod,
   type PanelType,
   type StatusColor,
@@ -288,6 +292,28 @@ function preText(element: HTMLElement): string {
   return (pre?.textContent ?? element.textContent ?? '').trim();
 }
 
+/**
+ * Size and placement, shared by both diagram nodes (#476). Read from the
+ * `data-kn-*` attributes the fence's info string becomes; written by renderHTML
+ * below (not per attribute) so the width's custom property rides along.
+ */
+const DIAGRAM_LAYOUT_ATTRIBUTES = {
+  width: {
+    default: null,
+    parseHTML: (element: HTMLElement) => diagramLayoutOf(element).width,
+    renderHTML: () => ({}),
+  },
+  wrap: {
+    default: null,
+    parseHTML: (element: HTMLElement) => diagramLayoutOf(element).wrap,
+    renderHTML: () => ({}),
+  },
+};
+
+function layoutOf(node: PMNode): DiagramLayout {
+  return { width: Number(node.attrs.width) || null, wrap: asDiagramWrap(node.attrs.wrap) };
+}
+
 export const Mermaid = Node.create({
   name: 'knMermaid',
   group: 'block',
@@ -302,6 +328,7 @@ export const Mermaid = Node.create({
         parseHTML: (element) => preText(element as HTMLElement) || DEFAULT_MERMAID,
         renderHTML: () => ({}),
       },
+      ...DIAGRAM_LAYOUT_ATTRIBUTES,
     };
   },
 
@@ -315,7 +342,7 @@ export const Mermaid = Node.create({
   },
 
   renderHTML({ node }) {
-    return ['div', { [KN.mermaid]: '1' }, ['pre', {}, node.attrs.code as string]];
+    return ['div', { [KN.mermaid]: '1', ...diagramLayoutAttrs(layoutOf(node)) }, ['pre', {}, node.attrs.code as string]];
   },
 });
 
@@ -334,6 +361,7 @@ export const Drawing = Node.create({
           (element as HTMLElement).getAttribute('data-scene') || preText(element as HTMLElement),
         renderHTML: () => ({}),
       },
+      ...DIAGRAM_LAYOUT_ATTRIBUTES,
     };
   },
 
@@ -342,7 +370,7 @@ export const Drawing = Node.create({
   },
 
   renderHTML({ node }) {
-    return ['div', { [KN.drawing]: '1' }, ['pre', {}, (node.attrs.scene as string) || '']];
+    return ['div', { [KN.drawing]: '1', ...diagramLayoutAttrs(layoutOf(node)) }, ['pre', {}, (node.attrs.scene as string) || '']];
   },
 });
 

@@ -262,7 +262,9 @@ describe('searchTextOf', () => {
   });
 
   it('keeps code, which readers search by identifier, and drops mermaid source', () => {
-    const text = searchTextOf('```ts\nconst getContent = 1\n```\n\n```mermaid\ngraph TD; A-->B\n```');
+    const text = searchTextOf(
+      '```ts\nconst getContent = 1\n```\n\n```mermaid\ngraph TD; A-->B\n```\n\n```mermaid width=480 wrap=right\ngraph LR; C-->D\n```',
+    );
     expect(text.body).toBe('const getContent = 1');
   });
 

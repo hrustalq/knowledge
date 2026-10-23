@@ -42,6 +42,9 @@ export const KN = {
   toc: 'data-kn-toc',
   mention: 'data-kn-mention',
   user: 'data-kn-user',
+  // A diagram's size and placement (#476): see diagramLayoutFromInfo.
+  width: 'data-kn-width',
+  wrap: 'data-kn-wrap',
   // Taken from contracts rather than spelled here: the API parses this
   // attribute out of comment bodies to find out which agent was tagged, so the
   // writer and the reader must not be able to drift apart.
@@ -103,4 +106,56 @@ export function escapeHtml(value: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/* -------------------------------------------------------- diagram layout */
+
+/** Where a mermaid block or drawing sits (#476): floated with text wrapping beside it, or centred (null). */
+export type DiagramWrap = 'left' | 'right';
+
+export interface DiagramLayout {
+  /** CSS px within the text column; null = the diagram's own width, capped at the column. */
+  width: number | null;
+  wrap: DiagramWrap | null;
+}
+
+/** The custom property a sized diagram's width travels in, on the editor node and the read view alike. */
+export const DIAGRAM_WIDTH_VAR = '--kn-diagram-width';
+
+export function asDiagramWrap(value: unknown): DiagramWrap | null {
+  return value === 'left' || value === 'right' ? value : null;
+}
+
+/**
+ * Layout is stored in the fence's info string after the language —
+ * ```mermaid width=480 wrap=right — so the body stays the diagram source and
+ * every reader that takes the first word as the language is unchanged.
+ * Centred and unsized write nothing.
+ */
+export function diagramLayoutFromInfo(info: string): DiagramLayout {
+  const width = Number(/(?:^|\s)width=(\d{2,4})(?=\s|$)/.exec(info)?.[1]) || null;
+  return { width, wrap: asDiagramWrap(/(?:^|\s)wrap=(\w+)(?=\s|$)/.exec(info)?.[1]) };
+}
+
+/** The info string for a fence: the language, then whatever layout is set. */
+export function diagramInfo(lang: string, layout: DiagramLayout): string {
+  return [lang, layout.width && `width=${layout.width}`, layout.wrap && `wrap=${layout.wrap}`].filter(Boolean).join(' ');
+}
+
+/** A rendered block's layout, read back from its `data-kn-*` attributes. */
+export function diagramLayoutOf(el: Element): DiagramLayout {
+  return { width: Number(el.getAttribute(KN.width)) || null, wrap: asDiagramWrap(el.getAttribute(KN.wrap)) };
+}
+
+/** The attributes that carry a layout on an element; a width also sets the custom property CSS sizes by. */
+export function diagramLayoutAttrs({ width, wrap }: DiagramLayout): Record<string, string> {
+  return {
+    ...(width ? { [KN.width]: String(width), style: `${DIAGRAM_WIDTH_VAR}: ${width}px` } : {}),
+    ...(wrap ? { [KN.wrap]: wrap } : {}),
+  };
+}
+
+/** Carry a block's layout onto the element a read view replaces it with (the rendered figure). */
+export function carryDiagramLayout(from: Element, to: Element): void {
+  for (const [name, value] of Object.entries(diagramLayoutAttrs(diagramLayoutOf(from)))) to.setAttribute(name, value);
 }

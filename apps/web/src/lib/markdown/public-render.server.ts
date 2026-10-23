@@ -29,7 +29,7 @@ import createDOMPurify, { type WindowLike } from 'dompurify'
 import { parseAttachmentPath } from '@knowledge/contracts/publishing'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from './render'
 import { parseScene, renderSceneToSvg } from './drawing'
-import { KN, attachmentKind, escapeHtml } from './nodes'
+import { KN, attachmentKind, carryDiagramLayout, escapeHtml } from './nodes'
 
 export interface PublicHeading {
   id: string
@@ -249,6 +249,7 @@ function renderDrawings(root: HTMLElement, doc: Document) {
     wrap.innerHTML = purify.sanitize(renderSceneToSvg(parseScene(node.textContent ?? '')), {
       USE_PROFILES: { svg: true, svgFilters: true },
     }) as unknown as string
+    carryDiagramLayout(node, wrap)
     node.replaceWith(wrap)
   }
 }

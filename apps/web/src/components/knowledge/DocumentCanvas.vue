@@ -37,7 +37,8 @@ import type {
 } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import RichEditor from '@/components/editor/RichEditor.vue'
-import ImageLightbox from '@/components/ui/image-lightbox/ImageLightbox.vue'
+import ImageLightbox from '@/components/ui/lightbox/ImageLightbox.vue'
+import DiagramLightbox from '@/components/ui/lightbox/DiagramLightbox.vue'
 import {
   ANCHOR_ATTR,
   anchorFromDomSelection,
@@ -716,9 +717,10 @@ function onOutdated(ids: string[]) {
         @outdated-anchors="onOutdated"
       />
     </div>
-    <!-- Images are block nodes, so a highlight or a glossary term never sits
-         on one: the lightbox's own listener cannot steal their clicks. -->
+    <!-- Images and diagrams are block nodes, so a highlight or a glossary term
+         never sits on one: the lightboxes' own listeners cannot steal their clicks. -->
     <ImageLightbox :root="page" />
+    <DiagramLightbox :root="page" />
 
     <!-- Comment on the block under the pointer. Lives in the reading gutter,
          so it never covers the words it refers to. -->

@@ -10,7 +10,7 @@
 import TurndownService from 'turndown';
 import type { Node as PMNode, Schema } from '@tiptap/pm/model';
 import { DOMSerializer } from '@tiptap/pm/model';
-import { KN } from '@knowledge/editor-schema/nodes';
+import { KN, diagramInfo, diagramLayoutOf } from '@knowledge/editor-schema/nodes';
 
 const turndown = new TurndownService({
   headingStyle: 'atx',
@@ -58,10 +58,11 @@ function firstDescendant(node: Node, tagName: string): Element | null {
   return null;
 }
 
-/** ```mermaid — the fence the read view and the ingestion worker already know. */
+/** ```mermaid — the fence the read view and the ingestion worker already know, with its layout in the info string (#476). */
 turndown.addRule('knMermaid', {
   filter: (node) => (node as HTMLElement).hasAttribute?.(KN.mermaid),
-  replacement: (_content, node) => `\n\n\`\`\`mermaid\n${(node.textContent ?? '').trim()}\n\`\`\`\n\n`,
+  replacement: (_content, node) =>
+    `\n\n\`\`\`${diagramInfo('mermaid', diagramLayoutOf(node as HTMLElement))}\n${(node.textContent ?? '').trim()}\n\`\`\`\n\n`,
 });
 
 /** ```drawing — a whiteboard scene as JSON. No prose inside, so a fence loses nothing. */
@@ -69,7 +70,7 @@ turndown.addRule('knDrawing', {
   filter: (node) => (node as HTMLElement).hasAttribute?.(KN.drawing),
   replacement: (_content, node) => {
     const scene = attr(node, 'data-scene') || (node.textContent ?? '').trim();
-    return `\n\n\`\`\`drawing\n${scene}\n\`\`\`\n\n`;
+    return `\n\n\`\`\`${diagramInfo('drawing', diagramLayoutOf(node as HTMLElement))}\n${scene}\n\`\`\`\n\n`;
   },
 });
 

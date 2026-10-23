@@ -340,6 +340,11 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Adding a Linear, Zendesk, Intercom or Figma connector no longer asks for a **Destination** (#512).
+  These kinds create no pages, so the project and parent they asked for were never used. The wizard now
+  goes from the connection check straight to **What it does**, which shows what the check reached, and
+  Back from there returns to the connector's last question. The connector is still saved under the
+  current project. Kinds that sync pages keep the step.
 - Leaving **New workflow** no longer brings its old conversation back next time (#473). The wizard
   kept every step in the browser so a reload could resume it, and only Create or Cancel cleared that.
   Now going anywhere else in the app clears it too, and the next visit starts at the first step. A

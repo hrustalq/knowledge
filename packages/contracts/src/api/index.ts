@@ -2,6 +2,7 @@ import type { ApiDocumentKind } from '@knowledge/contracts/core';
 import { normalizeEntityKey } from '@knowledge/contracts/graph';
 import type { ApiSpecDiff, ApiSpecDiffSummary } from '@knowledge/contracts/api/diff';
 import type { CodeSample } from '@knowledge/contracts/api/samples';
+import type { ApiTestCase } from '@knowledge/contracts/api/test-cases';
 
 // ---------------------------------------------------------------------------
 // API reference documents (#78).
@@ -199,6 +200,34 @@ export interface ApiOperationSamplesResponse {
   revisionId: string;
   entityKey: string;
   samples: CodeSample[];
+}
+
+// ---------------------------------------------------------------------------
+// QA test suites (#468)
+// ---------------------------------------------------------------------------
+
+/** How a suite is exported: one curl command per case, or a Postman Collection v2.1. */
+export const API_TEST_SUITE_FORMATS = ['curl', 'postman'] as const;
+export type ApiTestSuiteFormat = (typeof API_TEST_SUITE_FORMATS)[number];
+
+/** GET /v1/api-specs/:documentId/test-suite — one operation's cached suite. */
+export interface ApiTestSuiteResponse {
+  documentId: string;
+  entityKey: string;
+  /** The spec revision the suite was generated from; a later one that left the operation alone shares it. */
+  revisionId: string;
+  generatedAt: string;
+  generatedBy: string;
+  catalogueVersion: number;
+  cases: ApiTestCase[];
+}
+
+/** POST /v1/api-specs/:documentId/test-suite — the cached suite, or the `tester` run filling it. */
+export interface GenerateApiTestSuiteResponse {
+  suite: ApiTestSuiteResponse | null;
+  runId: string | null;
+  /** True when a run for the same operation and config was already in flight, and that run is returned. */
+  existing: boolean;
 }
 
 /**

@@ -68,19 +68,24 @@ export class WorkspacesController {
   @Post(':id/members')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Add (or re-role) a member by email (workspace admin)' })
-  addMember(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddMemberDto): Promise<ListWorkspaceMembersResponse> {
-    return this.workspaces.addMember(id, dto);
+  addMember(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddMemberDto,
+  ): Promise<ListWorkspaceMembersResponse> {
+    return this.workspaces.addMember(id, dto, principal.userId);
   }
 
   @Patch(':id/members/:userId')
   @Access('admin', 'workspace')
-  @ApiOperation({ summary: 'Change a member role / trusted-operator flag (workspace admin)' })
+  @ApiOperation({ summary: 'Change a member role / trusted-operator flag / capabilities (workspace admin)' })
   updateMember(
+    @CurrentPrincipal() principal: Principal,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('userId', ParseUUIDPipe) userId: string,
     @Body() dto: UpdateMemberDto,
   ): Promise<ListWorkspaceMembersResponse> {
-    return this.workspaces.updateMember(id, userId, dto);
+    return this.workspaces.updateMember(id, userId, dto, principal.userId);
   }
 
   @Delete(':id/members/:userId')

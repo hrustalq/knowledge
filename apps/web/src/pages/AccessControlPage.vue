@@ -86,7 +86,20 @@ const members = ref<WorkspaceMemberEntry[]>([])
 const loadingMembers = ref(false)
 
 const addRole = ref<WorkspaceRole>('viewer')
+const addTestSuites = ref(false)
 const addOpen = ref(false)
+
+/**
+ * The one member capability so far (#468). Admins hold it implicitly, so
+ * their cell says so rather than offering a box that would change nothing.
+ * ponytail: one column for one capability; a multi-select when the catalogue grows.
+ */
+const TEST_SUITES = 'api-test-suites.generate' as const
+const holdsTestSuites = (m: WorkspaceMemberEntry) => m.capabilities.includes(TEST_SUITES)
+function setTestSuites(member: WorkspaceMemberEntry, on: boolean) {
+  const rest = member.capabilities.filter((c) => c !== TEST_SUITES)
+  void patchMember(member, { capabilities: on ? [...rest, TEST_SUITES] : rest })
+}
 
 // --- filters ---------------------------------------------------------------
 // The roster for one workspace is small and already loaded, so every field
@@ -248,11 +261,12 @@ async function addMember() {
   try {
     const res = await apiFetch<ListWorkspaceMembersResponse>(`/v1/workspaces/${selected.value}/members`, {
       method: 'POST',
-      body: JSON.stringify({ email: user.email, role: addRole.value }),
+      body: JSON.stringify({ email: user.email, role: addRole.value, capabilities: addTestSuites.value ? [TEST_SUITES] : [] }),
     })
     members.value = res.members
     toast.success(t('access.memberAdded', { email: user.email, role: t(`role.${addRole.value}`) }))
     addOpen.value = false
+    addTestSuites.value = false
     pickedUser.value = null
     candidateCache.delete(user.userId) // now a member — no longer a candidate
   } catch (e) {
@@ -379,6 +393,7 @@ const tab = usePageTabs(tabs, 'members')
             <TableHead>{{ t('access.member') }}</TableHead>
             <TableHead>{{ t('access.role') }}</TableHead>
             <TableHead>{{ t('access.trustedOperator') }}</TableHead>
+            <TableHead>{{ t('access.testSuites') }}</TableHead>
             <TableHead class="text-right">{{ t('access.actions') }}</TableHead>
           </TableRow>
         </TableHeader>
@@ -422,6 +437,17 @@ const tab = usePageTabs(tabs, 'members')
                 @update:model-value="patchMember(member, { trustedOperator: $event === true })"
               />
               <span v-else class="text-muted-foreground text-sm">{{ member.trustedOperator ? t('common.yes') : t('common.no') }}</span>
+            </TableCell>
+            <TableCell>
+              <span v-if="member.role === 'admin'" class="text-muted-foreground text-sm">{{ t('access.implicitForAdmins') }}</span>
+              <!-- Any row, managed or not: no identity provider writes capabilities, so editing one takes nothing over. -->
+              <Checkbox
+                v-else-if="canManage"
+                :model-value="holdsTestSuites(member)"
+                :aria-label="t('access.testSuitesFor', { name: member.displayName })"
+                @update:model-value="setTestSuites(member, $event === true)"
+              />
+              <span v-else class="text-muted-foreground text-sm">{{ holdsTestSuites(member) ? t('common.yes') : t('common.no') }}</span>
             </TableCell>
             <TableCell class="text-right">
               <div v-if="canManage" class="flex justify-end gap-1.5">
@@ -496,6 +522,13 @@ const tab = usePageTabs(tabs, 'members')
                 <SelectItem v-for="r in ROLES" :key="r" :value="r">{{ r }}</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div class="flex items-start gap-2.5">
+            <Checkbox id="add-test-suites" v-model="addTestSuites" class="mt-0.5" />
+            <Label for="add-test-suites" class="grid gap-0.5 font-normal">
+              <span class="text-sm">{{ t('access.testSuitesGrant') }}</span>
+              <span class="text-muted-foreground text-xs">{{ t('access.testSuitesHint') }}</span>
+            </Label>
           </div>
         </form>
         <DialogFooter>

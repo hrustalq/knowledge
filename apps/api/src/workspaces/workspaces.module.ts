@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { WorkspacesController } from './workspaces.controller.js';
 import { WorkspacesService } from './workspaces.service.js';
@@ -8,7 +9,7 @@ import { WorkspacesService } from './workspaces.service.js';
  * out of worker and MCP contexts (same rationale as GraphQueryModule).
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthCoreModule],
   controllers: [WorkspacesController],
   providers: [WorkspacesService],
 })

@@ -85,6 +85,8 @@ because that resource is keyed by an autoincrementing integer
 (`WORKSPACE_ROLES` in contracts), plus a separate **`trusted_operator`** flag
 that is not a role — it gates the raw graph query and nothing else.
 
+Beside both sit **member capabilities** (#468), below.
+
 **`guest`** (issue #76) sits below the ladder at `ROLE_ORDER.guest = -1`, so
 every `@Access('viewer', …)` route refuses one with no special case. A guest
 reads only what is granted to them or their groups (see _Page restrictions_
@@ -361,6 +363,34 @@ the graph an arbitrary question. It is fenced on five sides:
    The row carries `aclBypass: true`: the query reads the stores past every page
    restriction, as only an admin operator may.
 
+## Member capabilities
+
+`workspace_members.capabilities` is a JSON array of grained permissions,
+checked against the closed `MEMBER_CAPABILITIES` catalogue in
+`@knowledge/contracts/identity`. Its one value so far is
+`api-test-suites.generate` ([52](../features/52-api-reference.md#test-suites-468)).
+Like `trusted_operator` it is independent of role — a viewer may hold one and
+an editor may not — and unlike it, it comes from a catalogue, so the next one
+is a constant, not a column.
+
+- **One predicate.** `hasCapability(member, capability, platformAdmin)`:
+  platform admins and workspace admins hold every capability implicitly,
+  everyone else what their row lists; a value outside the catalogue is dropped
+  on read (`memberCapabilitiesOf`). The guard, a background run and the web
+  (`auth.can()`) all read it.
+- **On a route** it is `@Access(role, source, { capability })`, checked in
+  `requireRole` after the role and the operator flag. A guest is always sent
+  through `requireRole` when a capability is named, so page grants cannot stand
+  in for it. A run that needs one re-checks it when it executes
+  (`requireRole(…, { capability })`), so revoking it between the click and the
+  run fails the run.
+- **Set by hand only.** `POST`/`PATCH /v1/workspaces/:id/members` accept
+  `capabilities` (the whole list), and each change writes one
+  `member.capabilities_changed` audit row with what was granted and revoked.
+  SSO role sync and SCIM never write the column, so editing capabilities alone
+  on an IdP-managed row needs no `convertToManual`. Existing members were not
+  backfilled.
+
 ## WebSockets are a separate door
 
 `APP_GUARD`s do not run on a WebSocket upgrade. `TokenAuthService` — extracted
@@ -430,7 +460,7 @@ POST /v1/auth/change-password                                     authenticated
 GET  /v1/me   PATCH /v1/me                                        self
 GET/POST/PATCH /v1/users                                          @PlatformAdmin()
 GET/POST /v1/workspaces                                           creator → admin+operator
-*    /v1/workspaces/:id/members                                   @Access(viewer|admin, 'workspace')
+*    /v1/workspaces/:id/members                                   @Access(viewer|admin, 'workspace'); writes audit capabilities
 GET  /v1/groups?workspaceId=   POST /v1/groups                    @Access(viewer, 'query') | (admin, 'body')
 PATCH|DELETE /v1/groups/:id   PUT /v1/groups/:id/members          @Access(admin, 'group')
 GET  /v1/groups/:id/members                                       @Access(viewer, 'group')

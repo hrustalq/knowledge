@@ -746,7 +746,7 @@ export interface paths {
         delete: operations["WorkspacesController_removeMember"];
         options?: never;
         head?: never;
-        /** Change a member role / trusted-operator flag (workspace admin) */
+        /** Change a member role / trusted-operator flag / capabilities (workspace admin) */
         patch: operations["WorkspacesController_updateMember"];
         trace?: never;
     };
@@ -4510,6 +4510,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/api-specs/{id}/test-suite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One operation's cached QA test suite (#468), for the operation as it stands at the head. 404 until one is generated, and again after an edit to the operation. format=curl|postman answers with the suite as a file */
+        get: operations["ApiSpecsController_testSuite"];
+        put?: never;
+        /** Generate one operation's QA test suite (#468): the cached suite when there is one and regenerate is not set, otherwise a queued tester run (one per operation and config in flight). Needs the api-test-suites.generate capability */
+        post: operations["ApiSpecsController_generateTestSuite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/api-specs/{id}/try": {
         parameters: {
             query?: never;
@@ -6818,11 +6836,15 @@ export interface components {
              * @default false
              */
             trustedOperator: boolean;
+            /** @description Grained permissions beside the role (#468). Replaces the list; admins hold every one implicitly. */
+            capabilities?: "api-test-suites.generate"[];
         };
         UpdateMemberDto: {
             /** @enum {string} */
             role?: "guest" | "viewer" | "editor" | "admin";
             trustedOperator?: boolean;
+            /** @description Grained permissions beside the role (#468). Replaces the list; admins hold every one implicitly. */
+            capabilities?: "api-test-suites.generate"[];
             /** @description Take an IdP-managed row (source jit/group/scim) over as manual. Without it such a row answers 409 managedByIdp. */
             convertToManual?: boolean;
         };
@@ -8351,6 +8373,12 @@ export interface components {
             projectId?: string;
             /** @description The page to nest it under */
             parentId?: string;
+        };
+        GenerateApiTestSuiteDto: {
+            /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+            entityKey: string;
+            /** @description Replace the cached suite instead of returning it. Absent means false. */
+            regenerate?: boolean;
         };
         ApiTryHeaderDto: {
             name: string;
@@ -23589,6 +23617,96 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_testSuite: {
+        parameters: {
+            query: {
+                /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+                entityKey: string;
+                /** @description Answer with a file instead of JSON: one curl command per case, or a Postman Collection v2.1 */
+                format?: "curl" | "postman";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The suite as JSON; with format, a file to download */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_generateTestSuite: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateApiTestSuiteDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {

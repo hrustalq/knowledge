@@ -1,10 +1,12 @@
 // Auth store: resolves /v1/me once per app instance (per SSR request / per
 // client load), owns the session token, and drives router guards + nav state.
 import { defineStore } from 'pinia'
+import { hasCapability } from '@knowledge/contracts'
 import type {
   AuthMethod,
   AuthSessionResponse,
   Locale,
+  MemberCapability,
   MeResponse,
   SsoDiscoverResponse,
   SsoExchangeResponse,
@@ -53,6 +55,17 @@ export const useAuthStore = defineStore('auth', {
     },
     canAdminWorkspace(): boolean {
       return this.role === 'admin'
+    },
+    /**
+     * A member capability (#468) in the active workspace, through the same
+     * predicate the API guard reads: workspace and platform admins hold all.
+     */
+    can(): (capability: MemberCapability) => boolean {
+      const me = this.me
+      if (!me) return () => false
+      if (me.mode === 'dev') return () => true
+      const membership = me.memberships.find((m) => m.workspaceId === getWorkspaceId()) ?? null
+      return (capability) => hasCapability(membership, capability, me.isAdmin)
     },
   },
   actions: {

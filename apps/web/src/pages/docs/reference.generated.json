@@ -991,6 +991,26 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/api-specs/{id}/test-suite",
+      "tag": "api-specs",
+      "summary": "One operation's cached QA test suite (#468), for the operation as it stands at the head. 404 until one is generated, and again after an edit to the operation. format=curl|postman answers with the suite as a file",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/api-specs/{id}/test-suite",
+      "tag": "api-specs",
+      "summary": "Generate one operation's QA test suite (#468): the cached suite when there is one and regenerate is not set, otherwise a queued tester run (one per operation and config in flight). Needs the api-test-suites.generate capability",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/api-specs/{id}/try",
       "tag": "api-specs",
@@ -4884,7 +4904,7 @@
       "method": "PATCH",
       "path": "/v1/workspaces/{id}/members/{userId}",
       "tag": "workspaces",
-      "summary": "Change a member role / trusted-operator flag (workspace admin)",
+      "summary": "Change a member role / trusted-operator flag / capabilities (workspace admin)",
       "role": "admin",
       "source": "workspace",
       "public": false,

@@ -1,12 +1,15 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  memberCapabilitiesOf,
   membershipSourceOf,
+  type MemberCapability,
   type CreateWorkspaceResponse,
   type ListWorkspaceCandidatesResponse,
   type ListWorkspaceMembersResponse,
   type ListWorkspacesResponse,
   type WorkspaceRole,
 } from '@knowledge/contracts';
+import { AuditService } from '../auth/audit.service.js';
 import type { Principal } from '../auth/principal.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
@@ -22,7 +25,10 @@ import { removeMemberGuarded, setRoleGuarded } from './membership-guards.js';
  */
 @Injectable()
 export class WorkspacesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async list(principal: Principal): Promise<ListWorkspacesResponse> {
     const seesAll = principal.mode === 'dev' || principal.isAdmin;
@@ -78,6 +84,7 @@ export class WorkspacesService {
         avatarUrl: userAvatarUrl(m.user),
         role: m.role as WorkspaceRole,
         trustedOperator: m.trustedOperator,
+        capabilities: memberCapabilitiesOf(m.capabilities),
         source: membershipSourceOf(m.source),
         disabled: m.user.disabledAt !== null,
         createdAt: m.createdAt.toISOString(),
@@ -127,7 +134,7 @@ export class WorkspacesService {
     };
   }
 
-  async addMember(workspaceId: string, dto: AddMemberDto): Promise<ListWorkspaceMembersResponse> {
+  async addMember(workspaceId: string, dto: AddMemberDto, actorId: string): Promise<ListWorkspaceMembersResponse> {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email.trim().toLowerCase() } });
     if (!user) throw new NotFoundException(t('error.workspace.noUserWithEmail'));
     const existing = await this.prisma.workspaceMember.findUnique({
@@ -135,21 +142,39 @@ export class WorkspacesService {
     });
     // Re-adding a member is a role change, and gets the same guards: the last
     // admin is not demoted, and an IdP-managed row is not silently taken over.
-    if (existing) return this.updateMember(workspaceId, user.id, { role: dto.role, trustedOperator: dto.trustedOperator ?? false });
-    await this.prisma.workspaceMember.createMany({
-      data: [{ workspaceId, userId: user.id, role: dto.role, trustedOperator: dto.trustedOperator ?? false }],
+    if (existing) {
+      return this.updateMember(
+        workspaceId,
+        user.id,
+        { role: dto.role, trustedOperator: dto.trustedOperator ?? false, capabilities: dto.capabilities },
+        actorId,
+      );
+    }
+    const capabilities = memberCapabilitiesOf(dto.capabilities);
+    const created = await this.prisma.workspaceMember.createMany({
+      data: [{ workspaceId, userId: user.id, role: dto.role, trustedOperator: dto.trustedOperator ?? false, capabilities }],
       skipDuplicates: true,
     });
+    if (created.count === 1) this.recordCapabilities(workspaceId, user.id, actorId, [], capabilities);
     return this.listMembers(workspaceId);
   }
 
-  async updateMember(workspaceId: string, userId: string, dto: UpdateMemberDto): Promise<ListWorkspaceMembersResponse> {
+  async updateMember(
+    workspaceId: string,
+    userId: string,
+    dto: UpdateMemberDto,
+    actorId: string,
+  ): Promise<ListWorkspaceMembersResponse> {
     const member = await this.requireMember(workspaceId, userId);
+    const capabilitiesBefore = memberCapabilitiesOf(member.capabilities);
     // A row JIT, group sync or SCIM wrote is theirs (#75): a hand edit would be
     // undone at the next sign-in. Taking it over is an explicit act. Read
     // through membershipSourceOf, as the member list is: what shows as manual edits as manual.
+    // Capabilities are the exception (#468): no IdP writes them, so editing
+    // them alone fights nothing and needs no takeover.
     const source = membershipSourceOf(member.source);
-    if (source !== 'manual' && !dto.convertToManual) {
+    const touchesSynced = dto.role !== undefined || dto.trustedOperator !== undefined;
+    if (source !== 'manual' && touchesSynced && !dto.convertToManual) {
       throw new ConflictException({
         statusCode: 409,
         message: t('error.workspace.managedByIdp', { source }),
@@ -163,10 +188,35 @@ export class WorkspacesService {
       where: { workspaceId_userId: { workspaceId, userId } },
       data: {
         ...(dto.trustedOperator !== undefined ? { trustedOperator: dto.trustedOperator } : {}),
+        ...(dto.capabilities !== undefined ? { capabilities: memberCapabilitiesOf(dto.capabilities) } : {}),
         ...(dto.convertToManual ? { source: 'manual' } : {}),
       },
     });
+    if (dto.capabilities !== undefined) {
+      this.recordCapabilities(workspaceId, userId, actorId, capabilitiesBefore, memberCapabilitiesOf(dto.capabilities));
+    }
     return this.listMembers(workspaceId);
+  }
+
+  /** One audit row per capability change (#468), naming what was granted and revoked. A no-op writes nothing. */
+  private recordCapabilities(
+    workspaceId: string,
+    userId: string,
+    actor: string,
+    before: MemberCapability[],
+    after: MemberCapability[],
+  ): void {
+    const granted = after.filter((c) => !before.includes(c));
+    const revoked = before.filter((c) => !after.includes(c));
+    if (granted.length === 0 && revoked.length === 0) return;
+    void this.audit.record({
+      workspaceId,
+      actor,
+      action: 'member.capabilities_changed',
+      params: { granted, revoked },
+      target: userId,
+      ok: true,
+    });
   }
 
   /**

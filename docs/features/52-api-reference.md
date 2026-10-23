@@ -266,14 +266,66 @@ file that imports one, which keeps `axios.get('/users')` out), FastAPI
 gorilla, chi, gin, echo and fiber. Tests, fixtures, examples and vendored code
 are not read. A non-literal path is counted as `dynamic`, never guessed.
 
+## Test suites (#468)
+
+Every HTTP operation card has a quick-action menu (the flask beside the lock)
+whose first item is **Generate test requests**. It writes a QA suite for the
+operation: positive and negative cases, each with a name, the rule it covers,
+the request and the expected status and body, exported as **cURL** (one
+command per case) or a **Postman Collection v2.1** (one folder, one request per
+case, the status as a `pm.test`).
+
+**Coverage is the spec's, not the model's.** `testCasesFor` in
+`@knowledge/contracts/api/test-cases` lists the cases an operation requires —
+a positive case per documented 2xx; a negative case per required query or
+header parameter, per required body field and for the whole body when it is
+required; per type violation; per enum value outside the set; both sides of
+every `minimum`/`maximum` (and their exclusive forms), `minLength`/`maxLength`
+and `pattern`; missing credentials when the operation is secured; and one per
+documented 4xx/5xx. A query or header value is text on the wire, so only a
+non-string type is "wrong" there. Path parameters get no missing case (that is
+another route), cookie parameters none at all (samples never send them), body
+fields are walked three levels deep through objects (not into arrays), and a
+form body's fields are not walked.
+
+The `tester` agent ([20](20-agents.md)) only fills: a realistic baseline
+request and, per case id, a name, a sentence and what to check. A baseline
+value that breaks the schema (`conformsToSchema`, the same rules the catalogue
+covers) is dropped for the spec's own example. `buildTestSuite` then builds
+every listed case from the baseline by the same `SampleRequest` model the code
+samples print, so a sample and a case cannot disagree, and names any case the
+model skipped. A `pattern:match` case needs a value that matches; when neither
+the spec's example nor the model supplies one the run fails rather than store
+a suite with a case that does not test what it says.
+
+**Cached, keyed by what the suite is built from.** `api_test_suites` is unique
+on spec document, entity key, `operationHash` (SHA-256 of
+`operationFingerprint`: the operation, its path-level parameters, every `$ref`
+it reaches, servers and security), `TEST_CASE_CATALOGUE_VERSION` and
+`agentHash` (`testerConfigHash`: instructions, skill ids, provider and model).
+A revision that does not touch the operation keeps the suite; one that does,
+or an admin override of the tester, misses, and the next Generate asks the
+model. Generate on a hit makes no model call and writes no `ai_usage` row.
+**Regenerate** overwrites the row under its key. The card shows when the suite
+was generated and from which revision.
+
+**Who may generate.** Reading and exporting a cached suite needs viewer on the
+spec. Generating needs viewer **and** the member capability
+`api-test-suites.generate` ([06](../architecture/06-auth-acl.md#member-capabilities)),
+checked by the route's guard and again by the run when it executes — revoking
+it after the click fails the run before any model call. A second Generate
+while a run for the same key is waiting joins it: the lookup and insert run
+under one advisory lock per key. The model call is billed to the person as
+`test-suite`.
+
 ## Surface
 
 | What | Where |
 | --- | --- |
-| Tables | `documents.kind`, `documents.spec_slug`, `api_operations`, `workspace_settings`, `merge_requests.breaking_ack_*` |
-| Vocabulary | `@knowledge/contracts/api` (`API_DOCUMENT_KINDS`, keys, `API_TRY_PROXY_MODES`, `API_BREAKING_CHANGE_POLICIES`, `API_DRIFT_KINDS`), `…/api/diff` (`API_CHANGE_RULES`), `…/api/samples` (`CODE_SAMPLE_LANGS`, generator) |
+| Tables | `documents.kind`, `documents.spec_slug`, `api_operations`, `workspace_settings`, `merge_requests.breaking_ack_*`, `api_test_suites` |
+| Vocabulary | `@knowledge/contracts/api` (`API_DOCUMENT_KINDS`, keys, `API_TRY_PROXY_MODES`, `API_BREAKING_CHANGE_POLICIES`, `API_DRIFT_KINDS`), `…/api/diff` (`API_CHANGE_RULES`), `…/api/samples` (`CODE_SAMPLE_LANGS`, generator), `…/api/test-cases` (`testCasesFor`, `buildTestSuite`, `testSuiteCurl`, `testSuitePostman`, `operationFingerprint`) |
 | Parse, project, read, diff | `api-spec.parser.ts` (`parseApiSpec`), `api-spec.projection.ts` (`renderSpecProjection`, `renderOperation`), `api-diff.ts` (`diffApiSpecs`), pure; `ApiSpecsService` (`project`), `ApiSpecReadService`, `ApiSpecDiffService` in `ApiSpecsCoreModule` (both processes) |
-| Controllers, try-it, settings, drift check | `ApiSpecsController`, `ApiOperationsController`, `ApiSettingsController`, `ApiTryService`, `ApiSettingsService`, `ApiDriftCheckService`, in `ApiSpecsModule` (API-only) |
+| Controllers, try-it, settings, drift check, test suites | `ApiSpecsController`, `ApiOperationsController`, `ApiSettingsController`, `ApiTryService`, `ApiSettingsService`, `ApiDriftCheckService`, `ApiTestSuiteRequestsService`, in `ApiSpecsModule` (API-only); `ApiTestSuitesService` (the store) in `ApiSpecsCoreModule`; the `tester` run in `AgentExecutor.writeTestSuite` |
 | Ingestion | `IngestionProcessor` step 2 (spec branch) and 7a (`GraphService.replaceRevisionSpecFacts`) |
 | Gate | `MergeRequestsService` (`breakingBlocks`, `assertBreakingAcknowledged`, `setBreakingAck`) |
 | Sync | `adapters/repo-specs.ts`, `apiSpecGlobs`, conflict reason `spec-changed` |
@@ -289,13 +341,15 @@ are not read. A non-literal path is counted as `dynamic`, never guessed.
 | `GET /v1/api-specs/:id/diff?from=&to=` | viewer, document |
 | `POST /v1/api-specs/:id/try` | editor, document; 403 when the mode is `off` |
 | `POST /v1/api-specs/:id/drift-check` | editor, document; `202 { runId, existing }` |
+| `GET /v1/api-specs/:id/test-suite?entityKey=&format=` | viewer, document; the cached suite or 404; `format=curl\|postman` answers with a file |
+| `POST /v1/api-specs/:id/test-suite` `{ entityKey, regenerate? }` | viewer, document, capability `api-test-suites.generate`; `{ suite }` from the cache or `{ runId, existing }` |
 | `GET /v1/api-operations?workspaceId=&q=&documentId=&entityKey=` | viewer, query, guests; operations at each spec's default-branch head |
 | `GET` / `PATCH /v1/workspaces/:id/api-settings` | viewer / admin, workspace |
 | `GET /v1/documents/:id/compare` | unchanged; gains `api` on a spec |
 | `GET /v1/merge-requests/:id/api-changes` | viewer, merge request |
 | `POST` / `DELETE /v1/merge-requests/:id/breaking-ack` | admin, merge request |
 
-The samples route takes `entityKey` as a query parameter, not a path segment,
+The samples and test-suite routes take `entityKey` as a query parameter (or body field), not a path segment,
 because a key holds `/` and `:`. A page passed to a per-document route is a 400
 `error.apiSpec.notSpec`.
 
@@ -310,7 +364,7 @@ None of them is in `WRITE_TOOLS`, and there is no try-it tool.
 
 Web: `components/api-reference/` (`ApiReferenceView`, `ApiOperationDetail`,
 `ApiSchemaTree`, `ApiCodeSamples`, `ApiTryConsole`, `ApiChangesPanel`,
-`ApiDriftCheck`, `ApiOperationPicker`, `ApiOperationEmbed`, and the shared
+`ApiDriftCheck`, `ApiTestSuite` with `use-test-suite.ts`, `ApiOperationPicker`, `ApiOperationEmbed`, and the shared
 `ApiTabs`, `ApiCode`, `ApiTone`, `ApiMediaContent`), `pages/ApiSpecEditorPage.vue`
 (`/create/spec`, `/documents/:id/spec`), `pages/ApiSettingsPage.vue`
 (`/settings/api`), and the **API changes** tab on `MergeRequestDetailPage`,
@@ -329,6 +383,9 @@ shown only when the merge request is on a spec. In the graph view, `op:` and
   `API_TRY_ALLOW_PRIVATE_URLS` (`false`), `API_TRY_TIMEOUT_MS` (15000),
   `API_TRY_MAX_RESPONSE_BYTES` (1000000), `API_TRY_RATE_PER_MINUTE` (30). With
   the defaults the proxy refuses every request.
+- Migration `20261204100000_api_test_suites` (#468) adds
+  `workspace_members.capabilities` (JSONB, default `[]`, not backfilled) and
+  `api_test_suites`. Additive; the previous image reads neither.
 
 ## Deliberate deferrals
 
@@ -342,8 +399,12 @@ shown only when the merge request is on a spec. In the graph view, `op:` and
   one bundled file.
 - An automatic `EntityAlias` when a title changes. The pinned slug makes it
   unnecessary.
-- Try-it and drift for AsyncAPI: a channel has no HTTP request to send and no
-  route to compare.
+- Try-it, drift and test suites for AsyncAPI: a channel has no HTTP request to
+  send, no route to compare and nothing to test.
+- For test suites (#468): a mock server, running the cases or asserting live
+  responses, a suite for a whole spec at once, other export formats (Insomnia,
+  HTTPie, k6) and an MCP tool. Suites under a key no head reaches any more are
+  never purged; a document's deletion cascades them.
 - An `operationKey` picker on the workflow canvas; items get keys from the
   fan-out step only.
 - The static markdown renderer (published sites, previews) draws API blocks as

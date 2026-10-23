@@ -11,6 +11,7 @@ import { ApiDriftCheckService } from './api-drift-check.service.js';
 import { ApiSettingsService } from './api-settings.service.js';
 import { ApiOperationsController, ApiSettingsController, ApiSpecsController } from './api-specs.controller.js';
 import { ApiSpecsCoreModule } from './api-specs-core.module.js';
+import { ApiTestSuiteRequestsService } from './api-test-suite-requests.service.js';
 import { ApiTryService } from './api-try.service.js';
 
 /**
@@ -23,7 +24,7 @@ import { ApiTryService } from './api-try.service.js';
 @Module({
   imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, ApiSpecsCoreModule, AiCoreModule, AgentCoreModule, AgentQueueModule],
   controllers: [ApiSpecsController, ApiOperationsController, ApiSettingsController],
-  providers: [ApiSettingsService, ApiTryService, ApiDriftCheckService, PublicStore, PublicRateLimiter],
+  providers: [ApiSettingsService, ApiTryService, ApiDriftCheckService, ApiTestSuiteRequestsService, PublicStore, PublicRateLimiter],
   exports: [ApiSpecsCoreModule],
 })
 export class ApiSpecsModule {}

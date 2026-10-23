@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -15,9 +16,11 @@ import {
 } from 'class-validator';
 import {
   API_BREAKING_CHANGE_POLICIES,
+  API_TEST_SUITE_FORMATS,
   API_TRY_PROXY_MODES,
   CODE_SAMPLE_LANGS,
   type ApiBreakingChangePolicy,
+  type ApiTestSuiteFormat,
   type ApiTryProxyMode,
   type CodeSampleLang,
 } from '@knowledge/contracts';
@@ -169,4 +172,31 @@ export class ApiSpecDiffQueryDto {
   @IsOptional()
   @IsUUID()
   to?: string;
+}
+
+export class ApiTestSuiteQueryDto {
+  @ApiProperty({ description: 'The operation, as its row names it (op:billing-api:post-/invoices)' })
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey!: string;
+
+  @ApiPropertyOptional({
+    enum: API_TEST_SUITE_FORMATS,
+    description: 'Answer with a file instead of JSON: one curl command per case, or a Postman Collection v2.1',
+  })
+  @IsOptional()
+  @IsIn(API_TEST_SUITE_FORMATS)
+  format?: ApiTestSuiteFormat;
+}
+
+export class GenerateApiTestSuiteDto {
+  @ApiProperty({ description: 'The operation, as its row names it (op:billing-api:post-/invoices)' })
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey!: string;
+
+  @ApiPropertyOptional({ description: 'Replace the cached suite instead of returning it. Absent means false.' })
+  @IsOptional()
+  @IsBoolean()
+  regenerate?: boolean;
 }

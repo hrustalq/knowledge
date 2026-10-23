@@ -12,6 +12,7 @@
     "./api": "./src/api/index.ts",
     "./api/samples": "./src/api/samples.ts",
     "./api/diff": "./src/api/diff.ts",
+    "./api/test-cases": "./src/api/test-cases.ts",
     "./identity": "./src/identity/index.ts",
     "./notifications": "./src/notifications/index.ts",
     "./ai": "./src/ai/index.ts",

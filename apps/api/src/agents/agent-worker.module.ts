@@ -4,6 +4,7 @@ import { GraphModule } from '../graph/graph.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { EventsSubscriberModule } from '../events/events-subscriber.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
+import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
@@ -85,6 +86,8 @@ import { AgentTriggerListener } from './agent-trigger.listener.js';
     ConflictsCoreModule,
     // The scribe reads the ticket it answers through its tracker (#433).
     ConnectorWorkItemsModule,
+    // The tester reads the spec and writes the suite it fills (#468).
+    ApiSpecsCoreModule,
     // The surveyor (docs/features/38, phase 4) embeds the questions answers
     // failed on, to cluster them — the same provider the ingestion worker
     // indexes with, so a question and the chunk that would answer it share a

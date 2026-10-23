@@ -15,11 +15,48 @@ import type { FactExtractor } from '@knowledge/contracts/graph';
 export const WORKSPACE_ROLES = ['guest', 'viewer', 'editor', 'admin'] as const;
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
+/**
+ * Grained permissions a member holds beside their role (#468), stored in
+ * `workspace_members.capabilities`. Closed: the API guard, the agent run and
+ * the web all read {@link hasCapability}, and a value outside this list is
+ * dropped on read. Like `trustedOperator`, independent of role — a viewer may
+ * hold one and an editor may not — and set by hand only: SSO role sync and
+ * SCIM never write it.
+ */
+export const MEMBER_CAPABILITIES = [
+  /** Generate and regenerate an operation's QA test suite (spends the AI budget). */
+  'api-test-suites.generate',
+] as const;
+export type MemberCapability = (typeof MEMBER_CAPABILITIES)[number];
+
+/** The catalogue's values in a stored column, deduplicated; anything else is dropped. */
+export function memberCapabilitiesOf(stored: unknown): MemberCapability[] {
+  return Array.isArray(stored)
+    ? MEMBER_CAPABILITIES.filter((c) => stored.includes(c))
+    : [];
+}
+
+/**
+ * The one predicate (#468). Workspace admins and platform admins hold every
+ * capability implicitly; everyone else holds what their row lists.
+ */
+export function hasCapability(
+  member: { role: string; capabilities: unknown } | null | undefined,
+  capability: MemberCapability,
+  platformAdmin = false,
+): boolean {
+  if (platformAdmin) return true;
+  if (!member) return false;
+  return member.role === 'admin' || memberCapabilitiesOf(member.capabilities).includes(capability);
+}
+
 export interface WorkspaceMembership {
   workspaceId: string;
   role: WorkspaceRole;
   /** Gate for POST /v1/graph/query / knowledge.query_graph (plan.md section 9). */
   trustedOperator: boolean;
+  /** Granted by hand, beside the role (#468). Admins hold every one without it being listed. */
+  capabilities: MemberCapability[];
   /** Who manages the row (#75): a person by hand, or an identity provider. */
   source: MembershipSource;
 }
@@ -101,6 +138,8 @@ export const AUDIT_ACTIONS = [
   'chat.listen_disabled',
   'chat.auto_harvest_enabled',
   'chat.auto_harvest_disabled',
+  /** A member's capabilities changed (#468): `params` lists what was granted and revoked. */
+  'member.capabilities_changed',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -1144,6 +1183,8 @@ export interface WorkspaceMemberEntry {
   avatarUrl: AvatarUrl;
   role: WorkspaceRole;
   trustedOperator: boolean;
+  /** Granted by hand (#468); editable on any row, since no IdP manages it. */
+  capabilities: MemberCapability[];
   /** Who manages the row (#75). Only `manual` rows are edited by hand; the rest need `convertToManual`. */
   source: MembershipSource;
   disabled: boolean;

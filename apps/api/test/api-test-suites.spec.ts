@@ -91,7 +91,7 @@ function requests(cached: boolean) {
   const registry = { resolve: vi.fn(async () => agent) };
   const producer = { enqueue: vi.fn(async () => undefined) };
   const usage = { assertWithinBudget: vi.fn(async () => undefined) };
-  const service = new ApiTestSuiteRequestsService(prisma as never, suites as never, {} as never, registry as never, producer as never, usage as never);
+  const service = new ApiTestSuiteRequestsService(prisma as never, suites as never, {} as never, {} as never, registry as never, producer as never, usage as never);
   return { service, runs, producer, usage };
 }
 

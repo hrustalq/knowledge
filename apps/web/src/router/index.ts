@@ -123,6 +123,8 @@ export function createRouter() {
       // verification state, bulk actions and the freshness policy.
 
       { path: '/knowledge-health', component: () => import('@/pages/KnowledgeHealthPage.vue') },
+      // The QA view (#483): operations by suite state, and the fixture library.
+      { path: '/qa', component: () => import('@/pages/QaPage.vue') },
       // Usage analytics (#79). Gated in the page on auth.canAdminWorkspace; the API enforces admin.
       { path: '/analytics', component: () => import('@/pages/AnalyticsPage.vue') },
       // What coding agents proposed from their sessions (issue #73).

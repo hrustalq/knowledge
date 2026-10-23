@@ -94,6 +94,7 @@
     "mergeRequests": "Merge requests",
     "workflows": "Workflows",
     "knowledgeHealth": "Knowledge health",
+    "qa": "QA",
     "analytics": "Analytics",
     "assistant": "Assistant",
     "settings": "Settings",
@@ -4437,6 +4438,73 @@
       "ownerChanged": "Owner updated",
       "archived": "Page archived",
       "unarchived": "Page restored"
+    }
+  },
+  "qa": {
+    "title": "QA",
+    "subtitle": "Which operations are ready to test, and the fixtures that set them up.",
+    "newFixture": "New fixture",
+    "tab": {
+      "operations": "Operations",
+      "fixtures": "Fixtures"
+    },
+    "statusFilter": "Filter by suite state",
+    "all": "All",
+    "showAll": "Show all operations",
+    "status": {
+      "review": "Needs review",
+      "unbound": "Unbound setup",
+      "outdated": "Outdated",
+      "none": "No suite",
+      "ready": "Ready"
+    },
+    "statusHint": {
+      "review": "A bound fixture is archived or calls an operation no spec defines any more.",
+      "unbound": "The spec says this operation needs a value another operation produces, and no fixture is bound to the suite.",
+      "outdated": "A suite exists, but the operation, its bound fixtures or the tester changed since. Regenerate it on the operation.",
+      "none": "No QA suite has been generated for this operation.",
+      "ready": "The suite is current and its setup is bound."
+    },
+    "suite": {
+      "none": "No suite generated",
+      "outdated": "The suite is outdated",
+      "current": "Current suite"
+    },
+    "column": {
+      "operation": "Operation",
+      "status": "State",
+      "cases": "Cases",
+      "setup": "Setup",
+      "fixtures": "Fixtures"
+    },
+    "setup": {
+      "review": "{n} fixture needs review | {n} fixtures need review",
+      "bound": "No suite fixture | {n} fixture | {n} fixtures",
+      "perCase": "{n} per case | {n} per case",
+      "needs": "Needs {n} prerequisite | Needs {n} prerequisites",
+      "none": "None needed"
+    },
+    "deprecated": "deprecated",
+    "fixturesFor": "{n} fixture calls {op} | {n} fixtures call {op}",
+    "specFilter": "Spec",
+    "anySpec": "Any spec",
+    "calls": "Calls",
+    "clearOperation": "Show fixtures for every operation",
+    "clearFilters": "Clear filters",
+    "moreCalls": "and {n} more | and {n} more",
+    "manualOnly": "Manual steps only",
+    "brokenCalls": "{n} broken call | {n} broken calls",
+    "updated": "Updated {when}",
+    "empty": {
+      "noSpecs": "No OpenAPI specs here yet",
+      "noSpecsHint": "Add a spec, then generate a QA suite for each operation from its page.",
+      "addSpec": "Add a spec",
+      "noOperations": "These specs define no HTTP operations yet",
+      "noOperationsHint": "A spec that was just saved is still indexing; its operations appear when it finishes.",
+      "noneWithStatus": "No operations are in “{status}”",
+      "noFixtures": "No test fixtures yet",
+      "noFixturesHint": "A fixture holds the calls a test needs first — log in, create the record — and the teardown after it.",
+      "noFixturesNarrowed": "No fixture matches these filters"
     }
   },
   "health": {

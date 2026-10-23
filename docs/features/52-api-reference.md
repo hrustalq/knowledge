@@ -442,7 +442,33 @@ own spec has a server select in the run form. Results — expected vs actual
 status, outcome, duration, captures with secret-like names masked
 (`isSecretName`) — are never stored.
 
-The server runner and the `/qa` view follow in the later phases of #483.
+### The QA view (#483, phase 4)
+
+`/qa` in the app shell answers "which operations are ready to test" across the
+active project's OpenAPI specs. `GET /v1/qa/overview` (`@Access('viewer',
+'query', { guests: true })`, scope-filtered; `knowledge_qa_overview` is its
+twin) lists every HTTP operation at each spec head with a state derived on read
+by `qaSuiteStatusFor` (contracts), worst first:
+
+| state | means |
+| --- | --- |
+| `review` | a bound fixture is archived, or its head calls an operation no spec head defines (`brokenCallsSql`, the knowledge-health predicate) |
+| `none` | no suite row for the operation |
+| `outdated` | suite rows exist, none under today's cache key |
+| `unbound` | a current suite, prerequisites the spec names (`suitePrerequisites`), no suite-level binding |
+| `ready` | a current suite with its setup bound, or none needed |
+
+"Current" is the panel's own key — operation hash, catalogue version, tester
+hash, bound-fixture hash — so `/qa` and the suite panel never disagree. Nothing
+is stored: one spec read per spec (operation hash and prerequisites), then the
+suite, binding and fixture-call rows. A bound fixture the reader cannot open
+still counts toward `review`, without a title. Each row also counts the
+fixtures the reader may open that call the operation (`countCalling`, the
+library's own predicates), linking to the **Fixtures** tab narrowed to it. The
+library follows the active project unless narrowed to one operation or spec,
+where it crosses projects, as the counts do.
+
+The server runner follows in phase 5 of #483.
 
 ## Surface
 
@@ -473,6 +499,7 @@ The server runner and the `/qa` view follow in the later phases of #483.
 | `POST /v1/api-specs/:id/test-suite` `{ entityKey, regenerate? }` | viewer, document, capability `api-test-suites.generate`; `{ suite }` from the cache or `{ runId, existing }` |
 | `GET /v1/api-specs/:id/test-run-plan?entityKey=` | viewer, document, capability `api-test-suites.run`; the run plan, no values |
 | `POST /v1/api-specs/:id/test-run/send` | viewer, document, capability `api-test-suites.run`; one proxied step, `/try`'s body and answer |
+| `GET /v1/qa/overview?workspaceId=&projectId=&documentId=` | viewer, workspace (guests too), filtered by scope; every HTTP operation's suite state |
 | `GET /v1/api-operations?workspaceId=&q=&documentId=&entityKey=` | viewer, query, guests; operations at each spec's default-branch head |
 | `GET` / `PATCH /v1/workspaces/:id/api-settings` | viewer / admin, workspace |
 | `GET /v1/documents/:id/compare` | unchanged; gains `api` on a spec |
@@ -497,6 +524,7 @@ because a key holds `/` and `:`. A page passed to a per-document route is a 400
 | `knowledge_suggest_test_fixtures` | viewer, document; read tool; prerequisites, candidates and current bindings |
 | `knowledge_set_test_fixtures` (`bindings`) | viewer, document + `api-test-suites.generate`; write tool |
 | `knowledge_get_test_run_plan` | viewer, document + `api-test-suites.run`; read tool; the plan an agent executes with its own HTTP client |
+| `knowledge_qa_overview` (`projectId?`, `documentId?`) | viewer, workspace; read tool; filtered by scope; every operation's suite state, worst first |
 
 Only `knowledge_generate_test_suite` and `knowledge_set_test_fixtures` are in
 `WRITE_TOOLS`, and there is no try-it tool: an agent runs a plan with its own
@@ -507,7 +535,7 @@ Web: `components/api-reference/` (`ApiReferenceView`, `ApiOperationDetail`,
 `ApiDriftCheck`, `ApiTestSuite` with `use-test-suite.ts`, `ApiSuiteSetup` with `use-suite-fixtures.ts` and the runner `ApiTestRun`, `ApiOperationPicker`, `ApiOperationEmbed`, and the shared
 `ApiTabs`, `ApiCode`, `ApiTone`, `ApiMediaContent`), `pages/ApiSpecEditorPage.vue`
 (`/create/spec`, `/documents/:id/spec`), `pages/ApiSettingsPage.vue`
-(`/settings/api`), and the **API changes** tab on `MergeRequestDetailPage`,
+(`/settings/api`), `pages/QaPage.vue` (`/qa`), and the **API changes** tab on `MergeRequestDetailPage`,
 shown only when the merge request is on a spec. In the graph view, `op:` and
 `channel:` entities are squares that open their card in the spec.
 

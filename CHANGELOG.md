@@ -17,6 +17,16 @@ in the pull request that introduces them — see
 
 ### Added
 
+- A **QA** page (#483, phase 4), in the sidebar after Knowledge health. **Operations** lists every
+  HTTP operation in the active project's OpenAPI specs, worst first, with its suite's state: **Needs
+  review** (a bound fixture is archived or calls an operation that no longer exists), **No suite**,
+  **Outdated** (the operation, its fixtures or the tester changed since the suite was generated),
+  **Unbound setup** (the spec says it needs a value another operation produces and no fixture is
+  bound), or **Ready**. A strip at the top counts each state and filters by it. Each row shows the
+  case count, the setup and how many fixtures call the operation, and links to the operation in its
+  spec. **Fixtures** is the fixture library, which can be narrowed to one spec or one operation, with
+  broken calls marked. The page reads what already exists, so the state always matches the
+  operation's own suite panel. Agents get `knowledge_qa_overview`.
 - Run a QA test suite against a real server (#483, phase 3). **Run suite** in an operation's **Test
   requests** section runs the suite's setup once, every case (negative ones first, each with its own
   setup and teardown), then teardown, which also runs after a failure or **Stop**. Requests go from

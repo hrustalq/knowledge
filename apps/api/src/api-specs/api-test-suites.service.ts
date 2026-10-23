@@ -63,16 +63,29 @@ export class ApiTestSuitesService {
       orderBy: { createdAt: 'asc' },
     });
     if (!op) throw new NotFoundException(t('error.apiTry.operationNotInSpec', { method: '', entityKey: key }));
-    const operationHash = createHash('sha256').update(operationFingerprint(spec.document, op)).digest('hex');
     const bindings = await this.bindingsOf(op.documentId, op.entityKey);
-    return { spec, op, operationHash, bindings, fixturesHash: fixturesHash(bindings) };
+    return { spec, op, operationHash: operationHash(spec.document, op), bindings, fixturesHash: fixturesHash(bindings) };
   }
 
   /** The fixtures bound to one operation's suite, in run order. A binding outlives Regenerate and spec edits. */
   async bindingsOf(documentId: string, entityKey: string): Promise<SuiteBinding[]> {
+    return this.bindingsWhere({ documentId, entityKey: normalizeEntityKey(entityKey) });
+  }
+
+  /** Every suite's bindings across these specs (the QA overview), keyed by `suiteId`, each list in run order. */
+  async bindingsOfSpecs(documentIds: string[]): Promise<Map<string, SuiteBinding[]>> {
+    const out = new Map<string, SuiteBinding[]>();
+    for (const b of await this.bindingsWhere({ documentId: { in: documentIds } })) {
+      const id = suiteId(b.documentId, b.entityKey);
+      out.set(id, [...(out.get(id) ?? []), b]);
+    }
+    return out;
+  }
+
+  private async bindingsWhere(where: Prisma.ApiTestBindingWhereInput): Promise<Array<SuiteBinding & { documentId: string; entityKey: string }>> {
     const rows = await this.prisma.apiTestBinding.findMany({
-      where: { documentId, entityKey: normalizeEntityKey(entityKey) },
-      orderBy: [{ caseId: { sort: 'asc', nulls: 'first' } }, { position: 'asc' }],
+      where,
+      orderBy: [{ documentId: 'asc' }, { entityKey: 'asc' }, { caseId: { sort: 'asc', nulls: 'first' } }, { position: 'asc' }],
       include: { fixture: { select: { title: true, defaultBranch: true, archivedAt: true, branches: { select: { name: true, headRevisionId: true } } } } },
     });
     const heads = rows.map((r) => r.fixture.branches.find((b) => b.name === r.fixture.defaultBranch)?.headRevisionId ?? null);
@@ -81,6 +94,8 @@ export class ApiTestSuitesService {
       (await this.prisma.documentRevision.findMany({ where: { id: { in: ids } }, select: { id: true, contentHash: true } })).map((r) => [r.id, r.contentHash]),
     );
     return rows.map((r, i) => ({
+      documentId: r.documentId,
+      entityKey: r.entityKey,
       caseId: r.caseId,
       fixtureId: r.fixtureId,
       title: r.fixture.title,
@@ -181,8 +196,16 @@ export class ApiTestSuitesService {
   }
 }
 
+/** One suite's identity within a workspace: its spec and operation. */
+export const suiteId = (documentId: string, entityKey: string) => `${documentId}\u0000${entityKey}`;
+
+/** The operation half of the cache key: unchanged by spec edits that do not reach this operation. */
+export function operationHash(doc: Record<string, unknown>, op: ApiOperation): string {
+  return createHash('sha256').update(operationFingerprint(doc, op)).digest('hex');
+}
+
 /** Which fixture heads a suite was built against, as one hash; '' when nothing is bound, so an unbound suite keeps its key. */
-function fixturesHash(bindings: readonly SuiteBinding[]): string {
+export function fixturesHash(bindings: readonly SuiteBinding[]): string {
   if (!bindings.length) return '';
   return createHash('sha256')
     .update(JSON.stringify(bindings.map((b) => [b.caseId, b.fixtureId, b.contentHash])))

@@ -10,6 +10,7 @@ import {
   type QaOperationRow,
   type QaOverviewResponse,
   type QaSuiteState,
+  type ApiTestRunSummary,
   type AgentRunDetails,
   type AgentRunInput,
   type ApiTestBindingInfo,
@@ -31,7 +32,10 @@ import { t } from '../i18n/t.js';
 import { canSee, type AccessScope } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ApiFixturesService } from './api-fixtures.service.js';
+import { ApiSettingsService } from './api-settings.service.js';
 import { ApiSpecReadService } from './api-spec-read.service.js';
+import { ApiTestEnvironmentsService } from './api-test-environments.service.js';
+import { ApiTestRunsService } from './api-test-runs.service.js';
 import {
   ApiTestSuitesService,
   fixturesHash,
@@ -61,6 +65,9 @@ export class ApiTestSuiteRequestsService {
     private readonly suites: ApiTestSuitesService,
     private readonly fixtures: ApiFixturesService,
     private readonly reads: ApiSpecReadService,
+    private readonly runs: ApiTestRunsService,
+    private readonly environments: ApiTestEnvironmentsService,
+    private readonly settings: ApiSettingsService,
     private readonly registry: AgentRegistryService,
     private readonly producer: AgentProducer,
     private readonly usage: AiUsageService,
@@ -103,6 +110,19 @@ export class ApiTestSuiteRequestsService {
   async plan(scope: AccessScope, documentId: string, entityKey: string): Promise<TestRunPlan> {
     const { suite, at } = await this.cached(documentId, entityKey);
     return this.fixtures.plan(scope, at, suite.cases, `${at.spec.title} — ${at.op.method} ${at.op.path}`);
+  }
+
+  /**
+   * Run on server (#483, phase 5): the cached suite's plan, resolved under the
+   * person's scope now, stored on a queued run the worker executes with the
+   * environment's values. The route checked `api-test-suites.run`; the worker
+   * checks it again, with the runner switch, when the run starts.
+   */
+  async runOnServer(principal: Principal, scope: AccessScope, documentId: string, entityKey: string, environment: { id?: string; name?: string }): Promise<ApiTestRunSummary> {
+    const plan = await this.plan(scope, documentId, entityKey);
+    const environmentId = environment.id ?? (environment.name ? (await this.environments.byName(scope.workspaceId, environment.name))?.id : undefined);
+    if (!environmentId) throw new NotFoundException(t('error.apiTestEnvironment.notFound', { id: environment.name ?? '' }));
+    return this.runs.start({ workspaceId: scope.workspaceId, plan, environmentId, createdBy: principal.userId });
   }
 
   async generate(principal: Principal, documentId: string, entityKey: string, regenerate: boolean): Promise<GenerateApiTestSuiteResponse> {
@@ -176,7 +196,7 @@ export class ApiTestSuiteRequestsService {
       (s) => s.kind === 'openapi' && s.headRevisionId && (!opts.documentId || s.documentId === opts.documentId),
     );
     const ids = specs.map((s) => s.documentId);
-    const [ops, bindings, suites, agent] = await Promise.all([
+    const [ops, bindings, suites, agent, lastRuns, runner] = await Promise.all([
       this.prisma.apiOperation.findMany({
         where: { revisionId: { in: specs.map((s) => s.headRevisionId!) }, protocol: 'http' },
         orderBy: { createdAt: 'asc' },
@@ -189,6 +209,8 @@ export class ApiTestSuiteRequestsService {
               FROM api_test_suites WHERE document_id = ANY(${ids}::uuid[])`
         : [],
       this.registry.resolve(scope.workspaceId, TESTER),
+      this.runs.latest(ids),
+      this.settings.testRunner(scope.workspaceId),
     ]);
     const agentHash = testerConfigHash(agent);
     const storedOf = new Map<string, typeof suites>();
@@ -239,12 +261,13 @@ export class ApiTestSuiteRequestsService {
           bound: { suite: suiteBindings, cases: bound.length - suiteBindings },
           reviewFixtures,
           fixtures: calling.get(op.entityKey) ?? 0,
+          lastRun: lastRuns.get(id) ?? null,
         });
       }
     }
     // Stable: within one status, specs by title and operations in spec order.
     rows.sort((a, b) => QA_SUITE_STATUSES.indexOf(a.status) - QA_SUITE_STATUSES.indexOf(b.status));
-    return { operations: rows, specs: specs.length };
+    return { operations: rows, specs: specs.length, runner: runner.effective === 'on' };
   }
 
   /** The fixtures bound to one operation's suite. A fixture the scope cannot open keeps its row but loses its title. */

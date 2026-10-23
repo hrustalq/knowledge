@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import type {
@@ -8,12 +8,17 @@ import type {
   ApiSpecDiff,
   ApiSpecDocumentResponse,
   ApiTestBindingsResponse,
+  ApiTestEnvironment,
+  ApiTestRunDetail,
+  ApiTestRunSummary,
   ApiTestFixtureCandidatesResponse,
   ApiTestSuiteResponse,
   ApiTryResponse,
   GenerateApiTestSuiteResponse,
   ListApiOperationsResponse,
   ListApiSpecsResponse,
+  ListApiTestEnvironmentsResponse,
+  ListApiTestRunsResponse,
   ListTestFixturesResponse,
   QaOverviewResponse,
   RankApiTestFixturesResponse,
@@ -30,6 +35,8 @@ import { ApiFixturesService } from './api-fixtures.service.js';
 import { ApiSpecDiffService } from './api-spec-diff.service.js';
 import { ApiSpecReadService } from './api-spec-read.service.js';
 import { ApiSettingsService } from './api-settings.service.js';
+import { ApiTestEnvironmentsService } from './api-test-environments.service.js';
+import { ApiTestRunsService } from './api-test-runs.service.js';
 import { ApiTestSuiteRequestsService } from './api-test-suite-requests.service.js';
 import { ApiTryService } from './api-try.service.js';
 import {
@@ -43,6 +50,8 @@ import {
   ListApiSpecsQueryDto,
   ListTestFixturesQueryDto,
   QaOverviewQueryDto,
+  RunApiTestSuiteDto,
+  SaveApiTestEnvironmentDto,
   SearchApiOperationsQueryDto,
   SetApiTestBindingsDto,
   UpdateApiSettingsDto,
@@ -64,6 +73,7 @@ export class ApiSpecsController {
     private readonly diffs: ApiSpecDiffService,
     private readonly driftChecks: ApiDriftCheckService,
     private readonly testSuites: ApiTestSuiteRequestsService,
+    private readonly runs: ApiTestRunsService,
   ) {}
 
   @Get()
@@ -282,6 +292,41 @@ export class ApiSpecsController {
     return this.tries.send(principal, id, dto);
   }
 
+  // The QA server runner (#483, phase 5). Starting a run is the runner's
+  // capability on top of viewer, like the browser runner's proxied step; the
+  // records are readable by every viewer of the spec.
+  @Post(':id/test-runs')
+  @HttpCode(202)
+  @Access('viewer', 'document', { capability: 'api-test-suites.run' })
+  @ApiOperation({
+    summary:
+      "Run one operation's cached QA suite on the server, against a test environment: queued, then run by the " +
+      "worker through the try-it proxy's rules. 403 unless the server runner is on for the workspace. Needs the " +
+      'api-test-suites.run capability',
+  })
+  async startTestRun(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RunApiTestSuiteDto,
+  ): Promise<ApiTestRunSummary> {
+    const scope = await this.permissions.scopeForDocument(principal, id);
+    return this.testSuites.runOnServer(principal, scope, id, dto.entityKey, { id: dto.environmentId });
+  }
+
+  @Get(':id/test-runs')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: "One operation's server runs, newest first (the last 20 are kept)" })
+  async testRuns(@Param('id', ParseUUIDPipe) id: string, @Query() query: ApiTestOperationDto): Promise<ListApiTestRunsResponse> {
+    return { runs: await this.runs.list(id, query.entityKey) };
+  }
+
+  @Get(':id/test-runs/:runId')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: 'One server run: the plan it walked and each step and case result. Captures named like secrets are never stored' })
+  testRun(@Param('id', ParseUUIDPipe) id: string, @Param('runId', ParseUUIDPipe) runId: string): Promise<ApiTestRunDetail> {
+    return this.runs.get(id, runId);
+  }
+
   @Post(':id/drift-check')
   @HttpCode(202)
   @Access('editor', 'document')
@@ -300,7 +345,50 @@ export class ApiSpecsController {
 @ApiTags('api-specs')
 @Controller('v1/workspaces')
 export class ApiSettingsController {
-  constructor(private readonly settings: ApiSettingsService) {}
+  constructor(
+    private readonly settings: ApiSettingsService,
+    private readonly environments: ApiTestEnvironmentsService,
+  ) {}
+
+  // Test environments for the QA server runner (#483, phase 5). Editors manage
+  // them; a viewer sees names, servers and inputs. Secrets are write-only.
+  @Get(':id/test-environments')
+  @Access('viewer', 'workspace')
+  @ApiOperation({ summary: "The workspace's QA test environments: server, inputs, and the names of the secrets set (never a value)" })
+  async listEnvironments(@Param('id', ParseUUIDPipe) id: string): Promise<ListApiTestEnvironmentsResponse> {
+    return { environments: await this.environments.list(id) };
+  }
+
+  @Post(':id/test-environments')
+  @Access('editor', 'workspace')
+  @ApiOperation({ summary: 'Create a QA test environment. Secrets are encrypted at rest and never returned' })
+  createEnvironment(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveApiTestEnvironmentDto,
+  ): Promise<ApiTestEnvironment> {
+    return this.environments.create(id, dto, principal.userId);
+  }
+
+  @Patch(':id/test-environments/:environmentId')
+  @Access('editor', 'workspace')
+  @ApiOperation({ summary: 'Change a QA test environment. inputs replaces the set; a secret set to null is removed, one left out is kept' })
+  updateEnvironment(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('environmentId', ParseUUIDPipe) environmentId: string,
+    @Body() dto: SaveApiTestEnvironmentDto,
+  ): Promise<ApiTestEnvironment> {
+    return this.environments.update(id, environmentId, dto, principal.userId);
+  }
+
+  @Delete(':id/test-environments/:environmentId')
+  @HttpCode(204)
+  @Access('editor', 'workspace')
+  @ApiOperation({ summary: 'Delete a QA test environment; its past runs keep their results' })
+  async deleteEnvironment(@Param('id', ParseUUIDPipe) id: string, @Param('environmentId', ParseUUIDPipe) environmentId: string): Promise<void> {
+    await this.environments.remove(id, environmentId);
+  }
 
   // A viewer reads it: the console has to know whether the proxy is there.
   @Get(':id/api-settings')

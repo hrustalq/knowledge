@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -16,10 +17,12 @@ import {
 } from 'class-validator';
 import {
   API_BREAKING_CHANGE_POLICIES,
+  API_TEST_RUNNER_MODES,
   API_TEST_SUITE_FORMATS,
   API_TRY_PROXY_MODES,
   CODE_SAMPLE_LANGS,
   type ApiBreakingChangePolicy,
+  type ApiTestRunnerMode,
   type ApiTestSuiteFormat,
   type ApiTryProxyMode,
   type CodeSampleLang,
@@ -161,6 +164,16 @@ export class UpdateApiSettingsDto {
   @IsOptional()
   @IsIn(API_BREAKING_CHANGE_POLICIES)
   apiBreakingChangePolicy?: ApiBreakingChangePolicy | null;
+
+  @ApiPropertyOptional({
+    enum: API_TEST_RUNNER_MODES,
+    nullable: true,
+    type: String,
+    description: 'The QA server runner (#483); on applies only when API_TEST_RUNNER_MODE is on. null is off',
+  })
+  @IsOptional()
+  @IsIn(API_TEST_RUNNER_MODES)
+  apiTestRunner?: ApiTestRunnerMode | null;
 }
 
 export class ApiSpecDiffQueryDto {
@@ -266,4 +279,47 @@ export class QaOverviewQueryDto {
   @IsOptional()
   @IsUUID()
   documentId?: string;
+}
+
+export class RunApiTestSuiteDto {
+  @ApiProperty({ description: 'The operation, as its row names it (op:billing-api:post-/invoices)' })
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey!: string;
+
+  @ApiProperty({ format: 'uuid', description: 'The test environment whose server and values the run uses' })
+  @IsUUID()
+  environmentId!: string;
+}
+
+export class SaveApiTestEnvironmentDto {
+  @ApiPropertyOptional({ description: 'Unique in the workspace; required to create' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80, { message: vmsg('maxLength') })
+  name?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: "An http(s) base URL; a step uses it when the step's spec declares it in servers",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000, { message: vmsg('maxLength') })
+  server?: string | null;
+
+  @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'string' }, description: 'Non-secret values by plan name (input.currency); replaces the set' })
+  @IsOptional()
+  @IsObject()
+  inputs?: Record<string, string>;
+
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: { type: 'string', nullable: true },
+    description: 'Secrets by plan name (secret.qaPassword, TOKEN): a string sets or replaces, null removes. Never returned',
+  })
+  @IsOptional()
+  @IsObject()
+  secrets?: Record<string, string | null>;
 }

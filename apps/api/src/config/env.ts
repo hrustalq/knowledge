@@ -611,6 +611,14 @@ export const envSchema = z.object({
   API_TRY_MAX_RESPONSE_BYTES: z.coerce.number().int().positive().default(1_000_000),
   /** Proxied requests per user per minute, counted in Redis. */
   API_TRY_RATE_PER_MINUTE: z.coerce.number().int().positive().default(30),
+  /**
+   * The QA server runner (#483, phase 5): the worker runs a whole suite against
+   * a test environment's server. A CEILING: `on` lets a workspace turn it on in
+   * its API settings, and runs nothing until one does. It sends exactly as the
+   * try-it proxy does — the workspace's proxy mode, source policies and
+   * API_TRY_ALLOW_PRIVATE_URLS — so `off` there refuses every step too.
+   */
+  API_TEST_RUNNER_MODE: z.enum(['off', 'on']).default('off'),
 
   /** Allow web targets on private/loopback ranges (self-hosted SearXNG, intranet). */
   WEB_ALLOW_PRIVATE_URLS: boolish(false),

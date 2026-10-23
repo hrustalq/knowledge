@@ -17,6 +17,18 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Run a QA suite on the server (#483, phase 5). Where the deployment allows it and an admin turns
+  it on in **Settings → API**, the run panel gains a **Server** route: pick a **test environment**
+  and the worker runs setup, every case and teardown, then the panel shows the results in the
+  same table, with the suite's recent runs below. Test environments (a server, inputs and
+  secrets) live on a new **Environments** tab of the QA page, where editors manage them. Secrets
+  are encrypted at rest and never shown again once saved. A run sends exactly as the try-it proxy
+  does: the workspace's proxy mode and source policies, private addresses refused, only servers a
+  spec declares, and each request audited under the person who started the run. The environment's
+  server is used for steps whose spec lists it. The last 20 runs per suite are kept, readable by
+  anyone who can open the spec, and captured values named like secrets are never stored. The QA
+  page shows each suite's last server run. Agents get `knowledge_run_test_suite` (hidden from
+  read-only keys) and `knowledge_get_test_run`.
 - A **QA** page (#483, phase 4), in the sidebar after Knowledge health. **Operations** lists every
   HTTP operation in the active project's OpenAPI specs, worst first, with its suite's state: **Needs
   review** (a bound fixture is archived or calls an operation that no longer exists), **No suite**,
@@ -174,6 +186,13 @@ in the pull request that introduces them — see
   it.
 
 ### Operations
+
+- **QA server runner (#483):** new env var `API_TEST_RUNNER_MODE` (`off` | `on`, default `off`), a
+  ceiling a workspace still has to opt into. Set it in the GitHub `production` environment before
+  tagging (`gh variable set API_TEST_RUNNER_MODE --env production --body off`), or the deploy
+  refuses the release. Secrets in test environments need `SETTINGS_ENCRYPTION_KEY`. Migration
+  `20261207100000_api_test_runs` adds `api_test_environments`, `api_test_runs` and a nullable
+  `workspace_settings.api_test_runner`. It survives a rollback: earlier releases read none of them.
 
 - Migration `20261206100000_api_test_bindings` (#483) adds the `api_test_bindings` table and
   `api_test_suites.fixtures_hash` (text, default `''`), and replaces the suite cache's unique index

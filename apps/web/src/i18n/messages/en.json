@@ -4441,10 +4441,46 @@
     }
   },
   "qa": {
+    "run": {
+      "counts": "{passed}/{total} passed"
+    },
+    "env": {
+      "intro": "Where a server run sends and with what. A run uses the server for every step whose spec lists it in its servers, and the spec's own server otherwise.",
+      "runnerOff": "Server runs are off in this workspace.",
+      "runnerSettings": "Turn them on in Settings → API",
+      "add": "New environment",
+      "empty": "No test environments yet",
+      "emptyHint": "Add one with a server and the secrets a suite asks for, then run suites on the server.",
+      "emptyReader": "An editor adds them.",
+      "specServer": "The spec's own servers",
+      "set": "set",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteTitle": "Delete “{name}”?",
+      "deleteBody": "Its secrets are deleted too. Past runs keep their results.",
+      "name": "Name",
+      "server": "Server",
+      "serverHint": "Used only for steps whose spec declares this server; the try-it proxy's rules apply.",
+      "inputs": "Inputs",
+      "value": "Value",
+      "addInput": "Add an input",
+      "secrets": "Secrets",
+      "secretsHint": "Write-only: a saved secret is never shown again. Type a value to replace it.",
+      "replace": "Keep the saved value",
+      "replaceLabel": "New value for {name}",
+      "removeSecret": "Remove {name}",
+      "keep": "Keep {name}",
+      "newSecrets": "New secrets",
+      "addSecret": "Add a secret",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saved": "Environment saved"
+    },
     "title": "QA",
     "subtitle": "Which operations are ready to test, and the fixtures that set them up.",
     "newFixture": "New fixture",
     "tab": {
+      "environments": "Environments",
       "operations": "Operations",
       "fixtures": "Fixtures"
     },
@@ -4471,6 +4507,7 @@
       "current": "Current suite"
     },
     "column": {
+      "lastRun": "Last server run",
       "operation": "Operation",
       "status": "State",
       "cases": "Cases",
@@ -5800,6 +5837,21 @@
       "documented-error": "Documented error"
     },
     "run": {
+      "viaServer": "Server",
+      "environment": "Environment",
+      "noEnvironments": "No test environment yet.",
+      "manageEnvironments": "Add one on the QA page",
+      "serverNote": "The worker runs the suite with this environment’s values, which never reach this page.",
+      "startOnServer": "Run on server",
+      "serverStatus": {
+        "queued": "Queued",
+        "running": "Running on the server",
+        "passed": "Passed",
+        "failed": "Failed",
+        "error": "Could not run"
+      },
+      "history": "Recent server runs",
+      "environmentGone": "deleted environment",
       "action": "Run suite",
       "noCapability": "Running a suite needs the permission to run test suites. A workspace admin grants it on Access control.",
       "title": "Run against a server",
@@ -5922,6 +5974,21 @@
     "resetBody": "Reset to the example"
   },
   "apiSettings": {
+    "runner": {
+      "title": "Server runs",
+      "subtitle": "Let the worker run a whole QA suite against a test environment, from the QA page or an agent. Each request goes out exactly as the try-it proxy sends it: the proxy mode above, its source policies, and only servers the spec declares.",
+      "ceilingOff": "This deployment keeps server runs off (API_TEST_RUNNER_MODE). Asking for them here takes effect once it allows them.",
+      "mode": {
+        "off": {
+          "label": "Off",
+          "body": "Suites run from the browser or the proxy only. Nothing is sent from the server."
+        },
+        "on": {
+          "label": "On",
+          "body": "Members with “Run API tests” can run a suite on the server. Each run’s results are kept, the last 20 per suite."
+        }
+      }
+    },
     "title": "API reference",
     "subtitle": "How the try-it console on spec pages may reach the APIs they describe.",
     "proxy": {

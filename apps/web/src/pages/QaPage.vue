@@ -15,6 +15,10 @@
  * narrowed to one operation or one spec: "who calls this" crosses projects,
  * and the counts on the operations tab count every fixture the reader may open.
  *
+ * **Environments** (phase 5) — where a server run sends and with what; see
+ * QaEnvironments. While the server runner applies, the operations list gains
+ * each suite's last server run.
+ *
  * `?tab=`, `?status=`, `?op=` and `?spec=` are opening instructions, written
  * back with `replace`, so a row's fixture count is a plain link.
  */
@@ -22,7 +26,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
-import { AlertTriangle, FlaskConical, Plus, TestTubes, X } from 'lucide-vue-next'
+import { AlertTriangle, CheckCircle2, FlaskConical, Loader2, Plus, TestTubes, X, XCircle } from 'lucide-vue-next'
 import {
   QA_SUITE_STATUSES,
   type ListTestFixturesResponse,
@@ -39,6 +43,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/components/layout/page'
 import ApiEndpoint from '@/components/api-reference/ApiEndpoint.vue'
 import { operationHref } from '@/components/api-reference/use-operation'
+import QaEnvironments from '@/components/qa/QaEnvironments.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -47,10 +52,11 @@ const router = useRouter()
 const workspaceId = getWorkspaceId()
 const projectId = getProjectId() ?? undefined
 
-type TabKey = 'operations' | 'fixtures'
+type TabKey = 'operations' | 'fixtures' | 'environments'
 const tabs = computed<PageTab<TabKey>[]>(() => [
   { key: 'operations', label: t('qa.tab.operations') },
   { key: 'fixtures', label: t('qa.tab.fixtures') },
+  { key: 'environments', label: t('qa.tab.environments') },
 ])
 const tab = usePageTabs(tabs, 'operations')
 
@@ -92,6 +98,8 @@ const TONE: Record<QaSuiteStatus, ApiTone | null> = {
 const toneStyle = (s: QaSuiteStatus) => ({ '--tone': TONE[s] ? `var(--kn-panel-${TONE[s]})` : 'var(--muted-foreground)' })
 
 const fixturesLink = (r: QaOperationRow) => ({ query: { tab: 'fixtures', op: r.entityKey } })
+const runner = computed(() => overview.value?.runner ?? false)
+const RUN_ICON = { passed: CheckCircle2, failed: XCircle, error: AlertTriangle, queued: Loader2, running: Loader2 } as const
 
 /* -------------------------------------------------------------- fixtures */
 
@@ -181,15 +189,16 @@ const CALLS_SHOWN = 3
         </PageState>
 
         <div v-else class="rounded-md border">
-          <div class="qa-grid qa-head text-caption text-muted-foreground border-b px-3 py-2 font-medium" aria-hidden="true">
+          <div class="qa-grid qa-head text-caption text-muted-foreground border-b px-3 py-2 font-medium" :data-runner="runner || undefined" aria-hidden="true">
             <span>{{ t('qa.column.operation') }}</span>
             <span>{{ t('qa.column.status') }}</span>
             <span class="text-right">{{ t('qa.column.cases') }}</span>
             <span>{{ t('qa.column.setup') }}</span>
             <span class="text-right">{{ t('qa.column.fixtures') }}</span>
+            <span v-if="runner">{{ t('qa.column.lastRun') }}</span>
           </div>
           <ul class="divide-y">
-            <li v-for="r in shown" :key="`${r.documentId}:${r.entityKey}`" class="qa-grid px-3 py-2.5">
+            <li v-for="r in shown" :key="`${r.documentId}:${r.entityKey}`" class="qa-grid px-3 py-2.5" :data-runner="runner || undefined">
               <div class="min-w-0">
                 <RouterLink
                   :to="operationHref(r)"
@@ -239,10 +248,33 @@ const CALLS_SHOWN = 3
                 </RouterLink>
                 <span v-else class="text-muted-foreground"><span class="md:hidden">{{ t('qa.column.fixtures') }}: </span>0</span>
               </div>
+
+              <div v-if="runner" class="qa-meta text-ui min-w-0">
+                <span class="text-muted-foreground md:hidden">{{ t('qa.column.lastRun') }}: </span>
+                <span v-if="r.lastRun" class="inline-flex items-center gap-1" :class="`qa-run--${r.lastRun.status}`">
+                  <component
+                    :is="RUN_ICON[r.lastRun.status]"
+                    class="size-3.5 shrink-0"
+                    :class="(r.lastRun.status === 'queued' || r.lastRun.status === 'running') && 'animate-spin motion-reduce:animate-none'"
+                    aria-hidden="true"
+                  />
+                  <template v-if="r.lastRun.status === 'passed' || r.lastRun.status === 'failed'">
+                    {{ t('qa.run.counts', { passed: r.lastRun.counts.passed, total: r.lastRun.counts.passed + r.lastRun.counts.failed + r.lastRun.counts.notRun }) }}
+                  </template>
+                  <template v-else>{{ t(`apiTests.run.serverStatus.${r.lastRun.status}`) }}</template>
+                  <span v-if="r.lastRun.finishedAt" class="text-muted-foreground"> · {{ formatRelative(r.lastRun.finishedAt) }}</span>
+                </span>
+                <span v-else class="text-muted-foreground">—</span>
+              </div>
             </li>
           </ul>
         </div>
       </template>
+    </div>
+
+    <!-- =================================================== environments -->
+    <div v-else-if="tab === 'environments'" :id="panelId('environments')" role="tabpanel" :aria-labelledby="tabId('environments')">
+      <QaEnvironments :workspace-id="workspaceId" :runner-on="runner" />
     </div>
 
     <!-- ======================================================= fixtures -->
@@ -332,6 +364,9 @@ const CALLS_SHOWN = 3
     display: grid;
     grid-template-columns: minmax(0, 1fr) 9rem 4rem minmax(9rem, 13rem) 5rem;
   }
+  .qa-grid[data-runner] {
+    grid-template-columns: minmax(0, 1fr) 9rem 4rem minmax(9rem, 13rem) 5rem 10rem;
+  }
 }
 .qa-dot {
   width: 0.5rem;
@@ -342,6 +377,13 @@ const CALLS_SHOWN = 3
 }
 /* The panel hues pulled toward the ink, as ApiTone does, so text holds AA. */
 .qa-ink-caution {
+  color: color-mix(in oklab, var(--kn-panel-caution) 70%, var(--foreground));
+}
+.qa-run--passed {
+  color: color-mix(in oklab, var(--kn-panel-tip) 70%, var(--foreground));
+}
+.qa-run--failed,
+.qa-run--error {
   color: color-mix(in oklab, var(--kn-panel-caution) 70%, var(--foreground));
 }
 .qa-ink-warning {

@@ -21,6 +21,8 @@ defineProps<{
   mono?: boolean
   /** The section already has a visible heading; keep the legend for screen readers only. */
   legendHidden?: boolean
+  /** Values are secrets (a test environment's): typed into a password field. */
+  secret?: boolean
 }>()
 const { t } = useI18n()
 const list = ref<HTMLElement | null>(null)
@@ -53,6 +55,8 @@ function remove(i: number) {
           v-model="row.value"
           :aria-label="`${legend}: ${valuePlaceholder}`"
           :placeholder="valuePlaceholder"
+          :type="secret ? 'password' : 'text'"
+          :autocomplete="secret ? 'new-password' : 'off'"
           spellcheck="false"
           autocapitalize="off"
           class="h-8 min-w-0 flex-1 text-ui"

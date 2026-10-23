@@ -14,8 +14,15 @@
  * stored, sent only in the requests that use them. Credential slots start
  * from the Try-it console's values (read, never written back), and each
  * spec's requests go to the server picked there.
+ *
+ * A third route, **Server** (phase 5), while the workspace's runner is on:
+ * the worker runs the plan with a test environment's values, which never
+ * reach this page. The run is polled until it settles and drawn in the same
+ * table, from the plan and results stored on it; the suite's recent runs
+ * open the same way.
  */
 import { computed, onBeforeUnmount, reactive, ref, useId, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { AlertTriangle, CheckCircle2, CircleDashed, ClipboardCheck, Loader2, MinusCircle, Play, Square, X, XCircle } from 'lucide-vue-next'
@@ -23,9 +30,14 @@ import {
   apiServerOptions,
   isSecretName,
   runTestPlan,
+  testRunCounts,
   testRunKey,
   type ApiOperationInfo,
   type ApiSettingsResponse,
+  type ApiTestRunDetail,
+  type ApiTestRunSummary,
+  type ListApiTestEnvironmentsResponse,
+  type ListApiTestRunsResponse,
   type ApiTryResponse,
   type TestRunCall,
   type TestRunOutcome,
@@ -40,7 +52,7 @@ import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { isApiRequestError } from '@/api/http'
-import { formatNumber } from '@/lib/format'
+import { formatNumber, formatRelative } from '@/lib/format'
 import { statusTone } from '@/lib/api-spec'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,9 +85,15 @@ const plan = computed(() => planQuery.data.value as TestRunPlan | undefined)
 
 const settingsQuery = useQuery(apiQueryOptions('/v1/workspaces/{id}/api-settings', { path: { id: props.workspaceId } }))
 const proxyOff = computed(() => (settingsQuery.data.value as ApiSettingsResponse | undefined)?.tryProxy.effective === 'off')
+const runnerOn = computed(() => (settingsQuery.data.value as ApiSettingsResponse | undefined)?.testRunner.effective === 'on')
 const suiteEnv = useTryEnv(props.operation.documentId)
-const chosenVia = ref<TryVia>(suiteEnv.via)
-const via = computed<TryVia>(() => (chosenVia.value === 'proxy' && settingsQuery.data.value && !proxyOff.value ? 'proxy' : 'browser'))
+type Via = TryVia | 'server'
+const chosenVia = ref<Via>(suiteEnv.via)
+const via = computed<Via>(() => {
+  if (chosenVia.value === 'server' && runnerOn.value) return 'server'
+  return chosenVia.value === 'proxy' && settingsQuery.data.value && !proxyOff.value ? 'proxy' : 'browser'
+})
+const routes = computed<Via[]>(() => (runnerOn.value ? ['browser', 'proxy', 'server'] : ['browser', 'proxy']))
 
 const servers = computed(() => apiServerOptions(props.document).filter((s) => /^https?:\/\//iu.test(s.url)))
 const server = ref(servers.value.find((s) => s.url === suiteEnv.serverUrl)?.url ?? servers.value[0]?.url ?? '')
@@ -117,6 +135,78 @@ function prepare(p: TestRunPlan) {
 
 const allCalls = (p: TestRunPlan): TestRunCall[] =>
   [...p.setup, ...p.teardown, ...p.cases.flatMap((c) => [...c.setup, ...c.teardown])].filter((s): s is TestRunCall => s.kind === 'call')
+
+// ---- On the server (phase 5) -----------------------------------------------------
+
+const envQuery = useQuery(
+  computed(() => ({
+    ...apiQueryOptions('/v1/workspaces/{id}/test-environments', { path: { id: props.workspaceId } }),
+    enabled: runnerOn.value,
+  })),
+)
+const environments = computed(() => (envQuery.data.value as ListApiTestEnvironmentsResponse | undefined)?.environments ?? [])
+const environmentId = ref('')
+watch(environments, (list) => {
+  if (!list.some((e) => e.id === environmentId.value)) environmentId.value = list[0]?.id ?? ''
+})
+
+const historyQuery = useQuery(
+  computed(() => ({
+    ...apiQueryOptions('/v1/api-specs/{id}/test-runs', { path: { id: props.operation.documentId }, query: { entityKey: props.operation.entityKey } }),
+    refetchInterval: (q: { state: { data?: unknown } }) =>
+      ((q.state.data as ListApiTestRunsResponse | undefined)?.runs ?? []).some((r) => r.status === 'queued' || r.status === 'running') ? 3000 : false,
+  })),
+)
+const history = computed(() => (historyQuery.data.value as ListApiTestRunsResponse | undefined)?.runs ?? [])
+
+/** The server run on show: one just queued, or one picked from the history. Polled until it settles. */
+const runId = ref<string | null>(null)
+const runQuery = useQuery(
+  computed(() => ({
+    ...apiQueryOptions('/v1/api-specs/{id}/test-runs/{runId}', { path: { id: props.operation.documentId, runId: runId.value ?? '' } }),
+    enabled: runId.value !== null,
+    refetchInterval: (q: { state: { data?: unknown } }) => {
+      const status = (q.state.data as ApiTestRunDetail | undefined)?.status
+      return status === undefined || status === 'queued' || status === 'running' ? 2000 : false
+    },
+  })),
+)
+const serverRun = computed(() => (runId.value ? ((runQuery.data.value as ApiTestRunDetail | undefined) ?? null) : null))
+const serverBusy = computed(() => serverRun.value?.status === 'queued' || serverRun.value?.status === 'running')
+const starting = ref(false)
+const serverError = ref<string | null>(null)
+
+async function startOnServer() {
+  if (!environmentId.value || starting.value) return
+  starting.value = true
+  serverError.value = null
+  try {
+    const run = (await api.post('/v1/api-specs/{id}/test-runs', {
+      path: { id: props.operation.documentId },
+      body: { entityKey: props.operation.entityKey, environmentId: environmentId.value },
+    })) as ApiTestRunSummary
+    results.value = {}
+    runId.value = run.id
+    void historyQuery.refetch()
+  } catch (e) {
+    serverError.value = errorMessage(e, t)
+  } finally {
+    starting.value = false
+  }
+}
+
+function openRun(id: string) {
+  results.value = {}
+  runId.value = id
+}
+
+watch(serverRun, (run) => {
+  if (run) results.value = run.results
+  if (run && !serverBusy.value) void historyQuery.refetch()
+})
+
+/** The plan the table draws: a server run's own (the suite may have moved on since), or the live one. */
+const shownPlan = computed(() => serverRun.value?.plan ?? plan.value)
 
 // ---- Running --------------------------------------------------------------------
 
@@ -185,8 +275,10 @@ async function countdown(key: string, seconds: number) {
 }
 
 async function start() {
+  if (via.value === 'server') return startOnServer()
   const p = plan.value
   if (!p || phase.value === 'running' || phase.value === 'stopping') return
+  runId.value = null
   results.value = {}
   phase.value = 'running'
   abort = new AbortController()
@@ -243,7 +335,7 @@ const stepRow = (key: string, s: TestRunStep, nested: string | null = null): Row
 })
 
 const sections = computed<Section[]>(() => {
-  const p = plan.value
+  const p = shownPlan.value
   if (!p) return []
   const out: Section[] = []
   if (p.setup.length) out.push({ id: 'setup', rows: p.setup.map((s) => stepRow(testRunKey.setup(s), s)) })
@@ -263,7 +355,7 @@ function outcomeOf(key: string): RowOutcome | null {
   const r = results.value[key]
   if (r) return r.outcome
   if (current.value === key) return 'running'
-  return phase.value === 'running' || phase.value === 'stopping' ? 'pending' : null
+  return phase.value === 'running' || phase.value === 'stopping' || serverBusy.value ? 'pending' : null
 }
 
 const OUTCOME_ICON = {
@@ -291,16 +383,10 @@ function reasonText(r: TestRunResult | undefined): string | null {
 const capturesOf = (key: string) =>
   Object.entries(results.value[key]?.captures ?? {}).map(([name, value]) => ({ name, value: isSecretName(name) ? null : value }))
 
-const summary = computed(() => {
-  const counts = { passed: 0, failed: 0, notRun: 0 }
-  for (const c of plan.value?.cases ?? []) {
-    const o = results.value[testRunKey.case(c)]?.outcome
-    if (o === 'pass') counts.passed++
-    else if (o === 'fail' || o === 'error') counts.failed++
-    else counts.notRun++
-  }
-  return counts
-})
+const summary = computed(() => (shownPlan.value ? testRunCounts(shownPlan.value, results.value) : { passed: 0, failed: 0, notRun: 0 }))
+
+/** Whether the table shows: a browser run started, or a server run is on show. */
+const showResults = computed(() => phase.value !== 'idle' || serverRun.value !== null)
 
 function hostOf(url: string): string {
   try {
@@ -336,7 +422,7 @@ watch(plan, (p) => p && prepare(p), { immediate: true })
             <span :id="`${uid}-via`" class="text-ui text-muted-foreground">{{ t('apiTry.via.label') }}</span>
             <div role="radiogroup" :aria-labelledby="`${uid}-via`" class="kn-run-seg">
               <button
-                v-for="v in (['browser', 'proxy'] as const)"
+                v-for="v in routes"
                 :key="v"
                 type="button"
                 role="radio"
@@ -346,11 +432,17 @@ watch(plan, (p) => p && prepare(p), { immediate: true })
                 :data-active="via === v || undefined"
                 @click="phase !== 'running' && !(v === 'proxy' && proxyOff) && (chosenVia = v)"
               >
-                {{ t(`apiTry.via.${v}`) }}
+                {{ v === 'server' ? t('apiTests.run.viaServer') : t(`apiTry.via.${v}`) }}
               </button>
             </div>
           </div>
-          <label v-if="servers.length > 1" class="kn-run-server">
+          <label v-if="via === 'server'" class="kn-run-server">
+            <span class="text-ui text-muted-foreground">{{ t('apiTests.run.environment') }}</span>
+            <select v-if="environments.length" v-model="environmentId" class="kn-setup-select" :disabled="starting || serverBusy">
+              <option v-for="e in environments" :key="e.id" :value="e.id">{{ e.server ? `${e.name} · ${e.server}` : e.name }}</option>
+            </select>
+          </label>
+          <label v-else-if="servers.length > 1" class="kn-run-server">
             <span class="text-ui text-muted-foreground">{{ t('apiTests.run.server') }}</span>
             <select v-model="server" class="kn-setup-select" :disabled="phase === 'running'">
               <option v-for="s in servers" :key="s.url" :value="s.url">{{ s.url }}</option>
@@ -358,9 +450,16 @@ watch(plan, (p) => p && prepare(p), { immediate: true })
           </label>
           <span v-else-if="servers.length" class="kn-run-server-text">{{ servers[0].url }}</span>
         </div>
+        <p v-if="via === 'server'" class="text-ui text-muted-foreground">
+          <template v-if="envQuery.isSuccess.value && !environments.length">
+            {{ t('apiTests.run.noEnvironments') }}
+            <RouterLink to="/qa?tab=environments" class="text-primary underline underline-offset-2">{{ t('apiTests.run.manageEnvironments') }}</RouterLink>
+          </template>
+          <template v-else>{{ t('apiTests.run.serverNote') }}</template>
+        </p>
         <p v-if="proxyOff" :id="`${uid}-proxy-why`" class="text-ui text-muted-foreground">{{ t('apiTry.proxyBlocked.off') }}</p>
 
-        <fieldset class="kn-run-values" :disabled="phase === 'running' || phase === 'stopping'">
+        <fieldset v-if="via !== 'server'" class="kn-run-values" :disabled="phase === 'running' || phase === 'stopping'">
           <legend class="kn-run-legend">{{ t('apiTests.run.values') }}</legend>
           <p v-if="!fields.length" class="text-ui text-muted-foreground">{{ t('apiTests.run.noValues') }}</p>
           <div v-for="f in fields" :key="f.name" class="kn-run-field">
@@ -385,10 +484,20 @@ watch(plan, (p) => p && prepare(p), { immediate: true })
           <Button v-if="phase === 'running' || phase === 'stopping'" type="button" size="sm" variant="outline" :disabled="phase === 'stopping'" @click="stop">
             <Square class="size-3.5" aria-hidden="true" />{{ t('apiTests.run.stop') }}
           </Button>
+          <Button v-else-if="via === 'server'" type="submit" size="sm" :disabled="!environmentId || starting || serverBusy">
+            <Loader2 v-if="starting || serverBusy" class="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            <Play v-else class="size-3.5" aria-hidden="true" />{{ t('apiTests.run.startOnServer') }}
+          </Button>
           <Button v-else type="submit" size="sm">
             <Play class="size-3.5" aria-hidden="true" />{{ phase === 'done' ? t('apiTests.run.again') : t('apiTests.run.start') }}
           </Button>
-          <p v-if="phase !== 'idle'" class="kn-run-summary" role="status">
+          <p v-if="serverError" class="kn-run-summary text-destructive" role="alert">{{ serverError }}</p>
+          <p v-else-if="serverRun" class="kn-run-summary" role="status">
+            <template v-if="serverBusy">{{ t(`apiTests.run.serverStatus.${serverRun.status}`) }}</template>
+            <template v-else-if="serverRun.status === 'error'">{{ t('apiTests.run.serverStatus.error') }}: {{ serverRun.error }}</template>
+            <template v-else>{{ t('apiTests.run.summary', summary) }}</template>
+          </p>
+          <p v-else-if="phase !== 'idle'" class="kn-run-summary" role="status">
             <template v-if="waiting">{{ t('apiTests.run.waiting', { seconds: waiting.seconds }) }}</template>
             <template v-else-if="phase === 'stopping'">{{ t('apiTests.run.stopping') }}</template>
             <template v-else-if="phase === 'running'">{{ t('apiTests.run.running') }}</template>
@@ -397,7 +506,7 @@ watch(plan, (p) => p && prepare(p), { immediate: true })
         </div>
       </form>
 
-      <div v-if="phase !== 'idle'" class="kn-run-results">
+      <div v-if="showResults" class="kn-run-results">
         <div class="kn-run-row kn-run-row--head" aria-hidden="true">
           <span />
           <span>{{ t('apiTests.run.col.step') }}</span>
@@ -454,11 +563,72 @@ watch(plan, (p) => p && prepare(p), { immediate: true })
           </ol>
         </section>
       </div>
+
+      <section v-if="history.length" class="kn-run-history" :aria-labelledby="`${uid}-history`">
+        <h6 :id="`${uid}-history`" class="kn-run-section">{{ t('apiTests.run.history') }}</h6>
+        <ol>
+          <li v-for="r in history" :key="r.id">
+            <button type="button" class="kn-run-past" :data-active="runId === r.id || undefined" :aria-current="runId === r.id || undefined" @click="openRun(r.id)">
+              <component
+                :is="r.status === 'passed' ? CheckCircle2 : r.status === 'failed' ? XCircle : r.status === 'error' ? AlertTriangle : Loader2"
+                class="size-4 shrink-0"
+                :class="[`kn-run-past--${r.status}`, (r.status === 'queued' || r.status === 'running') && 'animate-spin motion-reduce:animate-none']"
+                aria-hidden="true"
+              />
+              <span class="min-w-0 flex-1 truncate">
+                <span class="sr-only">{{ t(`apiTests.run.serverStatus.${r.status}`) }}: </span>
+                <template v-if="r.status === 'passed' || r.status === 'failed'">{{ t('apiTests.run.summary', r.counts) }}</template>
+                <template v-else>{{ t(`apiTests.run.serverStatus.${r.status}`) }}</template>
+              </span>
+              <span class="kn-run-past-meta">{{ r.environment?.name ?? t('apiTests.run.environmentGone') }} · {{ formatRelative(r.createdAt) }}</span>
+            </button>
+          </li>
+        </ol>
+      </section>
     </template>
   </section>
 </template>
 
 <style>
+.kn-run-history ol {
+  display: grid;
+  gap: 1px;
+}
+.kn-run-past {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  font-size: var(--kn-text-ui);
+  text-align: start;
+  color: var(--foreground);
+  outline: none;
+}
+.kn-run-past:hover,
+.kn-run-past[data-active] {
+  background: color-mix(in oklab, var(--muted) 70%, transparent);
+}
+.kn-run-past:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.kn-run-past-meta {
+  font-size: var(--kn-text-caption);
+  color: var(--muted-foreground);
+}
+.kn-run-past--passed {
+  color: color-mix(in oklab, var(--kn-panel-tip) 75%, var(--foreground));
+}
+.kn-run-past--failed,
+.kn-run-past--error {
+  color: color-mix(in oklab, var(--kn-panel-caution) 75%, var(--foreground));
+}
+.kn-run-past--queued,
+.kn-run-past--running {
+  color: var(--muted-foreground);
+}
 .kn-run {
   display: grid;
   gap: 0.85rem;

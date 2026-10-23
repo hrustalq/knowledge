@@ -117,6 +117,16 @@ export class ApiTryService {
   }
 
   async send(principal: Principal, documentId: string, req: ApiTryRequest): Promise<ApiTryResponse> {
+    return this.sendAs(principal.userId, documentId, req, true);
+  }
+
+  /**
+   * The same request on behalf of `actor`, who is audited. The QA server runner
+   * (#483, phase 5) sends unmetered: a run is bounded by its plan, and a
+   * person's per-minute budget would stall it mid-suite.
+   */
+  // ponytail: server runs are unmetered, bounded by plan size; meter per run if a suite ever floods a target.
+  async sendAs(actor: string, documentId: string, req: ApiTryRequest, metered: boolean): Promise<ApiTryResponse> {
     const doc = await this.prisma.document.findUnique({ where: { id: documentId }, select: { workspaceId: true } });
     if (!doc) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
     const workspaceId = doc.workspaceId;
@@ -127,7 +137,7 @@ export class ApiTryService {
     }
     const perMinute = this.config.get('API_TRY_RATE_PER_MINUTE', { infer: true });
     // Fails closed: an outage must not mean an unmetered proxy.
-    if (!(await this.limiter.hit(`api-try:${principal.userId}`, perMinute, 60_000, false))) {
+    if (metered && !(await this.limiter.hit(`api-try:${actor}`, perMinute, 60_000, false))) {
       throw new RateLimitedException(t('error.apiTry.rateLimited'), 60, 'api-try');
     }
 
@@ -159,7 +169,7 @@ export class ApiTryService {
     const maxBytes = this.config.get('API_TRY_MAX_RESPONSE_BYTES', { infer: true });
     const auditBase = {
       workspaceId,
-      actor: principal.userId,
+      actor,
       action: 'api.try' as const,
       // What was tried, never with what: no header, no query, no body.
       params: { documentId, revisionId: req.revisionId, entityKey: normalizeEntityKey(req.entityKey), method, host: target.host, path: pathTemplate },

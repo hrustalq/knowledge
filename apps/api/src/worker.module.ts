@@ -12,6 +12,7 @@ import { ExportWorkerModule } from './export/export-worker.module.js';
 import { AclWorkerModule } from './permissions/acl-worker.module.js';
 import { AnalyticsWorkerModule } from './analytics/analytics-worker.module.js';
 import { ChatWorkerModule } from './chat/chat-worker.module.js';
+import { ApiTestRunWorkerModule } from './api-specs/api-test-run-worker.module.js';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ChatWorkerModule } from './chat/chat-worker.module.js';
     AclWorkerModule,
     AnalyticsWorkerModule,
     ChatWorkerModule,
+    ApiTestRunWorkerModule,
   ],
 })
 export class WorkerModule {}

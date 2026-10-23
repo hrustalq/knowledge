@@ -27,6 +27,7 @@ import { CapturesCoreModule } from '../captures/captures-core.module.js';
 import { ComponentsCoreModule } from '../components/components-core.module.js';
 import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { ApiTestSuitesModule } from '../api-specs/api-test-suites.module.js';
+import { ApiRunnerCoreModule } from '../api-specs/api-runner-core.module.js';
 import { ComponentDraftsModule } from '../components/component-drafts.module.js';
 import { StyleLintModule } from '../assistant/style-lint.module.js';
 import { QualityCoreModule } from '../quality/quality-core.module.js';
@@ -102,6 +103,8 @@ import { McpService } from './mcp.service.js';
     ApiSpecsCoreModule,
     // The QA suite tools (#483): read, export, bind, rank, Generate. Controller-free; API-side, as Generate queues a run.
     ApiTestSuitesModule,
+    // knowledge_get_test_run (#483, phase 5): the server runner's records. Controller-free.
+    ApiRunnerCoreModule,
     // knowledge_lint_draft / knowledge_get_page_quality (#74). Controller-free and read-only.
     StyleLintModule,
     QualityCoreModule,

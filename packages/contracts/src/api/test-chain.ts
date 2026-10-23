@@ -16,6 +16,7 @@ import {
   type TestFixture,
 } from '@knowledge/contracts/api/fixtures';
 import type { ApiTestCase } from '@knowledge/contracts/api/test-cases';
+import type { ApiTestRunSummary } from '@knowledge/contracts/api';
 
 // ---------------------------------------------------------------------------
 // A suite as one runnable chain (#483): the bound fixtures' setup, every case
@@ -636,6 +637,18 @@ export interface TestRunResponse {
 /** Sends one filled request. A throw is an `error` row, never the end of the run. */
 export type TestRunSend = (key: string, target: TestRunTarget, request: TestRunRequest) => Promise<TestRunResponse>;
 
+/** A run's case tally — a case that never passed or failed did not run. One count for the browser runner and the server's run record. */
+export function testRunCounts(plan: TestRunPlan, results: Readonly<Record<string, TestRunResult>>): { passed: number; failed: number; notRun: number } {
+  const counts = { passed: 0, failed: 0, notRun: 0 };
+  for (const c of plan.cases) {
+    const o = results[`case/${c.id}`]?.outcome;
+    if (o === 'pass') counts.passed++;
+    else if (o === 'fail' || o === 'error') counts.failed++;
+    else counts.notRun++;
+  }
+  return counts;
+}
+
 /**
  * Result keys, one per row a runner shows: `setup/<id>`, `case/<caseId>`,
  * `case/<caseId>/setup/<id>`, `case/<caseId>/teardown/<id>`, `teardown/<id>`.
@@ -746,4 +759,10 @@ export async function runTestPlan(
   }
   await tearDown(plan.teardown, testRunKey.teardown);
   return results;
+}
+
+/** One server run (#483, phase 5): the plan it walked and each row's result. Captures named like secrets are never stored. */
+export interface ApiTestRunDetail extends ApiTestRunSummary {
+  plan: TestRunPlan;
+  results: Record<string, TestRunResult>;
 }

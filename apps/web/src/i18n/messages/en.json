@@ -6477,5 +6477,16 @@
       "ceiling": "This deployment creates at most {n} ticket per sweep (every ~15 s), across all workspaces. A large backlog is handed off over a few minutes. | This deployment creates at most {n} tickets per sweep (every ~15 s), across all workspaces. A large backlog is handed off over a few minutes.",
       "stopped": "This deployment has handoff rules switched off (WORK_ITEM_AUTOCREATE_MAX_PER_TICK=0 or WORK_ITEM_SYNC_ENABLED=false). Saved rules apply once they are back on."
     }
+  },
+  "imageViewer": {
+    "title": "Image preview",
+    "hint": "Click the image to see it at full size, drag to move around it, and use the arrow keys to go to the next or previous image.",
+    "open": "Open image",
+    "openNamed": "Open image: {name}",
+    "position": "Image {n} of {total}",
+    "fit": "Fit to screen",
+    "actualSize": "Actual size",
+    "previous": "Previous image",
+    "next": "Next image"
   }
 }

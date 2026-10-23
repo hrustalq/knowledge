@@ -4,7 +4,7 @@
  * server (lib/markdown/public-render.server) — sanitized, links and assets
  * already rewritten into the share's scope — so it renders during SSR and the
  * client only upgrades what cannot be static: mermaid diagrams, which need a
- * browser to lay out.
+ * browser to lay out, and images, which open in a lightbox (#467).
  */
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -12,6 +12,10 @@ import DOMPurify from 'dompurify'
 import { KN } from '@/lib/markdown/nodes'
 import { useTheme } from '@/lib/theme'
 import { mermaidConfig } from '@/lib/mermaid'
+import { markZoomable } from '@/lib/image-gallery'
+import ImageLightbox from '@/components/ui/image-lightbox/ImageLightbox.vue'
+
+defineOptions({ inheritAttrs: false })
 
 const props = defineProps<{ html: string }>()
 
@@ -42,10 +46,14 @@ async function renderMermaid() {
   }
 }
 
-onMounted(() => void renderMermaid())
+onMounted(() => {
+  if (host.value) markZoomable(host.value, t)
+  void renderMermaid()
+})
 </script>
 
 <template>
   <!-- eslint-disable-next-line vue/no-v-html -- sanitized server-side with the app's SANITIZE_CONFIG -->
-  <div ref="host" class="markdown-body max-w-none" v-html="props.html" />
+  <div ref="host" v-bind="$attrs" class="markdown-body max-w-none" v-html="props.html" />
+  <ImageLightbox :root="host" />
 </template>

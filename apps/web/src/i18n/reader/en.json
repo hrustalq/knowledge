@@ -155,5 +155,16 @@
       "converting": "Making the PDF",
       "packaging": "Packaging"
     }
+  },
+  "imageViewer": {
+    "title": "Image preview",
+    "hint": "Click the image to see it at full size, drag to move around it, and use the arrow keys to go to the next or previous image.",
+    "open": "Open image",
+    "openNamed": "Open image: {name}",
+    "position": "Image {n} of {total}",
+    "fit": "Fit to screen",
+    "actualSize": "Actual size",
+    "previous": "Previous image",
+    "next": "Next image"
   }
 }

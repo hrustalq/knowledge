@@ -148,6 +148,9 @@
 }
 .markdown-body hr, .kn-prose hr { border: none; border-top: 1px solid var(--border); margin: 1.75em 0; }
 .markdown-body img, .kn-prose img { max-width: 100%; border-radius: 8px; }
+/* A read-mode image opens the lightbox (#467, lib/image-gallery). */
+[data-kn-zoom] { cursor: zoom-in; }
+[data-kn-zoom]:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .markdown-body mark, .kn-prose mark {
   background: color-mix(in oklch, var(--kn-panel-warning) 30%, transparent);
   color: inherit;

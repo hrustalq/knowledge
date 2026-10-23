@@ -12,6 +12,7 @@
  * SSR renders nothing (DOMPurify needs a DOM); the client fills in on mount.
  */
 import { nextTick, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from '@/lib/markdown/render'
 import { parseScene, renderSceneToSvg } from '@/lib/markdown/drawing'
@@ -23,6 +24,11 @@ import { resolveAssetUrl } from '@/lib/api'
 import { useTheme } from '@/lib/theme'
 import { mermaidConfig } from '@/lib/mermaid'
 import { createRevealTracker, wrapRuns } from '@/lib/stream-reveal'
+import { markZoomable } from '@/lib/image-gallery'
+import ImageLightbox from '@/components/ui/image-lightbox/ImageLightbox.vue'
+
+// Two roots (the body and the lightbox), so a parent's class lands on the body by hand.
+defineOptions({ inheritAttrs: false })
 
 interface MarkdownHeading { id: string; text: string; level: number }
 
@@ -46,6 +52,7 @@ const emit = defineEmits<{
 }>()
 
 const pageRefsStore = usePageRefsStore()
+const { t } = useI18n()
 
 const host = ref<HTMLElement | null>(null)
 const html = ref('')
@@ -159,6 +166,8 @@ function resolveAssets() {
     img.loading = 'lazy'
     img.decoding = 'async'
   }
+  // Only finished text gets here, so a reply still streaming has nothing to open.
+  markZoomable(root, t)
 }
 
 function renderDrawings() {
@@ -260,5 +269,12 @@ watch([() => props.markdown, () => props.streaming, theme.isDark], () => void re
 </script>
 
 <template>
-  <div ref="host" class="markdown-body max-w-none" :class="streaming ? 'is-streaming' : ''" v-html="html" />
+  <div
+    ref="host"
+    v-bind="$attrs"
+    class="markdown-body max-w-none"
+    :class="streaming ? 'is-streaming' : ''"
+    v-html="html"
+  />
+  <ImageLightbox :root="host" />
 </template>

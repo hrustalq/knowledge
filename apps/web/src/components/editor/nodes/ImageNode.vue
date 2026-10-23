@@ -3,14 +3,33 @@
 // since `![]()` has nowhere to put one) because a deliberate resize is authored
 // intent, not a viewing preference.
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { resolveAssetUrl } from '@/lib/api'
+import { ZOOM_ATTR, zoomLabel } from '@/lib/image-gallery'
 
 const props = defineProps(nodeViewProps)
+const { t } = useI18n()
 const figure = ref<HTMLElement | null>(null)
 
 const src = computed(() => resolveAssetUrl((props.node.attrs.src as string) ?? ''))
 const width = computed(() => (props.node.attrs.width ? `${props.node.attrs.width}px` : undefined))
+
+/**
+ * Read mode makes the image a button that opens the page's lightbox (#467,
+ * the host's ImageLightbox listens for it). Edit mode leaves it alone: there a
+ * click selects the node and the grips resize it. A function, not a computed,
+ * so it re-reads `isEditable` on the same renders the grips' `v-if` does.
+ */
+function zoomAttrs() {
+  if (props.editor.isEditable) return {}
+  return {
+    [ZOOM_ATTR]: '',
+    tabindex: 0,
+    role: 'button',
+    'aria-label': zoomLabel(t, (props.node.attrs.alt || props.node.attrs.title || '') as string),
+  }
+}
 
 function startResize(event: PointerEvent, side: 'left' | 'right') {
   if (!props.editor.isEditable) return
@@ -57,6 +76,7 @@ function startResize(event: PointerEvent, side: 'left' | 'right') {
       loading="lazy"
       decoding="async"
       draggable="false"
+      v-bind="zoomAttrs()"
     />
     <template v-if="editor.isEditable">
       <span class="kn-image-grip" data-side="left" @pointerdown="startResize($event, 'left')" />

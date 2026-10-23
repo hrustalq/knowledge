@@ -82,12 +82,19 @@ export interface PublishingSettingsOverride {
   allowPasswordlessShares: boolean | null;
   /** Allow publishing a project as a public docs site (docs/features/44). */
   allowPublicSites: boolean | null;
+  /**
+   * Show embedded designs' snapshots on share links and published sites
+   * (#470, docs/features/64). Off shows captions and a placeholder; on or off,
+   * a public page never carries a Figma link, which would reveal the file key.
+   */
+  allowPublicEmbeds: boolean | null;
 }
 
 export interface PublishingSettingsValues {
   allowShareLinks: boolean;
   allowPasswordlessShares: boolean;
   allowPublicSites: boolean;
+  allowPublicEmbeds: boolean;
 }
 
 // GET/PATCH /v1/workspaces/:id/publishing-settings

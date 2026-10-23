@@ -5009,6 +5009,8 @@
     "allowPasswordlessHint": "Off: a link that never expires must have a password.",
     "allowPublicSites": "Public docs sites",
     "allowPublicSitesHint": "Admins can publish a project as a read-only site that opens without signing in.",
+    "allowPublicEmbeds": "Show embedded designs publicly",
+    "allowPublicEmbedsHint": "Share links and published sites show the snapshots of embedded Figma frames. Off, they show the captions and “Mockup not available publicly”. Figma links are never shown publicly: they reveal the file.",
     "inherit": "Default (off)",
     "on": "On",
     "off": "Off",

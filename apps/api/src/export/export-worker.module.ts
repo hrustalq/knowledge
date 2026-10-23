@@ -1,3 +1,4 @@
+import { EmbedsCoreModule } from '../embeds/embeds-core.module.js';
 import { Module } from '@nestjs/common';
 import { EventsModule } from '../events/events.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
@@ -14,7 +15,7 @@ import { GotenbergClient } from './gotenberg.client.js';
  * API process start building exports.
  */
 @Module({
-  imports: [PrismaModule, StorageModule, EventsModule, ExportCoreModule],
+  imports: [PrismaModule, StorageModule, EventsModule, ExportCoreModule, EmbedsCoreModule],
   providers: [ExportBuildService, ExportProcessor, ExportRenderClient, GotenbergClient],
 })
 export class ExportWorkerModule {}

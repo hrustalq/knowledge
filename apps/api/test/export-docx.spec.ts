@@ -240,6 +240,15 @@ describe('writeDocx — blocks', () => {
     expect(xml).toContain('<w:drawing>');
   });
 
+  it('draws an embedded design as its snapshot and caption, and an item with no snapshot as its caption (#470)', async () => {
+    const xml = await xmlOf(`<figure data-kn-embed="grid"><a data-kn-item="${IMG}">Sign-in</a><a>Elsewhere</a><figcaption>Flow</figcaption></figure>`);
+    expect(xml).toContain('<w:drawing>');
+    expect(xml).toContain('Sign-in');
+    expect(xml).toContain('Elsewhere');
+    expect(xml).toContain('Flow');
+    expect(xml).not.toContain('figma.com');
+  });
+
   it('draws a horizontal rule as a bottom border', async () => {
     const xml = await xmlOf('Above\n\n---\n\nBelow');
     expect(xml).toMatch(/<w:bottom w:val="single" w:color="D1D5DB"/);

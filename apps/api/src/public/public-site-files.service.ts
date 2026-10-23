@@ -1,3 +1,4 @@
+import { EmbedsService } from '../embeds/embeds.service.js';
 import { createHash } from 'node:crypto';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -66,6 +67,7 @@ export class PublicSiteFilesService {
     private readonly prisma: PrismaService,
     private readonly documents: DocumentsService,
     private readonly config: ConfigService<Env, true>,
+    private readonly embeds: EmbedsService,
   ) {}
 
   /**
@@ -196,7 +198,8 @@ export class PublicSiteFilesService {
       const bodies = await Promise.all(
         batch.map((p) =>
           this.documents.getContent(p.documentId, p.revisionId).then(
-            (c) => c.markdown,
+            // Text for machines: an embed is its captions, never its Figma link (#470).
+            (c) => this.embeds.publicMarkdown(c.markdown, p.revisionId, false),
             (e: unknown) => {
               this.logger.warn(`site llms-full: page ${p.documentId} unavailable: ${(e as Error).message}`);
               return null;
@@ -240,7 +243,8 @@ export class PublicSiteFilesService {
     if (matches(ifNoneMatch, etag)) return { etag, body: null };
     const content = await this.documents.getContent(row.documentId, row.revisionId).catch(() => null);
     if (!content) throw this.notFound();
-    return { etag, body: `${titledMarkdown(row.title, content.markdown).trimEnd()}\n` };
+    const body = await this.embeds.publicMarkdown(content.markdown, row.revisionId, false);
+    return { etag, body: `${titledMarkdown(row.title, body).trimEnd()}\n` };
   }
 
   // -------------------------------------------------------------------------

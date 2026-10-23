@@ -51,12 +51,14 @@ const KEYS: readonly { key: Key; label: string; hint: string }[] = [
   { key: 'allowShareLinks', label: 'publishing.allowShareLinks', hint: 'publishing.allowShareLinksHint' },
   { key: 'allowPasswordlessShares', label: 'publishing.allowPasswordless', hint: 'publishing.allowPasswordlessHint' },
   { key: 'allowPublicSites', label: 'publishing.allowPublicSites', hint: 'publishing.allowPublicSitesHint' },
+  { key: 'allowPublicEmbeds', label: 'publishing.allowPublicEmbeds', hint: 'publishing.allowPublicEmbedsHint' },
 ]
 
 const form = reactive<Record<Key, Tri>>({
   allowShareLinks: 'inherit',
   allowPasswordlessShares: 'inherit',
   allowPublicSites: 'inherit',
+  allowPublicEmbeds: 'inherit',
 })
 const toTri = (v: boolean | null): Tri => (v === null ? 'inherit' : v ? 'on' : 'off')
 const fromTri = (v: Tri): boolean | null => (v === 'inherit' ? null : v === 'on')
@@ -81,6 +83,7 @@ async function save() {
         allowShareLinks: fromTri(form.allowShareLinks),
         allowPasswordlessShares: fromTri(form.allowPasswordlessShares),
         allowPublicSites: fromTri(form.allowPublicSites),
+        allowPublicEmbeds: fromTri(form.allowPublicEmbeds),
       },
     })) as PublishingSettingsResponse
     queryClient.setQueryData(settingsOptions.queryKey, next)

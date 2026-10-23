@@ -421,7 +421,7 @@ describe('export packaging', () => {
 
 // ------------------------------------------------------------------ the build
 
-function buildHarness(opts: { row?: Partial<ExportJob>; gotenberg?: boolean; render?: () => Promise<unknown> } = {}) {
+function buildHarness(opts: { row?: Partial<ExportJob>; gotenberg?: boolean; render?: () => Promise<unknown>; embeds?: unknown; publicEmbeds?: boolean } = {}) {
   let row = jobRow(opts.row);
   const prisma = {
     exportJob: {
@@ -433,6 +433,7 @@ function buildHarness(opts: { row?: Partial<ExportJob>; gotenberg?: boolean; ren
       }),
       findUnique: vi.fn(async () => row),
     },
+    publishingSettings: { findUnique: vi.fn(async () => (opts.publicEmbeds ? { allowPublicEmbeds: true } : null)) },
     attachment: {
       findMany: vi.fn(async () => [
         { id: 'img', documentId: 'a', filename: 'shot.png', contentType: 'image/png', sizeBytes: 3, s3Key: 'k-img' },
@@ -480,6 +481,7 @@ function buildHarness(opts: { row?: Partial<ExportJob>; gotenberg?: boolean; ren
     renderer as never,
     gotenberg as never,
     events as never,
+    (opts.embeds ?? { publicMarkdown: vi.fn(async (md: string) => md), exportSnapshots: vi.fn(async () => []) }) as never,
     configOf() as never,
   );
   return { svc, row: () => row, written, renderer, gotenberg, events, storage, scope };
@@ -538,6 +540,33 @@ describe('ExportBuildService', () => {
     ]);
     expect(h.written[0]).toMatchObject({ key: `workspaces/${WS}/exports/job-1/install-guide.pdf`, type: 'application/pdf' });
     expect(h.row().status).toBe('completed');
+  });
+
+  it('prints embedded designs as images keyed by item, from rewritten markdown (#470)', async () => {
+    const embeds = {
+      publicMarkdown: vi.fn(async (_md: string, _rev: string, snapshots: boolean) => `<figure data-kn-embed="grid"><a${snapshots ? ' data-kn-item="item-1"' : ''}>Sign-in</a></figure>`),
+      exportSnapshots: vi.fn(async () => [{ id: 'item-1', documentId: 'doc-1', snapshotKey: 'k-embed' }]),
+    };
+    const h = buildHarness({ row: { format: 'pdf' }, gotenberg: true, embeds });
+    await h.svc.build('job-1');
+    const request = h.renderer.render.mock.calls[0][0] as { pages: { markdown: string }[]; assets: Record<string, string> };
+    expect(embeds.publicMarkdown.mock.calls.every((c) => c[2] === true)).toBe(true);
+    expect(request.pages[0].markdown).toContain('data-kn-item="item-1"');
+    expect(request.assets).toMatchObject({ 'item-1': 'asset-item-1.png' });
+    const files = h.gotenberg.htmlToPdf.mock.calls[0][0] as { name: string }[];
+    expect(files.map((f) => f.name)).toContain('asset-item-1.png');
+    expect(h.storage.getObjectBytes.mock.calls.map((c) => c[0])).toContain('k-embed');
+  });
+
+  it('gives a share link’s export snapshots only while the workspace shows embeds publicly (#470)', async () => {
+    const embeds = () => ({ publicMarkdown: vi.fn(async (md: string) => md), exportSnapshots: vi.fn(async () => []) });
+    const off = embeds();
+    await buildHarness({ row: { format: 'html', shareLinkId: 'share-1' }, embeds: off }).svc.build('job-1');
+    expect(off.exportSnapshots).not.toHaveBeenCalled();
+    expect(off.publicMarkdown.mock.calls.every((c) => c[2] === false)).toBe(true);
+    const on = embeds();
+    await buildHarness({ row: { format: 'html', shareLinkId: 'share-1' }, embeds: on, publicEmbeds: true }).svc.build('job-1');
+    expect(on.exportSnapshots).toHaveBeenCalled();
   });
 
   it('writes a Word document in the worker, without the renderer or Gotenberg, reading only the images', async () => {

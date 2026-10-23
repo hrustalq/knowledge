@@ -39392,6 +39392,11 @@
             "type": "boolean",
             "nullable": true,
             "description": "Allow publishing a project as a public docs site; null goes back to the default (off)"
+          },
+          "allowPublicEmbeds": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Show embedded designs' snapshots on share links and published sites; null goes back to the default (off)"
           }
         }
       },

@@ -316,3 +316,49 @@ describe('EmbedsService for search and agents', () => {
     expect(text).toContain('restricted_by');
   });
 });
+
+describe('EmbedsService.publicMarkdown (#470)', () => {
+  const md = [
+    'Intro.',
+    '',
+    `<figure data-kn-embed="grid">\n<a href="https://www.figma.com/design/${KEY}/?node-id=1-2" data-kn-version="7">Sign-in</a>\n<a href="https://www.figma.com/design/OTHERKEY9999/?node-id=5-6" data-kn-version="3">Other</a>\n<figcaption>Flow &amp; more</figcaption>\n</figure>`,
+  ].join('\n');
+  const rows = [
+    { id: 'item-a', workspaceId: WS, documentId: DOC, revisionId: 'r1', groupIndex: 0, position: 0, fileKey: KEY, nodeId: '1:2', version: '7', warning: null },
+    { id: 'item-b', workspaceId: WS, documentId: DOC, revisionId: 'r1', groupIndex: 0, position: 1, fileKey: 'OTHERKEY9999', nodeId: '5:6', version: '3', warning: null },
+  ];
+  const service = () =>
+    new EmbedsService(
+      fakePrisma({
+        refs: rows,
+        node: { fileKey: KEY, nodeId: '1:2', version: '7', snapshotKey: 'k', error: null, retryAt: null },
+        files: [{ fileKey: KEY, projectId: '222', teamId: null, connectorId: 'c1' }],
+        connectors: [figma({ allowlist: 'project:222' })],
+      }) as never,
+      {} as never,
+      config,
+      {} as never,
+    );
+
+  it('never carries a Figma link; with snapshots on, only a ready allowlisted item gets an opaque id', async () => {
+    const on = await service().publicMarkdown(md, 'r1', true);
+    expect(on).not.toContain('figma.com');
+    expect(on).not.toContain(KEY);
+    expect(on).toContain('<a data-kn-item="item-a">Sign-in</a>');
+    expect(on).toContain('<a>Other</a>');
+    expect(on).toContain('<figcaption>Flow &amp; more</figcaption>');
+    expect(on).toContain('Intro.');
+  });
+
+  it('with snapshots off, every item is its caption only', async () => {
+    const off = await service().publicMarkdown(md, 'r1', false);
+    expect(off).not.toContain('data-kn-item');
+    expect(off).toContain('<a>Sign-in</a><a>Other</a>');
+  });
+
+  it('leaves a page with no groups untouched', async () => {
+    await expect(service().publicMarkdown('Just prose with https://www.figma.com/design/X/.', 'r1', true)).resolves.toBe(
+      'Just prose with https://www.figma.com/design/X/.',
+    );
+  });
+});

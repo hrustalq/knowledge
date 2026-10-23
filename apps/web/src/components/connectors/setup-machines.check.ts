@@ -13,7 +13,7 @@
  * snapshot restoring mid-configure with the child's sub-step intact.
  */
 import assert from 'node:assert/strict'
-import { canWalkTree, createSetupActor, kindSteps, stepIndex, stepLabels } from './setup-machines.ts'
+import { canWalkTree, createSetupActor, createsPages, kindSteps, stepIndex, stepLabels } from './setup-machines.ts'
 
 const services = {
   test: async () => ({ ok: true, detail: 'Engineering (ENG)' }),
@@ -210,6 +210,46 @@ async function settle() {
   assert.equal(steps[0].credential, true, 'the JSON key is asked for with the delegation subject')
   assert.deepEqual(steps[1].fields, ['folderId'])
   assert.equal(canWalkTree('google-drive'), true, 'a new Drive connector is offered review + keep the tree')
+}
+
+// --- #512: a kind that creates no pages skips the destination step ----------
+for (const kind of ['figma', 'linear'] as const) {
+  assert.equal(createsPages(kind), false)
+  const labels = stepLabels(kind)
+  assert.ok(!labels.includes('connectors.step.destination'), `${kind} stepper has no destination`)
+  assert.equal(stepIndex(kind, 'options', null), labels.length - 1, `${kind} options is the last step`)
+
+  const actor = createSetupActor(kind, { kind, projectId: 'p1' }, services)
+  actor.start()
+  actor.send({ type: 'SET', patch: { name: 'Design', credential: 'token' } })
+  actor.send({ type: 'NEXT' })
+  actor.send({ type: 'NEXT' })
+  await settle()
+  assert.equal(actor.getSnapshot().value, 'options', `${kind} test resolves straight into options`)
+
+  // Back skips it too, landing on the kind's last question.
+  actor.send({ type: 'BACK' })
+  assert.equal(actor.getSnapshot().value, 'configuring')
+
+  // A skipped test takes the same route.
+  const failing = createSetupActor(kind, { kind }, { ...services, test: async () => ({ ok: false, detail: 'nope' }) })
+  failing.start()
+  failing.send({ type: 'SET', patch: { name: 'Design', credential: 'token' } })
+  failing.send({ type: 'NEXT' })
+  failing.send({ type: 'NEXT' })
+  await settle()
+  failing.send({ type: 'SKIP_TEST' })
+  assert.equal(failing.getSnapshot().value, 'options')
+
+  actor.send({ type: 'NEXT' })
+  await settle()
+  actor.send({ type: 'SUBMIT' })
+  await settle()
+  assert.equal(actor.getSnapshot().value, 'done')
+  assert.equal(actor.getSnapshot().context.projectId, 'p1', 'the default project still saves')
+}
+for (const kind of ['confluence', 'notion', 'markdown-git', 'codebase'] as const) {
+  assert.ok(stepLabels(kind).includes('connectors.step.destination'), `${kind} keeps the destination step`)
 }
 
 console.log('setup-machines: all checks passed')

@@ -51,6 +51,7 @@ import {
   COULD_NOT_CONNECT,
   clearSetup,
   createSetupActor,
+  createsPages,
   kindStepMeta,
   loadSetup,
   saveSetup,
@@ -366,6 +367,16 @@ function startOver() {
       <ImportStepper :current="current" :steps="labels" :label="t('connectors.steps')" class="kn-scroll-strip overflow-x-auto pb-1" />
 
       <div class="min-h-52 py-1">
+        <!-- What the test reached, on the step right after it: Destination, or
+             What it does for a kind that creates no pages (#512). -->
+        <div
+          v-if="context?.testDetail && (state === 'destination' || (state === 'options' && !createsPages(kind)))"
+          class="mb-4 flex items-center gap-2 text-sm"
+        >
+          <Check class="size-4 text-panel-tip-ink" />
+          <span>{{ t('connectors.connected', { detail: context.testDetail }) }}</span>
+        </div>
+
         <!-- 1 · Name and system ------------------------------------------->
         <div v-if="state === 'naming'" class="space-y-4">
           <label class="block space-y-1.5">
@@ -518,11 +529,6 @@ function startOver() {
 
         <!-- Destination ---------------------------------------------------->
         <div v-else-if="state === 'destination'" class="space-y-4">
-          <div v-if="context?.testDetail" class="flex items-center gap-2 text-sm">
-            <Check class="size-4 text-panel-tip-ink" />
-            <span>{{ t('connectors.connected', { detail: context.testDetail }) }}</span>
-          </div>
-
           <!-- Spec files the test found (#78). Offered, never added on their
                own: a repository's fixtures look exactly like its real spec. -->
           <div v-if="specSuggestions.length" class="space-y-2 rounded-md border p-3">

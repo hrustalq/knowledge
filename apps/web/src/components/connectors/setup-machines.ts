@@ -299,6 +299,16 @@ export function canWalkTree(kind: ConnectorKind): boolean {
   return connectorKindInfo(kind)?.capabilities.tree ?? false
 }
 
+/**
+ * Whether this kind creates pages, and so has a destination to ask for (#512).
+ * A harvest or embed kind moves no content, so its project and parent are never
+ * read and the step is skipped.
+ */
+export function createsPages(kind: ConnectorKind): boolean {
+  const caps = connectorKindInfo(kind)?.capabilities
+  return !!caps && (caps.pull || caps.push)
+}
+
 /** The current sub-step's meta, so the renderer never switches on kind itself. */
 export function kindStepMeta(kind: ConnectorKind, stateName: string | null): StepMeta | null {
   return KIND_STEPS[kind].find((step) => step.name === stateName)?.meta ?? null
@@ -338,6 +348,7 @@ export const connectorSetupMachine = setup({
     // Editing an existing connector keeps its stored credential, so an empty
     // box is legitimate there and only a new connector must be tested blind.
     canTest: ({ context }) => context.credential !== '' || context.editingId !== null,
+    skipsDestination: ({ context }) => !createsPages(context.kind),
   },
   actions: {
     patch: assign(({ context, event }) =>
@@ -418,7 +429,7 @@ export const connectorSetupMachine = setup({
         onDone: [
           {
             guard: ({ event }) => event.output.ok,
-            target: 'destination',
+            target: 'passed',
             actions: assign({
               testDetail: ({ event }) => event.output.detail,
               specSuggestions: ({ event }) => event.output.apiSpecSuggestions ?? [],
@@ -446,8 +457,13 @@ export const connectorSetupMachine = setup({
       on: {
         RETRY: { target: 'testing', actions: 'clearError' },
         BACK: { target: 'configuring', actions: 'clearError' },
-        SKIP_TEST: { target: 'destination', actions: 'clearError' },
+        SKIP_TEST: { target: 'passed', actions: 'clearError' },
       },
+    },
+
+    /** Past the test: a kind that creates no pages has no destination to ask for. */
+    passed: {
+      always: [{ guard: 'skipsDestination', target: 'options' }, { target: 'destination' }],
     },
 
     destination: {
@@ -461,7 +477,7 @@ export const connectorSetupMachine = setup({
     options: {
       on: {
         SUBMIT: 'saving',
-        BACK: 'destination',
+        BACK: [{ guard: 'skipsDestination', target: 'configuring' }, { target: 'destination' }],
       },
     },
 
@@ -574,7 +590,7 @@ export function stepLabels(kind: ConnectorKind): string[] {
     'connectors.step.name',
     ...kindSteps(kind).map((step) => step.labelKey),
     'connectors.step.test',
-    'connectors.step.destination',
+    ...(createsPages(kind) ? ['connectors.step.destination'] : []),
     'connectors.step.options',
   ]
 }
@@ -582,6 +598,7 @@ export function stepLabels(kind: ConnectorKind): string[] {
 /** Which stepper index the given wrapper/child state pair is on. */
 export function stepIndex(kind: ConnectorKind, state: string, childState: string | null): number {
   const kinds = kindSteps(kind)
+  const destination = createsPages(kind) ? 1 : 0
   const childIndex = childState ? Math.max(0, KIND_STEPS[kind].findIndex((s) => s.name === childState)) : 0
 
   switch (state) {
@@ -597,7 +614,7 @@ export function stepIndex(kind: ConnectorKind, state: string, childState: string
     case 'options':
     case 'saving':
     case 'done':
-      return 3 + kinds.length
+      return 2 + destination + kinds.length
     default:
       return 0
   }

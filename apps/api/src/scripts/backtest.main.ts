@@ -24,6 +24,7 @@ import {
   type ThresholdTuning,
 } from '../search/tuning.js';
 import { VerificationPolicyService } from '../verification/verification-policy.service.js';
+import { CommunitiesService } from '../communities/communities.service.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
 import { systemScope, type AccessScope } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
@@ -62,6 +63,7 @@ import type { AgentFinding } from '@knowledge/contracts';
  *
  *   make backtest ARGS="--generate --limit 120"                       known-item retrieval quality
  *   make backtest ARGS="--generate --as <userId>"                     the same, through one person's page restrictions
+ *   make backtest ARGS="--generate --with '{"communityPriorWeight":0.5}'"   … under other knobs, for a before/after in one session (#475)
  *   make backtest ARGS="--report"                                     aggregate the recorded stream
  *   make backtest ARGS="--export-feedback --workspace <id> --out f"   votes → labelled dataset (NDJSON)
  *   make backtest ARGS="--feedback f.ndjson --k 10"                   replay that dataset through search
@@ -109,6 +111,47 @@ function summarize(label: string, values: number[]): string {
 }
 
 /**
+ * `--with '<json>'` (#475): override the workspace's effective search knobs
+ * for this run only, so a before/after pair runs in one session on the same
+ * data — `--with '{"communityPriorWeight":0.5}'`. Nothing is written.
+ */
+function overrideKnobs(app: INestApplicationContext): Record<string, unknown> {
+  const raw = option('--with', '');
+  if (!raw) return {};
+  const over = JSON.parse(raw) as Record<string, unknown>;
+  const policy = app.get(VerificationPolicyService);
+  const effective = policy.effective.bind(policy);
+  policy.effective = async (workspaceId: string) => ({ ...(await effective(workspaceId)), ...over });
+  return over;
+}
+
+/**
+ * The broad-query set (#475, docs/features/63): every community the scope may
+ * see whole, at every level, asked by its own title and answered by its member
+ * pages. No model writes the questions, so the set is reproducible; it is only
+ * as good as the atlas's titles.
+ */
+async function broadCases(app: INestApplicationContext, workspaceId: string, scope: AccessScope): Promise<FeedbackBacktestCase[]> {
+  const communities = await app.get(CommunitiesService).scored(scope);
+  return communities.map((c) => ({
+    workspaceId,
+    query: c.title,
+    surface: 'assistant',
+    rating: 'up',
+    reason: null,
+    expectedDocumentIds: c.members,
+    rejectedDocumentIds: [],
+    createdAt: '',
+  }));
+}
+
+/** Share of a community's pages in the top 5, out of as many as could fit: 1 when the top 5 is all members. */
+function broadRecallAt5(ranked: readonly string[], members: readonly string[]): number {
+  const want = new Set(members);
+  return ranked.slice(0, 5).filter((id) => want.has(id)).length / Math.min(5, want.size);
+}
+
+/**
  * Known-item retrieval: each document's own title, answered by that document.
  *
  * `--as <userId>` searches with that person's `AccessScope` instead of the
@@ -129,6 +172,7 @@ async function generate(): Promise<void> {
   });
   const prisma = app.get(PrismaService);
   const search = app.get(SearchService);
+  const over = overrideKnobs(app);
 
   let scope: AccessScope = systemScope(workspaceId);
   if (asUser) {
@@ -178,6 +222,21 @@ async function generate(): Promise<void> {
   console.log(`recall@${k}${String(k).length === 1 ? ' ' : ''}            ${pct(hitAtK)}%  (${hitAtK}/${docs.length})`);
   console.log(`MRR@${k}               ${(reciprocalRankSum / docs.length).toFixed(4)}`);
   console.log(`not in top ${k}        ${missed}`);
+  if (Object.keys(over).length) console.log(`knobs overridden     ${JSON.stringify(over)}`);
+
+  // #475: the broad questions, beside the known items, from the same session.
+  const broad = await broadCases(app, workspaceId, scope);
+  if (broad.length === 0) {
+    console.log('broad queries        none (no communities built — run the atlas agent first)');
+  } else {
+    let sum = 0;
+    for (const c of broad) {
+      const { results } = await search.search({ workspaceId, query: c.query, limit: k, groupBy: 'page' } as SearchDto, scope);
+      sum += broadRecallAt5(results.map((r) => r.documentId), c.expectedDocumentIds);
+    }
+    console.log(`broad queries        ${broad.length} (each community's own title, every level)`);
+    console.log(`broad recall@5       ${((sum / broad.length) * 100).toFixed(1)}%  (share of each community's pages in its top 5)`);
+  }
   console.log('');
   console.log('Every query above also wrote a search.executed event, so `--report`');
   console.log('will show where the time went.');
@@ -559,16 +618,6 @@ async function calibrateCaptures(): Promise<void> {
   process.exit(0);
 }
 
-/**
- * `make tune` (#305, phase 4): propose the workspace's search knobs and capture
- * thresholds from the backtest's own datasets. Each distinct query is searched
- * once, recording its candidate pool, and every candidate knob setting
- * re-ranks those pools in memory (`search/tuning.ts`), so the stores see one
- * search per query — the ArcadeDB note on running backtests one at a time
- * still applies. Reads only: it prints a report and the PATCH bodies a person
- * may send, appends the same report to tune-<day>.jsonl beside the backtest
- * stream, and writes no setting.
- */
 /** The search knobs of a workspace's effective settings. */
 function knobsOf(e: SearchKnobs): SearchKnobs {
   return {
@@ -581,6 +630,16 @@ function knobsOf(e: SearchKnobs): SearchKnobs {
   };
 }
 
+/**
+ * `make tune` (#305, phase 4): propose the workspace's search knobs and capture
+ * thresholds from the backtest's own datasets. Each distinct query is searched
+ * once, recording its candidate pool, and every candidate knob setting
+ * re-ranks those pools in memory (`search/tuning.ts`), so the stores see one
+ * search per query — the ArcadeDB note on running backtests one at a time
+ * still applies. Reads only: it prints a report and the PATCH bodies a person
+ * may send, appends the same report to tune-<day>.jsonl beside the backtest
+ * stream, and writes no setting.
+ */
 async function tune(): Promise<void> {
   const workspaceId = option('--workspace', DEMO_WORKSPACE);
   const k = Number(option('--k', '10'));
@@ -592,8 +651,9 @@ async function tune(): Promise<void> {
   const policy = app.get(VerificationPolicyService);
   const scope = systemScope(workspaceId);
 
-  // Objective: the votes, from a saved export or straight from PostgreSQL.
-  const feedback: FeedbackBacktestCase[] = [];
+  // Objective: the votes, from a saved export or straight from PostgreSQL,
+  // and the broad questions (#475), each answered by any of its community's pages.
+  const feedback: FeedbackBacktestCase[] = await broadCases(app, workspaceId, scope);
   if (file) feedback.push(...readCases(file).filter((c) => c.workspaceId === workspaceId));
   else {
     const stream = app.get(FeedbackDatasetService).cases(workspaceId, {});
@@ -677,7 +737,7 @@ async function tune(): Promise<void> {
 
   console.log('');
   console.log(`tune — workspace ${workspaceId}, k=${k}, holdout ${HOLDOUT_SHARE * 100}% of each set`);
-  console.log(`feedback cases       ${feedback.length}${file ? ` from ${file}` : ' from the votes'} (objective: MRR)`);
+  console.log(`feedback cases       ${feedback.length}${file ? ` from ${file}` : ' from the votes'} + the broad questions (objective: MRR)`);
   console.log(`known items          ${known.length} page titles (constraint: recall@${KNOWN_ITEM_K} drops ≤ ${MAX_RECALL_DROP * 100} point)`);
   console.log(`trust ranking        ${effective.trustRanking ? 'on' : 'off — the weights cannot move a result'}`);
   console.log('');

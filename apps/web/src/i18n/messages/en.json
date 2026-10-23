@@ -3545,7 +3545,21 @@
       "toggleHeader": "Toggle header row",
       "deleteTable": "Delete table",
       "row": "Row",
-      "column": "Column"
+      "column": "Column",
+      "rowHandle": "Row {n} actions",
+      "columnHandle": "Column {n} actions",
+      "insertRowAbove": "Insert row above",
+      "insertRowBelow": "Insert row below",
+      "insertColumnLeft": "Insert column left",
+      "insertColumnRight": "Insert column right",
+      "deleteRows": "Delete {count} rows",
+      "deleteColumns": "Delete {count} columns",
+      "confirmDeleteRow": "Delete this row?",
+      "confirmDeleteRows": "Delete {count} rows?",
+      "confirmDeleteColumn": "Delete this column?",
+      "confirmDeleteColumns": "Delete {count} columns?",
+      "confirmCellsLost": "{count} cell with content will be removed. Undo brings it back. | {count} cells with content will be removed. Undo brings them back.",
+      "changedWhileConfirming": "The table changed while you were confirming, so nothing was deleted."
     },
     "group": {
       "text": "Text",

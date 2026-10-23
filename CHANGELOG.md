@@ -17,6 +17,14 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Every table row and column has its own handle in the editor (#471). A grip on the table's left
+  border acts on a row, and one on its top border acts on a column. They show for the row and column
+  under the pointer or the caret, and its menu inserts beside it or deletes it, whichever cell the caret is in.
+  The target is outlined before anything happens. Deleting a row or column whose cells are all empty
+  happens at once. If any cell holds text, an image or a mention, a confirmation first says how many
+  such cells will be lost. Keyboard: Escape in a cell focuses the row handle, Tab reaches the column
+  handle. The icon-only delete-row/column buttons on the table bar are gone, and Toggle header row
+  and Delete table stay.
 - API operations can generate their QA test requests (#468). On an HTTP operation of an OpenAPI
   spec, the flask menu beside the lock offers **Generate test requests**: one positive case per
   documented success, and a negative case for every required parameter or body field left out,

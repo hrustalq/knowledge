@@ -96,6 +96,7 @@ import LinkDialog from './LinkDialog.vue'
 import EditorToolbar from './EditorToolbar.vue'
 import EditorBubble from './EditorBubble.vue'
 import TableControls from './TableControls.vue'
+import TableHandles from './TableHandles.vue'
 
 export interface MentionablePage {
   documentId: string
@@ -976,6 +977,7 @@ defineExpose({
       </div>
 
       <EditorBubble v-if="editor && editable" :editor="editor" @link="openLinkDialog" />
+      <TableHandles v-if="editor && editable && !compact" :editor="editor" />
       <TableControls v-if="editor && editable && !compact" :editor="editor" />
     </div>
 

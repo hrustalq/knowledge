@@ -1217,6 +1217,55 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-bubble-status { width: 1.1rem; min-width: 1.1rem; height: 1.1rem; border-radius: 999px; padding: 0; }
 .kn-table-bar .kn-danger:hover { background: color-mix(in oklch, var(--destructive) 15%, transparent); color: var(--destructive); }
 
+/*
+ * Row and column handles (TableHandles): a pill straddling the table's border,
+ * centred on its row or column. Fixed, like the bars: top/left are the centre
+ * point, written inline. The row pill is 16px wide so it stays clear of the
+ * block gutter, which ends 16px left of the table; above the table only the
+ * bar sits, and it keeps its distance (gap 16).
+ */
+.kn-table-grip {
+  position: fixed;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  translate: -50% -50%;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.kn-table-grip-row { width: 1rem; height: 1.5rem; }
+.kn-table-grip-col { width: 1.5rem; height: 1rem; }
+.kn-table-grip:hover,
+.kn-table-grip:focus-visible,
+.kn-table-grip[data-state='open'] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+.kn-table-grip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+/* A finger needs more than a pointer does. */
+@media (pointer: coarse) {
+  .kn-table-grip-row { width: 1.5rem; height: 2.25rem; }
+  .kn-table-grip-col { width: 2.25rem; height: 1.5rem; }
+}
+/* What the handle under the pointer, or in focus, acts on. */
+.kn-table-band {
+  position: fixed;
+  z-index: 29;
+  pointer-events: none;
+  border-radius: 2px;
+  background: color-mix(in oklch, var(--primary) 8%, transparent);
+  outline: 2px solid color-mix(in oklch, var(--primary) 55%, transparent);
+  outline-offset: -1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kn-table-grip { transition: none; }
+}
+
 /* Command menu ------------------------------------------------------------ */
 
 .kn-cmd {

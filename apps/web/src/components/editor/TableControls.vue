@@ -1,7 +1,9 @@
 <script setup lang="ts">
 /**
- * Table row/column controls. Appear only while the caret is inside a table and
+ * Table-wide controls. Appear only while the caret is inside a table and
  * anchor to that table, so a page full of tables never shows more than one set.
+ * Deleting a row or column lives on that row's or column's own handle
+ * (TableHandles), which shows its target and asks before losing content.
  */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -9,8 +11,6 @@ import type { Editor } from '@tiptap/core'
 import {
   ArrowDownToLine,
   ArrowRightToLine,
-  Rows3,
-  Columns3,
   Trash2,
 } from 'lucide-vue-next'
 import { useAnchoredFloating, type AnchorRect } from '@/lib/use-anchored'
@@ -27,7 +27,8 @@ const props = defineProps<{ editor: Editor }>()
  * and `shift`, which is why the hand-rolled ceiling check is gone.
  */
 const rect = ref<AnchorRect | null>(null)
-const { setFloating, floatingStyles } = useAnchoredFloating(rect, { placement: 'top' })
+// The extra gap leaves the column handles on the table's top border clear of the bar.
+const { setFloating, floatingStyles } = useAnchoredFloating(rect, { placement: 'top', gap: 16 })
 
 function update() {
   if (!props.editor.isActive('table')) {
@@ -59,12 +60,6 @@ useSubscription(editorStreams(props.editor).frame$.subscribe(update))
       <ArrowRightToLine class="size-3.5" /> {{ t('toolbar.table.column') }}
     </button>
     <span class="kn-bubble-sep" />
-    <button type="button" :title="t('toolbar.table.deleteRow')" @mousedown.prevent="editor.chain().focus().deleteRow().run()">
-      <Rows3 class="size-3.5" />
-    </button>
-    <button type="button" :title="t('toolbar.table.deleteColumn')" @mousedown.prevent="editor.chain().focus().deleteColumn().run()">
-      <Columns3 class="size-3.5" />
-    </button>
     <button type="button" :title="t('toolbar.table.toggleHeader')" @mousedown.prevent="editor.chain().focus().toggleHeaderRow().run()">
       H
     </button>

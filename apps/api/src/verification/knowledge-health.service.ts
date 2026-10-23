@@ -32,6 +32,7 @@ import { listedSql } from '../common/listed-page.js';
 import { quietPageSql, readSignalsColumnsSql, readSignalsJoinSql } from '../analytics/read-signals.js';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
+import { brokenCallsSql } from '../api-specs/api-fixtures.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { VerificationPolicyService } from './verification-policy.service.js';
 import { VerificationService } from './verification.service.js';
@@ -75,6 +76,7 @@ interface HealthSqlRow {
   body_chars: number | null;
   child_count: number;
   missing_paths: string[];
+  broken_calls: string[];
   last_read_at: Date | null;
   status: SourceVerificationState;
 }
@@ -268,6 +270,8 @@ export class KnowledgeHealthService {
              -- Only a declaration that still resolves: a connector deleted
              -- since the last pull leaves a stale list behind its null id.
              COALESCE(cd.missing_paths, '{}') AS missing_paths,
+             -- #483: a fixture calling an operation no spec head defines.
+             ${brokenCallsSql(Prisma.sql`b.head_revision_id`)} AS broken_calls,
              d.created_at, ${readSignalsColumnsSql(access.workspaceId, this.readSince(now))},
              CASE
                WHEN d.verification_flag = 'outdated' THEN 'outdated'
@@ -340,6 +344,7 @@ export class KnowledgeHealthService {
       verificationFlag: (r.verification_flag as VerificationFlag | null) ?? null,
       verificationNote: r.verification_note,
       missingPaths: r.missing_paths,
+      brokenCalls: r.broken_calls,
     };
   }
 }
@@ -376,6 +381,8 @@ export function healthFilterSql(
       return Prisma.sql`${live} AND (r.status IN ('expired', 'outdated') OR ${inactive})`;
     case 'missing-paths':
       return Prisma.sql`${live} AND cardinality(r.missing_paths) > 0`;
+    case 'broken-calls':
+      return Prisma.sql`${live} AND cardinality(r.broken_calls) > 0`;
     case 'handed-off':
       return Prisma.sql`${live} AND EXISTS (
         SELECT 1 FROM connector_work_items w

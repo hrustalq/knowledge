@@ -21,7 +21,8 @@ import { IngestionProducer } from './ingestion.producer.js';
 import { UNFILTERED } from '../common/document-acl.js';
 import { ComponentsService } from '../components/components.service.js';
 import { ApiSpecsService, type ApiSpecProjection } from '../api-specs/api-specs.service.js';
-import { isApiSpecKind } from '@knowledge/contracts';
+import { ApiFixturesService, type ApiFixtureProjection } from '../api-specs/api-fixtures.service.js';
+import { isApiSpecKind, isTestFixtureKind } from '@knowledge/contracts';
 import { bindTrace, currentTrace, emitBacktest, startTrace, withTrace } from '@knowledge/observability';
 
 interface IngestionJobData {
@@ -45,6 +46,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     private readonly components: ComponentsService,
     private readonly apiSpecs: ApiSpecsService,
     private readonly conflicts: ConflictsService,
+    private readonly apiFixtures: ApiFixturesService,
   ) {
     super();
   }
@@ -127,11 +129,22 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       //    type, and indexed as its markdown projection, so everything from
       //    step 3 on is the page pipeline unchanged. A spec that will not parse
       //    fails the job with the validator's messages, which finalize would
-      //    have refused unless a limit was lowered since.
+      //    have refused unless a limit was lowered since. A test fixture
+      //    (#483) takes the same road through its own projection.
       const kind = revision.document.kind;
       let spec: ApiSpecProjection | null = null;
+      let fixture: ApiFixtureProjection | null = null;
       let parsed: { content: string; data: Record<string, unknown> };
-      if (isApiSpecKind(kind)) {
+      if (isTestFixtureKind(kind)) {
+        fixture = await this.apiFixtures.project({
+          workspaceId: revision.document.workspaceId,
+          documentId: revision.documentId,
+          revisionId: revision.id,
+          title: revision.document.title,
+          raw,
+        });
+        parsed = { content: fixture.markdown, data: {} };
+      } else if (isApiSpecKind(kind)) {
         spec = await this.apiSpecs.project({
           workspaceId: revision.document.workspaceId,
           documentId: revision.documentId,
@@ -252,7 +265,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       //    frontmatter `relations:`/`tags:`, and the operations a page's API
       //    blocks mirror (#78) → typed edges with provenance. A spec's body is
       //    its own projection, which declares nothing.
-      const facts = extractFrontmatterFacts(parsed.data ?? {}, spec ? '' : parsed.content);
+      const facts = extractFrontmatterFacts(parsed.data ?? {}, spec || fixture ? '' : parsed.content);
       await this.graph.replaceRevisionFrontmatterFacts({
         workspaceId: revision.document.workspaceId,
         documentId: revision.documentId,
@@ -266,9 +279,11 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       // 7a. #78: a spec DESCRIBES every operation and channel it defines.
       //     Revision-scoped like frontmatter, so a branch's operations join the
       //     live graph only when the branch merges. Skipped for pages: a kind
-      //     never changes, so a page has no spec edges to clear.
-      const specFacts = spec ? specDescribes(spec) : [];
-      if (spec) {
+      //     never changes, so a page has no spec edges to clear. A fixture
+      //     (#483) DEPENDS_ON each operation it calls, in the same class, so
+      //     impact analysis on an operation lists the fixtures that call it.
+      const specFacts = spec ? specDescribes(spec) : fixture ? fixtureDependsOn(fixture) : [];
+      if (spec || fixture) {
         await this.graph.replaceRevisionSpecFacts({
           workspaceId: revision.document.workspaceId,
           documentId: revision.documentId,
@@ -595,6 +610,22 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       this.logger.log(`Dependent reindex queued for "${doc.title}" (${depId}) after ${documentId}`);
     }
   }
+}
+
+/** One `DEPENDS_ON` per distinct operation a fixture calls, setup or teardown. */
+function fixtureDependsOn(fixture: ApiFixtureProjection) {
+  const byKey = new Map<string, ApiFixtureProjection['calls'][number]>();
+  for (const c of fixture.calls) if (!byKey.has(c.entityKey)) byKey.set(c.entityKey, c);
+  return [...byKey.values()].map((c) => ({
+    type: 'DEPENDS_ON',
+    target: {
+      key: c.entityKey,
+      type: 'op',
+      name: c.operation ? `${c.operation.method ?? ''} ${c.operation.path}`.trim() : c.entityKey,
+    },
+    extractor: 'spec' as const,
+    confidence: 1,
+  }));
 }
 
 /** One `DESCRIBES` per distinct operation entity: an AsyncAPI channel's send and receive are one vertex. */

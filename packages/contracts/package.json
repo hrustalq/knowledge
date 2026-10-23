@@ -13,6 +13,7 @@
     "./api/samples": "./src/api/samples.ts",
     "./api/diff": "./src/api/diff.ts",
     "./api/test-cases": "./src/api/test-cases.ts",
+    "./api/fixtures": "./src/api/fixtures.ts",
     "./identity": "./src/identity/index.ts",
     "./notifications": "./src/notifications/index.ts",
     "./ai": "./src/ai/index.ts",

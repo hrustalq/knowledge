@@ -17,10 +17,24 @@ import type { ApiTestCase } from '@knowledge/contracts/api/test-cases';
 
 
 /** The kinds whose body is a spec rather than markdown. */
-export type ApiSpecKind = Exclude<ApiDocumentKind, 'page'>;
+export type ApiSpecKind = Exclude<ApiDocumentKind, 'page' | 'test-fixture'>;
 
 export function isApiSpecKind(kind: string | null | undefined): kind is ApiSpecKind {
   return kind === 'openapi' || kind === 'asyncapi';
+}
+
+/** A QA test fixture (#483): setup and teardown calls, not a spec. */
+export function isTestFixtureKind(kind: string | null | undefined): kind is 'test-fixture' {
+  return kind === 'test-fixture';
+}
+
+/**
+ * The kinds whose body is YAML or JSON stored verbatim — a spec or a fixture.
+ * They have no frontmatter, cannot start from a template, and are stored under
+ * a `vnd` type in the syntax the author named (`structuredContentType`).
+ */
+export function isStructuredKind(kind: string | null | undefined): kind is ApiSpecKind | 'test-fixture' {
+  return isApiSpecKind(kind) || isTestFixtureKind(kind);
 }
 
 /** How a spec body is written. YAML is a superset of JSON, so either parses as YAML. */
@@ -35,6 +49,11 @@ export type ApiSpecSyntax = (typeof API_SPEC_SYNTAXES)[number];
  */
 export function apiSpecContentType(kind: ApiSpecKind, syntax: ApiSpecSyntax): string {
   return `application/vnd.${kind === 'openapi' ? 'oai.openapi' : 'aai.asyncapi'}+${syntax}`;
+}
+
+/** `apiSpecContentType`, plus the fixture's own `vnd.knowledge.test-fixture` type. */
+export function structuredContentType(kind: ApiSpecKind | 'test-fixture', syntax: ApiSpecSyntax): string {
+  return kind === 'test-fixture' ? `application/vnd.knowledge.test-fixture+${syntax}` : apiSpecContentType(kind, syntax);
 }
 
 /**

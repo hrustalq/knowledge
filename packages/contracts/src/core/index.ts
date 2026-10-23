@@ -50,11 +50,12 @@ export function parseAcceptLanguage(header: string | undefined | null): Locale |
 
 /**
  * `documents.kind` (#78). `page` is every document that existed before API
- * reference documents. Here rather than in `api/` because DocumentSummary
- * carries it and `core` must not import the domains that import it; `api/`
- * holds everything else about specs.
+ * reference documents; `test-fixture` (#483) is a QA fixture, a YAML/JSON
+ * chain of calls a suite runs before its cases. Here rather than in `api/`
+ * because DocumentSummary carries it and `core` must not import the domains
+ * that import it; `api/` holds everything else about specs and fixtures.
  */
-export const API_DOCUMENT_KINDS = ['page', 'openapi', 'asyncapi'] as const;
+export const API_DOCUMENT_KINDS = ['page', 'openapi', 'asyncapi', 'test-fixture'] as const;
 export type ApiDocumentKind = (typeof API_DOCUMENT_KINDS)[number];
 
 export interface DocumentSummary {
@@ -757,6 +758,8 @@ export interface DocumentTrust {
  * union of expired, outdated and inactive — the "needs attention" view.
  * `missing-paths` is a component page (docs/features/51) declaring a path no
  * file answers to at its connector's indexed head.
+ * `broken-calls` is a test fixture (#483) whose head calls an operation no
+ * spec head defines any more.
  * `unread` is a page nobody opened in the app for `ANALYTICS_DEAD_PAGE_DAYS`;
  * `dead` is one that no search returned either (#79). Both match nothing until
  * read analytics has been collecting for that long.
@@ -774,6 +777,7 @@ export const HEALTH_FILTERS = [
   'flagged',
   'inactive',
   'missing-paths',
+  'broken-calls',
   'unread',
   'dead',
   'archived',
@@ -813,6 +817,8 @@ export interface KnowledgeHealthRow {
   verificationNote: string | null;
   /** A component page's declared paths that match no file at the indexed head; empty otherwise. */
   missingPaths: string[];
+  /** A test fixture's called operation keys that no spec head defines (#483); empty otherwise. */
+  brokenCalls: string[];
   /**
    * The newest ticket handed off for this page's flag or for the page (#424);
    * null when there is none. Several are possible across trackers; the

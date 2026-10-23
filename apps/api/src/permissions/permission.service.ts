@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
   accessRank,
+  DEFAULT_LOCALE,
   type AccessLevel,
   type AccessResourceType,
   type EffectiveAccessLevel,
@@ -117,6 +118,15 @@ export class PermissionService {
       denied,
       granted,
     };
+  }
+
+  /**
+   * `scopeFor` for someone who is not the caller: the author of a revision
+   * being finalized by a merge or a sweeper (#483). Refused like `scopeFor`
+   * when they are no longer a member.
+   */
+  async scopeForUser(userId: string, workspaceId: string): Promise<AccessScope> {
+    return this.scopeFor(await this.access.principalFor(userId, DEFAULT_LOCALE), workspaceId);
   }
 
   /** `scopeFor` over the workspace a page lives in. */

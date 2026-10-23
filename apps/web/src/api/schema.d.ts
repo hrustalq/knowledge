@@ -4597,6 +4597,40 @@ export interface paths {
         patch: operations["ApiSettingsController_update"];
         trace?: never;
     };
+    "/v1/test-fixtures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Test fixtures the caller may open, each with the operations its head calls and which of those no spec head defines any more. Narrow by project, by one operation, or by the operations of one spec */
+        get: operations["TestFixturesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/test-fixtures/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One revision of a test fixture (the head unless revisionId is given): its parsed steps, the operation each call resolves to, the inputs and secrets a run must supply, and its issues against the specs as they stand now */
+        get: operations["TestFixturesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/markdown": {
         parameters: {
             query?: never;
@@ -6969,10 +7003,10 @@ export interface components {
              */
             parentId?: string;
             /**
-             * @description What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and `asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is created (422 with `details.issues`), and default to the `reference` category.
+             * @description What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and `asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is created (422 with `details.issues`), and default to the `reference` category. `test-fixture` (#483) is a QA fixture, YAML or JSON too, checked against the specs its author can open (400 with `details.issues`).
              * @enum {string}
              */
-            kind?: "page" | "openapi" | "asyncapi";
+            kind?: "page" | "openapi" | "asyncapi" | "test-fixture";
             /** @description Start from a template (issue #69). Without `content` the template is rendered server-side: its title pattern, body, tags and relations become the page, and its category is the default. */
             template?: components["schemas"]["DocumentTemplateDto"];
         };
@@ -23950,6 +23984,95 @@ export interface operations {
             };
         };
     };
+    TestFixturesController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Only the fixtures of this project */
+                projectId?: string;
+                /** @description Only the fixtures whose head calls this operation, however the key is spelled */
+                entityKey?: string;
+                /** @description Only the fixtures calling an operation this spec document defines */
+                specDocumentId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TestFixturesController_get: {
+        parameters: {
+            query?: {
+                /** @description A revision of this document; the default-branch head when absent */
+                revisionId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     AiReadableController_markdown: {
         parameters: {
             query?: {
@@ -24856,7 +24979,7 @@ export interface operations {
                 workspaceId: string;
                 projectId?: string;
                 /** @description Omitted lists every live page */
-                filter?: "stale" | "unowned" | "empty" | "expired" | "edited" | "outdated" | "requested" | "flagged" | "inactive" | "missing-paths" | "unread" | "dead" | "archived" | "handed-off";
+                filter?: "stale" | "unowned" | "empty" | "expired" | "edited" | "outdated" | "requested" | "flagged" | "inactive" | "missing-paths" | "broken-calls" | "unread" | "dead" | "archived" | "handed-off";
                 /** @description Only pages owned by this member */
                 ownerId?: string;
                 /** @description Title substring, case-insensitive */

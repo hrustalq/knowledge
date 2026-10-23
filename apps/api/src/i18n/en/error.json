@@ -640,6 +640,34 @@
     "disabled": "The tester agent is turned off for this workspace, so no test suite can be generated.",
     "noModel": "No model is configured for the tester agent, so no test suite can be generated."
   },
+  "testFixture": {
+    "template": "A test fixture cannot start from a page template",
+    "format": "A test fixture is written as yaml or json, not {format}",
+    "notFixture": "Document {id} is not a test fixture",
+    "invalid": "The test fixture is not valid: {reason}",
+    "invalidStep": "Step \"{step}\" of the test fixture is not valid: {reason}",
+    "issue": {
+      "syntax": "The body is not YAML or JSON: {reason}",
+      "too-large": "The fixture is {bytes} bytes; the limit is {max}",
+      "not-object": "The body must be a YAML or JSON object",
+      "version": "Start the fixture with \"fixture: {version}\"",
+      "steps-missing": "A fixture needs at least one step under \"steps\"",
+      "too-many-steps": "A fixture holds at most {max} steps, teardown included",
+      "inputs-shape": "{path}: an input is a name with a text, number, boolean or empty default",
+      "step-shape": "{path}: a step is either a \"call\" or a \"manual\" note (teardown steps are calls only)",
+      "step-id": "{path}: a step id is 1–64 letters, digits, \"-\" or \"_\"",
+      "duplicate-id": "Two steps share the id \"{id}\"",
+      "call-invalid": "\"{call}\" is not an operation key; write it as op:<spec>:<METHOD> <path>",
+      "expect-invalid": "{path}: the expected status is a number from 100 to 599",
+      "request-shape": "{path}: a request has path, query and headers of plain values, and any body",
+      "capture-name": "\"{name}\" cannot be a variable name: use letters, digits and \"_\", not input or secret",
+      "capture-rule": "The capture rule for \"{name}\" is neither a path like $.id nor header:<name>",
+      "placeholder-invalid": "{{{{{name}}}}} is not a placeholder: use {{{{input.x}}}}, {{{{secret.x}}}} or a captured variable",
+      "undefined-variable": "{{{{{name}}}}} is used before any earlier step captures it",
+      "unknown-operation": "No spec you can open defines {call}",
+      "literal-credential": "{name} carries a literal value; put credentials in a {{{{secret.x}}}} placeholder"
+    }
+  },
   "apiTry": {
     "disabled": "The try-it proxy is off for this workspace. Send the request from your browser instead.",
     "operationNotInSpec": "This revision of the spec has no {method} operation {entityKey}.",

@@ -17,6 +17,22 @@ in the pull request that introduces them — see
 
 ### Added
 
+- QA test fixtures (#483, phase 1). A new document kind, **Test fixture**, holds what a test needs
+  before it can run: calls to any operation in any spec (log in, create the invoice), values captured
+  from their responses (`$.id`, `$.items[0].id`, `header:Location`) and reused later as `{{invoiceId}}`,
+  manual notes for data no API can create, and teardown calls. Create one from **New → Test fixture**
+  in the sidebar. The editor has a **Steps** view (operations are picked from your specs, with rows
+  for path, query, headers and captures and a JSON body) and a **YAML**/**JSON** view of the same
+  body. Saving checks it against the specs you can open and refuses with the step named: a call to an
+  operation no spec defines, a variable used before any step captures it, or a literal in an
+  Authorization, Cookie or API-key slot (credentials are always `{{secret.name}}`). A fixture's page
+  lists its steps, the inputs and secrets a run asks for, and any issue against today's specs.
+  Impact analysis on an operation lists the fixtures calling it. When a spec change removes a called
+  operation, the fixture shows under **Broken fixtures** in knowledge health. Agents read the library
+  with `knowledge_list_test_fixtures` ("what do I call before I can test this operation") and one
+  fixture with `knowledge_get_test_fixture`, and create or edit one through `knowledge_create_document`
+  (now with `kind` and `syntax`) and `knowledge_create_revision`. Running fixtures and binding them
+  to test suites come in later phases.
 - QA page templates (#482). The template gallery, in English and Russian, and agents through
   `knowledge_list_templates` / `knowledge_get_template`, now offer **Test plan**, **Test case**,
   **Test data** and **Bug report**. Each asks for the operation under test (`op:` key) and links the
@@ -121,6 +137,11 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261205100000_api_fixture_calls` (#483) adds the `api_fixture_calls` table, one row
+  per call step of an indexed fixture revision. It is a new table the previous release never reads,
+  so a rollback keeps working for everything else. A fixture created on this release does not render
+  on the previous one: that release reads any non-page kind as a spec and shows an error. No new env
+  var: a fixture body is capped by `API_SPEC_MAX_BYTES`.
 - Migration `20261204100000_api_test_suites` adds `workspace_members.capabilities` (JSONB, default `[]`)
   and the `api_test_suites` table. Both are additive and the previous release reads neither, so a
   rollback keeps working; a permission granted on this release is simply not checked by the previous

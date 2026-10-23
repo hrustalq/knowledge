@@ -12,13 +12,16 @@ import type {
   GenerateApiTestSuiteResponse,
   ListApiOperationsResponse,
   ListApiSpecsResponse,
+  ListTestFixturesResponse,
   SearchApiOperationsResponse,
+  TestFixtureResponse,
 } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { ApiDriftCheckService } from './api-drift-check.service.js';
+import { ApiFixturesService } from './api-fixtures.service.js';
 import { ApiSpecDiffService } from './api-spec-diff.service.js';
 import { ApiSpecReadService } from './api-spec-read.service.js';
 import { ApiSettingsService } from './api-settings.service.js';
@@ -32,6 +35,7 @@ import {
   ApiTryRequestDto,
   GenerateApiTestSuiteDto,
   ListApiSpecsQueryDto,
+  ListTestFixturesQueryDto,
   SearchApiOperationsQueryDto,
   UpdateApiSettingsDto,
 } from './api-specs.dto.js';
@@ -227,5 +231,46 @@ export class ApiOperationsController {
       entityKeys: query.entityKey ? [query.entityKey] : undefined,
       limit: query.limit,
     });
+  }
+}
+
+/**
+ * QA test fixtures (#483). A fixture is a document, so its writes are the
+ * document routes (`kind: test-fixture`); these are the reads it adds — the
+ * library and one fixture checked against today's specs.
+ */
+@ApiTags('api-specs')
+@Controller('v1/test-fixtures')
+export class TestFixturesController {
+  constructor(
+    private readonly fixtures: ApiFixturesService,
+    private readonly permissions: PermissionService,
+  ) {}
+
+  @Get()
+  @Access('viewer', 'query', { guests: true })
+  @ApiOperation({
+    summary:
+      'Test fixtures the caller may open, each with the operations its head calls and which of those no spec head ' +
+      'defines any more. Narrow by project, by one operation, or by the operations of one spec',
+  })
+  async list(@CurrentPrincipal() principal: Principal, @Query() query: ListTestFixturesQueryDto): Promise<ListTestFixturesResponse> {
+    const scope = await this.permissions.scopeFor(principal, query.workspaceId);
+    return this.fixtures.list(scope, query);
+  }
+
+  @Get(':id')
+  @Access('viewer', 'document')
+  @ApiOperation({
+    summary:
+      'One revision of a test fixture (the head unless revisionId is given): its parsed steps, the operation each ' +
+      'call resolves to, the inputs and secrets a run must supply, and its issues against the specs as they stand now',
+  })
+  async get(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ApiSpecRevisionQueryDto,
+  ): Promise<TestFixtureResponse> {
+    return this.fixtures.get(await this.permissions.scopeForDocument(principal, id), id, query.revisionId);
   }
 }

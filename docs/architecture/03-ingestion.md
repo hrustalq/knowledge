@@ -315,6 +315,30 @@ Path parameters fold to `{}` inside `normalizeEntityKey`, for `op:` and
 by the worker and the API. `ApiSpecsModule` carries the controllers and the
 try-it proxy and never loads in the worker.
 
+### Test fixtures (#483)
+
+A `test-fixture` document is YAML or JSON too, and `isTestFixtureKind(kind)`
+sends step 2 to `ApiFixturesService.project` rather than to the spec branch.
+`isApiSpecKind` is false for it; `isStructuredKind` (spec **or** fixture) is
+what decides "verbatim body, no frontmatter, `vnd` content type"
+(`application/vnd.knowledge.test-fixture+yaml|json`). `project`:
+
+1. Reads the body with `readTestFixture` (`@knowledge/contracts/api/fixtures`),
+   the shape check finalize already ran. Finalize also checked, **as the
+   revision's author** (`PermissionService.scopeForUser`), that every call
+   names an operation at a spec head they can open and that no Authorization,
+   Cookie or API-key slot holds a literal. The worker does not re-check either.
+2. Replaces the revision's `api_fixture_calls` rows (one per call step, with
+   its phase and position), which the library and knowledge health read in SQL.
+3. Renders a projection: one `###` per step with its operation, expected status
+   and captures, and the request in a fenced block with placeholders as written.
+
+Step 7a writes `fixture -DEPENDS_ON-> op:…` per distinct called operation,
+in the same `spec` class, so impact analysis on an operation lists the
+fixtures that call it. A fixture whose head calls an operation no spec head
+defines any more is `broken-calls` in knowledge health (`brokenCallsSql`):
+derived on read, never stored.
+
 ## Stale detection and reindex
 
 `StaleSweeper` (`apps/api/src/ingestion/stale.sweeper.ts`) is registered only in

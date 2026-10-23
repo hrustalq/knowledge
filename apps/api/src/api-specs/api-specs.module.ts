@@ -9,7 +9,7 @@ import { PublicRateLimiter } from '../public/public-rate-limit.js';
 import { PublicStore } from '../public/public-store.js';
 import { ApiDriftCheckService } from './api-drift-check.service.js';
 import { ApiSettingsService } from './api-settings.service.js';
-import { ApiOperationsController, ApiSettingsController, ApiSpecsController } from './api-specs.controller.js';
+import { ApiOperationsController, ApiSettingsController, ApiSpecsController, TestFixturesController } from './api-specs.controller.js';
 import { ApiSpecsCoreModule } from './api-specs-core.module.js';
 import { ApiTestSuiteRequestsService } from './api-test-suite-requests.service.js';
 import { ApiTryService } from './api-try.service.js';
@@ -23,7 +23,7 @@ import { ApiTryService } from './api-try.service.js';
  */
 @Module({
   imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, ApiSpecsCoreModule, AiCoreModule, AgentCoreModule, AgentQueueModule],
-  controllers: [ApiSpecsController, ApiOperationsController, ApiSettingsController],
+  controllers: [ApiSpecsController, ApiOperationsController, ApiSettingsController, TestFixturesController],
   providers: [ApiSettingsService, ApiTryService, ApiDriftCheckService, ApiTestSuiteRequestsService, PublicStore, PublicRateLimiter],
   exports: [ApiSpecsCoreModule],
 })

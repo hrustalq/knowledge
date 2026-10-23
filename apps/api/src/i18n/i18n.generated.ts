@@ -1297,6 +1297,34 @@ export type I18nTranslations = {
             "disabled": string;
             "noModel": string;
         };
+        "testFixture": {
+            "template": string;
+            "format": string;
+            "notFixture": string;
+            "invalid": string;
+            "invalidStep": string;
+            "issue": {
+                "syntax": string;
+                "too-large": string;
+                "not-object": string;
+                "version": string;
+                "steps-missing": string;
+                "too-many-steps": string;
+                "inputs-shape": string;
+                "step-shape": string;
+                "step-id": string;
+                "duplicate-id": string;
+                "call-invalid": string;
+                "expect-invalid": string;
+                "request-shape": string;
+                "capture-name": string;
+                "capture-rule": string;
+                "placeholder-invalid": string;
+                "undefined-variable": string;
+                "unknown-operation": string;
+                "literal-credential": string;
+            };
+        };
         "apiTry": {
             "disabled": string;
             "operationNotInSpec": string;

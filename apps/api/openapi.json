@@ -22961,6 +22961,160 @@
         ]
       }
     },
+    "/v1/test-fixtures": {
+      "get": {
+        "operationId": "TestFixturesController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Only the fixtures of this project",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityKey",
+            "required": false,
+            "in": "query",
+            "description": "Only the fixtures whose head calls this operation, however the key is spelled",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "specDocumentId",
+            "required": false,
+            "in": "query",
+            "description": "Only the fixtures calling an operation this spec document defines",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Test fixtures the caller may open, each with the operations its head calls and which of those no spec head defines any more. Narrow by project, by one operation, or by the operations of one spec",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/test-fixtures/{id}": {
+      "get": {
+        "operationId": "TestFixturesController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "required": false,
+            "in": "query",
+            "description": "A revision of this document; the default-branch head when absent",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One revision of a test fixture (the head unless revisionId is given): its parsed steps, the operation each call resolves to, the inputs and secrets a run must supply, and its issues against the specs as they stand now",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
     "/v1/documents/{id}/markdown": {
       "get": {
         "operationId": "AiReadableController_markdown",
@@ -24416,6 +24570,7 @@
                 "flagged",
                 "inactive",
                 "missing-paths",
+                "broken-calls",
                 "unread",
                 "dead",
                 "archived",
@@ -33229,9 +33384,10 @@
             "enum": [
               "page",
               "openapi",
-              "asyncapi"
+              "asyncapi",
+              "test-fixture"
             ],
-            "description": "What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and `asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is created (422 with `details.issues`), and default to the `reference` category."
+            "description": "What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and `asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is created (422 with `details.issues`), and default to the `reference` category. `test-fixture` (#483) is a QA fixture, YAML or JSON too, checked against the specs its author can open (400 with `details.issues`)."
           },
           "template": {
             "description": "Start from a template (issue #69). Without `content` the template is rendered server-side: its title pattern, body, tags and relations become the page, and its category is the default.",

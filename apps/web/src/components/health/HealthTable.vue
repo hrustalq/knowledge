@@ -176,6 +176,14 @@ function expiryLine(row: KnowledgeHealthRow): string | null {
               >
                 {{ t('health.missingPathsChip', { n: row.missingPaths.length }, row.missingPaths.length) }}
               </Badge>
+              <Badge
+                v-if="row.brokenCalls.length > 0 && !row.archivedAt"
+                variant="outline"
+                class="text-panel-warning-ink"
+                :title="row.brokenCalls.join('\n')"
+              >
+                {{ t('health.brokenCallsChip', { n: row.brokenCalls.length }, row.brokenCalls.length) }}
+              </Badge>
             </div>
             <!-- #424: the ticket this page was handed off as; status in words, linking out. -->
             <a

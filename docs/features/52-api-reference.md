@@ -318,11 +318,53 @@ while a run for the same key is waiting joins it: the lookup and insert run
 under one advisory lock per key. The model call is billed to the person as
 `test-suite`.
 
+## Test fixtures (#483)
+
+A fixture is a document of kind `test-fixture`: the calls a test needs before it
+can run (log in, create the invoice, carry its `id` forward), manual notes for
+state no API creates, and teardown calls that always run. Its body is YAML or
+JSON:
+
+```yaml
+fixture: 1
+inputs: { currency: EUR }        # non-secret run values; null = ask at run time
+steps:
+  - id: login
+    call: op:auth:POST /sessions  # any spec in the workspace; {param} folds
+    request: { body: { password: '{{secret.qaPassword}}' } }
+    expect: 201
+    capture: { TOKEN: $.accessToken }        # $.a.b, $.items[0].id, $['k'], header:Name
+  - id: merchant
+    manual: A merchant with KYC approved exists.
+teardown:
+  - call: op:billing:DELETE /invoices/{id}
+    request: { path: { id: '{{invoiceId}}' } }
+```
+
+**Validated at finalize, as the author.** The shape (`readTestFixture`: unique
+ids, call keys, capture rules, every `{{var}}` captured by an earlier step) and
+then the workspace: every call must resolve to an operation at a spec head the
+revision's author can open, and an Authorization, Proxy-Authorization or Cookie
+header, or the operation's API-key header or query parameter, may hold only
+placeholders. `{{input.x}}` counts as a literal there, since an input may carry
+a default in the fixture. A refusal is a **400** naming the step, with every
+issue in `details.issues`.
+
+**Graphed and flagged.** Each call is a revision-scoped `DEPENDS_ON` edge to the
+`op:` entity, so impact analysis lists the fixtures calling an operation. When a
+spec change removes a called operation, the fixture shows up under **Broken
+fixtures** in knowledge health, and its read view lists the issue. Both are
+derived on read from `api_fixture_calls` against today's spec heads.
+
+Binding fixtures to suites, the runners and the `/qa` view follow in the later
+phases of #483.
+
 ## Surface
 
 | What | Where |
 | --- | --- |
-| Tables | `documents.kind`, `documents.spec_slug`, `api_operations`, `workspace_settings`, `merge_requests.breaking_ack_*`, `api_test_suites` |
+| Tables | `documents.kind`, `documents.spec_slug`, `api_operations`, `workspace_settings`, `merge_requests.breaking_ack_*`, `api_test_suites`, `api_fixture_calls` |
+| Fixtures (#483) | `@knowledge/contracts/api/fixtures` (`readTestFixture`, `parseCaptureRule`, `evaluateCapture`, `resolvePlaceholders`, `literalCredentialIssues`); `ApiFixturesService` in `ApiSpecsCoreModule`; `TestFixturesController` (`GET /v1/test-fixtures`, `GET /v1/test-fixtures/:id`, viewer); web `TestFixtureEditorPage` (`/create/fixture`, `/documents/:id/fixture`) and `TestFixtureView` |
 | Vocabulary | `@knowledge/contracts/api` (`API_DOCUMENT_KINDS`, keys, `API_TRY_PROXY_MODES`, `API_BREAKING_CHANGE_POLICIES`, `API_DRIFT_KINDS`), `…/api/diff` (`API_CHANGE_RULES`), `…/api/samples` (`CODE_SAMPLE_LANGS`, generator), `…/api/test-cases` (`testCasesFor`, `buildTestSuite`, `testSuiteCurl`, `testSuitePostman`, `operationFingerprint`) |
 | Parse, project, read, diff | `api-spec.parser.ts` (`parseApiSpec`), `api-spec.projection.ts` (`renderSpecProjection`, `renderOperation`), `api-diff.ts` (`diffApiSpecs`), pure; `ApiSpecsService` (`project`), `ApiSpecReadService`, `ApiSpecDiffService` in `ApiSpecsCoreModule` (both processes) |
 | Controllers, try-it, settings, drift check, test suites | `ApiSpecsController`, `ApiOperationsController`, `ApiSettingsController`, `ApiTryService`, `ApiSettingsService`, `ApiDriftCheckService`, `ApiTestSuiteRequestsService`, in `ApiSpecsModule` (API-only); `ApiTestSuitesService` (the store) in `ApiSpecsCoreModule`; the `tester` run in `AgentExecutor.writeTestSuite` |
@@ -358,7 +400,10 @@ because a key holds `/` and `:`. A page passed to a per-document route is a 400
 | `knowledge_list_api_operations` | viewer; read tool |
 | `knowledge_get_api_operation` (`lang` for samples) | viewer; read tool; returns the projection section and the linked pages |
 | `knowledge_diff_api_spec` | viewer; read tool |
-| `knowledge_create_revision` | unchanged guard; on a spec it takes `syntax: yaml \| json` and grafts no frontmatter |
+| `knowledge_create_revision` | unchanged guard; on a spec or fixture it takes `syntax: yaml \| json` and grafts no frontmatter |
+| `knowledge_create_document` | unchanged guard; takes `kind` and `syntax`, so an agent can create a spec or a fixture |
+| `knowledge_list_test_fixtures` (`entityKey?`, `documentId?`) | viewer; read tool; filtered by scope |
+| `knowledge_get_test_fixture` | viewer, document; read tool; steps, resolved operations, run values, issues now |
 
 None of them is in `WRITE_TOOLS`, and there is no try-it tool.
 
@@ -386,6 +431,8 @@ shown only when the merge request is on a spec. In the graph view, `op:` and
 - Migration `20261204100000_api_test_suites` (#468) adds
   `workspace_members.capabilities` (JSONB, default `[]`, not backfilled) and
   `api_test_suites`. Additive; the previous image reads neither.
+- Migration `20261205100000_api_fixture_calls` (#483) adds `api_fixture_calls`.
+  Additive; the previous image never reads it.
 
 ## Deliberate deferrals
 

@@ -200,3 +200,25 @@ export class GenerateApiTestSuiteDto {
   @IsBoolean()
   regenerate?: boolean;
 }
+
+export class ListTestFixturesQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only the fixtures of this project' })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
+  @ApiPropertyOptional({ description: 'Only the fixtures whose head calls this operation, however the key is spelled' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only the fixtures calling an operation this spec document defines' })
+  @IsOptional()
+  @IsUUID()
+  specDocumentId?: string;
+}

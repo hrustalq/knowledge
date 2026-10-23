@@ -36855,7 +36855,11 @@
               "api-spec",
               "use-case",
               "entity",
-              "component"
+              "component",
+              "test-plan",
+              "test-case",
+              "test-data",
+              "bug-report"
             ],
             "description": "Override this built-in for the workspace (`admin`): with `source` to customise it, with `enabled: false` to hide it"
           },

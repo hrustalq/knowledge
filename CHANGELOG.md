@@ -13,6 +13,25 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.33.1] — 2026-10-24
+
+### Fixed
+
+- An API spec can now say what owns it, so graph layers give its operations a parent (#519). Spec
+  documents have no frontmatter, so the membership rule for spec pages never found an owner: none of the
+  141 operations of the OMS API spec had a component or system above it, and layered search never walked
+  from an operation up to its service. Add an `x-knowledge-relations` list at the spec's root (or under
+  `info`), shaped like frontmatter `relations:` (`- { type: DESCRIBES, target: service:oms }`). Every
+  operation and channel the spec declares then belongs to the `component:` it names, or failing that its
+  `service:`. Unknown relation types are dropped as in frontmatter, a spec without the list behaves as
+  before, and an edit that only touches the list is not an API change in the spec diff.
+
+### Operations
+
+- Existing specs gain an owner only once someone adds `x-knowledge-relations` and publishes a new
+  revision; nothing is backfilled. For RTech OMS, add `service:oms` to «OMS API (OpenAPI)» after the
+  release.
+
 ## [0.33.0] — 2026-10-24
 
 ### Added
@@ -4843,7 +4862,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.33.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.33.1...HEAD
+[0.33.1]: https://github.com/hrustalq/knowledge/compare/v0.33.0...v0.33.1
 [0.33.0]: https://github.com/hrustalq/knowledge/compare/v0.32.1...v0.33.0
 [0.32.1]: https://github.com/hrustalq/knowledge/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/hrustalq/knowledge/compare/v0.31.0...v0.32.0

@@ -1749,7 +1749,7 @@ export class McpService {
         description:
           'Create a new markdown revision on a branch (immutable; parented on the branch head), upload the content and finalize it for indexing. Pass baseRevisionId for optimistic concurrency: the call is rejected if the branch head has moved past it. ' +
           'Content without a frontmatter block keeps the branch head\'s frontmatter (tags, relations); include a block to replace it. ' +
-          'For an API spec document (kind openapi or asyncapi), content is the whole spec in YAML or JSON (say which with syntax); it is validated, and refused with the validator\'s messages when it does not. ' +
+          'For an API spec document (kind openapi or asyncapi), content is the whole spec in YAML or JSON (say which with syntax); it is validated, and refused with the validator\'s messages when it does not. Its relations (what owns it: a service: or component:) go in a top-level x-knowledge-relations list shaped like frontmatter relations. ' +
           'A test fixture (kind test-fixture) is the same: its whole YAML or JSON body, checked against the specs you can open.',
         inputSchema: {
           documentId: z.string().uuid(),

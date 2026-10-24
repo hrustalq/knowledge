@@ -43,6 +43,11 @@ export interface ParsedApiSpec {
   description: string | null;
   /** `x-knowledge-key`, the only thing that re-pins a document's slug. */
   keyHint: string | null;
+  /**
+   * `x-knowledge-relations` (#519) as written: the spec's own frontmatter
+   * `relations:`, validated by the same reader at ingestion. Root, else `info`.
+   */
+  relations: unknown[];
   /** Fully dereferenced; may be cyclic where the spec's schemas recurse. */
   document: Record<string, unknown>;
   operations: ParsedOperation[];
@@ -174,6 +179,7 @@ async function parseOpenApi(input: Record<string, unknown>): Promise<ParsedApiSp
     version: str(info.version),
     description: str(info.description),
     keyHint: str(document['x-knowledge-key']) ?? str(input['x-knowledge-key']),
+    relations: relationsOf(input),
     document,
     operations,
   };
@@ -248,6 +254,7 @@ function parseAsyncApi(input: Record<string, unknown>): ParsedApiSpec {
     version: str(info.version),
     description: str(info.description),
     keyHint: str(document['x-knowledge-key']),
+    relations: relationsOf(input),
     document,
     operations,
   };
@@ -275,6 +282,12 @@ function asyncOperation(
     raw: op,
     parent: channel,
   };
+}
+
+function relationsOf(input: Record<string, unknown>): unknown[] {
+  const info = isObject(input.info) ? input.info : {};
+  const raw = input['x-knowledge-relations'] ?? info['x-knowledge-relations'];
+  return Array.isArray(raw) ? raw : [];
 }
 
 function channelIdOf(channels: Record<string, unknown>, channel: unknown): string | null {

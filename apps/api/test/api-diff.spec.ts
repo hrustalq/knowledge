@@ -138,6 +138,11 @@ describe('diffApiSpecs — what is not a change', () => {
     const after = edit(shop(), (s) => (getOrder(s).summary = 'Read one order'));
     expect((await diff(shop(), after)).changes).toEqual([]);
   });
+
+  it('declaring an owner with x-knowledge-relations is no change (#519)', async () => {
+    const after = edit(shop(), (s) => (s['x-knowledge-relations'] = [{ type: 'DESCRIBES', target: 'service:shop' }]));
+    expect((await diff(shop(), after)).changes).toEqual([]);
+  });
 });
 
 describe('diffApiSpecs — operations', () => {

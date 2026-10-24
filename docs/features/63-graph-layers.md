@@ -82,6 +82,17 @@ belongs to**, and the graph already holds every fact this needs.
   declare its operations and channels. The `component`-rung entities the page
   names through its other edges are their parents. If it names none, its
   `system`-rung entities are.
+  A spec has no frontmatter, so it names those in the spec itself (#519): an
+  `x-knowledge-relations` list at the root (or under `info`), shaped like
+  frontmatter `relations:` and read by the same `readFrontmatterRelations`.
+  Ingestion hands that list to step 7 as the spec's frontmatter, so the edges
+  carry extractor `frontmatter` and the spec diff never sees them.
+
+  ```yaml
+  openapi: 3.0.3
+  x-knowledge-relations:
+    - { type: DESCRIBES, target: service:oms }
+  ```
 - **Nothing else.** `code` edges record usage (a file imports a component),
   not containment. A page that merely mentions two keys links nothing.
 

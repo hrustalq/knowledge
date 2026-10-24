@@ -190,6 +190,8 @@ recorded as the page's origin. Either way the template's tags and relations link
    \`baseRevisionId\` set to the base from step 1. A revision replaces the page; it is never a patch.
    Step 1's \`markdown\` has the frontmatter split off into \`frontmatter\`. Send the body alone and the page keeps its
    current \`tags\` and \`relations\`; send a \`---\` block only to change them, and then send all of it.
+   An API spec (kind \`openapi\` / \`asyncapi\`) has no frontmatter: name what owns it in a top-level
+   \`x-knowledge-relations\` list of the same shape (\`- { type: DESCRIBES, target: service:billing }\`).
 4. ${toolRef('knowledge_create_merge_request')} from your branch to the default branch, with a description of what changed and why.
 5. Give the user the link: \`${webUrl}/merge-requests/<mergeRequestId>\`.
 

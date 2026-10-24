@@ -11,6 +11,8 @@ import {
 import { ApiSpecError, keyOperations, parseApiSpec, readApiSpecDocument } from '../src/api-specs/api-spec.parser.js';
 import { renderOperation, renderSpecProjection } from '../src/api-specs/api-spec.projection.js';
 import { WRITE_TOOLS } from '../src/mcp/mcp-tools.js';
+import { extractFrontmatterFacts } from '../src/ingestion/relations.js';
+import { layerParents } from '../src/graph/layers.js';
 import { ApiSpecsService } from '../src/api-specs/api-specs.service.js';
 import { splitMarkdown } from '../src/ingestion/markdown.js';
 import { StorageService } from '../src/storage/storage.service.js';
@@ -272,6 +274,42 @@ describe('parseApiSpec — AsyncAPI', () => {
   it('refuses an unsupported version and a missing title', async () => {
     await expect(parseApiSpec('asyncapi: 1.2.0\ninfo: {title: x}', 'asyncapi', LIMITS)).rejects.toThrow(/not supported/u);
     await expect(parseApiSpec('asyncapi: 2.6.0\ninfo: {version: "1"}', 'asyncapi', LIMITS)).rejects.toThrow(/title/u);
+  });
+});
+
+describe('x-knowledge-relations (#519)', () => {
+  const OWNED = `openapi: 3.0.3
+x-knowledge-relations:
+  - { type: describes, target: 'Service:OMS' }
+  - { type: NOT_A_TYPE, target: 'service:ghost' }
+info: { title: OMS API, version: '1' }
+paths:
+  /orders:
+    get:
+      responses: { '200': { description: ok } }
+`;
+
+  it('is read from the root, else from info, for both kinds; absent is none', async () => {
+    expect((await parseApiSpec(OWNED, 'openapi', LIMITS)).relations).toHaveLength(2);
+    const inInfo = ASYNCAPI_26.replace("info: { title: User Events, version: '1' }", "info:\n  title: User Events\n  version: '1'\n  x-knowledge-relations: [{ type: PART_OF, target: 'component:signup' }]");
+    expect((await parseApiSpec(inInfo, 'asyncapi', LIMITS)).relations).toEqual([{ type: 'PART_OF', target: 'component:signup' }]);
+    expect((await parseApiSpec(OPENAPI_30, 'openapi', LIMITS)).relations).toEqual([]);
+  });
+
+  it('becomes frontmatter facts that give every operation the spec its owner', async () => {
+    const spec = await parseApiSpec(OWNED, 'openapi', LIMITS);
+    // What ingestion hands step 7: `{ relations }` and no body.
+    const facts = extractFrontmatterFacts({ relations: spec.relations }, '');
+    expect(facts).toEqual([{ type: 'DESCRIBES', target: expect.objectContaining({ key: 'service:oms' }) }]);
+
+    const [op] = keyOperations(spec, apiSpecSlug(spec.title));
+    const edge = (targetKey: string, extractor: string, type: string) => ({ type, documentId: 'spec', targetKey, extractor, confidence: 1 });
+    const parents = layerParents(
+      [edge(op.entityKey, 'spec', 'DESCRIBES'), ...facts.map((f) => edge(f.target.key, 'frontmatter', f.type))],
+      new Map(),
+    );
+    expect(parents.get(op.entityKey)).toEqual(new Set(['service:oms']));
+    expect(layerParents([edge(op.entityKey, 'spec', 'DESCRIBES')], new Map()).size).toBe(0);
   });
 });
 

@@ -2,6 +2,7 @@ import type { ApiDocumentKind } from '@knowledge/contracts/core';
 import { normalizeEntityKey } from '@knowledge/contracts/graph';
 import type { ApiSpecDiff, ApiSpecDiffSummary } from '@knowledge/contracts/api/diff';
 import type { CodeSample } from '@knowledge/contracts/api/samples';
+import type { ApiTestCase, SuitePrerequisite, SuitePrerequisiteSource } from '@knowledge/contracts/api/test-cases';
 
 // ---------------------------------------------------------------------------
 // API reference documents (#78).
@@ -16,10 +17,24 @@ import type { CodeSample } from '@knowledge/contracts/api/samples';
 
 
 /** The kinds whose body is a spec rather than markdown. */
-export type ApiSpecKind = Exclude<ApiDocumentKind, 'page'>;
+export type ApiSpecKind = Exclude<ApiDocumentKind, 'page' | 'test-fixture'>;
 
 export function isApiSpecKind(kind: string | null | undefined): kind is ApiSpecKind {
   return kind === 'openapi' || kind === 'asyncapi';
+}
+
+/** A QA test fixture (#483): setup and teardown calls, not a spec. */
+export function isTestFixtureKind(kind: string | null | undefined): kind is 'test-fixture' {
+  return kind === 'test-fixture';
+}
+
+/**
+ * The kinds whose body is YAML or JSON stored verbatim — a spec or a fixture.
+ * They have no frontmatter, cannot start from a template, and are stored under
+ * a `vnd` type in the syntax the author named (`structuredContentType`).
+ */
+export function isStructuredKind(kind: string | null | undefined): kind is ApiSpecKind | 'test-fixture' {
+  return isApiSpecKind(kind) || isTestFixtureKind(kind);
 }
 
 /** How a spec body is written. YAML is a superset of JSON, so either parses as YAML. */
@@ -34,6 +49,11 @@ export type ApiSpecSyntax = (typeof API_SPEC_SYNTAXES)[number];
  */
 export function apiSpecContentType(kind: ApiSpecKind, syntax: ApiSpecSyntax): string {
   return `application/vnd.${kind === 'openapi' ? 'oai.openapi' : 'aai.asyncapi'}+${syntax}`;
+}
+
+/** `apiSpecContentType`, plus the fixture's own `vnd.knowledge.test-fixture` type. */
+export function structuredContentType(kind: ApiSpecKind | 'test-fixture', syntax: ApiSpecSyntax): string {
+  return kind === 'test-fixture' ? `application/vnd.knowledge.test-fixture+${syntax}` : apiSpecContentType(kind, syntax);
 }
 
 /**
@@ -201,6 +221,152 @@ export interface ApiOperationSamplesResponse {
   samples: CodeSample[];
 }
 
+// ---------------------------------------------------------------------------
+// QA test suites (#468)
+// ---------------------------------------------------------------------------
+
+/** How a suite is exported: one curl command per case, or a Postman Collection v2.1. */
+export const API_TEST_SUITE_FORMATS = ['curl', 'postman'] as const;
+export type ApiTestSuiteFormat = (typeof API_TEST_SUITE_FORMATS)[number];
+
+/** GET /v1/api-specs/:documentId/test-suite — one operation's cached suite. */
+export interface ApiTestSuiteResponse {
+  documentId: string;
+  entityKey: string;
+  /** The spec revision the suite was generated from; a later one that left the operation alone shares it. */
+  revisionId: string;
+  generatedAt: string;
+  generatedBy: string;
+  catalogueVersion: number;
+  cases: ApiTestCase[];
+}
+
+/** POST /v1/api-specs/:documentId/test-suite — the cached suite, or the `tester` run filling it. */
+export interface GenerateApiTestSuiteResponse {
+  suite: ApiTestSuiteResponse | null;
+  runId: string | null;
+  /** True when a run for the same operation and config was already in flight, and that run is returned. */
+  existing: boolean;
+}
+
+/** One fixture bound to a suite (#483). */
+export interface ApiTestBindingInfo {
+  fixtureId: string;
+  /** Null when the caller cannot open the fixture: a binding never leaks a title. */
+  title: string | null;
+  headRevisionId: string | null;
+  /** The fixture was archived after it was bound; it still runs until unbound. */
+  archived: boolean;
+}
+
+/** GET /v1/api-specs/:documentId/test-bindings — the fixtures that set up one operation's suite. */
+export interface ApiTestBindingsResponse {
+  documentId: string;
+  entityKey: string;
+  /** Run once, before every case. */
+  suite: ApiTestBindingInfo[];
+  /** Case id → fixtures run just before that case; their captures shadow the suite's for it. */
+  cases: Record<string, ApiTestBindingInfo[]>;
+}
+
+/** One operation of the same spec that produces a value the suite needs, with the fixtures already calling it. */
+export interface ApiTestPrerequisite extends SuitePrerequisite {
+  operation: { method: string | null; path: string; summary: string | null } | null;
+}
+
+/** A fixture offered as setup: it calls a producer of a value the operation needs. */
+export interface ApiTestFixtureCandidate {
+  documentId: string;
+  title: string;
+  headRevisionId: string | null;
+  /** The strongest evidence among the producers it calls. */
+  source: SuitePrerequisiteSource;
+  /** The producer keys it calls. */
+  producers: string[];
+  /** Why it is offered, from the spec. */
+  reason: string;
+  /** The tester's words, once a ranking run for this exact candidate set succeeded. */
+  explanation: string | null;
+  /** Already bound to the whole suite. */
+  bound: boolean;
+}
+
+/** Where the tester's ranking of this candidate set stands. */
+export type ApiTestRankingStatus = 'none' | 'pending' | 'ready' | 'failed';
+
+/** GET /v1/api-specs/:documentId/test-fixture-candidates */
+export interface ApiTestFixtureCandidatesResponse {
+  documentId: string;
+  entityKey: string;
+  prerequisites: ApiTestPrerequisite[];
+  /** Spec order (links, then path parameters), or the tester's when `ranking.status` is `ready`. Nothing here is bound. */
+  candidates: ApiTestFixtureCandidate[];
+  ranking: { status: ApiTestRankingStatus; runId: string | null };
+}
+
+/** POST /v1/api-specs/:documentId/test-fixture-candidates/rank — the tester run ranking the current candidate set. */
+export interface RankApiTestFixturesResponse {
+  runId: string | null;
+  /** True when a run for the same candidate set was already in flight (or done), and that run is returned. */
+  existing: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// QA overview (#483, phase 4)
+// ---------------------------------------------------------------------------
+
+/** One operation's QA state, worst first — the order /qa sorts by. */
+export const QA_SUITE_STATUSES = ['review', 'unbound', 'outdated', 'none', 'ready'] as const;
+export type QaSuiteStatus = (typeof QA_SUITE_STATUSES)[number];
+
+/** Whether a suite is stored for the operation, and whether it matches the cache key as things stand now. */
+export type QaSuiteState = 'none' | 'outdated' | 'current';
+
+/**
+ * Derived on read, never stored. A bound fixture needing review outranks the
+ * rest — regenerating does not fix it. Without a current suite, Generate is
+ * the next step whatever the setup; with one, prerequisites the spec names
+ * but no suite-level fixture covers are what is missing.
+ */
+export function qaSuiteStatusFor(s: { suite: QaSuiteState; prerequisites: number; suiteBindings: number; reviewFixtures: number }): QaSuiteStatus {
+  if (s.reviewFixtures > 0) return 'review';
+  if (s.suite === 'none') return 'none';
+  if (s.suite === 'outdated') return 'outdated';
+  return s.prerequisites > 0 && s.suiteBindings === 0 ? 'unbound' : 'ready';
+}
+
+/** One HTTP operation at its spec's head, as /qa lists it. */
+export interface QaOperationRow {
+  documentId: string;
+  specTitle: string;
+  entityKey: string;
+  method: string | null;
+  path: string;
+  summary: string | null;
+  deprecated: boolean;
+  status: QaSuiteStatus;
+  suite: { state: QaSuiteState; cases: number | null };
+  /** Operations of the same spec producing a value this one needs (`suitePrerequisites`). */
+  prerequisites: number;
+  /** Fixtures bound to the whole suite, and to single cases. */
+  bound: { suite: number; cases: number };
+  /** Bound fixtures that are archived or call an operation no spec head defines. Counted even when the reader cannot open them. */
+  reviewFixtures: number;
+  /** Fixtures the reader may open whose head calls this operation. */
+  fixtures: number;
+  /** The newest server run (phase 5); null when there is none. */
+  lastRun: Pick<ApiTestRunSummary, 'id' | 'status' | 'counts' | 'finishedAt'> | null;
+}
+
+/** GET /v1/qa/overview — every HTTP operation of the OpenAPI specs in scope, worst first. */
+export interface QaOverviewResponse {
+  operations: QaOperationRow[];
+  /** OpenAPI specs read; 0 means there is nothing to test yet. */
+  specs: number;
+  /** Whether server runs apply in this workspace: the last-run column shows only then. */
+  runner: boolean;
+}
+
 /**
  * How far the try-it proxy reaches. `allowlist` reuses the workspace's source
  * policies (docs/features/25), so there is one host list, not two.
@@ -227,6 +393,8 @@ export interface ApiSettingsResponse {
   breakingChanges: { requested: ApiBreakingChangePolicy | null; effective: ApiBreakingChangePolicy };
   /** The proxy's deployment caps, for the console to state. */
   tryLimits: { timeoutMs: number; maxRequestBytes: number; maxResponseBytes: number; perMinute: number };
+  /** The server runner (#483, phase 5): the workspace's switch beside the deployment's. */
+  testRunner: ApiTestRunnerSettings;
   updatedAt: string | null;
 }
 
@@ -235,7 +403,85 @@ export interface UpdateApiSettingsRequest {
   apiTryProxyMode?: ApiTryProxyMode | null;
   /** null goes back to the default, `warn`. */
   apiBreakingChangePolicy?: ApiBreakingChangePolicy | null;
+  /** null goes back to off. */
+  apiTestRunner?: ApiTestRunnerMode | null;
 }
+
+// ---------------------------------------------------------------------------
+// The server runner (#483, phase 5)
+// ---------------------------------------------------------------------------
+
+export const API_TEST_RUNNER_MODES = ['off', 'on'] as const;
+export type ApiTestRunnerMode = (typeof API_TEST_RUNNER_MODES)[number];
+
+/**
+ * Off unless both say on: API_TEST_RUNNER_MODE is a ceiling, and a workspace
+ * opts in — a deployment turning it on runs nothing until a workspace asks.
+ */
+export interface ApiTestRunnerSettings {
+  requested: ApiTestRunnerMode | null;
+  ceiling: ApiTestRunnerMode;
+  effective: ApiTestRunnerMode;
+}
+
+export function resolveApiTestRunner(requested: string | null | undefined, ceiling: ApiTestRunnerMode): ApiTestRunnerSettings {
+  const asked = requested === 'on' || requested === 'off' ? requested : null;
+  return { requested: asked, ceiling, effective: ceiling === 'on' && asked === 'on' ? 'on' : 'off' };
+}
+
+/**
+ * Where a server run sends and with what. Secrets are write-only: the API
+ * returns their names, never a value.
+ */
+export interface ApiTestEnvironment {
+  id: string;
+  name: string;
+  /** Used for a step whose spec declares it in `servers`; the spec's first server otherwise. */
+  server: string | null;
+  /** Non-secret run values, by plan name (`input.currency`). */
+  inputs: Record<string, string>;
+  /** The names of the stored secrets (`secret.qaPassword`, `TOKEN`). */
+  secrets: string[];
+  updatedAt: string;
+}
+
+export interface ListApiTestEnvironmentsResponse {
+  environments: ApiTestEnvironment[];
+}
+
+/** POST creates (name required); PATCH merges. A secret set to null is removed. */
+export interface SaveApiTestEnvironmentRequest {
+  name?: string;
+  server?: string | null;
+  inputs?: Record<string, string>;
+  secrets?: Record<string, string | null>;
+}
+
+export const API_TEST_RUN_STATUSES = ['queued', 'running', 'passed', 'failed', 'error'] as const;
+export type ApiTestRunStatus = (typeof API_TEST_RUN_STATUSES)[number];
+
+/** Runs kept per suite; the worker deletes older ones when it finishes a run. */
+export const API_TEST_RUNS_KEPT = 20;
+
+export interface ApiTestRunSummary {
+  id: string;
+  documentId: string;
+  entityKey: string;
+  /** Null once the environment is deleted. */
+  environment: { id: string; name: string } | null;
+  status: ApiTestRunStatus;
+  counts: { passed: number; failed: number; notRun: number };
+  /** Why the run itself could not run (`error`), as opposed to a case that failed. */
+  error: string | null;
+  createdBy: string;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface ListApiTestRunsResponse {
+  runs: ApiTestRunSummary[];
+}
+
 
 /** The largest request body the proxy forwards. */
 export const API_TRY_MAX_REQUEST_BYTES = 256 * 1024;

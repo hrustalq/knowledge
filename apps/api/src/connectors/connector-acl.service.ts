@@ -398,6 +398,21 @@ export class ConnectorAclService {
     return changed;
   }
 
+  /**
+   * One upstream person, recorded and resolved now: the member they are, or
+   * null while unmapped. Who resolved a harvested item (#382) is asked this
+   * way — the same table and resolver as access mirroring, so a person has one
+   * answer however a connector met them.
+   */
+  async userFor(row: Connector, person: ExternalGroupMember): Promise<string | null> {
+    await this.upsertIdentities(row, [person]);
+    const found = await this.prisma.externalIdentity.findUnique({
+      where: { connectorId_externalId: { connectorId: row.id, externalId: person.externalId } },
+      select: { userId: true },
+    });
+    return found?.userId ?? null;
+  }
+
   private async upsertIdentities(row: Connector, people: ExternalGroupMember[]): Promise<void> {
     const now = Date.now();
     const fresh = people.filter((p) => now - (this.recent.get(`${row.id}:u:${p.externalId}`) ?? 0) > RECENT_MS);

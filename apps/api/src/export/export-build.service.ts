@@ -1,3 +1,4 @@
+import { EmbedsService } from '../embeds/embeds.service.js';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ExportJob } from '@prisma/client';
@@ -41,7 +42,7 @@ class ExportFailure extends Error {
 }
 
 /** An attachment as collected: where its bytes are, beside what the archive says about it. */
-type CollectedAttachment = PackagedAttachment & { s3Key: string };
+type CollectedAttachment = PackagedAttachment & { s3Key: string; /** An embedded design's snapshot (#470): rendered, never listed as a file. */ embed?: boolean };
 
 /** Parallel S3 reads while collecting sources and attachments. */
 const READ_CONCURRENCY = 8;
@@ -76,6 +77,7 @@ export class ExportBuildService {
     private readonly renderer: ExportRenderClient,
     private readonly gotenberg: GotenbergClient,
     private readonly events: EventsPublisher,
+    private readonly embeds: EmbedsService,
     config: ConfigService<Env, true>,
   ) {
     this.maxPages = config.get('EXPORT_MAX_PAGES', { infer: true });
@@ -216,6 +218,17 @@ export class ExportBuildService {
     const keyOf = new Map(revisionRows.map((r) => [r.id, r.s3Key]));
     const docOf = new Map(documents.map((d) => [d.id, d]));
     const sources = await mapLimit(plan.pages, READ_CONCURRENCY, (p) => this.storage.getObjectText(keyOf.get(p.revisionId)!));
+    // Embedded designs (#470): an export never carries a Figma link, and shows
+    // the snapshots — always for a member, and for a share link's reader only
+    // while the workspace shows embeds publicly. A snapshot travels as an
+    // image attachment keyed by the item's opaque id.
+    const snapshots = row.shareLinkId
+      ? !!(await this.prisma.publishingSettings.findUnique({ where: { workspaceId: row.workspaceId } }))?.allowPublicEmbeds
+      : true;
+    const embedded = snapshots ? await this.embeds.exportSnapshots(plan.pages.map((p) => p.revisionId)) : [];
+    const bodies = await mapLimit(plan.pages, READ_CONCURRENCY, (p, i) =>
+      this.embeds.publicMarkdown(matter(sources[i]).content, p.revisionId, snapshots),
+    );
     const pages = plan.pages.map((p, i): PackagedPage => {
       const source = sources[i];
       return {
@@ -228,11 +241,18 @@ export class ExportBuildService {
         slugPath: p.slugPath,
         revisionId: p.revisionId,
         branch: revisions.get(p.documentId)!.branch,
-        source,
-        markdown: matter(source).content,
+        // A share link's archive carries what its reader may see; a member's keeps the source.
+        source: row.shareLinkId ? source.replace(matter(source).content, bodies[i]) : source,
+        markdown: bodies[i],
       };
     });
-    return { pages, attachments };
+    return {
+      pages,
+      attachments: [
+        ...attachments,
+        ...embedded.map((e) => ({ id: e.id, documentId: e.documentId, filename: `${e.id}.png`, contentType: 'image/png', sizeBytes: 0, s3Key: e.snapshotKey, embed: true })),
+      ],
+    };
   }
 
   private readAttachments(attachments: CollectedAttachment[]): Promise<Uint8Array[]> {
@@ -240,8 +260,10 @@ export class ExportBuildService {
   }
 
   /** Markdown sources with frontmatter, attachments and manifest.json — the shape an import can read back. */
-  private async zip(row: ExportJob, pages: PackagedPage[], attachments: CollectedAttachment[]): Promise<Uint8Array> {
+  private async zip(row: ExportJob, pages: PackagedPage[], collected: CollectedAttachment[]): Promise<Uint8Array> {
     await this.stage(row.id, 'packaging');
+    // The archive is sources an import reads back: an embed is its markup there, not a file (#470).
+    const attachments = collected.filter((a) => !a.embed);
     const bytes = await this.readAttachments(attachments);
     const manifest = buildManifest({
       workspaceId: row.workspaceId,
@@ -400,13 +422,13 @@ export class ExportBuildService {
 }
 
 /** `fn` over `items`, at most `limit` at a time, results in input order. */
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
   const out = new Array<R>(items.length);
   let next = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (next < items.length) {
       const i = next++;
-      out[i] = await fn(items[i]);
+      out[i] = await fn(items[i], i);
     }
   });
   await Promise.all(workers);

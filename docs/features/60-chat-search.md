@@ -165,8 +165,21 @@ unstemmed lexemes.
 
 A hit is `{ chunkId, bindingId, chatTitle, platform, projectId, firstAt,
 lastAt, messageCount, snippet, url }`. The snippet is cut at 400 characters
-after filtering. `url` links the window's first message where the platform
-has links: Telegram supergroups, through `t.me/c/…`.
+after filtering. `url` is built from what the binding already holds, never
+with a platform call at search time:
+
+- **Telegram** supergroups link the window's first message, through `t.me/c/…`.
+- **Time/Mattermost** channels link the thread's root (`threadKey`) as
+  `<serverUrl>/<team>/pl/<root>` (#407). A permalink needs the team's name,
+  which the platform does not send with a message. So the team is looked up
+  once, at the first message kept for a searchable binding, through the
+  adapter's `chatTeam`, and stored on `chat_channel_bindings.team_name`. That
+  happens API-side, in the inbound path that already holds the bot's token.
+  `''` stores "in no team" (a direct chat has no permalink), and a failed
+  lookup leaves the column `NULL` so the next message tries again. A renamed
+  team keeps its old name in the column until someone clears it.
+
+Any other hit has `url: null` and renders as plain text.
 
 ### Agents and bots
 
@@ -293,9 +306,6 @@ chat window.
 
 ## Deliberate deferrals
 
-- **Time/Mattermost permalinks.** The issue planned a link to the thread root
-  there too. Only Telegram supergroups link today; other hits render as plain
-  text.
 - **No audit row for the switch.** The issue planned
   `chat.search_enabled`/`chat.search_disabled`. Who and when are on the
   binding (`searchableBy`/`searchableAt`), as they are for listening and the

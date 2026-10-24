@@ -272,6 +272,16 @@
   "coachDesc": "Drafts a proposed learning for an agent from findings people kept dismissing. Runs in the learner process; an admin approves every one before any agent is told it.",
   "scribe": "Scribe",
   "scribeDesc": "Drafts the pages a tracker ticket asks for and opens each as a merge request, with a comment on the ticket linking them. Started by a trigger on a labelled ticket.",
+  "tester": "Tester",
+  "testerDesc": "Writes the QA test requests for one API operation — positive and negative cases derived from the spec — with realistic values. Started by Generate test requests on the operation, for members allowed to generate.",
+  "testerRun": {
+    "noOperation": "The tester was started without an operation; only Generate test requests on an operation can start it.",
+    "summary": "Wrote {count} test cases for {method} {path}.",
+    "noCandidates": "The tester was asked to rank fixtures for an operation that has none any more.",
+    "reasonLink": "Calls {producer}, which the spec links to this operation.",
+    "reasonPathParam": "Calls {producer}, whose response carries {field} for the path parameter {param}.",
+    "rankSummary": "Ranked {count} fixture candidates for {method} {path}."
+  },
   "scribeRun": {
     "noTicket": "The scribe was started without a ticket; only a work-item trigger can start it.",
     "ticketGone": "The ticket is gone, or the connector can no longer read it; nothing was drafted.",

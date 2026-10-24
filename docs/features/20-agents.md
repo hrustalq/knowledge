@@ -194,6 +194,37 @@ merge-request proposal path because the fix is a relation and not prose; a
 finding may now carry the relations it proposes, and Apply turns that into a
 frontmatter merge request without a model rewriting the page.
 
+## The tester fills a list it did not write
+
+**`tester`** (#468) writes one API operation's QA test suite
+([52](52-api-reference.md#test-suites-468)), on the `background` surface, the
+`review` purpose, `requires: ['json']`, no tools. The curator's split again:
+which cases an operation needs is `testCasesFor`, a pure function of the spec,
+and the model is shown that list and asked only for a realistic baseline
+request and the words for each case, as JSON keyed by case id. The spec
+excerpt reaches it wrapped untrusted (`spec`). `buildTestSuite` completes any
+case the model left out, and throws — failing the run — rather than store one
+it cannot build honestly.
+
+It is **not** in `RUNNABLE_AGENTS` and not triggerable: only Generate on an
+operation card starts it (`trigger: 'manual'`, `subjectKey` = the cache key),
+and only for a member holding `api-test-suites.generate`. The run checks that
+capability again before it calls the model. An admin override of its
+instructions or skills, or a change of its model, is part of the suite's cache
+key, so the next Generate after one asks the model again. Its calls are billed
+as `test-suite`.
+
+Its second duty (#483, [62](62-qa-fixtures-runs.md)) is **Ask tester** on a
+suite's fixture candidates: the spec has already decided which fixtures are
+candidates and why (`suitePrerequisites`, then the fixtures calling a
+producer), and the tester is asked only to order them and say why, as JSON.
+`readTesterRanking` keeps each known id once, drops any it was not shown and
+appends the ones it left out unexplained, so a model can reorder the list but
+never add to it. The answer stays on the run row, keyed by the candidate set's
+hash, and applies only to that exact set. Nothing is bound until a person
+presses Bind. The same capability (`api-test-suites.generate`) is checked at
+the route and again when the run executes.
+
 ## The linter and the auditor measure, and the harness decides
 
 Two built-ins came with doc quality ([53](53-doc-quality.md)). Both run on the

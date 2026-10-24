@@ -1,3 +1,4 @@
+import { EmbedsService } from '../embeds/embeds.service.js';
 import { createHash } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -162,6 +163,7 @@ export class PublicSitesService {
     private readonly avatars: AvatarsService,
     private readonly config: ConfigService<Env, true>,
     private readonly sessions: SiteSessionService,
+    private readonly embeds: EmbedsService,
   ) {}
 
   async resolve(query: ResolveQuery, cookieHeader?: string): Promise<PublicSiteResolveResponse> {
@@ -237,11 +239,13 @@ export class PublicSitesService {
       tree: treeLevel(rows, openPath),
       page: page ? await this.pageMeta(page, rows, site, version, viewer) : null,
     };
+    const publicEmbeds = (await this.settings.effective(site.workspaceId)).allowPublicEmbeds;
     const etag = `"${createHash('sha256')
       // The visible set, not just the trimmed tree: the body's links are
       // resolved against it after this tag, so two viewers who see different
       // pages must never share one.
-      .update(JSON.stringify([RESOLVE_FORMAT_VERSION, body, page?.revisionId ?? null, rows.map((r) => r.documentId)]))
+      // The embed switch changes the body's markup (#470), so it is part of the tag too.
+      .update(JSON.stringify([RESOLVE_FORMAT_VERSION, body, page?.revisionId ?? null, rows.map((r) => r.documentId), publicEmbeds]))
       .digest('hex')
       .slice(0, 32)}"`;
     if (etagMatches(ifNoneMatch, etag)) return { etag, body: null };
@@ -252,7 +256,7 @@ export class PublicSitesService {
       // absent as a page that was never published.
       const content = await this.documents.getContent(page.documentId, page.revisionId).catch(() => null);
       if (content) {
-        body.page.markdown = content.markdown;
+        body.page.markdown = await this.embeds.publicMarkdown(content.markdown, page.revisionId, publicEmbeds);
         body.page.links = this.pageLinks(content.markdown, byId);
       } else body.page = null;
     }
@@ -412,6 +416,28 @@ export class PublicSitesService {
       throw this.notFound();
     }
     return this.attachments.readUrl(attachment.documentId, attachment.id, download);
+  }
+
+  /**
+   * A presigned URL for an embedded design's snapshot (#470), by the opaque
+   * item id the page carries: only for the revision this version pinned, a
+   * page the viewer may see, and while the workspace shows embeds publicly.
+   */
+  async embedUrl(siteId: string, versionId: string, itemId: string, cookieHeader?: string): Promise<string> {
+    const site = await this.liveSite({ id: siteId });
+    if (!site.versions.some((v) => v.id === versionId) || !UUID_RE.test(itemId)) throw this.notFound();
+    const item = await this.embeds.publicItem(itemId);
+    if (!item?.fileKey || !item.version || item.nodeId === null) throw this.notFound();
+    const published = await this.prisma.siteVersionPage.findUnique({
+      where: { versionId_documentId: { versionId, documentId: item.documentId } },
+      select: { revisionId: true, audience: true, audienceClaims: true },
+    });
+    if (!published || published.revisionId !== item.revisionId) throw this.notFound();
+    if (published.audience !== 'public' && !siteViewerCanSee(published, await this.sessions.viewer(site, cookieHeader))) throw this.notFound();
+    if (!(await this.settings.effective(site.workspaceId)).allowPublicEmbeds) throw this.notFound();
+    return this.embeds.snapshotUrl(item.documentId, { fileKey: item.fileKey, nodeId: item.nodeId, version: item.version }).catch(() => {
+      throw this.notFound();
+    });
   }
 
   /**

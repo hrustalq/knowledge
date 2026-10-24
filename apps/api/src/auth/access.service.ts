@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import type { Locale, WorkspaceRole } from '@knowledge/contracts';
+import { hasCapability, type Locale, type MemberCapability, type WorkspaceRole } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import { DEV_PRINCIPAL, ROLE_ORDER, type Principal } from './principal.js';
@@ -24,12 +24,16 @@ export class AccessService {
     workspaceId: string,
     role: WorkspaceRole,
     operator = false,
-    opts: { allowGuest?: boolean; capture?: boolean } = {},
+    opts: { allowGuest?: boolean; capture?: boolean; capability?: MemberCapability } = {},
   ): Promise<void> {
     // A key narrows its owner before anything widens them: checked ahead of the
     // platform-admin shortcut, or an admin's read-only key would write anyway.
     if (principal.apiKey) this.requireKeyAllows(principal.apiKey, workspaceId, role, opts);
     if (principal.mode === 'dev') return; // AUTH_MODE=none — full access
+    // Ahead of the admin shortcut: a deleted workspace (#479) is gone to everyone,
+    // whichever resolver found its id — most read it off a child row that
+    // outlives the tombstone until the teardown sweeper reaches it.
+    await this.workspaceExists(workspaceId);
     // The workspace's sign-in policy (#75): enforced SSO, keys under it, a
     // session age cap. Ahead of the admin shortcut so an admin's crossing is
     // audited as break-glass; behind the key, which narrows first regardless.
@@ -53,6 +57,11 @@ export class AccessService {
     }
     if (operator && !member.trustedOperator) {
       throw new ForbiddenException(t('error.auth.trustedOperatorRequired'));
+    }
+    // A grained permission beside the role (#468). Platform admins returned
+    // above; workspace admins hold every capability through the predicate.
+    if (opts.capability && !hasCapability(member, opts.capability)) {
+      throw new ForbiddenException(t('error.auth.capabilityRequired', { capability: opts.capability }));
     }
   }
 
@@ -114,10 +123,10 @@ export class AccessService {
     };
   }
 
-  /** For @Access(..., 'workspace') routes: 404 for unknown workspaces before the membership check. */
+  /** For @Access(..., 'workspace') routes: 404 for unknown — or deleted (#479) — workspaces before the membership check. */
   async workspaceExists(workspaceId: string): Promise<string> {
-    const ws = await this.prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } });
-    if (!ws) throw new NotFoundException(t('error.workspace.notFound', { id: workspaceId }));
+    const ws = await this.prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true, deletedAt: true } });
+    if (!ws || ws.deletedAt) throw new NotFoundException(t('error.workspace.notFound', { id: workspaceId }));
     return ws.id;
   }
 
@@ -450,6 +459,7 @@ export class AccessService {
 
   async memberships(principal: Principal) {
     if (principal.mode === 'dev') return [];
-    return this.prisma.workspaceMember.findMany({ where: { userId: principal.userId } });
+    // A deleted workspace (#479) keeps its member rows until the teardown runs.
+    return this.prisma.workspaceMember.findMany({ where: { userId: principal.userId, workspace: { deletedAt: null } } });
   }
 }

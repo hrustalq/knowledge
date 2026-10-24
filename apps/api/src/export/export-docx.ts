@@ -525,6 +525,14 @@ class PageWriter {
       } else if (tag === 'div' && !closing && attrs[KN.toc] !== undefined) {
         flushText();
         out.push(...this.toc(ctx));
+      } else if (tag === 'a' && !closing && attrs[KN.item] !== undefined) {
+        // An embedded design (#470): its snapshot, carried as an image keyed by
+        // the item's id, then its caption as the text that follows.
+        flushText();
+        const run = this.doc.embed(attrs[KN.item], '', undefined);
+        if (run) out.push(this.para(ctx, [run], { alignment: AlignmentType.CENTER, keepNext: true }));
+      } else if (tag === 'a' && closing && text.trim()) {
+        flushText();
       } else if (tag === 'img' && !file) {
         flushText();
         const runs = this.image(attrs.src ?? '', attrs.alt ?? '', Number(attrs.width) || undefined);

@@ -3,9 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
   accessRank,
+  DEFAULT_LOCALE,
   type AccessLevel,
   type AccessResourceType,
   type EffectiveAccessLevel,
+  type MemberCapability,
   type WorkspaceRole,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
@@ -118,6 +120,15 @@ export class PermissionService {
     };
   }
 
+  /**
+   * `scopeFor` for someone who is not the caller: the author of a revision
+   * being finalized by a merge or a sweeper (#483). Refused like `scopeFor`
+   * when they are no longer a member.
+   */
+  async scopeForUser(userId: string, workspaceId: string): Promise<AccessScope> {
+    return this.scopeFor(await this.access.principalFor(userId, DEFAULT_LOCALE), workspaceId);
+  }
+
   /** `scopeFor` over the workspace a page lives in. */
   async scopeForDocument(principal: Principal, documentId: string): Promise<AccessScope> {
     return this.scopeFor(principal, await this.access.workspaceOfDocument(documentId));
@@ -140,7 +151,7 @@ export class PermissionService {
     resource: AccessResource,
     role: WorkspaceRole,
     operator: boolean,
-    opts: { capture?: boolean } = {},
+    opts: { capture?: boolean; capability?: MemberCapability } = {},
   ): Promise<void> {
     if (principal.apiKey) this.access.requireKeyAllows(principal.apiKey, workspaceId, role, opts);
     if (principal.mode === 'dev') return;
@@ -148,7 +159,7 @@ export class PermissionService {
     // requireKeyAllows has just let a capture key through for this call, so its
     // page level is the person's own, not capped at view.
     const scope = opts.capture && principal.apiKey?.scope === 'capture' ? { ...read, readOnly: false } : read;
-    if (!scope.guest || ROLE_ORDER[role] > ROLE_ORDER.editor || operator) {
+    if (!scope.guest || ROLE_ORDER[role] > ROLE_ORDER.editor || operator || opts.capability) {
       await this.access.requireRole(principal, workspaceId, role, operator, opts);
     }
 

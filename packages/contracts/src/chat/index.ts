@@ -6,19 +6,21 @@ import type { Locale } from '@knowledge/contracts/core';
 
 /**
  * The messengers a workspace can connect: Telegram, Time (T-Bank's corporate
- * messenger, Mattermost-shaped) and Mattermost (#343), the last two sharing one
- * adapter. VK Teams joins this list in the release that ships its adapter,
+ * messenger, Mattermost-shaped), Mattermost (#343) — those two sharing one
+ * adapter — Slack (#380) and Microsoft Teams (#381). VK Teams joins this list in the release that ships its adapter,
  * never before — a closed vocabulary must not promise a value the code never
  * emits, and the setup form, the DTO guard and the adapter registry all read
  * this one list.
  */
-export const CHAT_PLATFORM_KINDS = ['telegram', 'time', 'mattermost'] as const;
+export const CHAT_PLATFORM_KINDS = ['telegram', 'time', 'mattermost', 'slack', 'teams'] as const;
 export type ChatPlatformKind = (typeof CHAT_PLATFORM_KINDS)[number];
 /** Product names, never translated. */
 export const CHAT_PLATFORM_NAMES: Record<ChatPlatformKind, string> = {
   telegram: 'Telegram',
   time: 'Time',
   mattermost: 'Mattermost',
+  slack: 'Slack',
+  teams: 'Microsoft Teams',
 };
 
 /**
@@ -30,6 +32,49 @@ export const CHAT_SELF_HOSTED_PLATFORMS: readonly ChatPlatformKind[] = ['time', 
 
 export function chatPlatformNeedsServer(kind: ChatPlatformKind): boolean {
   return CHAT_SELF_HOSTED_PLATFORMS.includes(kind);
+}
+
+/**
+ * Platforms that sign every delivery with a secret of their own (Slack's
+ * signing secret), so a bot is saved with it beside the token. The form asks
+ * for it, the service requires it here and refuses it anywhere else.
+ */
+export const CHAT_SIGNED_PLATFORMS: readonly ChatPlatformKind[] = ['slack'];
+
+export function chatPlatformNeedsSigningSecret(kind: ChatPlatformKind): boolean {
+  return CHAT_SIGNED_PLATFORMS.includes(kind);
+}
+
+/**
+ * How a bot account is shown: `@name` where the platform has handles, the
+ * bare id on Slack (its user id, `U…`) and Teams (its app id).
+ */
+export function chatBotHandle(kind: ChatPlatformKind, botUsername: string): string {
+  return kind === 'slack' || kind === 'teams' ? botUsername : `@${botUsername}`;
+}
+
+/**
+ * Platforms whose bot is pointed at our webhook by the admin, in the
+ * platform's own settings (Slack's Request URL, an Azure Bot's messaging
+ * endpoint): the bot card shows the address to paste instead of a delivery
+ * status it cannot see.
+ */
+export const CHAT_PASTED_ENDPOINT_PLATFORMS: readonly ChatPlatformKind[] = ['slack', 'teams'];
+
+export function chatPlatformPastesEndpoint(kind: ChatPlatformKind): boolean {
+  return CHAT_PASTED_ENDPOINT_PLATFORMS.includes(kind);
+}
+
+/**
+ * Platforms whose groups can keep their messages for a harvest (#82, #381):
+ * the bot hears a whole group there but has no thread to fetch — Telegram
+ * (privacy mode off or an admin bot), Teams (the `ChannelMessage.Read.Group`
+ * permission). The switch, its guard and the automatic harvest read this list.
+ */
+export const CHAT_LISTENING_PLATFORMS: readonly ChatPlatformKind[] = ['telegram', 'teams'];
+
+export function chatPlatformListens(kind: ChatPlatformKind): boolean {
+  return CHAT_LISTENING_PLATFORMS.includes(kind);
 }
 
 /**

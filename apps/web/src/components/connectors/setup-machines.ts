@@ -25,7 +25,7 @@
  * localStorage, which is per-viewer and needs no schema.
  */
 import { assign, createActor, fromPromise, sendParent, sendTo, setup, type Snapshot } from 'xstate'
-import { connectorKindInfo } from '@knowledge/contracts'
+import { connectorKindInfo, FIGMA_ALLOWLIST_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY } from '@knowledge/contracts'
 import type {
   ConnectorConflictPolicy,
   ConnectorDirection,
@@ -233,6 +233,27 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
     },
     { name: 'folder', meta: { labelKey: 'connectors.step.folder', fields: ['folderId'] } },
   ],
+  // A harvest source (#382): the API key, and which label marks an issue
+  // worth keeping. One step — the label refines what the key reads.
+  linear: [{ name: 'workspace', meta: { labelKey: 'connectors.step.harvest', fields: ['harvestLabel'], credential: true } }],
+  // The help desk's address and an agent's token, then the tag (#383).
+  zendesk: [
+    { name: 'site', meta: { labelKey: 'connectors.step.site', fields: ['baseUrl'], credential: true } },
+    { name: 'tag', meta: { labelKey: 'connectors.step.harvestTag', fields: ['harvestLabel'] } },
+  ],
+  // The app's token and its region, then the tag (#384).
+  intercom: [
+    { name: 'app', meta: { labelKey: 'connectors.step.integration', fields: ['region'], credential: true } },
+    { name: 'tag', meta: { labelKey: 'connectors.step.harvestTag', fields: ['harvestLabel'] } },
+  ],
+  // An embed source (#470): the token and what it may reach are one question,
+  // since the connection test needs both.
+  figma: [
+    {
+      name: 'access',
+      meta: { labelKey: 'connectors.step.figmaAccess', fields: [FIGMA_ALLOWLIST_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY], credential: true },
+    },
+  ],
 }
 
 export const confluenceSetup = kindMachine('confluenceSetup', KIND_STEPS.confluence)
@@ -242,6 +263,10 @@ export const notionSetup = kindMachine('notionSetup', KIND_STEPS.notion)
 export const markdownGitSetup = kindMachine('markdownGitSetup', KIND_STEPS['markdown-git'])
 export const codebaseSetup = kindMachine('codebaseSetup', KIND_STEPS.codebase)
 export const googleDriveSetup = kindMachine('googleDriveSetup', KIND_STEPS['google-drive'])
+export const linearSetup = kindMachine('linearSetup', KIND_STEPS.linear)
+export const zendeskSetup = kindMachine('zendeskSetup', KIND_STEPS.zendesk)
+export const intercomSetup = kindMachine('intercomSetup', KIND_STEPS.intercom)
+export const figmaSetup = kindMachine('figmaSetup', KIND_STEPS.figma)
 
 export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   confluence: confluenceSetup,
@@ -251,6 +276,10 @@ export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   'markdown-git': markdownGitSetup,
   codebase: codebaseSetup,
   'google-drive': googleDriveSetup,
+  linear: linearSetup,
+  zendesk: zendeskSetup,
+  intercom: intercomSetup,
+  figma: figmaSetup,
 }
 
 /** The per-kind steps, for the stepper — read without running the machine. */
@@ -268,6 +297,16 @@ export function kindSteps(kind: ConnectorKind): StepMeta[] {
  */
 export function canWalkTree(kind: ConnectorKind): boolean {
   return connectorKindInfo(kind)?.capabilities.tree ?? false
+}
+
+/**
+ * Whether this kind creates pages, and so has a destination to ask for (#512).
+ * A harvest or embed kind moves no content, so its project and parent are never
+ * read and the step is skipped.
+ */
+export function createsPages(kind: ConnectorKind): boolean {
+  const caps = connectorKindInfo(kind)?.capabilities
+  return !!caps && (caps.pull || caps.push)
 }
 
 /** The current sub-step's meta, so the renderer never switches on kind itself. */
@@ -309,6 +348,7 @@ export const connectorSetupMachine = setup({
     // Editing an existing connector keeps its stored credential, so an empty
     // box is legitimate there and only a new connector must be tested blind.
     canTest: ({ context }) => context.credential !== '' || context.editingId !== null,
+    skipsDestination: ({ context }) => !createsPages(context.kind),
   },
   actions: {
     patch: assign(({ context, event }) =>
@@ -389,7 +429,7 @@ export const connectorSetupMachine = setup({
         onDone: [
           {
             guard: ({ event }) => event.output.ok,
-            target: 'destination',
+            target: 'passed',
             actions: assign({
               testDetail: ({ event }) => event.output.detail,
               specSuggestions: ({ event }) => event.output.apiSpecSuggestions ?? [],
@@ -417,8 +457,13 @@ export const connectorSetupMachine = setup({
       on: {
         RETRY: { target: 'testing', actions: 'clearError' },
         BACK: { target: 'configuring', actions: 'clearError' },
-        SKIP_TEST: { target: 'destination', actions: 'clearError' },
+        SKIP_TEST: { target: 'passed', actions: 'clearError' },
       },
+    },
+
+    /** Past the test: a kind that creates no pages has no destination to ask for. */
+    passed: {
+      always: [{ guard: 'skipsDestination', target: 'options' }, { target: 'destination' }],
     },
 
     destination: {
@@ -432,7 +477,7 @@ export const connectorSetupMachine = setup({
     options: {
       on: {
         SUBMIT: 'saving',
-        BACK: 'destination',
+        BACK: [{ guard: 'skipsDestination', target: 'configuring' }, { target: 'destination' }],
       },
     },
 
@@ -545,7 +590,7 @@ export function stepLabels(kind: ConnectorKind): string[] {
     'connectors.step.name',
     ...kindSteps(kind).map((step) => step.labelKey),
     'connectors.step.test',
-    'connectors.step.destination',
+    ...(createsPages(kind) ? ['connectors.step.destination'] : []),
     'connectors.step.options',
   ]
 }
@@ -553,6 +598,7 @@ export function stepLabels(kind: ConnectorKind): string[] {
 /** Which stepper index the given wrapper/child state pair is on. */
 export function stepIndex(kind: ConnectorKind, state: string, childState: string | null): number {
   const kinds = kindSteps(kind)
+  const destination = createsPages(kind) ? 1 : 0
   const childIndex = childState ? Math.max(0, KIND_STEPS[kind].findIndex((s) => s.name === childState)) : 0
 
   switch (state) {
@@ -568,7 +614,7 @@ export function stepIndex(kind: ConnectorKind, state: string, childState: string
     case 'options':
     case 'saving':
     case 'done':
-      return 3 + kinds.length
+      return 2 + destination + kinds.length
     default:
       return 0
   }

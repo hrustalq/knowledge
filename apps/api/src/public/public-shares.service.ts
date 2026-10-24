@@ -1,3 +1,4 @@
+import { EmbedsService } from '../embeds/embeds.service.js';
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Document, ExportJob, ShareLink } from '@prisma/client';
@@ -63,6 +64,8 @@ const SCOPE_SELECT = {
  * workspace or the deployment. Nothing here serialises a member DTO: the
  * reader gets a title, a body and a tree, never authors, revisions or history.
  */
+
+const UUID_ITEM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 @Injectable()
 export class PublicSharesService {
   private readonly unlockAttempts: number;
@@ -77,6 +80,7 @@ export class PublicSharesService {
     private readonly unlocks: ShareUnlockService,
     private readonly limiter: PublicRateLimiter,
     private readonly exports: ExportService,
+    private readonly embeds: EmbedsService,
     config: ConfigService<Env, true>,
   ) {
     this.unlockAttempts = config.get('PUBLIC_UNLOCK_ATTEMPTS_PER_15MIN', { infer: true });
@@ -112,10 +116,12 @@ export class PublicSharesService {
       where: { id: content.revisionId },
       select: { finalizedAt: true },
     });
+    // Never a Figma link on a public page (#470); snapshots only when the workspace allows them.
+    const { allowPublicEmbeds } = await this.settings.effective(live.root.workspaceId);
     return {
       documentId: doc.id,
       title: doc.title,
-      markdown: content.markdown,
+      markdown: await this.embeds.publicMarkdown(content.markdown, content.revisionId, allowPublicEmbeds),
       updatedAt: revision?.finalizedAt?.toISOString() ?? null,
     };
   }
@@ -130,6 +136,23 @@ export class PublicSharesService {
     if (!attachment || attachment.status !== 'ready') throw this.notFound();
     await this.inScope(live, attachment.documentId);
     return this.attachments.readUrl(attachment.documentId, attachment.id, download);
+  }
+
+  /**
+   * A presigned URL for an embedded design's snapshot on a page inside the
+   * scope (#470). The id is the opaque one `page` handed out; it resolves only
+   * while the workspace shows embeds publicly, and the embed service checks
+   * the item against the page and the allowlist again.
+   */
+  async embedUrl(token: string, itemId: string, cookieHeader: string | undefined): Promise<string> {
+    const live = await this.resolveOpen(token, cookieHeader);
+    const item = UUID_ITEM.test(itemId) ? await this.embeds.publicItem(itemId) : null;
+    if (!item?.fileKey || !item.version || item.nodeId === null) throw this.notFound();
+    await this.inScope(live, item.documentId);
+    if (!(await this.settings.effective(live.root.workspaceId)).allowPublicEmbeds) throw this.notFound();
+    return this.embeds.snapshotUrl(item.documentId, { fileKey: item.fileKey, nodeId: item.nodeId, version: item.version }).catch(() => {
+      throw this.notFound();
+    });
   }
 
   /**

@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
-import { SEARCH_MIN_COSINE_SHARE, SEARCH_RRF_K, TRUST_WEIGHTS, type FeedbackBacktestCase, type SourceVerificationState } from '@knowledge/contracts';
+import {
+  SEARCH_COMMUNITY_PRIOR_FLOOR,
+  SEARCH_COMMUNITY_PRIOR_WEIGHT,
+  SEARCH_MIN_COSINE_SHARE,
+  SEARCH_RRF_K,
+  TRUST_WEIGHTS,
+  type FeedbackBacktestCase,
+  type SourceVerificationState,
+} from '@knowledge/contracts';
 import { VerificationPolicyService } from '../src/verification/verification-policy.service.js';
 import { isHoldout, tuneSearch, tuneThreshold, dedupeCost, type Replay } from '../src/search/tuning.js';
 import type { SearchPool } from '../src/search/ranking.js';
@@ -11,7 +19,14 @@ import type { CaseScores } from '../src/captures/capture-calibration.js';
  * and a proposal is only emitted when the holdout agrees with the train split.
  */
 
-const CURRENT = { rrfK: SEARCH_RRF_K, minCosine: 0, minCosineShare: 0, trustWeights: TRUST_WEIGHTS };
+const CURRENT = {
+  rrfK: SEARCH_RRF_K,
+  minCosine: 0,
+  minCosineShare: 0,
+  communityPriorWeight: SEARCH_COMMUNITY_PRIOR_WEIGHT,
+  communityPriorFloor: SEARCH_COMMUNITY_PRIOR_FLOOR,
+  trustWeights: TRUST_WEIGHTS,
+};
 
 function policy(row: Record<string, unknown> | null) {
   const prisma = { knowledgeHealthSettings: { findUnique: vi.fn(async () => row), upsert: vi.fn(async () => ({})) } };
@@ -28,6 +43,8 @@ describe('search knobs settings', () => {
       // SEARCH_MIN_COSINE: the stub config answers 1 for every key.
       expect(effective.minCosine).toBe(1);
       expect(effective.trustWeights).toEqual(TRUST_WEIGHTS);
+      // #475: no prior and the flat walk, so an empty row ranks as before.
+      expect([effective.communityPriorWeight, effective.layeredExpansion]).toEqual([0, false]);
     }
   });
 
@@ -58,6 +75,7 @@ function replay(query: string, expected: 'a' | 'b', a: number, b: number): Repla
   const pool: SearchPool = {
     vectorHits: [hit('a', a), hit('b', b)].sort((x, y) => y.score - x.score),
     textHits: [],
+    communities: [],
     fetchK: 20,
     k: 10,
     trustOn: true,
@@ -110,6 +128,7 @@ describe('tuneSearch', () => {
           k: 10,
           trustOn: false,
           pages: new Map(['a', 'b', 'c'].map((id) => [id, page])),
+          communities: [],
         },
       }),
     );

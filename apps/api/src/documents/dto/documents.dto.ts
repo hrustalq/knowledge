@@ -165,7 +165,8 @@ export class CreateDocumentDto {
     description:
       'What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and ' +
       '`asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is ' +
-      'created (422 with `details.issues`), and default to the `reference` category.',
+      'created (422 with `details.issues`), and default to the `reference` category. `test-fixture` (#483) is a QA ' +
+      'fixture, YAML or JSON too, checked against the specs its author can open (400 with `details.issues`).',
   })
   @IsOptional()
   @IsIn(API_DOCUMENT_KINDS as unknown as string[])

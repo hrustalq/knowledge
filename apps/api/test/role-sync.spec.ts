@@ -12,7 +12,8 @@ import { WorkspacesService } from '../src/workspaces/workspaces.service.js';
  * - a manual row is never touched, a scim row is left to provisioning;
  * - demoting or removing the last admin is skipped and audited, never thrown;
  * - another workspace's mapping counts only while the provider is platform-wide;
- * - a hand edit of a managed row is a 409 unless it converts the row to manual.
+ * - a hand edit of a managed row is a 409 unless it converts the row to manual;
+ * - capabilities (#468) are manual-only: sync never writes them, and editing them alone needs no takeover.
  */
 
 const HOME = '11111111-1111-4111-8111-111111111111';
@@ -216,14 +217,15 @@ describe('editing an IdP-managed member by hand', () => {
   function service(source: string) {
     const { db, prisma } = fakeDb([{ workspaceId: HOME, userId: ADA, role: 'editor', source }]);
     const listMembers = vi.fn(async () => ({ workspaceId: HOME, members: [] }));
-    const workspaces = new WorkspacesService(prisma as never);
+    const audit = { record: vi.fn(async () => undefined) };
+    const workspaces = new WorkspacesService(prisma as never, audit as never);
     Object.assign(workspaces, { listMembers });
-    return { db, workspaces };
+    return { db, workspaces, audit };
   }
 
   it.each(['jit', 'group', 'scim'])('a %s row answers 409 managedByIdp', async (source) => {
     const { db, workspaces } = service(source);
-    const err = await workspaces.updateMember(HOME, ADA, { role: 'viewer' }).catch((e) => e);
+    const err = await workspaces.updateMember(HOME, ADA, { role: 'viewer' }, BOB).catch((e) => e);
     expect(err).toBeInstanceOf(ConflictException);
     expect(err.getResponse()).toMatchObject({ statusCode: 409, source });
     expect(db.members[0]).toMatchObject({ role: 'editor', source });
@@ -231,13 +233,44 @@ describe('editing an IdP-managed member by hand', () => {
 
   it('converting it to manual applies the change and hands the row to people', async () => {
     const { db, workspaces } = service('group');
-    await workspaces.updateMember(HOME, ADA, { role: 'viewer', convertToManual: true });
+    await workspaces.updateMember(HOME, ADA, { role: 'viewer', convertToManual: true }, BOB);
     expect(db.members[0]).toMatchObject({ role: 'viewer', source: 'manual' });
   });
 
   it('re-adding an existing member goes through the same guards', async () => {
     const { db, workspaces } = service('jit');
-    await expect(workspaces.addMember(HOME, { email: 'ada@corp.example', role: 'admin' })).rejects.toBeInstanceOf(ConflictException);
+    await expect(workspaces.addMember(HOME, { email: 'ada@corp.example', role: 'admin' }, BOB)).rejects.toBeInstanceOf(ConflictException);
     expect(db.members[0]).toMatchObject({ role: 'editor' });
+  });
+
+  it('a capability alone is edited on a managed row without a takeover, and audited', async () => {
+    const { db, workspaces, audit } = service('scim');
+    await workspaces.updateMember(HOME, ADA, { capabilities: ['api-test-suites.generate'] }, BOB);
+    expect(db.members[0]).toMatchObject({ role: 'editor', source: 'scim', capabilities: ['api-test-suites.generate'] });
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'member.capabilities_changed', actor: BOB, target: ADA, params: { granted: ['api-test-suites.generate'], revoked: [] } }),
+    );
+    await workspaces.updateMember(HOME, ADA, { capabilities: ['api-test-suites.generate'] }, BOB);
+    expect(audit.record).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('role sync and capabilities (#468)', () => {
+  const CAP = ['api-test-suites.generate'];
+
+  it('additive and authoritative sync leave a member capabilities alone', async () => {
+    const up = sync([{ workspaceId: HOME, userId: ADA, role: 'viewer', source: 'group', capabilities: CAP }], [mapping('admins', 'admin')]);
+    await up.run(provider(), ['admins']);
+    expect(up.ada()).toMatchObject({ role: 'admin', capabilities: CAP });
+
+    const down = sync(
+      [
+        { workspaceId: HOME, userId: ADA, role: 'editor', source: 'group', capabilities: CAP },
+        { workspaceId: HOME, userId: BOB, role: 'admin' },
+      ],
+      [mapping('readers', 'viewer', { trustedOperator: true })],
+    );
+    await down.run(provider({ groupSyncMode: 'authoritative' }), ['readers']);
+    expect(down.ada()).toMatchObject({ role: 'viewer', trustedOperator: true, capabilities: CAP });
   });
 });

@@ -18,6 +18,7 @@
  * `make tune` proposes: the RRF constant, the vector relevance floor and the
  * per-state trust weights, whose override is sparse per state. Their defaults
  * are code constants, except the absolute cosine floor (`SEARCH_MIN_COSINE`).
+ * The community prior and layered expansion (#475) join it, both off by default.
  */
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -66,34 +67,45 @@ const KNOBS = [
   { key: 'rrfK', min: 1, max: 1000, step: 1, integer: true },
   { key: 'minCosine', min: 0, max: 1, step: 0.01, integer: false },
   { key: 'minCosineShare', min: 0, max: 1, step: 0.01, integer: false },
+  { key: 'communityPriorWeight', min: 0, max: 2, step: 0.05, integer: false },
+  { key: 'communityPriorFloor', min: 0, max: 1, step: 0.01, integer: false },
 ] as const
 type Knob = (typeof KNOBS)[number]
 type KnobKey = Knob['key']
 
+/** The on/off keys, each a three-way: inherit, on, off. */
+type SwitchKey = 'trustRanking' | 'layeredExpansion'
+type Switch = 'inherit' | 'on' | 'off'
+
 /**
- * The inputs: a value per numeric key (empty = inherit) and a three-way for the
- * switch. A `type="number"` input's v-model hands back a number once typed
+ * The inputs: a value per numeric key (empty = inherit) and a three-way for
+ * each switch. A `type="number"` input's v-model hands back a number once typed
  * into and the string it was given before, so every read goes through `text`.
  */
 type Field = string | number
 const text = (v: Field) => String(v).trim()
 const form = reactive<
-  Record<NumericKey | KnobKey, Field> & { trustRanking: 'inherit' | 'on' | 'off'; trustWeights: Record<WeightKey, Field> }
+  Record<NumericKey | KnobKey, Field> & Record<SwitchKey, Switch> & { trustWeights: Record<WeightKey, Field> }
 >({
   reviewIntervalDays: '',
   remindBeforeDays: '',
   inactiveAfterDays: '',
   emptyMaxChars: '',
   trustRanking: 'inherit',
+  layeredExpansion: 'inherit',
   rrfK: '',
   minCosine: '',
   minCosineShare: '',
+  communityPriorWeight: '',
+  communityPriorFloor: '',
   trustWeights: Object.fromEntries(TRUST_WEIGHT_KEYS.map((k) => [k, ''])) as Record<WeightKey, Field>,
 })
 
 function adopt(res: KnowledgeHealthSettingsResponse) {
   for (const { key } of NUMERIC) form[key] = res.override[key] === null ? '' : String(res.override[key])
-  form.trustRanking = res.override.trustRanking === null ? 'inherit' : res.override.trustRanking ? 'on' : 'off'
+  for (const key of ['trustRanking', 'layeredExpansion'] as const) {
+    form[key] = res.override[key] === null ? 'inherit' : res.override[key] ? 'on' : 'off'
+  }
   for (const { key } of KNOBS) form[key] = res.override[key] === null ? '' : String(res.override[key])
   for (const k of TRUST_WEIGHT_KEYS) {
     const v = res.override.trustWeights?.[k]
@@ -109,6 +121,7 @@ const draft = computed<KnowledgeHealthSettingsOverride>(() => ({
   inactiveAfterDays: parse(form.inactiveAfterDays),
   emptyMaxChars: parse(form.emptyMaxChars),
   trustRanking: form.trustRanking === 'inherit' ? null : form.trustRanking === 'on',
+  layeredExpansion: form.layeredExpansion === 'inherit' ? null : form.layeredExpansion === 'on',
   ...(Object.fromEntries(KNOBS.map((knob) => [knob.key, parseKnob(knob)])) as Record<KnobKey, number | null>),
   trustWeights: draftWeights.value,
 }))
@@ -180,8 +193,7 @@ function appliesLabel(key: NumericKey, unit: 'days' | 'chars'): string {
 function defaultLabel(key: NumericKey): string {
   return formatNumber(settings.value?.defaults[key] ?? 0)
 }
-const trustDefault = computed(() => (settings.value?.defaults.trustRanking ? t('health.settings.on') : t('health.settings.off')))
-const trustApplies = computed(() => (settings.value?.effective.trustRanking ? t('health.settings.on') : t('health.settings.off')))
+const onOff = (value: boolean | undefined) => (value ? t('health.settings.on') : t('health.settings.off'))
 
 const saving = ref(false)
 async function save() {
@@ -257,7 +269,7 @@ async function save() {
           <p class="kn-measure text-xs text-muted-foreground">{{ t('health.settings.key.trustRanking.hint') }}</p>
           <p class="mt-1 text-xs">
             <span class="text-muted-foreground">{{ t('health.settings.applies') }}</span>
-            {{ trustApplies }}
+            {{ onOff(settings.effective.trustRanking) }}
             <span v-if="settings.override.trustRanking !== null" class="ml-1 text-primary/80">{{ t('ai.overridden') }}</span>
           </p>
         </div>
@@ -266,7 +278,7 @@ async function save() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="inherit">{{ t('health.settings.inherit', { value: trustDefault }) }}</SelectItem>
+            <SelectItem value="inherit">{{ t('health.settings.inherit', { value: onOff(settings.defaults.trustRanking) }) }}</SelectItem>
             <SelectItem value="on">{{ t('health.settings.on') }}</SelectItem>
             <SelectItem value="off">{{ t('health.settings.off') }}</SelectItem>
           </SelectContent>
@@ -289,6 +301,9 @@ async function save() {
               <span class="text-muted-foreground">{{ t('health.settings.applies') }}</span>
               {{ knobLabel(settings.effective[knob.key]) }}
               <span v-if="settings.override[knob.key] !== null" class="ml-1 text-primary/80">{{ t('ai.overridden') }}</span>
+            </p>
+            <p v-if="knob.key === 'communityPriorFloor' && settings.effective.communityPriorWeight === 0" class="mt-1 text-xs text-muted-foreground">
+              {{ t('health.settings.key.communityPriorFloor.inert') }}
             </p>
           </div>
           <div class="space-y-1">
@@ -352,6 +367,28 @@ async function save() {
             {{ t('health.settings.key.trustWeights.range', { min: formatNumber(TRUST_WEIGHT_MIN), max: formatNumber(TRUST_WEIGHT_MAX) }) }}
           </p>
         </fieldset>
+
+        <div class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">
+          <div class="min-w-0">
+            <span class="text-sm font-medium">{{ t('health.settings.key.layeredExpansion.label') }}</span>
+            <p class="kn-measure text-xs text-muted-foreground">{{ t('health.settings.key.layeredExpansion.hint') }}</p>
+            <p class="mt-1 text-xs">
+              <span class="text-muted-foreground">{{ t('health.settings.applies') }}</span>
+              {{ onOff(settings.effective.layeredExpansion) }}
+              <span v-if="settings.override.layeredExpansion !== null" class="ml-1 text-primary/80">{{ t('ai.overridden') }}</span>
+            </p>
+          </div>
+          <Select v-model="form.layeredExpansion" :disabled="!props.canManage">
+            <SelectTrigger class="h-9 w-full" :aria-label="t('health.settings.key.layeredExpansion.label')">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="inherit">{{ t('health.settings.inherit', { value: onOff(settings.defaults.layeredExpansion) }) }}</SelectItem>
+              <SelectItem value="on">{{ t('health.settings.on') }}</SelectItem>
+              <SelectItem value="off">{{ t('health.settings.off') }}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </section>
 

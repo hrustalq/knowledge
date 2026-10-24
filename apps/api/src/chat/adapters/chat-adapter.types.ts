@@ -193,6 +193,8 @@ export interface ChatAdapterContext {
   serverUrl: string | null;
   /** Our webhook: where a platform that is told per button (Time) sends a press. */
   actionUrl: string;
+  /** The key a platform signs every delivery with (Slack's signing secret); null where it signs nothing. */
+  signingSecret?: string | null;
 }
 
 /** The platform refused or could not be reached. The message never contains the token. */
@@ -222,9 +224,17 @@ export interface ChatAdapter {
    * Is this webhook delivery the platform's? Telegram echoes a shared secret,
    * compared against the stored hash; Time sends nothing to check, so its
    * buttons carry a signature over their data, keyed by the bot's token
-   * (`ctx`). Constant-time either way. Websocket messages never come here.
+   * (`ctx`); Slack signs every request with the app's signing secret
+   * (`ctx.signingSecret`); Teams sends a Bot Framework JWT, checked against
+   * its published keys — the one asynchronous check. Constant-time each way. Websocket messages never come here.
    */
-  verifyInbound(raw: RawInbound, secretHash: string | null, ctx: ChatAdapterContext | null): boolean;
+  verifyInbound(raw: RawInbound, secretHash: string | null, ctx: ChatAdapterContext | null): boolean | Promise<boolean>;
+  /**
+   * A verified delivery that is the platform checking our URL rather than
+   * sending anything (Slack's `url_verification`): what the webhook answers
+   * it with. null for every other delivery; absent where there is no such check.
+   */
+  handshake?(raw: RawInbound): unknown;
   /** Messages addressed to the bot; anything else (edits, joins, other bots' commands) is dropped. */
   parseInbound(raw: RawInbound, botUsername: string | null): ChatInbound[];
 
@@ -266,6 +276,12 @@ export interface ChatAdapter {
     beforeMessageId: string | null,
     max: number,
   ): Promise<ChatThread>;
+  /**
+   * The team a channel is in, which its permalinks need (Time, Mattermost);
+   * null for a channel in none, such as a direct chat. Throws when the
+   * platform cannot be asked. Kept on the binding for chat search (#407).
+   */
+  chatTeam?(ctx: ChatAdapterContext, chatId: string): Promise<string | null>;
   /** A link to one message, where the platform has one for this chat; the origin of a harvest from the buffer. */
   messageUrl?(chatId: string, messageId: string): string | null;
   /** A link that opens a private chat with the bot, or null if the platform has none. */

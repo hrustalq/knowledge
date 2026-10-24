@@ -10,7 +10,7 @@
 import TurndownService from 'turndown';
 import type { Node as PMNode, Schema } from '@tiptap/pm/model';
 import { DOMSerializer } from '@tiptap/pm/model';
-import { KN } from '@knowledge/editor-schema/nodes';
+import { KN, diagramInfo, diagramLayoutOf, escapeHtml } from '@knowledge/editor-schema/nodes';
 
 const turndown = new TurndownService({
   headingStyle: 'atx',
@@ -58,10 +58,11 @@ function firstDescendant(node: Node, tagName: string): Element | null {
   return null;
 }
 
-/** ```mermaid — the fence the read view and the ingestion worker already know. */
+/** ```mermaid — the fence the read view and the ingestion worker already know, with its layout in the info string (#476). */
 turndown.addRule('knMermaid', {
   filter: (node) => (node as HTMLElement).hasAttribute?.(KN.mermaid),
-  replacement: (_content, node) => `\n\n\`\`\`mermaid\n${(node.textContent ?? '').trim()}\n\`\`\`\n\n`,
+  replacement: (_content, node) =>
+    `\n\n\`\`\`${diagramInfo('mermaid', diagramLayoutOf(node as HTMLElement))}\n${(node.textContent ?? '').trim()}\n\`\`\`\n\n`,
 });
 
 /** ```drawing — a whiteboard scene as JSON. No prose inside, so a fence loses nothing. */
@@ -69,7 +70,7 @@ turndown.addRule('knDrawing', {
   filter: (node) => (node as HTMLElement).hasAttribute?.(KN.drawing),
   replacement: (_content, node) => {
     const scene = attr(node, 'data-scene') || (node.textContent ?? '').trim();
-    return `\n\n\`\`\`drawing\n${scene}\n\`\`\`\n\n`;
+    return `\n\n\`\`\`${diagramInfo('drawing', diagramLayoutOf(node as HTMLElement))}\n${scene}\n\`\`\`\n\n`;
   },
 });
 
@@ -164,6 +165,33 @@ turndown.addRule('knFile', {
     const size = attr(node, 'data-kn-size');
     const href = firstDescendant(node, 'A')?.getAttribute('href') ?? '';
     return `\n\n<div ${KN.file}="${id}" data-kn-name="${name}" data-kn-mime="${mime}"${size ? ` data-kn-size="${size}"` : ''}><a href="${href}">${name}</a></div>\n\n`;
+  },
+});
+
+function descendants(node: Node, tagName: string): Element[] {
+  return children(node).flatMap((child) => [...(child.nodeName === tagName ? [child] : []), ...descendants(child, tagName)]);
+}
+
+function oneLine(text: string | null | undefined): string {
+  return escapeHtml((text ?? '').replace(/\s+/g, ' ').trim());
+}
+
+/**
+ * Embed group (#470) → one raw HTML block of captioned links. No blank line
+ * inside: CommonMark ends an HTML block at the first one, which would split
+ * the group. References only — the markdown never holds an image URL.
+ */
+turndown.addRule('knEmbed', {
+  filter: (node) => node.nodeName === 'FIGURE' && !!(node as HTMLElement).hasAttribute?.(KN.embed),
+  replacement: (_content, node) => {
+    const layout = attr(node, KN.embed) === 'grid' ? 'grid' : 'strip';
+    const items = descendants(node, 'A').map((a) => {
+      const href = escapeHtml(a.getAttribute('href') ?? '');
+      const version = a.getAttribute(KN.version);
+      return `<a href="${href}"${version ? ` ${KN.version}="${escapeHtml(version)}"` : ''}>${oneLine(a.textContent) || href}</a>`;
+    });
+    const caption = oneLine(descendants(node, 'FIGCAPTION')[0]?.textContent);
+    return `\n\n${[`<figure ${KN.embed}="${layout}">`, ...items, ...(caption ? [`<figcaption>${caption}</figcaption>`] : []), '</figure>'].join('\n')}\n\n`;
   },
 });
 

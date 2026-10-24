@@ -38,6 +38,7 @@ export class PublishingSettingsService {
       allowShareLinks: row?.allowShareLinks ?? null,
       allowPasswordlessShares: row?.allowPasswordlessShares ?? null,
       allowPublicSites: row?.allowPublicSites ?? null,
+      allowPublicEmbeds: row?.allowPublicEmbeds ?? null,
     };
   }
 
@@ -47,6 +48,8 @@ export class PublishingSettingsService {
       allowShareLinks: this.ceiling().sharingEnabled && (override.allowShareLinks ?? false),
       allowPasswordlessShares: override.allowPasswordlessShares ?? false,
       allowPublicSites: this.ceiling().sitesEnabled && (override.allowPublicSites ?? false),
+      // No ceiling of its own: it only ever applies where a share or a site already does.
+      allowPublicEmbeds: override.allowPublicEmbeds ?? false,
     };
   }
 

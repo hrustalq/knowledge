@@ -231,7 +231,7 @@ function permissionsAs(role: string, grants: GrantRow[] = []) {
     { id: CHILD, title: 'Salaries', restricted: true },
   ];
   const prisma = {
-    workspaceMember: { findUnique: vi.fn(async () => ({ role, trustedOperator: false })) },
+    workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: { findUnique: vi.fn(async () => ({ role, trustedOperator: false })) },
     userGroupMember: { findMany: vi.fn(async () => []) },
     accessGrant: {
       findMany: vi.fn(async ({ where }: { where: { resourceId?: { in: string[] } } }) =>
@@ -316,7 +316,7 @@ describe('ResourceAccessService.update', () => {
   it('refuses a change that would leave the caller unable to manage the page', async () => {
     const { service, prisma } = permissionsAs('editor', [grant(CHILD, ALICE, 'manage')]);
     Object.assign(prisma, {
-      workspaceMember: { ...prisma.workspaceMember, findMany: vi.fn(async () => [{ userId: BOB }]) },
+      workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: { ...prisma.workspaceMember, findMany: vi.fn(async () => [{ userId: BOB }]) },
       userGroup: { findMany: vi.fn(async () => []) },
     });
     const access = new ResourceAccessService(prisma as never, service, { record: vi.fn() } as never);

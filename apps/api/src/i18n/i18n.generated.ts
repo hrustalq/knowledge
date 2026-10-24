@@ -289,6 +289,16 @@ export type I18nTranslations = {
         "coachDesc": string;
         "scribe": string;
         "scribeDesc": string;
+        "tester": string;
+        "testerDesc": string;
+        "testerRun": {
+            "noOperation": string;
+            "summary": string;
+            "noCandidates": string;
+            "reasonLink": string;
+            "reasonPathParam": string;
+            "rankSummary": string;
+        };
         "scribeRun": {
             "noTicket": string;
             "ticketGone": string;
@@ -483,6 +493,7 @@ export type I18nTranslations = {
                 "few": string;
                 "many": string;
             };
+            "notKept": string;
         };
         "forget": {
             "done": {
@@ -506,6 +517,12 @@ export type I18nTranslations = {
                 "few": string;
                 "many": string;
             };
+            "onPlain": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
         };
         "search": {
             "on": {
@@ -515,8 +532,10 @@ export type I18nTranslations = {
                 "many": string;
             };
         };
+        "helpTeams": string;
     };
     "connector": {
+        "figmaReach": string;
         "stage": {
             "connecting": string;
             "listing": string;
@@ -640,6 +659,10 @@ export type I18nTranslations = {
         };
     };
     "error": {
+        "embed": {
+            "notAllowlisted": string;
+            "notFigma": string;
+        };
         "internal": string;
         "payloadTooLarge": string;
         "invalidUuid": string;
@@ -665,6 +688,7 @@ export type I18nTranslations = {
             "roleRequired": string;
             "runOwnerUnavailable": string;
             "trustedOperatorRequired": string;
+            "capabilityRequired": string;
             "noApiKeyInDevMode": string;
             "apiKeyWorkspace": string;
             "apiKeyReadOnly": string;
@@ -689,6 +713,7 @@ export type I18nTranslations = {
             "notAMember": string;
             "lastAdminDemote": string;
             "lastAdminRemove": string;
+            "deleteConfirmMismatch": string;
             "managedByIdp": string;
         };
         "user": {
@@ -968,6 +993,7 @@ export type I18nTranslations = {
             "unknownKind": string;
             "missingField": string;
             "credentialRequired": string;
+            "zendeskAgentRequired": string;
             "encryptionKeyMissing": string;
             "urlInvalid": string;
             "urlNotHttps": string;
@@ -976,6 +1002,7 @@ export type I18nTranslations = {
             "disabled": string;
             "pullNotSupported": string;
             "pushNotSupported": string;
+            "figmaAllowlistInvalid": string;
             "directionNotAllowed": string;
             "runInFlight": string;
             "webhookNotConfigured": string;
@@ -1208,6 +1235,8 @@ export type I18nTranslations = {
             "linkNotMember": string;
             "serverUrlRequired": string;
             "serverUrlUnexpected": string;
+            "signingSecretRequired": string;
+            "signingSecretUnexpected": string;
             "serverUrlInvalid": string;
             "serverUrlNotHttps": string;
             "serverUrlPrivate": string;
@@ -1272,6 +1301,62 @@ export type I18nTranslations = {
             "driftNoRepository": string;
             "driftNotHttp": string;
             "driftDisabled": string;
+        };
+        "apiTestSuite": {
+            "notHttp": string;
+            "notGenerated": string;
+            "disabled": string;
+            "noModel": string;
+            "bindingFixture": string;
+            "bindingCase": string;
+            "fixtureHidden": string;
+            "fixtureBroken": string;
+            "fixtureInvalid": string;
+            "rankNothing": string;
+        };
+        "testFixture": {
+            "template": string;
+            "format": string;
+            "notFixture": string;
+            "invalid": string;
+            "invalidStep": string;
+            "issue": {
+                "syntax": string;
+                "too-large": string;
+                "not-object": string;
+                "version": string;
+                "steps-missing": string;
+                "too-many-steps": string;
+                "inputs-shape": string;
+                "step-shape": string;
+                "step-id": string;
+                "duplicate-id": string;
+                "call-invalid": string;
+                "expect-invalid": string;
+                "request-shape": string;
+                "capture-name": string;
+                "capture-rule": string;
+                "placeholder-invalid": string;
+                "undefined-variable": string;
+                "unknown-operation": string;
+                "literal-credential": string;
+            };
+        };
+        "apiTestEnvironment": {
+            "notFound": string;
+            "unreadable": string;
+            "keyMissing": string;
+            "name": string;
+            "server": string;
+            "tooMany": string;
+            "valueName": string;
+            "value": string;
+            "duplicate": string;
+        };
+        "apiTestRun": {
+            "off": string;
+            "notFound": string;
+            "environmentGone": string;
         };
         "apiTry": {
             "disabled": string;

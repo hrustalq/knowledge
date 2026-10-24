@@ -1,0 +1,143 @@
+// @vitest-environment jsdom
+import { describe, expect, it } from 'vitest'
+import DOMPurify from 'dompurify'
+import { canonicalEmbedUrl, parseEmbedUrl } from '@knowledge/contracts/embeds'
+import { editorSchema, parseMarkdown } from '@knowledge/editor-schema'
+import { docToMarkdown } from '@knowledge/editor-schema/serialize'
+import { SANITIZE_CONFIG, embedGroupsOf, markdownToHtml, rewriteEmbedGroups } from './render'
+import { embedCaptionOf, embedItemsOf } from './nodes'
+
+// The embed block (#470, docs/features/64): one URL matcher, and markdown that
+// carries captioned links and pinned versions, never an image.
+const KEY = 'AbCdEfGhIj12'
+
+describe('parseEmbedUrl', () => {
+  it.each([
+    [`https://www.figma.com/design/${KEY}/Checkout?node-id=12-34&t=x`, { fileKey: KEY, nodeId: '12:34', board: false }],
+    [`https://figma.com/file/${KEY}/Old`, { fileKey: KEY, nodeId: null, board: false }],
+    [`https://www.figma.com/proto/${KEY}/P?node-id=1-2&starting-point-node-id=1%3A2`, { fileKey: KEY, nodeId: '1:2', board: false }],
+    [`https://www.figma.com/design/${KEY}/X?node-id=5-6&m=dev`, { fileKey: KEY, nodeId: '5:6', board: false }],
+    [`https://www.figma.com/design/${KEY}/branch/BrAnChKeY99/X`, { fileKey: 'BrAnChKeY99', nodeId: null, board: false }],
+    [`https://www.figma.com/board/${KEY}/Flow`, { fileKey: KEY, nodeId: null, board: true }],
+    [`https://www.figma.com/design/${KEY}/X?node-id=I1-2%3B3-4`, { fileKey: KEY, nodeId: 'I1:2;3:4', board: false }],
+  ])('%s', (url, ref) => {
+    expect(parseEmbedUrl(url)).toEqual({ provider: 'figma', ...ref })
+  })
+
+  it.each([
+    'http://www.figma.com/design/AbCdEfGhIj12/',
+    'https://evil.figma.com.example/design/AbCdEfGhIj12/',
+    'https://www.figma.com/community/file/123',
+    'https://www.figma.com/design/short/',
+    'not a url',
+  ])('refuses %s', (url) => expect(parseEmbedUrl(url)).toBeNull())
+
+  it('canonicalizes two links to one node to the same string', () => {
+    const a = parseEmbedUrl(`https://www.figma.com/design/${KEY}/A?node-id=12-34&t=1`)!
+    const b = parseEmbedUrl(`https://figma.com/proto/${KEY}/B?node-id=12-34`)!
+    expect(canonicalEmbedUrl(a)).toBe(`https://www.figma.com/design/${KEY}/?node-id=12-34`)
+    expect(canonicalEmbedUrl(b)).toBe(canonicalEmbedUrl(a))
+  })
+})
+
+describe('the embed block in markdown', () => {
+  const md = (source: string) => docToMarkdown(parseMarkdown(source, document), editorSchema, document)
+
+  it('canonicalizes item URLs and keeps versions, captions and layout', () => {
+    const out = md(
+      `<figure data-kn-embed="grid">\n<a href="https://figma.com/file/${KEY}/Old?node-id=12-34" data-kn-version="7">Sign-in</a>\n<figcaption>Flow</figcaption>\n</figure>`,
+    )
+    expect(out).toBe(
+      `<figure data-kn-embed="grid">\n<a href="https://www.figma.com/design/${KEY}/?node-id=12-34" data-kn-version="7">Sign-in</a>\n<figcaption>Flow</figcaption>\n</figure>`,
+    )
+  })
+
+  it('keeps an item no provider claims and an unpinned one, as written', () => {
+    const source = `<figure data-kn-embed="strip">\n<a href="https://example.com/x">Other</a>\n<a href="https://www.figma.com/design/${KEY}/">https://www.figma.com/design/${KEY}/</a>\n</figure>`
+    expect(md(source)).toBe(source)
+  })
+
+  it('reads a group split by blank lines, and writes it back as one HTML block', () => {
+    const out = md(`<figure data-kn-embed>\n\n<a href="https://www.figma.com/board/${KEY}/" data-kn-version="1">Board</a>\n\n</figure>`)
+    expect(out).toBe(`<figure data-kn-embed="strip">\n<a href="https://www.figma.com/board/${KEY}/" data-kn-version="1">Board</a>\n</figure>`)
+    expect(out).not.toMatch(/\n\n/)
+  })
+
+  it('escapes captions', () => {
+    const doc = editorSchema.node('doc', null, [
+      editorSchema.node('knEmbed', { items: [{ url: 'https://example.com/', version: null, caption: '<b>"x"</b>' }], caption: 'a & b' }),
+    ])
+    const out = docToMarkdown(doc, editorSchema, document)
+    expect(out).toContain('>&lt;b&gt;&quot;x&quot;&lt;/b&gt;</a>')
+    expect(out).toContain('<figcaption>a &amp; b</figcaption>')
+  })
+
+  it('survives the read view sanitizer', () => {
+    const html = DOMPurify.sanitize(
+      markdownToHtml(`<figure data-kn-embed="grid">\n<a href="https://www.figma.com/design/${KEY}/" data-kn-version="7">A</a>\n<figcaption>C</figcaption>\n</figure>`),
+      { ...SANITIZE_CONFIG },
+    )
+    expect(html).toContain('<figure data-kn-embed="grid">')
+    expect(html).toContain('data-kn-version="7"')
+    expect(html).toContain('<figcaption>C</figcaption>')
+  })
+})
+
+describe('embedGroupsOf (#470, no DOM)', () => {
+  const figure = (html: string) => {
+    const host = document.createElement('div')
+    host.innerHTML = markdownToHtml(html)
+    return [...host.querySelectorAll('figure[data-kn-embed]')].map((f) => ({
+      layout: f.getAttribute('data-kn-embed') === 'grid' ? 'grid' : 'strip',
+      caption: embedCaptionOf(f),
+      items: embedItemsOf(f),
+    }))
+  }
+
+  it.each([
+    [
+      'canonical',
+      `<figure data-kn-embed="grid">\n<a href="https://figma.com/file/${KEY}/X?node-id=1-2" data-kn-version="7">Sign &amp; in</a>\n<a href='https://example.com/a'>https://example.com/a</a>\n<figcaption>Flow <b>one</b></figcaption>\n</figure>`,
+    ],
+    ['split by blank lines', `Intro.\n\n<figure data-kn-embed>\n\n<a href="https://www.figma.com/board/${KEY}/" data-kn-version="1">Board</a>\n\n</figure>\n\nAfter.`],
+    ['inside a panel', `> [!note]\n> <figure data-kn-embed="strip"><a href="https://www.figma.com/design/${KEY}/">x</a></figure>`],
+  ])('agrees with the DOM reader: %s', (_name, md) => {
+    expect(embedGroupsOf(md)).toEqual(figure(md))
+  })
+
+  it('ignores a figure inside a code fence', () => {
+    expect(embedGroupsOf('```html\n<figure data-kn-embed="grid"><a href="https://www.figma.com/design/AbCdEfGhIj12/">x</a></figure>\n```')).toEqual([])
+  })
+})
+
+describe('rewriteEmbedGroups (#470)', () => {
+  const page = [
+    '# Title',
+    '',
+    `<figure data-kn-embed="grid">\n<a href="https://www.figma.com/design/${KEY}/?node-id=1-2" data-kn-version="7">One</a>\n</figure>`,
+    '',
+    '```html\n<figure data-kn-embed><a href="https://www.figma.com/design/KEEP12345678/">code</a></figure>\n```',
+    '',
+    `> [!note]\n> <figure data-kn-embed="strip"><a href="https://www.figma.com/design/${KEY}/?node-id=3-4">Quoted</a></figure>`,
+    '',
+    `<figure data-kn-embed>\n\n<a href="https://www.figma.com/board/${KEY}/" data-kn-version="1">Split</a>\n\n</figure>`,
+    '',
+    'End.',
+  ].join('\n')
+
+  it('replaces every group, numbered as embedGroupsOf numbers them, and leaves code and prose alone', () => {
+    const seen: string[] = []
+    const out = rewriteEmbedGroups(page, (group, i) => {
+      seen.push(`${i}:${group.items.map((it) => it.caption).join(',')}`)
+      return `<figure data-kn-embed="${group.layout}"><span>G${i}</span></figure>`
+    })
+    expect(seen).toEqual(['0:One', '1:Quoted', '2:Split'])
+    expect(embedGroupsOf(page).map((g) => g.items.map((it) => it.caption).join(','))).toEqual(['One', 'Quoted', 'Split'])
+    expect(out).not.toContain(KEY)
+    expect(out).toContain('KEEP12345678')
+    expect(out).toContain('# Title')
+    expect(out).toContain('End.')
+    expect(out).toContain('> [!note]')
+    expect(embedGroupsOf(out)).toHaveLength(3)
+  })
+})

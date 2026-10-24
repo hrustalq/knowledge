@@ -10,7 +10,11 @@ T-Bank's self-hosted corporate messenger, is the second platform (phase 4): the
 same answers, linking, feedback, saving and notifications, heard over the bot's
 own websocket instead of a webhook (see **Time specifics**). Mattermost
 (#343) is the third, through the same adapter as Time (see **Mattermost
-specifics**). Since #82 a
+specifics**). Slack (#380) is the fourth: an internal app per workspace, heard
+through the Events API on our webhook, every request signed (see **Slack
+specifics**). Microsoft Teams (#381) is the fifth: a Bot Framework bot whose
+channels can keep their messages for `capture` (see **Teams specifics**).
+Since #82 a
 linked editor can also ask the bot to **harvest** a thread of people's
 messages into reviewed captures; that is its own document,
 [59 — Chat harvest](59-chat-harvest.md).
@@ -328,7 +332,7 @@ field is the search sheet's (`lib/tag-options.ts`).
 The core decides *what* to say and the adapter decides *how* it looks and
 travels. `ChatAdapterRegistry` is keyed by `ChatPlatformKind`, so a kind added
 to `CHAT_PLATFORM_KINDS` without an adapter is a type error.
-`CHAT_PLATFORM_KINDS` is `['telegram', 'time', 'mattermost']`: VK Teams joins
+`CHAT_PLATFORM_KINDS` is `['telegram', 'time', 'mattermost', 'slack', 'teams']`: VK Teams joins
 it only with its adapter, because a closed vocabulary must not promise a
 value the code never emits. `CHAT_SELF_HOSTED_PLATFORMS` (`['time',
 'mattermost']`) is the one list the form, the DTO check and the service read
@@ -336,20 +340,27 @@ for "this bot needs a server address". Time and Mattermost are **one adapter**,
 `MattermostAdapter` (`chat/adapters/mattermost.adapter.ts`), constructed once
 per kind; `CHAT_SOCKET_KINDS` in the registry is the list of kinds the socket
 supervisor holds, and `registry.socket(kind)` hands it the right instance.
+`CHAT_SIGNED_PLATFORMS` (`['slack']`) is the one list for "this bot needs a
+signing secret", read the same three ways. `CHAT_PASTED_ENDPOINT_PLATFORMS`
+(`['slack', 'teams']`) is the list whose card shows the address to paste,
+and `CHAT_LISTENING_PLATFORMS` (`['telegram', 'teams']`) the list whose groups
+can keep their messages — the switch, its guard and the automatic harvest.
+`verifyInbound` may be asynchronous (Teams fetches signing keys).
 
 How each platform maps, and what a later one must:
 
-| Seam               | Telegram                                       | Time (phase 4) and Mattermost (#343)                   | VK Teams                    |
-| ------------------ | ---------------------------------------------- | ------------------------------------------------------ | --------------------------- |
-| inbound            | webhook                                        | websocket `GET /api/v4/websocket`, `posted` events     | long poll `events/get`      |
-| `verifyInbound`    | `secret_token` header, SHA-256 + constant time | HMAC over the button's data in `integration.context`   | —                           |
-| `parseInbound`     | `message`, reply chain, `@bot` mention, `message_reaction` (✍) | `posted`: `@bot` in the text, `channel_type: 'D'`; `reaction_added` (📌) | message                     |
-| button presses     | `callback_query` / `answerCallbackQuery`       | POST to `integration.url`; note as `ephemeral_text` in the response (`respondToAction`) | —                           |
-| threads            | reply to the bot's message                     | `root_id` (`threadId`)                                 | reply                       |
-| `render`           | HTML subset + inline keyboard                  | markdown + one attachment of `actions` per button row  | markdown / inline keyboard  |
-| `postMessage` / `editMessage` | `sendMessage` / `editMessageText`   | `POST /api/v4/posts` / `PUT /api/v4/posts/:id/patch`   | —                           |
-| `identify`         | `getMe`                                        | `GET /api/v4/users/me`                                 | `self/get`                  |
-| `registerWebhook`  | `setWebhook`                                   | no-op (the supervisor opens the socket)                | manual                      |
+| Seam               | Telegram                                       | Time (phase 4) and Mattermost (#343)                   | Slack (#380)                                         | VK Teams                    |
+| ------------------ | ---------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------- | --------------------------- |
+| inbound            | webhook                                        | websocket `GET /api/v4/websocket`, `posted` events     | webhook: Events API + Interactivity                  | long poll `events/get`      |
+| `verifyInbound`    | `secret_token` header, SHA-256 + constant time | HMAC over the button's data in `integration.context`   | `X-Slack-Signature` v0 HMAC with the signing secret, ≤ 5 min old | —                |
+| `handshake`        | —                                              | —                                                      | `url_verification` → `{ challenge }`                 | —                           |
+| `parseInbound`     | `message`, reply chain, `@bot` mention, `message_reaction` (✍) | `posted`: `@bot` in the text, `channel_type: 'D'`; `reaction_added` (📌) | `message` (+ `message_changed` / `message_deleted`): `<@bot>` in the text, `channel_type: 'im'`; `reaction_added` (📌) | message |
+| button presses     | `callback_query` / `answerCallbackQuery`       | POST to `integration.url`; note as `ephemeral_text` in the response (`respondToAction`) | `block_actions` form payload; note POSTed to its `response_url` | — |
+| threads            | reply to the bot's message                     | `root_id` (`threadId`)                                 | `thread_ts`                                          | reply                       |
+| `render`           | HTML subset + inline keyboard                  | markdown + one attachment of `actions` per button row  | mrkdwn sections + one `actions` block per button row | markdown / inline keyboard  |
+| `postMessage` / `editMessage` | `sendMessage` / `editMessageText`   | `POST /api/v4/posts` / `PUT /api/v4/posts/:id/patch`   | `chat.postMessage` / `chat.update`                   | —                           |
+| `identify`         | `getMe`                                        | `GET /api/v4/users/me`                                 | `auth.test` (the bot's user id)                      | `self/get`                  |
+| `registerWebhook`  | `setWebhook`                                   | no-op (the supervisor opens the socket)                | no-op (the admin pastes the Request URL)             | manual                      |
 
 ## Admin surface
 
@@ -520,6 +531,123 @@ labels (`mattermost GET /users/me: …`) and in a capture's origin.
   📌 handed on and ✅ ignored, `capture` in a thread, and `fetchThread` with the
   team permalink. The fixtures in `chat-mattermost.spec.ts` match what it sent.
 
+## Slack specifics
+
+Slack (#380) is `SlackAdapter` (`chat/adapters/slack.adapter.ts`), plain
+`fetch` to the fixed `https://slack.com/api`.
+
+- **An internal app per workspace.** The workspace admin creates an app from
+  scratch at api.slack.com/apps, gives its bot the scopes `chat:write`,
+  `channels:history`, `groups:history`, `im:history` and `reactions:read`, and
+  installs it. The form takes the Bot User OAuth Token (`xoxb-…`) and the
+  app's **signing secret**. A Marketplace app is out: Slack throttles
+  `conversations.replies` to one call a minute for non-Marketplace
+  *distributed* apps, which no harvest survives, and an internal app is not
+  throttled that way.
+- **Events API over HTTPS, not Socket Mode.** The webhook controller already
+  verifies and dispatches deliveries, and the acceptance criterion is signed
+  requests. Socket Mode would add a third long-lived socket supervisor for the
+  same messages. Once the bot is saved, the admin pastes the bot card's
+  address as the Request URL under **Event Subscriptions** (bot events
+  `message.channels`, `message.groups`, `message.im`, `reaction_added`) and
+  under **Interactivity**. Slack checks it with a signed `url_verification`,
+  which `handshake` answers. Nothing tells us the URL was set, so the card
+  shows the address to paste rather than a delivery status.
+- **Every request is signed.** `X-Slack-Signature` is `v0=` HMAC-SHA256 over
+  `v0:<timestamp>:<raw body>` with the signing secret, compared in constant
+  time, and a timestamp more than five minutes off is refused as a replay. The
+  secret is the platform's, not ours, so unlike Telegram's it cannot be kept
+  as a hash. It is an AES-256-GCM envelope in `chat_integrations.signing_secret`
+  (secret box), handed to the adapter as `ctx.signingSecret`, and never returned.
+- **The bot is its user id.** `auth.test`'s `user_id` (`U…`) is `botUsername`,
+  because a mention is `<@U…>`. The card shows it bare, without `@`
+  (`chatBotHandle`).
+- **Hearing every message in a channel the bot is in.** `message.*` events,
+  not `app_mention`: a mention is `<@bot>` in the text, as on Time, and the
+  rest is what thread follow-ups and searchable chat (#339) need. Edits
+  (`message_changed`) and deletes (`message_deleted`) reach only a searchable
+  group's kept copy. The bot's own messages, other bots and join/topic
+  subtypes are dropped. Slack markup is read back to text (`<url|label>`,
+  `<#C…|name>`, entities).
+- **Threads** follow Time's rules on `thread_ts`. Slack wants the root as
+  `thread_ts`, never a reply, so the adapter remembers each parsed message's
+  root and asks `conversations.replies` only on a miss.
+- **Buttons** are `block_actions` posted to the same URL as a form with a
+  `payload`, signed the same way. The press's note goes to the presser alone
+  through its `response_url`, which is followed only on `hooks.slack.com`.
+- **Rendering.** mrkdwn in section blocks of at most 3000 characters (12 000
+  in all), `<url|label>` links and citations, `*bold*`/`_italic_`, code fences
+  without their language. Slack's three control characters are escaped
+  everywhere else, which is also what defuses `<!channel>` or `<@U…>` quoted
+  from a page: a message sent through the API pings only through that syntax.
+- **Retries.** Slack retries a delivery it thinks timed out. One whose
+  `X-Slack-Retry-Reason` is `http_timeout` was already taken (the webhook
+  answers at once) and is dropped; any other retry is handled, and an answer
+  stays single through its `chat_answers` claim.
+- **No deep link.** Opening a DM with an app needs its app id, which a bot
+  token does not name; a group asks people to message the bot.
+
+## Teams specifics
+
+Microsoft Teams (#381) is `TeamsAdapter` (`chat/adapters/teams.adapter.ts`):
+the Bot Framework's Bot Connector over plain `fetch`, `jose` for its tokens.
+
+- **An Azure Bot, single tenant.** Microsoft no longer creates multi-tenant
+  bots, so a token needs the tenant: the form asks for the **Microsoft App
+  ID**, the **directory (tenant) ID** and a **client secret** of the bot's app
+  registration, and joins them into the one write-only token as
+  `app:tenant:secret` (`teamsCredential`). Saving asks Entra for a
+  client-credentials token (`scope https://api.botframework.com/.default`) —
+  that is `identify`, and the bot's `botUsername` is its app id.
+- **The messaging endpoint is pasted.** Once saved, the admin sets the bot
+  card's address as the Azure Bot's *Messaging endpoint* and turns on the
+  Microsoft Teams channel. Nothing is registered by API.
+- **Every activity is a JWT.** `Authorization: Bearer` from Bot Framework,
+  verified against `login.botframework.com`'s keys (`createRemoteJWKSet`),
+  issuer `https://api.botframework.com`, audience the app id, and the
+  token's `serviceurl` claim equal to the activity's `serviceUrl`. That is the
+  only proof a delivery carries, so a button needs no signature of its own.
+  The key's `endorsements` are not checked (`ponytail:` in the adapter).
+- **The app package.** Teams installs the bot through an app whose manifest
+  names it, and asks for the resource-specific permission that lets it hear a
+  whole channel:
+
+  ```json
+  {
+    "bots": [{ "botId": "<app id>", "scopes": ["personal", "team", "groupChat"] }],
+    "webApplicationInfo": { "id": "<app id>", "resource": "https://RscPermission" },
+    "authorization": {
+      "permissions": {
+        "resourceSpecific": [{ "name": "ChannelMessage.Read.Group", "type": "Application" }]
+      }
+    }
+  }
+  ```
+
+  The team owner grants it at install; no Graph call is made and no protected
+  API approval is needed (the alternative, `ChannelMessage.Read.All`, was
+  rejected on #381). With it, every channel message reaches the webhook, and a
+  channel whose binding keeps messages (*Keep messages for capture*, as on
+  Telegram) files them in the listening buffer.
+- **Threads.** A channel thread's conversation id is
+  `<channel>;messageid=<root>`. `chatId` is the channel (what a binding names);
+  the root is `threadId` and `topicId`, so kept messages are filed per thread.
+  A post in a channel is its own thread's root. Chats (one-to-one and group)
+  have no threads. Replies go to the thread's conversation id, remembered per
+  message; edits `PUT` the activity there.
+- **Service URLs** come from activities, and only Bot Framework's hosts
+  (`*.trafficmanager.net`, `*.botframework.com`) are remembered; an unknown
+  conversation uses `https://smba.trafficmanager.net/teams/`.
+- **Buttons** are one Adaptive Card under the markdown text, a row per
+  `ActionSet`: `Action.Submit` carries the data, `Action.OpenUrl` a link. A
+  press arrives as a message whose `value` is the data. Teams has no note shown
+  to the presser alone, so `acknowledge` is silent; the core's edit answers.
+- **Commands are plain words** (`chat.helpTeams`), as on Time and Slack. Edits
+  and deletes (`messageUpdate`, `messageDelete`) reach a searchable channel's
+  kept copy only. Reactions are not a trigger on Teams.
+- **Links.** A channel message opens at `teams.microsoft.com/l/message/…`; the
+  bot opens at `teams.microsoft.com/l/chat/0/0?users=28:<app id>`.
+
 ## Configuration
 
 | Variable                              | Default                    | Meaning                                                             |
@@ -560,6 +688,36 @@ All nine tables are new (`chat_captures` was folded into `knowledge_captures` by
 of their own.
 
 ## Tests
+
+- `test/chat-teams.spec.ts` (#381, activities in Bot Framework's documented
+  shapes, tokens signed with a local key set): a token for this app from the
+  named service verifies; no token, a forged key, another issuer, another
+  app, an expired token and a mismatched service URL are refused. A channel
+  mention is its own thread and topic; a thread reply names its root (and
+  `capture` reads from it); a chat has no thread; a card submit is a press;
+  edits and deletes are changes. The client-credentials token, replies in the
+  thread on its service URL with the card, edits there, a chat answered in
+  place, a foreign service URL never used, and the links.
+
+- `test/chat-slack.spec.ts` (#380, Events API and interactivity payloads in
+  Slack's documented shapes):
+  - Signatures: a signed request verifies; unsigned, forged, stale (±301 s),
+    tampered and secret-less ones are refused. The webhook answers a signed
+    `url_verification` with its challenge and reads nothing else, 401s an
+    unsigned or forged one, and hands a verified event on.
+  - Events: a channel mention is addressed and its own thread; a reply names
+    its root; plain-word commands only when addressed; markup read back; the
+    bot, other bots, joins and `app_mention` dropped; edits and deletes are
+    changes; 📌 asks for the thread, other reactions are nothing; a timeout
+    retry is dropped.
+  - Presses: the value comes back as the action and the note goes to the
+    `response_url`; a link click is nothing and an off-Slack `response_url` is
+    never followed.
+  - Render and calls: mrkdwn links, citations, emphasis and escaping; sections
+    and action rows threaded under the question; a DM answered at the top; an
+    edit clears the buttons; `auth.test`'s user id; errors name Slack's code,
+    never the token; `fetchThread` reads from the root, keeps people only,
+    stops at the command, caps root + newest, and links the root.
 
 - `test/chat-mattermost.spec.ts` (phase 4, #343; Mattermost-shaped fixtures,
   every case run once for `time` and once for `mattermost` by `describe.each`,

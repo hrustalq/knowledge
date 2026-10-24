@@ -126,7 +126,7 @@ describe.each([
     const signup = await flow.signup(EMAIL, 'Ada', PASSWORD);
     expect(signup.me).toMatchObject({ mode: 'session', authMethod: 'password', email: EMAIL });
     // The default workspace and role, as before #75.
-    expect(signup.me.memberships).toEqual([{ workspaceId: WS, role: 'viewer', trustedOperator: false, source: 'manual' }]);
+    expect(signup.me.memberships).toEqual([{ workspaceId: WS, role: 'viewer', trustedOperator: false, capabilities: [], source: 'manual' }]);
     expect(templates()).toEqual(['verify-email']);
 
     const login = await flow.login('Ada@Example.com', PASSWORD);

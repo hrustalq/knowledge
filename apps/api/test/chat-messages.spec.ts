@@ -82,6 +82,34 @@ describe('keeping', () => {
   });
 });
 
+describe('the team, for search links (#407)', () => {
+  const withTeam = (teamName: string | null) => {
+    const updateMany = vi.fn(async () => ({ count: 1 }));
+    const svc = new ChatMessagesService({ chatChannelBinding: { updateMany } } as never, config as never);
+    return { svc, updateMany, row: { id: 'b-1', teamName } as never };
+  };
+
+  it('is looked up once and kept, a channel in no team as an empty name', async () => {
+    for (const [found, kept] of [['platform', 'platform'], [null, '']] as const) {
+      const { svc, updateMany, row } = withTeam(null);
+      await svc.rememberTeam(row, async () => found);
+      expect(updateMany).toHaveBeenCalledWith({ where: { id: 'b-1', teamName: null }, data: { teamName: kept } });
+    }
+  });
+
+  it('is never asked again once known, and a failed lookup leaves it for the next message', async () => {
+    const known = withTeam('');
+    const lookup = vi.fn(async () => 'platform');
+    await known.svc.rememberTeam(known.row, lookup);
+    expect(lookup).not.toHaveBeenCalled();
+    const failing = withTeam(null);
+    await failing.svc.rememberTeam(failing.row, async () => {
+      throw new Error('unreachable');
+    });
+    expect(failing.updateMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('changes', () => {
   it('an edit is masked, and its chunk goes so the thread is packed again', async () => {
     const { svc, db } = store();

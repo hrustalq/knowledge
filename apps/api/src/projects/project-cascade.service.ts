@@ -109,8 +109,12 @@ export class ProjectCascadeService {
    * The caller is responsible for deciding that these documents *should* go —
    * this method asks nothing about children, so pass a subtree's ids together
    * or leave orphans behind.
+   *
+   * `external: false` leaves storage, the graph and BM25 alone, for a caller
+   * that clears them wholesale afterwards — a workspace teardown (#479) purges
+   * the prefix once rather than one round trip per object.
    */
-  async cascadeDocuments(documentIds: string[], workspaceId: string): Promise<void> {
+  async cascadeDocuments(documentIds: string[], workspaceId: string, opts: { external?: boolean } = {}): Promise<void> {
     if (documentIds.length === 0) return;
 
     const revisions = await this.prisma.documentRevision.findMany({
@@ -130,6 +134,7 @@ export class ProjectCascadeService {
       { timeout: 120_000, maxWait: 15_000 },
     );
 
+    if (opts.external === false) return;
     await this.cleanExternal(workspaceId, documentIds, revisionIds, [
       ...revisions.map((r) => r.s3Key),
       // The normalized sibling the worker writes next to every source.
@@ -157,6 +162,8 @@ export class ProjectCascadeService {
 
     // Merge requests and their discussions.
     await tx.mergeRequestComment.deleteMany({ where: { thread: mrWhere } });
+    // Its FK is RESTRICT: a page with a lint or breaking-change check would refuse the delete.
+    await tx.mergeRequestCheck.deleteMany({ where: mrWhere });
     await tx.mergeRequestThread.deleteMany({ where: mrWhere });
     await tx.mergeRequestReviewer.deleteMany({ where: mrWhere });
     await tx.mergeRequest.deleteMany({ where: docs });
@@ -189,6 +196,7 @@ export class ProjectCascadeService {
     // no longer resolves, which is the failure mode this whole method exists
     // to avoid.
     await tx.glossaryExclusion.deleteMany({ where: docs });
+    await tx.revisionEmbed.deleteMany({ where: docs });
     await tx.connectorLink.deleteMany({ where: docs });
     await tx.connectorConflict.deleteMany({ where: docs });
     await tx.notification.deleteMany({ where: docs });

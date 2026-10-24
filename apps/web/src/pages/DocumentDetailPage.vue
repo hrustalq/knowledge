@@ -124,6 +124,7 @@ import VerificationBar from '@/components/verification/VerificationBar.vue'
 // none of them rides in this page's chunk. SSR still renders them (it awaits
 // async components), and hydration waits for the chunk before it adopts the DOM.
 const ApiReferenceView = defineAsyncComponent(() => import('@/components/api-reference/ApiReferenceView.vue'))
+const TestFixtureView = defineAsyncComponent(() => import('@/components/api-reference/TestFixtureView.vue'))
 const RevisionsView = defineAsyncComponent(() => import('@/components/knowledge/RevisionsView.vue'))
 const GraphView = defineAsyncComponent(() => import('@/components/knowledge/GraphView.vue'))
 
@@ -639,7 +640,9 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
 
 const viewingRevision = computed(() => (route.query.revision as string | undefined) ?? asOfRevision.value)
 // An API spec (#78) renders as a reference rather than a page, and is edited as text.
-const isSpec = computed(() => !!detail.value?.document.kind && detail.value.document.kind !== 'page')
+const isSpec = computed(() => detail.value?.document.kind === 'openapi' || detail.value?.document.kind === 'asyncapi')
+// A QA test fixture (#483) renders its steps, and has its own step editor.
+const isFixture = computed(() => detail.value?.document.kind === 'test-fixture')
 // One state for the rail's operation index and the main column's operation.
 const apiRef = useApiReference(documentId, viewingRevision, isSpec)
 const canComment = computed(() => auth.canComment && !viewingRevision.value)
@@ -752,7 +755,7 @@ watch(
       />
       <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
         <RouterLink
-          :to="`/documents/${detail.document.documentId}/${isSpec ? 'spec' : 'edit'}`"
+          :to="`/documents/${detail.document.documentId}/${isSpec ? 'spec' : isFixture ? 'fixture' : 'edit'}`"
           :title="hasUnstaged ? t('editor.unstaged.label') : t('common.edit')"
         >
           <Pencil class="size-3.5" />
@@ -857,7 +860,7 @@ watch(
           <!-- Above the stack and outside it: the contents belong to the page
                being read, not to the facts about it. -->
           <template #before>
-            <TocRail v-if="!isSpec && headings.length > 1" :headings="headings" />
+            <TocRail v-if="!isSpec && !isFixture && headings.length > 1" :headings="headings" />
           </template>
 
           <!-- Hidden while reading an old revision: the stamp is about the head. -->
@@ -1025,6 +1028,7 @@ watch(
         <!-- About the head, like the verification stamp. -->
         <ComponentDeclarationNotice v-if="!viewingRevision" :document-id="documentId" />
         <ApiReferenceView v-if="isSpec" :state="apiRef" :workspace-id="detail.document.workspaceId" />
+        <TestFixtureView v-else-if="isFixture" :document-id="documentId" :revision-id="viewingRevision" />
         <PageState v-else-if="contentError" state="error" :description="contentError" />
         <PageState v-else-if="!content" state="loading" :rows="1" row-class="h-96" />
         <DocumentCanvas

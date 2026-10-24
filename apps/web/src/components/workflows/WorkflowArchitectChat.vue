@@ -16,7 +16,7 @@
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowUp, Bot, Loader2, TriangleAlert } from 'lucide-vue-next'
+import { ArrowUp, Bot, Loader2, Plus, TriangleAlert } from 'lucide-vue-next'
 import type { DraftWorkflowResponse, WorkflowGraph } from '@knowledge/contracts'
 import { api, type Op, type RequestOptions } from '@/api/client'
 import { getProjectId, getWorkspaceId } from '@/lib/api'
@@ -34,6 +34,7 @@ const emit = defineEmits<{
   say: [WizardTurn]
   propose: [{ graph: WorkflowGraph; name: string | null; description: string | null }]
   unavailable: []
+  clear: []
 }>()
 
 const { t } = useI18n()
@@ -42,6 +43,7 @@ const input = ref('')
 const busy = ref(false)
 const error = ref<string | null>(null)
 const scroller = ref<HTMLElement | null>(null)
+const composer = ref<HTMLElement | null>(null)
 
 /** Openers, so the first turn is a choice rather than a blank box. */
 const SEEDS = ['seedEntity', 'seedProcess', 'seedContract'] as const
@@ -104,6 +106,20 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
+/**
+ * A new conversation keeps the canvas. The next message still carries the graph,
+ * so the architect picks up from what is drawn rather than from a blank page —
+ * what is cleared is the talk that got there, which is what piles up.
+ */
+function clear() {
+  input.value = ''
+  error.value = null
+  emit('clear')
+  // The button goes with the turns, so focus would fall to the page; the
+  // composer is where the next move is.
+  void nextTick(() => composer.value?.querySelector('textarea')?.focus())
+}
+
 defineExpose({ send })
 </script>
 
@@ -163,7 +179,7 @@ defineExpose({ send })
       </p>
     </div>
 
-    <div class="shrink-0 border-t p-3">
+    <div ref="composer" class="shrink-0 border-t p-3">
       <div class="focus-within:border-primary focus-within:ring-ring flex items-end gap-2 rounded-lg border px-2 py-1.5 transition-[color,box-shadow] focus-within:ring-[3px]">
         <Textarea
           v-model="input"
@@ -177,9 +193,22 @@ defineExpose({ send })
           <ArrowUp class="size-4" />
         </Button>
       </div>
-      <p class="text-muted-foreground mt-1.5 px-1 text-caption leading-snug">
-        {{ t('workflow.wizard.composerHint') }}
-      </p>
+      <div class="mt-1.5 flex items-center gap-2 px-1">
+        <p class="text-muted-foreground min-w-0 flex-1 text-caption leading-snug">
+          {{ t('workflow.wizard.composerHint') }}
+        </p>
+        <Button
+          v-if="turns.length"
+          variant="ghost"
+          size="xs"
+          class="text-muted-foreground -mr-1.5 shrink-0"
+          :disabled="busy"
+          @click="clear"
+        >
+          <Plus />
+          {{ t('workflow.wizard.newConversation') }}
+        </Button>
+      </div>
     </div>
   </div>
 </template>

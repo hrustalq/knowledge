@@ -50,6 +50,7 @@ import type {
 } from './dto/documents.dto.js';
 import type { Document, DocumentBranch, DocumentRevision, Prisma } from '@prisma/client';
 import {
+  entityLayerFor,
   isInactive,
   verificationStateFor,
   type VerificationFlag,
@@ -60,7 +61,16 @@ import { expiryFor, VerificationPolicyService } from '../verification/verificati
 import { TemplatesService } from '../templates/templates.service.js';
 import { t } from '../i18n/t.js';
 import { ApiSpecsService } from '../api-specs/api-specs.service.js';
-import { API_SPEC_SYNTAXES, apiSpecContentType, apiSpecSyntaxOf, isApiSpecKind, type ApiDocumentKind } from '@knowledge/contracts';
+import { ApiFixturesService } from '../api-specs/api-fixtures.service.js';
+import {
+  API_SPEC_SYNTAXES,
+  apiSpecSyntaxOf,
+  isApiSpecKind,
+  isStructuredKind,
+  isTestFixtureKind,
+  structuredContentType,
+  type ApiDocumentKind,
+} from '@knowledge/contracts';
 import { WORKSPACE_READER } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
@@ -111,6 +121,7 @@ export class DocumentsService {
     private readonly templates: TemplatesService,
     private readonly permissions: PermissionService,
     private readonly apiSpecs: ApiSpecsService,
+    private readonly apiFixtures: ApiFixturesService,
   ) {}
 
   async createDocument(input: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
@@ -120,18 +131,24 @@ export class DocumentsService {
 
     // #78: an API spec is parsed by its kind. A template body is markdown, so
     // a spec cannot start from one, and an inline spec is checked before the
-    // page exists rather than leaving a page with a refused draft behind.
+    // page exists rather than leaving a page with a refused draft behind. A
+    // test fixture (#483) is YAML/JSON too, checked under its author's scope.
     const kind = input.kind ?? 'page';
-    if (isApiSpecKind(kind)) {
-      if (input.template) throw new BadRequestException(t('error.apiSpec.template'));
+    if (isStructuredKind(kind)) {
+      const errors = isTestFixtureKind(kind) ? 'error.testFixture' : 'error.apiSpec';
+      if (input.template) throw new BadRequestException(t(`${errors}.template`));
       if (input.content && !(API_SPEC_SYNTAXES as readonly string[]).includes(input.content.format)) {
-        throw new BadRequestException(t('error.apiSpec.format', { format: input.content.format }));
+        throw new BadRequestException(t(`${errors}.format`, { format: input.content.format }));
       }
-      if (input.content) await this.apiSpecs.assertValid(input.content.text, kind);
+      if (input.content && isTestFixtureKind(kind)) {
+        await this.apiFixtures.assertValid(input.content.text, await this.permissions.scopeForUser(authorId, input.workspaceId));
+      } else if (input.content && isApiSpecKind(kind)) {
+        await this.apiSpecs.assertValid(input.content.text, kind);
+      }
     }
     const { dto, template } = await this.applyTemplate(input, authorId);
-    const contentType = isApiSpecKind(kind)
-      ? apiSpecContentType(kind, dto.content?.format === 'json' ? 'json' : 'yaml')
+    const contentType = isStructuredKind(kind)
+      ? structuredContentType(kind, dto.content?.format === 'json' ? 'json' : 'yaml')
       : dto.content
         ? `text/${dto.content.format}`
         : 'text/markdown';
@@ -165,7 +182,7 @@ export class DocumentsService {
           workspaceId: dto.workspaceId,
           projectId: dto.projectId,
           title: dto.title,
-          category: dto.category ?? (isApiSpecKind(kind) ? 'reference' : 'other'),
+          category: dto.category ?? (isStructuredKind(kind) ? 'reference' : 'other'),
           kind,
           parentId: dto.parentId ?? null,
           path: `${parent?.path ?? '/'}${id}/`,
@@ -454,6 +471,11 @@ export class DocumentsService {
     // messages, rather than queued to fail in the worker. The draft stays, so
     // the caller can upload a corrected body to the same revision.
     if (isApiSpecKind(document.kind)) await this.apiSpecs.assertValid(text, document.kind);
+    // #483: every call must name an operation at a spec head the revision's
+    // author can open, checked as that author — not as whoever finalizes.
+    if (isTestFixtureKind(document.kind)) {
+      await this.apiFixtures.assertValid(text, await this.permissions.scopeForUser(revision.authorId, document.workspaceId));
+    }
     const contentHash = createHash('sha256').update(text, 'utf-8').digest('hex');
 
     // Content-hash idempotency (plan.md §4), scoped per branch: a merge
@@ -993,9 +1015,9 @@ export class DocumentsService {
     }
 
     const raw = await this.storage.getObjectText(revision.s3Key);
-    // A spec (#78) is returned verbatim: it has no frontmatter, and a YAML
-    // spec may well open with a `---` document marker gray-matter would eat.
-    const parsed = isApiSpecKind(document.kind) ? { data: {}, content: raw } : matter(raw);
+    // A spec (#78) or fixture (#483) is returned verbatim: it has no
+    // frontmatter, and YAML may well open with a `---` marker gray-matter would eat.
+    const parsed = isStructuredKind(document.kind) ? { data: {}, content: raw } : matter(raw);
     return {
       documentId,
       revisionId: revision.id,
@@ -1571,6 +1593,7 @@ export class DocumentsService {
         kind: 'entity',
         label: g.entities[key]?.name ?? key,
         entityType: g.entities[key]?.type ?? 'entity',
+        layer: entityLayerFor(key),
         degree: degree.get(key) ?? 0,
       });
     }
@@ -1630,6 +1653,7 @@ export class DocumentsService {
         kind: 'entity',
         label: g.entities[key]?.name ?? key,
         entityType: g.entities[key]?.type ?? 'entity',
+        layer: entityLayerFor(key),
         distance: distance.get(key) ?? 0,
       });
     }
@@ -1870,8 +1894,8 @@ export class DocumentsService {
    * the kind, not the type, decides how it is parsed.
    */
   private revisionContentType(kind: string, requested?: string): string {
-    if (!isApiSpecKind(kind)) return requested ?? 'text/markdown';
-    return apiSpecContentType(kind, (requested && apiSpecSyntaxOf(requested)) || 'yaml');
+    if (!isStructuredKind(kind)) return requested ?? 'text/markdown';
+    return structuredContentType(kind, (requested && apiSpecSyntaxOf(requested)) || 'yaml');
   }
 
 

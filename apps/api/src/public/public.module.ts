@@ -1,3 +1,4 @@
+import { EmbedsCoreModule } from '../embeds/embeds-core.module.js';
 import { Module } from '@nestjs/common';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
@@ -44,6 +45,8 @@ import { SiteSignInController } from './site-sign-in.controller.js';
     EmbeddingModule,
     // A share link's download (#161): the same export path as a member's.
     ExportCoreModule,
+    // Public pages carry embeds without their Figma links, and serve snapshots by opaque id (#470).
+    EmbedsCoreModule,
   ],
   controllers: [PublicSharesController, PublicSitesController, PublicSiteFilesController, PublicDomainsController, SiteSignInController],
   providers: [

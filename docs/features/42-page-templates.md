@@ -36,8 +36,9 @@ page.
 
 ## Built-ins are code
 
-Seven built-ins ship in English and Russian: `adr`, `rfc`, `runbook`,
-`postmortem`, `api-spec`, `use-case`, `entity`
+Twelve built-ins ship in English and Russian: `adr`, `rfc`, `runbook`,
+`postmortem`, `api-spec`, `use-case`, `entity`, `component`, and the four QA
+templates (#482) `test-plan`, `test-case`, `test-data` and `bug-report`
 (`apps/api/src/templates/built-in/`). Each is a TS module with a `version`
 constant, so nothing is copied into `dist`. **They are never seeded as rows**
 (the `built-in-agents.ts` argument): a release can improve the ADR template
@@ -55,6 +56,14 @@ A row with `built_in_key` set is a workspace's override:
 - **Reset.** `DELETE /v1/templates/:id` deletes the override row (admin).
   Custom templates are never deleted (`notDeletable`); they are archived,
   which hides them from the gallery but keeps them resolvable.
+
+The QA templates name the operation under test through an `entity`
+placeholder that lands in `relations:` as an `op:` key — `DESCRIBES` for the
+test plan, test case and test data, `RELATED_TO` for a bug report — so impact
+analysis on an operation (feature 52) lists its test plan and open bugs. None
+declares a credential field; their `aiInstructions` forbid secrets in the page.
+`test-data` is the prose companion to a `test-fixture` document (#483), and is
+deliberately not called "fixture" so the two cannot be confused.
 
 The built-ins' language is picked by the caller's locale at render time. Once
 rendered, the text is page content and is never translated again (feature

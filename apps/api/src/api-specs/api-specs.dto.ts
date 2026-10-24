@@ -3,8 +3,10 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -15,9 +17,13 @@ import {
 } from 'class-validator';
 import {
   API_BREAKING_CHANGE_POLICIES,
+  API_TEST_RUNNER_MODES,
+  API_TEST_SUITE_FORMATS,
   API_TRY_PROXY_MODES,
   CODE_SAMPLE_LANGS,
   type ApiBreakingChangePolicy,
+  type ApiTestRunnerMode,
+  type ApiTestSuiteFormat,
   type ApiTryProxyMode,
   type CodeSampleLang,
 } from '@knowledge/contracts';
@@ -158,6 +164,16 @@ export class UpdateApiSettingsDto {
   @IsOptional()
   @IsIn(API_BREAKING_CHANGE_POLICIES)
   apiBreakingChangePolicy?: ApiBreakingChangePolicy | null;
+
+  @ApiPropertyOptional({
+    enum: API_TEST_RUNNER_MODES,
+    nullable: true,
+    type: String,
+    description: 'The QA server runner (#483); on applies only when API_TEST_RUNNER_MODE is on. null is off',
+  })
+  @IsOptional()
+  @IsIn(API_TEST_RUNNER_MODES)
+  apiTestRunner?: ApiTestRunnerMode | null;
 }
 
 export class ApiSpecDiffQueryDto {
@@ -169,4 +185,141 @@ export class ApiSpecDiffQueryDto {
   @IsOptional()
   @IsUUID()
   to?: string;
+}
+
+export class ApiTestSuiteQueryDto {
+  @ApiProperty({ description: 'The operation, as its row names it (op:billing-api:post-/invoices)' })
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey!: string;
+
+  @ApiPropertyOptional({
+    enum: API_TEST_SUITE_FORMATS,
+    description: 'Answer with a file instead of JSON: one curl command per case, or a Postman Collection v2.1',
+  })
+  @IsOptional()
+  @IsIn(API_TEST_SUITE_FORMATS)
+  format?: ApiTestSuiteFormat;
+}
+
+export class GenerateApiTestSuiteDto {
+  @ApiProperty({ description: 'The operation, as its row names it (op:billing-api:post-/invoices)' })
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey!: string;
+
+  @ApiPropertyOptional({ description: 'Replace the cached suite instead of returning it. Absent means false.' })
+  @IsOptional()
+  @IsBoolean()
+  regenerate?: boolean;
+}
+
+/** One operation's suite (#483): the bindings and candidate reads, and Ask tester. */
+export class ApiTestOperationDto {
+  @ApiProperty({ description: 'The operation, as its row names it (op:billing-api:post-/invoices)' })
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey!: string;
+}
+
+export class ApiTestBindingDto {
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'A case id of the suite; absent or null binds the whole suite' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200, { message: vmsg('maxLength') })
+  caseId?: string | null;
+
+  @ApiProperty({ format: 'uuid', description: 'A test-fixture document' })
+  @IsUUID()
+  fixtureId!: string;
+}
+
+export class SetApiTestBindingsDto extends ApiTestOperationDto {
+  @ApiProperty({ type: [ApiTestBindingDto], description: 'Every binding of the suite, in run order; replaces what is there. Empty unbinds all' })
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => ApiTestBindingDto)
+  bindings!: ApiTestBindingDto[];
+}
+
+export class ListTestFixturesQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only the fixtures of this project' })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
+  @ApiPropertyOptional({ description: 'Only the fixtures whose head calls this operation, however the key is spelled' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only the fixtures calling an operation this spec document defines' })
+  @IsOptional()
+  @IsUUID()
+  specDocumentId?: string;
+}
+
+export class QaOverviewQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: "Only this project's specs" })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: "Only this spec document's operations" })
+  @IsOptional()
+  @IsUUID()
+  documentId?: string;
+}
+
+export class RunApiTestSuiteDto {
+  @ApiProperty({ description: 'The operation, as its row names it (op:billing-api:post-/invoices)' })
+  @IsString()
+  @MaxLength(1000, { message: vmsg('maxLength') })
+  entityKey!: string;
+
+  @ApiProperty({ format: 'uuid', description: 'The test environment whose server and values the run uses' })
+  @IsUUID()
+  environmentId!: string;
+}
+
+export class SaveApiTestEnvironmentDto {
+  @ApiPropertyOptional({ description: 'Unique in the workspace; required to create' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80, { message: vmsg('maxLength') })
+  name?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: "An http(s) base URL; a step uses it when the step's spec declares it in servers",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000, { message: vmsg('maxLength') })
+  server?: string | null;
+
+  @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'string' }, description: 'Non-secret values by plan name (input.currency); replaces the set' })
+  @IsOptional()
+  @IsObject()
+  inputs?: Record<string, string>;
+
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: { type: 'string', nullable: true },
+    description: 'Secrets by plan name (secret.qaPassword, TOKEN): a string sets or replaces, null removes. Never returned',
+  })
+  @IsOptional()
+  @IsObject()
+  secrets?: Record<string, string | null>;
 }

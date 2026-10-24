@@ -55,6 +55,8 @@ export function createRouter() {
       // API specs (#78) are written as text, not in the page editor.
       { path: '/create/spec', component: () => import('@/pages/ApiSpecEditorPage.vue') },
       { path: '/documents/:id/spec', component: () => import('@/pages/ApiSpecEditorPage.vue') },
+      { path: '/create/fixture', component: () => import('@/pages/TestFixtureEditorPage.vue') },
+      { path: '/documents/:id/fixture', component: () => import('@/pages/TestFixtureEditorPage.vue') },
       // /upload keeps its path so every existing link, bookmark and sidebar
       // shortcut still lands; /import is the name the flow now goes by.
       // meta.fill: the wizard owns the viewport — its three steps share one
@@ -121,6 +123,8 @@ export function createRouter() {
       // verification state, bulk actions and the freshness policy.
 
       { path: '/knowledge-health', component: () => import('@/pages/KnowledgeHealthPage.vue') },
+      // The QA view (#483): operations by suite state, and the fixture library.
+      { path: '/qa', component: () => import('@/pages/QaPage.vue') },
       // Usage analytics (#79). Gated in the page on auth.canAdminWorkspace; the API enforces admin.
       { path: '/analytics', component: () => import('@/pages/AnalyticsPage.vue') },
       // What coding agents proposed from their sessions (issue #73).

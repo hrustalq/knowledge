@@ -63,11 +63,32 @@ function verifyAction(data: string, signature: string, token: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * A post's permalink, which opens it in its thread for the channel's members.
+ * Stateless, so chat search (#407) links a window from the team kept on its
+ * binding without an adapter or a platform call.
+ */
+export function mattermostPermalink(serverUrl: string, team: string, postId: string): string {
+  return `${serverUrl.replace(/\/$/, '')}/${encodeURIComponent(team)}/pl/${encodeURIComponent(postId)}`;
+}
+
+/**
+ * A command said as a whole message in plain words (`help`, `capture`…): a
+ * Mattermost client, like Slack's, takes every leading `/` for its own slash
+ * commands and never posts it. `remember` and `запомни` are `capture`.
+ */
+export function plainCommand(text: string): { name: string; args: string } | null {
+  const match = COMMAND_RE.exec(text);
+  if (!match) return null;
+  const name = match[1].toLowerCase();
+  return { name: CAPTURE_WORDS.has(name) ? 'capture' : name, args: '' };
+}
+
 /** `S3` → `3`: the reader sees a footnote number, not the model's label. */
-const citeNumber = (label: string): string => label.replace(/^S/i, '');
+export const citeNumber = (label: string): string => label.replace(/^S/i, '');
 
 /** `[text](url)`, the URL allowed one level of parentheses — the Telegram adapter's pattern. */
-const MD_LINK_RE = /\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g;
+export const MD_LINK_RE = /\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g;
 
 /** Link text that came from a page title: brackets would end the link early. */
 const escapeLinkText = (s: string): string => s.replace(/([[\]\\])/g, '\\$1');
@@ -82,7 +103,7 @@ export function defuseMentions(text: string): string {
   return text.replace(/(^|[^\w/:.@])@(?=[\w])/g, '$1@​');
 }
 
-function resolveUrl(raw: string, base: string): string | null {
+export function resolveUrl(raw: string, base: string): string | null {
   try {
     const url = new URL(raw, base.endsWith('/') ? base : `${base}/`);
     return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
@@ -257,8 +278,6 @@ export class MattermostAdapter implements ChatAdapter {
     const mentionRe = bot ? new RegExp(`(^|[^\\w.@-])@${escapeRegex(bot)}(?![\\w-]|\\.\\w)`, 'gi') : null;
     const mentioned = !!mentionRe && mentionRe.test(original);
     const text = (mentionRe ? original.replace(mentionRe, '$1') : original).replace(/\s+/g, ' ').trim();
-    // In a channel a command must be addressed, or `help` said to colleagues would summon the bot.
-    const cmd = (isDm || mentioned) && COMMAND_RE.exec(text);
     const root = post.root_id || null;
 
     return [
@@ -273,7 +292,8 @@ export class MattermostAdapter implements ChatAdapter {
         mentioned,
         replyToBotMessageId: root,
         threadId: root ?? (isDm ? null : post.id),
-        command: cmd ? { name: CAPTURE_WORDS.has(cmd[1].toLowerCase()) ? 'capture' : cmd[1].toLowerCase(), args: '' } : null,
+        // In a channel a command must be addressed, or `help` said to colleagues would summon the bot.
+        command: isDm || mentioned ? plainCommand(text) : null,
         action: null,
         // An edit's time is the edit's; a post's, its creation.
         ...(post.edit_at || post.create_at ? { at: new Date(post.edit_at || post.create_at!) } : {}),
@@ -440,15 +460,20 @@ export class MattermostAdapter implements ChatAdapter {
 
   private async permalink(ctx: ChatAdapterContext, chatId: string, postId: string): Promise<string | null> {
     try {
-      const channel = await this.call<{ team_id?: string }>(ctx, 'GET', `/channels/${encodeURIComponent(chatId)}`);
-      // A direct channel belongs to no team, and a permalink needs one.
-      if (!channel.team_id) return null;
-      const team = await this.call<{ name?: string }>(ctx, 'GET', `/teams/${encodeURIComponent(channel.team_id)}`);
-      if (!team.name) return null;
-      return `${ctx.serverUrl!.replace(/\/$/, '')}/${encodeURIComponent(team.name)}/pl/${encodeURIComponent(postId)}`;
+      const team = await this.chatTeam(ctx, chatId);
+      return team ? mattermostPermalink(ctx.serverUrl!, team, postId) : null;
     } catch {
       return null;
     }
+  }
+
+  /** The name of the team a channel is in: one call for the channel, one for its team. */
+  async chatTeam(ctx: ChatAdapterContext, chatId: string): Promise<string | null> {
+    const channel = await this.call<{ team_id?: string }>(ctx, 'GET', `/channels/${encodeURIComponent(chatId)}`);
+    // A direct channel belongs to no team, and a permalink needs one.
+    if (!channel.team_id) return null;
+    const team = await this.call<{ name?: string }>(ctx, 'GET', `/teams/${encodeURIComponent(channel.team_id)}`);
+    return team.name || null;
   }
 
   /** The websocket URL for a server: the API's own origin and path, over ws(s). */
@@ -530,7 +555,7 @@ export class MattermostAdapter implements ChatAdapter {
   }
 }
 
-function parseJson<T>(raw: unknown): T | null {
+export function parseJson<T>(raw: unknown): T | null {
   if (typeof raw !== 'string') return null;
   try {
     const value: unknown = JSON.parse(raw);

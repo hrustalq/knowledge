@@ -3057,6 +3057,194 @@
         ]
       }
     },
+    "/v1/workspaces/{id}/deletion-preview": {
+      "get": {
+        "operationId": "WorkspacesController_deletionPreview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What deleting the workspace would destroy, counted (workspace admin)",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}": {
+      "patch": {
+        "operationId": "WorkspacesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkspaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rename the workspace (workspace admin)",
+        "tags": [
+          "workspaces"
+        ]
+      },
+      "delete": {
+        "operationId": "WorkspacesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "confirm",
+            "required": false,
+            "in": "query",
+            "description": "The workspace's name, typed to confirm; anything else is a 400 that deletes nothing",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete the workspace and everything in it (workspace admin). Gone at once; contents removed in the background",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
     "/v1/workspaces/{id}/members": {
       "get": {
         "operationId": "WorkspacesController_listMembers",
@@ -3325,7 +3513,7 @@
             }
           }
         },
-        "summary": "Change a member role / trusted-operator flag (workspace admin)",
+        "summary": "Change a member role / trusted-operator flag / capabilities (workspace admin)",
         "tags": [
           "workspaces"
         ]
@@ -3391,6 +3579,483 @@
         "summary": "Remove a member (workspace admin; last admin is protected)",
         "tags": [
           "workspaces"
+        ]
+      }
+    },
+    "/v1/projects": {
+      "get": {
+        "operationId": "ProjectsController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive name/description substring match",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor from a previous page",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Omit for the full roster",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List projects in a workspace (searchable; cursor-paginated when limit is given)",
+        "tags": [
+          "projects"
+        ]
+      },
+      "post": {
+        "operationId": "ProjectsController_create",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a project",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/v1/projects/{id}": {
+      "get": {
+        "operationId": "ProjectsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Project detail",
+        "tags": [
+          "projects"
+        ]
+      },
+      "patch": {
+        "operationId": "ProjectsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rename a project / edit its description",
+        "tags": [
+          "projects"
+        ]
+      },
+      "delete": {
+        "operationId": "ProjectsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mode",
+            "required": false,
+            "in": "query",
+            "description": "Defaults to move",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "move",
+                "cascade"
+              ]
+            }
+          },
+          {
+            "name": "moveContentsTo",
+            "required": false,
+            "in": "query",
+            "description": "Sibling project to move contents into",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "confirm",
+            "required": false,
+            "in": "query",
+            "description": "Required for mode=cascade: the project name, verbatim",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a project: move its contents to another, or cascade-delete them",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/v1/projects/{id}/overview": {
+      "get": {
+        "operationId": "ProjectsController_overview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Project overview: counts, contributors, recent pages",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/v1/projects/{id}/deletion-preview": {
+      "get": {
+        "operationId": "ProjectsController_deletionPreview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target",
+            "required": false,
+            "in": "query",
+            "description": "Prospective destination project",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What deleting this project would relocate (pass ?target= for glossary conflicts)",
+        "tags": [
+          "projects"
         ]
       }
     },
@@ -4522,483 +5187,6 @@
         "summary": "A workspace member's identity, membership, open work and pages",
         "tags": [
           "profiles"
-        ]
-      }
-    },
-    "/v1/projects": {
-      "get": {
-        "operationId": "ProjectsController_list",
-        "parameters": [
-          {
-            "name": "workspaceId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "name": "search",
-            "required": false,
-            "in": "query",
-            "description": "Case-insensitive name/description substring match",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cursor",
-            "required": false,
-            "in": "query",
-            "description": "Opaque cursor from a previous page",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "description": "Omit for the full roster",
-            "schema": {
-              "minimum": 1,
-              "maximum": 200,
-              "type": "number"
-            }
-          },
-          {
-            "name": "Accept-Language",
-            "in": "header",
-            "required": false,
-            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "en",
-                "ru"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "4XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "List projects in a workspace (searchable; cursor-paginated when limit is given)",
-        "tags": [
-          "projects"
-        ]
-      },
-      "post": {
-        "operationId": "ProjectsController_create",
-        "parameters": [
-          {
-            "name": "Accept-Language",
-            "in": "header",
-            "required": false,
-            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "en",
-                "ru"
-              ]
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateProjectDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          },
-          "4XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Create a project",
-        "tags": [
-          "projects"
-        ]
-      }
-    },
-    "/v1/projects/{id}": {
-      "get": {
-        "operationId": "ProjectsController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Accept-Language",
-            "in": "header",
-            "required": false,
-            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "en",
-                "ru"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "4XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Project detail",
-        "tags": [
-          "projects"
-        ]
-      },
-      "patch": {
-        "operationId": "ProjectsController_update",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Accept-Language",
-            "in": "header",
-            "required": false,
-            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "en",
-                "ru"
-              ]
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateProjectDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "4XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Rename a project / edit its description",
-        "tags": [
-          "projects"
-        ]
-      },
-      "delete": {
-        "operationId": "ProjectsController_remove",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "mode",
-            "required": false,
-            "in": "query",
-            "description": "Defaults to move",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "move",
-                "cascade"
-              ]
-            }
-          },
-          {
-            "name": "moveContentsTo",
-            "required": false,
-            "in": "query",
-            "description": "Sibling project to move contents into",
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "name": "confirm",
-            "required": false,
-            "in": "query",
-            "description": "Required for mode=cascade: the project name, verbatim",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Accept-Language",
-            "in": "header",
-            "required": false,
-            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "en",
-                "ru"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "4XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Delete a project: move its contents to another, or cascade-delete them",
-        "tags": [
-          "projects"
-        ]
-      }
-    },
-    "/v1/projects/{id}/overview": {
-      "get": {
-        "operationId": "ProjectsController_overview",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Accept-Language",
-            "in": "header",
-            "required": false,
-            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "en",
-                "ru"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "4XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Project overview: counts, contributors, recent pages",
-        "tags": [
-          "projects"
-        ]
-      }
-    },
-    "/v1/projects/{id}/deletion-preview": {
-      "get": {
-        "operationId": "ProjectsController_deletionPreview",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "target",
-            "required": false,
-            "in": "query",
-            "description": "Prospective destination project",
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "name": "Accept-Language",
-            "in": "header",
-            "required": false,
-            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "en",
-                "ru"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "4XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "What deleting this project would relocate (pass ?target= for glossary conflicts)",
-        "tags": [
-          "projects"
         ]
       }
     },
@@ -10253,6 +10441,357 @@
         "summary": "Delete an attachment and its object",
         "tags": [
           "attachments"
+        ]
+      }
+    },
+    "/v1/documents/{id}/embeds": {
+      "get": {
+        "operationId": "EmbedsController_status",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentEmbedsResponseDto"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What the reader can show of each pinned embed item on a page",
+        "tags": [
+          "embeds"
+        ]
+      }
+    },
+    "/v1/embeds/figma/files": {
+      "get": {
+        "operationId": "FigmaPickerController_files",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FigmaPickerFilesResponseDto"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Figma files the workspace may embed",
+        "tags": [
+          "embeds"
+        ]
+      }
+    },
+    "/v1/embeds/figma/files/{fileKey}": {
+      "get": {
+        "operationId": "FigmaPickerController_file",
+        "parameters": [
+          {
+            "name": "fileKey",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FigmaPickerFileResponseDto"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A Figma file’s pages and top-level frames, with thumbnails, at its current version",
+        "tags": [
+          "embeds"
+        ]
+      }
+    },
+    "/v1/embeds/figma/resolve": {
+      "post": {
+        "operationId": "FigmaPickerController_resolve",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FigmaResolveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FigmaResolveResponseDto"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pin a pasted Figma link to the file’s current version",
+        "tags": [
+          "embeds"
+        ]
+      }
+    },
+    "/v1/embeds/usages": {
+      "get": {
+        "operationId": "EmbedUsagesController_usages",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "figmaUrl",
+            "required": false,
+            "in": "query",
+            "description": "A Figma link; a frame link narrows to that frame",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileKey",
+            "required": false,
+            "in": "query",
+            "description": "A Figma file key, when there is no link",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbedUsagesResponseDto"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pages whose current version embeds a Figma file or frame",
+        "tags": [
+          "embeds"
         ]
       }
     },
@@ -22474,6 +23013,414 @@
         ]
       }
     },
+    "/v1/api-specs/{id}/test-suite": {
+      "get": {
+        "operationId": "ApiSpecsController_testSuite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityKey",
+            "required": true,
+            "in": "query",
+            "description": "The operation, as its row names it (op:billing-api:post-/invoices)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "required": false,
+            "in": "query",
+            "description": "Answer with a file instead of JSON: one curl command per case, or a Postman Collection v2.1",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "curl",
+                "postman"
+              ]
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The suite as JSON; with format, a file to download"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One operation's cached QA test suite (#468), for the operation as it stands at the head. 404 until one is generated, and again after an edit to the operation or its bound fixtures. format=curl|postman answers with the suite as a file — a bash script or a Postman collection — with the bound fixtures as setup and teardown",
+        "tags": [
+          "api-specs"
+        ]
+      },
+      "post": {
+        "operationId": "ApiSpecsController_generateTestSuite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateApiTestSuiteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Generate one operation's QA test suite (#468): the cached suite when there is one and regenerate is not set, otherwise a queued tester run (one per operation and config in flight). Needs the api-test-suites.generate capability",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/api-specs/{id}/test-bindings": {
+      "get": {
+        "operationId": "ApiSpecsController_testBindings",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityKey",
+            "required": true,
+            "in": "query",
+            "description": "The operation, as its row names it (op:billing-api:post-/invoices)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The QA fixtures bound to one operation's suite (#483): suite-level setup, and per-case setup by case id. A fixture the caller cannot open is listed without its title",
+        "tags": [
+          "api-specs"
+        ]
+      },
+      "put": {
+        "operationId": "ApiSpecsController_setTestBindings",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetApiTestBindingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Replace the fixtures bound to one operation's suite (#483), in run order. Every fixture must be a test-fixture the caller can open; every case id one the suite lists. Changes the suite cache key. Needs the api-test-suites.generate capability",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/api-specs/{id}/test-fixture-candidates": {
+      "get": {
+        "operationId": "ApiSpecsController_testFixtureCandidates",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityKey",
+            "required": true,
+            "in": "query",
+            "description": "The operation, as its row names it (op:billing-api:post-/invoices)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Fixtures that could set up one operation (#483): operations of the same spec producing a value it needs (response links, then path parameters) and the fixtures calling them, in spec order or the tester's ranking. Nothing is bound",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/api-specs/{id}/test-fixture-candidates/rank": {
+      "post": {
+        "operationId": "ApiSpecsController_rankTestFixtures",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiTestOperationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ask the tester to rank and explain one operation's fixture candidates (#483). One run per candidate set: a set already ranked or being ranked returns that run. Needs the api-test-suites.generate capability",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
     "/v1/api-specs/{id}/try": {
       "post": {
         "operationId": "ApiSpecsController_try",
@@ -22536,6 +23483,335 @@
           }
         },
         "summary": "Send one request to a server this revision names, for an operation it defines — the try-it proxy. 403 while the workspace's mode is off; redirects are returned, not followed; Set-Cookie is dropped",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/api-specs/{id}/test-run-plan": {
+      "get": {
+        "operationId": "ApiSpecsController_testRunPlan",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityKey",
+            "required": true,
+            "in": "query",
+            "description": "The operation, as its row names it (op:billing-api:post-/invoices)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One operation's cached QA suite as a run plan (#483): setup, the cases (negative first, each with its own setup and teardown), then teardown, every request with {{placeholders}} for captures, inputs and secrets, and the spec revision each call is proxied through. Holds no value. Needs the api-test-suites.run capability",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/api-specs/{id}/test-run/send": {
+      "post": {
+        "operationId": "ApiSpecsController_sendTestRunStep",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiTryRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Send one step of a QA suite run through the try-it proxy: a request to a server this revision names, for an operation it defines. 403 while the workspace's proxy mode is off. Shares try-it's rate limit. Needs the api-test-suites.run capability",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/api-specs/{id}/test-runs": {
+      "post": {
+        "operationId": "ApiSpecsController_startTestRun",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunApiTestSuiteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Run one operation's cached QA suite on the server, against a test environment: queued, then run by the worker through the try-it proxy's rules. 403 unless the server runner is on for the workspace. Needs the api-test-suites.run capability",
+        "tags": [
+          "api-specs"
+        ]
+      },
+      "get": {
+        "operationId": "ApiSpecsController_testRuns",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityKey",
+            "required": true,
+            "in": "query",
+            "description": "The operation, as its row names it (op:billing-api:post-/invoices)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One operation's server runs, newest first (the last 20 are kept)",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/api-specs/{id}/test-runs/{runId}": {
+      "get": {
+        "operationId": "ApiSpecsController_testRun",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One server run: the plan it walked and each step and case result. Captures named like secrets are never stored",
         "tags": [
           "api-specs"
         ]
@@ -22695,6 +23971,266 @@
         ]
       }
     },
+    "/v1/workspaces/{id}/test-environments": {
+      "get": {
+        "operationId": "ApiSettingsController_listEnvironments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace's QA test environments: server, inputs, and the names of the secrets set (never a value)",
+        "tags": [
+          "api-specs"
+        ]
+      },
+      "post": {
+        "operationId": "ApiSettingsController_createEnvironment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveApiTestEnvironmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a QA test environment. Secrets are encrypted at rest and never returned",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/test-environments/{environmentId}": {
+      "patch": {
+        "operationId": "ApiSettingsController_updateEnvironment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "environmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveApiTestEnvironmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Change a QA test environment. inputs replaces the set; a secret set to null is removed, one left out is kept",
+        "tags": [
+          "api-specs"
+        ]
+      },
+      "delete": {
+        "operationId": "ApiSettingsController_deleteEnvironment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "environmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a QA test environment; its past runs keep their results",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
     "/v1/workspaces/{id}/api-settings": {
       "get": {
         "operationId": "ApiSettingsController_get",
@@ -22812,6 +24348,238 @@
           }
         },
         "summary": "Override the API reference settings; null on a key inherits the deployment value",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/test-fixtures": {
+      "get": {
+        "operationId": "TestFixturesController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Only the fixtures of this project",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityKey",
+            "required": false,
+            "in": "query",
+            "description": "Only the fixtures whose head calls this operation, however the key is spelled",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "specDocumentId",
+            "required": false,
+            "in": "query",
+            "description": "Only the fixtures calling an operation this spec document defines",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Test fixtures the caller may open, each with the operations its head calls and which of those no spec head defines any more. Narrow by project, by one operation, or by the operations of one spec",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/test-fixtures/{id}": {
+      "get": {
+        "operationId": "TestFixturesController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "required": false,
+            "in": "query",
+            "description": "A revision of this document; the default-branch head when absent",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One revision of a test fixture (the head unless revisionId is given): its parsed steps, the operation each call resolves to, the inputs and secrets a run must supply, and its issues against the specs as they stand now",
+        "tags": [
+          "api-specs"
+        ]
+      }
+    },
+    "/v1/qa/overview": {
+      "get": {
+        "operationId": "QaController_overview",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Only this project's specs",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": false,
+            "in": "query",
+            "description": "Only this spec document's operations",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Every HTTP operation of the OpenAPI specs the caller may open, worst first: whether its QA suite is generated and current, its setup prerequisites and bindings, bound fixtures needing review, and how many fixtures call it",
         "tags": [
           "api-specs"
         ]
@@ -24272,10 +26040,12 @@
                 "flagged",
                 "inactive",
                 "missing-paths",
+                "broken-calls",
                 "unread",
                 "dead",
                 "archived",
-                "handed-off"
+                "handed-off",
+                "stale-mockups"
               ]
             }
           },
@@ -25519,6 +27289,17 @@
             "schema": {
               "minimum": 1,
               "maximum": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "level",
+            "required": false,
+            "in": "query",
+            "description": "The level of the community tree, 0 = finest (#475). 0 when absent",
+            "schema": {
+              "minimum": 0,
+              "maximum": 2,
               "type": "number"
             }
           },
@@ -31981,7 +33762,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.31.0",
+    "version": "0.32.1",
     "contact": {}
   },
   "tags": [],
@@ -32670,6 +34451,18 @@
           "name"
         ]
       },
+      "UpdateWorkspaceDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Platform Team"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
       "AddMemberDto": {
         "type": "object",
         "properties": {
@@ -32691,6 +34484,17 @@
             "type": "boolean",
             "default": false,
             "description": "Gate for POST /v1/graph/query (plan.md §9)"
+          },
+          "capabilities": {
+            "type": "array",
+            "description": "Grained permissions beside the role (#468). Replaces the list; admins hold every one implicitly.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "api-test-suites.generate",
+                "api-test-suites.run"
+              ]
+            }
           }
         },
         "required": [
@@ -32713,9 +34517,60 @@
           "trustedOperator": {
             "type": "boolean"
           },
+          "capabilities": {
+            "type": "array",
+            "description": "Grained permissions beside the role (#468). Replaces the list; admins hold every one implicitly.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "api-test-suites.generate",
+                "api-test-suites.run"
+              ]
+            }
+          },
           "convertToManual": {
             "type": "boolean",
             "description": "Take an IdP-managed row (source jit/group/scim) over as manual. Without it such a row answers 409 managedByIdp."
+          }
+        }
+      },
+      "CreateProjectDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "workspaceId",
+          "name"
+        ]
+      },
+      "UpdateProjectDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatarEmoji": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatarColor": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -32879,46 +34734,6 @@
           }
         }
       },
-      "CreateProjectDto": {
-        "type": "object",
-        "properties": {
-          "workspaceId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "workspaceId",
-          "name"
-        ]
-      },
-      "UpdateProjectDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string",
-            "nullable": true
-          },
-          "avatarEmoji": {
-            "type": "string",
-            "nullable": true
-          },
-          "avatarColor": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
       "InlineContentDto": {
         "type": "object",
         "properties": {
@@ -33065,9 +34880,10 @@
             "enum": [
               "page",
               "openapi",
-              "asyncapi"
+              "asyncapi",
+              "test-fixture"
             ],
-            "description": "What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and `asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is created (422 with `details.issues`), and default to the `reference` category."
+            "description": "What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and `asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is created (422 with `details.issues`), and default to the `reference` category. `test-fixture` (#483) is a QA fixture, YAML or JSON too, checked against the specs its author can open (400 with `details.issues`)."
           },
           "template": {
             "description": "Start from a template (issue #69). Without `content` the template is rendered server-side: its title pattern, body, tags and relations become the page, and its category is the default.",
@@ -33691,6 +35507,299 @@
         "required": [
           "filename",
           "contentType"
+        ]
+      },
+      "EmbedItemStatusDto": {
+        "type": "object",
+        "properties": {
+          "fileKey": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string",
+            "description": "'' for a whole-file item"
+          },
+          "version": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "rendering",
+              "unavailable",
+              "failed"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "width": {
+            "type": "number",
+            "nullable": true
+          },
+          "height": {
+            "type": "number",
+            "nullable": true
+          },
+          "changed": {
+            "type": "boolean",
+            "description": "The node changed in Figma since this version was pinned"
+          }
+        },
+        "required": [
+          "fileKey",
+          "nodeId",
+          "version",
+          "state",
+          "name",
+          "width",
+          "height",
+          "changed"
+        ]
+      },
+      "DocumentEmbedsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbedItemStatusDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "FigmaPickerFileEntryDto": {
+        "type": "object",
+        "properties": {
+          "fileKey": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fileKey",
+          "name"
+        ]
+      },
+      "FigmaPickerFilesResponseDto": {
+        "type": "object",
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FigmaPickerFileEntryDto"
+            }
+          }
+        },
+        "required": [
+          "connected",
+          "files"
+        ]
+      },
+      "FigmaPickerFrameDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "thumbnailUrl"
+        ]
+      },
+      "FigmaPickerPageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "frames": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FigmaPickerFrameDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "frames"
+        ]
+      },
+      "FigmaPickerFileResponseDto": {
+        "type": "object",
+        "properties": {
+          "fileKey": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "board": {
+            "type": "boolean"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FigmaPickerPageDto"
+            }
+          }
+        },
+        "required": [
+          "fileKey",
+          "name",
+          "version",
+          "board",
+          "pages"
+        ]
+      },
+      "FigmaResolveDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "description": "A Figma design, prototype, Dev Mode or FigJam link"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "url"
+        ]
+      },
+      "FigmaResolveResponseDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "url",
+          "version",
+          "name",
+          "allowed"
+        ]
+      },
+      "EmbedUsageItemDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "url",
+          "caption",
+          "version"
+        ]
+      },
+      "EmbedUsageGroupDto": {
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "number"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbedUsageItemDto"
+            }
+          }
+        },
+        "required": [
+          "group",
+          "items"
+        ]
+      },
+      "EmbedUsagePageDto": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "string"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbedUsageGroupDto"
+            }
+          }
+        },
+        "required": [
+          "documentId",
+          "title",
+          "revisionId",
+          "groups"
+        ]
+      },
+      "EmbedUsagesResponseDto": {
+        "type": "object",
+        "properties": {
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbedUsagePageDto"
+            }
+          }
+        },
+        "required": [
+          "pages"
         ]
       },
       "CreateAvatarUploadDto": {
@@ -35513,7 +37622,11 @@
               "notion",
               "markdown-git",
               "codebase",
-              "google-drive"
+              "google-drive",
+              "linear",
+              "zendesk",
+              "intercom",
+              "figma"
             ]
           },
           "name": {
@@ -36688,7 +38801,11 @@
               "api-spec",
               "use-case",
               "entity",
-              "component"
+              "component",
+              "test-plan",
+              "test-case",
+              "test-data",
+              "bug-report"
             ],
             "description": "Override this built-in for the workspace (`admin`): with `source` to customise it, with `enabled: false` to hide it"
           },
@@ -36783,6 +38900,72 @@
           "paths"
         ]
       },
+      "GenerateApiTestSuiteDto": {
+        "type": "object",
+        "properties": {
+          "entityKey": {
+            "type": "string",
+            "description": "The operation, as its row names it (op:billing-api:post-/invoices)"
+          },
+          "regenerate": {
+            "type": "boolean",
+            "description": "Replace the cached suite instead of returning it. Absent means false."
+          }
+        },
+        "required": [
+          "entityKey"
+        ]
+      },
+      "ApiTestBindingDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "nullable": true,
+            "description": "A case id of the suite; absent or null binds the whole suite"
+          },
+          "fixtureId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A test-fixture document"
+          }
+        },
+        "required": [
+          "fixtureId"
+        ]
+      },
+      "SetApiTestBindingsDto": {
+        "type": "object",
+        "properties": {
+          "entityKey": {
+            "type": "string",
+            "description": "The operation, as its row names it (op:billing-api:post-/invoices)"
+          },
+          "bindings": {
+            "description": "Every binding of the suite, in run order; replaces what is there. Empty unbinds all",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiTestBindingDto"
+            }
+          }
+        },
+        "required": [
+          "entityKey",
+          "bindings"
+        ]
+      },
+      "ApiTestOperationDto": {
+        "type": "object",
+        "properties": {
+          "entityKey": {
+            "type": "string",
+            "description": "The operation, as its row names it (op:billing-api:post-/invoices)"
+          }
+        },
+        "required": [
+          "entityKey"
+        ]
+      },
       "ApiTryHeaderDto": {
         "type": "object",
         "properties": {
@@ -36838,6 +39021,53 @@
           "url"
         ]
       },
+      "RunApiTestSuiteDto": {
+        "type": "object",
+        "properties": {
+          "entityKey": {
+            "type": "string",
+            "description": "The operation, as its row names it (op:billing-api:post-/invoices)"
+          },
+          "environmentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The test environment whose server and values the run uses"
+          }
+        },
+        "required": [
+          "entityKey",
+          "environmentId"
+        ]
+      },
+      "SaveApiTestEnvironmentDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique in the workspace; required to create"
+          },
+          "server": {
+            "type": "string",
+            "nullable": true,
+            "description": "An http(s) base URL; a step uses it when the step's spec declares it in servers"
+          },
+          "inputs": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Non-secret values by plan name (input.currency); replaces the set"
+          },
+          "secrets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "nullable": true
+            },
+            "description": "Secrets by plan name (secret.qaPassword, TOKEN): a string sets or replaces, null removes. Never returned"
+          }
+        }
+      },
       "UpdateApiSettingsDto": {
         "type": "object",
         "properties": {
@@ -36860,6 +39090,15 @@
             ],
             "nullable": true,
             "description": "The merge gate for breaking spec changes; null inherits warn"
+          },
+          "apiTestRunner": {
+            "type": "string",
+            "enum": [
+              "off",
+              "on"
+            ],
+            "nullable": true,
+            "description": "The QA server runner (#483); on applies only when API_TEST_RUNNER_MODE is on. null is off"
           }
         }
       },
@@ -37223,6 +39462,21 @@
             "nullable": true,
             "description": "Keep vector hits at or above this share of the best cosine (#401); null = 0.9"
           },
+          "communityPriorWeight": {
+            "type": "number",
+            "nullable": true,
+            "description": "Community prior (#475): a matched page scores up to ×(1 + this); null = 0, off"
+          },
+          "communityPriorFloor": {
+            "type": "number",
+            "nullable": true,
+            "description": "Community prior (#475): the cosine a community's summary must reach; null = 0.5"
+          },
+          "layeredExpansion": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Hybrid expansion walks by entity layer (#475); null = off"
+          },
           "trustWeights": {
             "nullable": true,
             "description": "Per-state search weights; a state left out keeps its default, null resets them all",
@@ -37344,6 +39598,11 @@
             "type": "boolean",
             "nullable": true,
             "description": "Allow publishing a project as a public docs site; null goes back to the default (off)"
+          },
+          "allowPublicEmbeds": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Show embedded designs' snapshots on share links and published sites; null goes back to the default (off)"
           }
         }
       },
@@ -37712,7 +39971,9 @@
             "enum": [
               "telegram",
               "time",
-              "mattermost"
+              "mattermost",
+              "slack",
+              "teams"
             ]
           },
           "name": {
@@ -37722,7 +39983,12 @@
           },
           "token": {
             "type": "string",
-            "description": "The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token). Write-only — never returned."
+            "description": "The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token; Slack: the Bot User OAuth Token, xoxb-…). Write-only — never returned."
+          },
+          "signingSecret": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The app's signing secret, for a platform that signs its deliveries (Slack: Basic Information → App Credentials) — required there, refused elsewhere. Write-only — never returned."
           },
           "serverUrl": {
             "type": "string",
@@ -37764,6 +40030,11 @@
           "token": {
             "type": "string",
             "description": "Replaces the stored token; omit to keep it"
+          },
+          "signingSecret": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Replaces the stored signing secret (Slack); omit to keep it"
           },
           "serverUrl": {
             "type": "string",

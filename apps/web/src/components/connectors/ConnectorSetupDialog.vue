@@ -28,6 +28,7 @@ import {
   connectorKindInfo,
   driftCheckMode,
   driftFlagPages,
+  ZENDESK_TRIGGER_BODY,
 } from '@knowledge/contracts'
 import type {
   ConnectorConflictPolicy,
@@ -50,6 +51,7 @@ import {
   COULD_NOT_CONNECT,
   clearSetup,
   createSetupActor,
+  createsPages,
   kindStepMeta,
   loadSetup,
   saveSetup,
@@ -95,6 +97,7 @@ const fieldsFor = computed(() =>
       ...f,
       label: kindText(`${f.key}.label`) ?? f.label,
       help: kindText(`${f.key}.help`) ?? f.help,
+      options: f.options?.map((o) => ({ ...o, label: kindText(`${f.key}.options.${o.value}`) ?? o.label })),
     })),
 )
 
@@ -364,6 +367,16 @@ function startOver() {
       <ImportStepper :current="current" :steps="labels" :label="t('connectors.steps')" class="kn-scroll-strip overflow-x-auto pb-1" />
 
       <div class="min-h-52 py-1">
+        <!-- What the test reached, on the step right after it: Destination, or
+             What it does for a kind that creates no pages (#512). -->
+        <div
+          v-if="context?.testDetail && (state === 'destination' || (state === 'options' && !createsPages(kind)))"
+          class="mb-4 flex items-center gap-2 text-sm"
+        >
+          <Check class="size-4 text-panel-tip-ink" />
+          <span>{{ t('connectors.connected', { detail: context.testDetail }) }}</span>
+        </div>
+
         <!-- 1 · Name and system ------------------------------------------->
         <div v-if="state === 'naming'" class="space-y-4">
           <label class="block space-y-1.5">
@@ -381,7 +394,7 @@ function startOver() {
               >
                 {{ k.label }}
                 <span class="text-muted-foreground mt-0.5 block text-xs font-normal">
-                  {{ k.capabilities.push ? t('connectors.directionBoth') : t('connectors.directionPull') }}
+                  {{ k.capabilities.harvest ? t('connectors.directionHarvest') : k.capabilities.embeds ? t('connectors.directionEmbeds') : k.capabilities.push ? t('connectors.directionBoth') : t('connectors.directionPull') }}
                 </span>
               </button>
             </div>
@@ -516,11 +529,6 @@ function startOver() {
 
         <!-- Destination ---------------------------------------------------->
         <div v-else-if="state === 'destination'" class="space-y-4">
-          <div v-if="context?.testDetail" class="flex items-center gap-2 text-sm">
-            <Check class="size-4 text-panel-tip-ink" />
-            <span>{{ t('connectors.connected', { detail: context.testDetail }) }}</span>
-          </div>
-
           <!-- Spec files the test found (#78). Offered, never added on their
                own: a repository's fixtures look exactly like its real spec. -->
           <div v-if="specSuggestions.length" class="space-y-2 rounded-md border p-3">
@@ -561,6 +569,35 @@ function startOver() {
 
         <!-- What should it do ---------------------------------------------->
         <div v-else-if="state === 'options' || state === 'saving'" class="space-y-4">
+          <!-- A harvest source (#382) moves no content, so none of the sync
+               questions below apply; what it needs is the webhook's secret. -->
+          <template v-if="info?.capabilities.harvest">
+            <p class="text-muted-foreground text-sm">{{ t('connectors.harvestHint') }}</p>
+            <label class="block space-y-1.5">
+              <span class="text-sm font-medium">{{ t('connectors.webhookSecret') }}</span>
+              <Input
+                :model-value="context?.webhookSecret ?? ''"
+                type="password"
+                autocomplete="off"
+                :placeholder="editing?.hasWebhookSecret ? t('connectors.webhookSecretKeep') : ''"
+                @update:model-value="patch({ webhookSecret: String($event) })"
+              />
+              <span class="text-muted-foreground block text-xs">
+                {{
+                  kind === 'zendesk'
+                    ? t('connectors.harvestWebhookZendesk')
+                    : kind === 'intercom'
+                      ? t('connectors.harvestWebhookIntercom')
+                      : t('connectors.harvestWebhook', { kind: info.label })
+                }}
+                <code v-if="editing?.webhookPath" class="bg-muted rounded px-1">{{ editing.webhookPath }}</code>
+              </span>
+              <code v-if="kind === 'zendesk'" class="bg-muted block rounded px-2 py-1.5 text-xs break-all">{{ ZENDESK_TRIGGER_BODY }}</code>
+            </label>
+          </template>
+          <!-- An embed source (#470) moves no content either: no sync questions. -->
+          <p v-else-if="info?.capabilities.embeds" class="text-muted-foreground text-sm">{{ t('connectors.embedsHint') }}</p>
+          <template v-else>
           <label class="block space-y-1.5">
             <span class="text-sm font-medium">{{ t('connectors.direction') }}</span>
             <Select :model-value="context?.direction ?? 'pull'" @update:model-value="patch({ direction: $event as ConnectorDirection })">
@@ -628,6 +665,7 @@ function startOver() {
             />
             <span class="text-muted-foreground block text-xs">{{ t('connectors.intervalHint') }}</span>
           </label>
+          </template>
 
           <label v-if="info?.capabilities.push" class="flex items-start gap-2">
             <Checkbox

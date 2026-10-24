@@ -6,7 +6,9 @@ import {
   composeTemplateSource,
   detectPlaceholders,
   missingRequiredPlaceholders,
+  normalizeEntityKey,
   parseTemplateRef,
+  referencedPlaceholders,
   renderTemplate,
   renderTemplateFrontmatter,
   renderTemplateTitle,
@@ -35,7 +37,7 @@ import { noAuthPolicy } from './auth-policy-fakes.js';
  *    parses in both languages, and a bad relation fails the write rather than
  *    the page created from it months later.
  * 3. **Built-ins are code, rows are overrides.** An empty table is exactly the
- *    seven built-ins; hiding, customising and resetting are row operations.
+ *    built-ins; hiding, customising and resetting are row operations.
  * 4. **Scope decides the role, and the row decides the workspace.**
  */
 
@@ -137,6 +139,31 @@ describe('template sources', () => {
     expect(parseTemplateSource(source).meta.titlePattern).toBe('ADR-{{number}}: {{title}}');
     expect(parseTemplateSource(source).meta.titlePattern).toBe('ADR-{{number}}: {{title}}');
   });
+
+  // The QA templates (#482) join the graph at creation: the operation lands as
+  // a canonical `op:` relation target, and nothing is left unfilled.
+  const QA_RELATION = { 'test-plan': 'DESCRIBES', 'test-case': 'DESCRIBES', 'test-data': 'DESCRIBES', 'bug-report': 'RELATED_TO' } as const;
+  it.each((Object.keys(QA_RELATION) as (keyof typeof QA_RELATION)[]).flatMap((key) => [[key, 'en'], [key, 'ru']] as const))(
+    'QA built-in %s (%s) relates the page to the picked op: entity and renders every placeholder',
+    (key, locale) => {
+      const parsed = parseTemplateSource(BUILT_IN_TEMPLATES[key].text[locale].source);
+      const values = Object.fromEntries(
+        parsed.meta.placeholders.map((p) => [
+          p.name,
+          p.kind === 'entity' ? 'Op:Billing-API:POST  /invoices' : p.kind === 'date' ? '2026-10-23' : 'x',
+        ]),
+      );
+      const rctx = { ...ctx, locale };
+      const frontmatter = renderTemplateFrontmatter({ tags: parsed.tags, relations: parsed.relations }, parsed.meta, values, rctx);
+      expect(frontmatter.relations).toEqual([
+        { type: QA_RELATION[key], target: normalizeEntityKey('op:billing-api:POST /invoices') },
+      ]);
+      const rendered = renderTemplateTitle(parsed.meta, values, rctx) + renderTemplate(parsed.body, parsed.meta, values, rctx);
+      expect(referencedPlaceholders(rendered)).toEqual([]);
+      // No credential field: a secret is named by its vault entry, never typed in.
+      for (const p of parsed.meta.placeholders) expect(`${p.name} ${p.label}`).not.toMatch(/pass|secret|token|credential|key|парол|секрет|токен/i);
+    },
+  );
 
   const refuse = (source: string, code: TemplateSourceError['code']) => {
     try {
@@ -344,7 +371,7 @@ function fakePrisma() {
       findMany: async ({ where }: { where: { workspaceId: string; id: { in: string[] } } }) =>
         where.workspaceId === WS && where.id.in.includes(PAGE) ? [{ id: PAGE, title: 'Billing' }] : [],
     },
-    workspaceMember: {
+    workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: {
       findMany: async ({ where }: { where: { workspaceId: string; userId: { in: string[] } } }) =>
         where.workspaceId === WS && where.userId.in.includes(USER)
           ? [{ userId: USER, user: { displayName: 'Ada', email: 'ada@x.test' } }]
@@ -533,7 +560,7 @@ const editor: Principal = {
 
 function accessAs(role: 'viewer' | 'editor' | 'admin', workspaceId = WS) {
   return new AccessService({
-    workspaceMember: {
+    workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: {
       findUnique: vi.fn(async ({ where }: { where: { workspaceId_userId: { workspaceId: string } } }) =>
         where.workspaceId_userId.workspaceId === workspaceId ? { role, trustedOperator: false } : null,
       ),

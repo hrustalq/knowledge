@@ -291,7 +291,7 @@ describe('the route', () => {
   it('needs editor, so a read-only key is refused', async () => {
     const spec = Reflect.getMetadata(ACCESS_META, ApiSpecsController.prototype.try) as AccessSpec;
     expect(spec).toMatchObject({ role: 'editor', source: 'document' });
-    const prisma = { workspaceMember: { findUnique: vi.fn(async () => ({ role: 'editor', trustedOperator: false })) } };
+    const prisma = { workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: { findUnique: vi.fn(async () => ({ role: 'editor', trustedOperator: false })) } };
     const access = new AccessService(prisma as never, noAuthPolicy);
     const readKey: Principal = { ...USER, mode: 'api-key', apiKey: { id: 'k', scope: 'read', workspaceId: null } };
     await expect(access.requireRole(readKey, WS, spec.role)).rejects.toThrow(/apiKeyReadOnly/);

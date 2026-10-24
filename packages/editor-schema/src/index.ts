@@ -13,7 +13,8 @@
  * expects and `markdown.ts` produces. Change one, change all three.
  */
 import { Mark, Node, getSchema, mergeAttributes, type AnyExtension } from '@tiptap/core';
-import { DOMParser as PMDOMParser, type Node as PMNode, type Schema } from '@tiptap/pm/model';
+import { DOMParser as PMDOMParser, type DOMOutputSpec, type Node as PMNode, type Schema } from '@tiptap/pm/model';
+import { asEmbedLayout, type EmbedItem, type EmbedLayout } from '@knowledge/contracts/embeds';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Highlight from '@tiptap/extension-highlight';
@@ -25,11 +26,17 @@ import { createLowlight } from 'lowlight';
 import { markdownToHtml } from '@knowledge/editor-schema/markdown';
 import {
   KN,
+  asDiagramWrap,
+  diagramLayoutAttrs,
+  diagramLayoutOf,
+  embedCaptionOf,
+  embedItemsOf,
   isApiSection,
   isHttpMethod,
   isPanelType,
   isStatusColor,
   type ApiSectionKind,
+  type DiagramLayout,
   type HttpMethod,
   type PanelType,
   type StatusColor,
@@ -288,6 +295,28 @@ function preText(element: HTMLElement): string {
   return (pre?.textContent ?? element.textContent ?? '').trim();
 }
 
+/**
+ * Size and placement, shared by both diagram nodes (#476). Read from the
+ * `data-kn-*` attributes the fence's info string becomes; written by renderHTML
+ * below (not per attribute) so the width's custom property rides along.
+ */
+const DIAGRAM_LAYOUT_ATTRIBUTES = {
+  width: {
+    default: null,
+    parseHTML: (element: HTMLElement) => diagramLayoutOf(element).width,
+    renderHTML: () => ({}),
+  },
+  wrap: {
+    default: null,
+    parseHTML: (element: HTMLElement) => diagramLayoutOf(element).wrap,
+    renderHTML: () => ({}),
+  },
+};
+
+function layoutOf(node: PMNode): DiagramLayout {
+  return { width: Number(node.attrs.width) || null, wrap: asDiagramWrap(node.attrs.wrap) };
+}
+
 export const Mermaid = Node.create({
   name: 'knMermaid',
   group: 'block',
@@ -302,6 +331,7 @@ export const Mermaid = Node.create({
         parseHTML: (element) => preText(element as HTMLElement) || DEFAULT_MERMAID,
         renderHTML: () => ({}),
       },
+      ...DIAGRAM_LAYOUT_ATTRIBUTES,
     };
   },
 
@@ -315,7 +345,7 @@ export const Mermaid = Node.create({
   },
 
   renderHTML({ node }) {
-    return ['div', { [KN.mermaid]: '1' }, ['pre', {}, node.attrs.code as string]];
+    return ['div', { [KN.mermaid]: '1', ...diagramLayoutAttrs(layoutOf(node)) }, ['pre', {}, node.attrs.code as string]];
   },
 });
 
@@ -334,6 +364,7 @@ export const Drawing = Node.create({
           (element as HTMLElement).getAttribute('data-scene') || preText(element as HTMLElement),
         renderHTML: () => ({}),
       },
+      ...DIAGRAM_LAYOUT_ATTRIBUTES,
     };
   },
 
@@ -342,7 +373,7 @@ export const Drawing = Node.create({
   },
 
   renderHTML({ node }) {
-    return ['div', { [KN.drawing]: '1' }, ['pre', {}, (node.attrs.scene as string) || '']];
+    return ['div', { [KN.drawing]: '1', ...diagramLayoutAttrs(layoutOf(node)) }, ['pre', {}, (node.attrs.scene as string) || '']];
   },
 });
 
@@ -393,6 +424,65 @@ export const FileEmbed = Node.create({
       mergeAttributes(HTMLAttributes),
       ['a', { href: node.attrs.href as string }, node.attrs.filename as string],
     ];
+  },
+});
+
+/**
+ * An embed group (#470, docs/features/64): an ordered list of external items,
+ * each pinned to a provider version, with a caption per item and one for the
+ * group. An atom with its items as an attribute, not child nodes: the group is
+ * edited through its own view (reorder, captions, layout), and the stored
+ * markdown is `<figure data-kn-embed>` of plain `<a>` links, so every renderer
+ * that knows nothing of embeds still shows the captions and the links.
+ *
+ * Every `<a>` is kept, including one no provider claims or one with no
+ * version — a write is never rejected over an embed; the reader shows such an
+ * item as a link and the revision records a warning.
+ */
+export const Embed = Node.create({
+  name: 'knEmbed',
+  group: 'block',
+  atom: true,
+  selectable: true,
+  draggable: true,
+
+  addAttributes() {
+    return {
+      layout: {
+        default: 'strip' as EmbedLayout,
+        parseHTML: (element) => asEmbedLayout(element.getAttribute(KN.embed)),
+        renderHTML: () => ({}),
+      },
+      caption: {
+        default: '',
+        parseHTML: (element) => embedCaptionOf(element),
+        renderHTML: () => ({}),
+      },
+      items: {
+        default: [] as EmbedItem[],
+        parseHTML: (element) => embedItemsOf(element),
+        renderHTML: () => ({}),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: `figure[${KN.embed}]` }];
+  },
+
+  renderHTML({ node }) {
+    const items = (node.attrs.items as EmbedItem[]) ?? [];
+    const caption = node.attrs.caption as string;
+    return [
+      'figure',
+      { [KN.embed]: asEmbedLayout(node.attrs.layout) },
+      ...items.map((item) => [
+        'a',
+        { href: item.url, ...(item.version ? { [KN.version]: item.version } : {}) },
+        item.caption || item.url,
+      ]),
+      ...(caption ? [['figcaption', {}, caption]] : []),
+    ] as unknown as DOMOutputSpec;
   },
 });
 
@@ -620,6 +710,7 @@ export const editorSchema = getSchema([
   Mermaid,
   Drawing,
   FileEmbed,
+  Embed,
   ResizableImage.configure(IMAGE_OPTIONS),
   StatusMark,
   DocMention,

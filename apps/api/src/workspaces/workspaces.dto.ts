@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsEmail,
   IsIn,
@@ -12,7 +14,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { WORKSPACE_ROLES } from '@knowledge/contracts';
+import { MEMBER_CAPABILITIES, WORKSPACE_ROLES, type MemberCapability } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 const ROLES = WORKSPACE_ROLES;
@@ -33,13 +35,25 @@ export class ListCandidatesQueryDto {
   limit?: number;
 }
 
+export class DeleteWorkspaceQueryDto {
+  @ApiPropertyOptional({ description: "The workspace's name, typed to confirm; anything else is a 400 that deletes nothing" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200, { message: vmsg('maxLength') })
+  confirm?: string;
+}
+
 export class CreateWorkspaceDto {
   @ApiProperty({ example: 'Platform Team' })
   @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsNotEmpty()
   @MaxLength(120, { message: vmsg('maxLength') })
   name!: string;
 }
+
+/** Renaming follows the create rule (#478): trimmed, non-empty, at most 120 characters. */
+export class UpdateWorkspaceDto extends CreateWorkspaceDto {}
 
 export class AddMemberDto {
   @ApiProperty({ example: 'teammate@example.com', description: 'Existing user email' })
@@ -54,6 +68,17 @@ export class AddMemberDto {
   @IsOptional()
   @IsBoolean()
   trustedOperator?: boolean;
+
+  @ApiPropertyOptional({
+    enum: MEMBER_CAPABILITIES,
+    isArray: true,
+    description: 'Grained permissions beside the role (#468). Replaces the list; admins hold every one implicitly.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MEMBER_CAPABILITIES.length)
+  @IsIn(MEMBER_CAPABILITIES, { each: true })
+  capabilities?: MemberCapability[];
 }
 
 export class UpdateMemberDto {
@@ -66,6 +91,17 @@ export class UpdateMemberDto {
   @IsOptional()
   @IsBoolean()
   trustedOperator?: boolean;
+
+  @ApiPropertyOptional({
+    enum: MEMBER_CAPABILITIES,
+    isArray: true,
+    description: 'Grained permissions beside the role (#468). Replaces the list; admins hold every one implicitly.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MEMBER_CAPABILITIES.length)
+  @IsIn(MEMBER_CAPABILITIES, { each: true })
+  capabilities?: MemberCapability[];
 
   @ApiPropertyOptional({
     description:

@@ -7,6 +7,7 @@ import { VerificationPolicyModule } from '../verification/verification-policy.mo
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { TemporalCoreModule } from '../temporal/temporal-core.module.js';
 import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
+import { CommunitiesCoreModule } from '../communities/communities-core.module.js';
 import { SearchService } from './search.service.js';
 
 /**
@@ -26,8 +27,19 @@ import { SearchService } from './search.service.js';
   // for the trust switch and the inactivity window (docs/features/39): both
   // leaves, both worker-safe. PermissionsCoreModule for the caller's page
   // visibility (#76), controller-free by design. AnalyticsCoreModule records
-  // each search (#79).
-  imports: [GraphModule, EmbeddingModule, FulltextModule, FeedbackCoreModule, VerificationPolicyModule, PermissionsCoreModule, TemporalCoreModule, AnalyticsCoreModule],
+  // each search (#79). CommunitiesCoreModule for the community prior and
+  // each result's place in the tree (#475), a leaf over the stores.
+  imports: [
+    GraphModule,
+    EmbeddingModule,
+    FulltextModule,
+    FeedbackCoreModule,
+    VerificationPolicyModule,
+    PermissionsCoreModule,
+    TemporalCoreModule,
+    AnalyticsCoreModule,
+    CommunitiesCoreModule,
+  ],
   providers: [SearchService],
   exports: [SearchService],
 })

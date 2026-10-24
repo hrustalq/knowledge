@@ -15,12 +15,14 @@
  * Descriptions are the spec author's markdown, so they go through MarkdownView
  * and its sanitizer; nothing here uses `v-html`.
  */
-import { computed, ref, useId } from 'vue'
+import { computed, ref, toRef, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, ChevronDown, Copy, LockKeyhole } from 'lucide-vue-next'
+import { Check, ChevronDown, Copy, FlaskConical, LockKeyhole, RefreshCw } from 'lucide-vue-next'
 import type { ApiOperationInfo } from '@knowledge/contracts'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import { Collapse } from '@/components/ui/collapse'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { useAuthStore } from '@/stores/auth'
 import { operationView, statusTone, type ResponseView } from '@/lib/api-spec'
 import { operationDomId } from './use-api-reference'
 import { useCopy } from '@/lib/use-copy'
@@ -28,7 +30,10 @@ import ApiEndpoint from './ApiEndpoint.vue'
 import ApiMediaContent from './ApiMediaContent.vue'
 import ApiOperationLinks from './ApiOperationLinks.vue'
 import ApiRequestPanel from './ApiRequestPanel.vue'
+import ApiTestSuite from './ApiTestSuite.vue'
 import ApiTone from './ApiTone.vue'
+import { useTestSuite } from './use-test-suite'
+import { useSuiteFixtures } from './use-suite-fixtures'
 
 const props = withDefaults(
   defineProps<{
@@ -55,6 +60,27 @@ const where = (loc: string) => (te(`apiLink.in.${loc}`) ? t(`apiLink.in.${loc}`)
 
 /** Successful responses with a body start open; the rest wait to be asked. */
 const openResponses = ref(new Set((view.value?.responses ?? []).filter((r) => r.status.startsWith('2') && r.contents.length).map((r) => r.status)))
+/**
+ * Test requests (#468), HTTP only. The suite is read only while the card is
+ * open; Generate opens the card so its progress and result are in view.
+ */
+const auth = useAuthStore()
+const canGenerate = computed(() => auth.can('api-test-suites.generate'))
+const canRun = computed(() => auth.can('api-test-suites.run'))
+const tests = useTestSuite(() => props.workspaceId, () => props.operation.documentId, () => props.operation.entityKey, toRef(props, 'open'))
+/** The suite's fixtures (#483): read with the suite, for an open HTTP card only. */
+const fixtures = useSuiteFixtures(
+  () => props.workspaceId,
+  () => props.operation.documentId,
+  () => props.operation.entityKey,
+  computed(() => props.open && view.value?.protocol === 'http'),
+  tests.queryKey,
+)
+function generateTests(regenerate: boolean) {
+  if (!props.open) emit('toggle', true)
+  void tests.generate(regenerate)
+}
+
 function toggleResponse(r: ResponseView) {
   const next = new Set(openResponses.value)
   if (next.has(r.status)) next.delete(r.status)
@@ -72,7 +98,7 @@ function toggleResponse(r: ResponseView) {
     :data-op="operation.entityKey"
   >
     <template v-if="view">
-      <h3 class="m-0">
+      <h3 class="kn-op-headrow m-0">
         <button
           type="button"
           class="kn-op-head"
@@ -90,6 +116,32 @@ function toggleResponse(r: ResponseView) {
             <ChevronDown class="kn-op-chevron" aria-hidden="true" />
           </span>
         </button>
+        <!-- A sibling of the toggle, never inside it: a button in a button is invalid and unreachable. -->
+        <DropdownMenu v-if="view.protocol === 'http'">
+          <DropdownMenuTrigger as-child>
+            <button type="button" class="kn-op-iconbtn kn-op-actions" :aria-label="t('apiTests.menu')" :title="t('apiTests.menu')">
+              <FlaskConical class="size-4" aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" class="w-72">
+            <DropdownMenuItem class="items-start gap-2.5" :disabled="!canGenerate || tests.generating.value" @select="generateTests(false)">
+              <FlaskConical class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <span class="grid gap-0.5">
+                <span>{{ t('apiTests.generate') }}</span>
+                <span class="text-xs text-muted-foreground">{{ canGenerate ? t('apiTests.generateHint') : t('apiTests.noCapability') }}</span>
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              v-if="tests.suite.value"
+              class="gap-2.5"
+              :disabled="!canGenerate || tests.generating.value"
+              @select="generateTests(true)"
+            >
+              <RefreshCw class="size-4 shrink-0" aria-hidden="true" />
+              {{ t('apiTests.regenerate') }}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </h3>
 
       <Collapse :open="open">
@@ -219,6 +271,24 @@ function toggleResponse(r: ResponseView) {
             :workspace-id="workspaceId"
           />
 
+          <ApiTestSuite
+            v-if="
+              view.protocol === 'http' &&
+              (tests.suite.value || tests.generating.value || tests.failure.value !== null || tests.loadError.value || fixtures.hasAny.value)
+            "
+            :document="document"
+            :workspace-id="workspaceId"
+            :operation="operation"
+            :suite="tests.suite.value"
+            :generating="tests.generating.value"
+            :failure="tests.failure.value"
+            :load-error="tests.loadError.value"
+            :can-generate="canGenerate"
+            :can-run="canRun"
+            :fixtures="fixtures"
+            @generate="generateTests"
+          />
+
           <ApiOperationLinks
             v-if="links"
             class="kn-op-section"
@@ -239,6 +309,38 @@ function toggleResponse(r: ResponseView) {
    here is the reference card's own interior — unscoped, because the request
    panel inside the card opens on the same section band. Every class is
    `kn-op-*`, so nothing outside a card can match. */
+/* The header row: the toggle and the quick-action menu side by side on the
+   header wash, so the menu is a sibling of the toggle and the open-state
+   hairline runs under both. */
+.kn-op-headrow {
+  display: flex;
+  align-items: center;
+  background: color-mix(in oklab, var(--kn-accent) 10%, var(--card));
+}
+.kn-op-headrow > .kn-op-head {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+.kn-op[data-state='open'] > .kn-op-headrow {
+  border-bottom: 1px solid color-mix(in oklab, var(--kn-accent) 30%, var(--border));
+}
+.kn-op[data-state='open'] > .kn-op-headrow > .kn-op-head {
+  border-bottom: 0;
+}
+.kn-op-actions {
+  /* On the header's first line, beside the lock, however far the summary wraps. */
+  align-self: flex-start;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  margin-block-start: 0.6rem;
+  margin-inline-end: 0.6rem;
+}
+.kn-op-actions[data-state='open'] {
+  color: var(--foreground);
+  background: var(--accent);
+}
 .kn-op-route {
   flex: 0 1 auto;
 }

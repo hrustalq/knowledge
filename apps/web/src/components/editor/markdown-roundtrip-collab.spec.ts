@@ -21,11 +21,17 @@ const FIXTURES: Record<string, string> = {
   toc: '<div data-kn-toc="1"></div>\n\n## H2\n',
   api: '<div data-kn-api="POST" data-kn-path="/invoices/{id}" data-kn-op="op:billing:post-/invoices">\n\n### POST /invoices/{id}\n\n<div data-kn-api-section="summary">\n\nBills a customer.\n\n</div>\n\n</div>\n',
   mermaid: '```mermaid\ngraph TD; A-->B\n```\n',
+  // Size and placement ride in the info string (#476).
+  mermaidLaidOut: '```mermaid width=480 wrap=right\ngraph TD; A-->B\n```\n',
+  drawingLaidOut: '```drawing wrap=left\n{"v":1,"w":720,"h":300,"els":[]}\n```\n',
   drawing:
     '```drawing\n{"type":"excalidraw","version":2,"elements":[{"id":"r1","type":"rectangle","x":1,"y":2}],"appState":{}}\n```\n',
   file: '<div data-kn-file="f1" data-kn-name="spec.pdf" data-kn-mime="application/pdf" data-kn-size="2048"><a href="/v1/attachments/f1">spec.pdf</a></div>\n',
   image: '<img src="/v1/attachments/i1" alt="diagram" width="320" />\n\n![plain](/v1/attachments/i2)\n',
   status: 'State: <span data-kn-status="green">DONE</span>\n',
+  // An array attribute (#470): Y.XmlElement must carry it as JSON.
+  embed:
+    '<figure data-kn-embed="grid">\n<a href="https://www.figma.com/design/AbCdEfGhIj12/?node-id=12-34" data-kn-version="2083951442">Sign-in</a>\n<a href="https://www.figma.com/board/XyZ7890abcd/">https://www.figma.com/board/XyZ7890abcd/</a>\n<figcaption>Flow</figcaption>\n</figure>\n',
   mentions:
     'Ask <span data-kn-user="00000000-0000-4000-8000-000000000001">@Ada</span> and <span data-kn-agent="reviewer">@Reviewer</span>, see <span data-kn-doc="00000000-0000-4000-8000-000000000002">@Billing</span>.\n',
 }
@@ -73,6 +79,14 @@ describe('markdown through a shared draft', () => {
       expect(md(back)).toBe(md(doc))
     })
   }
+
+  it('keeps a diagram\'s size and placement in its fence, and writes nothing for the default', () => {
+    const doc = toDoc(FIXTURES.mermaidLaidOut!)
+    expect(doc.firstChild!.attrs).toMatchObject({ width: 480, wrap: 'right' })
+    expect(md(doc)).toContain('```mermaid width=480 wrap=right\n')
+    expect(md(toDoc(FIXTURES.drawingLaidOut!))).toContain('```drawing wrap=left\n')
+    expect(md(toDoc(FIXTURES.mermaid!))).toContain('```mermaid\n')
+  })
 
   it('concurrent edits in one table cell and a panel merge into markdown that re-parses to itself', () => {
     const a = prosemirrorToYDoc(toDoc(`${FIXTURES.table}\n${FIXTURES.panel}`), BODY_FIELD)

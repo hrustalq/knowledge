@@ -108,3 +108,72 @@ write wins. Copies are per browser, never synced. With `COLLAB_ENABLED` on, the
 working copy is off and both tabs edit one shared draft instead
 ([56](56-realtime-coediting.md)); this paragraph describes the editor with the
 flag off.
+
+### Table handles — `TableHandles.vue`, `table-cells.ts`
+
+Every editable table has a grip on its left border for a row and on its top
+border for a column (#471). They show for the row and column under the
+pointer, else the caret's, and on touch, tapping a cell puts the caret there,
+so its grips appear. Each grip's menu offers **Insert above/below** (or
+**left/right**) and **Delete row/column**, and acts on that row or column,
+not on wherever the caret is. When a cell selection covers the hovered row,
+the grip covers the whole selection ("Delete 2 rows"). Hovering or focusing a
+grip outlines its target before anything is deleted.
+
+- **Confirmation rule.** One predicate, `filledCellCount(doc, band)`, counts
+  the cells that a delete would lose and that hold content. Content means any
+  non-blank text, or any leaf other than a line break (image, mention, embed).
+  A merged cell counts once, and only if the band holds all of it: one that
+  reaches past the band is shrunk, not removed. Zero means delete at once.
+  Anything else opens `confirm({ destructive: true })` with the count. The
+  band is stored before the dialog. If its table is not structurally equal
+  afterwards, because a co-editing peer changed it, nothing is deleted and a
+  toast says why.
+- **Exact deletion.** `deleteBand` calls `removeRow` / `removeColumn` per
+  index rather than selecting the band and running `deleteRow()`. A cell
+  selection grows to cover any merged cell at its corners, so selecting a row
+  beside a cell that spans two rows would delete both. Deleting every row or
+  column stays refused, as the stock commands refuse it. **Delete table**
+  lives in the table bar and stays one click with undo.
+- **Keyboard.** Tab inside a table moves between cells (and adds a row at the
+  end), so it never reaches the grips. **Escape** in a cell focuses the row
+  grip, Tab moves on to the column grip, and Enter or Space opens the menu.
+  Escape on a grip returns to the caret. The Escape binding is a ProseMirror
+  plugin registered last, not a DOM listener: ProseMirror calls
+  `preventDefault` on every Escape, and an open slash menu has to keep it.
+- **Where they don't show.** Read view, the comment composer (`compact`) and
+  review mode, under the same gate as the table bar.
+- **Collab.** A delete or insert is one transaction, so per-peer undo restores
+  it for the person who made it.
+
+### Embed groups — `EmbedNode.vue`, `lib/embeds.ts` (#470)
+
+A `knEmbed` atom holds an ordered group of external items, each
+`{ url, version, caption }`, plus a group caption and a layout (`strip` or
+`grid`). It is written as one raw HTML block, so any markdown renderer still
+shows captioned links:
+
+```html
+<figure data-kn-embed="strip">
+<a href="https://www.figma.com/design/AbC123/?node-id=12-34" data-kn-version="2083951442">Sign-in</a>
+<figcaption>Sign-in flow</figcaption>
+</figure>
+```
+
+- **Round trip.** `embedItemsOf` / `embedCaptionOf` (`@knowledge/editor-schema/nodes`)
+  read a figure for the parse rule, `MarkdownView` and the public renderer
+  alike. Item URLs are canonicalized by `parseEmbedUrl` (contracts) on parse.
+  An item no provider claims, or with no version, is kept as written. The
+  turndown rule writes the group with no blank line inside, because CommonMark
+  ends an HTML block at one. The `<a>` text is the caption, or the URL when
+  there is none.
+- **Tested** in `lib/markdown/embed.spec.ts` (URL parsing, canonical
+  spelling, round trip, escaping, sanitizer) and through a shared draft in
+  `markdown-roundtrip-collab.spec.ts`, since `items` is an array attribute.
+- **Rendering.** The node view and the read view build the same tiles from
+  `embedTile`, with the page's snapshots from `GET /v1/documents/:id/embeds`.
+  Public surfaces never get a link; see [64](64-embeds.md).
+- **Authoring.** `/figma` opens `EmbedPickerDialog.vue` (a lazy `import()`), a
+  Figma link pasted alone on an empty line becomes a group (the paste rule in
+  `extensions/media.ts`, tested in `embed-paste.spec.ts`), the pencil reopens
+  the picker, and **Update** re-pins a changed or unpinned item.

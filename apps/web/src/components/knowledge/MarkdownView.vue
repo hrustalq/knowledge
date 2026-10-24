@@ -12,17 +12,26 @@
  * SSR renders nothing (DOMPurify needs a DOM); the client fills in on mount.
  */
 import { nextTick, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from '@/lib/markdown/render'
 import { parseScene, renderSceneToSvg } from '@/lib/markdown/drawing'
-import { KN, attachmentKind, escapeHtml } from '@/lib/markdown/nodes'
+import { KN, attachmentKind, carryDiagramLayout, embedItemsOf, escapeHtml } from '@/lib/markdown/nodes'
+import { embedTile } from '@/lib/embeds'
 import { formatBytes } from '@/lib/format'
 import { mayContainPageRef } from '@/lib/page-refs'
 import { usePageRefsStore } from '@/stores/page-refs'
 import { resolveAssetUrl } from '@/lib/api'
 import { useTheme } from '@/lib/theme'
-import { mermaidConfig } from '@/lib/mermaid'
+import { mermaidConfig, mermaidSvg } from '@/lib/mermaid'
 import { createRevealTracker, wrapRuns } from '@/lib/stream-reveal'
+import { markZoomable } from '@/lib/image-gallery'
+import { markDiagrams } from '@/lib/diagram-gallery'
+import ImageLightbox from '@/components/ui/lightbox/ImageLightbox.vue'
+import DiagramLightbox from '@/components/ui/lightbox/DiagramLightbox.vue'
+
+// Several roots (the body and the lightboxes), so a parent's class lands on the body by hand.
+defineOptions({ inheritAttrs: false })
 
 interface MarkdownHeading { id: string; text: string; level: number }
 
@@ -46,12 +55,11 @@ const emit = defineEmits<{
 }>()
 
 const pageRefsStore = usePageRefsStore()
+const { t } = useI18n()
 
 const host = ref<HTMLElement | null>(null)
 const html = ref('')
 const theme = useTheme()
-
-let mermaidSeq = 0
 
 /**
  * Page references by title need the roster, and the roster costs a request —
@@ -93,9 +101,13 @@ async function render() {
   resolveAssets()
   renderDrawings()
   renderFiles()
+  renderEmbeds()
   renderToc(headings)
   await renderMermaid()
-  if (host.value) emit('rendered', host.value)
+  if (!host.value) return
+  // Last, once every diagram is drawn: DiagramLightbox reads the marks as "done".
+  markDiagrams(host.value, t)
+  emit('rendered', host.value)
 }
 
 function collectHeadings(): MarkdownHeading[] {
@@ -159,6 +171,8 @@ function resolveAssets() {
     img.loading = 'lazy'
     img.decoding = 'async'
   }
+  // Only finished text gets here, so a reply still streaming has nothing to open.
+  markZoomable(root, t)
 }
 
 function renderDrawings() {
@@ -173,6 +187,7 @@ function renderDrawings() {
     wrap.innerHTML = DOMPurify.sanitize(renderSceneToSvg(scene), {
       USE_PROFILES: { svg: true, svgFilters: true },
     })
+    carryDiagramLayout(node, wrap)
     node.replaceWith(wrap)
   }
 }
@@ -211,6 +226,32 @@ function renderFiles() {
   }
 }
 
+/** Embed groups (#470) as the editor draws them: captioned link tiles, built from the items, never the raw markup. */
+function renderEmbeds() {
+  const root = host.value
+  if (!root) return
+  for (const figure of root.querySelectorAll<HTMLElement>(`figure[${KN.embed}]`)) {
+    const list = document.createElement('div')
+    list.className = 'kn-embed-items'
+    for (const item of embedItemsOf(figure)) {
+      const tile = embedTile(item, t('editor.embed.wholeFile'))
+      const el = document.createElement(tile.href ? 'a' : 'span')
+      el.className = 'kn-embed-item'
+      if (tile.href) {
+        el.setAttribute('href', tile.href)
+        el.setAttribute('target', '_blank')
+        el.setAttribute('rel', 'noopener noreferrer nofollow')
+      }
+      el.innerHTML = `<span class="kn-embed-caption">${escapeHtml(tile.caption || t('editor.embed.untitled'))}</span><span class="kn-embed-meta">${escapeHtml(tile.meta)}</span>`
+      list.append(el)
+    }
+    figure.classList.add('kn-embed')
+    figure.querySelectorAll(':scope > :not(figcaption)').forEach((el) => el.remove())
+    figure.querySelector('figcaption')?.classList.add('kn-embed-figcaption')
+    figure.prepend(list)
+  }
+}
+
 function renderToc(headings: MarkdownHeading[]) {
   const root = host.value
   if (!root) return
@@ -239,10 +280,11 @@ async function renderMermaid() {
   for (const block of blocks) {
     const source = block.textContent ?? ''
     try {
-      const { svg } = await mermaid.render(`mmd-${Date.now()}-${mermaidSeq++}`, source)
+      const { svg } = await mermaidSvg(mermaid, source)
       const wrap = document.createElement('div')
       wrap.className = 'kn-mermaid-figure'
       wrap.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+      carryDiagramLayout(block, wrap)
       block.replaceWith(wrap)
     } catch {
       // Leave the source visible and flagged rather than swallowing the block:
@@ -260,5 +302,13 @@ watch([() => props.markdown, () => props.streaming, theme.isDark], () => void re
 </script>
 
 <template>
-  <div ref="host" class="markdown-body max-w-none" :class="streaming ? 'is-streaming' : ''" v-html="html" />
+  <div
+    ref="host"
+    v-bind="$attrs"
+    class="markdown-body max-w-none"
+    :class="streaming ? 'is-streaming' : ''"
+    v-html="html"
+  />
+  <ImageLightbox :root="host" />
+  <DiagramLightbox :root="host" />
 </template>

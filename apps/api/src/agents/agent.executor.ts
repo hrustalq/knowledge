@@ -14,9 +14,11 @@ import type {
   AnswerSurface,
   AssistantWebSource,
   AuthorableRelationType,
+  ApiTestCaseFill,
   Locale,
   RelationInput,
 } from '@knowledge/contracts';
+import { buildTestSuite, operationFingerprint, testCasesFor } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import {
@@ -36,12 +38,12 @@ import { LISTED_PAGE } from '../common/listed-page.js';
 import { normalizeRelation } from '../common/relations.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { GraphService } from '../graph/graph.service.js';
+import { GraphService, type StoredCommunity } from '../graph/graph.service.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { AssistantClient, ProviderAccountError } from '../assistant/assistant.client.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { candidatePairs, conflictFingerprint, quoteIn, readJudgement } from './contradiction.js';
-import { graphFingerprint, groupCommunities, louvain, pagePairs } from './communities.js';
+import { communityHierarchy, graphFingerprint, pagePairs } from './communities.js';
 import { AssistantReadToolsService } from '../assistant/assistant-read-tools.service.js';
 import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
@@ -54,6 +56,9 @@ import { wrapUntrusted } from '../common/untrusted.js';
 import { SearchService } from '../search/search.service.js';
 import { visibilityWhere, WORKSPACE_AUDIENCE, type AccessScope } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { AccessService } from '../auth/access.service.js';
+import { ApiFixturesService } from '../api-specs/api-fixtures.service.js';
+import { ApiTestSuitesService } from '../api-specs/api-test-suites.service.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
 import { runCodeReadingLoop } from './code-reading-loop.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
@@ -156,6 +161,15 @@ import {
 } from './digest.js';
 import { TrackerRegistry } from '../connectors/tracker-registry.service.js';
 import { MAX_SCRIBE_PAGES, SCRIBE_OUTPUT_CONTRACT, readScribeDrafts, scribeCitedIds, scribePrompt } from './scribe.js';
+import {
+  TESTER_OUTPUT_CONTRACT,
+  TESTER_RANKING_CONTRACT,
+  boundCaptures,
+  readTesterRanking,
+  testerConfigHash,
+  testerPrompt,
+  testerRankingPrompt,
+} from './tester.js';
 
 /**
  * Agents with a background executor. Exported so the API can refuse a run at
@@ -300,6 +314,9 @@ export class AgentExecutor {
     private readonly compare: CompareService,
     private readonly conflicts: ConflictsService,
     private readonly trackers: TrackerRegistry,
+    private readonly access: AccessService,
+    private readonly testSuites: ApiTestSuitesService,
+    private readonly fixtures: ApiFixturesService,
   ) {}
 
   /**
@@ -468,6 +485,11 @@ export class AgentExecutor {
       // Not in RUNNABLE_AGENTS: only a `work-item.updated` trigger names a ticket (#433).
       case 'scribe':
         return this.scribe(run, agent, principal, report);
+      // Not in RUNNABLE_AGENTS: only Generate (#468) or Ask tester (#483) on an operation card names an operation.
+      case 'tester':
+        return ((run.input ?? {}) as AgentRunInput).apiFixtureRanking
+          ? this.rankFixtures(run, agent, principal, report)
+          : this.writeTestSuite(run, agent, principal, report);
       // Deliberately not in RUNNABLE_AGENTS (docs/features/35): that set offers
       // the Run button and feeds the schedule sweeper, and a sentinel run with
       // neither a pull request nor a report has nothing to check. Only
@@ -644,11 +666,14 @@ export class AgentExecutor {
   /**
    * The atlas (#81, phase 7): communities of pages for global questions. The
    * grouping is deterministic — Louvain over the page-to-page projection of
-   * the live graph, as the run's audience may see it — and skipped outright
-   * when the projection's fingerprint is the one the stored communities were
-   * built from. The model summarises each community from its pages' titles
-   * and opening excerpts; each summary is embedded so a question can find it.
-   * Written whole at the end, so a failed run leaves the last good set.
+   * the live graph, as the run's audience may see it, repeated on the
+   * aggregated graph for the levels above (#475) — and skipped outright when
+   * the projection's fingerprint is the one the stored communities were built
+   * from. The model summarises each level-0 community from its pages' titles
+   * and opening excerpts, and each community above from its children's
+   * summaries; each summary is embedded so a question can find it. One
+   * COMMUNITY_MAX_PER_RUN budget across levels, finest first. Written whole at
+   * the end, so a failed run leaves the last good set.
    */
   private async chart(
     run: AgentRun,
@@ -668,12 +693,14 @@ export class AgentExecutor {
     if ((await this.graph.communityFingerprint(run.workspaceId)) === fingerprint) {
       return { summary: t('agent.charting.unchanged'), findings: [] };
     }
-    const groups = groupCommunities(louvain(pairs), 2).slice(0, this.config.get('COMMUNITY_MAX_PER_RUN', { infer: true }));
-    if (groups.length === 0) return { summary: t('agent.charting.noCommunities'), findings: [] };
+    const tree = communityHierarchy(pairs);
+    if (tree.length === 0) return { summary: t('agent.charting.noCommunities'), findings: [] };
+    const budget = this.config.get('COMMUNITY_MAX_PER_RUN', { infer: true });
 
     // Titles from PG under the run's scope (#76); an opening excerpt per page
     // from its live chunks — the first chunk is the page's own introduction.
-    const memberIds = [...new Set(groups.flat())];
+    // Level 0 holds every page of the tree.
+    const memberIds = tree.filter((n) => n.level === 0).flatMap((n) => n.members);
     const docs = await this.prisma.document.findMany({
       where: { id: { in: memberIds }, workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
       select: { id: true, title: true },
@@ -687,26 +714,41 @@ export class AgentExecutor {
 
     const call = { config: agent.config, userId: run.createdBy, operation: 'community' as const, locale: run.locale as Locale };
     const system = agent.instructions + (await this.guidance(run, agent));
-    const built: Array<{ communityId: string; title: string; summary: string; members: string[]; embedding: number[] }> = [];
+    const built = new Map<string, StoredCommunity & { embedding: number[] }>();
+    let attempted = 0;
     let partial = false;
-    for (const [i, members] of groups.entries()) {
-      const pages = members.filter((m) => titleOf.has(m));
-      if (pages.length < 2) continue;
-      await report({ stage: 'summarising', progress: 0.1 + (0.85 * i) / groups.length });
-      const listing = pages
-        .slice(0, 25)
-        .map((id) => `## ${titleOf.get(id)}\n${wrapUntrusted((opening.get(id)?.text ?? '').slice(0, 600), 'atlas', 'page')}`)
-        .join('\n\n');
+    for (const node of tree) {
+      if (attempted >= budget) break;
+      const pages = node.members.filter((m) => titleOf.has(m));
+      // An upper community is written from its children's summaries, so it
+      // needs two of them; level 0 needs two pages.
+      const children = node.children.flatMap((id) => built.get(id) ?? []);
+      if (node.level === 0 ? pages.length < 2 : children.length < 2) continue;
+      attempted++;
+      await report({ stage: 'summarising', progress: 0.1 + (0.85 * attempted) / Math.min(budget, tree.length) });
+      const listing = (
+        node.level === 0
+          ? pages.slice(0, 25).map((id) => `## ${titleOf.get(id)}\n${wrapUntrusted((opening.get(id)?.text ?? '').slice(0, 600), 'atlas', 'page')}`)
+          : children.slice(0, 25).map((c) => `## ${c.title}\n${wrapUntrusted(c.summary, 'atlas', 'page')}`)
+      ).join('\n\n');
       try {
         const raw = await this.client.chat(call, [{ role: 'system', content: system }, { role: 'user', content: listing }], { json: true });
         const parsed = safeJson(raw);
         const title = typeof parsed?.title === 'string' ? parsed.title.trim().slice(0, 120) : '';
         const summary = typeof parsed?.summary === 'string' ? parsed.summary.trim().slice(0, 2_000) : '';
         if (!title || !summary) continue;
-        built.push({ communityId: members[0]!, title, summary, members: pages, embedding: await this.embedding.embed(`${title}\n${summary}`) });
+        built.set(node.id, {
+          communityId: node.id,
+          level: node.level,
+          parentId: node.parentId,
+          title,
+          summary,
+          members: pages,
+          embedding: await this.embedding.embed(`${title}\n${summary}`),
+        });
       } catch (error) {
         if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
-          await report({ warning: t('agent.charting.budgetSpent', { done: built.length }) });
+          await report({ warning: t('agent.charting.budgetSpent', { done: built.size }) });
           partial = true;
           break;
         }
@@ -718,10 +760,14 @@ export class AgentExecutor {
         this.logger.warn(`Atlas could not summarise one community: ${String(error)}`);
       }
     }
-    if (built.length === 0) return { summary: t('agent.charting.noneWritten'), findings: [] };
+    if (built.size === 0) return { summary: t('agent.charting.noneWritten'), findings: [] };
+    // A parent the budget or the model left unwritten makes its children
+    // roots, so every stored non-root has a stored parent.
+    const written = [...built.values()].map((c) => ({ ...c, parentId: c.parentId && built.has(c.parentId) ? c.parentId : null }));
     // A partial set is stored but not fingerprinted, so the next run finishes it.
-    await this.graph.replaceCommunities(run.workspaceId, built, partial ? '' : fingerprint);
-    return { summary: t('agent.charting.summary', { n: built.length, pages: built.reduce((s, c) => s + c.members.length, 0) }), findings: [] };
+    await this.graph.replaceCommunities(run.workspaceId, written, partial ? '' : fingerprint);
+    const pages = new Set(written.flatMap((c) => c.members)).size;
+    return { summary: t('agent.charting.summary', { n: written.length, pages }), findings: [] };
   }
 
   private async curate(
@@ -2712,6 +2758,106 @@ ${page.markdown}`, files);
       summary:
         summary ?? t('agent.scribeRun.summary', { key: ticket.key, count: findings.length, max: MAX_SCRIBE_PAGES }),
       findings,
+    };
+  }
+
+  // ------------------------------------------------------------------- tester
+
+  /**
+   * The tester (#468): one API operation's QA suite. The case list is the
+   * catalogue's; the model only fills values and words, and `buildTestSuite`
+   * completes every case it left out — or throws when one cannot be built
+   * honestly, so a suite is never stored partial.
+   *
+   * The capability is checked here as well as at the route: revoking it
+   * between the click and this run fails the run before any model call.
+   */
+  private async writeTestSuite(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const input = ((run.input ?? {}) as AgentRunInput).apiTestSuite;
+    if (!input) throw new Error(t('agent.testerRun.noOperation'));
+    await this.access.requireRole(principal, run.workspaceId, 'viewer', false, { capability: 'api-test-suites.generate' });
+    const scope = await this.permissions.scopeFor(principal, run.workspaceId);
+    await this.permissions.requireLevel(scope, { type: 'document', id: input.documentId }, 'view');
+
+    const at = await this.testSuites.operationAt(input.documentId, input.entityKey, input.revisionId);
+    if (at.op.workspaceId !== run.workspaceId) throw new Error(t('agent.testerRun.noOperation'));
+    const cases = testCasesFor(at.spec.document, at.op);
+    if (!agent.config.enabled || agent.missing.length > 0) throw new Error(t('error.apiTestSuite.noModel'));
+    // Bound fixtures (#483) as the run's owner sees them: one they cannot open fails the run.
+    const { captures, vars } = boundCaptures(await this.fixtures.bound(scope, at.bindings));
+
+    await report({ stage: 'thinking', progress: 0.3 });
+    const call = { config: agent.config, userId: run.createdBy, operation: 'test-suite' as const, locale: run.locale as Locale };
+    const raw = await this.client.chat(
+      call,
+      [
+        { role: 'system', content: `${agent.instructions}\n\n${TESTER_OUTPUT_CONTRACT}${await this.guidance(run, agent)}` },
+        {
+          role: 'user',
+          content: testerPrompt({ method: at.op.method ?? '', path: at.op.path }, cases, operationFingerprint(at.spec.document, at.op), captures),
+        },
+      ],
+      { json: true },
+    );
+    const parsed = safeJson(raw) ?? {};
+    const fills = (parsed.cases && typeof parsed.cases === 'object' ? parsed.cases : {}) as Record<string, ApiTestCaseFill>;
+    const suite = buildTestSuite(at.spec.document, at.op, parsed.baseline, fills, vars);
+
+    await this.testSuites.save(at, testerConfigHash(agent), suite, { userId: run.createdBy, agentRunId: run.id });
+    return {
+      summary: t('agent.testerRun.summary', { count: suite.length, method: at.op.method ?? '', path: at.op.path }),
+      findings: [],
+    };
+  }
+
+  /**
+   * Ask tester (#483): order one operation's fixture candidates and say why.
+   * The candidates are recomputed here under the run owner's scope, and the
+   * order is stored with the hash of the set it ranked, so the candidates
+   * route applies it only while that set is unchanged. Binds nothing.
+   */
+  private async rankFixtures(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const input = ((run.input ?? {}) as AgentRunInput).apiFixtureRanking!;
+    await this.access.requireRole(principal, run.workspaceId, 'viewer', false, { capability: 'api-test-suites.generate' });
+    const scope = await this.permissions.scopeFor(principal, run.workspaceId);
+    await this.permissions.requireLevel(scope, { type: 'document', id: input.documentId }, 'view');
+    const at = await this.testSuites.operationAt(input.documentId, input.entityKey);
+    if (at.op.workspaceId !== run.workspaceId) throw new Error(t('agent.testerRun.noOperation'));
+    const { prerequisites, candidates, hash } = await this.fixtures.candidates(scope, at);
+    if (!candidates.length) throw new Error(t('agent.testerRun.noCandidates'));
+    if (!agent.config.enabled || agent.missing.length > 0) throw new Error(t('error.apiTestSuite.noModel'));
+    const bodies = await Promise.all(
+      candidates.map(async (candidate) => ({
+        candidate,
+        fixture: await this.fixtures.get(scope, candidate.documentId).then((f) => f.fixture, () => null),
+      })),
+    );
+
+    await report({ stage: 'thinking', progress: 0.3 });
+    const op = { method: at.op.method ?? '', path: at.op.path };
+    const raw = await this.client.chat(
+      { config: agent.config, userId: run.createdBy, operation: 'test-fixture-ranking' as const, locale: run.locale as Locale },
+      [
+        { role: 'system', content: `${agent.instructions}\n\n${TESTER_RANKING_CONTRACT}${await this.guidance(run, agent)}` },
+        { role: 'user', content: testerRankingPrompt(op, prerequisites, bodies) },
+      ],
+      { json: true },
+    );
+    const order = readTesterRanking(safeJson(raw), candidates.map((c) => c.documentId));
+    return {
+      summary: t('agent.testerRun.rankSummary', { count: order.length, ...op }),
+      findings: [],
+      details: { fixtureRanking: { candidatesHash: hash, order } },
     };
   }
 

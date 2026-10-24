@@ -7,7 +7,15 @@
 import { Marked, type Token, type Tokens, type TokensList } from 'marked';
 import { slugifyPath } from '@knowledge/contracts/publishing';
 import { pageTitleHref, type PageRefResolver } from '@knowledge/contracts';
-import { KN, escapeHtml, isPanelType, type PanelType } from '@knowledge/editor-schema/nodes';
+import { asEmbedLayout, canonicalEmbedUrl, canonicalizeEmbedUrl, parseEmbedUrl, type EmbedItem, type EmbedLayout } from '@knowledge/contracts/embeds';
+import {
+  KN,
+  diagramLayoutAttrs,
+  diagramLayoutFromInfo,
+  escapeHtml,
+  isPanelType,
+  type PanelType,
+} from '@knowledge/editor-schema/nodes';
 
 export type { PageRefResolver, Token, Tokens, TokensList };
 
@@ -57,11 +65,11 @@ marked.use({
     /** Fenced blocks: `mermaid` and `drawing` become rich nodes, everything else stays code. */
     code(token: Tokens.Code): string {
       const lang = (token.lang ?? '').trim().split(/\s+/)[0].toLowerCase();
-      if (lang === 'mermaid') {
-        return `<div ${KN.mermaid}="1"><pre>${escapeHtml(token.text)}</pre></div>`;
-      }
-      if (lang === 'drawing') {
-        return `<div ${KN.drawing}="1"><pre>${escapeHtml(token.text)}</pre></div>`;
+      if (lang === 'mermaid' || lang === 'drawing') {
+        const layout = Object.entries(diagramLayoutAttrs(diagramLayoutFromInfo(token.lang ?? '')))
+          .map(([name, value]) => ` ${name}="${escapeHtml(value)}"`)
+          .join('');
+        return `<div ${lang === 'mermaid' ? KN.mermaid : KN.drawing}="1"${layout}><pre>${escapeHtml(token.text)}</pre></div>`;
       }
       const cls = lang ? ` class="language-${escapeHtml(lang)}"` : '';
       return `<pre><code${cls}>${escapeHtml(token.text)}</code></pre>`;
@@ -222,6 +230,152 @@ export function markdownTokens(md: string): TokensList {
   return marked.lexer(md ?? '');
 }
 
+/* ------------------------------------------------------------------ embeds */
+
+export interface EmbedGroup {
+  layout: EmbedLayout;
+  caption: string;
+  items: EmbedItem[];
+}
+
+const FIGURE_OPEN_RE = new RegExp(`<figure\\b[^>]*\\b${KN.embed}\\b`, 'i');
+
+/**
+ * The embed groups of a page, in order, read from its markdown without a DOM
+ * (#470) — the ingestion worker records them, and agents read them, on the
+ * server. It walks the lexer's tokens, so a figure inside a code fence is not
+ * a group, and it follows a group that blank lines split into several tokens.
+ * Agrees with `embedItemsOf` / `embedCaptionOf`, which read the rendered DOM.
+ */
+export function embedGroupsOf(md: string): EmbedGroup[] {
+  const groups: EmbedGroup[] = [];
+  const walk = (tokens: Token[]) => {
+    let open: string | null = null;
+    for (const token of tokens) {
+      if (open !== null) {
+        open += token.raw;
+        if (/<\/figure>/i.test(token.raw)) {
+          groups.push(parseFigure(open));
+          open = null;
+        }
+        continue;
+      }
+      if (token.type === 'html' && FIGURE_OPEN_RE.test(token.raw)) {
+        if (/<\/figure>/i.test(token.raw)) groups.push(parseFigure(token.raw));
+        else open = token.raw;
+        continue;
+      }
+      const nested = (token as { tokens?: Token[] }).tokens;
+      if (token.type === 'blockquote' && nested) walk(nested);
+      if (token.type === 'list') for (const item of (token as Tokens.List).items) walk(item.tokens);
+    }
+    // An unclosed figure still holds what it holds; the browser closes it too.
+    if (open !== null) groups.push(parseFigure(open));
+  };
+  walk(marked.lexer(md ?? ''));
+  return groups;
+}
+
+const FIGURE_BLOCK_RE = new RegExp(`<figure\\b[^>]*\\b${KN.embed}\\b[\\s\\S]*?(?:</figure>|$)`, 'gi');
+
+/**
+ * The markdown with every embed group replaced by what `rewrite` returns for
+ * it, numbered exactly as `embedGroupsOf` numbers them (#470). Public surfaces
+ * use it so a page's markup never carries a Figma URL — a link reveals the
+ * file key. A group split by blank lines is replaced whole; one inside a
+ * quote or a list is replaced inside its block; a figure in a code fence is
+ * left alone, as it is not a group.
+ */
+export function rewriteEmbedGroups(md: string, rewrite: (group: EmbedGroup, index: number) => string): string {
+  let index = 0;
+  let out = '';
+  let open: string | null = null;
+  for (const token of marked.lexer(md ?? '')) {
+    if (open !== null) {
+      open += token.raw;
+      if (/<\/figure>/i.test(token.raw)) {
+        out += `${rewrite(parseFigure(open), index++)}\n\n`;
+        open = null;
+      }
+      continue;
+    }
+    if (token.type === 'html' && FIGURE_OPEN_RE.test(token.raw)) {
+      if (/<\/figure>/i.test(token.raw)) out += `${rewrite(parseFigure(token.raw), index++)}\n\n`;
+      else open = token.raw;
+      continue;
+    }
+    if (token.type === 'blockquote' || token.type === 'list') {
+      out += token.raw.replace(FIGURE_BLOCK_RE, (figure) => rewrite(parseFigure(figure.replace(/^\s*>\s?/gm, '')), index++));
+      continue;
+    }
+    out += token.raw;
+  }
+  return open !== null ? `${out}${rewrite(parseFigure(open), index)}\n` : out;
+}
+
+/**
+ * A group as stored markdown (#470): one HTML block, no blank line inside —
+ * the spelling the editor's serializer writes, for every writer without a DOM
+ * (connectors, importers, the API).
+ */
+export function embedGroupMarkup(group: EmbedGroup): string {
+  const items = group.items.map((item) => {
+    const version = item.version ? ` ${KN.version}="${escapeHtml(item.version)}"` : '';
+    return `<a href="${escapeHtml(item.url)}"${version}>${escapeHtml(item.caption || item.url)}</a>`;
+  });
+  const caption = group.caption ? [`<figcaption>${escapeHtml(group.caption)}</figcaption>`] : [];
+  return [`<figure ${KN.embed}="${group.layout}">`, ...items, ...caption, '</figure>'].join('\n');
+}
+
+/**
+ * A Figma link alone in a paragraph becomes a one-item group (#470) — how a
+ * plain markdown file (a git repository) spells an embed. A link inside a
+ * sentence stays a link, as in the editor.
+ */
+export function embedLoneUrls(md: string): string {
+  let changed = false;
+  const out = marked
+    .lexer(md ?? '')
+    .map((token) => {
+      if (token.type !== 'paragraph') return token.raw;
+      const text = token.text.trim().replace(/^<(.+)>$/, '$1');
+      const ref = /^\S+$/.test(text) ? parseEmbedUrl(text) : null;
+      if (!ref) return token.raw;
+      changed = true;
+      const tail = token.raw.match(/\n*$/)?.[0] ?? '';
+      return `${embedGroupMarkup({ layout: 'strip', caption: '', items: [{ url: canonicalEmbedUrl(ref), version: null, caption: '' }] })}${tail || '\n'}`;
+    })
+    .join('');
+  return changed ? out : md;
+}
+
+function parseFigure(html: string): EmbedGroup {
+  const items = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)].map(([, attrs, inner]): EmbedItem => {
+    const href = (attrOf(attrs!, 'href') ?? '').trim();
+    const url = canonicalizeEmbedUrl(href);
+    const text = textOf(inner!);
+    return { url, version: attrOf(attrs!, KN.version) || null, caption: text === href || text === url ? '' : text };
+  });
+  const caption = /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/i.exec(html)?.[1];
+  const openTag = /<figure\b[^>]*>/i.exec(html)?.[0] ?? '';
+  return { layout: asEmbedLayout(attrOf(openTag, KN.embed)), caption: caption ? textOf(caption) : '', items };
+}
+
+function attrOf(attrs: string, name: string): string | null {
+  const match = new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i').exec(attrs);
+  return match ? decodeEntities(match[1] ?? match[2] ?? match[3] ?? '') : null;
+}
+
+function textOf(html: string): string {
+  return decodeEntities(html.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
+}
+
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'", nbsp: ' ' };
+
+function decodeEntities(text: string): string {
+  return text.replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/g, (_, name: string) => ENTITIES[name]!);
+}
+
 /**
  * Attributes DOMPurify must not strip. The read view sanitizes this HTML, and
  * every rich block is identified by a data-* attribute — losing them would
@@ -243,6 +397,11 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
     'data-kn-toc',
     'data-kn-mention',
     'data-kn-user',
+    'data-kn-width',
+    'data-kn-wrap',
+    'data-kn-embed',
+    'data-kn-version',
+    'data-kn-item',
     'data-kn-agent',
     'data-kn-api',
     'data-kn-path',

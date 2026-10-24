@@ -142,6 +142,7 @@ function labelsFor(locale: Locale): PublicRenderOptions['labels'] {
     open: messages.open,
     download: messages.download,
     pdfFallback: messages.pdfFallback,
+    embedUnavailable: messages.embedUnavailable,
     formatBytes: (n) => formatBytes(n, locale),
   }
 }
@@ -164,6 +165,7 @@ async function resolveShareView(url: string, ctx: PublicRenderContext): Promise<
     const body = renderPublicMarkdown(page.markdown, {
       pageHref: (id) => (inTree.has(id) ? shareHref(token, id, share.rootDocumentId) : null),
       attachmentHref: (id, download) => `${apiPublic}${publicShareAttachmentPath(token, id)}${download ? '?download=1' : ''}`,
+      embedSrc: (id) => `${apiPublic}/v1/public/shares/${enc}/embeds/${encodeURIComponent(id)}`,
       labels: labelsFor(ctx.locale),
     })
     return {
@@ -299,6 +301,7 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
     },
     attachmentHref: (id, download) =>
       `${apiPublic}${publicSiteAttachmentPath(site.id, version.id, id)}${download ? '?download=1' : ''}`,
+    embedSrc: (id) => `${apiPublic}/v1/public/sites/${site.id}/versions/${version.id}/embeds/${encodeURIComponent(id)}`,
     labels: labelsFor(ctx.locale),
   })
 

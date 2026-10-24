@@ -29,7 +29,8 @@ import createDOMPurify, { type WindowLike } from 'dompurify'
 import { parseAttachmentPath } from '@knowledge/contracts/publishing'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from './render'
 import { parseScene, renderSceneToSvg } from './drawing'
-import { KN, attachmentKind, escapeHtml } from './nodes'
+import { asEmbedLayout } from '@knowledge/contracts/embeds'
+import { KN, attachmentKind, carryDiagramLayout, embedCaptionOf, escapeHtml } from './nodes'
 
 export interface PublicHeading {
   id: string
@@ -50,6 +51,12 @@ export interface PublicRenderOptions {
    */
   attachmentHref: (attachmentId: string, download: boolean) => string | null
   /**
+   * The snapshot URL of an embedded design's item, by the opaque id the API
+   * put on it when the workspace shows embeds publicly (#470); null or absent
+   * shows its caption and the placeholder.
+   */
+  embedSrc?: (itemId: string) => string | null
+  /**
    * Prefixed to every heading id and in-page `#anchor`, so pages printed one
    * after another in one document (an export) keep their anchors apart.
    */
@@ -61,6 +68,8 @@ export interface PublicRenderOptions {
     open: string
     download: string
     pdfFallback: string
+    /** In place of an embed's frames where the public may not see them (#470). */
+    embedUnavailable: string
     formatBytes: (bytes: number) => string
   }
 }
@@ -90,6 +99,8 @@ export function renderPublicMarkdown(markdown: string, options: PublicRenderOpti
   focusScrollers(host)
   rewriteLinks(host, doc, options)
   rewriteImages(host, options)
+  // After the image pass: an embed's snapshot URL is the caller's own public route, not a member path to drop.
+  renderEmbeds(host, doc, options)
   renderFiles(host, doc, options)
   renderDrawings(host, doc)
   renderToc(host, doc, headings, options)
@@ -242,6 +253,43 @@ function renderFiles(root: HTMLElement, doc: Document, options: PublicRenderOpti
   }
 }
 
+/**
+ * Embed groups (#470). The API has already taken out every Figma link: an
+ * item is its caption, plus an opaque `data-kn-item` id where the workspace
+ * shows snapshots publicly. Never a link and never a live frame here.
+ */
+function renderEmbeds(root: HTMLElement, doc: Document, options: PublicRenderOptions) {
+  for (const figure of root.querySelectorAll<HTMLElement>(`figure[${KN.embed}]`)) {
+    const out = doc.createElement('figure')
+    out.className = 'kn-embed'
+    out.setAttribute(KN.embed, asEmbedLayout(figure.getAttribute(KN.embed)))
+    const list = doc.createElement('div')
+    list.className = 'kn-embed-items'
+    for (const a of figure.querySelectorAll('a')) {
+      const text = (a.textContent ?? '').replace(/\s+/g, ' ').trim()
+      // An uncaptioned item's text is its URL in raw markdown; never echo that publicly.
+      const caption = /^https?:\/\//i.test(text) ? '' : text
+      const id = a.getAttribute(KN.item)
+      const src = id ? (options.embedSrc?.(id) ?? null) : null
+      const tile = doc.createElement('div')
+      tile.className = 'kn-embed-tile'
+      tile.innerHTML =
+        (src ? `<div class="kn-embed-frame"><img src="${escapeHtml(src)}" alt="${escapeHtml(caption)}" loading="lazy"></div>` : '') +
+        `<div class="kn-embed-bar"><span class="kn-embed-item">${caption ? `<span class="kn-embed-caption">${escapeHtml(caption)}</span>` : ''}${src ? '' : `<span class="kn-embed-meta">${escapeHtml(options.labels.embedUnavailable)}</span>`}</span></div>`
+      list.append(tile)
+    }
+    out.append(list)
+    const caption = embedCaptionOf(figure)
+    if (caption) {
+      const fc = doc.createElement('figcaption')
+      fc.className = 'kn-embed-figcaption'
+      fc.textContent = caption
+      out.append(fc)
+    }
+    figure.replaceWith(out)
+  }
+}
+
 function renderDrawings(root: HTMLElement, doc: Document) {
   for (const node of root.querySelectorAll<HTMLElement>(`[${KN.drawing}]`)) {
     const wrap = doc.createElement('div')
@@ -249,6 +297,7 @@ function renderDrawings(root: HTMLElement, doc: Document) {
     wrap.innerHTML = purify.sanitize(renderSceneToSvg(parseScene(node.textContent ?? '')), {
       USE_PROFILES: { svg: true, svgFilters: true },
     }) as unknown as string
+    carryDiagramLayout(node, wrap)
     node.replaceWith(wrap)
   }
 }

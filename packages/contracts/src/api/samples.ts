@@ -194,7 +194,7 @@ export function exampleForSchema(doc: unknown, schema: unknown, depth = 0, chain
   return null;
 }
 
-interface ParamDef {
+export interface ParamDef {
   name: string;
   in: string;
   required: boolean;
@@ -203,7 +203,7 @@ interface ParamDef {
 }
 
 /** Path-level parameters, overridden by the operation's own of the same name + location. */
-function parametersOf(doc: Json, op: Json, pathItem: unknown): ParamDef[] {
+export function parametersOf(doc: Json, op: Json, pathItem: unknown): ParamDef[] {
   const read = (list: unknown) =>
     (Array.isArray(list) ? list : [])
       .map((p) => derefSpec(doc, p).node)
@@ -286,7 +286,7 @@ function authFor(doc: Json, op: { pointer: string }): { headers: SampleRequest['
   return { headers, query };
 }
 
-const isJsonType = (t: string) => /[/+]json\b/iu.test(t);
+export const isJsonType = (t: string) => /[/+]json\b/iu.test(t);
 
 /**
  * The request an operation's sample describes: the console's values where it
@@ -312,7 +312,7 @@ export function sampleRequestFor(
     const typed = inputs.path?.[name];
     const value = typed ?? (p ? scalar(p.example ?? exampleForSchema(doc, p.schema)) : '');
     // An empty value keeps the template, so the sample still says what goes there.
-    return value && value !== 'string' ? encodeURIComponent(value) : whole;
+    return value && value !== 'string' ? encodePathValue(value) : whole;
   });
 
   const auth = authFor(doc, op);
@@ -333,6 +333,13 @@ export function sampleRequestFor(
   ];
   return { method: op.method.toUpperCase(), url: `${base}${path}`, query, headers, body };
 }
+
+/** A `{{variable}}` a QA fixture captured (#483) stays readable in the URL; everything around it is encoded. */
+const encodePathValue = (v: string) =>
+  v
+    .split(/(\{\{[^{}]+\}\})/u)
+    .map((part, i) => (i % 2 ? part : encodeURIComponent(part)))
+    .join('');
 
 function bodyFor(doc: Json, op: Json, inputs: SampleInputs): SampleRequest['body'] {
   const requestBody = derefSpec(doc, op.requestBody).node;
@@ -373,7 +380,7 @@ function bodyFor(doc: Json, op: Json, inputs: SampleInputs): SampleRequest['body
 // ---------------------------------------------------------------------------
 
 /** The URL with its query, as one text: literal runs encoded, env parts kept. */
-function fullUrl(req: SampleRequest, withQuery = true): SampleText {
+export function fullUrl(req: SampleRequest, withQuery = true): SampleText {
   const out: SampleText = [req.url];
   if (withQuery) {
     req.query.forEach((q, i) => {
@@ -406,11 +413,20 @@ const shell = {
   },
 };
 
+/**
+ * curl's arguments, one per line, from a request whose URL and body may read
+ * environment variables too — what a QA suite's script prints (#483).
+ */
+export function curlArgs(req: { method: string; url: SampleText; headers: SampleRequest['headers']; body: SampleText | null }): string[] {
+  const args = [`--request ${req.method}`, `--url ${shell.str(req.url)}`];
+  for (const h of req.headers) args.push(`--header ${shell.str([`${h.name}: `, ...h.value])}`);
+  if (req.body) args.push(`--data ${shell.str(req.body)}`);
+  return args;
+}
+
 function curl(req: SampleRequest): string {
-  const lines = [`curl --request ${req.method}`, `--url ${shell.str(fullUrl(req))}`];
-  for (const h of req.headers) lines.push(`--header ${shell.str([`${h.name}: `, ...h.value])}`);
-  if (req.body) lines.push(`--data ${shell.str([req.body.text])}`);
-  return lines.join(' \\\n  ');
+  const args = curlArgs({ ...req, url: fullUrl(req), body: req.body ? [req.body.text] : null });
+  return [`curl ${args[0]}`, ...args.slice(1)].join(' \\\n  ');
 }
 
 const js = {

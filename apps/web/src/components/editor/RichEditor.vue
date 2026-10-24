@@ -12,7 +12,8 @@
  * extensions rebuilt in this folder (drag handle, expand, file handling and
  * table of contents).
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { toast } from 'vue-sonner'
 import { Subject, Subscription, animationFrameScheduler, auditTime, distinctUntilChanged, filter, merge } from 'rxjs'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
@@ -40,6 +41,7 @@ import {
   ListTodo,
   Minus,
   Paperclip,
+  Frame,
   PenLine,
   Plus,
   Quote,
@@ -52,6 +54,9 @@ import {
   LayoutTemplate,
 } from 'lucide-vue-next'
 import { markdownToHtml } from '@/lib/markdown/render'
+import { api } from '@/api/client'
+import { getWorkspaceId } from '@/lib/api'
+import type { EmbedAttributes } from './extensions/media'
 import type {
   AssistantDraftEdit,
   GlossaryExclusion,
@@ -64,7 +69,7 @@ import { fromWatch } from '@/lib/rx-vue'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/lib/markdown/nodes'
 import { Layout, LayoutColumn, Expand, Panel, TableOfContents } from './extensions/blocks'
 import { ApiContract, ApiSection } from './extensions/api'
-import { Drawing, FileEmbed, Mermaid, ResizableImage } from './extensions/media'
+import { Drawing, Embed, FileEmbed, Mermaid, ResizableImage } from './extensions/media'
 import { AgentMention, DocMention, StatusMark, UserMention } from './extensions/inline'
 import { createSuggestionExtension, type SuggestionSession } from './extensions/suggestion'
 import {
@@ -96,6 +101,7 @@ import LinkDialog from './LinkDialog.vue'
 import EditorToolbar from './EditorToolbar.vue'
 import EditorBubble from './EditorBubble.vue'
 import TableControls from './TableControls.vue'
+import TableHandles from './TableHandles.vue'
 
 export interface MentionablePage {
   documentId: string
@@ -309,6 +315,72 @@ const { uploads, insertFiles, pickFiles } = useAttachments(
  * stray "@" and no menu at all.
  */
 const pagePickerOpen = ref(false)
+
+/* ------------------------------------------------------------- embeds (#470) */
+
+// Loaded on first open only: a reader of a page never downloads the picker.
+const EmbedPickerDialog = defineAsyncComponent(() => import('./EmbedPickerDialog.vue'))
+/** Where the picker saves: a new group at the caret (pos null) or the group at `pos`. */
+const embedPicker = ref<{ pos: number | null; initial: EmbedAttributes | null } | null>(null)
+
+function openEmbedPicker(pos: number | null, initial: EmbedAttributes | null = null) {
+  embedPicker.value = { pos, initial }
+}
+
+function saveEmbed(attrs: EmbedAttributes) {
+  const target = embedPicker.value
+  const instance = editor.value
+  if (!target || !instance) return
+  if (target.pos === null) instance.chain().focus().setEmbed(attrs).run()
+  else instance.chain().focus().updateEmbedAt(target.pos, attrs).run()
+}
+
+/**
+ * The group a paste made: the first holding this URL — unpinned while the pin
+ * is in flight, or (for "Keep as link") the one-item group it became.
+ */
+function findPasted(url: string, match: 'unpinned' | 'alone'): { pos: number; attrs: EmbedAttributes } | null {
+  let found: { pos: number; attrs: EmbedAttributes } | null = null
+  editor.value?.state.doc.descendants((node, pos) => {
+    if (found) return false
+    const items = node.type.name === 'knEmbed' ? (node.attrs.items as EmbedAttributes['items']) : []
+    if (match === 'unpinned' ? items.some((i) => i.url === url && !i.version) : items.length === 1 && items[0]!.url === url) {
+      found = { pos, attrs: node.attrs as EmbedAttributes }
+    }
+    return !found
+  })
+  return found
+}
+
+/**
+ * A pasted Figma link became a group: pin it to the file's current version and
+ * take the frame's name as its caption. Whatever the answer, the toast offers
+ * to turn it back into the plain link it was.
+ */
+async function pinPasted(url: string) {
+  const keepAsLink = {
+    label: t('editor.embed.keepAsLink'),
+    onClick: () => {
+      const hit = findPasted(url, 'alone')
+      const instance = editor.value
+      if (!hit || !instance) return
+      const node = instance.state.doc.nodeAt(hit.pos)
+      if (!node) return
+      instance.chain().focus().insertContentAt({ from: hit.pos, to: hit.pos + node.nodeSize }, `<p><a href="${url.replace(/"/g, '&quot;')}">${url.replace(/</g, '&lt;')}</a></p>`).run()
+    },
+  }
+  try {
+    const res = await api.post('/v1/embeds/figma/resolve', { body: { workspaceId: getWorkspaceId(), url } })
+    const hit = findPasted(url, 'unpinned')
+    if (hit && res.allowed && res.version) {
+      const items = hit.attrs.items.map((i) => (i.url === url && !i.version ? { ...i, version: res.version, caption: i.caption || res.name || '' } : i))
+      editor.value?.chain().updateEmbedAt(hit.pos, { ...hit.attrs, items }).run()
+    }
+    toast(res.allowed ? t('editor.embed.pasted') : t('editor.embed.pastedNotAllowed'), { action: keepAsLink, duration: 10_000 })
+  } catch {
+    toast(t('editor.embed.pastedUnpinned'), { action: keepAsLink, duration: 10_000 })
+  }
+}
 const linkOpen = ref(false)
 const linkUrl = ref('')
 
@@ -391,12 +463,13 @@ const SLASH_ITEMS: (CommandItem & { run: (e: CoreEditor) => void })[] = [
   { id: 'mermaid', group: t('toolbar.group.media'), label: t('toolbar.mermaid'), icon: Workflow, keywords: 'graph flowchart sequence', run: (e) => e.chain().focus().setMermaid().run() },
   { id: 'drawing', group: t('toolbar.group.media'), label: t('toolbar.whiteboard'), icon: PenLine, keywords: 'draw sketch excalidraw diagram', run: (e) => e.chain().focus().setDrawing().run() },
   { id: 'image', group: t('toolbar.group.media'), label: t('toolbar.image'), icon: ImageIcon, keywords: 'picture photo upload', run: (e) => pickFiles(e, 'image/*') },
+  { id: 'embed', group: t('toolbar.group.media'), label: t('toolbar.figmaEmbed'), icon: Frame, keywords: 'figma design mockup frame prototype figjam макет фрейм дизайн прототип', run: () => openEmbedPicker(null) },
   { id: 'file', group: t('toolbar.group.media'), label: t('toolbar.fileOrPdf'), icon: Paperclip, keywords: 'attachment document upload', run: (e) => pickFiles(e, '') },
   { id: 'mention', group: t('toolbar.group.media'), label: t('toolbar.linkToPage'), icon: FileText, keywords: 'reference mention doc', run: () => { pagePickerOpen.value = true } },
 ]
 
 /** Blocks that belong in a page but not in a comment. */
-const COMPACT_EXCLUDED = new Set(['layout2', 'layout3', 'toc', 'drawing', 'expand', 'api', 'template'])
+const COMPACT_EXCLUDED = new Set(['layout2', 'layout3', 'toc', 'drawing', 'expand', 'api', 'template', 'embed'])
 const slashItems = computed(() =>
   SLASH_ITEMS.filter(
     (i) => !(props.compact && COMPACT_EXCLUDED.has(i.id)) && (i.id !== 'template' || !!props.templateContext),
@@ -665,6 +738,7 @@ onMounted(() => {
       Mermaid,
       Drawing,
       FileEmbed,
+      Embed.configure({ onEdit: (pos, attrs) => openEmbedPicker(pos, attrs), onPasted: (url) => void pinPasted(url) }),
       ResizableImage.configure(IMAGE_OPTIONS),
       StatusMark,
       DocMention,
@@ -976,10 +1050,18 @@ defineExpose({
       </div>
 
       <EditorBubble v-if="editor && editable" :editor="editor" @link="openLinkDialog" />
+      <TableHandles v-if="editor && editable && !compact" :editor="editor" />
       <TableControls v-if="editor && editable && !compact" :editor="editor" />
     </div>
 
     <PagePickerDialog v-model:open="pagePickerOpen" :pages="pages" @pick="insertMention" />
+    <EmbedPickerDialog
+      v-if="embedPicker"
+      :open="!!embedPicker"
+      :initial="embedPicker.initial"
+      @update:open="(open: boolean) => { if (!open) embedPicker = null }"
+      @save="saveEmbed"
+    />
 
     <LinkDialog
       v-if="editor"

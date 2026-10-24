@@ -174,14 +174,22 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
   }
 
   async deleteRevision(revisionId: string): Promise<void> {
+    await this.deleteByTerm({ revisionId }, `revision ${revisionId}`);
+  }
+
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    await this.deleteByTerm({ workspaceId }, `workspace ${workspaceId}`);
+  }
+
+  private async deleteByTerm(term: Record<string, string>, what: string): Promise<void> {
     await this.ensureIndex();
     const res = await fetch(`${this.baseUrl}/${this.index}/_delete_by_query?refresh=true`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: { term: { revisionId } } }),
+      body: JSON.stringify({ query: { term } }),
     });
     if (!res.ok && res.status !== 404) {
-      throw new Error(`OpenSearch delete_by_query failed (${res.status}) for revision ${revisionId}`);
+      throw new Error(`OpenSearch delete_by_query failed (${res.status}) for ${what}`);
     }
   }
 

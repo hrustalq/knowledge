@@ -13,6 +13,382 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.33.0] — 2026-10-24
+
+### Added
+
+- Workspace admins can rename a workspace (#478). **Settings → Access** has a **Workspace name** field
+  above **Delete this workspace**; the switcher shows the new name at once, without a reload. The name
+  follows the create rule: trimmed, not empty, at most 120 characters. Each rename writes a
+  `workspace.renamed` audit entry with who did it and the old and new name. Creating a workspace whose
+  name is only spaces is now refused too, rather than making one with an empty name. API:
+  `PATCH /v1/workspaces/:id` with `{ "name": "…" }`, workspace admin only.
+- Workspace admins can delete a workspace and everything in it (#479). **Settings → Access** ends with
+  **Delete this workspace**. It lists what the workspace holds (projects, pages, revisions, stored files,
+  connectors, chat bindings, API keys, published sites) and asks for the workspace's name to be typed back.
+  The workspace disappears for everyone the moment you confirm: every route answers 404, it leaves the
+  workspace list and switcher, its share links, published sites and public embeds stop resolving, keys
+  narrowed to it and its SCIM tokens are revoked, and its sign-in providers, connectors, chat bots,
+  triggers and agent schedules are switched off. Its contents (every table, every object under
+  `workspaces/{id}/` in the bucket, project avatars, graph vertices and BM25 rows) are removed in the
+  background within a minute, and an interrupted removal resumes on the next tick. Only the
+  `workspace.deleted` audit entry stays, with who deleted it and what it held. A browser still pointing
+  at a deleted workspace opens another one you can see. API: `GET /v1/workspaces/:id/deletion-preview`,
+  `DELETE /v1/workspaces/:id?confirm=<name>`. There is no undo.
+- Embedded designs say when Figma moved on (#470, phase 8). Every `EMBED_CHECK_INTERVAL_HOURS` (6 by
+  default) each enabled Figma connector checks the frames that pages' current versions pin, against the
+  file's current version. A frame counts as changed only when its own subtree changed; edits elsewhere in
+  the file do not count. A changed frame shows "Design changed in Figma since this was pinned" in the
+  reader and the editor, and editors get **Update**, which pins it to the current design as an ordinary
+  edit (the revision diff shows only the version). Update also pins an item that was never pinned.
+  **Knowledge health** gains a **Changed designs** filter. Nothing flags a page and nothing opens a merge
+  request on its own. A frame deleted in Figma reads as changed.
+- Figma embeds survive connectors and imports (#470, phase 7). On pull, a Notion **Embed** block with a
+  Figma link, a Confluence smart link shown as an embed, a Confluence macro wrapping a Figma link, a Figma
+  `<iframe>` in an imported HTML page, and a Figma link alone on its line in a git repository all arrive
+  as an embed group. A connector pull pins each frame to its file's current version and takes its name as
+  the caption; a frame outside the allowlist stays an unpinned link. A Confluence macro carried over this
+  way is no longer listed as lost. On push, each frame goes back as Notion's own embed block or a Confluence
+  smart link shown as an embed, with the group caption as a paragraph; the strip or grid layout has no
+  equivalent there and is lost. Figma's embed URLs (`figma.com/embed?url=…`, `embed.figma.com/…`) are now
+  read as the frame they show.
+- Embedded designs on public pages and in exports (#470, phase 6). A new switch, **Settings → Publishing
+  → Show embedded designs publicly** (off by default), lets share links and published sites show the
+  snapshots of embedded Figma frames. Off, they show the captions and "Mockup not available publicly".
+  On or off, no public page carries a Figma link, since a link reveals the file: the page's markup sent to
+  the reader, a published site's `.md` and `llms-full.txt`, and a share link's download all replace each
+  group with its captions. With the switch on, each visible frame carries an opaque id that a public route
+  turns into its snapshot, after the link's or the site's own checks and the Figma allowlist. A member's
+  export (HTML, PDF, Word) always shows the snapshots; a share link's export follows the switch. The Live
+  frame is never offered publicly.
+- Agents and search can see into embedded designs (#470, phase 5). A pinned Figma frame's name and
+  text layers are indexed as their own chunks after the page's text, so a search for words that appear
+  only in a frame finds the page. They are read from the snapshot cache, and once a frame renders its
+  pages are reindexed. A frame whose project leaves the allowlist drops out of the index at the page's
+  next reindex. Two read-only MCP tools: `knowledge_get_embed` returns one group of a page (canonical
+  node URLs, captions, frame names, the text marked untrusted, and up to 8 snapshot images) for an agent
+  to hand to Figma's Dev Mode MCP. `knowledge_find_embeds` returns the pages whose current version
+  embeds a Figma file or frame, only those the caller may open. `GET /v1/embeds/usages` is its REST twin.
+  Published-site search matches captions and never the Figma links.
+- Authors can embed Figma frames from the editor (#470, phase 4). `/figma` (also `/макет`) opens a
+  picker: choose an allowlisted file, tick frames from its pages, or paste a "Copy link to selection"
+  link for a deeper layer; then reorder (drag, or the arrow buttons), caption each frame and the group,
+  and pick Strip or Grid. Up to 24 frames per group, each pinned to the file's current version. The
+  pencil on a group reopens it. A Figma link pasted alone on an empty line becomes a group straight
+  away, pinned and captioned with the frame's name; **Keep as link** in the toast, or undo, turns it
+  back. The picker loads only when opened, and every Figma call goes through the API, which holds the
+  token. Without a Figma connector the picker says so and links to connectors.
+- Embedded Figma frames show their snapshots (#470, phase 3). When a page is indexed, the worker
+  records each item it embeds and renders every pinned one through the Figma connector: a PNG of
+  that node at its pinned version, 2× and at most 4096 px on the long side. The snapshot is stored once
+  and shared by every page and revision that pins the same node and version. The reader and the editor
+  show the snapshots, with a shimmer while one renders. **Open live** mounts Figma's own embed of the
+  frame on demand. A snapshot is served only to a reader of a page whose revision references it,
+  and only while the file's project or team is on an enabled Figma connector's allowlist. Removing
+  the project hides it everywhere, old revisions included, and adding it back restores it. Editors
+  see why an item is only a link: not pinned, not in the allowlist, not yet published, or the render
+  failed (retried by the worker every 15 minutes, whether or not anyone opens the page). Recording happens before embedding, so a page's snapshots never
+  wait on the embedder, and indexing never calls Figma.
+- A **Figma** connector (#470, phase 2). An admin adds it under **Settings → Connectors** with a
+  Figma personal access token and an allowlist of Figma team and project links (or `team:<id>`,
+  `project:<id>`); only files in those teams and projects will be embeddable. It syncs no pages.
+  **Test** names the token's owner and how many projects and files the allowlist reaches. Figma
+  does not report a token's expiry, so the admin can type it in, and the connector card warns from
+  14 days before that date and once it has passed. Figma's `429` answers are retried after
+  `Retry-After`, up to three attempts.
+- Pages can hold an embed group (#470, phase 1): one block of Figma frames, written in markdown as
+  `<figure data-kn-embed="strip|grid">` with one link per frame (its canonical Figma URL and a pinned
+  `data-kn-version`) and an optional `<figcaption>`. The reader and the editor show the group as
+  captioned tiles in a strip or a grid; an item no provider claims, or one with no pinned version,
+  is kept and shown as a plain link. Figma links are canonicalized, so two links to one node read
+  the same. Share links and published sites show the captions and "Mockup not available publicly",
+  never the Figma links, since a link reveals the file key. Inserting from the editor, snapshots and
+  the Figma connector arrive in later phases. Feature doc 64 has the plan.
+- Agents see where a search hit sits (#475, phase 6). Ask's `search_knowledge` and MCP
+  `knowledge_search` return each result's `layer` and `communityPath`. Ask's `global_overview`
+  and MCP `knowledge_global_overview` take an optional `level` (0, the finest, by default; 1 and 2
+  for broader areas). The atlas agent's instructions now cover summarising a group of
+  already-summarised areas. The MCP skill explains entity prefixes as layers. Feature doc 63
+  describes all of #475.
+- Search can use the community tree and entity layers (#475, phase 4), both off until an admin
+  turns them on in **Knowledge health → Settings → Search ranking**:
+  - **Community boost** raises the pages of the community whose summary best matches the
+    question, starting at the broadest matching level and going down to its closest sub-group.
+    A page deeper in that path gains more. It only boosts and never hides a page. It needs the
+    Atlas agent to have built communities. **Community match threshold** sets how close a match
+    must be. `make tune` now proposes both.
+  - **Expand related pages by layer** changes what hybrid search's related pages follow: a page
+    about one API operation reaches its component, its code and its spec, but no longer every
+    page that merely names the same service. An operation also reaches the component its spec
+    page names.
+  - Every search result now says where it sits: `layer` (the level most of its entities are on)
+    and `communityPath` (the titles of its communities, broadest first). A community holding any
+    page the reader cannot open boosts nothing and appears in no path, at any level. A search
+    `asOf` a past date never uses the community boost.
+
+  With the settings empty, search ranks exactly as before.
+- Every entity in the workspace and page graphs (`GET /v1/documents/graph`, `GET /v1/documents/:id/graph`)
+  now carries a `layer` (#475, phase 3): `system` (services, domains, integrations), `component`
+  (components, databases, tables, queues), `interface` (API operations, channels, specs), `code`
+  (modules, files, functions), or `concept` for anything else (tags, teams, unknown prefixes). The
+  layer comes from the key's prefix (`op:` → `interface`) and is never stored, so existing graphs
+  have it at once, with no reindex.
+- Communities now form a tree (#475, phase 2). The atlas agent groups related pages as before, then
+  groups those groups into broader areas, up to three levels. Each area above the finest is
+  summarised from the summaries of the groups it contains. `GET /v1/graph/communities` takes
+  `level` (0 = finest, the default and today's answer), and every community it returns carries its
+  `level` and `parentId`. A reader still sees a community only if they may open every page beneath
+  it, at every level. The first atlas run after the deploy rebuilds once, even on an unchanged
+  graph. One `COMMUNITY_MAX_PER_RUN` budget covers all levels, finest first.
+- Run a QA suite on the server (#483, phase 5). Where the deployment allows it and an admin turns
+  it on in **Settings → API**, the run panel gains a **Server** route: pick a **test environment**
+  and the worker runs setup, every case and teardown, then the panel shows the results in the
+  same table, with the suite's recent runs below. Test environments (a server, inputs and
+  secrets) live on a new **Environments** tab of the QA page, where editors manage them. Secrets
+  are encrypted at rest and never shown again once saved. A run sends exactly as the try-it proxy
+  does: the workspace's proxy mode and source policies, private addresses refused, only servers a
+  spec declares, and each request audited under the person who started the run. The environment's
+  server is used for steps whose spec lists it. The last 20 runs per suite are kept, readable by
+  anyone who can open the spec, and captured values named like secrets are never stored. The QA
+  page shows each suite's last server run. Agents get `knowledge_run_test_suite` (hidden from
+  read-only keys) and `knowledge_get_test_run`.
+- A **QA** page (#483, phase 4), in the sidebar after Knowledge health. **Operations** lists every
+  HTTP operation in the active project's OpenAPI specs, worst first, with its suite's state: **Needs
+  review** (a bound fixture is archived or calls an operation that no longer exists), **No suite**,
+  **Outdated** (the operation, its fixtures or the tester changed since the suite was generated),
+  **Unbound setup** (the spec says it needs a value another operation produces and no fixture is
+  bound), or **Ready**. A strip at the top counts each state and filters by it. Each row shows the
+  case count, the setup and how many fixtures call the operation, and links to the operation in its
+  spec. **Fixtures** is the fixture library, which can be narrowed to one spec or one operation, with
+  broken calls marked. The page reads what already exists, so the state always matches the
+  operation's own suite panel. Agents get `knowledge_qa_overview`.
+- Run a QA test suite against a real server (#483, phase 3). **Run suite** in an operation's **Test
+  requests** section runs the suite's setup once, every case (negative ones first, each with its own
+  setup and teardown), then teardown, which also runs after a failure or **Stop**. Requests go from
+  your browser or, where the workspace allows it, through the try-it proxy, to the server picked in
+  Try it (the run form can switch the suite's own). The form asks for the secrets and inputs the
+  suite needs; credentials start from what Try it holds, and nothing typed is stored. Each step and
+  case shows the expected and actual status, the time, and what it captured, with secret values
+  hidden. A failed setup step marks the cases as not run. When the proxy's rate limit is reached, the
+  run waits and carries on. Running needs a new permission, **Run API tests**, granted per member on
+  Access control (admins have it), next to the renamed **Generate API tests**. Agents get
+  `knowledge_get_test_run_plan`: the same ordered requests with placeholders, to send with their own
+  HTTP client. It never contains a credential.
+- Test fixtures set up QA test suites (#483, phase 2). An operation's **Test requests** section now
+  opens with **Setup**: the fixtures bound to the suite, run once before its cases, and fixtures the
+  spec suggests. A suggestion is a fixture that calls an operation producing a value this one needs:
+  one the spec's response `links` point here from first, then one whose response carries the path
+  parameter (`POST /invoices` returning `id` for `GET /invoices/{id}`). **Ask tester** has the tester
+  agent order the suggestions and explain each; nothing is bound until you press **Bind**. Any fixture
+  can also be bound from the list, to the whole suite or, inside a case, to that case only (its
+  captures replace the suite's for that case). Generate then writes cases that use what setup
+  captures, such as `/invoices/{{invoiceId}}`. Binding, unbinding or editing a bound fixture means the
+  suite has to be generated again. **Download script** (replacing Copy cURL) gives a bash script that
+  checks every secret is exported, runs setup, every case, and teardown on exit even after a failure,
+  and exits non-zero when anything failed. It needs curl and jq. The Postman collection gains Setup
+  and Teardown folders that pass captured values between requests. Neither file contains a secret
+  value. Binding needs the same permission as generating. Agents get `knowledge_get_test_suite` (JSON,
+  script or collection), `knowledge_generate_test_suite`, `knowledge_suggest_test_fixtures` and
+  `knowledge_set_test_fixtures`; the generate and set tools are hidden from read-only keys.
+- QA test fixtures (#483, phase 1). A new document kind, **Test fixture**, holds what a test needs
+  before it can run: calls to any operation in any spec (log in, create the invoice), values captured
+  from their responses (`$.id`, `$.items[0].id`, `header:Location`) and reused later as `{{invoiceId}}`,
+  manual notes for data no API can create, and teardown calls. Create one from **New → Test fixture**
+  in the sidebar. The editor has a **Steps** view (operations are picked from your specs, with rows
+  for path, query, headers and captures and a JSON body) and a **YAML**/**JSON** view of the same
+  body. Saving checks it against the specs you can open and refuses with the step named: a call to an
+  operation no spec defines, a variable used before any step captures it, or a literal in an
+  Authorization, Cookie or API-key slot (credentials are always `{{secret.name}}`). A fixture's page
+  lists its steps, the inputs and secrets a run asks for, and any issue against today's specs.
+  Impact analysis on an operation lists the fixtures calling it. When a spec change removes a called
+  operation, the fixture shows under **Broken fixtures** in knowledge health. Agents read the library
+  with `knowledge_list_test_fixtures` ("what do I call before I can test this operation") and one
+  fixture with `knowledge_get_test_fixture`, and create or edit one through `knowledge_create_document`
+  (now with `kind` and `syntax`) and `knowledge_create_revision`. Running fixtures and binding them
+  to test suites come in later phases.
+- QA page templates (#482). The template gallery, in English and Russian, and agents through
+  `knowledge_list_templates` / `knowledge_get_template`, now offer **Test plan**, **Test case**,
+  **Test data** and **Bug report**. Each asks for the operation under test (`op:` key) and links the
+  new page to it, so the operation's linked pages and impact analysis show its test plan and bug
+  reports. A bug report also records the suite case that found it (`<entityKey>#<caseId>`). None of
+  them has a credential field, and their AI instructions keep secrets out of the page. Workspaces
+  can customise, hide or reset them like any other built-in.
+- Diagrams open full-screen (#476). Clicking, tapping or pressing Enter on a rendered mermaid
+  diagram of any type, or on a whiteboard drawing, opens it scaled to the screen. This works in a
+  page, a comment, a merge request, an assistant answer, a share link and a published site. The
+  preview keeps the page's theme and follows a theme switch. It shows the SVG the page already drew,
+  so it sends no request, and stays sharp at any zoom. **+** / **−** (keyboard or header buttons),
+  Ctrl/⌘ + wheel and pinch zoom to at least 400%. **0** or the percentage fits it again. Zoomed, the
+  diagram is grabbed: a drag or the wheel moves it. ←/→ and the side buttons step through the page's
+  diagrams ("2 / 5"), separately from its images. Escape, ✕ or a click beside the diagram returns
+  focus and scroll position. A block that failed to parse opens nothing, and edit mode is unchanged.
+- Mermaid diagrams and drawings can be resized and set beside the text (#476). In the editor, side
+  grips drag a diagram's width, and three buttons in its action bar place it left or right with the
+  text wrapping around it, or centred on a line of its own (the default). A wrapped diagram takes
+  half the column unless resized and never more than 70%. Headings and centred diagrams start below
+  it, and under 40rem it falls back to full width. The layout is stored in the fence's info string
+  (```` ```mermaid width=480 wrap=right ````), so the diagram source is unchanged and an unsized,
+  centred diagram is written exactly as before. Pages, comments, share links, published sites and
+  HTML/PDF exports all lay it out the same way. Word export ignores it.
+- The mermaid source editor numbers its lines and marks the one the parser failed on (#476). The
+  status under the source says what the parser expected there, or which diagram type parsed. The
+  source box now grows with the diagram source instead of scrolling inside a fixed 12-line box.
+
+- Every table row and column has its own handle in the editor (#471). A grip on the table's left
+  border acts on a row, and one on its top border acts on a column. They show for the row and column
+  under the pointer or the caret, and its menu inserts beside it or deletes it, whichever cell the caret is in.
+  The target is outlined before anything happens. Deleting a row or column whose cells are all empty
+  happens at once. If any cell holds text, an image or a mention, a confirmation first says how many
+  such cells will be lost. Keyboard: Escape in a cell focuses the row handle, Tab reaches the column
+  handle. The icon-only delete-row/column buttons on the table bar are gone, and Toggle header row
+  and Delete table stay.
+- API operations can generate their QA test requests (#468). On an HTTP operation of an OpenAPI
+  spec, the flask menu beside the lock offers **Generate test requests**: one positive case per
+  documented success, and a negative case for every required parameter or body field left out,
+  every type violation, every value outside an enum, both sides of every minimum, maximum, length
+  and pattern, missing credentials and every documented error status. The cases come from the spec;
+  the new `tester` agent only fills in realistic values and names. Copy the suite as cURL commands or
+  download it as a Postman collection; credentials are always placeholders (`$TOKEN`, `{{token}}`).
+  A suite is cached until the operation, the tester's settings or the case rules change, so opening
+  it again costs no model call; **Regenerate** replaces it. Reading and exporting a suite needs only
+  viewer on the spec. Generating needs the new member permission **Allow generating API test
+  suites**, which an admin grants when adding a member or on Access control. It is independent of
+  role, and admins always have it. `GET`/`POST /v1/api-specs/:id/test-suite`.
+
+- Images open in a full-screen preview (#467). Click, tap or press Enter on an image in a page, a
+  comment, a merge request, a share link or a published site. The preview shows the image's alt text
+  as a caption. Clicking the image toggles between fit and actual size at the clicked point. A drag
+  pans, a pinch zooms on touch, and ←/→ or the side buttons move between the page's images. Escape,
+  ✕ or a click beside the image returns you to the same place on the page. An image inside a link
+  still follows the link, and edit mode is unchanged.
+
+- Microsoft Teams is a chat-bot platform (#381). Connect an Azure Bot (single tenant) with its app ID,
+  tenant ID and a client secret under Settings → Chat bots, set the address shown on the bot's card as
+  its messaging endpoint, and install it in Teams with an app package that grants
+  `ChannelMessage.Read.Group` (the manifest is in the chat bots docs). The bot answers a mention in a
+  channel, in the post's thread, and a message in a chat, as the linked person, with citations, 👍/👎
+  and Save. A channel can keep its messages for capture, as Telegram groups can. Then `capture` said
+  in a thread proposes what the thread settled, and without kept messages the bot says there is
+  nothing to read. Every activity's Bot Framework token is checked, and a forged one is refused.
+
+- Closed Intercom conversations can be harvested into reviewed captures (#384). Add an Intercom
+  connector with your Intercom app's access token, its data region and a harvest tag (default
+  `knowledge`), paste the app's client secret as the webhook secret, and subscribe the app's webhook
+  to `conversation.admin.closed` at the connector's address. When a linked editor closes a tagged
+  conversation, its opening message, replies and admin notes are masked and proposed as captures in
+  their name. Nothing is written back to Intercom.
+
+- Solved Zendesk tickets can be harvested into reviewed captures (#383). Add a Zendesk connector with
+  your Zendesk address, an agent's `email:api-token` and a harvest tag (default `knowledge`), then
+  create a Zendesk webhook pointed at the connector's address and a trigger, *Ticket status changed to
+  Solved* with the tag, whose *Notify webhook* body is the JSON the setup dialog shows. When a linked
+  editor solves a tagged ticket, its public replies and internal notes are masked and proposed as
+  captures in their name. Nothing is written back to Zendesk.
+
+- Linear issues can be harvested into reviewed captures (#382). Add a Linear connector under
+  Settings → Connectors with a personal API key and a harvest label (default `knowledge`), then add a
+  webhook on Issues in Linear pointed at the connector's address and paste its signing secret. When a
+  linked editor completes an issue that carries the label, its description and comments are masked
+  and proposed as captures in their name, and they get one notification with the counts. An issue
+  completed by someone who is not mapped to a member, or is not an editor, is not harvested. Each
+  issue is harvested at most once, and nothing is written back to Linear.
+
+- Slack is a chat-bot platform (#380). A workspace admin connects an internal Slack app with its bot
+  token and signing secret under Settings → Chat bots, then pastes the address shown on the bot's card
+  as the app's Request URL for Event Subscriptions and Interactivity. The bot answers a mention in a
+  channel (in the message's thread) and a direct message, as the linked person, with citations, 👍/👎
+  and Save, as it does on Time and Mattermost. `capture` said in a thread, or 📌 on any of its
+  messages, harvests the thread into reviewed captures. The chat reply gives counts and an inbox
+  link. Every request Slack sends is checked against the signing secret, and an unsigned, forged or
+  more than five-minute-old request is refused.
+
+- A chat search result from a Time or Mattermost channel now links to its thread, as Telegram supergroup
+  results already did (#407). On the Chat tab of search and in an assistant answer's chat citation, the
+  result opens the thread's first post on the chat server in a new tab. Direct chats still have no link.
+  A channel that was made searchable before this release gets its link after the next message posted in
+  it.
+
+### Operations
+
+- Migration `20261212100000_workspace_deleted_at` adds one nullable column, `workspaces.deleted_at`, with
+  no backfill (#479). The previous image never reads it, so a code rollback works, with one caveat: a
+  workspace deleted less than a minute before the rollback, and not yet removed, reappears half-emptied
+  and stays that way. Workspace removal runs in the API process (`WorkspaceTeardownSweeper`, 60 s tick),
+  not the worker. No new env var.
+- Migration `20261211100000_embed_node_heads` adds one table, `embed_node_heads`, with no backfill; a
+  rollback leaves it unread. New env var `EMBED_CHECK_INTERVAL_HOURS` (default 6) (#470).
+- Migration `20261210100000_public_embeds` adds one nullable column, `publishing_settings.allow_public_embeds`;
+  a rollback to the previous image leaves it unread (#470).
+- Migration `20261209100000_embeds` adds three tables (`embed_files`, `embed_nodes`,
+  `revision_embeds`) with no backfill; a rollback to the previous image leaves them unused. New env
+  vars, all with defaults: `EMBED_MAX_ITEMS` (24), `EMBED_SNAPSHOT_SCALE` (2), `EMBED_SNAPSHOT_MAX_PX`
+  (4096), `EMBED_TEXT_MAX_BYTES` (2048). Snapshots are stored under
+  `workspaces/{ws}/embeds/figma/` in the bucket (#470).
+- Migration `20261208100000_community_prior_knobs` adds three nullable columns to
+  `knowledge_health_settings` (#475). The previous image never reads them, so a code rollback is
+  safe.
+- **QA server runner (#483):** new env var `API_TEST_RUNNER_MODE` (`off` | `on`, default `off`), a
+  ceiling a workspace still has to opt into. Set it in the GitHub `production` environment before
+  tagging (`gh variable set API_TEST_RUNNER_MODE --env production --body off`), or the deploy
+  refuses the release. Secrets in test environments need `SETTINGS_ENCRYPTION_KEY`. Migration
+  `20261207100000_api_test_runs` adds `api_test_environments`, `api_test_runs` and a nullable
+  `workspace_settings.api_test_runner`. It survives a rollback: earlier releases read none of them.
+
+- Migration `20261206100000_api_test_bindings` (#483) adds the `api_test_bindings` table and
+  `api_test_suites.fixtures_hash` (text, default `''`), and replaces the suite cache's unique index
+  with one that includes it. v0.32.0 reads neither table, so a rollback is safe. The case catalogue
+  moves to version 2, so every suite generated before this release is generated again on next use.
+- Migration `20261205100000_api_fixture_calls` (#483) adds the `api_fixture_calls` table, one row
+  per call step of an indexed fixture revision. It is a new table the previous release never reads,
+  so a rollback keeps working for everything else. A fixture created on this release does not render
+  on the previous one: that release reads any non-page kind as a spec and shows an error. No new env
+  var: a fixture body is capped by `API_SPEC_MAX_BYTES`.
+- Migration `20261204100000_api_test_suites` adds `workspace_members.capabilities` (JSONB, default `[]`)
+  and the `api_test_suites` table. Both are additive and the previous release reads neither, so a
+  rollback keeps working; a permission granted on this release is simply not checked by the previous
+  one, which has no Generate. Existing members start without the permission; grant it on Access
+  control. No new env var. Each generation is billed to the person as `test-suite` in AI usage.
+- Migration `20261203100000_connector_harvests` adds the `connector_harvests` table, one row per
+  harvested issue. It is a new table the previous release never reads, so a rollback keeps working; a
+  Linear connector saved on this release is unknown to the previous one and shows as an unknown kind.
+- Migration `20261202100000_chat_signing_secret` adds a nullable `chat_integrations.signing_secret`
+  (the Slack app's signing secret, encrypted with `SETTINGS_ENCRYPTION_KEY`). It is additive, so a
+  rollback keeps working; a Slack bot saved on this release stops answering on the previous one,
+  which has no Slack adapter. No new env var: `CHAT_ENABLED` covers Slack too.
+- Migration `20261201100000_chat_binding_team` adds a nullable `chat_channel_bindings.team_name`. It is
+  additive, and the previous release ignores it, so a rollback keeps working. The bot fills it once per
+  searchable Time/Mattermost channel, at the first message it keeps there, with two calls to the chat
+  server. A team renamed after that keeps the old name in the column. Set the column to `NULL` and the
+  next message resolves the new name.
+
+### Fixed
+
+- Deleting a project with **Delete everything** no longer fails when one of its pages had a merge
+  request with a lint or breaking-change check (#479). Those checks blocked the merge request's
+  deletion, so the whole delete was refused.
+- Adding a Linear, Zendesk, Intercom or Figma connector no longer asks for a **Destination** (#512).
+  These kinds create no pages, so the project and parent they asked for were never used. The wizard now
+  goes from the connection check straight to **What it does**, which shows what the check reached, and
+  Back from there returns to the connector's last question. The connector is still saved under the
+  current project. Kinds that sync pages keep the step.
+- Leaving **New workflow** no longer brings its old conversation back next time (#473). The wizard
+  kept every step in the browser so a reload could resume it, and only Create or Cancel cleared that.
+  Now going anywhere else in the app clears it too, and the next visit starts at the first step. A
+  reload or a reopened tab still picks up where you were. The architect chat, in the wizard and in the
+  workflow editor, gains **New conversation**: it clears the messages and keeps the chain on the
+  canvas, and the next message is sent with that chain. In the wizard the chat now fills its column,
+  with the message box at the bottom.
+- On a phone, the page editor no longer leaves a wide blank margin on each side of the text
+  (#499). It reserved 28 px for drag handles that never appear on a touch screen. It now uses the
+  app's 16 px gutter there; desktop keeps its margin.
+- Generating test requests on a spec opened from another workspace's link no longer spins forever
+  (#483). The panel watched the tester run in the workspace selected in the sidebar instead of the
+  spec's own.
+- Two mermaid diagrams on one page no longer draw into each other (#476). When two blocks rendered in
+  the same millisecond they got the same id: one came out empty and the other held both diagrams'
+  shapes. A mermaid block that fails to parse no longer leaves a "Syntax error in text" bomb pinned
+  to the bottom of the page.
+
 ## [0.32.1] — 2026-10-22
 
 ### Fixed
@@ -4467,7 +4843,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.32.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/hrustalq/knowledge/compare/v0.32.1...v0.33.0
 [0.32.1]: https://github.com/hrustalq/knowledge/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/hrustalq/knowledge/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/hrustalq/knowledge/compare/v0.30.1...v0.31.0

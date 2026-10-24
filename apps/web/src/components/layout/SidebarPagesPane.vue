@@ -16,7 +16,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, onMounted, provide, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { Braces, ChevronDown, ChevronLeft, FilePlus2, FileUp, LayoutTemplate, Plus } from 'lucide-vue-next'
+import { Braces, ChevronDown, ChevronLeft, FilePlus2, FileUp, FlaskConical, LayoutTemplate, Plus } from 'lucide-vue-next'
 import type { DocumentTreeNode } from '@knowledge/contracts'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
@@ -199,6 +199,12 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
                 <RouterLink to="/create/spec">
                   <Braces class="size-3.5" />
                   {{ t('nav.newApiSpec') }}
+                </RouterLink>
+              </DropdownMenuItem>
+              <DropdownMenuItem as-child>
+                <RouterLink to="/create/fixture">
+                  <FlaskConical class="size-3.5" />
+                  {{ t('nav.newTestFixture') }}
                 </RouterLink>
               </DropdownMenuItem>
             </DropdownMenuContent>

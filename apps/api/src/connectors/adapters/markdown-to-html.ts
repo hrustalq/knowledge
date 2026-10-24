@@ -1,4 +1,6 @@
 import { marked } from 'marked';
+import { rewriteEmbedGroups } from '@knowledge/editor-schema/markdown';
+import { escapeHtml } from '@knowledge/editor-schema/nodes';
 
 /**
  * Markdown → HTML, server side. The push-direction mirror of
@@ -24,5 +26,20 @@ export function markdownToHtml(markdown: string): string {
 const VOID_TAGS = /<(br|hr|img|col)([^>]*?)\s*\/?>/gi;
 
 export function markdownToStorageFormat(markdown: string): string {
-  return markdownToHtml(markdown).replace(VOID_TAGS, (_m, tag: string, attrs: string) => `<${tag}${attrs} />`);
+  return markdownToHtml(embedsAsSmartLinks(markdown)).replace(VOID_TAGS, (_m, tag: string, attrs: string) => `<${tag}${attrs} />`);
+}
+
+/**
+ * An embed group (#470) as Confluence's own embed: one smart link per item
+ * shown as an embed card (Cloud; Server shows a plain link), and the group
+ * caption as a paragraph after. The layout is lost. Storage format would
+ * reject the `<figure>` itself.
+ */
+function embedsAsSmartLinks(markdown: string): string {
+  return rewriteEmbedGroups(markdown, (group) =>
+    [
+      ...group.items.map((item) => `<p><a href="${escapeHtml(item.url)}" data-card-appearance="embed">${escapeHtml(item.url)}</a></p>`),
+      ...(group.caption ? [`<p>${escapeHtml(group.caption)}</p>`] : []),
+    ].join('\n'),
+  );
 }

@@ -266,14 +266,258 @@ file that imports one, which keeps `axios.get('/users')` out), FastAPI
 gorilla, chi, gin, echo and fiber. Tests, fixtures, examples and vendored code
 are not read. A non-literal path is counted as `dynamic`, never guessed.
 
+## Test suites (#468)
+
+Every HTTP operation card has a quick-action menu (the flask beside the lock)
+whose first item is **Generate test requests**. It writes a QA suite for the
+operation: positive and negative cases, each with a name, the rule it covers,
+the request and the expected status and body, exported as a **bash script**
+(curl + jq) or a **Postman Collection v2.1** (one request per case, the status
+as a `pm.test`). Both exports carry the bound fixtures' setup and teardown (see
+below), which is why they come from `?format=` on the API rather than from the
+browser.
+
+**Coverage is the spec's, not the model's.** `testCasesFor` in
+`@knowledge/contracts/api/test-cases` lists the cases an operation requires —
+a positive case per documented 2xx; a negative case per required query or
+header parameter, per required body field and for the whole body when it is
+required; per type violation; per enum value outside the set; both sides of
+every `minimum`/`maximum` (and their exclusive forms), `minLength`/`maxLength`
+and `pattern`; missing credentials when the operation is secured; and one per
+documented 4xx/5xx. A query or header value is text on the wire, so only a
+non-string type is "wrong" there. Path parameters get no missing case (that is
+another route), cookie parameters none at all (samples never send them), body
+fields are walked three levels deep through objects (not into arrays), and a
+form body's fields are not walked.
+
+The `tester` agent ([20](20-agents.md)) only fills: a realistic baseline
+request and, per case id, a name, a sentence and what to check. A baseline
+value that breaks the schema (`conformsToSchema`, the same rules the catalogue
+covers) is dropped for the spec's own example. `buildTestSuite` then builds
+every listed case from the baseline by the same `SampleRequest` model the code
+samples print, so a sample and a case cannot disagree, and names any case the
+model skipped. A `pattern:match` case needs a value that matches; when neither
+the spec's example nor the model supplies one the run fails rather than store
+a suite with a case that does not test what it says.
+
+**Cached, keyed by what the suite is built from.** `api_test_suites` is unique
+on spec document, entity key, `operationHash` (SHA-256 of
+`operationFingerprint`: the operation, its path-level parameters, every `$ref`
+it reaches, servers and security), `TEST_CASE_CATALOGUE_VERSION` and
+`agentHash` (`testerConfigHash`: instructions, skill ids, provider and model).
+A revision that does not touch the operation keeps the suite; one that does,
+or an admin override of the tester, misses, and the next Generate asks the
+model. Generate on a hit makes no model call and writes no `ai_usage` row.
+**Regenerate** overwrites the row under its key. The card shows when the suite
+was generated and from which revision.
+
+**Who may generate.** Reading and exporting a cached suite needs viewer on the
+spec. Generating needs viewer **and** the member capability
+`api-test-suites.generate` ([06](../architecture/06-auth-acl.md#member-capabilities)),
+checked by the route's guard and again by the run when it executes — revoking
+it after the click fails the run before any model call. A second Generate
+while a run for the same key is waiting joins it: the lookup and insert run
+under one advisory lock per key. The model call is billed to the person as
+`test-suite`.
+
+## Test fixtures (#483)
+
+A fixture is a document of kind `test-fixture`: the calls a test needs before it
+can run (log in, create the invoice, carry its `id` forward), manual notes for
+state no API creates, and teardown calls that always run. Its body is YAML or
+JSON:
+
+```yaml
+fixture: 1
+inputs: { currency: EUR }        # non-secret run values; null = ask at run time
+steps:
+  - id: login
+    call: op:auth:POST /sessions  # any spec in the workspace; {param} folds
+    request: { body: { password: '{{secret.qaPassword}}' } }
+    expect: 201
+    capture: { TOKEN: $.accessToken }        # $.a.b, $.items[0].id, $['k'], header:Name
+  - id: merchant
+    manual: A merchant with KYC approved exists.
+teardown:
+  - call: op:billing:DELETE /invoices/{id}
+    request: { path: { id: '{{invoiceId}}' } }
+```
+
+**Validated at finalize, as the author.** The shape (`readTestFixture`: unique
+ids, call keys, capture rules, every `{{var}}` captured by an earlier step) and
+then the workspace: every call must resolve to an operation at a spec head the
+revision's author can open, and an Authorization, Proxy-Authorization or Cookie
+header, or the operation's API-key header or query parameter, may hold only
+placeholders. `{{input.x}}` counts as a literal there, since an input may carry
+a default in the fixture. A refusal is a **400** naming the step, with every
+issue in `details.issues`.
+
+**Graphed and flagged.** Each call is a revision-scoped `DEPENDS_ON` edge to the
+`op:` entity, so impact analysis lists the fixtures calling an operation. When a
+spec change removes a called operation, the fixture shows up under **Broken
+fixtures** in knowledge health, and its read view lists the issue. Both are
+derived on read from `api_fixture_calls` against today's spec heads.
+
+### Binding fixtures to a suite (#483, phase 2)
+
+A suite **binds** fixtures in `api_test_bindings`, keyed by spec document +
+operation entity key (+ case id), so a binding survives Regenerate and spec
+edits. A suite-level fixture runs once before the cases; a per-case one runs
+just before its case, its captures shadow the suite's for that case only, and
+its teardown runs right after. Binding is a person's act — Bind in the suite
+panel or `knowledge_set_test_fixtures` — and needs `api-test-suites.generate`.
+Every fixture must be a `test-fixture` the caller can open in the spec's
+workspace; a binding to one the reader cannot open is listed without its title.
+
+**Candidates come from the spec.** `suitePrerequisites` (contracts) finds the
+operations of the same spec that produce a value this one needs: a response
+`links` entry targeting it (by `operationId` or `operationRef`) first, then a
+path parameter matched to a non-GET operation's 2xx response field of the same
+name (a generic `id` only under its own collection: `POST /invoices` for
+`/invoices/{id}`). The candidates are the fixtures whose head calls one of
+those producers, in that order. **Ask tester** queues a `tester` run that
+reorders and explains them; its answer stays on the run (`details.fixtureRanking`)
+with the hash of the candidate set it ranked, and the candidates route applies
+it only while that set is unchanged. Nothing is bound by the model.
+
+**The cache key gains the bindings.** `api_test_suites.fixtures_hash` is the
+bound fixtures' ids and head content hashes ('' for none), so binding,
+unbinding or editing a bound fixture is a miss: the suite 404s until the next
+Generate, and only suites bound to that fixture miss. `TEST_CASE_CATALOGUE_VERSION`
+is 2. The tester is told what setup captures and may write `{{invoiceId}}`
+where a value must already exist; a placeholder naming anything not captured
+is dropped like any value that does not fit the schema.
+
+**One chain, two printers.** `testChain` (`@knowledge/contracts/api/test-chain`)
+orders setup → cases (negative before positive) → teardown, and both exports
+print it. The bash script refuses to start until every secret is exported,
+stops at the first failed setup step, runs every case, and tears down from a
+`trap` — skipping a teardown step whose setup never captured what it sends. A
+case with its own fixtures runs in a subshell. The Postman collection has Setup
+and Teardown folders, sets a collection variable per capture, jumps to
+teardown on a failed setup step, and restores shadowed variables after a case.
+Inputs carry their defaults; secrets and credential slots no fixture captures
+are variables with no value. A capture named like a credential slot (`TOKEN`)
+fills it.
+
+### Running a suite (#483, phase 3)
+
+**Run suite** in the suite panel runs the whole chain from the browser against
+a real server, for a member holding `api-test-suites.run`
+([06](../architecture/06-auth-acl.md#member-capabilities)) — independent of
+role, implicit for admins, like `generate`. Without it, Run is disabled and the
+panel says which permission is missing.
+
+**One plan, any client.** `GET /v1/api-specs/:id/test-run-plan` (viewer +
+`api-test-suites.run`) is the cached suite as `testRunPlan` prints it: setup →
+cases (negative first, each with its own setup and teardown) → teardown, every
+request flattened to strings with `{{placeholders}}` (captures, `input.x`,
+`secret.x`, credential slots), and each call's **target** — the spec document
+and head revision defining its operation, and the server its URL starts with.
+The plan holds no value. `runTestPlan` (contracts) walks it with an injected
+`send`: a failed setup step makes every case `not-run`; a case runs between its
+own setup and teardown with its captures shadowed; teardown always runs, after
+a failure or Stop, and skips a step whose placeholders were never captured.
+`fillRunRequest` encodes a value in the URL, escapes it inside a JSON body,
+and leaves out a header whose slot is empty (an empty credential is "no
+credentials", as in the try console). The browser runner and an agent
+(`knowledge_get_test_run_plan`) walk the same plan, so they get the same results.
+
+**Two routes out, as in the try console.** From the browser (CORS permitting),
+or through the proxy's twin `POST /v1/api-specs/:id/test-run/send` — the same
+`ApiTryService.send` (mode, source policies, `safeFetch`, target check, caps,
+audit as `api.try`), behind `@Access('viewer', 'document', { capability:
+'api-test-suites.run' })` instead of editor, since `@Access` cannot express
+role-or-capability. `:id` is the spec defining the step's operation, so a login
+step in another spec is checked against that spec. It shares try-it's per-user
+rate limit; a 429 holds the row for `retryAfter` and sends again, so a long
+suite finishes. Revoking the capability mid-run fails the next proxied step.
+
+**Values never leave the run.** The form asks for what the plan lists: secrets
+and credential slots (a slot starts from that spec's Try-it value, read and
+never written back) and inputs (starting at the fixture's default). They live
+in the component for one run and are sent only in the requests using them.
+Each spec's requests go to the server picked in its Try-it console; the suite's
+own spec has a server select in the run form. Results — expected vs actual
+status, outcome, duration, captures with secret-like names masked
+(`isSecretName`) — are never stored.
+
+### The QA view (#483, phase 4)
+
+`/qa` in the app shell answers "which operations are ready to test" across the
+active project's OpenAPI specs. `GET /v1/qa/overview` (`@Access('viewer',
+'query', { guests: true })`, scope-filtered; `knowledge_qa_overview` is its
+twin) lists every HTTP operation at each spec head with a state derived on read
+by `qaSuiteStatusFor` (contracts), worst first:
+
+| state | means |
+| --- | --- |
+| `review` | a bound fixture is archived, or its head calls an operation no spec head defines (`brokenCallsSql`, the knowledge-health predicate) |
+| `none` | no suite row for the operation |
+| `outdated` | suite rows exist, none under today's cache key |
+| `unbound` | a current suite, prerequisites the spec names (`suitePrerequisites`), no suite-level binding |
+| `ready` | a current suite with its setup bound, or none needed |
+
+"Current" is the panel's own key — operation hash, catalogue version, tester
+hash, bound-fixture hash — so `/qa` and the suite panel never disagree. Nothing
+is stored: one spec read per spec (operation hash and prerequisites), then the
+suite, binding and fixture-call rows. A bound fixture the reader cannot open
+still counts toward `review`, without a title. Each row also counts the
+fixtures the reader may open that call the operation (`countCalling`, the
+library's own predicates), linking to the **Fixtures** tab narrowed to it. The
+library follows the active project unless narrowed to one operation or spec,
+where it crosses projects, as the counts do.
+
+### The server runner (#483, phase 5)
+
+**Run on server** runs the same plan from the worker, against a **test
+environment**: a name, one server URL, non-secret inputs, and secrets in one
+`ai/secret-box.ts` envelope (`api_test_environments`). Editors manage them on
+the **Environments** tab of `/qa`; secrets are write-only — the API returns
+their names, a PATCH sets, replaces (`"name": "value"`) or removes
+(`"name": null`) one, and nothing reads a value back except the worker.
+
+**Off unless both say on.** `API_TEST_RUNNER_MODE` (default `off`) is a ceiling
+and `workspace_settings.api_test_runner` the workspace's opt-in, shown on
+Settings → API as asked / ceiling / applied (`resolveApiTestRunner`). With it
+off, the Server route is absent, `POST …/test-runs` and
+`knowledge_run_test_suite` refuse 403 `runner-off`, and the worker refuses a
+run it already queued.
+
+**One egress path.** `ApiTryService` moved, with `ApiSettingsService`, into the
+controller-free `ApiRunnerCoreModule`, which the worker loads. A step goes out
+through `sendAs(owner, …, metered: false)`: the workspace's proxy mode, source
+policies, `safeFetch`, the target check (only servers the step's spec declares)
+and the `api.try` audit under the run's owner — exactly what the proxy
+reaches. The environment's server replaces a step's server only when that
+step's spec declares it in `servers`; otherwise the spec's own server is used.
+Unmetered because a run is bounded by its plan.
+
+**The worker generates, the API stores the ask.** `POST
+/v1/api-specs/:id/test-runs` resolves the plan under the person's scope and
+inserts a `queued` `api_test_runs` row holding it (placeholders, never a value);
+the job carries the run id only, so no secret sits in Redis. The worker claims
+it (`queued → running`, one guarded update), checks again at execution — runner
+on, owner still holds `api-test-suites.run`, may still open every spec the plan
+calls, environment still exists — walks it with `runTestPlan`, and writes the
+results without any capture named like a secret (`isSecretName`). Then it keeps
+the newest `API_TEST_RUNS_KEPT` (20) runs of the suite. One attempt: a run that
+died mid-suite already sent requests, and replaying setup is not a retry.
+
+The run panel shows the result in the browser runner's table, from the plan
+stored on the run, and lists the suite's recent runs; `/qa` gains a last-run
+column while the runner applies. Scheduling is out of scope.
+
 ## Surface
 
 | What | Where |
 | --- | --- |
-| Tables | `documents.kind`, `documents.spec_slug`, `api_operations`, `workspace_settings`, `merge_requests.breaking_ack_*` |
-| Vocabulary | `@knowledge/contracts/api` (`API_DOCUMENT_KINDS`, keys, `API_TRY_PROXY_MODES`, `API_BREAKING_CHANGE_POLICIES`, `API_DRIFT_KINDS`), `…/api/diff` (`API_CHANGE_RULES`), `…/api/samples` (`CODE_SAMPLE_LANGS`, generator) |
+| Tables | `documents.kind`, `documents.spec_slug`, `api_operations`, `workspace_settings`, `merge_requests.breaking_ack_*`, `api_test_suites`, `api_fixture_calls`, `api_test_bindings` |
+| Runs (#483) | `@knowledge/contracts/api/test-chain` (`testRunPlan`, `runTestPlan`, `fillRunRequest`, `isSecretName`); `ApiFixturesService.plan`; web `ApiTestRun` |
+| Fixtures (#483) | `@knowledge/contracts/api/fixtures` (`readTestFixture`, `parseCaptureRule`, `evaluateCapture`, `resolvePlaceholders`, `literalCredentialIssues`); `ApiFixturesService` in `ApiSpecsCoreModule`; `TestFixturesController` (`GET /v1/test-fixtures`, `GET /v1/test-fixtures/:id`, viewer); web `TestFixtureEditorPage` (`/create/fixture`, `/documents/:id/fixture`) and `TestFixtureView` |
+| Vocabulary | `@knowledge/contracts/api` (`API_DOCUMENT_KINDS`, keys, `API_TRY_PROXY_MODES`, `API_BREAKING_CHANGE_POLICIES`, `API_DRIFT_KINDS`), `…/api/diff` (`API_CHANGE_RULES`), `…/api/samples` (`CODE_SAMPLE_LANGS`, generator), `…/api/test-cases` (`testCasesFor`, `buildTestSuite`, `testSuiteCurl`, `testSuitePostman`, `operationFingerprint`) |
 | Parse, project, read, diff | `api-spec.parser.ts` (`parseApiSpec`), `api-spec.projection.ts` (`renderSpecProjection`, `renderOperation`), `api-diff.ts` (`diffApiSpecs`), pure; `ApiSpecsService` (`project`), `ApiSpecReadService`, `ApiSpecDiffService` in `ApiSpecsCoreModule` (both processes) |
-| Controllers, try-it, settings, drift check | `ApiSpecsController`, `ApiOperationsController`, `ApiSettingsController`, `ApiTryService`, `ApiSettingsService`, `ApiDriftCheckService`, in `ApiSpecsModule` (API-only) |
+| Controllers, try-it, settings, drift check, test suites | `ApiSpecsController`, `ApiOperationsController`, `ApiSettingsController`, `ApiTryService`, `ApiSettingsService`, `ApiDriftCheckService`, `ApiTestSuiteRequestsService`, in `ApiSpecsModule` (API-only); `ApiTestSuitesService` (the store) in `ApiSpecsCoreModule`; the `tester` run in `AgentExecutor.writeTestSuite` |
 | Ingestion | `IngestionProcessor` step 2 (spec branch) and 7a (`GraphService.replaceRevisionSpecFacts`) |
 | Gate | `MergeRequestsService` (`breakingBlocks`, `assertBreakingAcknowledged`, `setBreakingAck`) |
 | Sync | `adapters/repo-specs.ts`, `apiSpecGlobs`, conflict reason `spec-changed` |
@@ -289,13 +533,21 @@ are not read. A non-literal path is counted as `dynamic`, never guessed.
 | `GET /v1/api-specs/:id/diff?from=&to=` | viewer, document |
 | `POST /v1/api-specs/:id/try` | editor, document; 403 when the mode is `off` |
 | `POST /v1/api-specs/:id/drift-check` | editor, document; `202 { runId, existing }` |
+| `GET /v1/api-specs/:id/test-suite?entityKey=&format=` | viewer, document; the cached suite or 404; `format=curl\|postman` answers with a file |
+| `POST /v1/api-specs/:id/test-suite` `{ entityKey, regenerate? }` | viewer, document, capability `api-test-suites.generate`; `{ suite }` from the cache or `{ runId, existing }` |
+| `GET /v1/api-specs/:id/test-run-plan?entityKey=` | viewer, document, capability `api-test-suites.run`; the run plan, no values |
+| `POST /v1/api-specs/:id/test-run/send` | viewer, document, capability `api-test-suites.run`; one proxied step, `/try`'s body and answer |
+| `GET /v1/qa/overview?workspaceId=&projectId=&documentId=` | viewer, workspace (guests too), filtered by scope; every HTTP operation's suite state |
+| `POST /v1/api-specs/:id/test-runs` | viewer, document, capability `api-test-suites.run`, runner on; queues a server run (202) |
+| `GET /v1/api-specs/:id/test-runs?entityKey=` / `…/test-runs/:runId` | viewer, document; a suite's recent runs / one run's plan and results |
+| `GET\|POST /v1/workspaces/:id/test-environments`, `PATCH\|DELETE …/:environmentId` | viewer to read (names, server, inputs, secret names); editor to write; secrets write-only |
 | `GET /v1/api-operations?workspaceId=&q=&documentId=&entityKey=` | viewer, query, guests; operations at each spec's default-branch head |
 | `GET` / `PATCH /v1/workspaces/:id/api-settings` | viewer / admin, workspace |
 | `GET /v1/documents/:id/compare` | unchanged; gains `api` on a spec |
 | `GET /v1/merge-requests/:id/api-changes` | viewer, merge request |
 | `POST` / `DELETE /v1/merge-requests/:id/breaking-ack` | admin, merge request |
 
-The samples route takes `entityKey` as a query parameter, not a path segment,
+The samples and test-suite routes take `entityKey` as a query parameter (or body field), not a path segment,
 because a key holds `/` and `:`. A page passed to a per-document route is a 400
 `error.apiSpec.notSpec`.
 
@@ -304,16 +556,29 @@ because a key holds `/` and `:`. A page passed to a per-document route is a 400
 | `knowledge_list_api_operations` | viewer; read tool |
 | `knowledge_get_api_operation` (`lang` for samples) | viewer; read tool; returns the projection section and the linked pages |
 | `knowledge_diff_api_spec` | viewer; read tool |
-| `knowledge_create_revision` | unchanged guard; on a spec it takes `syntax: yaml \| json` and grafts no frontmatter |
+| `knowledge_create_revision` | unchanged guard; on a spec or fixture it takes `syntax: yaml \| json` and grafts no frontmatter |
+| `knowledge_create_document` | unchanged guard; takes `kind` and `syntax`, so an agent can create a spec or a fixture |
+| `knowledge_list_test_fixtures` (`entityKey?`, `documentId?`) | viewer; read tool; filtered by scope |
+| `knowledge_get_test_fixture` | viewer, document; read tool; steps, resolved operations, run values, issues now |
+| `knowledge_get_test_suite` (`format?: curl \| postman`) | viewer, document; read tool; the suite, or an export with setup and teardown |
+| `knowledge_generate_test_suite` (`regenerate?`) | viewer, document + `api-test-suites.generate`; write tool |
+| `knowledge_suggest_test_fixtures` | viewer, document; read tool; prerequisites, candidates and current bindings |
+| `knowledge_set_test_fixtures` (`bindings`) | viewer, document + `api-test-suites.generate`; write tool |
+| `knowledge_get_test_run_plan` | viewer, document + `api-test-suites.run`; read tool; the plan an agent executes with its own HTTP client |
+| `knowledge_qa_overview` (`projectId?`, `documentId?`) | viewer, workspace; read tool; filtered by scope; every operation's suite state, worst first |
+| `knowledge_run_test_suite` (`environment` by name) | viewer, document + `api-test-suites.run`, runner on; write tool |
+| `knowledge_get_test_run` (`runId?` or `entityKey`) | viewer, document; read tool; one run, or a suite's recent runs |
 
-None of them is in `WRITE_TOOLS`, and there is no try-it tool.
+Only `knowledge_generate_test_suite` and `knowledge_set_test_fixtures` are in
+`WRITE_TOOLS`, and there is no try-it tool: an agent runs a plan with its own
+client, so no request an agent writes is sent through us.
 
 Web: `components/api-reference/` (`ApiReferenceView`, `ApiOperationDetail`,
 `ApiSchemaTree`, `ApiCodeSamples`, `ApiTryConsole`, `ApiChangesPanel`,
-`ApiDriftCheck`, `ApiOperationPicker`, `ApiOperationEmbed`, and the shared
+`ApiDriftCheck`, `ApiTestSuite` with `use-test-suite.ts`, `ApiSuiteSetup` with `use-suite-fixtures.ts` and the runner `ApiTestRun`, `ApiOperationPicker`, `ApiOperationEmbed`, and the shared
 `ApiTabs`, `ApiCode`, `ApiTone`, `ApiMediaContent`), `pages/ApiSpecEditorPage.vue`
 (`/create/spec`, `/documents/:id/spec`), `pages/ApiSettingsPage.vue`
-(`/settings/api`), and the **API changes** tab on `MergeRequestDetailPage`,
+(`/settings/api`), `pages/QaPage.vue` (`/qa`), and the **API changes** tab on `MergeRequestDetailPage`,
 shown only when the merge request is on a spec. In the graph view, `op:` and
 `channel:` entities are squares that open their card in the spec.
 
@@ -329,6 +594,15 @@ shown only when the merge request is on a spec. In the graph view, `op:` and
   `API_TRY_ALLOW_PRIVATE_URLS` (`false`), `API_TRY_TIMEOUT_MS` (15000),
   `API_TRY_MAX_RESPONSE_BYTES` (1000000), `API_TRY_RATE_PER_MINUTE` (30). With
   the defaults the proxy refuses every request.
+- Migration `20261204100000_api_test_suites` (#468) adds
+  `workspace_members.capabilities` (JSONB, default `[]`, not backfilled) and
+  `api_test_suites`. Additive; the previous image reads neither.
+- Migration `20261205100000_api_fixture_calls` (#483) adds `api_fixture_calls`.
+  Additive; the previous image never reads it.
+- Migration `20261206100000_api_test_bindings` (#483) adds `api_test_bindings`
+  and `api_test_suites.fixtures_hash` (default `''`), and swaps the suite's
+  unique index for one that includes it. v0.32.0 reads neither table, so a
+  rollback is safe.
 
 ## Deliberate deferrals
 
@@ -342,8 +616,13 @@ shown only when the merge request is on a spec. In the graph view, `op:` and
   one bundled file.
 - An automatic `EntityAlias` when a title changes. The pinned slug makes it
   unnecessary.
-- Try-it and drift for AsyncAPI: a channel has no HTTP request to send and no
-  route to compare.
+- Try-it, drift and test suites for AsyncAPI: a channel has no HTTP request to
+  send, no route to compare and nothing to test.
+- For test suites (#468): a mock server, asserting response bodies beyond the
+  status, a suite for a whole spec at once, and other export formats (Insomnia,
+  HTTPie, k6). Running the cases ships with #483 phase 3; a server-side runner
+  is phase 5. Suites under a key no head reaches any more are
+  never purged; a document's deletion cascades them.
 - An `operationKey` picker on the workflow canvas; items get keys from the
   fan-out step only.
 - The static markdown renderer (published sites, previews) draws API blocks as

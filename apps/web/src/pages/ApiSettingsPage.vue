@@ -13,6 +13,9 @@
  * Below it, the merge gate for breaking spec changes (phase 6): the same
  * three-row control, with no deployment ceiling — `null` is the code default,
  * `warn`, and the row says so rather than looking unset.
+ *
+ * Last, the QA server runner (#483, phase 5): off unless API_TEST_RUNNER_MODE
+ * allows it and the workspace asks, and the clamp gets its sentence too.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -22,10 +25,12 @@ import { toast } from 'vue-sonner'
 import { ShieldCheck } from 'lucide-vue-next'
 import {
   API_BREAKING_CHANGE_POLICIES,
+  API_TEST_RUNNER_MODES,
   API_TRY_PROXY_MODES,
   DEFAULT_API_BREAKING_CHANGE_POLICY,
   type ApiBreakingChangePolicy,
   type ApiSettingsResponse,
+  type ApiTestRunnerMode,
   type ApiTryProxyMode,
   type UpdateApiSettingsRequest,
 } from '@knowledge/contracts'
@@ -50,6 +55,7 @@ const query = useQuery(options)
 const settings = computed(() => query.data.value as ApiSettingsResponse | undefined)
 const proxy = computed(() => settings.value?.tryProxy)
 const breaking = computed(() => settings.value?.breakingChanges)
+const runner = computed(() => settings.value?.testRunner)
 
 function setMode(mode: ApiTryProxyMode | null) {
   if (mode === proxy.value?.requested) return
@@ -58,6 +64,11 @@ function setMode(mode: ApiTryProxyMode | null) {
 function setPolicy(policy: ApiBreakingChangePolicy | null) {
   if (policy === breaking.value?.requested) return
   return save({ apiBreakingChangePolicy: policy })
+}
+
+function setRunner(mode: ApiTestRunnerMode) {
+  if (mode === (runner.value?.requested ?? 'off')) return
+  return save({ apiTestRunner: mode })
 }
 
 async function save(body: UpdateApiSettingsRequest) {
@@ -212,6 +223,47 @@ async function save(body: UpdateApiSettingsRequest) {
           {{ t('apiSettings.breaking.inherit') }}
         </button>
       </div>
+    </section>
+
+    <section v-if="runner" class="space-y-4">
+      <header class="space-y-1 border-b pb-3">
+        <h2 class="text-sm font-semibold">{{ t('apiSettings.runner.title') }}</h2>
+        <p class="kn-measure text-sm leading-relaxed text-muted-foreground">{{ t('apiSettings.runner.subtitle') }}</p>
+      </header>
+
+      <RadioGroup
+        :model-value="runner.requested ?? 'off'"
+        :disabled="!canManage"
+        class="kn-modes"
+        :aria-label="t('apiSettings.runner.title')"
+        @update:model-value="setRunner($event as ApiTestRunnerMode)"
+      >
+        <label
+          v-for="mode in API_TEST_RUNNER_MODES"
+          :key="mode"
+          class="kn-mode"
+          :data-active="runner.effective === mode || undefined"
+          :data-capped="(mode === 'on' && runner.requested === 'on' && runner.effective === 'off') || undefined"
+        >
+          <RadioGroupItem :value="mode" :disabled="!canManage" class="mt-0.5" />
+          <span class="min-w-0">
+            <span class="flex flex-wrap items-center gap-1.5">
+              <span class="text-sm font-medium">{{ t(`apiSettings.runner.mode.${mode}.label`) }}</span>
+              <Badge v-if="mode === 'on' && runner.requested === 'on' && runner.effective === 'off'" variant="secondary" class="font-normal">
+                {{ t('apiSettings.cappedTo', { mode: t('apiSettings.runner.mode.off.label') }) }}
+              </Badge>
+            </span>
+            <span class="kn-measure mt-0.5 block text-ui leading-relaxed text-muted-foreground">
+              {{ t(`apiSettings.runner.mode.${mode}.body`) }}
+            </span>
+          </span>
+        </label>
+      </RadioGroup>
+
+      <p v-if="runner.ceiling === 'off'" class="kn-clamp">
+        <ShieldCheck class="mt-px size-3.5 shrink-0" />
+        <span>{{ t('apiSettings.runner.ceilingOff') }}</span>
+      </p>
     </section>
 
     <p v-if="settings && !canManage" class="kn-measure text-ui text-muted-foreground">{{ t('apiSettings.adminOnly') }}</p>

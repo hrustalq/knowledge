@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_EMBED_MAX_ITEMS } from '@knowledge/contracts/embeds';
 
 /**
  * An env flag, spelled out.
@@ -306,6 +307,17 @@ export const envSchema = z.object({
   EXPORT_CONCURRENCY: z.coerce.number().int().positive().default(2),
   /** Wall-clock ceiling for rendering and converting one export; past twice this the sweeper fails it. */
   EXPORT_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
+  // ---- Embeds (#470, docs/features/64) ----
+  /** Items per embed group; more stay links, with a warning on the revision. */
+  EMBED_MAX_ITEMS: z.coerce.number().int().positive().default(DEFAULT_EMBED_MAX_ITEMS),
+  /** Figma render scale for a snapshot, before the pixel cap below. */
+  EMBED_SNAPSHOT_SCALE: z.coerce.number().positive().max(4).default(2),
+  /** Longest side of a snapshot, in pixels. */
+  EMBED_SNAPSHOT_MAX_PX: z.coerce.number().int().positive().default(4096),
+  /** Text layers kept per item, in bytes. */
+  EMBED_TEXT_MAX_BYTES: z.coerce.number().int().positive().default(2048),
+  /** Hours between a Figma connector's checks of pinned frames for design changes. */
+  EMBED_CHECK_INTERVAL_HOURS: z.coerce.number().positive().default(6),
   /** Cap on pages in one llms-full.txt; past it the dump ends with a truncation marker. */
   LLMS_FULL_MAX_DOCS: z.coerce.number().int().positive().default(2000),
   /** Cap on bytes streamed in one llms-full.txt (20 MB). */
@@ -611,6 +623,14 @@ export const envSchema = z.object({
   API_TRY_MAX_RESPONSE_BYTES: z.coerce.number().int().positive().default(1_000_000),
   /** Proxied requests per user per minute, counted in Redis. */
   API_TRY_RATE_PER_MINUTE: z.coerce.number().int().positive().default(30),
+  /**
+   * The QA server runner (#483, phase 5): the worker runs a whole suite against
+   * a test environment's server. A CEILING: `on` lets a workspace turn it on in
+   * its API settings, and runs nothing until one does. It sends exactly as the
+   * try-it proxy does — the workspace's proxy mode, source policies and
+   * API_TRY_ALLOW_PRIVATE_URLS — so `off` there refuses every step too.
+   */
+  API_TEST_RUNNER_MODE: z.enum(['off', 'on']).default('off'),
 
   /** Allow web targets on private/loopback ranges (self-hosted SearXNG, intranet). */
   WEB_ALLOW_PRIVATE_URLS: boolish(false),

@@ -4,6 +4,8 @@ import type { ChatPlatformKind } from '@knowledge/contracts';
 import type { Env } from '../../config/env.js';
 import type { ChatAdapter } from './chat-adapter.types.js';
 import { MattermostAdapter, type MattermostKind } from './mattermost.adapter.js';
+import { SlackAdapter } from './slack.adapter.js';
+import { TeamsAdapter } from './teams.adapter.js';
 import { TelegramAdapter } from './telegram.adapter.js';
 
 /** The kinds heard over the bot's own websocket — each one a {@link MattermostAdapter}. */
@@ -29,6 +31,8 @@ export class ChatAdapterRegistry {
     this.adapters = {
       telegram: new TelegramAdapter(config.get('TELEGRAM_API_BASE_URL', { infer: true })),
       ...this.sockets,
+      slack: new SlackAdapter(),
+      teams: new TeamsAdapter(),
     };
   }
 

@@ -83,6 +83,15 @@ second closed list, `CAPTURE_TOOLS`, disjoint from `WRITE_TOOLS`. A capture key
 is offered the reads plus that list, and they are the only calls that pass the
 `{ capture: true }` flag which lifts such a key to editor.
 
+**A capability is checked like a role.** Tools behind a member capability
+(`api-test-suites.generate`, `api-test-suites.run`, #468/#483) pass it to their
+`guard.*` call, the twin of the REST route's `@Access(…, { capability })`, and
+whatever executes later checks it again. `knowledge_run_test_suite` sends
+requests from the platform, so it is a write tool and a read-only key is not
+offered it; the run plan (`knowledge_get_test_run_plan`) is the read-side way
+for an agent to send with its own client. No tool hands out a test
+environment's secret ([62](62-qa-fixtures-runs.md)).
+
 **Keys are managed from a session, never by a key.** Every `/v1/me/api-keys`
 route refuses an API-key principal: a leaked key that could mint its own
 replacement would survive being revoked.

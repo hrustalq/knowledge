@@ -10,8 +10,10 @@
  *
  * So this is a scenario, and a scenario is a machine rather than a form. It
  * follows `connectors/setup-machines.ts`: one small wrapper, `getPersistedSnapshot`
- * into localStorage so closing the tab does not lose the conversation, and Back
- * that lands where you actually were.
+ * into localStorage so a reload or a closed tab does not lose the conversation,
+ * and Back that lands where you actually were. Leaving the page inside the app
+ * is a decision to drop it: the page clears the snapshot on route leave, so the
+ * next visit starts on the approach step rather than in last week's chat.
  *
  * Two lanes, chosen first and never merged:
  *
@@ -54,6 +56,7 @@ export type WizardEvent =
   | { type: 'SET'; patch: Partial<WizardContext> }
   | { type: 'PROPOSE'; graph: WorkflowGraph; name?: string | null; description?: string | null }
   | { type: 'SAY'; turn: WizardTurn }
+  | { type: 'CLEAR_TURNS' }
   | { type: 'AI_UNAVAILABLE' }
   | { type: 'NEXT' }
   | { type: 'BACK' }
@@ -122,6 +125,9 @@ export const wizardMachine = setup({
     describe: {
       on: {
         SAY: { actions: assign({ turns: ({ context, event }) => [...context.turns, event.turn] }) },
+        // A new conversation, not a new wizard: the graph and the name it earned
+        // stay, and the next turn is sent with that graph.
+        CLEAR_TURNS: { actions: assign({ turns: [] }) },
         PROPOSE: {
           actions: assign({
             graph: ({ event }) => event.graph,

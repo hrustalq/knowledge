@@ -25,9 +25,12 @@ import { toast } from 'vue-sonner'
 import { AtSign, Library, ShieldCheck, UserPlus, Wrench } from 'lucide-vue-next'
 import { WORKSPACE_ROLES } from '@knowledge/contracts'
 import type {
+  DeleteWorkspaceResponse,
   ListWorkspaceCandidatesResponse,
   ListWorkspaceMembersResponse,
   ListWorkspacesResponse,
+  MemberCapability,
+  UpdateWorkspaceResponse,
   WorkspaceCandidate,
   WorkspaceMemberEntry,
   WorkspaceRole,
@@ -35,6 +38,8 @@ import type {
 } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { useWorkspacesStore } from '@/stores/workspaces'
+import DeleteWorkspaceDialog from '@/components/access/DeleteWorkspaceDialog.vue'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import { Badge } from '@/components/ui/badge'
 import UserChip from '@/components/people/UserChip.vue'
@@ -56,6 +61,7 @@ import {
   type FilterAccessors,
   type FilterField,
 } from '@/components/ui/filter-bar'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -86,7 +92,26 @@ const members = ref<WorkspaceMemberEntry[]>([])
 const loadingMembers = ref(false)
 
 const addRole = ref<WorkspaceRole>('viewer')
+const addCapabilities = ref<MemberCapability[]>([])
 const addOpen = ref(false)
+
+/**
+ * Member capabilities (#468, #483), one column each. Admins hold every one
+ * implicitly, so their cell says so rather than offering a box that would
+ * change nothing. `key` names the column's messages under `access.`.
+ */
+const CAPABILITIES = [
+  { id: 'api-test-suites.generate', key: 'testSuites' },
+  { id: 'api-test-suites.run', key: 'testRuns' },
+] as const satisfies ReadonlyArray<{ id: MemberCapability; key: string }>
+const holds = (m: WorkspaceMemberEntry, c: MemberCapability) => m.capabilities.includes(c)
+function setCapability(member: WorkspaceMemberEntry, c: MemberCapability, on: boolean) {
+  const rest = member.capabilities.filter((x) => x !== c)
+  void patchMember(member, { capabilities: on ? [...rest, c] : rest })
+}
+function toggleAddCapability(c: MemberCapability, on: boolean) {
+  addCapabilities.value = on ? [...addCapabilities.value.filter((x) => x !== c), c] : addCapabilities.value.filter((x) => x !== c)
+}
 
 // --- filters ---------------------------------------------------------------
 // The roster for one workspace is small and already loaded, so every field
@@ -206,6 +231,47 @@ async function loadWorkspaces() {
   }
 }
 
+/* ------------------------------------------------- renaming the workspace */
+
+/** Seeded from the selected workspace, and re-seeded when the selection or its name changes. */
+const nameDraft = ref('')
+const renaming = ref(false)
+watch(() => selectedWorkspace.value?.name, (name) => (nameDraft.value = name ?? ''), { immediate: true })
+const nameChanged = computed(() => {
+  const next = nameDraft.value.trim()
+  return next !== '' && next !== selectedWorkspace.value?.name
+})
+
+async function renameWorkspace() {
+  const ws = selectedWorkspace.value
+  if (!ws || !nameChanged.value) return
+  renaming.value = true
+  try {
+    const res = await apiFetch<UpdateWorkspaceResponse>(`/v1/workspaces/${ws.workspaceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: nameDraft.value.trim() }),
+    })
+    ws.name = res.name
+    useWorkspacesStore().rename(res.workspaceId, res.name)
+    toast.success(t('access.renameWorkspace.renamed', { name: res.name }))
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    renaming.value = false
+  }
+}
+
+/* ------------------------------------------------- deleting the workspace */
+
+const deleteOpen = ref(false)
+
+async function onWorkspaceDeleted(res: DeleteWorkspaceResponse) {
+  toast.success(t('access.deleteWorkspace.deleted', { name: selectedWorkspace.value?.name ?? '' }))
+  // Leaves the page with a full reload when it was the active workspace.
+  await useWorkspacesStore().forget(res.workspaceId)
+  await loadWorkspaces()
+}
+
 async function loadMembers() {
   if (!selected.value) return
   loadingMembers.value = true
@@ -248,11 +314,12 @@ async function addMember() {
   try {
     const res = await apiFetch<ListWorkspaceMembersResponse>(`/v1/workspaces/${selected.value}/members`, {
       method: 'POST',
-      body: JSON.stringify({ email: user.email, role: addRole.value }),
+      body: JSON.stringify({ email: user.email, role: addRole.value, capabilities: addCapabilities.value }),
     })
     members.value = res.members
     toast.success(t('access.memberAdded', { email: user.email, role: t(`role.${addRole.value}`) }))
     addOpen.value = false
+    addCapabilities.value = []
     pickedUser.value = null
     candidateCache.delete(user.userId) // now a member — no longer a candidate
   } catch (e) {
@@ -379,6 +446,7 @@ const tab = usePageTabs(tabs, 'members')
             <TableHead>{{ t('access.member') }}</TableHead>
             <TableHead>{{ t('access.role') }}</TableHead>
             <TableHead>{{ t('access.trustedOperator') }}</TableHead>
+            <TableHead v-for="c in CAPABILITIES" :key="c.id">{{ t(`access.${c.key}`) }}</TableHead>
             <TableHead class="text-right">{{ t('access.actions') }}</TableHead>
           </TableRow>
         </TableHeader>
@@ -423,6 +491,17 @@ const tab = usePageTabs(tabs, 'members')
               />
               <span v-else class="text-muted-foreground text-sm">{{ member.trustedOperator ? t('common.yes') : t('common.no') }}</span>
             </TableCell>
+            <TableCell v-for="c in CAPABILITIES" :key="c.id">
+              <span v-if="member.role === 'admin'" class="text-muted-foreground text-sm">{{ t('access.implicitForAdmins') }}</span>
+              <!-- Any row, managed or not: no identity provider writes capabilities, so editing one takes nothing over. -->
+              <Checkbox
+                v-else-if="canManage"
+                :model-value="holds(member, c.id)"
+                :aria-label="t(`access.${c.key}For`, { name: member.displayName })"
+                @update:model-value="setCapability(member, c.id, $event === true)"
+              />
+              <span v-else class="text-muted-foreground text-sm">{{ holds(member, c.id) ? t('common.yes') : t('common.no') }}</span>
+            </TableCell>
             <TableCell class="text-right">
               <div v-if="canManage" class="flex justify-end gap-1.5">
                 <Button v-if="isManaged(member)" size="sm" variant="outline" @click="takeOver(member)">
@@ -434,6 +513,42 @@ const tab = usePageTabs(tabs, 'members')
           </TableRow>
         </TableBody>
         </Table>
+
+        <!-- The workspace itself (#478): its name, then the last act on it (#479). -->
+        <section
+          v-if="canManage && selectedWorkspace"
+          aria-labelledby="rename-workspace-heading"
+          class="mt-8 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t pt-4"
+        >
+          <div class="min-w-0 flex-1 space-y-0.5">
+            <h2 id="rename-workspace-heading" class="text-sm font-medium">
+              <label for="workspace-name">{{ t('access.renameWorkspace.title') }}</label>
+            </h2>
+            <p class="text-muted-foreground max-w-prose text-xs">{{ t('access.renameWorkspace.body') }}</p>
+          </div>
+          <form class="flex w-full gap-2 sm:w-auto" @submit.prevent="renameWorkspace">
+            <Input id="workspace-name" v-model="nameDraft" maxlength="120" required class="h-8 sm:w-64" />
+            <Button type="submit" size="sm" variant="outline" :disabled="!nameChanged || renaming">
+              {{ t('access.renameWorkspace.save') }}
+            </Button>
+          </form>
+        </section>
+
+        <section
+          v-if="canManage && selectedWorkspace"
+          aria-labelledby="delete-workspace-heading"
+          class="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t pt-4"
+        >
+          <div class="min-w-0 flex-1 space-y-0.5">
+            <h2 id="delete-workspace-heading" class="text-sm font-medium">{{ t('access.deleteWorkspace.zoneTitle') }}</h2>
+            <p class="text-muted-foreground max-w-prose text-xs break-words">
+              {{ t('access.deleteWorkspace.zoneBody', { name: selectedWorkspace.name }) }}
+            </p>
+          </div>
+          <Button size="sm" variant="outline" class="text-destructive hover:text-destructive" @click="deleteOpen = true">
+            {{ t('access.deleteWorkspace.open') }}
+          </Button>
+        </section>
       </template>
 
       <!-- Roles: the same roster, read as a ladder of what each rung grants. -->
@@ -464,6 +579,13 @@ const tab = usePageTabs(tabs, 'members')
       <!-- Accounts: the platform layer. Only rendered where it can be used. -->
       <AccessAccounts v-else-if="tab === 'accounts' && canSeeAccounts" />
     </div>
+
+    <DeleteWorkspaceDialog
+      v-if="selectedWorkspace"
+      v-model:open="deleteOpen"
+      :workspace="selectedWorkspace"
+      @deleted="onWorkspaceDeleted"
+    />
 
     <Dialog v-model:open="addOpen">
       <DialogContent class="sm:max-w-md">
@@ -496,6 +618,18 @@ const tab = usePageTabs(tabs, 'members')
                 <SelectItem v-for="r in ROLES" :key="r" :value="r">{{ r }}</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div v-for="c in CAPABILITIES" :key="c.id" class="flex items-start gap-2.5">
+            <Checkbox
+              :id="`add-${c.key}`"
+              :model-value="addCapabilities.includes(c.id)"
+              class="mt-0.5"
+              @update:model-value="toggleAddCapability(c.id, $event === true)"
+            />
+            <Label :for="`add-${c.key}`" class="grid gap-0.5 font-normal">
+              <span class="text-sm">{{ t(`access.${c.key}Grant`) }}</span>
+              <span class="text-muted-foreground text-xs">{{ t(`access.${c.key}Hint`) }}</span>
+            </Label>
           </div>
         </form>
         <DialogFooter>

@@ -697,6 +697,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{id}/deletion-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What deleting the workspace would destroy, counted (workspace admin) */
+        get: operations["WorkspacesController_deletionPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete the workspace and everything in it (workspace admin). Gone at once; contents removed in the background */
+        delete: operations["WorkspacesController_remove"];
+        options?: never;
+        head?: never;
+        /** Rename the workspace (workspace admin) */
+        patch: operations["WorkspacesController_update"];
+        trace?: never;
+    };
     "/v1/workspaces/{id}/members": {
         parameters: {
             query?: never;
@@ -746,8 +781,79 @@ export interface paths {
         delete: operations["WorkspacesController_removeMember"];
         options?: never;
         head?: never;
-        /** Change a member role / trusted-operator flag (workspace admin) */
+        /** Change a member role / trusted-operator flag / capabilities (workspace admin) */
         patch: operations["WorkspacesController_updateMember"];
+        trace?: never;
+    };
+    "/v1/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List projects in a workspace (searchable; cursor-paginated when limit is given) */
+        get: operations["ProjectsController_list"];
+        put?: never;
+        /** Create a project */
+        post: operations["ProjectsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Project detail */
+        get: operations["ProjectsController_get"];
+        put?: never;
+        post?: never;
+        /** Delete a project: move its contents to another, or cascade-delete them */
+        delete: operations["ProjectsController_remove"];
+        options?: never;
+        head?: never;
+        /** Rename a project / edit its description */
+        patch: operations["ProjectsController_update"];
+        trace?: never;
+    };
+    "/v1/projects/{id}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Project overview: counts, contributors, recent pages */
+        get: operations["ProjectsController_overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/deletion-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What deleting this project would relocate (pass ?target= for glossary conflicts) */
+        get: operations["ProjectsController_deletionPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/groups": {
@@ -952,77 +1058,6 @@ export interface paths {
         };
         /** A workspace member's identity, membership, open work and pages */
         get: operations["ProfilesController_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/projects": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List projects in a workspace (searchable; cursor-paginated when limit is given) */
-        get: operations["ProjectsController_list"];
-        put?: never;
-        /** Create a project */
-        post: operations["ProjectsController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/projects/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Project detail */
-        get: operations["ProjectsController_get"];
-        put?: never;
-        post?: never;
-        /** Delete a project: move its contents to another, or cascade-delete them */
-        delete: operations["ProjectsController_remove"];
-        options?: never;
-        head?: never;
-        /** Rename a project / edit its description */
-        patch: operations["ProjectsController_update"];
-        trace?: never;
-    };
-    "/v1/projects/{id}/overview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Project overview: counts, contributors, recent pages */
-        get: operations["ProjectsController_overview"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/projects/{id}/deletion-preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** What deleting this project would relocate (pass ?target= for glossary conflicts) */
-        get: operations["ProjectsController_deletionPreview"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1980,6 +2015,91 @@ export interface paths {
         post?: never;
         /** Delete an attachment and its object */
         delete: operations["AttachmentsController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/embeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the reader can show of each pinned embed item on a page */
+        get: operations["EmbedsController_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/embeds/figma/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Figma files the workspace may embed */
+        get: operations["FigmaPickerController_files"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/embeds/figma/files/{fileKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A Figma file’s pages and top-level frames, with thumbnails, at its current version */
+        get: operations["FigmaPickerController_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/embeds/figma/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pin a pasted Figma link to the file’s current version */
+        post: operations["FigmaPickerController_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/embeds/usages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pages whose current version embeds a Figma file or frame */
+        get: operations["EmbedUsagesController_usages"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4510,6 +4630,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/api-specs/{id}/test-suite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One operation's cached QA test suite (#468), for the operation as it stands at the head. 404 until one is generated, and again after an edit to the operation or its bound fixtures. format=curl|postman answers with the suite as a file — a bash script or a Postman collection — with the bound fixtures as setup and teardown */
+        get: operations["ApiSpecsController_testSuite"];
+        put?: never;
+        /** Generate one operation's QA test suite (#468): the cached suite when there is one and regenerate is not set, otherwise a queued tester run (one per operation and config in flight). Needs the api-test-suites.generate capability */
+        post: operations["ApiSpecsController_generateTestSuite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/test-bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The QA fixtures bound to one operation's suite (#483): suite-level setup, and per-case setup by case id. A fixture the caller cannot open is listed without its title */
+        get: operations["ApiSpecsController_testBindings"];
+        /** Replace the fixtures bound to one operation's suite (#483), in run order. Every fixture must be a test-fixture the caller can open; every case id one the suite lists. Changes the suite cache key. Needs the api-test-suites.generate capability */
+        put: operations["ApiSpecsController_setTestBindings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/test-fixture-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fixtures that could set up one operation (#483): operations of the same spec producing a value it needs (response links, then path parameters) and the fixtures calling them, in spec order or the tester's ranking. Nothing is bound */
+        get: operations["ApiSpecsController_testFixtureCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/test-fixture-candidates/rank": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the tester to rank and explain one operation's fixture candidates (#483). One run per candidate set: a set already ranked or being ranked returns that run. Needs the api-test-suites.generate capability */
+        post: operations["ApiSpecsController_rankTestFixtures"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/api-specs/{id}/try": {
         parameters: {
             query?: never;
@@ -4521,6 +4711,75 @@ export interface paths {
         put?: never;
         /** Send one request to a server this revision names, for an operation it defines — the try-it proxy. 403 while the workspace's mode is off; redirects are returned, not followed; Set-Cookie is dropped */
         post: operations["ApiSpecsController_try"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/test-run-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One operation's cached QA suite as a run plan (#483): setup, the cases (negative first, each with its own setup and teardown), then teardown, every request with {{placeholders}} for captures, inputs and secrets, and the spec revision each call is proxied through. Holds no value. Needs the api-test-suites.run capability */
+        get: operations["ApiSpecsController_testRunPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/test-run/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send one step of a QA suite run through the try-it proxy: a request to a server this revision names, for an operation it defines. 403 while the workspace's proxy mode is off. Shares try-it's rate limit. Needs the api-test-suites.run capability */
+        post: operations["ApiSpecsController_sendTestRunStep"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/test-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One operation's server runs, newest first (the last 20 are kept) */
+        get: operations["ApiSpecsController_testRuns"];
+        put?: never;
+        /** Run one operation's cached QA suite on the server, against a test environment: queued, then run by the worker through the try-it proxy's rules. 403 unless the server runner is on for the workspace. Needs the api-test-suites.run capability */
+        post: operations["ApiSpecsController_startTestRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-specs/{id}/test-runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One server run: the plan it walked and each step and case result. Captures named like secrets are never stored */
+        get: operations["ApiSpecsController_testRun"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4561,6 +4820,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{id}/test-environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's QA test environments: server, inputs, and the names of the secrets set (never a value) */
+        get: operations["ApiSettingsController_listEnvironments"];
+        put?: never;
+        /** Create a QA test environment. Secrets are encrypted at rest and never returned */
+        post: operations["ApiSettingsController_createEnvironment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/test-environments/{environmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a QA test environment; its past runs keep their results */
+        delete: operations["ApiSettingsController_deleteEnvironment"];
+        options?: never;
+        head?: never;
+        /** Change a QA test environment. inputs replaces the set; a secret set to null is removed, one left out is kept */
+        patch: operations["ApiSettingsController_updateEnvironment"];
+        trace?: never;
+    };
     "/v1/workspaces/{id}/api-settings": {
         parameters: {
             query?: never;
@@ -4577,6 +4872,57 @@ export interface paths {
         head?: never;
         /** Override the API reference settings; null on a key inherits the deployment value */
         patch: operations["ApiSettingsController_update"];
+        trace?: never;
+    };
+    "/v1/test-fixtures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Test fixtures the caller may open, each with the operations its head calls and which of those no spec head defines any more. Narrow by project, by one operation, or by the operations of one spec */
+        get: operations["TestFixturesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/test-fixtures/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One revision of a test fixture (the head unless revisionId is given): its parsed steps, the operation each call resolves to, the inputs and secrets a run must supply, and its issues against the specs as they stand now */
+        get: operations["TestFixturesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/qa/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every HTTP operation of the OpenAPI specs the caller may open, worst first: whether its QA suite is generated and current, its setup prerequisites and bindings, bound fixtures needing review, and how many fixtures call it */
+        get: operations["QaController_overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/documents/{id}/markdown": {
@@ -6805,6 +7151,10 @@ export interface components {
             /** @example Platform Team */
             name: string;
         };
+        UpdateWorkspaceDto: {
+            /** @example Platform Team */
+            name: string;
+        };
         AddMemberDto: {
             /**
              * @description Existing user email
@@ -6818,13 +7168,29 @@ export interface components {
              * @default false
              */
             trustedOperator: boolean;
+            /** @description Grained permissions beside the role (#468). Replaces the list; admins hold every one implicitly. */
+            capabilities?: ("api-test-suites.generate" | "api-test-suites.run")[];
         };
         UpdateMemberDto: {
             /** @enum {string} */
             role?: "guest" | "viewer" | "editor" | "admin";
             trustedOperator?: boolean;
+            /** @description Grained permissions beside the role (#468). Replaces the list; admins hold every one implicitly. */
+            capabilities?: ("api-test-suites.generate" | "api-test-suites.run")[];
             /** @description Take an IdP-managed row (source jit/group/scim) over as manual. Without it such a row answers 409 managedByIdp. */
             convertToManual?: boolean;
+        };
+        CreateProjectDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            name: string;
+            description?: string | null;
+        };
+        UpdateProjectDto: {
+            name?: string;
+            description?: string | null;
+            avatarEmoji?: string | null;
+            avatarColor?: string | null;
         };
         CreateUserGroupDto: {
             workspaceId: string;
@@ -6876,18 +7242,6 @@ export interface components {
         DenyAccessRequestDto: {
             /** @description Shown to the requester */
             reason?: string | null;
-        };
-        CreateProjectDto: {
-            /** Format: uuid */
-            workspaceId: string;
-            name: string;
-            description?: string | null;
-        };
-        UpdateProjectDto: {
-            name?: string;
-            description?: string | null;
-            avatarEmoji?: string | null;
-            avatarColor?: string | null;
         };
         InlineContentDto: {
             /** @enum {string} */
@@ -6947,10 +7301,10 @@ export interface components {
              */
             parentId?: string;
             /**
-             * @description What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and `asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is created (422 with `details.issues`), and default to the `reference` category.
+             * @description What the body is (#78), fixed for the life of the document. `page` (when omitted) is markdown; `openapi` and `asyncapi` are API specs, written with `content.format` `yaml` or `json`, validated before the document is created (422 with `details.issues`), and default to the `reference` category. `test-fixture` (#483) is a QA fixture, YAML or JSON too, checked against the specs its author can open (400 with `details.issues`).
              * @enum {string}
              */
-            kind?: "page" | "openapi" | "asyncapi";
+            kind?: "page" | "openapi" | "asyncapi" | "test-fixture";
             /** @description Start from a template (issue #69). Without `content` the template is rendered server-side: its title pattern, body, tags and relations become the page, and its category is the default. */
             template?: components["schemas"]["DocumentTemplateDto"];
         };
@@ -7175,6 +7529,78 @@ export interface components {
             contentType: "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "image/avif" | "application/pdf" | "text/plain" | "text/csv" | "text/markdown" | "application/json" | "application/zip" | "application/msword" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "application/vnd.ms-excel" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" | "application/vnd.ms-powerpoint" | "application/vnd.openxmlformats-officedocument.presentationml.presentation";
             /** @example 148231 */
             sizeBytes?: number;
+        };
+        EmbedItemStatusDto: {
+            fileKey: string;
+            /** @description '' for a whole-file item */
+            nodeId: string;
+            version: string;
+            /** @enum {string} */
+            state: "ready" | "rendering" | "unavailable" | "failed";
+            name: string | null;
+            width: number | null;
+            height: number | null;
+            /** @description The node changed in Figma since this version was pinned */
+            changed: boolean;
+        };
+        DocumentEmbedsResponseDto: {
+            items: components["schemas"]["EmbedItemStatusDto"][];
+        };
+        FigmaPickerFileEntryDto: {
+            fileKey: string;
+            name: string;
+        };
+        FigmaPickerFilesResponseDto: {
+            connected: boolean;
+            files: components["schemas"]["FigmaPickerFileEntryDto"][];
+        };
+        FigmaPickerFrameDto: {
+            id: string;
+            name: string;
+            type: string;
+            thumbnailUrl: string | null;
+        };
+        FigmaPickerPageDto: {
+            id: string;
+            name: string;
+            frames: components["schemas"]["FigmaPickerFrameDto"][];
+        };
+        FigmaPickerFileResponseDto: {
+            fileKey: string;
+            name: string;
+            version: string;
+            board: boolean;
+            pages: components["schemas"]["FigmaPickerPageDto"][];
+        };
+        FigmaResolveDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description A Figma design, prototype, Dev Mode or FigJam link */
+            url: string;
+        };
+        FigmaResolveResponseDto: {
+            url: string;
+            version: string | null;
+            name: string | null;
+            allowed: boolean;
+        };
+        EmbedUsageItemDto: {
+            url: string;
+            caption: string;
+            version: string | null;
+        };
+        EmbedUsageGroupDto: {
+            group: number;
+            items: components["schemas"]["EmbedUsageItemDto"][];
+        };
+        EmbedUsagePageDto: {
+            documentId: string;
+            title: string;
+            revisionId: string;
+            groups: components["schemas"]["EmbedUsageGroupDto"][];
+        };
+        EmbedUsagesResponseDto: {
+            pages: components["schemas"]["EmbedUsagePageDto"][];
         };
         CreateAvatarUploadDto: {
             filename: string;
@@ -7864,7 +8290,7 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive";
+            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma";
             /** @example Product wiki */
             name: string;
             /**
@@ -8318,7 +8744,7 @@ export interface components {
              * @description Override this built-in for the workspace (`admin`): with `source` to customise it, with `enabled: false` to hide it
              * @enum {string}
              */
-            builtInKey?: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component";
+            builtInKey?: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report";
             /** @description Required for a custom template; a built-in override inherits the built-in name */
             name?: string;
             description?: string | null;
@@ -8352,6 +8778,31 @@ export interface components {
             /** @description The page to nest it under */
             parentId?: string;
         };
+        GenerateApiTestSuiteDto: {
+            /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+            entityKey: string;
+            /** @description Replace the cached suite instead of returning it. Absent means false. */
+            regenerate?: boolean;
+        };
+        ApiTestBindingDto: {
+            /** @description A case id of the suite; absent or null binds the whole suite */
+            caseId?: string | null;
+            /**
+             * Format: uuid
+             * @description A test-fixture document
+             */
+            fixtureId: string;
+        };
+        SetApiTestBindingsDto: {
+            /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+            entityKey: string;
+            /** @description Every binding of the suite, in run order; replaces what is there. Empty unbinds all */
+            bindings: components["schemas"]["ApiTestBindingDto"][];
+        };
+        ApiTestOperationDto: {
+            /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+            entityKey: string;
+        };
         ApiTryHeaderDto: {
             name: string;
             value: string;
@@ -8373,6 +8824,29 @@ export interface components {
             /** @description At most 256 KB */
             body?: string | null;
         };
+        RunApiTestSuiteDto: {
+            /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+            entityKey: string;
+            /**
+             * Format: uuid
+             * @description The test environment whose server and values the run uses
+             */
+            environmentId: string;
+        };
+        SaveApiTestEnvironmentDto: {
+            /** @description Unique in the workspace; required to create */
+            name?: string;
+            /** @description An http(s) base URL; a step uses it when the step's spec declares it in servers */
+            server?: string | null;
+            /** @description Non-secret values by plan name (input.currency); replaces the set */
+            inputs?: {
+                [key: string]: string;
+            };
+            /** @description Secrets by plan name (secret.qaPassword, TOKEN): a string sets or replaces, null removes. Never returned */
+            secrets?: {
+                [key: string]: string | null;
+            };
+        };
         UpdateApiSettingsDto: {
             /**
              * @description null inherits API_TRY_PROXY_MODE
@@ -8384,6 +8858,11 @@ export interface components {
              * @enum {string|null}
              */
             apiBreakingChangePolicy?: "off" | "warn" | "block" | null;
+            /**
+             * @description The QA server runner (#483); on applies only when API_TEST_RUNNER_MODE is on. null is off
+             * @enum {string|null}
+             */
+            apiTestRunner?: "off" | "on" | null;
         };
         SetMessageFeedbackDto: {
             /** @enum {string} */
@@ -8516,6 +8995,12 @@ export interface components {
             minCosine?: number | null;
             /** @description Keep vector hits at or above this share of the best cosine (#401); null = 0.9 */
             minCosineShare?: number | null;
+            /** @description Community prior (#475): a matched page scores up to ×(1 + this); null = 0, off */
+            communityPriorWeight?: number | null;
+            /** @description Community prior (#475): the cosine a community's summary must reach; null = 0.5 */
+            communityPriorFloor?: number | null;
+            /** @description Hybrid expansion walks by entity layer (#475); null = off */
+            layeredExpansion?: boolean | null;
             /** @description Per-state search weights; a state left out keeps its default, null resets them all */
             trustWeights?: components["schemas"]["TrustWeightsDto"] | null;
         };
@@ -8576,6 +9061,8 @@ export interface components {
             allowPasswordlessShares?: boolean | null;
             /** @description Allow publishing a project as a public docs site; null goes back to the default (off) */
             allowPublicSites?: boolean | null;
+            /** @description Show embedded designs' snapshots on share links and published sites; null goes back to the default (off) */
+            allowPublicEmbeds?: boolean | null;
         };
         CreateSiteDto: {
             /** @description 2–40 lowercase letters, digits and hyphens: `<slug>.PUBLISH_BASE_DOMAIN` or `/pub/<slug>` */
@@ -8711,11 +9198,13 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            kind: "telegram" | "time" | "mattermost";
+            kind: "telegram" | "time" | "mattermost" | "slack" | "teams";
             /** @example Team bot */
             name: string;
-            /** @description The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token). Write-only — never returned. */
+            /** @description The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts; Mattermost: the bot account access token; Slack: the Bot User OAuth Token, xoxb-…). Write-only — never returned. */
             token: string;
+            /** @description The app's signing secret, for a platform that signs its deliveries (Slack: Basic Information → App Credentials) — required there, refused elsewhere. Write-only — never returned. */
+            signingSecret?: string;
             /**
              * @description The messenger server, for a self-hosted platform (Time, Mattermost) — required there, refused for Telegram
              * @example https://time.example.com
@@ -8734,6 +9223,8 @@ export interface components {
             enabled?: boolean;
             /** @description Replaces the stored token; omit to keep it */
             token?: string;
+            /** @description Replaces the stored signing secret (Slack); omit to keep it */
+            signingSecret?: string;
             /** @description Moves a self-hosted bot to another server; omit to keep it */
             serverUrl?: string;
             /** @description Omit to keep; null goes back to the researcher */
@@ -11077,6 +11568,133 @@ export interface operations {
             };
         };
     };
+    WorkspacesController_deletionPreview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkspacesController_remove: {
+        parameters: {
+            query?: {
+                /** @description The workspace's name, typed to confirm; anything else is a 400 that deletes nothing */
+                confirm?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkspacesController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkspaceDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     WorkspacesController_listMembers: {
         parameters: {
             query?: never;
@@ -11264,6 +11882,308 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateMemberDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Case-insensitive name/description substring match */
+                search?: string;
+                /** @description Opaque cursor from a previous page */
+                cursor?: string;
+                /** @description Omit for the full roster */
+                limit?: number;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_remove: {
+        parameters: {
+            query?: {
+                /** @description Defaults to move */
+                mode?: "move" | "cascade";
+                /** @description Sibling project to move contents into */
+                moveContentsTo?: string;
+                /** @description Required for mode=cascade: the project name, verbatim */
+                confirm?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_overview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_deletionPreview: {
+        parameters: {
+            query?: {
+                /** @description Prospective destination project */
+                target?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {
@@ -12016,308 +12936,6 @@ export interface operations {
             };
             path: {
                 userId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    ProjectsController_list: {
-        parameters: {
-            query: {
-                workspaceId: string;
-                /** @description Case-insensitive name/description substring match */
-                search?: string;
-                /** @description Opaque cursor from a previous page */
-                cursor?: string;
-                /** @description Omit for the full roster */
-                limit?: number;
-            };
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    ProjectsController_create: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateProjectDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    ProjectsController_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    ProjectsController_remove: {
-        parameters: {
-            query?: {
-                /** @description Defaults to move */
-                mode?: "move" | "cascade";
-                /** @description Sibling project to move contents into */
-                moveContentsTo?: string;
-                /** @description Required for mode=cascade: the project name, verbatim */
-                confirm?: string;
-            };
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    ProjectsController_update: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateProjectDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    ProjectsController_overview: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    ProjectsController_deletionPreview: {
-        parameters: {
-            query?: {
-                /** @description Prospective destination project */
-                target?: string;
-            };
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path: {
-                id: string;
             };
             cookie?: never;
         };
@@ -15549,6 +16167,224 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    EmbedsController_status: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentEmbedsResponseDto"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    FigmaPickerController_files: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FigmaPickerFilesResponseDto"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    FigmaPickerController_file: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                fileKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FigmaPickerFileResponseDto"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    FigmaPickerController_resolve: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FigmaResolveDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FigmaResolveResponseDto"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    EmbedUsagesController_usages: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description A Figma link; a frame link narrows to that frame */
+                figmaUrl?: string;
+                /** @description A Figma file key, when there is no link */
+                fileKey?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbedUsagesResponseDto"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23612,6 +24448,270 @@ export interface operations {
             };
         };
     };
+    ApiSpecsController_testSuite: {
+        parameters: {
+            query: {
+                /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+                entityKey: string;
+                /** @description Answer with a file instead of JSON: one curl command per case, or a Postman Collection v2.1 */
+                format?: "curl" | "postman";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The suite as JSON; with format, a file to download */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_generateTestSuite: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateApiTestSuiteDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_testBindings: {
+        parameters: {
+            query: {
+                /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+                entityKey: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_setTestBindings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetApiTestBindingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_testFixtureCandidates: {
+        parameters: {
+            query: {
+                /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+                entityKey: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_rankTestFixtures: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiTestOperationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     ApiSpecsController_try: {
         parameters: {
             query?: never;
@@ -23629,6 +24729,221 @@ export interface operations {
                 "application/json": components["schemas"]["ApiTryRequestDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_testRunPlan: {
+        parameters: {
+            query: {
+                /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+                entityKey: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_sendTestRunStep: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiTryRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_testRuns: {
+        parameters: {
+            query: {
+                /** @description The operation, as its row names it (op:billing-api:post-/invoices) */
+                entityKey: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_startTestRun: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunApiTestSuiteDto"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSpecsController_testRun: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {
@@ -23744,6 +25059,176 @@ export interface operations {
             };
         };
     };
+    ApiSettingsController_listEnvironments: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSettingsController_createEnvironment: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveApiTestEnvironmentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSettingsController_deleteEnvironment: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                environmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiSettingsController_updateEnvironment: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                environmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveApiTestEnvironmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     ApiSettingsController_get: {
         parameters: {
             query?: never;
@@ -23801,6 +25286,139 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateApiSettingsDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TestFixturesController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Only the fixtures of this project */
+                projectId?: string;
+                /** @description Only the fixtures whose head calls this operation, however the key is spelled */
+                entityKey?: string;
+                /** @description Only the fixtures calling an operation this spec document defines */
+                specDocumentId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TestFixturesController_get: {
+        parameters: {
+            query?: {
+                /** @description A revision of this document; the default-branch head when absent */
+                revisionId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    QaController_overview: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Only this project's specs */
+                projectId?: string;
+                /** @description Only this spec document's operations */
+                documentId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {
@@ -24734,7 +26352,7 @@ export interface operations {
                 workspaceId: string;
                 projectId?: string;
                 /** @description Omitted lists every live page */
-                filter?: "stale" | "unowned" | "empty" | "expired" | "edited" | "outdated" | "requested" | "flagged" | "inactive" | "missing-paths" | "unread" | "dead" | "archived" | "handed-off";
+                filter?: "stale" | "unowned" | "empty" | "expired" | "edited" | "outdated" | "requested" | "flagged" | "inactive" | "missing-paths" | "broken-calls" | "unread" | "dead" | "archived" | "handed-off" | "stale-mockups";
                 /** @description Only pages owned by this member */
                 ownerId?: string;
                 /** @description Title substring, case-insensitive */
@@ -25474,6 +27092,8 @@ export interface operations {
                 q?: string;
                 /** @description 10 when absent */
                 limit?: number;
+                /** @description The level of the community tree, 0 = finest (#475). 0 when absent */
+                level?: number;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */

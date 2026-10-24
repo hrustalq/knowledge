@@ -83,6 +83,15 @@ export class UpdatePublishingSettingsDto {
   @ValidateIf((o: UpdatePublishingSettingsDto) => o.allowPublicSites !== undefined && o.allowPublicSites !== null)
   @IsBoolean()
   allowPublicSites?: boolean | null;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    description: "Show embedded designs' snapshots on share links and published sites; null goes back to the default (off)",
+  })
+  @ValidateIf((o: UpdatePublishingSettingsDto) => o.allowPublicEmbeds !== undefined && o.allowPublicEmbeds !== null)
+  @IsBoolean()
+  allowPublicEmbeds?: boolean | null;
 }
 
 export class UnlockShareDto {

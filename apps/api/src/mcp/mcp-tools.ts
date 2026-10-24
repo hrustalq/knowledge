@@ -78,6 +78,12 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_suggest_draft_edit',
   // Names an instant the graph can be read as of (#81).
   'knowledge_create_release_tag',
+  // Queues a tester run that writes a QA suite, spending the caller's AI budget (#468).
+  'knowledge_generate_test_suite',
+  // Replaces a suite's fixture bindings, which changes its cache key (#483).
+  'knowledge_set_test_fixtures',
+  // Queues a QA server run that sends requests to a real server (#483).
+  'knowledge_run_test_suite',
   // Resolves or dismisses a contradiction between pages (#81).
   'knowledge_resolve_conflict',
 ]);

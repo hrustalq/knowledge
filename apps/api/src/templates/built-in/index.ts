@@ -8,6 +8,10 @@ import { API_SPEC_TEMPLATE } from './api-spec.js';
 import { USE_CASE_TEMPLATE } from './use-case.js';
 import { ENTITY_TEMPLATE } from './entity.js';
 import { COMPONENT_TEMPLATE } from './component.js';
+import { TEST_PLAN_TEMPLATE } from './test-plan.js';
+import { TEST_CASE_TEMPLATE } from './test-case.js';
+import { TEST_DATA_TEMPLATE } from './test-data.js';
+import { BUG_REPORT_TEMPLATE } from './bug-report.js';
 
 export type { BuiltInTemplate, BuiltInTemplateText } from './types.js';
 
@@ -25,4 +29,8 @@ export const BUILT_IN_TEMPLATES: Readonly<Record<BuiltInTemplateKey, BuiltInTemp
   'use-case': USE_CASE_TEMPLATE,
   entity: ENTITY_TEMPLATE,
   component: COMPONENT_TEMPLATE,
+  'test-plan': TEST_PLAN_TEMPLATE,
+  'test-case': TEST_CASE_TEMPLATE,
+  'test-data': TEST_DATA_TEMPLATE,
+  'bug-report': BUG_REPORT_TEMPLATE,
 };

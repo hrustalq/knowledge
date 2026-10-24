@@ -26,6 +26,8 @@ import { AiCoreModule } from '../ai/ai-core.module.js';
 import { CapturesCoreModule } from '../captures/captures-core.module.js';
 import { ComponentsCoreModule } from '../components/components-core.module.js';
 import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
+import { ApiTestSuitesModule } from '../api-specs/api-test-suites.module.js';
+import { ApiRunnerCoreModule } from '../api-specs/api-runner-core.module.js';
 import { ComponentDraftsModule } from '../components/component-drafts.module.js';
 import { StyleLintModule } from '../assistant/style-lint.module.js';
 import { QualityCoreModule } from '../quality/quality-core.module.js';
@@ -35,6 +37,7 @@ import { CommunitiesCoreModule } from '../communities/communities-core.module.js
 import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
 import { ChatSearchCoreModule } from '../chat/chat-search-core.module.js';
 import { FlowsCoreModule } from '../flows/flows-core.module.js';
+import { EmbedsCoreModule } from '../embeds/embeds-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -99,6 +102,12 @@ import { McpService } from './mcp.service.js';
     ComponentDraftsModule,
     // knowledge_list_api_operations / knowledge_get_api_operation (#78). Controller-free and read-only.
     ApiSpecsCoreModule,
+    // knowledge_get_embed / knowledge_find_embeds (#470).
+    EmbedsCoreModule,
+    // The QA suite tools (#483): read, export, bind, rank, Generate. Controller-free; API-side, as Generate queues a run.
+    ApiTestSuitesModule,
+    // knowledge_get_test_run (#483, phase 5): the server runner's records. Controller-free.
+    ApiRunnerCoreModule,
     // knowledge_lint_draft / knowledge_get_page_quality (#74). Controller-free and read-only.
     StyleLintModule,
     QualityCoreModule,

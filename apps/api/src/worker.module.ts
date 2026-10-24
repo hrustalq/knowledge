@@ -9,9 +9,11 @@ import { AgentWorkerModule } from './agents/agent-worker.module.js';
 import { MailWorkerModule } from './mail/mail-worker.module.js';
 import { PublishingWorkerModule } from './publishing/publishing-worker.module.js';
 import { ExportWorkerModule } from './export/export-worker.module.js';
+import { EmbedsWorkerModule } from './embeds/embeds-worker.module.js';
 import { AclWorkerModule } from './permissions/acl-worker.module.js';
 import { AnalyticsWorkerModule } from './analytics/analytics-worker.module.js';
 import { ChatWorkerModule } from './chat/chat-worker.module.js';
+import { ApiTestRunWorkerModule } from './api-specs/api-test-run-worker.module.js';
 
 @Module({
   imports: [
@@ -25,9 +27,11 @@ import { ChatWorkerModule } from './chat/chat-worker.module.js';
     MailWorkerModule,
     PublishingWorkerModule,
     ExportWorkerModule,
+    EmbedsWorkerModule,
     AclWorkerModule,
     AnalyticsWorkerModule,
     ChatWorkerModule,
+    ApiTestRunWorkerModule,
   ],
 })
 export class WorkerModule {}

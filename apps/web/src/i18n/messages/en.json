@@ -94,6 +94,7 @@
     "mergeRequests": "Merge requests",
     "workflows": "Workflows",
     "knowledgeHealth": "Knowledge health",
+    "qa": "QA",
     "analytics": "Analytics",
     "assistant": "Assistant",
     "settings": "Settings",
@@ -169,6 +170,7 @@
     "chatBots": "Chat bots",
     "captures": "Captures",
     "newApiSpec": "API spec",
+    "newTestFixture": "Test fixture",
     "apiReference": "API reference",
     "security": "Security",
     "releases": "Releases",
@@ -325,7 +327,7 @@
     "templatesHint": "Page shapes to start from",
     "publishingHint": "Public links to pages",
     "exportsHint": "Files you exported",
-    "chatBotsHint": "Answer questions in Telegram, citing your pages.",
+    "chatBotsHint": "Answer questions in chat, citing your pages.",
     "apiReferenceHint": "Try-it proxy for spec pages",
     "securityHint": "Sign-in and the audit trail",
     "releasesHint": "Named points in time"
@@ -441,7 +443,10 @@
       "destination": "Destination",
       "options": "What it does",
       "serviceAccount": "Service account",
-      "folder": "Folder"
+      "folder": "Folder",
+      "harvest": "Workspace and label",
+      "figmaAccess": "Access",
+      "harvestTag": "Tag"
     },
     "testing": "Checking the connection",
     "testingHint": "Making one request to prove the credential reaches the right place.",
@@ -806,6 +811,17 @@
       "assistOff": "The AI assists rewrite markdown, so they are not offered for an API spec."
     },
     "kindText": {
+      "figma": {
+        "allowlist": {
+          "label": "Teams and projects",
+          "help": "Figma team or project links (or team:<id>, project:<id>), separated by spaces or commas. Only their files can be embedded; removing one hides its embeds everywhere until it is added back."
+        },
+        "tokenExpiresAt": {
+          "label": "Token expires on",
+          "help": "The expiry you chose when creating the token, as YYYY-MM-DD. Figma does not report it, so the card warns from this date."
+        },
+        "credential": "A personal access token from Figma (Settings → Security → Personal access tokens) with read access to file content, file metadata and projects."
+      },
       "googleDrive": {
         "credential": "Paste the whole JSON key file of a Google Cloud service account with the Drive API enabled. Then share the folder with the service account's email, or add it to the shared drive.",
         "folderId": {
@@ -816,8 +832,50 @@
           "label": "Act as user",
           "help": "Domain-wide delegation: read Drive as this person instead of as the service account. Also needed to read Google Groups when access is mirrored."
         }
+      },
+      "linear": {
+        "harvestLabel": {
+          "label": "Harvest label",
+          "help": "An issue carrying this label is harvested when it is completed. Leave empty for \"knowledge\"."
+        },
+        "credential": "A personal API key from Linear (Settings → Security & access) that can read the teams whose issues are harvested."
+      },
+      "zendesk": {
+        "baseUrl": {
+          "label": "Zendesk URL"
+        },
+        "harvestLabel": {
+          "label": "Harvest tag",
+          "help": "A ticket carrying this tag is harvested when it is solved. Leave empty for \"knowledge\"."
+        },
+        "credential": "The email of an agent and an API token (Admin Center → Apps and integrations → Zendesk API), as email:token. The agent must be able to read the tickets that are harvested."
+      },
+      "intercom": {
+        "region": {
+          "label": "Data region",
+          "help": "Where your Intercom workspace is hosted. Leave on United States unless it is in Europe or Australia.",
+          "options": {
+            "us": "United States",
+            "eu": "Europe",
+            "au": "Australia"
+          }
+        },
+        "harvestLabel": {
+          "label": "Harvest tag",
+          "help": "A conversation carrying this tag is harvested when an admin closes it. Leave empty for \"knowledge\"."
+        },
+        "credential": "The access token of your Intercom app (Developer Hub → your app → Authentication). It must be able to read conversations."
       }
-    }
+    },
+    "harvestHint": "Nothing syncs either way. When an issue carrying the harvest label is completed by a linked editor, its description and comments are masked and proposed as captures in their name, for review in the Captures inbox.",
+    "harvestWebhook": "In {kind}, add a webhook on issues pointed at this server, and paste its signing secret here:",
+    "directionHarvest": "Harvest",
+    "directionEmbeds": "Embeds",
+    "embedsHint": "Nothing syncs either way. Frames from the files of the teams and projects listed can be embedded in pages; snapshots are rendered with this token, and the connector checks pinned frames for design changes.",
+    "tokenExpiresSoon": "Token expires {date}",
+    "tokenExpired": "Token expired {date}",
+    "harvestWebhookZendesk": "In Zendesk, create a webhook pointed at the address below, then a trigger: Ticket status changed to Solved, Tags contain the harvest tag, action Notify webhook with this JSON body. Paste the webhook’s signing secret above.",
+    "harvestWebhookIntercom": "In the Developer Hub, open your app’s Webhooks, point them at the address below and subscribe to conversation.admin.closed. Paste the app’s client secret (Basic information) above: Intercom signs every delivery with it."
   },
   "workflow": {
     "nodeStatus": {
@@ -1048,6 +1106,7 @@
       "followUp": "Ask for a change…",
       "describePlaceholder": "Describe what this workflow should produce…",
       "composerHint": "Enter sends · Shift+Enter for a new line",
+      "newConversation": "New conversation",
       "pickShape": "Start from a shape",
       "pickShapeBody": "These are the arrangements this feature was built around. Pick the closest and change it on the canvas.",
       "aiUnavailable": "No AI provider is configured for this workspace, so the architect cannot run.",
@@ -2376,6 +2435,8 @@
       "glossary": "Glossary",
       "public_ask": "Site Ask",
       "chat-capture": "Saved from chat",
+      "test-suite": "Test suite",
+      "test-fixture-ranking": "Fixture ranking",
       "component-draft": "Component draft",
       "lint": "Lint",
       "contradiction": "Contradiction check",
@@ -3012,6 +3073,15 @@
     },
     "roleFor": "Role for {name}",
     "trustedOperatorFor": "Trusted operator for {name}",
+    "testSuites": "Generate API tests",
+    "testSuitesFor": "Can generate API test suites: {name}",
+    "implicitForAdmins": "Included for admins",
+    "testSuitesGrant": "Allow generating API test suites",
+    "testSuitesHint": "Generate and regenerate the test requests of an API operation. Each generation spends this person's AI budget. Independent of role; admins always have it.",
+    "testRuns": "Run API tests",
+    "testRunsFor": "Can run API test suites: {name}",
+    "testRunsGrant": "Allow running API test suites",
+    "testRunsHint": "Send a suite's requests to the API it describes, from the browser or through the proxy. Independent of role; admins always have it.",
     "groups": {
       "hint": "A group is a named set of members. Page and project restrictions are granted to groups as well as to people, so a team is added once rather than person by person.",
       "new": "New group",
@@ -3165,6 +3235,32 @@
       "takeOver": "Manage manually",
       "takeOverTitle": "Manage {name} by hand?",
       "takeOverBody": "Sign-ins will stop changing their role here."
+    },
+    "renameWorkspace": {
+      "title": "Workspace name",
+      "body": "Shown in the workspace switcher and to every member.",
+      "save": "Rename",
+      "renamed": "Renamed to {name}"
+    },
+    "deleteWorkspace": {
+      "zoneTitle": "Delete this workspace",
+      "zoneBody": "Removes every project, page, stored file, connector and chat bot in {name}, for every member. Its audit record stays.",
+      "open": "Delete workspace…",
+      "title": "Delete {name}?",
+      "body": "It disappears for everyone the moment you confirm; what it holds is removed in the background over the next minute.",
+      "empty": "Nothing is stored in it yet: only its members and settings go.",
+      "confirm": "Delete workspace",
+      "deleted": "{name} was deleted",
+      "count": {
+        "projects": "{n} project | {n} projects",
+        "documents": "{n} page | {n} pages",
+        "revisions": "{n} revision | {n} revisions",
+        "storedFiles": "{n} stored file | {n} stored files",
+        "connectors": "{n} connector | {n} connectors",
+        "chatBindings": "{n} chat binding | {n} chat bindings",
+        "apiKeys": "{n} API key | {n} API keys",
+        "publishedSites": "{n} published site | {n} published sites"
+      }
     }
   },
   "users": {
@@ -3292,8 +3388,15 @@
     "emptyDiagram": "Empty diagram",
     "editDiagram": "Edit diagram",
     "deleteDiagram": "Delete diagram",
+    "diagramPlacement": "Placement",
+    "diagramWrapLeft": "Left, text wraps on the right",
+    "diagramCentre": "Centred, no text beside it",
+    "diagramWrapRight": "Right, text wraps on the left",
     "editSource": "Edit source",
     "mermaidSource": "Mermaid diagram source",
+    "mermaidErrorAt": "Line {line}: {message}",
+    "mermaidValid": "Valid · {type}",
+    "mermaidInvalid": "The diagram could not be parsed",
     "done": "Done",
     "collapsePreview": "Collapse preview",
     "expandPreview": "Expand preview",
@@ -3302,6 +3405,60 @@
     "downloadNamed": "Download {name}",
     "removeAttachment": "Remove attachment",
     "pdfUnsupported": "This browser cannot display PDFs inline.",
+    "embed": {
+      "label": "Design embed",
+      "untitled": "No caption",
+      "wholeFile": "whole file",
+      "notPinned": "not pinned",
+      "remove": "Remove embed",
+      "rendering": "rendering…",
+      "afterPublish": "snapshot after publishing",
+      "unavailable": "not in the Figma allowlist",
+      "failed": "snapshot failed, retrying",
+      "openLive": "Open live",
+      "openLiveNamed": "Open {name} live in Figma",
+      "closeLive": "Close the live frame",
+      "edit": "Edit embed",
+      "keepAsLink": "Keep as link",
+      "pasted": "Embedded the Figma frame",
+      "pastedNotAllowed": "Embedded as a link: this file is not in a Figma connector’s allowlist",
+      "pastedUnpinned": "Embedded, but Figma could not be reached to pin it",
+      "changed": "Design changed in Figma since this was pinned",
+      "update": "Update",
+      "updateNamed": "Pin {name} to the current design"
+    },
+    "embedPicker": {
+      "title": "Embed Figma frames",
+      "editTitle": "Edit Figma embed",
+      "description": "Pick up to {max} frames from the files your Figma connector allows. Each is pinned to the file’s current version.",
+      "noConnector": "No Figma connector is set up in this workspace, so nothing can be embedded yet.",
+      "openConnectors": "Open connectors",
+      "sourceLabel": "Frames to choose from",
+      "file": "Figma file",
+      "loadingFiles": "Loading files…",
+      "pickFile": "Choose a file",
+      "noFiles": "The connector’s allowlist reaches no files.",
+      "framesLabel": "Frames in this file",
+      "noFrames": "No frames on this page.",
+      "linkPlaceholder": "Paste a Figma link to a deeper layer",
+      "linkLabel": "Figma link",
+      "addLink": "Add",
+      "notFigma": "That is not a Figma design, prototype or FigJam link.",
+      "notAllowlisted": "That file is not in the Figma connector’s allowlist.",
+      "selectedLabel": "Selected frames",
+      "selected": "Selected: {count} of {max}",
+      "layout": "Layout",
+      "layout_strip": "Strip",
+      "layout_grid": "Grid",
+      "nothingSelected": "Tick frames on the left, or paste a link.",
+      "captionFor": "Caption for frame {n}",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "removeItem": "Remove from group",
+      "groupCaption": "Caption for the group (optional)",
+      "save": "Save",
+      "insert": "Insert"
+    },
     "previewOf": "Preview of {name}",
     "tocEmpty": "Headings you add will appear here.",
     "discardBody": "This page has edits that were never published, so they exist only in this tab. Leaving now throws them away.",
@@ -3499,7 +3656,21 @@
       "toggleHeader": "Toggle header row",
       "deleteTable": "Delete table",
       "row": "Row",
-      "column": "Column"
+      "column": "Column",
+      "rowHandle": "Row {n} actions",
+      "columnHandle": "Column {n} actions",
+      "insertRowAbove": "Insert row above",
+      "insertRowBelow": "Insert row below",
+      "insertColumnLeft": "Insert column left",
+      "insertColumnRight": "Insert column right",
+      "deleteRows": "Delete {count} rows",
+      "deleteColumns": "Delete {count} columns",
+      "confirmDeleteRow": "Delete this row?",
+      "confirmDeleteRows": "Delete {count} rows?",
+      "confirmDeleteColumn": "Delete this column?",
+      "confirmDeleteColumns": "Delete {count} columns?",
+      "confirmCellsLost": "{count} cell with content will be removed. Undo brings it back. | {count} cells with content will be removed. Undo brings them back.",
+      "changedWhileConfirming": "The table changed while you were confirming, so nothing was deleted."
     },
     "group": {
       "text": "Text",
@@ -3523,6 +3694,7 @@
     "apiContract": "API contract",
     "mermaid": "Mermaid diagram",
     "whiteboard": "Whiteboard",
+    "figmaEmbed": "Figma frames",
     "image": "Image",
     "fileOrPdf": "File or PDF",
     "linkToPage": "Link to a page",
@@ -4087,7 +4259,8 @@
       "access.denied": "declined your access request",
       "access.expired": "Your access request expired",
       "access.granted": "gave you access",
-      "work-item.closed": "closed the tracker ticket for this"
+      "work-item.closed": "closed the tracker ticket for this",
+      "connector.harvest.proposed": "a resolved item you closed was harvested into captures for review"
     }
   },
   "connect": {
@@ -4365,6 +4538,110 @@
       "unarchived": "Page restored"
     }
   },
+  "qa": {
+    "run": {
+      "counts": "{passed}/{total} passed"
+    },
+    "env": {
+      "intro": "Where a server run sends and with what. A run uses the server for every step whose spec lists it in its servers, and the spec's own server otherwise.",
+      "runnerOff": "Server runs are off in this workspace.",
+      "runnerSettings": "Turn them on in Settings → API",
+      "add": "New environment",
+      "empty": "No test environments yet",
+      "emptyHint": "Add one with a server and the secrets a suite asks for, then run suites on the server.",
+      "emptyReader": "An editor adds them.",
+      "specServer": "The spec's own servers",
+      "set": "set",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteTitle": "Delete “{name}”?",
+      "deleteBody": "Its secrets are deleted too. Past runs keep their results.",
+      "name": "Name",
+      "server": "Server",
+      "serverHint": "Used only for steps whose spec declares this server; the try-it proxy's rules apply.",
+      "inputs": "Inputs",
+      "value": "Value",
+      "addInput": "Add an input",
+      "secrets": "Secrets",
+      "secretsHint": "Write-only: a saved secret is never shown again. Type a value to replace it.",
+      "replace": "Keep the saved value",
+      "replaceLabel": "New value for {name}",
+      "removeSecret": "Remove {name}",
+      "keep": "Keep {name}",
+      "newSecrets": "New secrets",
+      "addSecret": "Add a secret",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saved": "Environment saved"
+    },
+    "title": "QA",
+    "subtitle": "Which operations are ready to test, and the fixtures that set them up.",
+    "newFixture": "New fixture",
+    "tab": {
+      "environments": "Environments",
+      "operations": "Operations",
+      "fixtures": "Fixtures"
+    },
+    "statusFilter": "Filter by suite state",
+    "all": "All",
+    "showAll": "Show all operations",
+    "status": {
+      "review": "Needs review",
+      "unbound": "Unbound setup",
+      "outdated": "Outdated",
+      "none": "No suite",
+      "ready": "Ready"
+    },
+    "statusHint": {
+      "review": "A bound fixture is archived or calls an operation no spec defines any more.",
+      "unbound": "The spec says this operation needs a value another operation produces, and no fixture is bound to the suite.",
+      "outdated": "A suite exists, but the operation, its bound fixtures or the tester changed since. Regenerate it on the operation.",
+      "none": "No QA suite has been generated for this operation.",
+      "ready": "The suite is current and its setup is bound."
+    },
+    "suite": {
+      "none": "No suite generated",
+      "outdated": "The suite is outdated",
+      "current": "Current suite"
+    },
+    "column": {
+      "lastRun": "Last server run",
+      "operation": "Operation",
+      "status": "State",
+      "cases": "Cases",
+      "setup": "Setup",
+      "fixtures": "Fixtures"
+    },
+    "setup": {
+      "review": "{n} fixture needs review | {n} fixtures need review",
+      "bound": "No suite fixture | {n} fixture | {n} fixtures",
+      "perCase": "{n} per case | {n} per case",
+      "needs": "Needs {n} prerequisite | Needs {n} prerequisites",
+      "none": "None needed"
+    },
+    "deprecated": "deprecated",
+    "fixturesFor": "{n} fixture calls {op} | {n} fixtures call {op}",
+    "specFilter": "Spec",
+    "anySpec": "Any spec",
+    "calls": "Calls",
+    "clearOperation": "Show fixtures for every operation",
+    "clearFilters": "Clear filters",
+    "moreCalls": "and {n} more | and {n} more",
+    "manualOnly": "Manual steps only",
+    "brokenCalls": "{n} broken call | {n} broken calls",
+    "updated": "Updated {when}",
+    "empty": {
+      "noSpecs": "No OpenAPI specs here yet",
+      "noSpecsHint": "Add a spec, then generate a QA suite for each operation from its page.",
+      "addSpec": "Add a spec",
+      "noOperations": "These specs define no HTTP operations yet",
+      "noOperationsHint": "A spec that was just saved is still indexing; its operations appear when it finishes.",
+      "noneWithStatus": "No operations are in “{status}”",
+      "noFixtures": "No test fixtures yet",
+      "noFixturesHint": "A fixture holds the calls a test needs first — log in, create the record — and the teardown after it.",
+      "noFixturesNarrowed": "No fixture matches these filters"
+    }
+  },
   "health": {
     "title": "Knowledge health",
     "subtitleIntro": "Which pages are stale, unowned, empty or put away — and one action over many of them.",
@@ -4388,10 +4665,12 @@
       "flagged": "Reported",
       "inactive": "Inactive",
       "missing-paths": "Missing code",
+      "broken-calls": "Broken fixtures",
       "unread": "Unread",
       "dead": "Dead",
       "archived": "Archived",
-      "handed-off": "Handed off"
+      "handed-off": "Handed off",
+      "stale-mockups": "Changed designs"
     },
     "presetHint": {
       "all": "Every live page",
@@ -4405,9 +4684,11 @@
       "flagged": "A reader or an agent reported a problem",
       "inactive": "No edit, comment or check for the inactivity window",
       "missing-paths": "A component page declares a path no file matches at the indexed head",
+      "broken-calls": "A test fixture calls an operation no spec defines any more",
       "unread": "Older than the read window, and nobody opened it in the app during it",
       "dead": "Unread, and no search returned it either: a candidate to archive",
-      "archived": "Put away; hidden from lists, search and the assistant"
+      "archived": "Put away; hidden from lists, search and the assistant",
+      "stale-mockups": "A Figma frame the page embeds changed since it was pinned"
     },
     "search": "Search by title…",
     "owner": {
@@ -4434,6 +4715,7 @@
     "openPage": "Open page",
     "emptyChip": "Empty",
     "missingPathsChip": "{n} missing path | {n} missing paths",
+    "brokenCallsChip": "{n} missing operation | {n} missing operations",
     "neverRead": "No reads",
     "emptyHint": "The body is under the workspace's empty-page threshold",
     "children": "{n} page under it | {n} pages under it",
@@ -4529,6 +4811,19 @@
         "minCosineShare": {
           "label": "Similarity band",
           "hint": "A semantic match counts only within this share of the best one, so pages found at middling ranks by both legs cannot outrank the best match of either. 0 turns it off"
+        },
+        "communityPriorWeight": {
+          "label": "Community boost",
+          "hint": "How much a page gains when its community's summary matches the question: a page in the closest matching group scores up to this much higher (0.5 means ×1.5). Needs communities built by the Atlas agent. 0 turns it off"
+        },
+        "communityPriorFloor": {
+          "label": "Community match threshold",
+          "hint": "How closely a community's summary must match the question before it boosts anything. Higher boosts only clear matches. The right value depends on the embedding model: about 0.5 for bge-m3",
+          "inert": "The community boost is off, so this threshold changes nothing until a boost is set."
+        },
+        "layeredExpansion": {
+          "label": "Expand related pages by layer",
+          "hint": "When search also returns related pages, follow only links at the hit's own level of detail and one step up or down. A page about one API operation then reaches its component and its code, not every page of the whole service"
         },
         "trustWeights": {
           "label": "Trust weights",
@@ -4746,6 +5041,8 @@
     "allowPasswordlessHint": "Off: a link that never expires must have a password.",
     "allowPublicSites": "Public docs sites",
     "allowPublicSitesHint": "Admins can publish a project as a read-only site that opens without signing in.",
+    "allowPublicEmbeds": "Show embedded designs publicly",
+    "allowPublicEmbedsHint": "Share links and published sites show the snapshots of embedded Figma frames. Off, they show the captions and “Mockup not available publicly”. Figma links are never shown publicly: they reveal the file.",
     "inherit": "Default (off)",
     "on": "On",
     "off": "Off",
@@ -5043,7 +5340,7 @@
     "ceilingOff": "Chat bots are switched off on this server (CHAT_ENABLED=false). You can prepare a bot here, but nothing will be answered until an operator turns them on.",
     "empty": {
       "title": "No bots yet",
-      "body": "Connect a Telegram, Time or Mattermost bot, then message it privately to link your account. To let it answer in a group or channel, add it there and send /bind (in Time and Mattermost: mention it with the word bind)."
+      "body": "Connect a Telegram, Time, Mattermost, Slack or Microsoft Teams bot, then message it privately to link your account. To let it answer in a group or channel, add it there and send /bind (in Time, Mattermost, Slack and Teams: mention it with the word bind)."
     },
     "connect": {
       "open": "Connect a bot",
@@ -5068,6 +5365,22 @@
         "step2": "Copy the access token it shows once, and paste it below with your Mattermost server address.",
         "step3": "Add the bot to a team and a channel and mention it, or message it privately: it replies with a link that connects your account.",
         "checking": "Checking with Mattermost…"
+      },
+      "slack": {
+        "description": "The token is checked with Slack. The token and the signing secret are stored encrypted and never shown again.",
+        "step1": "At api.slack.com/apps, create an app from scratch in your workspace. It stays internal to that workspace; nothing is published.",
+        "step2": "Under OAuth & Permissions, add the bot token scopes chat:write, channels:history, groups:history, im:history and reactions:read, then install the app.",
+        "step3": "Paste the Bot User OAuth Token (xoxb-…) and, from Basic Information, the Signing Secret below.",
+        "step4": "Once connected, paste the address shown on the bot’s card as the Request URL under Event Subscriptions (bot events message.channels, message.groups, message.im, reaction_added) and under Interactivity. Then invite the bot to a channel and mention it, or message it privately to link your account.",
+        "checking": "Checking with Slack…"
+      },
+      "teams": {
+        "description": "Microsoft checks the credential before anything is saved. It is stored encrypted and never shown again.",
+        "step1": "In the Azure portal, create an Azure Bot of type Single Tenant. Copy its Microsoft App ID and its directory (tenant) ID, and create a client secret for its app registration.",
+        "step2": "Paste the three below. Once the bot is connected, set the address shown on its card as the bot’s Messaging endpoint (Configuration), and turn on the Microsoft Teams channel.",
+        "step3": "Install it in Teams with an app package whose manifest names the bot, and grants the resource-specific permission ChannelMessage.Read.Group so a channel can keep its messages for capture (manifest in the docs).",
+        "step4": "Mention the bot in a channel, or message it in a chat: it replies with a link that connects your account.",
+        "checking": "Checking with Microsoft…"
       }
     },
     "fields": {
@@ -5087,7 +5400,14 @@
       "serverUrl": "{platform} server",
       "serverUrlHint": "The address you open {platform} at. This server must be able to reach it, and it must reach API_PUBLIC_URL for buttons to work.",
       "tokenHintTime": "From Integrations → Bot accounts. Write-only: the page only ever shows its last four characters.",
-      "tokenHintMattermost": "The bot account's access token, from Integrations → Bot Accounts. Write-only: the page only ever shows its last four characters."
+      "tokenHintMattermost": "The bot account's access token, from Integrations → Bot Accounts. Write-only: the page only ever shows its last four characters.",
+      "tokenHintSlack": "The Bot User OAuth Token, from OAuth & Permissions. Write-only: the page only ever shows its last four characters.",
+      "signingSecret": "Signing secret",
+      "signingSecretHint": "From Basic Information → App Credentials. {platform} signs every request with it, and a request that does not match is refused. Write-only.",
+      "appId": "Microsoft App ID",
+      "tenantId": "Directory (tenant) ID",
+      "clientSecret": "Client secret",
+      "tokenHintTeams": "From the app registration’s Certificates & secrets. Write-only: the page only ever shows its last four characters."
     },
     "locale": {
       "en": "English",
@@ -5096,7 +5416,9 @@
     "kind": {
       "telegram": "Telegram",
       "time": "Time",
-      "mattermost": "Mattermost"
+      "mattermost": "Mattermost",
+      "slack": "Slack",
+      "teams": "Microsoft Teams"
     },
     "answerMode": {
       "mention": "When mentioned",
@@ -5104,7 +5426,7 @@
       "off": "Never"
     },
     "bindings": {
-      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time and Mattermost: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
+      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time, Mattermost, Slack and Teams: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
       "untitled": "Untitled chat",
       "wholeWorkspace": "Whole workspace",
       "botDefault": "Bot default",
@@ -5127,7 +5449,12 @@
       "searchableHint": "Messages are kept for {days}, masked, and found under Search → Chat by anyone who can read this group's project (the whole workspace's members when it has none; never guests). Edits are followed; /forget deletes a person's own. Turning this on posts a notice in the group first; turning it off deletes everything kept.",
       "searchableTelegram": "Telegram: needs privacy mode off in {'@'}BotFather or the bot as a group admin. A message deleted in Telegram stays searchable until it expires, because Telegram does not tell bots about deletions.",
       "searchableUnavailable": "Switched off on this server (CHAT_SEARCH_ENABLED): no group can be made searchable.",
-      "searchableBy": "Made searchable by"
+      "searchableBy": "Made searchable by",
+      "chatIdPlaceholderSlack": "C0123ABCDEF",
+      "chatIdPlaceholderTeams": "19:…{'@'}thread.tacv2",
+      "listenTeams": "Keep messages for capture",
+      "listenHintTeams": "Messages are kept for {days}, with emails, phone numbers, card numbers and secrets masked, so editors can mention the bot with capture inside a thread to propose what it settled. Kept only for capture: making the channel searchable is a separate switch below. Needs the ChannelMessage.Read.Group permission in the Teams app. The channel is told when this is turned on, and what was kept is deleted when it is turned off.",
+      "autoHarvestNeedsListeningTeams": "Needs Keep messages for capture."
     },
     "card": {
       "off": "Off",
@@ -5148,7 +5475,14 @@
       "socketDown": "This server is not connected to {platform}, so the bot hears nothing.",
       "socketFix": "Check that the {platform} server is reachable from here and that the bot token is still valid; the connection retries on its own.",
       "socketOk": "Listening to {server}",
-      "testOkSocket": "{bot} is reachable. Messages arrive over the bot’s connection to {platform}."
+      "testOkSocket": "{bot} is reachable. Messages arrive over the bot’s connection to {platform}.",
+      "requestUrl": "{platform} delivers messages and button presses only once this address is set as the Request URL under Event Subscriptions and under Interactivity in the app’s settings:",
+      "copyRequestUrl": "Copy the Request URL",
+      "copyFailed": "The clipboard is unavailable here. Select the address and copy it manually.",
+      "testOkSlack": "{bot} is reachable. {platform} delivers once the Request URL below is set in the app’s settings.",
+      "messagingEndpoint": "{platform} delivers messages only once this address is the Messaging endpoint of your Azure Bot (Configuration):",
+      "copyMessagingEndpoint": "Copy the messaging endpoint",
+      "testOkTeams": "{bot} has a valid credential. {platform} delivers once the messaging endpoint below is set on the Azure Bot."
     },
     "people": {
       "hint": "Every answer runs as the linked person, with exactly their access. Unlinking stops the bot answering that account.",
@@ -5491,6 +5825,65 @@
     "editHeading": "Edit API spec",
     "hint": "Paste an OpenAPI (3.0, 3.1, Swagger 2.0) or AsyncAPI (2.x, 3.x) spec, or load a file. It is checked when you save."
   },
+  "testFixture": {
+    "newHeading": "New test fixture",
+    "editHeading": "Edit test fixture",
+    "titlePlaceholder": "Draft invoice, logged in as admin",
+    "titleRequired": "Give the fixture a title.",
+    "create": "Create fixture",
+    "created": "Fixture created — indexing its calls.",
+    "saved": "Revision published — indexing its calls.",
+    "viewLabel": "Edit as",
+    "viewSteps": "Steps",
+    "invalid": "The fixture does not validate ({n} issue) | The fixture does not validate ({n} issues)",
+    "description": "Description",
+    "descriptionPlaceholder": "What state this fixture leaves behind, and for which tests.",
+    "inputs": "Inputs",
+    "inputsHint": "Non-secret values a run supplies, used as {'{{'}input.name{'}}'}. Leave the default empty to ask for it at run time.",
+    "inputName": "name",
+    "inputDefault": "default (optional)",
+    "addInput": "Add input",
+    "setup": "Setup",
+    "setupHint": "Runs in order before the tests. Capture a value from one response and use it later as {'{{'}name{'}}'}; credentials are always {'{{'}secret.name{'}}'}.",
+    "teardown": "Teardown",
+    "teardownHint": "Runs after the tests, including after a failure — delete what setup created.",
+    "addCall": "Add call",
+    "addManual": "Add manual step",
+    "addTeardown": "Add teardown call",
+    "callStep": "call",
+    "manualStep": "Manual step",
+    "manualPlaceholder": "Describe data no API can create, e.g. a merchant with KYC approved.",
+    "stepId": "Step id",
+    "moveUp": "Move step up",
+    "moveDown": "Move step down",
+    "removeStep": "Remove step {id}",
+    "removeRow": "Remove {name}",
+    "operation": "Operation",
+    "pickOperation": "Pick an operation…",
+    "changeOperation": "Operation {call}; pick another",
+    "expect": "Expected status",
+    "path": "Path parameters",
+    "query": "Query",
+    "headers": "Headers",
+    "capture": "Captures",
+    "paramName": "name",
+    "valuePlaceholder": "value",
+    "addParam": "Add parameter",
+    "addHeader": "Add header",
+    "addCapture": "Add capture",
+    "body": "Body (JSON)",
+    "bodyPlaceholder": "{'{'} \"amount\": 100 {'}'}",
+    "bodyInvalid": "This body is not JSON. Fix it before switching views or saving.",
+    "textInvalid": "This is not valid YAML or JSON: {reason}",
+    "textHint": "The whole fixture as text. It is checked against your specs when you save.",
+    "issuesNow": "{n} issue against the specs as they stand now | {n} issues against the specs as they stand now",
+    "runValues": "A run asks for",
+    "inputRequired": "input, no default",
+    "inputDefaultIs": "input, default {value}",
+    "secretAsked": "secret, typed in per run and never stored",
+    "captureFrom": "from {rule}",
+    "any2xx": "2xx"
+  },
   "apiSamples": {
     "title": "Request",
     "label": "Code sample language",
@@ -5501,6 +5894,130 @@
     "fromSpec": "Written by the spec’s author — it does not follow the values in the console.",
     "fromSpecLabelled": "“{label}”, written by the spec’s author — it does not follow the values in the console.",
     "copyJson": "Copy JSON"
+  },
+  "apiTests": {
+    "title": "Test requests",
+    "menu": "Quick actions",
+    "generate": "Generate test requests",
+    "generateHint": "Positive and negative cases derived from the spec, as cURL or Postman",
+    "regenerate": "Regenerate",
+    "noCapability": "Needs the permission to generate test suites. A workspace admin grants it on Access control.",
+    "generated": "Generated {when} from revision {revision}",
+    "downloadScript": "Download script",
+    "downloadPostman": "Download Postman",
+    "generating": "Writing test requests…",
+    "regenerating": "Writing a new suite. The current one stays until it is ready.",
+    "failed": "The test requests could not be generated.",
+    "retry": "Try again",
+    "credentials": "Credentials are placeholders: export $TOKEN (or $API_KEY) before running the script, or fill the collection variables in Postman. A setup fixture that captures TOKEN fills it for you.",
+    "setup": {
+      "title": "Setup",
+      "hint": "Fixtures bound here run once, before the cases. A case can use what they capture, written as {'{{'}name{'}}'}.",
+      "hidden": "A fixture you cannot open",
+      "archived": "Archived",
+      "unbind": "Unbind {name}",
+      "regenerate": "No suite uses these fixtures yet. Generate one so its cases can use what they capture.",
+      "addLabel": "Bind a fixture to the whole suite",
+      "addPlaceholder": "Choose a fixture…",
+      "bind": "Bind",
+      "suggested": "Suggested from the spec",
+      "rank": "Ask tester",
+      "ranking": "Tester is ranking…",
+      "ranked": "Ranked by tester",
+      "rankFailed": "The tester could not rank these fixtures.",
+      "testerSays": "Tester: ",
+      "uncovered": "Nothing calls {op} yet, and this operation needs a value it returns.",
+      "newFixture": "New fixture",
+      "forCase": "Setup for this case:",
+      "addToCase": "Bind a fixture to {name}"
+    },
+    "expect": "Expect {status}:",
+    "expectedBody": "Expected body · {status}",
+    "curlLabel": "curl command",
+    "kind": {
+      "positive": "Positive",
+      "negative": "Negative"
+    },
+    "rule": {
+      "success": "Success",
+      "missing-required": "Required value left out",
+      "wrong-type": "Wrong type",
+      "enum-outside": "Value outside the allowed set",
+      "minimum": "Minimum",
+      "maximum": "Maximum",
+      "min-length": "Minimum length",
+      "max-length": "Maximum length",
+      "pattern": "Pattern",
+      "missing-credentials": "No credentials",
+      "documented-error": "Documented error"
+    },
+    "run": {
+      "viaServer": "Server",
+      "environment": "Environment",
+      "noEnvironments": "No test environment yet.",
+      "manageEnvironments": "Add one on the QA page",
+      "serverNote": "The worker runs the suite with this environment’s values, which never reach this page.",
+      "startOnServer": "Run on server",
+      "serverStatus": {
+        "queued": "Queued",
+        "running": "Running on the server",
+        "passed": "Passed",
+        "failed": "Failed",
+        "error": "Could not run"
+      },
+      "history": "Recent server runs",
+      "environmentGone": "deleted environment",
+      "action": "Run suite",
+      "noCapability": "Running a suite needs the permission to run test suites. A workspace admin grants it on Access control.",
+      "title": "Run against a server",
+      "intro": "Setup runs once, then every case (negative ones first), then teardown, which runs even after a failure. The values below are kept for this run only and sent only in the requests that use them.",
+      "server": "Server",
+      "values": "Values for this run",
+      "noValues": "This suite needs no values.",
+      "secret": "secret",
+      "input": "input",
+      "fromTryIt": "from Try it",
+      "emptyNote": "A credential left empty is not sent; any other empty value fails the step that needs it.",
+      "start": "Start run",
+      "again": "Run again",
+      "stop": "Stop",
+      "close": "Close the run",
+      "loading": "Preparing the run…",
+      "running": "Running…",
+      "stopping": "Stopping after this request. Teardown still runs.",
+      "waiting": "Waiting {seconds} s for the rate limit",
+      "section": {
+        "setup": "Setup",
+        "cases": "Cases",
+        "teardown": "Teardown"
+      },
+      "col": {
+        "step": "Step",
+        "expected": "Expected",
+        "actual": "Got",
+        "time": "Time",
+        "captured": "Captured"
+      },
+      "outcome": {
+        "pass": "Passed",
+        "fail": "Failed",
+        "error": "Error",
+        "skipped": "Skipped",
+        "not-run": "Not run",
+        "manual": "Check by hand",
+        "running": "Running",
+        "pending": "Waiting"
+      },
+      "reason": {
+        "missing": "No value for {names}",
+        "capture": "The response has no {name} to capture",
+        "setup": "Its setup failed",
+        "skipped": "Setup never captured what this step sends",
+        "cors": "No response reached this page from {host}: the API may not allow requests from a browser (CORS), or it could not be reached. Try the proxy."
+      },
+      "summary": "{passed} passed · {failed} failed · {notRun} not run",
+      "hidden": "hidden"
+    }
   },
   "apiTry": {
     "open": "Try it",
@@ -5572,6 +6089,21 @@
     "resetBody": "Reset to the example"
   },
   "apiSettings": {
+    "runner": {
+      "title": "Server runs",
+      "subtitle": "Let the worker run a whole QA suite against a test environment, from the QA page or an agent. Each request goes out exactly as the try-it proxy sends it: the proxy mode above, its source policies, and only servers the spec declares.",
+      "ceilingOff": "This deployment keeps server runs off (API_TEST_RUNNER_MODE). Asking for them here takes effect once it allows them.",
+      "mode": {
+        "off": {
+          "label": "Off",
+          "body": "Suites run from the browser or the proxy only. Nothing is sent from the server."
+        },
+        "on": {
+          "label": "On",
+          "body": "Members with “Run API tests” can run a suite on the server. Each run’s results are kept, the last 20 per suite."
+        }
+      }
+    },
     "title": "API reference",
     "subtitle": "How the try-it console on spec pages may reach the APIs they describe.",
     "proxy": {
@@ -5849,7 +6381,10 @@
         "chat_listen_enabled": "Chat messages kept for /capture",
         "chat_listen_disabled": "Chat messages no longer kept for /capture",
         "chat_auto_harvest_enabled": "Automatic thread harvest turned on",
-        "chat_auto_harvest_disabled": "Automatic thread harvest turned off"
+        "chat_auto_harvest_disabled": "Automatic thread harvest turned off",
+        "member_capabilities_changed": "Member capabilities changed",
+        "workspace_deleted": "Workspace deleted",
+        "workspace_renamed": "Workspace renamed"
       }
     },
     "tabs": {
@@ -6399,5 +6934,27 @@
       "ceiling": "This deployment creates at most {n} ticket per sweep (every ~15 s), across all workspaces. A large backlog is handed off over a few minutes. | This deployment creates at most {n} tickets per sweep (every ~15 s), across all workspaces. A large backlog is handed off over a few minutes.",
       "stopped": "This deployment has handoff rules switched off (WORK_ITEM_AUTOCREATE_MAX_PER_TICK=0 or WORK_ITEM_SYNC_ENABLED=false). Saved rules apply once they are back on."
     }
+  },
+  "imageViewer": {
+    "title": "Image preview",
+    "hint": "Click the image to see it at full size, drag to move around it, and use the arrow keys to go to the next or previous image.",
+    "open": "Open image",
+    "openNamed": "Open image: {name}",
+    "position": "Image {n} of {total}",
+    "fit": "Fit to screen",
+    "actualSize": "Actual size",
+    "previous": "Previous image",
+    "next": "Next image"
+  },
+  "diagramViewer": {
+    "title": "Diagram preview",
+    "hint": "Click the diagram to see it at its own size, drag to move around it, use + and − or Ctrl and the wheel to zoom, 0 to fit, and the arrow keys to go to the next or previous diagram.",
+    "open": "Open diagram",
+    "position": "Diagram {n} of {total}",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit to screen ({percent}%)",
+    "previous": "Previous diagram",
+    "next": "Next diagram"
   }
 }

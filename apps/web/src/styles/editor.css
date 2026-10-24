@@ -148,6 +148,10 @@
 }
 .markdown-body hr, .kn-prose hr { border: none; border-top: 1px solid var(--border); margin: 1.75em 0; }
 .markdown-body img, .kn-prose img { max-width: 100%; border-radius: 8px; }
+/* A read-mode image or diagram opens a lightbox (#467, #476; lib/image-gallery, lib/diagram-gallery). */
+[data-kn-zoom], [data-kn-diagram] { cursor: zoom-in; }
+[data-kn-zoom]:focus-visible, [data-kn-diagram]:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+[data-kn-diagram] { border-radius: 8px; }
 .markdown-body mark, .kn-prose mark {
   background: color-mix(in oklch, var(--kn-panel-warning) 30%, transparent);
   color: inherit;
@@ -923,29 +927,109 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   box-shadow: 0 4px 12px -8px oklch(0 0 0 / 0.5);
 }
 .kn-block-actions button:hover { color: var(--foreground); background: var(--accent); }
+.kn-block-actions button[aria-pressed='true'] { color: var(--foreground); background: var(--accent); }
+.kn-block-actions-group { display: inline-flex; }
+.kn-block-actions-group button { border-radius: 0; }
+.kn-block-actions-group button:first-child { border-radius: 7px 0 0 7px; }
+.kn-block-actions-group button:last-child { border-radius: 0 7px 7px 0; }
+.kn-block-actions-group button + button { border-left-width: 0; }
+/* A diagram can be resized down to 160px: its bar wraps rather than being clipped by the card. */
+:is(.kn-mermaid, .kn-drawing) > .kn-block-actions { left: 0.5rem; flex-wrap: wrap; justify-content: flex-end; pointer-events: none; }
+:is(.kn-mermaid, .kn-drawing) > .kn-block-actions > * { pointer-events: auto; }
+
+/* Diagram size and placement (#476), stored in the fence's info string. The
+   editor's node and the read view's rendered figure carry the same attributes,
+   so a page reads as it was edited. Centred is the default: a sized diagram
+   sits in the middle of its own line. A wrapped one floats with the text beside
+   it (half the column unless resized, never more than 70%), and headings start
+   below it. Under 40rem there is no room beside it, so it falls back to full width. */
+:is(.kn-mermaid, .kn-drawing, .kn-mermaid-figure, .kn-drawing-canvas) {
+  width: var(--kn-diagram-width, auto);
+  max-width: 100%;
+  margin-inline: auto;
+}
+/* Centred means a line of its own: it starts below a floated neighbour instead of squeezing beside it. */
+:is(.kn-mermaid, .kn-drawing, .kn-mermaid-figure, .kn-drawing-canvas):not([data-kn-wrap]) { clear: both; }
+:is(.kn-mermaid, .kn-drawing, .kn-mermaid-figure, .kn-drawing-canvas)[data-kn-wrap] {
+  width: var(--kn-diagram-width, 50%);
+  max-width: 70%;
+}
+[data-kn-wrap='left'] { float: left; margin: 0.25rem 1.5rem 0.75rem 0; }
+[data-kn-wrap='right'] { float: right; margin: 0.25rem 0 0.75rem 1.5rem; }
+:is(.markdown-body, .kn-prose, .ProseMirror) :is(h1, h2, h3, h4) { clear: both; }
+@media (max-width: 40rem) {
+  [data-kn-wrap] { float: none; margin-inline: 0; }
+  :is(.kn-mermaid, .kn-drawing, .kn-mermaid-figure, .kn-drawing-canvas)[data-kn-wrap] { width: auto; max-width: 100%; }
+}
 
 .kn-mermaid-grid { display: grid; }
 .kn-mermaid-grid[data-editing='true'] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 @media (max-width: 56rem) { .kn-mermaid-grid[data-editing='true'] { grid-template-columns: minmax(0, 1fr); } }
-.kn-mermaid-source { border-right: 1px solid var(--border); background: color-mix(in oklch, var(--foreground) 3%, transparent); }
-.kn-mermaid-textarea {
-  width: 100%;
-  min-height: 12rem;
-  resize: vertical;
-  padding: 0.85rem;
-  background: transparent;
+.kn-mermaid-source {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+  background: color-mix(in oklch, var(--foreground) 3%, transparent);
+}
+/* Gutter, error band and text share one font and line height, so they line up
+   without measuring. The textarea is as many rows as the source has lines
+   (MermaidNode), so it grows with the source instead of scrolling inside it. */
+.kn-mermaid-code {
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: var(--kn-text-ui);
   line-height: 1.6;
+}
+.kn-mermaid-code[data-error-line]::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset-inline: 0;
+  top: calc(0.85rem + (var(--kn-error-line) - 1) * 1lh);
+  height: 1lh;
+  background: color-mix(in oklch, var(--destructive) 12%, transparent);
+  pointer-events: none;
+}
+.kn-mermaid-lines {
+  display: flex;
+  flex-direction: column;
+  padding: 0.85rem 0.55rem 0.85rem 0.85rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in oklch, var(--muted-foreground) 70%, transparent);
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+.kn-mermaid-lines [data-error] { color: var(--destructive); font-weight: 600; }
+.kn-mermaid-textarea {
+  width: 100%;
+  resize: none;
+  overflow: auto hidden;
+  white-space: pre;
+  padding: 0.85rem;
+  background: transparent;
+  font: inherit;
   outline: none;
   border: none;
 }
-.kn-mermaid-error {
-  padding: 0.4rem 0.85rem 0.7rem;
+.kn-mermaid-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  min-height: 2.1rem;
+  padding: 0.45rem 0.85rem 0.6rem;
   font-size: var(--kn-text-xs);
-  color: var(--destructive);
+  color: var(--muted-foreground);
   border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
 }
+.kn-mermaid-status[data-state='error'] { color: var(--destructive); }
+.kn-mermaid-status svg { margin-top: 0.15em; }
 .kn-mermaid-preview,
 .kn-mermaid-figure { display: flex; justify-content: center; padding: 1.1rem; overflow-x: auto; }
 .kn-mermaid-preview svg,
@@ -1005,6 +1089,166 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-file-pdf { display: block; width: 100%; height: min(70vh, 40rem); border: none; background: var(--muted); }
 .kn-file-fallback { padding: 2rem; text-align: center; font-size: var(--kn-text-sm); color: var(--muted-foreground); }
 
+/* Embed groups (#470): no frame of their own — the tiles carry the hairline,
+   so a group never reads as a card holding cards. The editor's node view and
+   the read views share every class; a read view without snapshots renders
+   bare `.kn-embed-item` tiles straight inside `.kn-embed-items`. */
+.kn-embed { margin-block: var(--kn-block-gap); position: relative; }
+.kn-embed-items { display: flex; gap: 0.6rem; align-items: start; }
+.kn-embed[data-kn-embed='strip'] .kn-embed-items {
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: 0.25rem;
+}
+.kn-embed[data-kn-embed='strip'] :is(.kn-embed-tile, .kn-embed-items > .kn-embed-item) { flex: 0 0 min(18rem, 80%); scroll-snap-align: start; }
+.kn-embed[data-kn-embed='grid'] .kn-embed-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(14rem, 100%), 1fr)); }
+:is(.kn-embed-tile, .kn-embed-items > .kn-embed-item) {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  overflow: hidden;
+  transition: border-color 150ms ease;
+}
+.kn-embed-tile:has(a:hover), .kn-embed-items > a.kn-embed-item:hover { border-color: color-mix(in oklch, var(--primary) 45%, var(--border)); }
+.kn-embed-frame {
+  display: block;
+  position: relative;
+  max-height: 22rem;
+  width: 100%;
+  background: color-mix(in oklch, var(--foreground) 3%, var(--card));
+  border-bottom: 1px solid var(--border);
+}
+.kn-embed-frame img { display: block; width: 100%; height: 100%; max-height: 22rem; object-fit: contain; }
+.kn-embed-live { max-height: none; min-height: 18rem; }
+.kn-embed-live iframe { display: block; width: 100%; height: 100%; min-height: 18rem; border: 0; }
+.kn-embed-pending {
+  background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--foreground) 5%, transparent), transparent) 0 0 / 200% 100%,
+    color-mix(in oklch, var(--foreground) 3%, var(--card));
+  animation: kn-embed-pending 1.4s ease-in-out infinite;
+}
+@keyframes kn-embed-pending { to { background-position: -200% 0, 0 0; } }
+.kn-embed-bar { display: flex; align-items: center; gap: 0.25rem; padding-right: 0.4rem; }
+.kn-embed-item {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  color: var(--foreground);
+  text-decoration: none;
+}
+/* Beats `.kn-prose a`: a tile is a target, not a link inside prose. */
+.kn-embed a.kn-embed-item, .kn-embed a.kn-embed-frame { color: var(--foreground); text-decoration: none; }
+.kn-embed a:focus-visible, .kn-embed button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 8px; }
+.kn-embed-caption { font-size: var(--kn-text-sm); font-weight: 540; line-height: 1.35; overflow-wrap: anywhere; }
+.kn-embed-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: var(--kn-text-xs);
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kn-embed-changed {
+  align-self: flex-start;
+  margin-top: 0.15rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: var(--kn-text-xs);
+  color: var(--foreground);
+  background: color-mix(in oklch, var(--kn-panel-warning) 18%, transparent);
+  border: 1px solid color-mix(in oklch, var(--kn-panel-warning) 45%, transparent);
+}
+.kn-embed-out { width: 0.75rem; height: 0.75rem; flex: none; opacity: 0.7; }
+.kn-embed-live-toggle, .kn-embed-close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2rem;
+  padding: 0 0.55rem;
+  border-radius: 8px;
+  font-size: var(--kn-text-xs);
+  color: var(--muted-foreground);
+}
+.kn-embed-live-toggle:hover, .kn-embed-close:hover { background: var(--accent); color: var(--foreground); }
+.kn-embed-close { position: absolute; top: 0.4rem; right: 0.4rem; padding: 0 0.45rem; background: var(--card); border: 1px solid var(--border); }
+.kn-embed-figcaption { margin-top: 0.45rem; font-size: var(--kn-text-sm); color: var(--muted-foreground); }
+.kn-embed[data-selected='true'] :is(.kn-embed-tile, .kn-embed-items > .kn-embed-item) { border-color: var(--ring); }
+.kn-embed-actions {
+  position: absolute;
+  top: -0.7rem;
+  right: -0.6rem;
+  z-index: 1;
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.kn-embed-actions button {
+  display: inline-flex;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted-foreground);
+}
+.kn-embed-actions button:hover { color: var(--foreground); background: var(--accent); }
+.kn-embed-actions .kn-embed-remove:hover { color: var(--destructive); }
+.kn-embed:hover .kn-embed-actions, .kn-embed[data-selected='true'] .kn-embed-actions, .kn-embed-actions:focus-within { opacity: 1; }
+@media (hover: none) { .kn-embed-actions { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  :is(.kn-embed-tile, .kn-embed-items > .kn-embed-item), .kn-embed-actions { transition: none; }
+  .kn-embed-pending { animation: none; }
+}
+
+/* The Figma picker (#470), loaded with its dialog. */
+.kn-embed-picker { max-height: min(90vh, 52rem); grid-template-rows: auto 1fr auto; }
+.kn-embed-picker-body { display: grid; gap: 1.25rem; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 22rem); }
+.kn-embed-picker-source, .kn-embed-picker-selected { display: flex; flex-direction: column; gap: 0.75rem; min-height: 0; }
+.kn-embed-picker-frames { display: flex; flex-direction: column; gap: 0.75rem; overflow-y: auto; min-height: 10rem; max-height: 26rem; padding-right: 0.25rem; }
+.kn-embed-picker-page h3 { margin-bottom: 0.35rem; font-size: var(--kn-text-xs); font-weight: 600; letter-spacing: 0.02em; color: var(--muted-foreground); }
+.kn-embed-picker-frame {
+  display: grid;
+  grid-template-columns: auto 3.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.kn-embed-picker-frame:hover { background: var(--accent); }
+.kn-embed-picker-frame[data-picked='true'] { background: color-mix(in oklch, var(--primary) 8%, transparent); }
+.kn-embed-picker-thumb {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 2.5rem;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--foreground) 3%, var(--card));
+}
+.kn-embed-picker-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.kn-embed-picker-list { display: flex; flex-direction: column; gap: 0.35rem; overflow-y: auto; max-height: 22rem; }
+.kn-embed-picker-list li { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem; border-radius: 8px; }
+.kn-embed-picker-list li[data-dragging='true'] { opacity: 0.5; }
+.kn-embed-picker-layout { display: inline-flex; padding: 0.15rem; border: 1px solid var(--border); border-radius: 8px; }
+.kn-embed-picker-layout button { padding: 0.2rem 0.6rem; border-radius: 6px; font-size: var(--kn-text-xs); color: var(--muted-foreground); }
+.kn-embed-picker-layout button[aria-checked='true'] { background: var(--accent); color: var(--foreground); font-weight: 540; }
+.kn-embed-picker-layout button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.kn-embed-picker-empty { display: flex; flex-direction: column; gap: 0.5rem; padding: 1.5rem; border: 1px dashed var(--border); border-radius: 10px; font-size: var(--kn-text-sm); }
+@media (max-width: 720px) {
+  .kn-embed-picker-body { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+  .kn-embed-picker-frames { max-height: 16rem; }
+}
+
 .kn-toc { padding: 0.75rem 0.95rem; background: color-mix(in oklch, var(--foreground) 2.5%, var(--card)); }
 .kn-toc-head {
   display: flex;
@@ -1034,7 +1278,7 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-image { position: relative; display: block; margin-block: var(--kn-block-gap); width: fit-content; max-width: 100%; }
 .kn-image img { display: block; width: var(--kn-image-width, auto); max-width: 100%; border-radius: 8px; }
 .kn-image[data-selected='true'] img { outline: 2px solid var(--ring); outline-offset: 2px; }
-.kn-image-grip {
+.kn-resize-grip {
   position: absolute;
   top: 50%;
   width: 0.4rem;
@@ -1046,9 +1290,13 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   cursor: ew-resize;
   transition: opacity 140ms ease;
 }
-.kn-image:hover .kn-image-grip { opacity: 0.85; }
-.kn-image-grip[data-side='left'] { left: -0.2rem; }
-.kn-image-grip[data-side='right'] { right: -0.2rem; }
+:is(.kn-image, .kn-mermaid, .kn-drawing):hover .kn-resize-grip { opacity: 0.85; }
+.kn-resize-grip[data-side='left'] { left: -0.2rem; }
+.kn-resize-grip[data-side='right'] { right: -0.2rem; }
+/* A diagram is a bordered card that clips its overflow, so its grips sit just inside the border. */
+.kn-block > .kn-resize-grip { z-index: 1; }
+.kn-block > .kn-resize-grip[data-side='left'] { left: 0.2rem; }
+.kn-block > .kn-resize-grip[data-side='right'] { right: 0.2rem; }
 
 /* ---------------------------------------------------------------- editor */
 
@@ -1213,6 +1461,55 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-bubble-sep { width: 1px; height: 1.1rem; margin: 0 0.2rem; background: var(--border); }
 .kn-bubble-status { width: 1.1rem; min-width: 1.1rem; height: 1.1rem; border-radius: 999px; padding: 0; }
 .kn-table-bar .kn-danger:hover { background: color-mix(in oklch, var(--destructive) 15%, transparent); color: var(--destructive); }
+
+/*
+ * Row and column handles (TableHandles): a pill straddling the table's border,
+ * centred on its row or column. Fixed, like the bars: top/left are the centre
+ * point, written inline. The row pill is 16px wide so it stays clear of the
+ * block gutter, which ends 16px left of the table; above the table only the
+ * bar sits, and it keeps its distance (gap 16).
+ */
+.kn-table-grip {
+  position: fixed;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  translate: -50% -50%;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.kn-table-grip-row { width: 1rem; height: 1.5rem; }
+.kn-table-grip-col { width: 1.5rem; height: 1rem; }
+.kn-table-grip:hover,
+.kn-table-grip:focus-visible,
+.kn-table-grip[data-state='open'] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+.kn-table-grip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+/* A finger needs more than a pointer does. */
+@media (pointer: coarse) {
+  .kn-table-grip-row { width: 1.5rem; height: 2.25rem; }
+  .kn-table-grip-col { width: 2.25rem; height: 1.5rem; }
+}
+/* What the handle under the pointer, or in focus, acts on. */
+.kn-table-band {
+  position: fixed;
+  z-index: 29;
+  pointer-events: none;
+  border-radius: 2px;
+  background: color-mix(in oklch, var(--primary) 8%, transparent);
+  outline: 2px solid color-mix(in oklch, var(--primary) 55%, transparent);
+  outline-offset: -1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kn-table-grip { transition: none; }
+}
 
 /* Command menu ------------------------------------------------------------ */
 
@@ -1417,7 +1714,7 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   .kn-block-actions,
   .kn-panel-switch,
   .kn-layout-switch,
-  .kn-image-grip,
+  .kn-resize-grip,
   .markdown-body summary::before { transition: none; }
 }
 
@@ -1516,6 +1813,11 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
  * assistant's margin rule. The read view keeps its measure. */
 .kn-page-editor { --kn-measure: none; }
 .kn-page-editor .kn-editor-content { padding-inline: clamp(1.75rem, 3.5vw, 3.5rem); }
+/* No hover, no block handles: a phone keeps the app's 1rem gutter, which still
+ * holds the assistant's margin rule (0.85rem in). */
+@media (hover: none) {
+  .kn-page-editor .kn-editor-content { padding-inline: 1rem; }
+}
 .kn-dirty-dot {
   width: 0.45rem;
   height: 0.45rem;

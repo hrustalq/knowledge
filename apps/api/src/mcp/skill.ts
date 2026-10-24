@@ -174,9 +174,10 @@ Pass \`projectId\` (and a \`note\` for a page with no subpages) and nothing is a
 
 ### Start a page from a template
 
-Decisions, proposals, runbooks and incident reviews have a house shape. ${toolRef('knowledge_list_templates')} lists them
+Decisions, proposals, runbooks, incident reviews, test plans and bug reports have a house shape. ${toolRef('knowledge_list_templates')} lists them
 (\`builtin:adr\`, \`builtin:rfc\`, \`builtin:runbook\`, \`builtin:postmortem\`, \`builtin:api-spec\`, \`builtin:use-case\`,
-\`builtin:entity\`, \`builtin:component\`, plus the workspace's own); ${toolRef('knowledge_get_template')} shows a template's sections and the
+\`builtin:entity\`, \`builtin:component\`, \`builtin:test-plan\`, \`builtin:test-case\`, \`builtin:test-data\`,
+\`builtin:bug-report\`, plus the workspace's own); ${toolRef('knowledge_get_template')} shows a template's sections and the
 placeholders it expects. Pass \`templateRef\` and \`values\` to ${toolRef('knowledge_create_document')}: without \`content\`
 the server fills the skeleton in, with \`content\` (the skeleton, written out) yours is published and the template is
 recorded as the page's origin. Either way the template's tags and relations link the page into the graph.
@@ -304,6 +305,15 @@ ${feedbackStep}${reportStep}${flagStep}
 - ${toolRef('knowledge_list_documents')} — the page tree of a workspace or project.
 - ${toolRef('knowledge_get_workspace_graph')} — every page and entity with typed edges; pages of degree 0 are orphans.
 
+### Designs embedded in pages
+
+A page can embed Figma frames: a \`<figure data-kn-embed>\` of links, each pinned to a version with \`data-kn-version\`.
+
+- ${toolRef('knowledge_get_embed')} — one group of a page: canonical node URLs, captions, frame names, the frames' text
+  and the snapshot images. To implement a screen, pass those node URLs to Figma's own Dev Mode MCP for layers and CSS.
+- ${toolRef('knowledge_find_embeds')} — which pages embed a Figma file or frame (pass the Figma link). Use it before
+  changing a screen, to find every page that documents it.
+
 ### House style and page quality
 
 - ${toolRef('knowledge_lint_draft')} — check markdown against the styleguide of its project before you write it. Each
@@ -317,7 +327,10 @@ ${feedbackStep}${reportStep}${flagStep}
 
 ### Dependencies and impact
 
-Entities are keyed \`type:name\` — \`service:identity\`, \`db:orders\`.
+Entities are keyed \`type:name\` — \`service:identity\`, \`db:orders\`. The prefix names a layer: \`system\` (\`service:\`,
+\`domain:\`), \`component\` (\`component:\`, \`db:\`), \`interface\` (\`op:\`, \`channel:\`), \`code\` (\`module:\`, \`file:\`), or
+\`concept\` for anything else. Pick the prefix for the level you mean, so a page about one endpoint names \`op:\`, not only
+its service.
 
 - ${toolRef('knowledge_find_relations')} — what an entity touches, within N hops.
 - ${toolRef('knowledge_impact_analysis')} — what breaks if it changes (\`direction: "dependents"\`), or what it relies on.
@@ -329,6 +342,9 @@ not. ${toolRef('knowledge_list_release_tags')} names the instants worth asking a
 
 For a broad question across everything ("what are our main risks?"), ${toolRef('knowledge_global_overview')}
 returns the communities of related pages closest to it, each with a summary. Read and cite the pages it names.
+Communities form a tree: \`level: 0\` (the default) is the finest grouping, \`level: 1\` and \`2\` broader areas. A
+search result's \`communityPath\` names its areas broadest first, and \`layer\` says whether the page is about a system,
+a component, an interface or code.
 
 What was said but never written down may be in a team chat a workspace made searchable:
 ${toolRef('knowledge_search_chat')} returns masked windows of messages from the chats you may read. A chat is not a
@@ -353,6 +369,16 @@ A component page declares its code in a \`component:\` frontmatter block (\`path
       ? ` When code you touched has no page, ${toolRef('knowledge_document_component')} drafts one from the files and opens it as a merge request.`
       : ''
   }
+
+### API tests
+
+An OpenAPI operation can have a QA suite: positive and negative cases, with test fixtures (pages of
+\`kind: test-fixture\`) bound as setup and teardown. ${toolRef('knowledge_qa_overview')} lists which operations have
+no suite, an outdated one, unbound setup or fixtures needing review. ${toolRef('knowledge_get_test_suite')} reads it, or exports it as a
+bash script or a Postman collection; ${toolRef('knowledge_suggest_test_fixtures')} says what to call before testing it.
+To run it yourself, ${toolRef('knowledge_get_test_run_plan')} returns the ordered requests with \`{{placeholders}}\`:
+supply its \`secrets\` and \`inputs\`, send each request with your own HTTP client, capture as each step says, and run
+teardown even after a failure. The plan never contains a credential; never write one into a page or a fixture.
 
 ${writeFlows}
 ${questionFlows}${captureMemory}${plainMarkdown}

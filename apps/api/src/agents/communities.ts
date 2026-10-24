@@ -3,10 +3,11 @@
  *
  * The graph is bipartite (page → entity), so communities are found on its
  * page-to-page projection: two pages are linked by every entity they both
- * name, weighted by how many. One level of Louvain modularity optimisation
- * over that is enough to say "these pages are about one area" — the summaries
- * do the rest. Deterministic (ids in sorted order), so the same graph gives
- * the same communities, and its fingerprint says when a rebuild is worth it.
+ * name, weighted by how many. Louvain modularity optimisation over that says
+ * "these pages are about one area"; repeated on the aggregated graph (#475)
+ * it says which areas belong together, up to MAX_COMMUNITY_LEVELS. The
+ * summaries do the rest. Deterministic (ids in sorted order), so the same
+ * graph gives the same tree, and its fingerprint says when a rebuild is worth it.
  */
 import { createHash } from 'node:crypto';
 
@@ -14,6 +15,16 @@ import { createHash } from 'node:crypto';
 export const HUB_ENTITY_PAGES = 12;
 /** A Louvain level stops after this many passes even if nodes still move. */
 const MAX_PASSES = 20;
+/** Levels 0 (finest) … 2 (docs/features/63). */
+export const MAX_COMMUNITY_LEVELS = 3;
+/**
+ * Level L runs Louvain at resolution RESOLUTION_STEP^L. At resolution 1 a
+ * converged level 0 is already a modularity optimum, so aggregating merges
+ * almost nothing; halving it per level is what finds the coarser grouping.
+ */
+const RESOLUTION_STEP = 0.5;
+/** Bumped when the tree's shape changes, so the first run after a deploy rebuilds an unchanged graph. */
+const HIERARCHY_VERSION = 'levels-v1';
 
 export interface WeightedPair {
   a: string;
@@ -39,6 +50,11 @@ export function pagePairs(edges: ReadonlyArray<{ documentId: string; targetKey: 
       }
     }
   }
+  return sortedPairs(weights);
+}
+
+/** `"a b" → weight` as pairs, in key order, so the same links always come out the same way. */
+function sortedPairs(weights: ReadonlyMap<string, number>): WeightedPair[] {
   return [...weights].sort(([x], [y]) => x.localeCompare(y)).map(([key, weight]) => {
     const [a, b] = key.split(' ') as [string, string];
     return { a, b, weight };
@@ -46,22 +62,33 @@ export function pagePairs(edges: ReadonlyArray<{ documentId: string; targetKey: 
 }
 
 /**
- * One level of Louvain: each page starts alone, and in turn moves to the
+ * One level of Louvain: each node starts alone, and in turn moves to the
  * neighbouring community that raises modularity most, until a pass moves
- * nobody. Returns page → community label (the smallest page id in it).
+ * nobody. Returns node → community label (the smallest node id in it).
+ *
+ * A pair with `a === b` is a self-loop: on an aggregated graph it carries a
+ * community's internal weight, which counts twice towards its degree and
+ * never as a link to move along. `resolution` below 1 favours larger
+ * communities (the γ of generalised modularity).
  */
-export function louvain(pairs: readonly WeightedPair[]): Map<string, string> {
+export function louvain(pairs: readonly WeightedPair[], resolution = 1): Map<string, string> {
   const adj = new Map<string, Map<string, number>>();
+  const self = new Map<string, number>();
   const link = (x: string, y: string, w: number) => {
     if (!adj.has(x)) adj.set(x, new Map());
     adj.get(x)!.set(y, (adj.get(x)!.get(y) ?? 0) + w);
   };
   for (const { a, b, weight } of pairs) {
+    if (a === b) {
+      if (!adj.has(a)) adj.set(a, new Map());
+      self.set(a, (self.get(a) ?? 0) + weight);
+      continue;
+    }
     link(a, b, weight);
     link(b, a, weight);
   }
   const nodes = [...adj.keys()].sort();
-  const degree = new Map(nodes.map((n) => [n, [...adj.get(n)!.values()].reduce((s, w) => s + w, 0)]));
+  const degree = new Map(nodes.map((n) => [n, [...adj.get(n)!.values()].reduce((s, w) => s + w, 2 * (self.get(n) ?? 0))]));
   const m2 = [...degree.values()].reduce((s, d) => s + d, 0); // 2m
   const community = new Map(nodes.map((n) => [n, n]));
   const total = new Map(nodes.map((n) => [n, degree.get(n)!])); // Σtot per community
@@ -79,8 +106,8 @@ export function louvain(pairs: readonly WeightedPair[]): Map<string, string> {
         into.set(c, (into.get(c) ?? 0) + w);
       }
       total.set(own, total.get(own)! - k);
-      // ΔQ of joining c, up to a constant: k_in/m − Σtot·k/(2m²), scaled by 2m.
-      const gain = (c: string) => 2 * (into.get(c) ?? 0) - (total.get(c)! * k * 2) / m2;
+      // ΔQ of joining c, up to a constant: k_in/m − γ·Σtot·k/(2m²), scaled by 2m.
+      const gain = (c: string) => 2 * (into.get(c) ?? 0) - (resolution * total.get(c)! * k * 2) / m2;
       let best = own;
       let bestGain = gain(own);
       for (const c of [...into.keys()].sort()) {
@@ -121,9 +148,62 @@ export function groupCommunities(assignment: ReadonlyMap<string, string>, minSiz
     .sort((x, y) => y.length - x.length || x[0]!.localeCompare(y[0]!));
 }
 
+/** One community of the tree: every page beneath it, and the community it merged into. */
+export interface CommunityNode {
+  /** `<level>:<smallest page id beneath>` — unique across levels. */
+  id: string;
+  level: number;
+  /** Null for a root: nothing above merged it with another community. */
+  parentId: string | null;
+  /** Every page beneath, sorted — so "withheld whole" is one check per community. */
+  members: string[];
+  /** The communities it merged, one level or more below. Empty at level 0. */
+  children: string[];
+}
+
+/**
+ * The community tree (#475): level 0 is `groupCommunities(louvain(pairs))`,
+ * and each level above runs Louvain on the roots so far, at a lower
+ * resolution — nodes linked by the page-pair weight between them, their
+ * internal weight a self-loop. A level
+ * keeps only communities merging at least two roots; the rest stay roots and
+ * take part in the next level. Stops when a level merges nothing, or at
+ * MAX_COMMUNITY_LEVELS. Ordered by level, then largest first.
+ */
+export function communityHierarchy(pairs: readonly WeightedPair[]): CommunityNode[] {
+  const nodes: CommunityNode[] = groupCommunities(louvain(pairs), 2).map((members) => ({
+    id: `0:${members[0]}`,
+    level: 0,
+    parentId: null,
+    members,
+    children: [],
+  }));
+  let roots = [...nodes];
+  for (let level = 1; level < MAX_COMMUNITY_LEVELS && roots.length > 1; level++) {
+    const rootOf = new Map(roots.flatMap((r) => r.members.map((m) => [m, r.id] as const)));
+    const weights = new Map<string, number>();
+    for (const { a, b, weight } of pairs) {
+      const [x, y] = [rootOf.get(a), rootOf.get(b)];
+      if (!x || !y) continue;
+      const key = x < y ? `${x} ${y}` : `${y} ${x}`;
+      weights.set(key, (weights.get(key) ?? 0) + weight);
+    }
+    const byId = new Map(roots.map((r) => [r.id, r]));
+    const merged = groupCommunities(louvain(sortedPairs(weights), RESOLUTION_STEP ** level), 2).map((ids): CommunityNode => {
+      const members = ids.flatMap((id) => byId.get(id)!.members).sort();
+      return { id: `${level}:${members[0]}`, level, parentId: null, members, children: ids };
+    });
+    if (merged.length === 0) break;
+    for (const parent of merged) for (const id of parent.children) byId.get(id)!.parentId = parent.id;
+    nodes.push(...merged.sort((x, y) => y.members.length - x.members.length || x.id.localeCompare(y.id)));
+    roots = roots.filter((r) => r.parentId === null).concat(merged);
+  }
+  return nodes;
+}
+
 /** The projection's identity: unchanged links mean an unchanged answer, so the rebuild is skipped. */
 export function graphFingerprint(pairs: readonly WeightedPair[]): string {
   return createHash('sha256')
-    .update(pairs.map((p) => `${p.a} ${p.b} ${p.weight}`).join('\n'))
+    .update([HIERARCHY_VERSION, ...pairs.map((p) => `${p.a} ${p.b} ${p.weight}`)].join('\n'))
     .digest('hex');
 }

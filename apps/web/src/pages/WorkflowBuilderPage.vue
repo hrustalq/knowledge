@@ -549,6 +549,7 @@ function applyProposal(proposal: { graph: WorkflowGraph; name: string | null; de
           @say="(turn) => chatTurns.push(turn)"
           @propose="applyProposal"
           @unavailable="chatUnavailable = true"
+          @clear="chatTurns = []"
         />
       </aside>
     </div>
@@ -567,6 +568,7 @@ function applyProposal(proposal: { graph: WorkflowGraph; name: string | null; de
           @say="(turn) => chatTurns.push(turn)"
           @propose="applyProposal"
           @unavailable="chatUnavailable = true"
+          @clear="chatTurns = []"
         />
       </SheetContent>
     </Sheet>

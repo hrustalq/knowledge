@@ -4,7 +4,9 @@ import {
   API_TRY_MAX_REQUEST_BYTES,
   API_TRY_PROXY_MODES,
   resolveApiBreakingChangePolicy,
+  resolveApiTestRunner,
   type ApiBreakingChangePolicy,
+  type ApiTestRunnerSettings,
   type ApiSettingsResponse,
   type ApiTryProxyMode,
   type ApiTryProxySettings,
@@ -26,6 +28,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
  * The breaking-change policy (phase 6) has no env ceiling: `null` is `warn`,
  * and the merge gate reads it through `ApiSpecDiffService.breakingPolicy`,
  * which resolves it with the same contracts function.
+ *
+ * The server runner (#483, phase 5) is off unless API_TEST_RUNNER_MODE and the
+ * workspace both say on; the worker reads it again before every run.
  */
 @Injectable()
 export class ApiSettingsService {
@@ -53,6 +58,11 @@ export class ApiSettingsService {
     return this.tryProxy(row?.apiTryProxyMode).effective;
   }
 
+  async testRunner(workspaceId: string): Promise<ApiTestRunnerSettings> {
+    const row = await this.prisma.workspaceSettings.findUnique({ where: { workspaceId }, select: { apiTestRunner: true } });
+    return resolveApiTestRunner(row?.apiTestRunner, this.config.get('API_TEST_RUNNER_MODE', { infer: true }));
+  }
+
   async get(workspaceId: string): Promise<ApiSettingsResponse> {
     const row = await this.prisma.workspaceSettings.findUnique({ where: { workspaceId } });
     return {
@@ -68,6 +78,7 @@ export class ApiSettingsService {
         maxResponseBytes: this.config.get('API_TRY_MAX_RESPONSE_BYTES', { infer: true }),
         perMinute: this.config.get('API_TRY_RATE_PER_MINUTE', { infer: true }),
       },
+      testRunner: resolveApiTestRunner(row?.apiTestRunner, this.config.get('API_TEST_RUNNER_MODE', { infer: true })),
       updatedAt: row?.updatedAt.toISOString() ?? null,
     };
   }
@@ -88,6 +99,13 @@ export class ApiSettingsService {
         where: { workspaceId },
         create: { workspaceId, apiBreakingChangePolicy: patch.apiBreakingChangePolicy, updatedBy: actorId ?? null },
         update: { apiBreakingChangePolicy: patch.apiBreakingChangePolicy, updatedBy: actorId ?? null },
+      });
+    }
+    if (patch.apiTestRunner !== undefined) {
+      await this.prisma.workspaceSettings.upsert({
+        where: { workspaceId },
+        create: { workspaceId, apiTestRunner: patch.apiTestRunner, updatedBy: actorId ?? null },
+        update: { apiTestRunner: patch.apiTestRunner, updatedBy: actorId ?? null },
       });
     }
     return this.get(workspaceId);

@@ -7,6 +7,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   BookmarkPlus,
   ChartColumn,
+  FlaskConical,
   GitPullRequestArrow,
   HeartPulse,
   House,
@@ -64,6 +65,8 @@ const links = computed<NavLink[]>(() => [
   // The trust loop's review surface (docs/features/40): beside merge requests
   // and workflows, which are the other two places a page is acted on in bulk.
   { to: '/knowledge-health', label: t('nav.knowledgeHealth'), icon: HeartPulse },
+  // Which operations are ready to test (#483), beside health: both are a sweep for what needs work.
+  { to: '/qa', label: t('nav.qa'), icon: FlaskConical },
   // Usage analytics (#79): beside health, which reads its unread/dead signals.
   // Admins only — it carries what people searched for.
   ...(auth.canAdminWorkspace ? [{ to: '/analytics', label: t('nav.analytics'), icon: ChartColumn }] : []),

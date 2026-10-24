@@ -367,6 +367,9 @@ importers:
       highlight.js:
         specifier: ^11.12.0
         version: 11.12.0
+      js-yaml:
+        specifier: ^5.4.1
+        version: 5.4.1
       jsdom:
         specifier: ^30.1.1
         version: 30.1.1(@noble/hashes@1.8.0)
@@ -437,6 +440,9 @@ importers:
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
       '@types/jsdom':
         specifier: ^28.0.3
         version: 28.0.3
@@ -7414,7 +7420,7 @@ snapshots:
       ignore: 7.0.9
       import-fresh: 4.0.1
       is-language-code: 3.1.0
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       json5: 2.2.3
       jsonc-eslint-parser: 3.3.0
       parse5: 7.3.0
@@ -8755,7 +8761,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@30.1.1(@noble/hashes@1.8.0))(vite@8.2.2(@types/node@24.13.3)(jiti@2.7.0)(stylus@0.57.0)(yaml@2.9.0))
+      vitest: 4.1.11(@types/node@25.9.5)(@vitest/coverage-v8@4.1.11)(jsdom@30.1.1(@noble/hashes@1.8.0))(vite@8.2.2(@types/node@25.9.5)(jiti@2.7.0)(stylus@0.57.0)(yaml@2.9.0))
 
   '@vitest/expect@4.1.11':
     dependencies:
@@ -9473,7 +9479,7 @@ snapshots:
     dependencies:
       env-paths: 2.2.1
       import-fresh: 3.3.1
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       parse-json: 5.2.0
     optionalDependencies:
       typescript: 6.0.3

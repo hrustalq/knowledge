@@ -61,6 +61,7 @@ function build(at: TemporalPoint | undefined) {
   };
   // A store that honours exactly the two predicates GraphService builds.
   const graph = {
+    entityKeysOf: vi.fn(async () => new Map<string, string[]>()),
     searchChunks: vi.fn(async (_ws: string, _e: number[], k: number, _acl: unknown, p?: TemporalPoint) =>
       chunks
         .filter((c) => (p ? c.validFrom <= p.at && (c.validTo === null || c.validTo > p.at) : c.live))
@@ -81,6 +82,9 @@ function build(at: TemporalPoint | undefined) {
     { documentFilterFor: vi.fn(async () => UNFILTERED) } as never,
     { get: vi.fn(() => 1000) } as never,
     { resolve: vi.fn(async () => at) } as never,
+    // No analytics, no communities built (#475): no prior, no communityPath.
+    { search: () => undefined } as never,
+    { scored: async () => [] } as never,
   );
   return { svc, graph, fulltext };
 }

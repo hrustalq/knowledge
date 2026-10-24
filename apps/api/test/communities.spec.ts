@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { graphFingerprint, groupCommunities, HUB_ENTITY_PAGES, louvain, pagePairs } from '../src/agents/communities.js';
+import {
+  communityHierarchy,
+  graphFingerprint,
+  groupCommunities,
+  HUB_ENTITY_PAGES,
+  louvain,
+  MAX_COMMUNITY_LEVELS,
+  pagePairs,
+  type WeightedPair,
+} from '../src/agents/communities.js';
 import { CommunitiesService } from '../src/communities/communities.service.js';
 import { systemScope } from '../src/permissions/access-scope.js';
 
@@ -46,6 +55,81 @@ describe('louvain', () => {
   });
 });
 
+describe('louvain self-loops', () => {
+  it('counts a self-loop towards degree and never moves along it', () => {
+    // Two heavy nodes (internal weight 10) joined by a thin link stay apart;
+    // without the self-loops the thin link alone would merge them.
+    const pairs = [
+      { a: 'x', b: 'x', weight: 10 },
+      { a: 'y', b: 'y', weight: 10 },
+      { a: 'x', b: 'y', weight: 1 },
+    ];
+    expect(new Set(louvain(pairs).values()).size).toBe(2);
+    expect(new Set(louvain([{ a: 'x', b: 'y', weight: 1 }]).values()).size).toBe(1);
+  });
+});
+
+describe('communityHierarchy (#475)', () => {
+  const clique = (ids: string[], weight: number): WeightedPair[] => ids.flatMap((a, i) => ids.slice(i + 1).map((b) => ({ a, b, weight })));
+  const bridge = (a: string, b: string, weight: number): WeightedPair => ({ a, b, weight });
+  // Four triangles; a–b and c–d are close neighbours, the two pairs barely touch.
+  const pairs = [
+    ...clique(['a1', 'a2', 'a3'], 4),
+    ...clique(['b1', 'b2', 'b3'], 4),
+    ...clique(['c1', 'c2', 'c3'], 4),
+    ...clique(['d1', 'd2', 'd3'], 4),
+    bridge('a1', 'b1', 3),
+    bridge('a2', 'b2', 3),
+    bridge('c1', 'd1', 3),
+    bridge('c2', 'd2', 3),
+    bridge('b3', 'c3', 1),
+  ];
+  const tree = communityHierarchy(pairs);
+
+  it('builds at least two levels, and every non-root has a parent one or more levels up', () => {
+    const levels = new Set(tree.map((n) => n.level));
+    expect(levels.size).toBeGreaterThanOrEqual(2);
+    expect(Math.max(...levels)).toBeLessThan(MAX_COMMUNITY_LEVELS);
+    const byId = new Map(tree.map((n) => [n.id, n]));
+    for (const n of tree.filter((x) => x.parentId)) {
+      const parent = byId.get(n.parentId!)!;
+      expect(parent.level).toBeGreaterThan(n.level);
+      expect(parent.children).toContain(n.id);
+    }
+  });
+
+  it('gives each level 0 its triangle and each level 1 two of them, members being every page beneath', () => {
+    expect(tree.filter((n) => n.level === 0).map((n) => n.members)).toEqual([
+      ['a1', 'a2', 'a3'],
+      ['b1', 'b2', 'b3'],
+      ['c1', 'c2', 'c3'],
+      ['d1', 'd2', 'd3'],
+    ]);
+    expect(tree.filter((n) => n.level === 1).map((n) => [n.id, n.children, n.members.length])).toEqual([
+      ['1:a1', ['0:a1', '0:b1'], 6],
+      ['1:c1', ['0:c1', '0:d1'], 6],
+    ]);
+  });
+
+  it('is deterministic', () => {
+    expect(communityHierarchy([...pairs].reverse())).toEqual(tree);
+  });
+
+  it('stops at one level when nothing merges, and never past the cap', () => {
+    const alone = communityHierarchy([...clique(['a1', 'a2', 'a3'], 4), ...clique(['b1', 'b2', 'b3'], 4)]);
+    expect(alone.map((n) => [n.level, n.parentId])).toEqual([
+      [0, null],
+      [0, null],
+    ]);
+    // A long chain of triangles keeps merging; the tree still has at most MAX levels.
+    const chain = Array.from({ length: 16 }, (_, i) => [
+      ...clique([`p${i}a`, `p${i}b`, `p${i}c`], 4),
+      ...(i ? [bridge(`p${i - 1}a`, `p${i}a`, 3)] : []),
+    ]).flat();
+    expect(Math.max(...communityHierarchy(chain).map((n) => n.level))).toBeLessThan(MAX_COMMUNITY_LEVELS);
+  });
+});
+
 describe('graphFingerprint', () => {
   it('changes when a link does, and only then', () => {
     const base = [{ a: 'a', b: 'b', weight: 1 }];
@@ -57,8 +141,9 @@ describe('graphFingerprint', () => {
 describe('CommunitiesService', () => {
   const WS = '11111111-1111-4111-8111-111111111111';
   const stored = [
-    { communityId: 'c1', title: 'Payments', summary: 'Billing and webhooks.', members: ['d1', 'd2'], builtAt: 0, score: 0.9 },
-    { communityId: 'c2', title: 'Secrets', summary: 'Restricted.', members: ['d3', 'd4'], builtAt: 0, score: 0.5 },
+    { communityId: 'c1', level: 0, parentId: 'top', title: 'Payments', summary: 'Billing and webhooks.', members: ['d1', 'd2'], builtAt: 0, score: 0.9 },
+    { communityId: 'c2', level: 0, parentId: 'top', title: 'Secrets', summary: 'Restricted.', members: ['d3', 'd4'], builtAt: 0, score: 0.5 },
+    { communityId: 'top', level: 1, parentId: null, title: 'Finance', summary: 'Payments and secrets.', members: ['d1', 'd2', 'd3', 'd4'], builtAt: 0, score: 0.7 },
   ];
   function service(visible: string[]) {
     const graph = { communities: vi.fn(async () => stored) };
@@ -75,6 +160,18 @@ describe('CommunitiesService', () => {
       { documentId: 'd1', title: 'T d1' },
       { documentId: 'd2', title: 'T d2' },
     ]);
+  });
+
+  it('withholds an ancestor of a withheld community too (#475)', async () => {
+    const { svc } = service(['d1', 'd2', 'd3']);
+    expect(await svc.overview(systemScope(WS), undefined, 10, 1)).toEqual([]);
+    const all = service(['d1', 'd2', 'd3', 'd4']).svc;
+    expect((await all.overview(systemScope(WS), undefined, 10, 1)).map((c) => [c.communityId, c.level, c.parentId])).toEqual([['top', 1, null]]);
+  });
+
+  it('reads level 0 when no level is asked for', async () => {
+    const { svc } = service(['d1', 'd2', 'd3', 'd4']);
+    expect((await svc.overview(systemScope(WS), undefined, 10)).map((c) => c.communityId)).toEqual(['c1', 'c2']);
   });
 
   it('ranks by the question when there is one, and embeds nothing without one', async () => {

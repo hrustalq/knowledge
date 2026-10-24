@@ -12,17 +12,22 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   CreateWorkspaceResponse,
+  DeleteWorkspaceResponse,
   ListWorkspaceCandidatesResponse,
   ListWorkspaceMembersResponse,
   ListWorkspacesResponse,
+  UpdateWorkspaceResponse,
+  WorkspaceDeletionPreviewResponse,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import {
   AddMemberDto,
   CreateWorkspaceDto,
+  DeleteWorkspaceQueryDto,
   ListCandidatesQueryDto,
   UpdateMemberDto,
+  UpdateWorkspaceDto,
 } from './workspaces.dto.js';
 import { WorkspacesService } from './workspaces.service.js';
 
@@ -48,6 +53,37 @@ export class WorkspacesController {
     return this.workspaces.create(principal, dto.name);
   }
 
+  @Get(':id/deletion-preview')
+  @Access('admin', 'workspace')
+  @ApiOperation({ summary: 'What deleting the workspace would destroy, counted (workspace admin)' })
+  deletionPreview(@Param('id', ParseUUIDPipe) id: string): Promise<WorkspaceDeletionPreviewResponse> {
+    return this.workspaces.deletionPreview(id);
+  }
+
+  @Patch(':id')
+  @Access('admin', 'workspace')
+  @ApiOperation({ summary: 'Rename the workspace (workspace admin)' })
+  update(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateWorkspaceDto,
+  ): Promise<UpdateWorkspaceResponse> {
+    return this.workspaces.rename(principal, id, dto.name);
+  }
+
+  @Delete(':id')
+  @Access('admin', 'workspace')
+  @ApiOperation({
+    summary: 'Delete the workspace and everything in it (workspace admin). Gone at once; contents removed in the background',
+  })
+  remove(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: DeleteWorkspaceQueryDto,
+  ): Promise<DeleteWorkspaceResponse> {
+    return this.workspaces.remove(principal, id, query.confirm);
+  }
+
   @Get(':id/members')
   @Access('viewer', 'workspace')
   @ApiOperation({ summary: 'Workspace member roster (any member)' })
@@ -68,19 +104,24 @@ export class WorkspacesController {
   @Post(':id/members')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Add (or re-role) a member by email (workspace admin)' })
-  addMember(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddMemberDto): Promise<ListWorkspaceMembersResponse> {
-    return this.workspaces.addMember(id, dto);
+  addMember(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddMemberDto,
+  ): Promise<ListWorkspaceMembersResponse> {
+    return this.workspaces.addMember(id, dto, principal.userId);
   }
 
   @Patch(':id/members/:userId')
   @Access('admin', 'workspace')
-  @ApiOperation({ summary: 'Change a member role / trusted-operator flag (workspace admin)' })
+  @ApiOperation({ summary: 'Change a member role / trusted-operator flag / capabilities (workspace admin)' })
   updateMember(
+    @CurrentPrincipal() principal: Principal,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('userId', ParseUUIDPipe) userId: string,
     @Body() dto: UpdateMemberDto,
   ): Promise<ListWorkspaceMembersResponse> {
-    return this.workspaces.updateMember(id, userId, dto);
+    return this.workspaces.updateMember(id, userId, dto, principal.userId);
   }
 
   @Delete(':id/members/:userId')

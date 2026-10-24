@@ -2,7 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import type { KnowledgeHealthSettingsOverride, KnowledgeHealthSettingsValues, TrustWeights } from '@knowledge/contracts';
-import { SEARCH_MIN_COSINE_SHARE, SEARCH_RRF_K, TRUST_WEIGHTS } from '@knowledge/contracts';
+import {
+  SEARCH_COMMUNITY_PRIOR_FLOOR,
+  SEARCH_COMMUNITY_PRIOR_WEIGHT,
+  SEARCH_MIN_COSINE_SHARE,
+  SEARCH_RRF_K,
+  TRUST_WEIGHTS,
+} from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -37,6 +43,9 @@ export class VerificationPolicyService {
       rrfK: SEARCH_RRF_K,
       minCosine: this.config.get('SEARCH_MIN_COSINE', { infer: true }),
       minCosineShare: SEARCH_MIN_COSINE_SHARE,
+      communityPriorWeight: SEARCH_COMMUNITY_PRIOR_WEIGHT,
+      communityPriorFloor: SEARCH_COMMUNITY_PRIOR_FLOOR,
+      layeredExpansion: false,
       trustWeights: TRUST_WEIGHTS,
     };
   }
@@ -52,6 +61,9 @@ export class VerificationPolicyService {
       rrfK: row?.rrfK ?? null,
       minCosine: row?.minCosine ?? null,
       minCosineShare: row?.minCosineShare ?? null,
+      communityPriorWeight: row?.communityPriorWeight ?? null,
+      communityPriorFloor: row?.communityPriorFloor ?? null,
+      layeredExpansion: row?.layeredExpansion ?? null,
       trustWeights: (row?.trustWeights as Partial<TrustWeights> | null) ?? null,
     };
   }
@@ -67,6 +79,9 @@ export class VerificationPolicyService {
       rrfK: override.rrfK ?? defaults.rrfK,
       minCosine: override.minCosine ?? defaults.minCosine,
       minCosineShare: override.minCosineShare ?? defaults.minCosineShare,
+      communityPriorWeight: override.communityPriorWeight ?? defaults.communityPriorWeight,
+      communityPriorFloor: override.communityPriorFloor ?? defaults.communityPriorFloor,
+      layeredExpansion: override.layeredExpansion ?? defaults.layeredExpansion,
       trustWeights: { ...defaults.trustWeights, ...override.trustWeights },
     };
   }

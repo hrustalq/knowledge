@@ -23,6 +23,10 @@ export const RRF_K_GRID = [10, 20, 30, 40, 60, 80, 100, 150, 200];
 /** #401: 0 is off; 0.4 suits bge-m3. Absolute cosines mean nothing across models, so the grid stays coarse. */
 export const MIN_COSINE_GRID = [0, 0.3, 0.35, 0.4, 0.45, 0.5];
 export const MIN_COSINE_SHARE_GRID = [0, 0.8, 0.85, 0.88, 0.9, 0.93, 0.95];
+/** #475: 0 is off; at 1 a page in the finest matched community scores double. */
+export const COMMUNITY_PRIOR_WEIGHT_GRID = [0, 0.1, 0.2, 0.3, 0.5, 0.75, 1];
+/** #475: bge-m3 cosines of a question against a summary; coarse, like the vector floor's. */
+export const COMMUNITY_PRIOR_FLOOR_GRID = [0.3, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7];
 /** The states the tuner moves. unverified/requested/edited stay the reference 1: scaling everything ranks nothing differently. */
 export const TUNED_WEIGHTS = ['verified', 'expired', 'flagged', 'outdated', 'inactive'] as const satisfies readonly (keyof TrustWeights)[];
 /** 0.30 … 1.25: the settings route's bounds, minus the extremes nobody should ship. */
@@ -53,6 +57,9 @@ interface Axis {
 
 const AXES: readonly Axis[] = [
   { name: 'rrfK', values: RRF_K_GRID, get: (k) => k.rrfK, set: (k, v) => ({ ...k, rrfK: v }) },
+  // The floor first, so the weight is tried against the path it would boost.
+  { name: 'communityPriorFloor', values: COMMUNITY_PRIOR_FLOOR_GRID, get: (k) => k.communityPriorFloor, set: (k, v) => ({ ...k, communityPriorFloor: v }) },
+  { name: 'communityPriorWeight', values: COMMUNITY_PRIOR_WEIGHT_GRID, get: (k) => k.communityPriorWeight, set: (k, v) => ({ ...k, communityPriorWeight: v }) },
   ...TUNED_WEIGHTS.map(
     (state): Axis => ({
       name: `trustWeights.${state}`,

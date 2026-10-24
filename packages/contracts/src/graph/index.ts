@@ -175,6 +175,74 @@ export function normalizeRelationType(raw: string): AuthorableRelationType | nul
 }
 
 
+// --- abstraction layers (#475) -----------------------------------------------
+
+/**
+ * Where an entity sits, coarsest to finest, plus `concept` for everything off
+ * that ladder (docs/features/63). Derived from the key, never stored: a layer
+ * on the vertex would be a second answer to what the key already says.
+ */
+export const ENTITY_LAYERS = ['system', 'component', 'interface', 'code', 'concept'] as const;
+export type EntityLayer = (typeof ENTITY_LAYERS)[number];
+
+/**
+ * The type prefixes of each rung. Whole segments (`entityTypeOf`), matched
+ * exactly. A closed catalogue: a prefix not here is `concept`, and adding one
+ * is a contracts change with a spec case. `concept` has no list — its inverse
+ * is "none of these".
+ */
+export const ENTITY_LAYER_PREFIXES: Readonly<Record<Exclude<EntityLayer, 'concept'>, readonly string[]>> = {
+  system: ['system', 'service', 'domain', 'product', 'platform', 'integration'],
+  component: ['component', 'library', 'db', 'database', 'table', 'index', 'cache', 'queue', 'topic'],
+  interface: ['op', 'channel', 'spec', 'api', 'endpoint', 'event'],
+  code: ['module', 'file', 'symbol', 'function', 'class', 'task'],
+};
+
+const LAYER_OF_PREFIX: ReadonlyMap<string, EntityLayer> = new Map(
+  Object.entries(ENTITY_LAYER_PREFIXES).flatMap(([layer, prefixes]) => prefixes.map((p) => [p, layer as EntityLayer] as const)),
+);
+
+/** `op:post /invoices/{}` → `interface`; an unknown prefix or a bare key → `concept`. */
+export function entityLayerFor(key: string): EntityLayer {
+  return LAYER_OF_PREFIX.get(entityTypeOf(key)) ?? 'concept';
+}
+
+/**
+ * The inverse, for a read that filters by layer: the type prefixes of a rung.
+ * `concept` returns null — it is every prefix NOT listed, so filter with
+ * `NOT IN (all listed prefixes)` instead.
+ */
+export function entityTypesOfLayer(layer: EntityLayer): readonly string[] | null {
+  return layer === 'concept' ? null : ENTITY_LAYER_PREFIXES[layer];
+}
+
+/** A rung's position on the ladder (0 = system), or null for `concept`. */
+export function layerRung(layer: EntityLayer): number | null {
+  return layer === 'concept' ? null : ENTITY_LAYERS.indexOf(layer);
+}
+
+/**
+ * A page's layer: the rung holding most of its distinct entities, a tie to
+ * the finer rung — so a page naming one operation and its service is an
+ * `interface` page. All-`concept` is `concept`; no entities, no layer.
+ */
+export function pageLayerOf(keys: Iterable<string>): EntityLayer | null {
+  const counts = new Map<EntityLayer, number>();
+  for (const key of new Set(keys)) {
+    const layer = entityLayerFor(key);
+    counts.set(layer, (counts.get(layer) ?? 0) + 1);
+  }
+  if (counts.size === 0) return null;
+  let best: EntityLayer | null = null;
+  // Coarse to fine, so `>=` hands a tie to the finer rung.
+  for (const layer of ENTITY_LAYERS.slice(0, 4)) {
+    const n = counts.get(layer) ?? 0;
+    if (n > 0 && n >= (best ? counts.get(best)! : 0)) best = layer;
+  }
+  return best ?? 'concept';
+}
+
+
 export interface EntitySummary {
   key: string;
   type: string;
@@ -379,6 +447,10 @@ export interface ListConflictsResponse {
 /** One community of pages and what they are about, for global questions. */
 export interface CommunitySummaryDto {
   communityId: string;
+  /** 0 = finest; each level above merges communities of the levels below (#475). */
+  level: number;
+  /** The community this one merged into; null for a root. */
+  parentId: string | null;
   title: string;
   /** Written by the atlas agent from the member pages; a summary, not a source. */
   summary: string;
@@ -388,7 +460,7 @@ export interface CommunitySummaryDto {
   score: number;
 }
 
-// GET /v1/graph/communities?workspaceId=&q=&limit=
+// GET /v1/graph/communities?workspaceId=&q=&limit=&level=
 export interface ListCommunitiesResponse {
   communities: CommunitySummaryDto[];
 }

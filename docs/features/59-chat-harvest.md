@@ -1,4 +1,4 @@
-# 59 — Chat harvest: a Telegram, Time or Mattermost thread, proposed as reviewed captures
+# 59 — Chat harvest: a Telegram, Time, Mattermost or Slack thread, proposed as reviewed captures
 
 Issue [#82](https://github.com/hrustalq/knowledge/issues/82), shipped as five
 PRs (#344–#347 and the one carrying this document). Before it, the only way
@@ -20,14 +20,21 @@ separate switch with its own store and retention ([feature 60](60-chat-search.md
 - **Ask for a harvest**, as a linked person with the `editor` role in the
   bound workspace:
 
-  | trigger | Time, Mattermost | Telegram |
+  | trigger | Time, Mattermost, Slack | Telegram |
   | --- | --- | --- |
   | a command | `capture` (or `remember`, `запомни`) inside a thread, mentioning the bot in a channel | `/capture` as a reply to the first message of the thread |
   | a private chat | — | forward the bot the messages, then `/capture` |
   | a reaction | 📌 on any message of a thread | ✍ on a kept message, where the bot is a group admin |
 
+  On **Teams** (#381) `capture` is said inside a channel thread, mentioning
+  the bot, and reads that thread from the listening buffer: the root's id is
+  the thread's topic, and its text is a kept row like the replies (Teams sends
+  none of it with the command). A channel that does not keep its messages has
+  nothing to read, and the bot says so (`chat.harvest.notKept`) rather than
+  harvesting the command alone. Teams has no harvest reaction.
+
 - **What it reads:**
-  - **Time, Mattermost:** the whole thread, fetched by root. A command reads up to the
+  - **Time, Mattermost, Slack:** the whole thread, fetched by root. A command reads up to the
     command; a reaction reads all of it.
   - **Telegram group:** the replied-to message, then what the group (or
     forum topic) said from there up to the command, from the listening
@@ -92,6 +99,12 @@ The adapter seam (`chat-adapter.types.ts`) has two optional members:
   a reaction passes null. The thread link is the root's permalink, which needs
   the channel's team. A direct channel has no team, so no link, and a link that
   cannot be built is left out rather than failing the harvest.
+- `fetchThread` on Slack (#380) is `conversations.replies` from the root:
+  asked about a reply, Slack returns that reply alone with its `thread_ts`,
+  so the thread is read again from the root (one page of 1000). Bots' and
+  join/topic messages are left out, markup is read back to text, and the link
+  is `chat.getPermalink` of the root, left out if it fails. 📌 is
+  `reaction_added` with `pushpin`.
 - `messageUrl(chatId, messageId)`: Telegram's `t.me/c/…` link for a
   supergroup. A basic group and a private chat have none.
 
@@ -341,7 +354,8 @@ one save path, one dedupe and one inbox.
   other.
 - **Proposals go through agent memory.** No new `ConnectorRunItem` kinds and
   no capture runs; feature-26 run items stay pages-only.
-- **Sources are the existing chat-bot platforms.** No new connector kinds.
+- **Sources were the existing chat-bot platforms** at first. Trackers and help
+  desks came later as harvest connectors (see Trackers and help desks).
 - **Triggers are explicit:** a command, a forward or a reaction. The one
   exception is the automatic harvest (#340): opt-in per group, by an admin,
   told to the group, and in that admin's name.
@@ -435,9 +449,135 @@ Captures are read and decided through the existing `/v1/captures` routes;
   points at a proxy, so Time or Mattermost is the first platform that can be
   checked there.
 
+## Trackers and help desks (#382–#384)
+
+A resolved Linear issue, a solved Zendesk ticket or a closed Intercom
+conversation can be harvested the way a chat thread is. A tracker or a help
+desk is not a chat, though. Nobody is talking to a bot, there is no group to
+bind, and the item usually ends with somebody resolving it. These decisions
+were settled with the owner on 2026-10-22, before any code:
+
+- **It is a connector, not a chat platform.** Each source is a connector kind
+  (`linear`, `zendesk`, `intercom`) with `capabilities.harvest`, and moves no
+  content (`pull: false, push: false`), so it has no Sync button, no
+  destination and no runs.
+  - The credential goes in the connector credential box.
+  - The source signs its webhook with a secret it generates itself (Linear's
+    webhook signing secret, Zendesk's webhook signing secret, the Intercom
+    app's client secret). The admin pastes it as the connector's webhook
+    secret.
+  - Deliveries reach the existing `/v1/connectors/:id/webhook`.
+  - People are matched through the connector's `external_identities`.
+- **What starts a harvest: resolution while labelled.** The item must reach
+  its resolved state while it carries the connector's harvest label or tag
+  (`config.harvestLabel`, default `knowledge`, matched case-insensitively).
+  Nothing is harvested by default, and the spend stays with items somebody
+  marked as worth keeping.
+
+  | source   | resolved means                                  | label is      | delivery                                   |
+  | -------- | ----------------------------------------------- | ------------- | ------------------------------------------ |
+  | Linear   | the issue moved into a `completed`-type state   | an issue label | `Issue` `update` webhook, `Linear-Signature` (hex HMAC-SHA256 of the body), `webhookTimestamp` ≤ 60 s old |
+  | Zendesk  | status became `solved`                          | a ticket tag   | a trigger-driven webhook with a fixed JSON body, `X-Zendesk-Webhook-Signature` (base64 HMAC-SHA256 of timestamp + body) |
+  | Intercom | the conversation was closed by an admin         | a conversation tag | `conversation.admin.closed` topic, `X-Hub-Signature: sha1=` HMAC of the body with the app's client secret |
+
+- **It runs as the person who resolved it, or not at all.** That person is the
+  delivery's actor: Linear's `actor`, the Zendesk updater the trigger names,
+  the Intercom admin who closed the conversation. They are recorded in
+  `external_identities`, and the existing resolver maps them to a member (an
+  admin's manual mapping first, then a verified email). The person must hold
+  `editor` in the workspace now. Anyone else, unmapped or without the role, gets
+  nothing, and nothing is answered or posted anywhere. There is no bot
+  principal: the feature-47 rule.
+- **What is read.** The item is fetched fresh from the source, never taken from
+  the delivery: Linear's description and comments, a Zendesk ticket's comments
+  (**public replies and internal notes**), an Intercom conversation's opening
+  message, replies and admin notes. The fetch also re-checks resolution and the
+  label. Every message is masked by `harvest-mask.ts` before the model reads
+  it, and the thread is wrapped untrusted, as in chat.
+  - Customer messages carry PII, which is why masking comes first.
+  - Notes usually hold the actual fix, which is why they are read.
+  - Authors are the source's opaque ids, numbered in the transcript as in chat.
+- **Once per item, through a guarded row, finished by a sweeper.** The webhook
+  only verifies and claims: one `connector_harvests` row per (connector,
+  item), inserted only if absent. An API-side sweeper takes the claimed rows,
+  checks the person, reads the item and calls `HarvestService.harvest` as that
+  person. This is "the handler does no work beyond verifying and enqueueing"
+  (doc 19), and the row doubles as crash recovery.
+  - A row whose item turns out not to qualify (no longer resolved or labelled,
+    an unmapped person) is deleted, so a later qualifying delivery can claim
+    the item again.
+  - A harvested item is never harvested twice.
+- **Where it lives (#382, shipped for Linear first).**
+  - `ConnectorAdapter` gains two optional members:
+    `verifyHarvestDelivery(ctx, headers, rawBody)` → `{ item }` or null
+    (401), and `readHarvestItem(ctx, id)` → the item fresh, or null.
+  - `ConnectorWebhookController` hands a verified resolution to
+    `ConnectorHarvestSweeper.claim`. The claim records the person through
+    `ConnectorAclService.userFor` (the delivery is the only place their
+    email is) and inserts the row.
+  - `ConnectorHarvestSweeper` is in `ConnectorsModule`, API-only. It takes up
+    to five unharvested rows every 30 s under a 10-minute lease and finishes
+    each.
+  - `HarvestService` moved into `HarvestCoreModule`, so ChatModule and
+    ConnectorsModule share it without loading each other's controllers.
+  - It is off with `HARVEST_ENABLED=false`, like every harvest.
+  - Linear specifically:
+    - The webhook is on **Issues**.
+    - `Linear-Signature` must match, and `webhookTimestamp` must be within
+      60 s.
+    - The prefilter is an `Issue` `update` with `stateId` in `updatedFrom`, by
+      a `user` actor.
+    - The read is one GraphQL call: identifier, title, URL, `state.type`,
+      labels, the description and up to 250 comments.
+    - The key goes bare in `Authorization`.
+- **Zendesk (#383).**
+  - Zendesk has no "ticket solved" subscription of its own, so the admin
+    builds a trigger: *Ticket status changed to Solved*, *Tags contain* the
+    harvest tag, and a *Notify webhook* action whose JSON body is
+    `ZENDESK_TRIGGER_BODY` (contracts: ticket id, status, and the updating
+    agent's id, name and email). The dialog shows it to paste.
+  - The signature is `X-Zendesk-Webhook-Signature`, base64 HMAC-SHA256 over
+    the `-Timestamp` header plus the raw body. A timestamp more than 5 minutes
+    off is refused.
+  - The prefilter: status `solved` or `closed`, and a numeric agent id
+    (`-1`, Zendesk itself, is no person).
+  - The read is the ticket (subject, status, tags) and one page of 100
+    comments, oldest first, public and private alike, as `email/token`
+    Basic auth. A 404 or 403 is a ticket gone.
+  - `testConnection` refuses an end-user credential, which cannot read
+    tickets.
+- **Intercom (#384).**
+  - The admin's Intercom app subscribes its webhook to
+    `conversation.admin.closed`. The app's **client secret** is the webhook
+    secret, and its access token is the credential. A region select (US, EU,
+    AU) picks the API host.
+  - The signature is `X-Hub-Signature: sha1=` hex HMAC-SHA1 of the raw body.
+    Intercom signs no timestamp, so there is no replay window, and none is
+    needed: the claim is once per conversation, and the sweeper re-reads the
+    conversation before anything is harvested.
+  - Who closed it is the author of the conversation's last `close` part, and
+    it must be an `admin`. Bots and Fin are no person.
+  - The read is `GET /conversations/:id` (`Intercom-Version: 2.11`): the
+    opening message, every `comment` and `note` part (replies **and** admin
+    notes), with bot parts dropped. HTML is read back to text. The URL needs
+    the app's `id_code`, so `/me` is read once per harvest. A 404 or 403
+    means the conversation is gone.
+- **The same contract as chat.** Captures go through `CaptureService` with a
+  server-set origin (`platform: 'linear' | 'zendesk' | 'intercom'`, the
+  item's key and title, its URL, the span of its messages). They are
+  reviewed in the Captures inbox. Nothing is indexed, nothing is synced back,
+  and the spend is one `harvest` AI usage row. Nothing is written on the
+  ticket: the person who resolved it gets one inbox notification with the
+  counts, as the automatic harvest's admin does.
+
 ## Deliberate deferrals
 
-- No new sources (Slack, Teams and the rest #341, Google Drive #338). Chat
+- No new sources (Teams and the rest #341, Google Drive #338). Slack shipped
+  as a chat platform (#380); Linear, Zendesk and Intercom as harvest
+  connectors (#382–#384, above).
+- A harvest connector reads one page of an item's comments (Linear 250,
+  Zendesk 100, Intercom's 500-part cap); longer items are harvested from what
+  that page holds (`ponytail:` markers in each adapter). Chat
   search arrived separately as [feature 60](60-chat-search.md).
 - No named-entity detection, no reversible masking. A passport mentioned with
   its context word more than 20 characters (or a digit) away from the number

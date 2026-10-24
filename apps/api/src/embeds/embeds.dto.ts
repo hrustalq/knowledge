@@ -1,0 +1,113 @@
+import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { EMBED_ITEM_STATES, type EmbedItemState } from '@knowledge/contracts';
+
+export class EmbedItemStatusDto {
+  @ApiProperty() fileKey!: string;
+  @ApiProperty({ description: "'' for a whole-file item" }) nodeId!: string;
+  @ApiProperty() version!: string;
+  @ApiProperty({ enum: EMBED_ITEM_STATES }) state!: EmbedItemState;
+  @ApiProperty({ type: String, nullable: true }) name!: string | null;
+  @ApiProperty({ type: Number, nullable: true }) width!: number | null;
+  @ApiProperty({ type: Number, nullable: true }) height!: number | null;
+  @ApiProperty({ description: 'The node changed in Figma since this version was pinned' }) changed!: boolean;
+}
+
+export class DocumentEmbedsResponseDto {
+  @ApiProperty({ type: [EmbedItemStatusDto] }) items!: EmbedItemStatusDto[];
+}
+
+export class FigmaWorkspaceQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+}
+
+export class FigmaResolveDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ description: 'A Figma design, prototype, Dev Mode or FigJam link' })
+  @IsString()
+  @MaxLength(2000)
+  url!: string;
+}
+
+export class FigmaPickerFileEntryDto {
+  @ApiProperty() fileKey!: string;
+  @ApiProperty() name!: string;
+}
+
+export class FigmaPickerFilesResponseDto {
+  @ApiProperty() connected!: boolean;
+  @ApiProperty({ type: [FigmaPickerFileEntryDto] }) files!: FigmaPickerFileEntryDto[];
+}
+
+export class FigmaPickerFrameDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty() type!: string;
+  @ApiProperty({ type: String, nullable: true }) thumbnailUrl!: string | null;
+}
+
+export class FigmaPickerPageDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty({ type: [FigmaPickerFrameDto] }) frames!: FigmaPickerFrameDto[];
+}
+
+export class FigmaPickerFileResponseDto {
+  @ApiProperty() fileKey!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty() version!: string;
+  @ApiProperty() board!: boolean;
+  @ApiProperty({ type: [FigmaPickerPageDto] }) pages!: FigmaPickerPageDto[];
+}
+
+export class FigmaResolveResponseDto {
+  @ApiProperty() url!: string;
+  @ApiProperty({ type: String, nullable: true }) version!: string | null;
+  @ApiProperty({ type: String, nullable: true }) name!: string | null;
+  @ApiProperty() allowed!: boolean;
+}
+
+export class EmbedUsagesQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ description: 'A Figma link; a frame link narrows to that frame' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  figmaUrl?: string;
+
+  @ApiPropertyOptional({ description: 'A Figma file key, when there is no link' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  fileKey?: string;
+}
+
+export class EmbedUsageItemDto {
+  @ApiProperty() url!: string;
+  @ApiProperty() caption!: string;
+  @ApiProperty({ type: String, nullable: true }) version!: string | null;
+}
+
+export class EmbedUsageGroupDto {
+  @ApiProperty() group!: number;
+  @ApiProperty({ type: [EmbedUsageItemDto] }) items!: EmbedUsageItemDto[];
+}
+
+export class EmbedUsagePageDto {
+  @ApiProperty() documentId!: string;
+  @ApiProperty() title!: string;
+  @ApiProperty() revisionId!: string;
+  @ApiProperty({ type: [EmbedUsageGroupDto] }) groups!: EmbedUsageGroupDto[];
+}
+
+export class EmbedUsagesResponseDto {
+  @ApiProperty({ type: [EmbedUsagePageDto] }) pages!: EmbedUsagePageDto[];
+}

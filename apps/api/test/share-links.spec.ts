@@ -241,6 +241,16 @@ function harness(envOverrides: Record<string, unknown> = {}) {
   const exportScope = { documents: vi.fn(async () => [{ id: ROOT }]) };
   const producer = { enqueue: vi.fn(async () => undefined) };
   const storage = { presignGet: vi.fn(async (key: string) => `https://s3.example.com/${key}?signed`) };
+  // Embedded designs (#470): an item is known by an opaque id, on one page.
+  const embeds = {
+    publicMarkdown: vi.fn(async (md: string) => md),
+    exportSnapshots: vi.fn(async () => []),
+    publicItem: vi.fn(async (id: string) =>
+      ({ 'item-child': { documentId: CHILD, revisionId: 'r', fileKey: 'AbCdEfGhIj12', nodeId: '1:2', version: '7', warning: null }, 'item-sibling': { documentId: SIBLING, revisionId: 'r', fileKey: 'AbCdEfGhIj12', nodeId: '1:2', version: '7', warning: null } })[
+        id === '11111111-0000-4000-8000-000000000001' ? 'item-child' : id === '11111111-0000-4000-8000-000000000002' ? 'item-sibling' : ''
+      ] ?? null),
+    snapshotUrl: vi.fn(async (doc: string) => `https://s3.example.com/embed/${doc}`),
+  };
   const exports = new ExportService(prisma as never, {} as never, storage as never, exportScope as never, producer as never, config as never);
   const reader = new PublicSharesService(
     prisma as never,
@@ -250,9 +260,10 @@ function harness(envOverrides: Record<string, unknown> = {}) {
     unlocks,
     limiter,
     exports,
+    embeds as never,
     config as never,
   );
-  return { prisma, settings, shares, reader, kv, store, limiter, unlocks, documents, attachments, activity, config, exportScope, producer, storage };
+  return { embeds, prisma, settings, shares, reader, kv, store, limiter, unlocks, documents, attachments, activity, config, exportScope, producer, storage };
 }
 
 const tokenOf = (url: string) => url.split('/s/')[1]!;
@@ -406,6 +417,19 @@ describe('PublicSharesService (the anonymous reader)', () => {
     await expect(h.reader.attachmentUrl(h.token, ATT_CHILD, false, undefined)).resolves.toBe(`https://s3.example.com/${CHILD}/${ATT_CHILD}`);
     await expect(h.reader.attachmentUrl(h.token, ATT_SIBLING, false, undefined)).rejects.toMatchObject({ status: 404 });
     expect(h.attachments.readUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('serves an embedded design only on a page in scope, and only while the workspace shows embeds publicly (#470)', async () => {
+    const h = await shared({ includeSubtree: true });
+    const child = '11111111-0000-4000-8000-000000000001';
+    const sibling = '11111111-0000-4000-8000-000000000002';
+    await expect(h.reader.embedUrl(h.token, child, undefined)).rejects.toMatchObject({ status: 404 });
+    await h.settings.update(WS, { allowPublicEmbeds: true });
+    await expect(h.reader.embedUrl(h.token, child, undefined)).resolves.toBe(`https://s3.example.com/embed/${CHILD}`);
+    await expect(h.reader.embedUrl(h.token, sibling, undefined)).rejects.toMatchObject({ status: 404 });
+    await expect(h.reader.embedUrl(h.token, 'not-a-uuid', undefined)).rejects.toMatchObject({ status: 404 });
+    h.embeds.snapshotUrl.mockRejectedValueOnce(new Error('revoked'));
+    await expect(h.reader.embedUrl(h.token, child, undefined)).rejects.toMatchObject({ status: 404 });
   });
 
   it('404s an unknown, malformed, revoked or expired link, and every link once sharing is switched off', async () => {

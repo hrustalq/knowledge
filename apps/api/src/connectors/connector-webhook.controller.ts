@@ -20,6 +20,7 @@ import {
 import { readRepoPushDelivery, safeJson } from './webhook-payload.js';
 import { ConnectorWorkItemsService } from './connector-work-items.service.js';
 import { TrackerRegistry } from './tracker-registry.service.js';
+import { ConnectorHarvestSweeper } from './harvest/connector-harvest.sweeper.js';
 
 /**
  * Inbound webhooks from external systems (docs/features/19).
@@ -44,6 +45,7 @@ export class ConnectorWebhookController {
     private readonly drift: DriftTriggerService,
     private readonly trackers: TrackerRegistry,
     private readonly workItems: ConnectorWorkItemsService,
+    private readonly harvests: ConnectorHarvestSweeper,
     config: ConfigService<Env, true>,
   ) {
     this.debounceMs = config.get('WIKI_PUSH_DEBOUNCE_MS', { infer: true });
@@ -68,6 +70,17 @@ export class ConnectorWebhookController {
     const ctx = await this.connectors.contextFor(row, async () => undefined);
     const rawBody = req.rawBody?.toString('utf8') ?? '';
     const lower = lowercaseKeys(headers);
+
+    // A harvest connector (#382, doc 59): a resolved item is claimed, and the
+    // API-side sweeper reads and harvests it. Nothing else to do here — a
+    // harvest kind moves no content.
+    const adapter = this.connectors.adapterFor(row);
+    if (adapter.verifyHarvestDelivery) {
+      const delivery = adapter.verifyHarvestDelivery(ctx, lower, rawBody);
+      if (delivery === null) throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
+      if (delivery.item) await this.harvests.claim(row, delivery.item);
+      return { accepted: true, runId: null };
+    }
 
     // A tracker delivery (#424): a ticket changed. Written to the work-item
     // projection, which the sync sweeper reads on its next tick. A ticket
@@ -122,7 +135,6 @@ export class ConnectorWebhookController {
       return { accepted: true, runId: run?.id ?? null };
     }
 
-    const adapter = this.connectors.adapterFor(row);
     if (!adapter.verifyWebhook) throw new UnauthorizedException(t('error.connector.webhookNotConfigured'));
 
     const refs = adapter.verifyWebhook(ctx, lower, rawBody);

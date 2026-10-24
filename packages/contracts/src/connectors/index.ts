@@ -1,5 +1,6 @@
 import type { DocumentCategory } from '@knowledge/contracts/documents';
 import type { ApiSpecKind } from '@knowledge/contracts/api';
+import { FIGMA_ALLOWLIST_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY } from '@knowledge/contracts/embeds';
 
 // configured sources and destinations. A connector is one configured
 // connection; a link is the recorded identity between an external item and a
@@ -19,6 +20,10 @@ export const CONNECTOR_KINDS = [
   'markdown-git',
   'codebase',
   'google-drive',
+  'linear',
+  'zendesk',
+  'intercom',
+  'figma',
 ] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
@@ -82,7 +87,29 @@ export interface ConnectorCapabilities {
    * connector-level audience (`aclAudienceGroupId`).
    */
   acl?: boolean;
+  /**
+   * A resolved item can be harvested into reviewed captures (#382–#384, doc
+   * 59). Such a kind moves no content — `pull` and `push` are false — and is
+   * fed by its webhook alone. Optional for the reason `tasks` is.
+   */
+  harvest?: boolean;
+  /**
+   * The source's items can be embedded in pages (#470, doc 64): a token and an
+   * allowlist, no content moved either way. Optional for the reason `tasks` is.
+   */
+  embeds?: boolean;
 }
+
+/** The label a harvest connector looks for when `config.harvestLabel` is empty. */
+export const DEFAULT_HARVEST_LABEL = 'knowledge';
+
+/**
+ * The JSON body a Zendesk trigger's webhook action sends (#383). Zendesk
+ * sends what the trigger says, so the admin pastes exactly this, the setup
+ * dialog shows it, and the adapter reads that shape.
+ */
+export const ZENDESK_TRIGGER_BODY =
+  '{"ticket_id":"{{ticket.id}}","status":"{{ticket.status}}","updated_by_id":"{{current_user.id}}","updated_by_name":"{{current_user.name}}","updated_by_email":"{{current_user.email}}"}';
 
 // ---------------------------------------------------------------------------
 // Access mirroring (#76, phase 6)
@@ -492,6 +519,101 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         required: false,
         placeholder: 'docs-reader@example.com',
         help: 'Domain-wide delegation: read Drive as this person instead of as the service account. Also needed to read Google Groups when access is mirrored.',
+      },
+    ],
+  },
+  {
+    // A harvest source (#382, doc 59): a resolved, labelled issue becomes
+    // reviewed captures in the name of whoever resolved it. Nothing is synced
+    // either way, so there is no destination tree and no runs.
+    kind: 'linear',
+    label: 'Linear',
+    capabilities: { pull: false, push: false, webhook: true, tree: false, harvest: true },
+    credentialLabel: 'Personal API key',
+    fields: [
+      {
+        key: 'harvestLabel',
+        label: 'Harvest label',
+        kind: 'text',
+        required: false,
+        placeholder: DEFAULT_HARVEST_LABEL,
+        help: 'An issue carrying this label is harvested when it is completed. Leave empty for "knowledge".',
+      },
+    ],
+  },
+  {
+    // A harvest source (#383, doc 59): a solved ticket carrying the tag, in
+    // the name of the agent who solved it. Fed by a trigger's webhook.
+    kind: 'zendesk',
+    label: 'Zendesk',
+    capabilities: { pull: false, push: false, webhook: true, tree: false, harvest: true },
+    credentialLabel: 'email:api-token',
+    fields: [
+      { key: 'baseUrl', label: 'Zendesk URL', kind: 'text', required: true, placeholder: 'https://your-team.zendesk.com' },
+      {
+        key: 'harvestLabel',
+        label: 'Harvest tag',
+        kind: 'text',
+        required: false,
+        placeholder: DEFAULT_HARVEST_LABEL,
+        help: 'A ticket carrying this tag is harvested when it is solved. Leave empty for "knowledge".',
+      },
+    ],
+  },
+  {
+    // A harvest source (#384, doc 59): a conversation an admin closes while
+    // it carries the tag, in that admin's name. Fed by the app's webhook.
+    kind: 'intercom',
+    label: 'Intercom',
+    capabilities: { pull: false, push: false, webhook: true, tree: false, harvest: true },
+    credentialLabel: 'Access token',
+    fields: [
+      {
+        key: 'region',
+        label: 'Data region',
+        kind: 'select',
+        required: false,
+        options: [
+          { value: 'us', label: 'United States' },
+          { value: 'eu', label: 'Europe' },
+          { value: 'au', label: 'Australia' },
+        ],
+        help: 'Where your Intercom workspace is hosted. Leave on United States unless it is in Europe or Australia.',
+      },
+      {
+        key: 'harvestLabel',
+        label: 'Harvest tag',
+        kind: 'text',
+        required: false,
+        placeholder: DEFAULT_HARVEST_LABEL,
+        help: 'A conversation carrying this tag is harvested when an admin closes it. Leave empty for "knowledge".',
+      },
+    ],
+  },
+  {
+    // An embed source (#470, doc 64): frames from the allowlisted teams and
+    // projects can be embedded in pages. Nothing syncs either way; the
+    // connector's tick checks whether pinned frames changed.
+    kind: 'figma',
+    label: 'Figma',
+    capabilities: { pull: false, push: false, webhook: false, tree: false, embeds: true },
+    credentialLabel: 'Personal access token',
+    fields: [
+      {
+        key: FIGMA_ALLOWLIST_CONFIG_KEY,
+        label: 'Teams and projects',
+        kind: 'text',
+        required: true,
+        placeholder: 'https://www.figma.com/files/team/1234567890/Design',
+        help: 'Figma team or project links (or team:<id>, project:<id>), separated by spaces or commas. Only their files can be embedded.',
+      },
+      {
+        key: FIGMA_TOKEN_EXPIRES_CONFIG_KEY,
+        label: 'Token expires on',
+        kind: 'text',
+        required: false,
+        placeholder: '2027-01-31',
+        help: 'The expiry you chose when creating the token, as YYYY-MM-DD. Figma does not report it, so the card warns from this date.',
       },
     ],
   },

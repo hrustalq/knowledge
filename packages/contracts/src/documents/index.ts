@@ -7,7 +7,7 @@ import type {
   SourceVerificationState,
 } from '@knowledge/contracts/core';
 import type { ApiSpecDiff } from '@knowledge/contracts/api/diff';
-import type { AuthorableRelationType, FactExtractor, ResolvedAsOf } from '@knowledge/contracts/graph';
+import type { AuthorableRelationType, EntityLayer, FactExtractor, ResolvedAsOf } from '@knowledge/contracts/graph';
 import type { DeleteReviewCommentResponse, ReviewComment, ReviewThread, SemanticDiff, StructuralDiff } from '@knowledge/contracts/reviews';
 
 // rich editor. Two-step by design (presign → confirm), mirroring the revision
@@ -164,6 +164,17 @@ export interface SearchResult {
   headingPath?: string[];
   /** Entities related to the result's document (present when expandGraph is used). */
   entities?: EntityRef[];
+  /**
+   * Where the page sits (#475): the abstraction layer most of its entities
+   * are on (`pageLayerOf`). Absent for a page that names no entity.
+   */
+  layer?: EntityLayer;
+  /**
+   * Titles of the communities containing the page that the reader may see
+   * whole, coarsest first (#475). Absent when there are none, and under
+   * `asOf` — communities describe only the current graph.
+   */
+  communityPath?: string[];
   /**
    * When the matched text was the page's content (#81), ISO; present on an
    * `asOf` search. A `validTo` means the page has since changed: the text is
@@ -513,6 +524,8 @@ export interface DocumentGraphNode {
   label: string;
   category?: DocumentCategory | string;
   entityType?: string;
+  /** Entities only: the abstraction layer its key's prefix names (#475). */
+  layer?: EntityLayer;
   /** Entity hops from the root document (root = 0). */
   distance: number;
 }
@@ -549,6 +562,8 @@ export interface WorkspaceGraphNode {
   label: string;
   category?: DocumentCategory | string;
   entityType?: string;
+  /** Entities only: the abstraction layer its key's prefix names (#475). */
+  layer?: EntityLayer;
   /** Documents only: head-revision status, for the lifecycle dot. */
   status?: RevisionStatus | null;
   /** Incident edge count, after filtering. */

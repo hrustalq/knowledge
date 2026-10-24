@@ -50,11 +50,12 @@ export function parseAcceptLanguage(header: string | undefined | null): Locale |
 
 /**
  * `documents.kind` (#78). `page` is every document that existed before API
- * reference documents. Here rather than in `api/` because DocumentSummary
- * carries it and `core` must not import the domains that import it; `api/`
- * holds everything else about specs.
+ * reference documents; `test-fixture` (#483) is a QA fixture, a YAML/JSON
+ * chain of calls a suite runs before its cases. Here rather than in `api/`
+ * because DocumentSummary carries it and `core` must not import the domains
+ * that import it; `api/` holds everything else about specs and fixtures.
  */
-export const API_DOCUMENT_KINDS = ['page', 'openapi', 'asyncapi'] as const;
+export const API_DOCUMENT_KINDS = ['page', 'openapi', 'asyncapi', 'test-fixture'] as const;
 export type ApiDocumentKind = (typeof API_DOCUMENT_KINDS)[number];
 
 export interface DocumentSummary {
@@ -398,6 +399,10 @@ export const KNOWN_EVENT_TYPES = [
   // thread. Never published on the bus: a directed row to the admin it runs
   // as. `title` is the group's name; metadata carries counts only.
   'chat.harvest.proposed',
+  // A resolved tracker or help-desk item was harvested (#382) as the person
+  // who resolved it. A directed row to them; `title` is the item's key and
+  // title, metadata carries counts only.
+  'connector.harvest.proposed',
   'connector.created',
   'connector.updated',
   'connector.deleted',
@@ -735,6 +740,14 @@ export const SEARCH_RRF_K = 60;
  */
 export const SEARCH_MIN_COSINE_SHARE = 0.9;
 
+/**
+ * #475: how much the community prior multiplies a matched page's score by, at
+ * most (`1 + weight`). 0 is off, so an empty settings row ranks as before.
+ */
+export const SEARCH_COMMUNITY_PRIOR_WEIGHT = 0;
+/** #475: the cosine a community's summary must reach against the query to boost anything. Tuned for bge-m3. */
+export const SEARCH_COMMUNITY_PRIOR_FLOOR = 0.5;
+
 export function trustWeight(state: SourceVerificationState, inactive: boolean, weights: TrustWeights = TRUST_WEIGHTS): number {
   return weights[state] * (inactive ? weights.inactive : 1);
 }
@@ -753,6 +766,8 @@ export interface DocumentTrust {
  * union of expired, outdated and inactive — the "needs attention" view.
  * `missing-paths` is a component page (docs/features/51) declaring a path no
  * file answers to at its connector's indexed head.
+ * `broken-calls` is a test fixture (#483) whose head calls an operation no
+ * spec head defines any more.
  * `unread` is a page nobody opened in the app for `ANALYTICS_DEAD_PAGE_DAYS`;
  * `dead` is one that no search returned either (#79). Both match nothing until
  * read analytics has been collecting for that long.
@@ -770,11 +785,14 @@ export const HEALTH_FILTERS = [
   'flagged',
   'inactive',
   'missing-paths',
+  'broken-calls',
   'unread',
   'dead',
   'archived',
   // #424: pages with a ticket handed off for their flag or for the page.
   'handed-off',
+  // #470: a page whose embedded design changed in Figma since it was pinned.
+  'stale-mockups',
 ] as const;
 export type HealthFilter = (typeof HEALTH_FILTERS)[number];
 
@@ -809,6 +827,8 @@ export interface KnowledgeHealthRow {
   verificationNote: string | null;
   /** A component page's declared paths that match no file at the indexed head; empty otherwise. */
   missingPaths: string[];
+  /** A test fixture's called operation keys that no spec head defines (#483); empty otherwise. */
+  brokenCalls: string[];
   /**
    * The newest ticket handed off for this page's flag or for the page (#424);
    * null when there is none. Several are possible across trackers; the
@@ -868,6 +888,12 @@ export interface KnowledgeHealthSettingsValues {
   minCosine: number;
   /** #401: the vector leg keeps hits at or above this share of its best cosine; 0 = none. */
   minCosineShare: number;
+  /** #475: the community prior's weight; 0 = off. */
+  communityPriorWeight: number;
+  /** #475: the cosine a community must reach to boost its pages. */
+  communityPriorFloor: number;
+  /** #475: hybrid expansion walks by entity layer instead of every shared key. */
+  layeredExpansion: boolean;
   trustWeights: TrustWeights;
 }
 /** Sparse: `null` inherits. `trustWeights` is sparse per state too — it names only what differs. */

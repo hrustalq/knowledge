@@ -3236,6 +3236,12 @@
       "takeOverTitle": "Manage {name} by hand?",
       "takeOverBody": "Sign-ins will stop changing their role here."
     },
+    "renameWorkspace": {
+      "title": "Workspace name",
+      "body": "Shown in the workspace switcher and to every member.",
+      "save": "Rename",
+      "renamed": "Renamed to {name}"
+    },
     "deleteWorkspace": {
       "zoneTitle": "Delete this workspace",
       "zoneBody": "Removes every project, page, stored file, connector and chat bot in {name}, for every member. Its audit record stays.",
@@ -6377,7 +6383,8 @@
         "chat_auto_harvest_enabled": "Automatic thread harvest turned on",
         "chat_auto_harvest_disabled": "Automatic thread harvest turned off",
         "member_capabilities_changed": "Member capabilities changed",
-        "workspace_deleted": "Workspace deleted"
+        "workspace_deleted": "Workspace deleted",
+        "workspace_renamed": "Workspace renamed"
       }
     },
     "tabs": {

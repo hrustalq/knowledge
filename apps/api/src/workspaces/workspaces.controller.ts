@@ -16,6 +16,7 @@ import type {
   ListWorkspaceCandidatesResponse,
   ListWorkspaceMembersResponse,
   ListWorkspacesResponse,
+  UpdateWorkspaceResponse,
   WorkspaceDeletionPreviewResponse,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
@@ -26,6 +27,7 @@ import {
   DeleteWorkspaceQueryDto,
   ListCandidatesQueryDto,
   UpdateMemberDto,
+  UpdateWorkspaceDto,
 } from './workspaces.dto.js';
 import { WorkspacesService } from './workspaces.service.js';
 
@@ -56,6 +58,17 @@ export class WorkspacesController {
   @ApiOperation({ summary: 'What deleting the workspace would destroy, counted (workspace admin)' })
   deletionPreview(@Param('id', ParseUUIDPipe) id: string): Promise<WorkspaceDeletionPreviewResponse> {
     return this.workspaces.deletionPreview(id);
+  }
+
+  @Patch(':id')
+  @Access('admin', 'workspace')
+  @ApiOperation({ summary: 'Rename the workspace (workspace admin)' })
+  update(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateWorkspaceDto,
+  ): Promise<UpdateWorkspaceResponse> {
+    return this.workspaces.rename(principal, id, dto.name);
   }
 
   @Delete(':id')

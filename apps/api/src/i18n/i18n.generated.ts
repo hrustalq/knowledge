@@ -713,6 +713,7 @@ export type I18nTranslations = {
             "notAMember": string;
             "lastAdminDemote": string;
             "lastAdminRemove": string;
+            "deleteConfirmMismatch": string;
             "managedByIdp": string;
         };
         "user": {

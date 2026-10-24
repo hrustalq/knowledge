@@ -5071,10 +5071,30 @@
       "platformAdmin": false
     },
     {
+      "method": "DELETE",
+      "path": "/v1/workspaces/{id}",
+      "tag": "workspaces",
+      "summary": "Delete the workspace and everything in it (workspace admin). Gone at once; contents removed in the background",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/workspaces/{id}/candidates",
       "tag": "workspaces",
       "summary": "Users who are not members yet, for the add-member picker (workspace admin)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/deletion-preview",
+      "tag": "workspaces",
+      "summary": "What deleting the workspace would destroy, counted (workspace admin)",
       "role": "admin",
       "source": "workspace",
       "public": false,

@@ -4,6 +4,8 @@ import {
   membershipSourceOf,
   type MemberCapability,
   type CreateWorkspaceResponse,
+  type DeleteWorkspaceResponse,
+  type WorkspaceDeletionPreviewResponse,
   type ListWorkspaceCandidatesResponse,
   type ListWorkspaceMembersResponse,
   type ListWorkspacesResponse,
@@ -16,6 +18,8 @@ import { userAvatarUrl } from '../common/avatar-url.js';
 import type { AddMemberDto, UpdateMemberDto } from './workspaces.dto.js';
 import { t } from '../i18n/t.js';
 import { removeMemberGuarded, setRoleGuarded } from './membership-guards.js';
+import { WorkspaceTeardownService } from './workspace-teardown.service.js';
+import { WorkspaceTeardownSweeper } from './workspace-teardown.sweeper.js';
 
 /**
  * Access-control management: workspaces + workspace_members CRUD. Role checks
@@ -28,6 +32,8 @@ export class WorkspacesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly teardown: WorkspaceTeardownService,
+    private readonly sweeper: WorkspaceTeardownSweeper,
   ) {}
 
   async list(principal: Principal): Promise<ListWorkspacesResponse> {
@@ -36,7 +42,7 @@ export class WorkspacesService {
     const roleByWorkspace = new Map(memberships.map((m) => [m.workspaceId, m.role as WorkspaceRole]));
 
     const workspaces = await this.prisma.workspace.findMany({
-      where: seesAll ? {} : { id: { in: [...roleByWorkspace.keys()] } },
+      where: { deletedAt: null, ...(seesAll ? {} : { id: { in: [...roleByWorkspace.keys()] } }) },
       orderBy: { createdAt: 'asc' },
       include: { _count: { select: { members: true } } },
     });
@@ -54,8 +60,8 @@ export class WorkspacesService {
   async create(principal: Principal, name: string): Promise<CreateWorkspaceResponse> {
     // One transaction: a workspace whose founding admin never committed is
     // invisible to its creator (list scopes to membership), un-joinable (adding a
-    // member is admin-gated) and undeletable (there is no delete route) — an
-    // orphan row nobody can reach.
+    // member is admin-gated) and undeletable — an
+    // orphan row nobody can reach (deleting one takes an admin, #479).
     const workspace = await this.prisma.$transaction(async (tx) => {
       const created = await tx.workspace.create({ data: { name: name.trim() } });
       // The dev principal has no users row — membership would violate the FK.
@@ -67,6 +73,58 @@ export class WorkspacesService {
       return created;
     });
     return { workspaceId: workspace.id, name: workspace.name };
+  }
+
+  async deletionPreview(workspaceId: string): Promise<WorkspaceDeletionPreviewResponse> {
+    const ws = await this.prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { name: true } });
+    return { workspaceId, name: ws.name, counts: await this.teardown.preview(workspaceId) };
+  }
+
+  /**
+   * Tombstone the workspace (#479). From this commit on it is gone to every
+   * caller — `requireRole` and `workspaceExists` read the tombstone — and the
+   * teardown sweeper deletes what it owned.
+   *
+   * The doors that never pass `requireRole` close in the same transaction,
+   * each through the switch its own reader already honours: no publishing
+   * row means the code default (nothing public: share links, sites, public
+   * embeds); keys narrowed to it and SCIM tokens are revoked; its sign-in
+   * providers, connectors, chat bots, triggers and agent schedules are turned
+   * off. Nothing has to learn a new predicate, and the sweeper's next pass
+   * deletes all of these rows anyway.
+   */
+  async remove(principal: Principal, workspaceId: string, confirm: string | undefined): Promise<DeleteWorkspaceResponse> {
+    const ws = await this.prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { name: true } });
+    if (confirm !== ws.name) throw new BadRequestException(t('error.workspace.deleteConfirmMismatch'));
+    const counts = await this.teardown.preview(workspaceId);
+    const now = new Date();
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const where = { workspaceId };
+      const tombstoned = await tx.workspace.updateMany({ where: { id: workspaceId, deletedAt: null }, data: { deletedAt: now } });
+      if (tombstoned.count === 0) return false;
+      await tx.publishingSettings.deleteMany({ where });
+      await tx.apiKey.updateMany({ where: { ...where, revokedAt: null }, data: { revokedAt: now } });
+      await tx.scimToken.updateMany({ where: { ...where, revokedAt: null }, data: { revokedAt: now } });
+      await tx.identityProvider.updateMany({ where, data: { enabled: false } });
+      await tx.connector.updateMany({ where, data: { enabled: false } });
+      await tx.chatIntegration.updateMany({ where, data: { enabled: false } });
+      await tx.agentTrigger.updateMany({ where, data: { enabled: false } });
+      await tx.aiAgent.updateMany({ where, data: { scheduleEnabled: false } });
+      return true;
+    });
+    // A concurrent delete won the claim; to this caller it is already gone.
+    if (!claimed) throw new NotFoundException(t('error.workspace.notFound', { id: workspaceId }));
+    // audit_logs is the one table the teardown keeps, so this outlives every row it counts.
+    void this.audit.record({
+      workspaceId,
+      actor: principal.userId,
+      action: 'workspace.deleted',
+      params: { name: ws.name, ...counts },
+      target: workspaceId,
+      ok: true,
+    });
+    void this.sweeper.sweep();
+    return { workspaceId, deletedAt: now.toISOString(), counts };
   }
 
   async listMembers(workspaceId: string): Promise<ListWorkspaceMembersResponse> {

@@ -82,6 +82,16 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       return;
     }
     if (jobRow.status === 'completed') return; // idempotent retry guard
+    // A deleted workspace (#479): fail the row and stop, without a throw that
+    // would retry — anything written now would outlive the teardown.
+    const workspace = await this.prisma.workspace.findUnique({ where: { id: jobRow.workspaceId }, select: { deletedAt: true } });
+    if (!workspace || workspace.deletedAt) {
+      await this.prisma.ingestionJob.updateMany({
+        where: { id: ingestionJobId },
+        data: { status: 'failed', error: { message: 'workspace deleted' } },
+      });
+      return;
+    }
 
     // Known only after the row is read, which is what bindTrace exists for.
     const jobPayload = jobRow.payload as { reason?: string; traceId?: string } | null;

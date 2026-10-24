@@ -22,7 +22,7 @@ const CAP = 'api-test-suites.generate' as const;
 const USER: Principal = { userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'qa@x', displayName: 'QA', avatarUrl: null, mode: 'session', isAdmin: false, locale: 'en' };
 
 function access(member: { role: string; capabilities?: unknown } | null) {
-  const prisma = { workspaceMember: { findUnique: vi.fn(async () => (member ? { trustedOperator: false, capabilities: [], ...member } : null)) } };
+  const prisma = { workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: { findUnique: vi.fn(async () => (member ? { trustedOperator: false, capabilities: [], ...member } : null)) } };
   return new AccessService(prisma as never, noAuthPolicy);
 }
 
@@ -125,7 +125,7 @@ describe('Generate', () => {
 describe('the tester run', () => {
   function executor(capabilities: string[]) {
     const prisma = {
-      workspaceMember: { findUnique: vi.fn(async () => ({ role: 'viewer', trustedOperator: false, capabilities })) },
+      workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: { findUnique: vi.fn(async () => ({ role: 'viewer', trustedOperator: false, capabilities })) },
       agentRun: { updateMany: vi.fn(async () => ({ count: 1 })) },
     };
     const client = { chat: vi.fn(async () => '{}') };

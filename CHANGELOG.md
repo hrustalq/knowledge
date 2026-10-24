@@ -17,6 +17,18 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Workspace admins can delete a workspace and everything in it (#479). **Settings → Access** ends with
+  **Delete this workspace**. It lists what the workspace holds (projects, pages, revisions, stored files,
+  connectors, chat bindings, API keys, published sites) and asks for the workspace's name to be typed back.
+  The workspace disappears for everyone the moment you confirm: every route answers 404, it leaves the
+  workspace list and switcher, its share links, published sites and public embeds stop resolving, keys
+  narrowed to it and its SCIM tokens are revoked, and its sign-in providers, connectors, chat bots,
+  triggers and agent schedules are switched off. Its contents (every table, every object under
+  `workspaces/{id}/` in the bucket, project avatars, graph vertices and BM25 rows) are removed in the
+  background within a minute, and an interrupted removal resumes on the next tick. Only the
+  `workspace.deleted` audit entry stays, with who deleted it and what it held. A browser still pointing
+  at a deleted workspace opens another one you can see. API: `GET /v1/workspaces/:id/deletion-preview`,
+  `DELETE /v1/workspaces/:id?confirm=<name>`. There is no undo.
 - Embedded designs say when Figma moved on (#470, phase 8). Every `EMBED_CHECK_INTERVAL_HOURS` (6 by
   default) each enabled Figma connector checks the frames that pages' current versions pin, against the
   file's current version. A frame counts as changed only when its own subtree changed; edits elsewhere in
@@ -292,6 +304,11 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261212100000_workspace_deleted_at` adds one nullable column, `workspaces.deleted_at`, with
+  no backfill (#479). The previous image never reads it, so a code rollback works, with one caveat: a
+  workspace deleted less than a minute before the rollback, and not yet removed, reappears half-emptied
+  and stays that way. Workspace removal runs in the API process (`WorkspaceTeardownSweeper`, 60 s tick),
+  not the worker. No new env var.
 - Migration `20261211100000_embed_node_heads` adds one table, `embed_node_heads`, with no backfill; a
   rollback leaves it unread. New env var `EMBED_CHECK_INTERVAL_HOURS` (default 6) (#470).
 - Migration `20261210100000_public_embeds` adds one nullable column, `publishing_settings.allow_public_embeds`;
@@ -340,6 +357,9 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Deleting a project with **Delete everything** no longer fails when one of its pages had a merge
+  request with a lint or breaking-change check (#479). Those checks blocked the merge request's
+  deletion, so the whole delete was refused.
 - Adding a Linear, Zendesk, Intercom or Figma connector no longer asks for a **Destination** (#512).
   These kinds create no pages, so the project and parent they asked for were never used. The wizard now
   goes from the connection check straight to **What it does**, which shows what the check reached, and

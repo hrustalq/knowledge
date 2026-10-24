@@ -371,7 +371,7 @@ function fakePrisma() {
       findMany: async ({ where }: { where: { workspaceId: string; id: { in: string[] } } }) =>
         where.workspaceId === WS && where.id.in.includes(PAGE) ? [{ id: PAGE, title: 'Billing' }] : [],
     },
-    workspaceMember: {
+    workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: {
       findMany: async ({ where }: { where: { workspaceId: string; userId: { in: string[] } } }) =>
         where.workspaceId === WS && where.userId.in.includes(USER)
           ? [{ userId: USER, user: { displayName: 'Ada', email: 'ada@x.test' } }]
@@ -560,7 +560,7 @@ const editor: Principal = {
 
 function accessAs(role: 'viewer' | 'editor' | 'admin', workspaceId = WS) {
   return new AccessService({
-    workspaceMember: {
+    workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: {
       findUnique: vi.fn(async ({ where }: { where: { workspaceId_userId: { workspaceId: string } } }) =>
         where.workspaceId_userId.workspaceId === workspaceId ? { role, trustedOperator: false } : null,
       ),

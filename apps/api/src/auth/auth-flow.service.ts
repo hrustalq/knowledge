@@ -345,7 +345,7 @@ export class AuthFlowService {
       ip: meta?.ip,
       target: user.id,
     });
-    const memberships = await this.prisma.workspaceMember.findMany({ where: { userId: user.id } });
+    const memberships = await this.prisma.workspaceMember.findMany({ where: { userId: user.id, workspace: { deletedAt: null } } });
     const me = toMeResponse(
       {
         userId: user.id,

@@ -39,6 +39,18 @@ export const useWorkspacesStore = defineStore('workspaces', {
      * Full reload, for the same reason switching project does one: the page
      * tree, query cache and live subscription are all scoped to the selection.
      */
+    /**
+     * After a deletion (#479): the roster drops it (the API no longer lists
+     * it), and if it was the active one the app moves to the next it can see.
+     */
+    async forget(workspaceId: string) {
+      await this.fetchList().catch(() => {
+        this.items = this.items.filter((w) => w.workspaceId !== workspaceId)
+      })
+      if (workspaceId !== getWorkspaceId()) return
+      setActiveWorkspace(this.items[0]?.workspaceId ?? null)
+      window.location.assign('/documents')
+    },
     switchWorkspace(workspaceId: string) {
       if (workspaceId === getWorkspaceId()) return
       setActiveWorkspace(workspaceId)

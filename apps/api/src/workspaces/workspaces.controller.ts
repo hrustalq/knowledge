@@ -12,15 +12,18 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   CreateWorkspaceResponse,
+  DeleteWorkspaceResponse,
   ListWorkspaceCandidatesResponse,
   ListWorkspaceMembersResponse,
   ListWorkspacesResponse,
+  WorkspaceDeletionPreviewResponse,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import {
   AddMemberDto,
   CreateWorkspaceDto,
+  DeleteWorkspaceQueryDto,
   ListCandidatesQueryDto,
   UpdateMemberDto,
 } from './workspaces.dto.js';
@@ -46,6 +49,26 @@ export class WorkspacesController {
   @ApiOperation({ summary: 'Create a workspace — the creator becomes its admin + trusted operator' })
   create(@CurrentPrincipal() principal: Principal, @Body() dto: CreateWorkspaceDto): Promise<CreateWorkspaceResponse> {
     return this.workspaces.create(principal, dto.name);
+  }
+
+  @Get(':id/deletion-preview')
+  @Access('admin', 'workspace')
+  @ApiOperation({ summary: 'What deleting the workspace would destroy, counted (workspace admin)' })
+  deletionPreview(@Param('id', ParseUUIDPipe) id: string): Promise<WorkspaceDeletionPreviewResponse> {
+    return this.workspaces.deletionPreview(id);
+  }
+
+  @Delete(':id')
+  @Access('admin', 'workspace')
+  @ApiOperation({
+    summary: 'Delete the workspace and everything in it (workspace admin). Gone at once; contents removed in the background',
+  })
+  remove(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: DeleteWorkspaceQueryDto,
+  ): Promise<DeleteWorkspaceResponse> {
+    return this.workspaces.remove(principal, id, query.confirm);
   }
 
   @Get(':id/members')

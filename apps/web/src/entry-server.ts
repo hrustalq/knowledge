@@ -8,6 +8,7 @@ import { ensureLocaleMessages } from './i18n'
 import { useAuthStore } from './stores/auth'
 import { useDocumentsStore } from './stores/documents'
 import { useProjectsStore } from './stores/projects'
+import { useWorkspacesStore } from './stores/workspaces'
 
 interface SsrRequestContext {
   token: string | null
@@ -56,6 +57,19 @@ async function prefetchShell(router: Router, pinia: Pinia, request: SsrRequestCo
   const early = scoped ? documents.fetchTree().catch(() => undefined) : null
   await projects.fetchList().catch(() => undefined)
   await early
+  if (!projects.loaded || projects.items.length === 0) {
+    // The cookie's workspace may be gone — deleted (#479), or never ours (a 404,
+    // or under AUTH_MODE=none an empty roster). Render the first one the caller
+    // can see instead; entry-client adopts it the same way.
+    const workspaces = useWorkspacesStore(pinia)
+    await workspaces.fetchList().catch(() => undefined)
+    const fallback = workspaces.items[0]?.workspaceId
+    if (fallback && !workspaces.items.some((w) => w.workspaceId === request.workspaceId)) {
+      // The project check below then drops the old workspace's tree.
+      request.workspaceId = fallback
+      await projects.fetchList().catch(() => undefined)
+    }
+  }
   if (projects.loaded && projects.activeId !== scoped) {
     // The roster resolved another project (the cookie's is gone, or there was
     // none): render that one's tree, as the client would after its own fetch.

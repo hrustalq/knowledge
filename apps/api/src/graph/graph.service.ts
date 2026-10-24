@@ -278,6 +278,9 @@ export interface WorkspaceRelationGraph {
  * All graph access goes through this service — it is the single injection
  * point for the mandatory server-side workspace predicate (plan.md §6).
  */
+/** Every vertex type that carries `workspaceId` — what a workspace's teardown removes (#479). */
+export const WORKSPACE_VERTEX_TYPES = ['Chunk', 'DocumentRevision', 'Document', 'Entity', 'Community', 'ChatChunk'] as const;
+
 @Injectable()
 export class GraphService {
   private readonly logger = new Logger(GraphService.name);
@@ -785,6 +788,17 @@ export class GraphService {
         `DELETE FROM ${type} WHERE documentId = :documentId AND workspaceId = :workspaceId`,
         { documentId, workspaceId },
       );
+    }
+  }
+
+  /**
+   * Every vertex a workspace owns, for its teardown (#479). Deleting a vertex
+   * takes its edges with it, as in `deleteDocumentGraph`; the predicate is the
+   * workspace itself, so nothing outside it can match.
+   */
+  async deleteWorkspaceGraph(workspaceId: string): Promise<void> {
+    for (const type of WORKSPACE_VERTEX_TYPES) {
+      await this.arcade.command('sql', `DELETE FROM ${type} WHERE workspaceId = :workspaceId`, { workspaceId });
     }
   }
 

@@ -47,7 +47,7 @@ const caller: Principal = {
 
 function accessAs(role: string, workspaceId = WS) {
   return new AccessService({
-    workspaceMember: {
+    workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: {
       findUnique: vi.fn(async ({ where }: { where: { workspaceId_userId: { workspaceId: string } } }) =>
         where.workspaceId_userId.workspaceId === workspaceId ? { role, trustedOperator: false } : null,
       ),
@@ -125,7 +125,7 @@ function fakePrisma(opts: { source?: string; roster?: string[] } = {}) {
         }
       }),
     },
-    workspaceMember: {
+    workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: {
       findMany: vi.fn(async ({ where }: { where: { userId: { in: string[] } } }) =>
         where.userId.in
           .filter((id) => roster.has(id))
@@ -221,7 +221,7 @@ describe('removing a workspace member', () => {
     const deleteMany = vi.fn(async () => ({ count: 2 }));
     const grantsDeleteMany = vi.fn(async () => ({ count: 1 }));
     const prisma = {
-      workspaceMember: {
+      workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: {
         findUnique: vi.fn(async () => ({ workspaceId: WS, userId: BOB, role })),
         delete: vi.fn(async () => ({})),
         findMany: vi.fn(async () => []),
@@ -239,7 +239,7 @@ describe('removing a workspace member', () => {
   it('keeps them when the removal is refused (the last admin)', async () => {
     const deleteMany = vi.fn();
     const prisma = {
-      workspaceMember: { findUnique: vi.fn(async () => ({ workspaceId: WS, userId: BOB, role: 'admin' })) },
+      workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: { findUnique: vi.fn(async () => ({ workspaceId: WS, userId: BOB, role: 'admin' })) },
       $executeRaw: vi.fn(async () => 0),
       userGroupMember: { deleteMany },
     };

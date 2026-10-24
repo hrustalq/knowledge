@@ -53,6 +53,7 @@
     "notAMember": "User {userId} is not a member of workspace {workspaceId}",
     "lastAdminDemote": "Cannot demote the last admin of the workspace",
     "lastAdminRemove": "Cannot remove the last admin of the workspace",
+    "deleteConfirmMismatch": "Type the workspace name exactly to confirm the deletion",
     "managedByIdp": "This member is managed by single sign-on ({source}) — take the row over as manual to edit it"
   },
   "user": {

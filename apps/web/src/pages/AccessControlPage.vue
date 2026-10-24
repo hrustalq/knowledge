@@ -25,6 +25,7 @@ import { toast } from 'vue-sonner'
 import { AtSign, Library, ShieldCheck, UserPlus, Wrench } from 'lucide-vue-next'
 import { WORKSPACE_ROLES } from '@knowledge/contracts'
 import type {
+  DeleteWorkspaceResponse,
   ListWorkspaceCandidatesResponse,
   ListWorkspaceMembersResponse,
   ListWorkspacesResponse,
@@ -36,6 +37,8 @@ import type {
 } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { useWorkspacesStore } from '@/stores/workspaces'
+import DeleteWorkspaceDialog from '@/components/access/DeleteWorkspaceDialog.vue'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import { Badge } from '@/components/ui/badge'
 import UserChip from '@/components/people/UserChip.vue'
@@ -224,6 +227,17 @@ async function loadWorkspaces() {
   } catch (e) {
     toast.error((e as Error).message)
   }
+}
+
+/* ------------------------------------------------- deleting the workspace */
+
+const deleteOpen = ref(false)
+
+async function onWorkspaceDeleted(res: DeleteWorkspaceResponse) {
+  toast.success(t('access.deleteWorkspace.deleted', { name: selectedWorkspace.value?.name ?? '' }))
+  // Leaves the page with a full reload when it was the active workspace.
+  await useWorkspacesStore().forget(res.workspaceId)
+  await loadWorkspaces()
 }
 
 async function loadMembers() {
@@ -467,6 +481,23 @@ const tab = usePageTabs(tabs, 'members')
           </TableRow>
         </TableBody>
         </Table>
+
+        <!-- The last act on the workspace this page manages (#479). -->
+        <section
+          v-if="canManage && selectedWorkspace"
+          aria-labelledby="delete-workspace-heading"
+          class="mt-8 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t pt-4"
+        >
+          <div class="min-w-0 flex-1 space-y-0.5">
+            <h2 id="delete-workspace-heading" class="text-sm font-medium">{{ t('access.deleteWorkspace.zoneTitle') }}</h2>
+            <p class="text-muted-foreground max-w-prose text-xs break-words">
+              {{ t('access.deleteWorkspace.zoneBody', { name: selectedWorkspace.name }) }}
+            </p>
+          </div>
+          <Button size="sm" variant="outline" class="text-destructive hover:text-destructive" @click="deleteOpen = true">
+            {{ t('access.deleteWorkspace.open') }}
+          </Button>
+        </section>
       </template>
 
       <!-- Roles: the same roster, read as a ladder of what each rung grants. -->
@@ -497,6 +528,13 @@ const tab = usePageTabs(tabs, 'members')
       <!-- Accounts: the platform layer. Only rendered where it can be used. -->
       <AccessAccounts v-else-if="tab === 'accounts' && canSeeAccounts" />
     </div>
+
+    <DeleteWorkspaceDialog
+      v-if="selectedWorkspace"
+      v-model:open="deleteOpen"
+      :workspace="selectedWorkspace"
+      @deleted="onWorkspaceDeleted"
+    />
 
     <Dialog v-model:open="addOpen">
       <DialogContent class="sm:max-w-md">

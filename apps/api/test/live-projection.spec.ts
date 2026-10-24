@@ -150,6 +150,7 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       document: { id: DOC, workspaceId: WS, title: 'Doc' },
     };
     const prisma = {
+      workspace: { findUnique: async () => ({ deletedAt: null }) },
       ingestionJob: {
         findUnique: vi.fn(async () => ({ id: 'job', status: 'queued', workspaceId: WS, revisionId: revision.id, payload: {} })),
         update: vi.fn(),

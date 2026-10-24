@@ -35,6 +35,14 @@ export class ListCandidatesQueryDto {
   limit?: number;
 }
 
+export class DeleteWorkspaceQueryDto {
+  @ApiPropertyOptional({ description: "The workspace's name, typed to confirm; anything else is a 400 that deletes nothing" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200, { message: vmsg('maxLength') })
+  confirm?: string;
+}
+
 export class CreateWorkspaceDto {
   @ApiProperty({ example: 'Platform Team' })
   @IsString()

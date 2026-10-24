@@ -40,6 +40,8 @@ export interface FulltextProvider {
     opts: { live: boolean; aclNodes: string[] },
   ): Promise<void>;
   deleteRevision(revisionId: string): Promise<void>;
+  /** Every row of a workspace, for its teardown (#479). */
+  deleteWorkspace(workspaceId: string): Promise<void>;
   /**
    * Make one revision the document's live projection (#83) and demote every
    * other revision of the document; `null` demotes all. Mirrors
@@ -62,6 +64,7 @@ export class NoopFulltextProvider implements FulltextProvider {
   readonly enabled = false;
   async indexRevisionChunks(): Promise<void> {}
   async deleteRevision(): Promise<void> {}
+  async deleteWorkspace(): Promise<void> {}
   async setLiveRevision(): Promise<void> {}
   async restamp(): Promise<void> {}
   async stampRevisions(): Promise<void> {}

@@ -3235,6 +3235,26 @@
       "takeOver": "Manage manually",
       "takeOverTitle": "Manage {name} by hand?",
       "takeOverBody": "Sign-ins will stop changing their role here."
+    },
+    "deleteWorkspace": {
+      "zoneTitle": "Delete this workspace",
+      "zoneBody": "Removes every project, page, stored file, connector and chat bot in {name}, for every member. Its audit record stays.",
+      "open": "Delete workspace…",
+      "title": "Delete {name}?",
+      "body": "It disappears for everyone the moment you confirm; what it holds is removed in the background over the next minute.",
+      "empty": "Nothing is stored in it yet: only its members and settings go.",
+      "confirm": "Delete workspace",
+      "deleted": "{name} was deleted",
+      "count": {
+        "projects": "{n} project | {n} projects",
+        "documents": "{n} page | {n} pages",
+        "revisions": "{n} revision | {n} revisions",
+        "storedFiles": "{n} stored file | {n} stored files",
+        "connectors": "{n} connector | {n} connectors",
+        "chatBindings": "{n} chat binding | {n} chat bindings",
+        "apiKeys": "{n} API key | {n} API keys",
+        "publishedSites": "{n} published site | {n} published sites"
+      }
     }
   },
   "users": {
@@ -6356,7 +6376,8 @@
         "chat_listen_disabled": "Chat messages no longer kept for /capture",
         "chat_auto_harvest_enabled": "Automatic thread harvest turned on",
         "chat_auto_harvest_disabled": "Automatic thread harvest turned off",
-        "member_capabilities_changed": "Member capabilities changed"
+        "member_capabilities_changed": "Member capabilities changed",
+        "workspace_deleted": "Workspace deleted"
       }
     },
     "tabs": {

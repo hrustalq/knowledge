@@ -187,21 +187,30 @@ export class StorageService {
    * exceed that.
    */
   async purgeObjectVersions(objectKey: string): Promise<void> {
+    // Prefix is a prefix, not an exact match: a sibling key that merely starts
+    // with this one must not be swept up with it.
+    await this.purgeVersions(objectKey, (key) => key === objectKey);
+  }
+
+  /** Every version of every key under `prefix` — a deleted workspace's whole tree (#479). */
+  async purgePrefix(prefix: string): Promise<void> {
+    await this.purgeVersions(prefix, () => true);
+  }
+
+  private async purgeVersions(prefix: string, matches: (key: string) => boolean): Promise<void> {
     let keyMarker: string | undefined;
     let versionIdMarker: string | undefined;
     do {
       const listed = await this.s3.send(
         new ListObjectVersionsCommand({
           Bucket: this.bucket,
-          Prefix: objectKey,
+          Prefix: prefix,
           KeyMarker: keyMarker,
           VersionIdMarker: versionIdMarker,
         }),
       );
       const objects = [...(listed.Versions ?? []), ...(listed.DeleteMarkers ?? [])]
-        // Prefix is a prefix, not an exact match: a sibling key that merely
-        // starts with this one must not be swept up with it.
-        .filter((v) => v.Key === objectKey && v.VersionId)
+        .filter((v) => v.Key && matches(v.Key) && v.VersionId)
         .map((v) => ({ Key: v.Key!, VersionId: v.VersionId! }));
       if (objects.length > 0) {
         await this.s3.send(

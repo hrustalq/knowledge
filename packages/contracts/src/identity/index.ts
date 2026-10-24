@@ -142,6 +142,8 @@ export const AUDIT_ACTIONS = [
   'chat.auto_harvest_disabled',
   /** A member's capabilities changed (#468): `params` lists what was granted and revoked. */
   'member.capabilities_changed',
+  /** A workspace was deleted (#479): `params` holds what it held, so the record outlives every row it counts. */
+  'workspace.deleted',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -941,6 +943,36 @@ export interface ListWorkspacesResponse {
 export interface CreateWorkspaceResponse {
   workspaceId: string;
   name: string;
+}
+
+/**
+ * What deleting a workspace destroys (#479), counted rather than estimated —
+ * the same argument `ProjectCascadeCounts` makes for a project.
+ */
+export interface WorkspaceDeletionCounts {
+  projects: number;
+  documents: number;
+  revisions: number;
+  /** Each revision stores its source and a normalized JSON; every attachment is one more. */
+  storedFiles: number;
+  connectors: number;
+  chatBindings: number;
+  apiKeys: number;
+  publishedSites: number;
+}
+
+// GET /v1/workspaces/:id/deletion-preview
+export interface WorkspaceDeletionPreviewResponse {
+  workspaceId: string;
+  name: string;
+  counts: WorkspaceDeletionCounts;
+}
+
+// DELETE /v1/workspaces/:id — the workspace is gone at once; its contents go on the teardown sweeper's next tick.
+export interface DeleteWorkspaceResponse {
+  workspaceId: string;
+  deletedAt: string;
+  counts: WorkspaceDeletionCounts;
 }
 
 // ---------------------------------------------------------------------------

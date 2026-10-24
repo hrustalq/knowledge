@@ -5081,6 +5081,16 @@
       "platformAdmin": false
     },
     {
+      "method": "PATCH",
+      "path": "/v1/workspaces/{id}",
+      "tag": "workspaces",
+      "summary": "Rename the workspace (workspace admin)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/workspaces/{id}/candidates",
       "tag": "workspaces",

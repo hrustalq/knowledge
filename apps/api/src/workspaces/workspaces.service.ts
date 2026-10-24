@@ -9,6 +9,7 @@ import {
   type ListWorkspaceCandidatesResponse,
   type ListWorkspaceMembersResponse,
   type ListWorkspacesResponse,
+  type UpdateWorkspaceResponse,
   type WorkspaceRole,
 } from '@knowledge/contracts';
 import { AuditService } from '../auth/audit.service.js';
@@ -73,6 +74,23 @@ export class WorkspacesService {
       return created;
     });
     return { workspaceId: workspace.id, name: workspace.name };
+  }
+
+  /** Rename (#478). The audit row keeps both names, so the old one can still be searched for. */
+  async rename(principal: Principal, workspaceId: string, name: string): Promise<UpdateWorkspaceResponse> {
+    const before = await this.prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { name: true } });
+    if (before.name !== name) {
+      await this.prisma.workspace.update({ where: { id: workspaceId }, data: { name } });
+      void this.audit.record({
+        workspaceId,
+        actor: principal.userId,
+        action: 'workspace.renamed',
+        params: { from: before.name, to: name },
+        target: workspaceId,
+        ok: true,
+      });
+    }
+    return { workspaceId, name };
   }
 
   async deletionPreview(workspaceId: string): Promise<WorkspaceDeletionPreviewResponse> {

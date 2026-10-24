@@ -144,6 +144,8 @@ export const AUDIT_ACTIONS = [
   'member.capabilities_changed',
   /** A workspace was deleted (#479): `params` holds what it held, so the record outlives every row it counts. */
   'workspace.deleted',
+  /** A workspace was renamed (#478): `params` holds `from` and `to`. */
+  'workspace.renamed',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -941,6 +943,12 @@ export interface ListWorkspacesResponse {
 }
 
 export interface CreateWorkspaceResponse {
+  workspaceId: string;
+  name: string;
+}
+
+// PATCH /v1/workspaces/:id
+export interface UpdateWorkspaceResponse {
   workspaceId: string;
   name: string;
 }

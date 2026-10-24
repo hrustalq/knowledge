@@ -728,7 +728,8 @@ export interface paths {
         delete: operations["WorkspacesController_remove"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Rename the workspace (workspace admin) */
+        patch: operations["WorkspacesController_update"];
         trace?: never;
     };
     "/v1/workspaces/{id}/members": {
@@ -7150,6 +7151,10 @@ export interface components {
             /** @example Platform Team */
             name: string;
         };
+        UpdateWorkspaceDto: {
+            /** @example Platform Team */
+            name: string;
+        };
         AddMemberDto: {
             /**
              * @description Existing user email
@@ -11619,6 +11624,50 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkspacesController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkspaceDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {

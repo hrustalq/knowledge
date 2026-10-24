@@ -17,6 +17,12 @@ in the pull request that introduces them — see
 
 ### Added
 
+- Workspace admins can rename a workspace (#478). **Settings → Access** has a **Workspace name** field
+  above **Delete this workspace**; the switcher shows the new name at once, without a reload. The name
+  follows the create rule: trimmed, not empty, at most 120 characters. Each rename writes a
+  `workspace.renamed` audit entry with who did it and the old and new name. Creating a workspace whose
+  name is only spaces is now refused too, rather than making one with an empty name. API:
+  `PATCH /v1/workspaces/:id` with `{ "name": "…" }`, workspace admin only.
 - Workspace admins can delete a workspace and everything in it (#479). **Settings → Access** ends with
   **Delete this workspace**. It lists what the workspace holds (projects, pages, revisions, stored files,
   connectors, chat bindings, API keys, published sites) and asks for the workspace's name to be typed back.

@@ -70,6 +70,13 @@ not move it. Only an `x-knowledge-key` on the default-branch head re-pins it;
 a branch revision with a new key shows its operations under that key without
 moving the live entities first.
 
+**The owner.** A spec has no frontmatter, so `x-knowledge-relations` (root,
+else `info`) stands in for its `relations:` (#519): same shape, same reader,
+written as `frontmatter` edges on the spec document. That is how a spec says
+which `service:` or `component:` its operations belong to
+([doc 63](63-graph-layers.md#membership-between-layers)). It is not API
+surface: the spec diff ignores it.
+
 **Matching in a diff.** Operations match by what a client calls: method plus
 folded path, or channel address plus action. Never by array index and never by
 entity key. Reordering parameters, renaming a path parameter (matched by

@@ -165,7 +165,9 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
           raw,
           live,
         });
-        parsed = { content: spec.markdown, data: {} };
+        // `x-knowledge-relations` is the spec's frontmatter (#519): the one key
+        // read, so step 7 makes its owner edges and nothing else.
+        parsed = { content: spec.markdown, data: { relations: spec.spec.relations } };
       } else {
         if (!revision.contentType.includes('markdown') && !revision.contentType.startsWith('text/')) {
           throw new Error(`Unsupported content type for Phase 1 ingestion: ${revision.contentType}`);

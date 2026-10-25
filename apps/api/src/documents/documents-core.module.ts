@@ -13,6 +13,7 @@ import { PermissionsCoreModule } from '../permissions/permissions-core.module.js
 import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
+import { ReadCacheCoreModule } from '../cache/read-cache.module.js';
 
 /**
  * Document reads and writes with no controllers and no auth dependencies.
@@ -50,6 +51,8 @@ import { CompareService } from './compare.service.js';
     PermissionsCoreModule,
     // A spec document is validated at finalize (#78). A leaf.
     ApiSpecsCoreModule,
+    // Revision bytes by id (#472). A leaf.
+    ReadCacheCoreModule,
   ],
   // CompareService too: a merge request's lint reads its diff in the worker
   // (#74). Prisma, storage, graph and the spec diff — all already here.

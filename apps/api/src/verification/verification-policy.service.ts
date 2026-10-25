@@ -10,6 +10,7 @@ import {
   TRUST_WEIGHTS,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
+import { ReadCache, READ_CACHE_FAMILIES } from '../cache/read-cache.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 /**
@@ -31,6 +32,7 @@ export class VerificationPolicyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<Env, true>,
+    private readonly cache: ReadCache,
   ) {}
 
   defaults(): KnowledgeHealthSettingsValues {
@@ -50,7 +52,12 @@ export class VerificationPolicyService {
     };
   }
 
-  async override(workspaceId: string): Promise<KnowledgeHealthSettingsOverride> {
+  /** Read on every page detail and search, so through the read cache; `update` is its one writer. */
+  override(workspaceId: string): Promise<KnowledgeHealthSettingsOverride> {
+    return this.cache.wrap(workspaceId, READ_CACHE_FAMILIES.healthSettings.key(), () => this.readOverride(workspaceId));
+  }
+
+  private async readOverride(workspaceId: string): Promise<KnowledgeHealthSettingsOverride> {
     const row = await this.prisma.knowledgeHealthSettings.findUnique({ where: { workspaceId } });
     return {
       reviewIntervalDays: row?.reviewIntervalDays ?? null,
@@ -99,6 +106,7 @@ export class VerificationPolicyService {
       create: { workspaceId, ...data },
       update: data,
     });
+    await this.cache.invalidate(workspaceId, READ_CACHE_FAMILIES.healthSettings.key());
   }
 }
 

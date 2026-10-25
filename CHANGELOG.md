@@ -15,6 +15,15 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- A Redis read cache for answers that are the same for every caller (#472): a revision's raw bytes, a
+  search query's embedding and a workspace's knowledge-health settings. Off by default
+  (`READ_CACHE_ENABLED`); with it on, an unchanged page's content skips object storage, a repeated
+  search skips the embedding call, and every page view and search skips the settings read. Nothing
+  filtered by page permissions is ever cached, a settings change reaches every process on the next
+  request, and with Redis down every read still answers from its source.
+
 ### Changed
 
 - The web app makes every API call through one typed client and one cache (#472). Project, workspace,
@@ -41,6 +50,12 @@ in the pull request that introduces them — see
 - The page picker in a workflow's **Start** dialog listed no pages (#472).
 - Opening a page's editor in two tabs at the same moment could fail one of them with **Internal server
   error**: both asked for the author's working branch and the second insert collided (#472).
+
+### Operations
+
+- Two env vars, both defaulted (#472): `READ_CACHE_ENABLED` (`false`) and `READ_CACHE_DEFAULT_TTL_MS`
+  (`3600000`). Set them in the GitHub `production` environment before the release that ships them —
+  `deploy.yml` refuses a variable the environment lacks. Leave the cache off until it has been measured.
 
 ## [0.34.0] — 2026-10-26
 

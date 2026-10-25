@@ -262,7 +262,9 @@
     "noPairs": "No passages were close enough to compare.",
     "budgetSpent": "The AI budget ran out after {judged} comparisons.",
     "findingTitle": "“{a}” and “{b}” disagree",
-    "summary": "Compared {judged} pairs of passages; {found} new contradictions."
+    "summary": "Compared {judged} pairs of passages; {found} new contradictions.",
+    "screened": "The decision model screened {asked} pairs and set {dropped} aside as not contradicting.",
+    "screeningStopped": "The decision model stopped answering ({error}); the remaining pairs went to the judge unscreened."
   },
   "atlas": "Atlas",
   "atlasDesc": "Groups related pages into communities and summarises each, so broad questions can be answered across the whole knowledge base.",

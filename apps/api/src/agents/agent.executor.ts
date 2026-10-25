@@ -41,8 +41,16 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService, type StoredCommunity } from '../graph/graph.service.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { AssistantClient, ProviderAccountError } from '../assistant/assistant.client.js';
+import { DecisionClient } from '../assistant/decision.client.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
-import { candidatePairs, conflictFingerprint, quoteIn, readJudgement } from './contradiction.js';
+import {
+  candidatePairs,
+  conflictFingerprint,
+  CONTRADICTION_QUESTION,
+  prefilterPairs,
+  quoteIn,
+  readJudgement,
+} from './contradiction.js';
 import { communityHierarchy, graphFingerprint, pagePairs } from './communities.js';
 import { AssistantReadToolsService } from '../assistant/assistant-read-tools.service.js';
 import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
@@ -317,6 +325,7 @@ export class AgentExecutor {
     private readonly access: AccessService,
     private readonly testSuites: ApiTestSuitesService,
     private readonly fixtures: ApiFixturesService,
+    private readonly decision: DecisionClient,
   ) {}
 
   /**
@@ -575,21 +584,52 @@ export class AgentExecutor {
       for (const k of ea) if (eb.has(k)) return true;
       return false;
     };
-    const pairs = candidatePairs(chunks, inScope, {
+    // With a decision route (#530) every candidate is screened by Jev first,
+    // and the cap bounds the judge's calls rather than the candidates.
+    const route = await this.decision.routeFor(run.workspaceId);
+    const cap = this.config.get('CONTRADICTION_MAX_PAIRS_PER_RUN', { infer: true });
+    const candidates = candidatePairs(chunks, inScope, {
       minSimilarity: this.config.get('CONTRADICTION_MIN_SIMILARITY', { infer: true }),
-      cap: this.config.get('CONTRADICTION_MAX_PAIRS_PER_RUN', { infer: true }),
+      cap: route ? Number.POSITIVE_INFINITY : cap,
       sharesEntity,
     });
-    if (pairs.length === 0) return { summary: t('agent.arbitration.noPairs'), findings: [] };
+    if (candidates.length === 0) return { summary: t('agent.arbitration.noPairs'), findings: [] };
 
-    // PG has the last word on visibility (#76), and the titles.
-    const docIds = [...new Set(pairs.flatMap((p) => [p.a.documentId, p.b.documentId]))];
+    // PG has the last word on visibility (#76), and the titles — before any
+    // passage leaves for the decision model.
+    const docIds = [...new Set(candidates.flatMap((p) => [p.a.documentId, p.b.documentId]))];
     const docs = await this.prisma.document.findMany({
       where: { id: { in: docIds }, workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
       select: { id: true, title: true },
     });
     const titleOf = new Map(docs.map((d) => [d.id, d.title]));
     const revisionOf = (chunkId: string) => chunkId.slice(0, chunkId.lastIndexOf(':'));
+    let pairs = candidates.filter((p) => titleOf.has(p.a.documentId) && titleOf.has(p.b.documentId));
+    let screened: { asked: number; dropped: number } | null = null;
+    if (route) {
+      await report({ stage: 'screening', progress: 0.08 });
+      const decision = { route, userId: run.createdBy, operation: 'contradiction' as const };
+      const result = await prefilterPairs(
+        pairs,
+        (pair) =>
+          this.decision.noul(
+            decision,
+            {
+              pageA: { title: titleOf.get(pair.a.documentId), passage: wrapUntrusted(pair.a.text, 'arbiter', 'page') },
+              pageB: { title: titleOf.get(pair.b.documentId), passage: wrapUntrusted(pair.b.text, 'arbiter', 'page') },
+            },
+            CONTRADICTION_QUESTION,
+          ),
+        route.thresholds.arbiter,
+        (error) => error instanceof ProviderAccountError,
+      );
+      if (result.stopped) {
+        await report({ warning: t('agent.arbitration.screeningStopped', { error: (result.stopped as Error).message }) });
+      }
+      screened = { asked: result.asked, dropped: pairs.length - result.kept.length };
+      pairs = result.kept;
+    }
+    pairs = pairs.slice(0, cap);
 
     const minConfidence = this.config.get('CONTRADICTION_MIN_CONFIDENCE', { infer: true });
     const call = { config: agent.config, userId: run.createdBy, operation: 'contradiction' as const, locale: run.locale as Locale };
@@ -597,9 +637,8 @@ export class AgentExecutor {
     const findings: AgentFinding[] = [];
     let judged = 0;
     for (const [i, pair] of pairs.entries()) {
-      const titleA = titleOf.get(pair.a.documentId);
-      const titleB = titleOf.get(pair.b.documentId);
-      if (!titleA || !titleB) continue;
+      const titleA = titleOf.get(pair.a.documentId)!;
+      const titleB = titleOf.get(pair.b.documentId)!;
       await report({ stage: 'judging', progress: 0.1 + (0.85 * i) / pairs.length });
       let raw: string;
       try {
@@ -658,7 +697,9 @@ export class AgentExecutor {
       if (findings.length >= MAX_FINDINGS) break;
     }
     return {
-      summary: t('agent.arbitration.summary', { judged, found: findings.length }),
+      summary:
+        t('agent.arbitration.summary', { judged, found: findings.length }) +
+        (screened ? ' ' + t('agent.arbitration.screened', screened) : ''),
       findings,
     };
   }

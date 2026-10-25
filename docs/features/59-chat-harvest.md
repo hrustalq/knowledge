@@ -197,6 +197,15 @@ Its instructions forbid stating anything the thread does not say, allow an
 empty list as a good answer, and say placeholders stay as they are. The
 caller appends the cap (eight), which it owns as `MAX_PROPOSALS`.
 
+**Jev first, with a Decisions route** (#530,
+[67](67-decision-model-evaluation.md)). Before the page search and the
+harvester call, `settlesSomething` asks TypeSafe Jev one noul over the masked,
+wrapped thread: did it settle something that belongs in the knowledge base?
+Below the harvest threshold (default 0.5), the harvest returns the outcome an
+empty harvest returns, so the reply is the same "nothing to keep" and no
+proposal call is made. Without a route, or when the question fails, the
+harvest runs as before. Only the masked thread is sent: no pages, no ids.
+
 ### Validation happens here, not in the prompt
 
 `planCaptures` turns the model's JSON into capture requests and drops, and
@@ -243,7 +252,9 @@ matched page, because the group may include people who cannot open them.
 
 Each harvest is one model call, booked as `AiUsageOperation 'harvest'`
 against the asker. The rate limit counts those rows, so the limit and the bill
-cannot disagree.
+cannot disagree. The Jev question (#530) is booked under `harvest` too, but the
+rate limit skips its rows (`model` starting `jev`): a thread Jev turns away
+costs a fifth of a harvest and proposes nothing.
 
 ### The listening buffer
 

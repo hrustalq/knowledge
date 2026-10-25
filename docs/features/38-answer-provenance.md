@@ -509,6 +509,43 @@ rather than a false zero.
 already store; retention (`ANSWER_FEEDBACK_RETENTION_DAYS`) bounds the
 dataset the same way it bounds the table.
 
+## Citation support (#530)
+
+`finalizeCitations` proves a label was handed out; it cannot tell whether the
+passage behind it says what the sentence claims. With a Decisions route
+([67](67-decision-model-evaluation.md)), TypeSafe Jev checks that, one noul per
+cited sentence.
+
+**Only what the turn handed out.** A turn keeps, per label, the text its
+source came with (`PreparedTurn.passages`, never stored):
+- the page `read_document` returned (`AssistantToolResult.passages`);
+- a search, overview, web or chat source's `snippet`;
+- the grounding page (the draft, from the editor) and attached pages.
+
+Each label holds at most 12 000 characters. No new retrieval, so no new
+access question. A sentence whose labels have no text is not checked.
+
+**A mark, never an edit.** `checkSupport` sets `AnswerCitation.support` to
+`supported` or `unsupported` (threshold default 0.5); absent means not
+checked. The text and its `[S#]` labels stay exactly as `finalizeCitations`
+left them, and confidence does not read the mark.
+
+**After the answer, where there is an "after".**
+- Pane, editor assistant and chat bot (`finishTurn`): fire-and-forget once the
+  message is saved. The marks are written to the message, and
+  `assistant.turn.finished` is published again so an open pane re-reads it.
+- `/v1/assistant/ask` and a published site's Ask: inline, because nothing is
+  shown until the response. The site's marks come back in the response's
+  `citations`; nothing is stored.
+
+Each question books a `citation_check` usage row: the asker's, or the site's.
+
+**On the page.** `unsupportedMarkers` maps unsupported sentences to the order
+in which `decorateCitations` draws markers (code skipped on both sides), and
+`markUnsupported` gives those markers a dashed caution ring, a title and an
+`aria-description`. The answer's receipts add a count. It is re-applied
+whenever the marks change, because they arrive after the text.
+
 ## Not in these phases
 
 A report filed against a page in a workspace without a model stays open for a
@@ -522,7 +559,9 @@ with `make backtest`, and nothing in search reads `answer_feedback`.
 - `packages/contracts/src/core/index.ts` — `SourceProvenance`, `AnswerCitation`,
   `AnswerConfidence`, `assessAnswer`, `verificationStateFor`, the vocabularies
 - `apps/api/src/assistant/citations.ts` — labels, splitter, `finalizeCitations`,
-  `answerSignals`, `CITATION_CLAUSE`
+  `answerSignals`, `CITATION_CLAUSE`; `notePassage`, `checkSupport`,
+  `SUPPORT_QUESTION` (#530), with `common/ask-each.ts` and
+  `assistant/decision.client.ts`
 - `apps/api/src/feedback/provenance.service.ts`, `feedback-core.module.ts`
 - `apps/api/src/assistant/assistant.service.ts` — `settleAnswer`, shared by
   `/ask` and both chat paths

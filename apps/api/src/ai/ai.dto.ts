@@ -316,6 +316,59 @@ export class UpdateAiSettingsDto {
   @NULLABLE<UpdateAiSettingsDto>('extractionProviderId')
   @IsUUID()
   extractionProviderId?: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description: 'gen-api profile serving the decision pre-filters (#530). Null turns them off.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('decisionProviderId')
+  @IsUUID()
+  decisionProviderId?: string | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    minimum: 0,
+    maximum: 1,
+    description: 'Decision probability at or above which the arbiter lets an item through (#530). Null inherits the code default (0.2).',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('decisionArbiterThreshold')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  @Max(1, { message: vmsg('max') })
+  decisionArbiterThreshold?: number | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    minimum: 0,
+    maximum: 1,
+    description: 'Decision probability at or above which the citation check lets an item through (#530). Null inherits the code default (0.5).',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('decisionCitationThreshold')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  @Max(1, { message: vmsg('max') })
+  decisionCitationThreshold?: number | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    minimum: 0,
+    maximum: 1,
+    description: 'Decision probability at or above which the harvest lets an item through (#530). Null inherits the code default (0.5).',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('decisionHarvestThreshold')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  @Max(1, { message: vmsg('max') })
+  decisionHarvestThreshold?: number | null;
 }
 
 export class TestAiConnectionDto {

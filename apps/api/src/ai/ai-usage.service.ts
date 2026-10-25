@@ -37,6 +37,8 @@ export interface AiUsageRecordInput {
   /** The run this call was made for (#305). Defaults to the ambient `currentAgentRun()`. */
   agentKey?: string;
   agentRunId?: string;
+  /** A cost the caller already knows; otherwise estimated from the config's model and prices. */
+  costUsdMicros?: number | null;
 }
 
 const LOG_PAGE_SIZE = 50;
@@ -91,7 +93,10 @@ export class AiUsageService {
           completionTokens: tokens.completionTokens,
           totalTokens: tokens.totalTokens,
           estimated: tokens.estimated,
-          costUsdMicros: this.aiConfig.estimateCostMicros(config, tokens.promptTokens, tokens.completionTokens),
+          costUsdMicros:
+            input.costUsdMicros !== undefined
+              ? input.costUsdMicros
+              : this.aiConfig.estimateCostMicros(config, tokens.promptTokens, tokens.completionTokens),
           durationMs: input.durationMs,
           ok: input.ok,
           errorCode: input.errorCode ?? null,

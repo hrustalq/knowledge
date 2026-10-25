@@ -7999,6 +7999,17 @@ export interface components {
              * @description Provider profile serving the worker's relation extraction
              */
             extractionProviderId?: string | null;
+            /**
+             * Format: uuid
+             * @description gen-api profile serving the decision pre-filters (#530). Null turns them off.
+             */
+            decisionProviderId?: string | null;
+            /** @description Decision probability at or above which the arbiter lets an item through (#530). Null inherits the code default (0.2). */
+            decisionArbiterThreshold?: number | null;
+            /** @description Decision probability at or above which the citation check lets an item through (#530). Null inherits the code default (0.5). */
+            decisionCitationThreshold?: number | null;
+            /** @description Decision probability at or above which the harvest lets an item through (#530). Null inherits the code default (0.5). */
+            decisionHarvestThreshold?: number | null;
         };
         TestAiConnectionDto: {
             /** Format: uuid */

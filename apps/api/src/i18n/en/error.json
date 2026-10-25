@@ -213,6 +213,7 @@
     "pluginHostUnresolved": "Plugin host {host} does not resolve",
     "pluginUrlPrivate": "Plugin URL resolves to a private address ({address}). Set AI_PLUGINS_ALLOW_PRIVATE_URLS=true if this is intentional.",
     "providerNone": "Provider is set to none for this workspace",
+    "decisionNeedsGenApi": "The decision route needs a gen-api profile of this workspace: Jev is reached only through gen-api.",
     "agentNotFound": "Unknown agent \"{key}\"",
     "agentScheduleNeedsOwner": "A scheduled agent needs an owner to run as.",
     "agentScheduleNeedsInterval": "A scheduled agent needs an interval in minutes.",

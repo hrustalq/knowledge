@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { visibleAiActions } from '@knowledge/contracts/content';
+import { DECISION_DEFAULT_MODEL, DECISION_SITES, DECISION_THRESHOLDS } from '@knowledge/contracts';
 import type {
   AiConnectionTestResponse,
   AiPageActionsResponse,
@@ -11,6 +12,8 @@ import type {
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
+import { DecisionClient, isJevModel } from '../assistant/decision.client.js';
+import { DECISION_THRESHOLD_COLUMN } from './decision-settings.js';
 import { AiConfigService } from './ai-config.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
 import { encryptSecret, maskSecret, MissingEncryptionKeyError } from './secret-box.js';
@@ -22,6 +25,12 @@ export interface UpdateAiSettingsInput {
   chatProviderId?: string | null;
   reviewProviderId?: string | null;
   extractionProviderId?: string | null;
+  /** #530 — null turns the decision pre-filters off. Must name a gen-api profile of this workspace. */
+  decisionProviderId?: string | null;
+  /** #530 — each null clears the override back to DECISION_THRESHOLDS. */
+  decisionArbiterThreshold?: number | null;
+  decisionCitationThreshold?: number | null;
+  decisionHarvestThreshold?: number | null;
   provider?: AiProvider | null;
   baseUrl?: string | null;
   model?: string | null;
@@ -71,6 +80,7 @@ export class AiSettingsService {
     private readonly sourcePolicies: SourcePolicyService,
     private readonly client: AssistantClient,
     private readonly config: ConfigService<Env, true>,
+    private readonly decision: DecisionClient,
   ) {}
 
   /**
@@ -88,10 +98,11 @@ export class AiSettingsService {
   }
 
   async get(workspaceId: string): Promise<AiSettingsResponse> {
-    const [row, effective, capture] = await Promise.all([
+    const [row, effective, capture, decision] = await Promise.all([
       this.prisma.aiSettings.findUnique({ where: { workspaceId } }),
       this.aiConfig.resolve(workspaceId),
       this.aiConfig.captureSettings(workspaceId),
+      this.aiConfig.decisionSettings(workspaceId),
     ]);
     return {
       workspaceId,
@@ -126,7 +137,9 @@ export class AiSettingsService {
         chat: row?.chatProviderId ?? null,
         review: row?.reviewProviderId ?? null,
         extraction: row?.extractionProviderId ?? null,
+        decision: row?.decisionProviderId ?? null,
       },
+      decision,
       canStoreSecrets: this.aiConfig.canStoreSecrets,
       updatedAt: row?.updatedAt.toISOString() ?? null,
       updatedBy: row?.updatedBy ?? null,
@@ -142,6 +155,7 @@ export class AiSettingsService {
       await this.sourcePolicies.assertModeSavable(workspaceId, input.webAccessMode);
     }
     await this.assertCaptureSavable(workspaceId, input);
+    const tunedModel = await this.decisionTunedModel(workspaceId, input);
     const data = {
       ...pick(input, 'provider'),
       ...pick(input, 'baseUrl'),
@@ -159,6 +173,11 @@ export class AiSettingsService {
       ...pick(input, 'chatProviderId'),
       ...pick(input, 'reviewProviderId'),
       ...pick(input, 'extractionProviderId'),
+      ...pick(input, 'decisionProviderId'),
+      ...pick(input, 'decisionArbiterThreshold'),
+      ...pick(input, 'decisionCitationThreshold'),
+      ...pick(input, 'decisionHarvestThreshold'),
+      ...(tunedModel === undefined ? {} : { decisionTunedModel: tunedModel }),
       ...(input.agentModeEnabled === undefined ? {} : { agentModeEnabled: input.agentModeEnabled }),
       ...pick(input, 'webAccessMode'),
       ...pick(input, 'externalAiActions'),
@@ -195,6 +214,19 @@ export class AiSettingsService {
       return { ok: false, model: '', latencyMs: 0, error: t('error.ai.providerNone') };
     }
     const startedAt = Date.now();
+    // A Jev profile (#530) cannot answer a chat completion; ask it one noul.
+    if (isJevModel(config.model)) {
+      try {
+        await this.decision.noul(
+          { route: { config, thresholds: { ...DECISION_THRESHOLDS } }, userId: principalId, operation: 'suggest' },
+          { statement: 'ok' },
+          { instructions: 'Does the statement say ok?', criteria: { true: 'It says ok.', false: 'It says something else.' } },
+        );
+        return { ok: true, model: config.model, latencyMs: Date.now() - startedAt };
+      } catch (err) {
+        return { ok: false, model: config.model, latencyMs: Date.now() - startedAt, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
     try {
       await this.client.chat({ config, userId: principalId, operation: 'suggest', locale: currentLocale() }, [
         { role: 'user', content: 'Reply with the single word: ok' },
@@ -242,6 +274,33 @@ export class AiSettingsService {
     if (amend > dedupe) {
       throw new BadRequestException(t('error.ai.captureThresholdOrder', { amend, dedupe }));
     }
+  }
+
+  /**
+   * The decision route must name an enabled gen-api profile of this workspace
+   * (#530): Jev is reached only through gen-api, and a route the client would
+   * ignore is a setting that lies. Returns what `decision_tuned_model` becomes:
+   * the routed model when a threshold override is saved, null once none is
+   * left, undefined when the thresholds are untouched.
+   */
+  private async decisionTunedModel(workspaceId: string, input: UpdateAiSettingsInput): Promise<string | null | undefined> {
+    let routed: string | undefined;
+    if (input.decisionProviderId) {
+      const profile = await this.prisma.aiProvider.findUnique({ where: { id: input.decisionProviderId } });
+      if (profile?.workspaceId !== workspaceId || profile.provider !== 'gen-api') {
+        throw new BadRequestException(t('error.ai.decisionNeedsGenApi'));
+      }
+      routed = isJevModel(profile.model) ? profile.model : DECISION_DEFAULT_MODEL;
+    }
+    const touched = DECISION_SITES.filter((site) => input[DECISION_THRESHOLD_COLUMN[site]] !== undefined);
+    if (touched.length === 0) return undefined;
+    const row = await this.prisma.aiSettings.findUnique({ where: { workspaceId } });
+    const kept = DECISION_SITES.some((site) => {
+      const asked = input[DECISION_THRESHOLD_COLUMN[site]];
+      return asked === undefined ? row?.[DECISION_THRESHOLD_COLUMN[site]] != null : asked !== null;
+    });
+    if (!kept) return null;
+    return routed ?? (await this.decision.routeFor(workspaceId))?.config.model ?? DECISION_DEFAULT_MODEL;
   }
 
   private encryptKey(apiKey: string | null): string | null {

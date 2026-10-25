@@ -148,7 +148,7 @@ export class AiProvidersService {
   }
 
   /**
-   * Deleting a profile clears every reference to it — the three routing
+   * Deleting a profile clears every reference to it — the four routing
    * columns and any thread pinned to it — so a dangling id can never send a
    * turn to a provider that no longer exists. This is the trade for having no
    * foreign keys on those columns (house style, see the schema comment).
@@ -167,6 +167,10 @@ export class AiProvidersService {
       this.prisma.aiSettings.updateMany({
         where: { workspaceId: row.workspaceId, extractionProviderId: id },
         data: { extractionProviderId: null },
+      }),
+      this.prisma.aiSettings.updateMany({
+        where: { workspaceId: row.workspaceId, decisionProviderId: id },
+        data: { decisionProviderId: null },
       }),
       this.prisma.assistantThread.updateMany({ where: { providerId: id }, data: { providerId: null } }),
       this.prisma.aiProvider.delete({ where: { id } }),

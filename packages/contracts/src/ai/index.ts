@@ -775,6 +775,8 @@ export interface AiSettingsResponse {
   capture: CaptureSettings;
   /** Per-purpose routing into the workspace's provider profiles. */
   routing: AiRouting;
+  /** The decision pre-filters (#530): whether the deployment allows them, and their thresholds. */
+  decision: DecisionSettings;
   /** False when SETTINGS_ENCRYPTION_KEY is unset — the UI must disable key entry. */
   canStoreSecrets: boolean;
   updatedAt: string | null;
@@ -837,14 +839,49 @@ export interface ListAiProvidersResponse {
  * What a provider is being used for. Chat and agent turns, background draft
  * review/suggestion, and the worker's relation extraction are the three jobs
  * a workspace may want on different models.
+ *
+ * `decision` (#530) is the odd one: a typed yes/no model (TypeSafe Jev through
+ * gen-api, docs/features/67) that pre-filters a few LLM calls. It never falls
+ * back to the inline config — with no profile routed to it, nothing is asked.
  */
-export type AiPurpose = 'chat' | 'review' | 'extraction';
+export type AiPurpose = 'chat' | 'review' | 'extraction' | 'decision';
 
-/** Which profile serves each purpose. null = fall back to the inline config, then env. */
+/**
+ * Which profile serves each purpose. null = fall back to the inline config,
+ * then env — except `decision`, where null means off.
+ */
 export interface AiRouting {
   chat: string | null;
   review: string | null;
   extraction: string | null;
+  decision: string | null;
+}
+
+/** The call sites a decision pre-filters (#530). */
+export const DECISION_SITES = ['arbiter', 'citation', 'harvest'] as const;
+export type DecisionSite = (typeof DECISION_SITES)[number];
+
+/**
+ * The Jev model a decision route asks when its profile names none of its own.
+ * Pinned: `jev-latest` moves on every vendor release, and a threshold tuned on
+ * one release can shift on the next (docs/features/67).
+ */
+export const DECISION_DEFAULT_MODEL = 'jev-1-13';
+
+/**
+ * The probability at or above which a pre-filter lets an item through, as
+ * measured in docs/features/67 on {@link DECISION_DEFAULT_MODEL}. A workspace
+ * override is sparse and records the model it was saved against.
+ */
+export const DECISION_THRESHOLDS: Record<DecisionSite, number> = { arbiter: 0.2, citation: 0.5, harvest: 0.5 };
+
+export interface DecisionSettings {
+  /** False when the deployment's DECISION_PROVIDER is `none`: no route is honoured, whatever is saved. */
+  available: boolean;
+  /** Per site, the override (null = the code default) and what applies. */
+  thresholds: Record<DecisionSite, { requested: number | null; effective: number }>;
+  /** The model the thresholds were tuned on: the code default's, or the route's when an override was saved. */
+  tunedOn: string;
 }
 
 /**
@@ -1151,6 +1188,8 @@ export type AiUsageOperation =
   | 'community'
   /** Reading a chat thread a person asked to harvest into captures (#82). */
   | 'harvest'
+  /** Asking the decision model whether a cited passage supports its sentence (#530). One row per cited sentence. */
+  | 'citation_check'
   /**
    * The learner's `coach` drafting one proposed learning from a cluster of
    * dismissed findings (#305). Billed to no person: the row's `userId` is the

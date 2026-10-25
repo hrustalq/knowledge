@@ -6,6 +6,7 @@ import { DocumentsModule } from '../documents/documents.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { VerificationCoreModule } from '../verification/verification-core.module.js';
 import { AssistantModule } from '../assistant/assistant.module.js';
+import { DecisionClientModule } from '../assistant/decision-client.module.js';
 import { AiCoreModule } from './ai-core.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
@@ -59,6 +60,8 @@ import { AgentOutcomesController } from './agent-outcomes.controller.js';
     // A learning's evidence is titled only for a viewer who may open its pages (#305).
     PermissionsCoreModule,
     forwardRef(() => AssistantModule),
+    // Test connection on a Jev profile, and the decision route's model (#530).
+    DecisionClientModule,
   ],
   controllers: [AiController, AiUsageController, AgentWebhookController, AgentOutcomesController],
   providers: [AiAgentsService, AgentRunsService, AgentTriggersService, AgentRecipesService, AgentFindingsService, AgentTiebreakService, AiPluginsService, AiSettingsService, McpClientService],

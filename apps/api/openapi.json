@@ -37000,6 +37000,33 @@
             "format": "uuid",
             "nullable": true,
             "description": "Provider profile serving the worker's relation extraction"
+          },
+          "decisionProviderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "gen-api profile serving the decision pre-filters (#530). Null turns them off."
+          },
+          "decisionArbiterThreshold": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Decision probability at or above which the arbiter lets an item through (#530). Null inherits the code default (0.2)."
+          },
+          "decisionCitationThreshold": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Decision probability at or above which the citation check lets an item through (#530). Null inherits the code default (0.5)."
+          },
+          "decisionHarvestThreshold": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Decision probability at or above which the harvest lets an item through (#530). Null inherits the code default (0.5)."
           }
         },
         "required": [

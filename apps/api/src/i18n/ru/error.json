@@ -213,6 +213,7 @@
     "pluginHostUnresolved": "Узел плагина {host} не разрешается в адрес",
     "pluginUrlPrivate": "Адрес плагина указывает на частную сеть ({address}). Если это намеренно, включите AI_PLUGINS_ALLOW_PRIVATE_URLS=true.",
     "providerNone": "Для этого рабочего пространства провайдер не выбран",
+    "decisionNeedsGenApi": "Для решений нужен профиль gen-api этого рабочего пространства: Jev доступен только через gen-api.",
     "agentNotFound": "Неизвестный агент «{key}»",
     "agentScheduleNeedsOwner": "Агенту с расписанием нужен владелец, от имени которого он работает.",
     "agentScheduleNeedsInterval": "Агенту с расписанием нужен интервал в минутах.",

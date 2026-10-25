@@ -13,6 +13,7 @@ import type {
   AiConnectionTestResponse,
   AiProviderSummary,
   AiRouting,
+  DecisionSettings,
   ListAiProvidersResponse,
 } from '@knowledge/contracts'
 import { api } from '@/api/client'
@@ -32,10 +33,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import AiSettingsSection from './AiSettingsSection.vue'
+import AiDecisionRoute from './AiDecisionRoute.vue'
 
 const { t } = useI18n()
 
-const props = defineProps<{ canManage: boolean; routing: AiRouting; canStoreSecrets: boolean }>()
+const props = defineProps<{
+  canManage: boolean
+  routing: AiRouting
+  decision: DecisionSettings
+  canStoreSecrets: boolean
+}>()
 
 const workspaceId = getWorkspaceId()
 const queryClient = useQueryClient()
@@ -157,7 +164,9 @@ async function route(field: string, value: string) {
 }
 
 function purposesServedBy(id: string): string[] {
-  return PURPOSES.filter((p) => props.routing[p.key] === id).map((p) => p.label)
+  const labels: string[] = PURPOSES.filter((p) => props.routing[p.key] === id).map((p) => p.label)
+  if (props.routing.decision === id) labels.push(t('ai.purpose.decision'))
+  return labels
 }
 </script>
 
@@ -230,6 +239,13 @@ function purposesServedBy(id: string): string[] {
           </SelectContent>
         </Select>
       </label>
+      <AiDecisionRoute
+        class="border-t pt-3"
+        :can-manage="canManage"
+        :routed="routing.decision"
+        :decision="decision"
+        :providers="providers"
+      />
     </div>
 
     <Dialog v-model:open="open">

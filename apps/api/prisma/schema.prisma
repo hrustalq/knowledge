@@ -1203,6 +1203,17 @@ model AiSettings {
   chatProviderId       String? @map("chat_provider_id") @db.Uuid
   reviewProviderId     String? @map("review_provider_id") @db.Uuid
   extractionProviderId String? @map("extraction_provider_id") @db.Uuid
+  /// #530 — the decision model's profile. Unlike the three above, null means
+  /// off: a decision never falls back to the inline config.
+  decisionProviderId   String? @map("decision_provider_id") @db.Uuid
+
+  /// #530 — pre-filter thresholds. Null inherits DECISION_THRESHOLDS (code);
+  /// `decisionTunedModel` is the routed model when an override was last saved,
+  /// since a threshold tuned on one Jev release can shift on the next.
+  decisionArbiterThreshold  Float?  @map("decision_arbiter_threshold")
+  decisionCitationThreshold Float?  @map("decision_citation_threshold")
+  decisionHarvestThreshold  Float?  @map("decision_harvest_threshold")
+  decisionTunedModel        String? @map("decision_tuned_model")
 
   /// Relation-extraction tuning. Null = inherit EXTRACTOR_MIN_CONFIDENCE /
   /// EXTRACTOR_MAX_CHUNKS. Workspace-scoped on purpose: these shape extraction

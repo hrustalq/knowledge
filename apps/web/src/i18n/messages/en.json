@@ -2350,7 +2350,9 @@
       "review": "Review & suggest",
       "reviewHint": "Draft review and writing suggestions",
       "extraction": "Relation extraction",
-      "extractionHint": "Inferred graph edges, in the indexing worker"
+      "extractionHint": "Inferred graph edges, in the indexing worker",
+      "decision": "Decisions",
+      "decisionHint": "Jev pre-filters for the arbiter, harvest and citation support"
     },
     "disabled": "disabled",
     "test": "Test",
@@ -2450,7 +2452,8 @@
       "contradiction": "Contradiction check",
       "community": "Community summary",
       "harvest": "Chat harvest",
-      "coach": "Learner coach"
+      "coach": "Learner coach",
+      "citation_check": "Citation check"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",
@@ -2762,7 +2765,23 @@
     "qualityAudit": "Quality audit",
     "qualityAuditDesc": "How the auditor agent keeps page quality scores current.",
     "qualityAuditDays": "Re-score unchanged pages after (days)",
-    "qualityAuditHint": "A page is re-scored as soon as it changes. An unchanged page keeps its score for {days} days; leave the field empty to use the server default ({defaultDays})."
+    "qualityAuditHint": "A page is re-scored as soon as it changes. An unchanged page keeps its score for {days} days; leave the field empty to use the server default ({defaultDays}).",
+    "decision": {
+      "off": "Off",
+      "unavailable": "Off for this deployment: DECISION_PROVIDER is none.",
+      "notAppliedNamed": "Routed to {name}, not applied: DECISION_PROVIDER is none for this deployment.",
+      "noGenApi": "Add a GenAPI profile to route decisions: Jev is reached only through gen-api.",
+      "dataPath": "Decisions send page passages and masked chat threads to gen-api, which keeps request content and forwards it to TypeSafe in the US.",
+      "thresholds": "Thresholds, tuned on {model}",
+      "thresholdsHint": "An item at or above its threshold goes on to the model; below it, the arbiter skips the pair, harvest replies with nothing to keep and a cited sentence is marked unsupported. Leave a field empty to use the default shown.",
+      "site": {
+        "arbiter": "Arbiter",
+        "citation": "Citation support",
+        "harvest": "Harvest"
+      },
+      "invalid": "A number from 0 to 1",
+      "saved": "Decision thresholds saved"
+    }
   },
   "search": {
     "activeFilters": "{n} filter | {n} filters",

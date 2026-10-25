@@ -509,6 +509,14 @@ export const envSchema = z.object({
   CONTRADICTION_MAX_PAIRS_PER_RUN: z.coerce.number().int().positive().default(20),
 
   /**
+   * The decision model's ceiling (#530, docs/features/67). `none` turns every
+   * decision route off for the deployment, whatever a workspace saved;
+   * `gen-api` lets a workspace route a gen-api profile to the `decision`
+   * purpose, which then asks TypeSafe Jev through gen-api's `jev` network.
+   */
+  DECISION_PROVIDER: z.enum(['none', 'gen-api']).default('none'),
+
+  /**
    * Community summaries (#81, phase 7). Off by default: each rebuild costs one
    * model call per community. On, the atlas agent groups pages into
    * communities and summarises at most COMMUNITY_MAX_PER_RUN of them; an

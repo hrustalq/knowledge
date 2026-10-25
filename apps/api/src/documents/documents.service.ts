@@ -50,6 +50,7 @@ import type {
 } from './dto/documents.dto.js';
 import type { Document, DocumentBranch, DocumentRevision, Prisma } from '@prisma/client';
 import {
+  DRAFT_BRANCH_PREFIX,
   entityLayerFor,
   isInactive,
   verificationStateFor,
@@ -890,6 +891,50 @@ export class DocumentsService {
       }),
     );
     return { branch: this.toBranchInfo(branch) };
+  }
+
+  /**
+   * The caller's working branch for this page (#474), private and created on
+   * first ask. A branch an MR was merged or closed from is spent — the MR made
+   * it readable — so the next edit starts a fresh `draft/<userId>-<n>`. One
+   * nothing was ever written on follows the default head, so the editor never
+   * opens a page as it read the day the branch was cut.
+   */
+  async myDraftBranch(documentId: string, userId: string): Promise<CreateBranchResponse> {
+    const document = await this.getDocumentOrThrow(documentId);
+    const prefix = `${DRAFT_BRANCH_PREFIX}${userId}`;
+    const mine = await this.prisma.documentBranch.findFirst({
+      where: {
+        documentId,
+        ownerId: userId,
+        name: { startsWith: prefix },
+        mrAsSource: { none: { status: { in: ['merged', 'closed'] } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!mine) {
+      const spent = await this.prisma.documentBranch.count({ where: { documentId, name: { startsWith: prefix } } });
+      const name = spent === 0 ? prefix : `${prefix}-${spent + 1}`;
+      return this.createBranch(documentId, { name, visibility: 'private' }, userId);
+    }
+    const def = await this.prisma.documentBranch.findUnique({
+      where: { documentId_name: { documentId, name: document.defaultBranch } },
+      select: { headRevisionId: true },
+    });
+    if (def?.headRevisionId && def.headRevisionId !== mine.headRevisionId) {
+      // ponytail: a shared draft opened but never saved keeps its stale base; the
+      // publish then asks to review the newer head. Reset such drafts here if
+      // that shows up as confusion.
+      const [own, drafts] = await Promise.all([
+        this.prisma.documentRevision.count({ where: { branchId: mine.id } }),
+        this.prisma.collabDraft.count({ where: { branchId: mine.id } }),
+      ]);
+      if (own === 0 && drafts === 0) {
+        const moved = await this.prisma.documentBranch.update({ where: { id: mine.id }, data: { headRevisionId: def.headRevisionId } });
+        return { branch: this.toBranchInfo(moved) };
+      }
+    }
+    return { branch: this.toBranchInfo(mine) };
   }
 
   /** The page's branches `scope` may read: a private one only for its owner, its grantees and admins (#474). */

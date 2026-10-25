@@ -106,8 +106,10 @@ grants on it say; a read-only key caps it at view.
 - **Opening a merge request** from (or into) a private branch clears its
   `restricted`: the MR is read by everyone who can read the page.
 
-Phase 2b (the editor working on `draft/<userId>`, publish through the merge
-path) is not built yet.
+Phase 2b puts the editor on these branches: each person edits a published page
+on a private working branch (`POST /v1/documents/:id/branches/mine`) and
+**Publish** merges it through a merge request. What the author does and what
+each step writes is [66 — Drafts and publishing](66-drafts-publishing.md).
 
 ## Groups
 

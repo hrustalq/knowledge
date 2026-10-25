@@ -6567,6 +6567,64 @@
         ]
       }
     },
+    "/v1/documents/{id}/branches/mine": {
+      "post": {
+        "description": "What the editor edits a published page on. Spent once a merge request from it is merged or closed: the next call starts a fresh one. A branch nothing was written on follows the default head.",
+        "operationId": "DocumentsController_myDraftBranch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's private working branch for this page (#474), created on first ask",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/v1/documents/{id}/compare": {
       "get": {
         "operationId": "DocumentsController_compare",
@@ -8005,6 +8063,82 @@
           }
         },
         "summary": "List merge requests of a document (newest first)",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
+    "/v1/documents/{id}/branches/{branchId}/publish": {
+      "post": {
+        "description": "Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — `protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. 400 when there is nothing to publish; 409 `diverged` when the default head moved past the branch and `onTopOf` does not name it. The guard holds the caller to edit on the branch.",
+        "operationId": "MergeRequestsController_publishBranch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishBranchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Publish a working branch onto the default branch (#474)",
         "tags": [
           "merge-requests"
         ]
@@ -35488,6 +35622,24 @@
         },
         "required": [
           "sourceBranch",
+          "title"
+        ]
+      },
+      "PublishBranchDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the merge request the publish opens (or reuses).",
+            "example": "Shorten access-token TTL"
+          },
+          "onTopOf": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The default-branch head the author reviewed after it moved past the branch: the merge lands over that head instead of refusing as `diverged`, and only over that head."
+          }
+        },
+        "required": [
           "title"
         ]
       },

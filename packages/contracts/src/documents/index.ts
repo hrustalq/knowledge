@@ -218,6 +218,13 @@ export interface RelatedDocumentResult {
 // Phase 2 — revision DAG, branches, compare, deterministic relations
 // ---------------------------------------------------------------------------
 
+/**
+ * A person's working branch for one page (#474): `draft/<userId>`, then
+ * `draft/<userId>-<n>` once publishing has used the earlier ones up. The editor
+ * and `POST /v1/documents/:id/branches/mine` both read a branch by this prefix.
+ */
+export const DRAFT_BRANCH_PREFIX = 'draft/';
+
 export interface BranchInfo {
   branchId: string;
   documentId: string;

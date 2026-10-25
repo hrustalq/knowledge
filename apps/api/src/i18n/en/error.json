@@ -93,7 +93,8 @@
     "headMoved": "Branch {name} head is {actual}, not {expected} — compare before retrying",
     "needsFinalized": "Revision {id} is {status} — branches must start from a finalized revision",
     "hidden": "Branch not found on this page",
-    "defaultNotPrivate": "The default branch cannot be private"
+    "defaultNotPrivate": "The default branch cannot be private",
+    "publishDefault": "The default branch is what publishing lands on — edit on a branch to publish it"
   },
   "collab": {
     "branchNotFound": "Document {documentId} has no branch named {branch}",

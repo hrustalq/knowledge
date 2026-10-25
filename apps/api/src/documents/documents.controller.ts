@@ -370,6 +370,18 @@ export class DocumentsController {
     return this.documents.createBranch(id, dto, principal.userId);
   }
 
+  @Post(':id/branches/mine')
+  @Access('editor', 'document')
+  @ApiOperation({
+    summary: "The caller's private working branch for this page (#474), created on first ask",
+    description:
+      'What the editor edits a published page on. Spent once a merge request from it is merged or closed: the next ' +
+      'call starts a fresh one. A branch nothing was written on follows the default head.',
+  })
+  myDraftBranch(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
+    return this.documents.myDraftBranch(id, principal.userId);
+  }
+
   @Get(':id/branches')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'List branches with head revisions' })

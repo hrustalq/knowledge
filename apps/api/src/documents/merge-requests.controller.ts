@@ -24,6 +24,7 @@ import {
   CreateThreadDto,
   ListMergeRequestsQueryDto,
   MergeMergeRequestDto,
+  PublishBranchDto,
   ResolveThreadDto,
   SetReviewersDto,
   UpdateMergeRequestDto,
@@ -59,6 +60,25 @@ export class MergeRequestsController {
     @CurrentPrincipal() principal: Principal,
   ) {
     return this.mergeRequests.create(id, dto, principal?.userId);
+  }
+
+  @Post('documents/:id/branches/:branchId/publish')
+  @Access('editor', 'document')
+  @ApiOperation({
+    summary: 'Publish a working branch onto the default branch (#474)',
+    description:
+      'Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — ' +
+      '`protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. ' +
+      '400 when there is nothing to publish; 409 `diverged` when the default head moved past the branch and `onTopOf` ' +
+      'does not name it. The guard holds the caller to edit on the branch.',
+  })
+  publishBranch(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('branchId', ParseUUIDPipe) branchId: string,
+    @Body() dto: PublishBranchDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.mergeRequests.publishBranch(id, branchId, dto, principal);
   }
 
   @Get('documents/:id/merge-requests')

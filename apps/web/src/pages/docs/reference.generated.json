@@ -2781,6 +2781,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/documents/{id}/branches/mine",
+      "tag": "documents",
+      "summary": "The caller's private working branch for this page (#474), created on first ask",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/documents/{id}/compare",
       "tag": "documents",
@@ -3757,6 +3767,16 @@
       "summary": "SKILL.md for an AI agent using this knowledge base over MCP, generated for the caller (workspaces, projects, offered tools)",
       "role": null,
       "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/branches/{branchId}/publish",
+      "tag": "merge-requests",
+      "summary": "Publish a working branch onto the default branch (#474)",
+      "role": "editor",
+      "source": "document",
       "public": false,
       "platformAdmin": false
     },

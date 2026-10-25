@@ -754,6 +754,7 @@ export type I18nTranslations = {
             "needsFinalized": string;
             "hidden": string;
             "defaultNotPrivate": string;
+            "publishDefault": string;
         };
         "collab": {
             "branchNotFound": string;
@@ -1263,9 +1264,6 @@ export type I18nTranslations = {
             "manageRequired": string;
             "selfLockout": string;
             "draftPublishFirst": string;
-            "branchRestricted": string;
-            "branchManageRequired": string;
-            "branchLevel": string;
             "unknownSubjects": string;
             "usersWithoutView": string;
             "requestDuplicate": string;
@@ -1275,6 +1273,9 @@ export type I18nTranslations = {
             "alreadyGranted": string;
             "levelAboveRole": string;
             "requestSelf": string;
+            "branchRestricted": string;
+            "branchManageRequired": string;
+            "branchLevel": string;
         };
         "capture": {
             "disabled": string;

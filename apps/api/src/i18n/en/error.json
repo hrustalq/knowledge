@@ -91,7 +91,9 @@
     "notFound": "Branch {name} not found on document {documentId}",
     "exists": "Branch {name} already exists on document {documentId}",
     "headMoved": "Branch {name} head is {actual}, not {expected} — compare before retrying",
-    "needsFinalized": "Revision {id} is {status} — branches must start from a finalized revision"
+    "needsFinalized": "Revision {id} is {status} — branches must start from a finalized revision",
+    "hidden": "Branch not found on this page",
+    "defaultNotPrivate": "The default branch cannot be private"
   },
   "collab": {
     "branchNotFound": "Document {documentId} has no branch named {branch}",
@@ -607,7 +609,10 @@
     "requestOwnOnly": "Only the person who asked can withdraw a request",
     "alreadyGranted": "You can already open this at the level you asked for",
     "levelAboveRole": "Your workspace role does not allow editing, so edit access cannot be requested or granted",
-    "requestSelf": "You manage this already — nothing to ask for"
+    "requestSelf": "You manage this already — nothing to ask for",
+    "branchRestricted": "This branch is private to the person who started it",
+    "branchManageRequired": "Only the person who started this branch, or a workspace admin, can share it",
+    "branchLevel": "A branch can be shared at view or edit"
   },
   "capture": {
     "disabled": "Capturing is switched off for this workspace.",

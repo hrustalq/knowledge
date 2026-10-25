@@ -99,9 +99,12 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
 
     const revision = await this.prisma.documentRevision.findUnique({
       where: { id: jobRow.revisionId },
-      include: { document: true },
+      include: { document: true, branch: { select: { restricted: true } } },
     });
     if (!revision) throw new Error(`Revision ${jobRow.revisionId} not found`);
+    // A private branch's revision is indexed (never `live`) but not announced:
+    // its events would reach every reader of the page, and workflows (#474).
+    const announce = !revision.branch?.restricted;
 
     await this.prisma.$transaction([
       this.prisma.ingestionJob.update({
@@ -436,7 +439,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       // Feature 04 (docs/features/04): live event + one level of dependent
       // fan-out. Cascade jobs are marked with payload.reason and never
       // re-cascade — no transitive reindex storms.
-      await this.events.publish({
+      if (announce) await this.events.publish({
         type: 'revision.indexed',
         workspaceId: revision.document.workspaceId,
         documentId: revision.documentId,
@@ -475,7 +478,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
           data: { status: 'failed' },
         }),
       ]);
-      await this.events.publish({
+      if (announce) await this.events.publish({
         type: 'revision.failed',
         workspaceId: revision.document.workspaceId,
         documentId: revision.documentId,

@@ -82,6 +82,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/documents/{id}/branches/{branchId}/access",
+      "tag": "access",
+      "summary": "A private branch's grants (#474); listed for its owner and admins",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/documents/{id}/branches/{branchId}/access",
+      "tag": "access",
+      "summary": "Replace a private branch's grants, at view or edit (#474; its owner or an admin)",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/projects/{id}/access",
       "tag": "access",
       "summary": "The project's restriction and the caller's level; grants only for a manager",
@@ -5270,6 +5290,10 @@
         },
         {
           "name": "fromRevisionId",
+          "optional": true
+        },
+        {
+          "name": "visibility",
           "optional": true
         }
       ]

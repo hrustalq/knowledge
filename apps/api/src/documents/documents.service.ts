@@ -531,7 +531,7 @@ export class DocumentsService {
     // will not release until this call returns. Postgres sees the outer as
     // `idle in transaction` rather than blocked, so its deadlock detector never
     // fires and the request hangs until something kills the connection.
-    const { job } = await this.prisma.withTransaction(async () => {
+    const { job, privateBranch } = await this.prisma.withTransaction(async () => {
       await this.prisma.documentRevision.update({
         where: { id: revision.id },
         data: {
@@ -543,11 +543,12 @@ export class DocumentsService {
       });
       // Advance the head of the branch this revision belongs to (branch_id,
       // plan.md §4); legacy rows without branchId fall back to the default branch.
-      await this.prisma.documentBranch.update({
+      const branch = await this.prisma.documentBranch.update({
         where: revision.branchId
           ? { id: revision.branchId }
           : { documentId_name: { documentId, name: document.defaultBranch } },
         data: { headRevisionId: revision.id },
+        select: { restricted: true },
       });
       if (revision.collabDraftId) await this.markPublished(revision.collabDraftId, revision.id, revision.collabSnapshot, true);
       // Outbox (plan.md §5): the job row commits atomically with the status change;
@@ -561,7 +562,7 @@ export class DocumentsService {
           payload: { documentId, revisionId: revision.id, s3Key: revision.s3Key, title: document.title },
         },
       });
-      return { job };
+      return { job, privateBranch: branch.restricted };
     });
 
     // Both of these are post-commit by contract, and `onCommit` is what keeps
@@ -573,16 +574,20 @@ export class DocumentsService {
     // path is unchanged. Failures stay swallowed: the outbox sweeper re-enqueues,
     // and the event bus is best-effort.
     this.prisma.onCommit(() => this.ingestion.enqueue(job.id));
-    this.prisma.onCommit(() =>
-      this.activity.record({
-        workspaceId: document.workspaceId,
-        actor: revision.authorId,
-        action: 'revision.finalized',
-        documentId,
-        subjectId: revision.id,
-        metadata: { title: document.title, revisionNumber: revision.revisionNumber },
-      }),
-    );
+    // A revision on a private branch is nobody's news but its readers' (#474):
+    // no feed row, no live frame, no watcher notification.
+    if (!privateBranch) {
+      this.prisma.onCommit(() =>
+        this.activity.record({
+          workspaceId: document.workspaceId,
+          actor: revision.authorId,
+          action: 'revision.finalized',
+          documentId,
+          subjectId: revision.id,
+          metadata: { title: document.title, revisionNumber: revision.revisionNumber },
+        }),
+      );
+    }
 
     return { revisionId: revision.id, status: 'finalized', ingestionJobId: job.id, deduplicated: false };
   }
@@ -838,7 +843,13 @@ export class DocumentsService {
     };
   }
 
-  async createBranch(documentId: string, dto: CreateBranchDto): Promise<CreateBranchResponse> {
+  /**
+   * A new branch off the default head or a finalized revision. `ownerId` is
+   * who started it; `visibility: 'private'` (#474) restricts it to them, the
+   * people they share it with and admins, and announces nothing — a
+   * `branch.created` row would name it to every reader of the page.
+   */
+  async createBranch(documentId: string, dto: CreateBranchDto, ownerId?: string): Promise<CreateBranchResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     const existing = await this.prisma.documentBranch.findUnique({
       where: { documentId_name: { documentId, name: dto.name } },
@@ -863,9 +874,11 @@ export class DocumentsService {
       head = def?.headRevisionId ?? null;
     }
 
+    const isPrivate = dto.visibility === 'private';
     const branch = await this.prisma.documentBranch.create({
-      data: { documentId, name: dto.name, headRevisionId: head },
+      data: { documentId, name: dto.name, headRevisionId: head, ownerId: ownerId ?? null, restricted: isPrivate },
     });
+    if (isPrivate) return { branch: this.toBranchInfo(branch) };
     // Post-commit: publishes onto the bus (see createDocument above).
     this.prisma.onCommit(() =>
       this.activity.record({
@@ -879,17 +892,24 @@ export class DocumentsService {
     return { branch: this.toBranchInfo(branch) };
   }
 
-  async listBranches(documentId: string): Promise<ListBranchesResponse> {
+  /** The page's branches `scope` may read: a private one only for its owner, its grantees and admins (#474). */
+  async listBranches(documentId: string, scope: AccessScope): Promise<ListBranchesResponse> {
     await this.getDocumentOrThrow(documentId);
-    const branches = await this.prisma.documentBranch.findMany({
-      where: { documentId },
-      orderBy: { createdAt: 'asc' },
-    });
-    return { branches: branches.map((b) => this.toBranchInfo(b)) };
+    const [branches, visible] = await Promise.all([
+      this.prisma.documentBranch.findMany({ where: { documentId }, orderBy: { createdAt: 'asc' } }),
+      this.permissions.visibleBranchIds(scope, documentId),
+    ]);
+    return { branches: branches.filter((b) => visible.has(b.id)).map((b) => this.toBranchInfo(b)) };
   }
 
-  async listRevisions(documentId: string, branchName?: string): Promise<ListRevisionsResponse> {
+  /**
+   * The revision DAG, or one branch of it. Revisions on a private branch
+   * `scope` may not read are left out (#474); naming such a branch is refused
+   * before this runs (the guard, or the MCP tool's).
+   */
+  async listRevisions(documentId: string, scope: AccessScope, branchName?: string): Promise<ListRevisionsResponse> {
     await this.getDocumentOrThrow(documentId);
+    const visible = await this.permissions.visibleBranchIds(scope, documentId);
 
     let branchId: string | undefined;
     if (branchName) {
@@ -901,7 +921,10 @@ export class DocumentsService {
     }
 
     const revisions = await this.prisma.documentRevision.findMany({
-      where: { documentId, ...(branchId ? { branchId } : {}) },
+      where: {
+        documentId,
+        ...(branchId ? { branchId } : { OR: [{ branchId: null }, { branchId: { in: [...visible] } }] }),
+      },
       include: { parents: { orderBy: { parentOrder: 'asc' } }, branch: true },
       orderBy: { revisionNumber: 'asc' },
     });
@@ -1889,6 +1912,8 @@ export class DocumentsService {
       name: b.name,
       headRevisionId: b.headRevisionId,
       protected: b.protected,
+      ownerId: b.ownerId,
+      restricted: b.restricted,
       createdAt: b.createdAt.toISOString(),
     };
   }

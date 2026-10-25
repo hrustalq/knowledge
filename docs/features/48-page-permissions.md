@@ -72,7 +72,42 @@ audited.
 - Creating a draft publishes `acl.changed` before the page's first event, since
   no cached scope has the new node in its `denied` set yet.
 
-Phase 2 (edits on private branches) is not built yet.
+### Private branches (phase 2a)
+
+`document_branches.owner_id` + `restricted`, and `access_grants` rows with
+`resource_type = 'branch'` at `view` or `edit`. A branch is not a node in the
+page chain: the page level is decided first (`levelOn`), and
+`branchLevel` (`permissions/branch-access.ts`, one in-memory spelling — a page
+has a handful of branches) only narrows it. An open branch adds nothing; its
+owner and admins edit it; anyone else holds what their or their groups'
+grants on it say; a read-only key caps it at view.
+
+- **Where it is enforced.** `AclGuard`, after the page check on every
+  `'document'` route, reads the request's branch refs (`BRANCH_REFS`: `:branchId`,
+  `:revisionId`, `?branch`, `?revision`, `?from`, `?to`, `?at`, body `branch`,
+  `sourceBranch`, `targetBranch`, `revisionId`, `fromRevisionId`) and holds each
+  to the route's level (`PermissionService.requireBranches`). A new route that
+  names a branch through one of those keys is covered as it lands; a new key
+  must be added there. MCP tools call `guard.branches` after `guard.doc`. The
+  collab gateway checks the branch on join and on every re-check.
+- **Lists** (branches, revisions, collab drafts) filter by
+  `visibleBranchIds`.
+- **Silence.** A revision on a private branch records no activity row and
+  publishes no `revision.finalized`, `revision.indexed` or `revision.failed`,
+  so the feed, live frames, watcher notifications and workflow triggers never
+  hear of it; creating one records no `branch.created`. Its chunks are indexed
+  but never `live`, as for any non-default branch.
+- **Export and sites** never resolve a private branch by name: the page
+  falls back to its default branch.
+- **Refusal.** A member gets 403 `{ resourceType: 'branch', resourceId,
+  canRequestAccess: false }` (a branch is shared by its owner, not requested);
+  a guest 404. An admin let in only by the bypass is audited (`acl.bypass`,
+  `resourceType: 'branch'`).
+- **Opening a merge request** from (or into) a private branch clears its
+  `restricted`: the MR is read by everyone who can read the page.
+
+Phase 2b (the editor working on `draft/<userId>`, publish through the merge
+path) is not built yet.
 
 ## Groups
 
@@ -140,6 +175,8 @@ pending requests expire after `ACCESS_REQUEST_TTL_DAYS`.
 | `PUT /v1/documents/:id/access` `{ restricted, grants }` | manage on the page; replaces its manual grants; 409 `access.selfLockout` if it would leave a non-admin caller without manage |
 | `GET /v1/documents/:id/access/effective` | manage |
 | `POST /v1/documents/:id/publish` | manage on the page; opens a private draft (#474), no-op on a published page |
+| `GET /v1/documents/:id/branches/:branchId/access` | readers of the branch; grants listed for its owner and admins (#474) |
+| `PUT /v1/documents/:id/branches/:branchId/access` `{ grants }` | the branch's owner or an admin; view/edit grants only |
 | `GET`/`PUT /v1/projects/:id/access`, `…/access/effective` | the same, for a project |
 | `POST /v1/access-requests` · `GET /v1/access-requests?workspaceId=&status=&mine=` | members and guests |
 | `POST /v1/access-requests/:id/approve` · `…/deny` | manage on every node the approval grants on |
@@ -215,7 +252,7 @@ All have defaults. None needs setting to use the feature.
   verification here. Confluence space permissions are not mirrored, and Notion
   pages can only be restricted to one connector-wide group
   ([19](19-connectors.md#access-mirroring-76-phase-6)).
-- **Out of scope:** block- or section-level permissions, per-branch or per-merge-
-  request permissions, SCIM or SSO group claims (the `source` column is ready
+- **Out of scope:** block- or section-level permissions, per-merge-request
+  permissions (a private branch, #474, stops being private when an MR is opened), SCIM or SSO group claims (the `source` column is ready
   for them), Jira issue security, and field-level ACLs on glossary, workflows
   and AI settings, which stay gated by workspace role.

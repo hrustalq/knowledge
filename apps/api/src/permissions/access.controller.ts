@@ -1,11 +1,11 @@
 import { Body, Controller, Get, Param, Put } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { EffectiveAccessResponse, ResourceAccessResponse } from '@knowledge/contracts';
+import type { BranchAccessResponse, EffectiveAccessResponse, ResourceAccessResponse } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ResourceAccessService } from './resource-access.service.js';
-import { UpdateResourceAccessDto } from './permissions.dto.js';
+import { UpdateBranchAccessDto, UpdateResourceAccessDto } from './permissions.dto.js';
 
 /**
  * Page and project restrictions (#76). Every route is `viewer` on the node
@@ -27,6 +27,31 @@ export class AccessController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<EffectiveAccessResponse> {
     return this.access.effective(principal, { type: 'document', id });
+  }
+
+  // A private branch's share list (#474). The guard reads `:branchId` and
+  // holds it to the route's level, so only its readers get this far.
+  @Get('documents/:id/branches/:branchId/access')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: "A private branch's grants (#474); listed for its owner and admins" })
+  branchAccess(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('branchId', ParseUUIDPipe) branchId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<BranchAccessResponse> {
+    return this.access.getBranch(principal, id, branchId);
+  }
+
+  @Put('documents/:id/branches/:branchId/access')
+  @Access('editor', 'document')
+  @ApiOperation({ summary: "Replace a private branch's grants, at view or edit (#474; its owner or an admin)" })
+  updateBranchAccess(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('branchId', ParseUUIDPipe) branchId: string,
+    @Body() dto: UpdateBranchAccessDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<BranchAccessResponse> {
+    return this.access.updateBranch(principal, id, branchId, dto);
   }
 
   @Get('documents/:id/access')

@@ -752,6 +752,8 @@ export type I18nTranslations = {
             "exists": string;
             "headMoved": string;
             "needsFinalized": string;
+            "hidden": string;
+            "defaultNotPrivate": string;
         };
         "collab": {
             "branchNotFound": string;
@@ -1261,6 +1263,9 @@ export type I18nTranslations = {
             "manageRequired": string;
             "selfLockout": string;
             "draftPublishFirst": string;
+            "branchRestricted": string;
+            "branchManageRequired": string;
+            "branchLevel": string;
             "unknownSubjects": string;
             "usersWithoutView": string;
             "requestDuplicate": string;

@@ -224,6 +224,10 @@ export interface BranchInfo {
   name: string;
   headRevisionId: string | null;
   protected: boolean;
+  /** Who started the branch (#474); null for a branch from before then or made by the system. */
+  ownerId: string | null;
+  /** Private (#474): only its owner, the people they shared it with and admins read it. */
+  restricted: boolean;
   createdAt: string;
 }
 

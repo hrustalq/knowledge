@@ -281,7 +281,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
             text: c.text,
             headingPath: c.headingPath,
           })),
-          { live, aclNodes },
+          { live, aclNodes, title: revision.document.title },
         );
         if (this.fulltext.enabled) await this.markFulltext(revision.id, 'in-step');
       } catch (e) {

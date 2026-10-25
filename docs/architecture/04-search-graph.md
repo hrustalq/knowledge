@@ -215,6 +215,33 @@ re-chunked or re-embedded. Until it finishes, those rows are invisible to
 BM25. The check reads the rows rather than the mapping, so a backfill cut
 short by a restart resumes on the next boot.
 
+### Titles and headings (#528)
+
+The chunker keeps the page title out of `headingPath`, and the title reaches
+only the embed text (`chunkEmbedText`). So until #528 a page whose body never
+repeated its title could not be found by keyword. Every row now also carries
+`heading`: the page title followed by the chunk's headings, deduplicated so a
+body that opens with `# <title>` does not count it twice. It is analyzed like
+`text`, with the same `ru` and `en` multi-fields. `headingPath` stays a
+`keyword` for display.
+
+`bm25Clause` is a `cross_fields` `multi_match` over `text.<lang>` and
+`heading.<lang>^2`. Both fields of a language share one analyzer, so
+cross_fields blends them into one field, and the `2<60%` term share counts
+across both. A query with one word in the title and one in the body still
+matches. The boost came from `make backtest` on 2026-10-25: 1 changed nothing,
+2 and 4 tied (recall@1 26% → 28%, MRR@10 0.326 → 0.344), so the smaller one
+stayed. On its own the keyword leg found the page by its title in 30 of 30
+indexed pages, up from 6.
+
+The title is a page field, not a revision field, so a rename stamps
+`fulltext_stale_at` on the page's indexed revisions. `StaleSweeper.repairFulltext`
+then re-mirrors them from the graph's chunks, with nothing re-embedded. The
+migration `20261215100000_fulltext_heading` backfills older rows the same way,
+heads of the default branch first. A stamp is written at millisecond
+precision, because the sweeper clears it only while it still equals the JS
+`Date` it read.
+
 The read path is just as optional (#173). `SearchService.fulltextLeg` races the
 BM25 query against `FULLTEXT_TIMEOUT_MS` (default 1500). If it errors or loses
 the race, the search drops that leg and answers from vectors alone. A keyword

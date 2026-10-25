@@ -62,6 +62,10 @@ in the pull request that introduces them — see
 - Publishing an edit from the web editor now leaves a merged merge request on the page instead of a
   bare revision, and goes through the same merge gates as any merge request (#474). The page's title,
   category and place in the tree still change at Publish and are not part of the review.
+- Keyword search, and the keyword half of hybrid search, now matches a page's title and the headings
+  above each section (#528). Before, it matched only section bodies, so a page whose text never
+  repeated its title could not be found by keyword at all. Words split between the title and the body
+  count together, and a heading match ranks above the same word in a body.
 
 ### Fixed
 
@@ -79,6 +83,13 @@ in the pull request that introduces them — see
 - With `MR_REQUIRED_APPROVALS` at 1 or more (the default), a non-admin's Publish from the editor now
   waits for a reviewer's approval, where it used to land at once (#474). Set `MR_REQUIRED_APPROVALS=0`
   to keep editor publishing direct; production already runs with 0.
+- Migration `20261215100000_fulltext_heading` marks every indexed revision for the fulltext re-mirror
+  (data only, safe under the previous image). With `FULLTEXT_PROVIDER=opensearch`, the worker's stale
+  sweeper rewrites 25 revisions per 5-minute tick from the graph, default-branch heads first, with
+  nothing re-embedded. Until a page's rows are rewritten, keyword search does not match its title, as
+  before. Check progress with
+  `SELECT count(*) FROM document_revisions WHERE fulltext_stale_at IS NOT NULL` (0 = done). Renaming a
+  page re-marks its revisions the same way.
 
 ## [0.33.1] — 2026-10-24
 

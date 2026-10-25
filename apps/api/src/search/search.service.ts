@@ -167,15 +167,53 @@ export class SearchService {
     const communitiesRead: Promise<Array<PriorCommunity & { title: string }>> = at
       ? Promise.resolve([])
       : (async () => this.communities.scored(scope, (priorOn || observe) && embedding ? await embedding : undefined))();
+    // Join PG for authoritative titles (three-store separation: PG owns
+    // metadata), for everything the trust re-rank reads — the stamp, the flag,
+    // the owner, the freshness clock and the archive mark — and for the
+    // page-permission predicate itself (#76). The stores' filter came from a
+    // list read a moment earlier; this is the read that decides.
+    // A hit is kept only if this read returns its page, for every reader: a
+    // page gone from PG can leave chunks behind in a store, and those must not
+    // outrank real answers as "(unknown)" for whoever happens to hide nothing.
+    //
+    // Over every page either leg named, before the floors (#526): a floor is a
+    // share of its leg's best, and that best must be a hit this search can
+    // return. A hidden page, an archived one or one outside the filters set
+    // the bar and then dropped out, taking the answers under it along.
+    let docById = new Map<string, Awaited<ReturnType<SearchService['loadDocs']>>[number]>();
+    let trustOf = new Map<string, DocumentTrust>();
+    let aclFiltered = 0;
+    const join = async () => {
+      const pool = [...vectorHits, ...textHits];
+      if (pool.length === 0) return;
+      const docs = await this.loadDocs([...new Set(pool.map((h) => h.documentId))], scope);
+      docById = new Map(docs.map((d) => [d.id, d]));
+      trustOf = await this.trustOf(docs, settings.inactiveAfterDays);
+      aclFiltered = new Set(pool.filter((h) => !docById.has(h.documentId)).map((h) => h.chunkId)).size;
+    };
+    // Archived pages drop first, whatever the switch says: they are put away,
+    // not demoted.
+    const admits = (h: { documentId: string }) => {
+      const doc = docById.get(h.documentId);
+      return (
+        !!doc &&
+        (includeArchived || !doc.archivedAt) &&
+        (!taggedDocs || taggedDocs.has(h.documentId)) &&
+        (!categories || categories.has((doc.category ?? 'other') as never)) &&
+        (!projectIds || projectIds.has(doc.projectId ?? '')) &&
+        (!states || states.has(trustOf.get(h.documentId)?.status ?? 'unverified'))
+      );
+    };
     // The relevance floors (#401, #416) drop weak evidence from each leg before fusion.
     let vectorFloored = 0;
     const fuse = () => {
-      const floored = floorVectorHits(vectorHits, settings);
-      vectorFloored = vectorHits.length - floored.length;
-      return fuseHits(floored, floorTextHits(textHits), fetchK, settings.rrfK);
+      const vector = vectorHits.filter(admits);
+      const floored = floorVectorHits(vector, settings);
+      vectorFloored = vector.length - floored.length;
+      return fuseHits(floored, floorTextHits(textHits.filter(admits)), fetchK, settings.rrfK);
     };
+    await join();
     let hits = fuse();
-    let aclFiltered = 0;
 
     /**
      * The measurement a recall@k / MRR sweep replays.
@@ -225,28 +263,6 @@ export class SearchService {
     // Absent unless a leg was skipped, so a healthy response is unchanged.
     const health = () => ({ ...(degraded.length ? { degraded } : {}), ...(at ? { resolvedAsOf: at.resolved } : {}) });
 
-    if (hits.length === 0) {
-      communitiesRead.catch(() => undefined);
-      return { results: [], ...health(), ...record([]) };
-    }
-
-    // Join PG for authoritative titles (three-store separation: PG owns
-    // metadata), for everything the trust re-rank reads — the stamp, the flag,
-    // the owner, the freshness clock and the archive mark — and for the
-    // page-permission predicate itself (#76). The stores' filter came from a
-    // list read a moment earlier; this is the read that decides.
-    // A hit is kept only if this read returns its page, for every reader: a
-    // page gone from PG can leave chunks behind in a store, and those must not
-    // outrank real answers as "(unknown)" for whoever happens to hide nothing.
-    const visibleHits = async <H extends ChunkHit>(candidates: H[]) => {
-      const docIds = [...new Set(candidates.map((h) => h.documentId))];
-      const docs = await this.loadDocs(docIds, scope);
-      const seen = new Set(docs.map((d) => d.id));
-      return { docs, kept: candidates.filter((h) => seen.has(h.documentId)) };
-    };
-    let { docs, kept } = await visibleHits(hits);
-    aclFiltered = hits.length - kept.length;
-
     // One refill round (#76): the post-filter dropped hits, left fewer than k,
     // and a leg came back full — so it had more to give. Bounded by
     // SEARCH_ACL_MAX_FETCH, and only ever once. A vector leg the floor cut is
@@ -254,33 +270,29 @@ export class SearchService {
     // (#443), a pool whose chunks name fewer than k pages refills the same way.
     const maxFetch = this.config.get('SEARCH_ACL_MAX_FETCH', { infer: true });
     const saturated = (vectorHits.length >= fetchK && vectorFloored === 0) || textHits.length >= fetchK;
-    const short = byPage ? new Set(kept.map((h) => h.documentId)).size < k : aclFiltered > 0 && kept.length < k;
+    const short = byPage ? new Set(hits.map((h) => h.documentId)).size < k : aclFiltered > 0 && hits.length < k;
     if (short && saturated && fetchK < maxFetch) {
       fetchK = Math.min(fetchK * 2, maxFetch);
       [[vectorHits], [textHits]] = await legs(fetchK);
+      await join();
       hits = fuse();
-      ({ docs, kept } = await visibleHits(hits));
-      aclFiltered = hits.length - kept.length;
     }
 
-    const docById = new Map(docs.map((d) => [d.id, d]));
-    const [trustOf, readable] = await Promise.all([this.trustOf(docs, settings.inactiveAfterDays), communitiesRead]);
+    if (hits.length === 0) {
+      communitiesRead.catch(() => undefined);
+      return { results: [], ...health(), ...record([]) };
+    }
+
+    const readable = await communitiesRead;
     const prior = priorOn ? communityPrior(readable, settings) : new Map<string, number>();
 
-    // Archived pages drop first, whatever the switch says: they are put away,
-    // not demoted. Then the multiplicative weight, a re-sort, and only then
-    // the cut to k — the weight is the point of the over-fetch above.
-    const weighted = kept
-      .filter((h) => includeArchived || !docById.get(h.documentId)?.archivedAt)
-      .filter((h) => !taggedDocs || taggedDocs.has(h.documentId))
-      .filter((h) => !categories || categories.has((docById.get(h.documentId)?.category ?? 'other') as never))
-      .filter((h) => !projectIds || projectIds.has(docById.get(h.documentId)?.projectId ?? ''))
-      .filter((h) => !states || states.has(trustOf.get(h.documentId)?.status ?? 'unverified'))
-      .map((h) => {
-        const trust = trustOf.get(h.documentId);
-        const weight = trustOn && trust ? trustWeight(trust.status, trust.inactive, settings.trustWeights) : 1;
-        return { hit: h, documentId: h.documentId, score: h.score * weight * (prior.get(h.documentId) ?? 1), trust };
-      });
+    // The multiplicative weight, a re-sort, and only then the cut to k — the
+    // weight is the point of the over-fetch above.
+    const weighted = hits.map((h) => {
+      const trust = trustOf.get(h.documentId);
+      const weight = trustOn && trust ? trustWeight(trust.status, trust.inactive, settings.trustWeights) : 1;
+      return { hit: h, documentId: h.documentId, score: h.score * weight * (prior.get(h.documentId) ?? 1), trust };
+    });
     if (trustOn || prior.size > 0) weighted.sort((a, b) => b.score - a.score);
 
     // By page, each page's best chunk after the re-sort, then the cut.
@@ -303,15 +315,13 @@ export class SearchService {
     if (observe) {
       // Every page either leg named, not only the fused head: another rrfK
       // fuses a different head.
-      const pooled = await this.loadDocs([...new Set([...vectorHits, ...textHits].map((h) => h.documentId))], scope);
-      const pooledTrust = await this.trustOf(pooled, settings.inactiveAfterDays);
       observe({
         vectorHits,
         textHits,
         fetchK,
         k,
         trustOn,
-        pages: new Map(pooled.map((d) => [d.id, { ...pooledTrust.get(d.id)!, archived: d.archivedAt !== null }])),
+        pages: new Map([...docById.values()].map((d) => [d.id, { ...trustOf.get(d.id)!, archived: d.archivedAt !== null }])),
         communities: readable,
       });
     }

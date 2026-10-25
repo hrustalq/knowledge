@@ -8,6 +8,7 @@ import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
+import { DecisionClientModule } from '../assistant/decision-client.module.js';
 import { AssistantReadToolsModule } from '../assistant/assistant-read-tools.module.js';
 import { WebResearchModule } from '../assistant/web-research.module.js';
 import { CodeResearchModule } from '../connectors/code-research/code-research.module.js';
@@ -60,6 +61,8 @@ import { AgentTriggerListener } from './agent-trigger.listener.js';
     AgentCoreModule,
     AgentQueueModule,
     AssistantClientModule,
+    // The arbiter's pre-filter (#530).
+    DecisionClientModule,
     AssistantReadToolsModule,
     // No runnable agent reaches the web yet — the research loop that will is
     // still open (docs/features/29). This is imported anyway, and it is not

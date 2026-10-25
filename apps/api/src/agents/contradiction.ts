@@ -110,3 +110,52 @@ export function conflictFingerprint(sides: Array<{ documentId: string; quote: st
   const parts = sides.map((s) => `${s.documentId}\u0000${fold(s.quote)}`).sort();
   return createHash('sha256').update(parts.join('\u0001')).digest('hex');
 }
+
+/**
+ * The decision model's question for a pair (#530), as measured in
+ * docs/features/67: a noul over both passages, page text wrapped untrusted by
+ * the caller.
+ */
+export const CONTRADICTION_QUESTION = {
+  instructions: 'Do passage A and passage B contradict each other, so that a reader cannot believe both?',
+  criteria: {
+    true: 'They state different values, rules, owners or behaviours for the same thing.',
+    false: 'They differ only in scope, emphasis, detail, wording or recency, or they are about different things.',
+  },
+};
+
+/** Decision questions in flight at once. gen-api answers synchronously in ~2.5 s, so a pass is wall-clock bound. */
+export const PREFILTER_CONCURRENCY = 8;
+
+/**
+ * Ask the decision model about every pair and keep, in order, those it puts at
+ * or above `threshold` (#530). Fail-open: a pair whose question failed is kept,
+ * so it goes to the judge as it did before. An error `isFatal` calls fatal (a
+ * dead account) stops the asking, and every pair not yet asked is kept.
+ */
+export async function prefilterPairs<P>(
+  pairs: readonly P[],
+  ask: (pair: P) => Promise<number>,
+  threshold: number,
+  isFatal: (error: unknown) => boolean,
+): Promise<{ kept: P[]; asked: number; failed: number; stopped: unknown }> {
+  const keep = new Array<boolean>(pairs.length).fill(true);
+  let asked = 0;
+  let failed = 0;
+  let stopped: unknown = null;
+  for (let i = 0; i < pairs.length && !stopped; i += PREFILTER_CONCURRENCY) {
+    await Promise.all(
+      pairs.slice(i, i + PREFILTER_CONCURRENCY).map(async (pair, j) => {
+        try {
+          const p = await ask(pair);
+          asked += 1;
+          keep[i + j] = p >= threshold;
+        } catch (error) {
+          failed += 1;
+          if (isFatal(error)) stopped ??= error;
+        }
+      }),
+    );
+  }
+  return { kept: pairs.filter((_, i) => keep[i]), asked, failed, stopped };
+}

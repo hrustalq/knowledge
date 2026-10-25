@@ -2300,7 +2300,8 @@
         "linting": "Checking the change against the styleguide",
         "facts": "Checking links, owners and duplicates",
         "scoring": "Scoring pages",
-        "writing": "Saving scores"
+        "writing": "Saving scores",
+        "screening": "Screening page pairs"
       },
       "propose": "Propose fix",
       "proposed": "Opened a merge request: {title}",

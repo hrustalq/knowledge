@@ -66,6 +66,12 @@ in the pull request that introduces them — see
   `HTTP` `PATCH /v1/ai/settings` takes `decisionProviderId` (a GenAPI profile of the workspace, else 400)
   and `decisionArbiterThreshold` / `decisionCitationThreshold` / `decisionHarvestThreshold`. Usage
   gains a **Citation check** operation.
+- With a Decisions route, the arbiter checks **every** candidate page pair instead of the closest 20
+  (#530). Jev screens each pair first, and only those it puts at or above the arbiter threshold go on
+  to the judge, still at most `CONTRADICTION_MAX_PAIRS_PER_RUN` per run; a pair Jev sets aside never
+  becomes a conflict. A question that fails lets its pair through, and a refused account stops the
+  screening for the rest of the run. The run summary says how many pairs were screened and set aside.
+  Without a route, the arbiter runs exactly as before.
 
 ### Changed
 

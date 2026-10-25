@@ -280,6 +280,8 @@ export type I18nTranslations = {
             "budgetSpent": string;
             "findingTitle": string;
             "summary": string;
+            "screened": string;
+            "screeningStopped": string;
         };
         "atlas": string;
         "atlasDesc": string;

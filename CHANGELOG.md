@@ -72,6 +72,10 @@ in the pull request that introduces them — see
   becomes a conflict. A question that fails lets its pair through, and a refused account stops the
   screening for the rest of the run. The run summary says how many pairs were screened and set aside.
   Without a route, the arbiter runs exactly as before.
+- With a Decisions route, harvesting a chat thread asks Jev first whether the thread settled anything
+  (#530). Below the harvest threshold, the reply is the one an empty harvest gives, with no harvester
+  call and no page search; only the masked thread is sent. A failed question harvests as before. The
+  decision's usage row is not counted against `HARVEST_RATE_PER_HOUR`.
 
 ### Changed
 

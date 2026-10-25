@@ -14,6 +14,7 @@ import type {
 } from '@knowledge/contracts'
 import { api, fetchApi, isApiRequestError } from '@/api/queries'
 import { getWorkspaceId, setActiveWorkspace, setToken } from '@/lib/api'
+import { clearPwaCaches } from '@/lib/pwa'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -136,6 +137,7 @@ export const useAuthStore = defineStore('auth', {
       this.me = null
       // Nothing the signed-out session read may answer for the next one.
       this.queryClient.clear()
+      await clearPwaCaches().catch(() => undefined)
     },
     setWorkspace(workspaceId: string) {
       setActiveWorkspace(workspaceId)

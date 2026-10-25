@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useEventsStore } from '@/stores/events'
 import { useSearchUiStore } from '@/stores/search-ui'
 import { startLive } from '@/api'
+import { startPwa } from '@/lib/pwa'
 import { authSlideDirection } from '@/router'
 import { useI18n } from 'vue-i18n'
 
@@ -22,6 +23,8 @@ const searchUi = useSearchUiStore()
 // A workspace switch from inside the search sheet reloads the app; pick the
 // query back up on the other side.
 onMounted(() => searchUi.hydrateFromSession())
+// The service worker, its update toast and the offline notice (#472).
+onMounted(() => startPwa(t))
 const route = useRoute()
 const queryClient = useQueryClient()
 

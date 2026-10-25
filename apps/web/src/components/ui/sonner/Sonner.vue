@@ -18,6 +18,12 @@ const props = defineProps<ToasterProps>()
       '--border-radius': 'var(--radius)',
     }"
     v-bind="props"
+    :toast-options="{
+      ...props.toastOptions,
+      // vue-sonner's own description colour is a fixed light-theme grey: on the
+      // dark card it was all but invisible. Important, to beat its selector.
+      classes: { description: 'text-muted-foreground!', ...props.toastOptions?.classes },
+    }"
   >
     <template #success-icon>
       <CircleCheckIcon class="size-4" />

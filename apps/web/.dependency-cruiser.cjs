@@ -80,7 +80,8 @@ module.exports = {
       comment: 'A broken import specifier — the `@/*` alias and workspace packages both resolve here.',
       severity: 'error',
       from: {},
-      to: { couldNotResolve: true },
+      // `virtual:*` is a Vite plugin's module, resolved only inside a build (lib/pwa.ts).
+      to: { couldNotResolve: true, pathNot: '^virtual:' },
     },
     {
       name: 'no-deprecated-core',

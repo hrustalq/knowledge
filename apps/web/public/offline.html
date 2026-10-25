@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Offline · Knowledge</title>
+    <!-- The service worker's answer to a navigation it could not reach the
+         server for (#472). Self-contained: no web font, no script but this
+         page's own, every URL absolute — it stands in for any path. -->
+    <script>
+      try {
+        var t = localStorage.getItem('kn_theme')
+        if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark')
+        }
+      } catch (e) {}
+    </script>
+    <style>
+      :root {
+        --background: oklch(0.988 0.003 85);
+        --foreground: oklch(0.22 0.02 265);
+        --muted-foreground: oklch(0.5 0.02 262);
+        --primary: oklch(0.45 0.15 268);
+        --primary-foreground: oklch(0.985 0.005 85);
+        color-scheme: light;
+      }
+      .dark {
+        --background: oklch(0.165 0.012 265);
+        --foreground: oklch(0.93 0.008 85);
+        --muted-foreground: oklch(0.68 0.015 262);
+        --primary: oklch(0.74 0.11 268);
+        --primary-foreground: oklch(0.16 0.02 265);
+        color-scheme: dark;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem 1rem;
+        background: var(--background);
+        color: var(--foreground);
+        font: 400 0.95rem/1.7 ui-sans-serif, system-ui, sans-serif;
+      }
+      main { max-width: 26rem; }
+      img { display: block; width: 1.75rem; height: auto; margin-bottom: 1.5rem; }
+      h1 { margin: 0 0 0.5rem; font-size: 1.35rem; font-weight: 600; line-height: 1.35; letter-spacing: -0.015em; text-wrap: balance; }
+      p { margin: 0 0 1.5rem; color: var(--muted-foreground); }
+      button {
+        height: 2.25rem;
+        padding: 0 1rem;
+        border: 0;
+        border-radius: 8px;
+        background: var(--primary);
+        color: var(--primary-foreground);
+        font: 500 0.875rem/1 ui-sans-serif, system-ui, sans-serif;
+        cursor: pointer;
+      }
+      button:hover { background: color-mix(in oklab, var(--primary) 90%, transparent); }
+      button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+      ::selection { background: color-mix(in oklab, var(--primary) 20%, transparent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/favicon.svg" alt="" />
+      <h1 data-text="title">You’re offline</h1>
+      <p data-text="body">This page needs a connection to load. Nothing from your workspace is kept on this device, so pages are not available offline.</p>
+      <button type="button" data-text="retry" onclick="location.reload()">Try again</button>
+    </main>
+    <script>
+      // The app's language (the kn_lang cookie, docs/features/18), else the browser's.
+      var ru = {
+        title: 'Нет подключения к сети',
+        body: 'Для загрузки этой страницы нужна сеть. Данные рабочего пространства не хранятся на устройстве, поэтому без сети страницы недоступны.',
+        retry: 'Повторить',
+      }
+      var lang = (document.cookie.match(/(?:^|;\s*)kn_lang=([^;]*)/) || [])[1] || navigator.language || 'en'
+      if (lang.slice(0, 2).toLowerCase() === 'ru') {
+        document.documentElement.lang = 'ru'
+        document.title = ru.title + ' · Knowledge'
+        document.querySelectorAll('[data-text]').forEach(function (el) {
+          el.textContent = ru[el.getAttribute('data-text')]
+        })
+      }
+      // Back online: load what was asked for.
+      window.addEventListener('online', function () {
+        location.reload()
+      })
+    </script>
+  </body>
+</html>

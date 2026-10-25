@@ -7030,5 +7030,12 @@
     "fit": "Fit to screen ({percent}%)",
     "previous": "Previous diagram",
     "next": "Next diagram"
+  },
+  "pwa": {
+    "updateReady": "A new version is available.",
+    "updateDescription": "Reload to switch to it.",
+    "reload": "Reload",
+    "offline": "You’re offline",
+    "offlineDescription": "Pages already open stay readable. Anything that needs the server will fail until the connection returns."
   }
 }

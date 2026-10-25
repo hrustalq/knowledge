@@ -34,7 +34,19 @@ export function Returns<N extends keyof ContractResponses>(
   key: string | symbol,
   descriptor: TypedPropertyDescriptor<M>,
 ) => void;
-export function Returns(name: string, _opts?: { orText: true }) {
+/**
+ * A conditional GET (`notModified` in common/http-cache.ts): a 304 answers
+ * nothing, so the handler may return `undefined`.
+ */
+export function Returns<N extends keyof ContractResponses>(
+  name: N,
+  opts: { conditional: true },
+): <M extends (...args: never[]) => Promise<ContractResponses[N] | undefined>>(
+  target: object,
+  key: string | symbol,
+  descriptor: TypedPropertyDescriptor<M>,
+) => void;
+export function Returns(name: string, _opts?: { orText: true } | { conditional: true }) {
   return (target: object, key: string | symbol, descriptor: PropertyDescriptor): void => {
     ApiExtension('x-returns', name)(target, key, descriptor);
   };

@@ -7,7 +7,8 @@ import { StorageService } from '../storage/storage.service.js';
 import { parseMarkdown } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
 import { type AiReadableScope, isReadableRevisionStatus, listedProjectsWhere, readableDocumentsWhere } from './ai-readable-scope.js';
-import { AI_READABLE_FORMAT_VERSION, etagFor, etagMatches, renderPageMarkdown } from './render.js';
+import { AI_READABLE_FORMAT_VERSION, etagFor, renderPageMarkdown } from './render.js';
+import { etagMatches } from '../common/http-cache.js';
 import {
   type IndexPage,
   type OrderedPage,

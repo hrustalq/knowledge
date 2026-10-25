@@ -10,8 +10,11 @@ import { AccessService } from './access.service.js';
 import { AuditService } from './audit.service.js';
 import type { Principal } from './principal.js';
 import { Returns } from '../common/returns.decorator.js';
+import { CachePolicy } from '../common/http-cache.js';
 
 @ApiTags('auth')
+// Sessions, keys and sign-in answers carry credentials: never kept (#472).
+@CachePolicy('no-store')
 @Controller('v1')
 export class AuthController {
   constructor(

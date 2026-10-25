@@ -2,7 +2,7 @@ import { Controller, Get, NotFoundException, Query, Req, Res, UseGuards } from '
 import { ApiOkResponse, ApiOperation, ApiProduces, ApiPropertyOptional, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 import type { Request, Response } from 'express';
-import { etagMatches } from '../ai-readable/render.js';
+import { etagMatches } from '../common/http-cache.js';
 import { Public } from '../auth/access.decorator.js';
 import { t } from '../i18n/t.js';
 import { PublicRateLimitGuard } from './public-rate-limit.js';

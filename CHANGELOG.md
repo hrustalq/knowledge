@@ -27,6 +27,12 @@ in the pull request that introduces them — see
 - The OpenAPI document (`/docs`, `apps/api/openapi.json`) now declares the response body of 316 JSON
   routes, generated from the `@knowledge/contracts` types they return (#472). A client generated from
   it gets typed responses where it used to get untyped ones. `HTTP` `GET /docs-json`
+- Every API response now says how it may be cached (#472). Authenticated reads are `private, no-cache`
+  with `Vary: Authorization, Cookie, Accept-Language`, so the browser keeps them and revalidates and no
+  shared cache stores them; writes, and every sign-in, session, API-key, SSO and SCIM-token response, are
+  `no-store`. A page's detail and its content answer **304 Not Modified** when nothing changed, without
+  reading the graph or object storage; content at a named revision is cached for a year. Public routes
+  that set their own headers keep them.
 - Optional request fields with a server-side default (`limit`, `mode`, `branch`, `category`, …) are no
   longer marked required in the OpenAPI document; the default is stated in their description (#472).
 

@@ -8,7 +8,7 @@ import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { AiReadableService, type FullPlan, type TextResult } from './ai-readable.service.js';
 import { renderHub, type HubWorkspace } from './llms.js';
-import { etagMatches } from './render.js';
+import { etagMatches } from '../common/http-cache.js';
 
 /**
  * Authenticated content: never in a shared cache, never indexed, never sniffed

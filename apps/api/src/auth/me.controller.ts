@@ -24,6 +24,7 @@ import { AuditService } from './audit.service.js';
 import { requestMeta } from '../common/client-ip.js';
 import { t } from '../i18n/t.js';
 import { Returns } from '../common/returns.decorator.js';
+import { CachePolicy } from '../common/http-cache.js';
 
 /**
  * The caller's own account.
@@ -35,6 +36,8 @@ import { Returns } from '../common/returns.decorator.js';
  * parameter to point at somebody else.
  */
 @ApiTags('auth')
+// Sessions, keys and sign-in answers carry credentials: never kept (#472).
+@CachePolicy('no-store')
 @Controller('v1/me')
 export class MeController {
   constructor(

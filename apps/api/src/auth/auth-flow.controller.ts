@@ -25,6 +25,7 @@ import { UrlTicketsService } from './url-tickets.service.js';
 import { requestMeta } from '../common/client-ip.js';
 import { AuthRateLimit, AuthRateLimitGuard } from './auth-rate-limit.guard.js';
 import { Returns } from '../common/returns.decorator.js';
+import { CachePolicy } from '../common/http-cache.js';
 
 /**
  * Auth flow endpoints. signup/login/forgot/reset are @Public (they mint the
@@ -32,6 +33,8 @@ import { Returns } from '../common/returns.decorator.js';
  * Works in both AUTH_MODEs — in 'none' the session is created but unused.
  */
 @ApiTags('auth')
+// Sessions, keys and sign-in answers carry credentials: never kept (#472).
+@CachePolicy('no-store')
 @Controller('v1/auth')
 export class AuthFlowController {
   constructor(

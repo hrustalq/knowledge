@@ -75,6 +75,7 @@ describe('MCP agents in a shared draft (e2e, #316)', () => {
       .post('/v1/documents')
       .send({
         workspaceId: project.workspaceId,
+        visibility: 'workspace',
         projectId: project.id,
         title: `MCP draft ${randomUUID().slice(0, 8)}`,
         content: { mode: 'inline', format: 'markdown', text: 'The head.\n\nThe **owner** is billing.\n' },

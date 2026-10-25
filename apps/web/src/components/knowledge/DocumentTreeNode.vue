@@ -10,7 +10,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch, watchEffect } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Archive, ChevronRight, FileText, Loader2, Lock } from 'lucide-vue-next'
+import { Archive, ChevronRight, FileText, Loader2, Lock, NotepadTextDashed } from 'lucide-vue-next'
 import { Collapse } from '@/components/ui/collapse'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { Badge } from '@/components/ui/badge'
@@ -131,10 +131,20 @@ const dnd = useTreeDndRow({
       >
         {{ node.title }}
       </RouterLink>
+      <!-- A private draft (#474), in words where the row has room for them. -->
+      <Badge
+        v-if="node.draftOwnerId"
+        variant="outline"
+        class="shrink-0 gap-1 text-xs text-muted-foreground"
+        :title="t('access.draft.hint')"
+      >
+        <NotepadTextDashed class="size-3" aria-hidden="true" />
+        {{ t('access.draft.label') }}
+      </Badge>
       <!-- Restricted (#76): this page, an ancestor or the project is not open
            to the whole workspace. -->
       <span
-        v-if="node.restricted"
+        v-else-if="node.restricted"
         class="grid shrink-0 place-items-center text-muted-foreground/70"
         role="img"
         :aria-label="t('access.lockedLabel')"

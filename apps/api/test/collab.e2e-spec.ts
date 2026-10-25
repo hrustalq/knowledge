@@ -83,6 +83,7 @@ describe('shared drafts over /v1/collab (e2e)', () => {
       .post('/v1/documents')
       .send({
         workspaceId,
+        visibility: 'workspace',
         projectId: project.id,
         title: `Collab ${randomUUID().slice(0, 8)}`,
         content: { mode: 'inline', format: 'markdown', text: PAGE },

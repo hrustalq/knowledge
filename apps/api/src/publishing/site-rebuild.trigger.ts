@@ -17,6 +17,8 @@ export const SITE_REBUILD_EVENTS: ReadonlySet<string> = new Set([
   'document.updated',
   'document.archived',
   'document.unarchived',
+  // A private draft opened to the workspace (#474) enters the project's sites.
+  'document.published',
 ]);
 
 /**

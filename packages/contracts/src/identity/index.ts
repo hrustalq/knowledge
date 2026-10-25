@@ -1370,6 +1370,11 @@ export interface ResourceAccessResponse {
   resourceType: AccessResourceType;
   resourceId: string;
   restricted: boolean;
+  /**
+   * A private draft (#474): restricted until published, and only publish lifts
+   * it — the PUT refuses `restricted: false` with 409 `access.draftPublishFirst`.
+   */
+  draft: boolean;
   /** Outermost first: the project, then ancestors root-first. Empty when nothing above is restricted. */
   inherited: InheritedRestriction[];
   /** What the caller may do here. */

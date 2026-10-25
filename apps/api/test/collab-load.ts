@@ -64,7 +64,7 @@ const pages: { documentId: string; name: string }[] = [];
 for (let d = 0; d < DOCS; d++) {
   const { documentId } = await api<{ documentId: string }>('/v1/documents', {
     method: 'POST',
-    body: { workspaceId, projectId, title: `Collab load ${Date.now()}-${d}`, content: { mode: 'inline', format: 'markdown', text: page } },
+    body: { workspaceId, projectId, visibility: 'workspace', title: `Collab load ${Date.now()}-${d}`, content: { mode: 'inline', format: 'markdown', text: page } },
   });
   const { branches } = await api<{ branches: { branchId: string; name: string }[] }>(`/v1/documents/${documentId}/branches`);
   pages.push({ documentId, name: collabDocName(workspaceId, documentId, branches[0]!.branchId) });

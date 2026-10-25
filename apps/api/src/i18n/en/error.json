@@ -598,6 +598,7 @@
     "editRequired": "Editing this page is restricted to the people it names",
     "manageRequired": "Only this page's managers and workspace admins can change who has access",
     "selfLockout": "This change would leave you without access to manage this page. Keep yourself (or a group you are in) as a manager",
+    "draftPublishFirst": "This page is a private draft. Publish it to open it to the workspace",
     "unknownSubjects": "Not a member or group of this workspace: {subjects}",
     "usersWithoutView": "These people cannot open the page, so they cannot be given work on it: {users}",
     "requestDuplicate": "You already asked for access to this. A manager has your request",

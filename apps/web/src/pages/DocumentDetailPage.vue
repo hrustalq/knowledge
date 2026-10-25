@@ -35,11 +35,13 @@ import {
   Lock,
   LockOpen,
   MoreHorizontal,
+  NotepadTextDashed,
   Plug,
   Info,
   Network,
   Pencil,
   Scale,
+  Send,
   Share2,
   Workflow as WorkflowIcon,
   ListTree,
@@ -330,6 +332,29 @@ async function load() {
 function onAccessSaved() {
   void load()
   void store.invalidate()
+}
+
+/**
+ * Publish is the draft's owner's (#474), or a workspace admin's; the API asks
+ * for manage on the page, which a manager the owner shared it with also holds
+ * and can reach from the Access dialog.
+ */
+const canPublish = computed(() => {
+  const owner = detail.value?.document.draftOwnerId
+  return !!owner && !archived.value && (owner === auth.me?.userId || auth.canAdminWorkspace)
+})
+const publishing = ref(false)
+async function publishDraft() {
+  publishing.value = true
+  try {
+    await apiFetch(`/v1/documents/${documentId.value}/publish`, { method: 'POST' })
+    toast.success(t('access.draft.published'))
+    onAccessSaved()
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  } finally {
+    publishing.value = false
+  }
 }
 
 /**
@@ -735,7 +760,22 @@ watch(
       <!-- Who may open the page (#76). Offered to every reader: a manager
            edits it, anyone else is told where they stand. The icon is the
            page's state, so a restricted page reads as one from its row. -->
+      <!-- A private draft (#474) says so in words, and the same control shares
+           it: the Access dialog lists who it is shared with. -->
       <Button
+        v-if="detail.document.draftOwnerId"
+        variant="ghost"
+        size="sm"
+        data-draft="true"
+        :title="t('access.draft.hint')"
+        @click="accessOpen = true"
+      >
+        <NotepadTextDashed class="size-3.5" aria-hidden="true" />
+        <span class="kn-bar-label">{{ t('access.draft.label') }}</span>
+        <span class="sr-only">{{ t('access.draft.share') }}</span>
+      </Button>
+      <Button
+        v-else
         variant="ghost"
         size="icon-sm"
         :data-restricted="detail.document.restricted ? 'true' : undefined"
@@ -753,6 +793,16 @@ watch(
         :title="detail.document.title"
         :revision-id="viewingRevision"
       />
+      <Button
+        v-if="canPublish"
+        size="sm"
+        :disabled="publishing"
+        :title="t('access.draft.publishHint')"
+        @click="publishDraft"
+      >
+        <Send class="size-3.5" aria-hidden="true" />
+        <span class="kn-bar-label">{{ t('access.draft.publish') }}</span>
+      </Button>
       <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
         <RouterLink
           :to="`/documents/${detail.document.documentId}/${isSpec ? 'spec' : isFixture ? 'fixture' : 'edit'}`"

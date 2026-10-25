@@ -6,6 +6,7 @@ import {
   ANSWER_FEEDBACK_REASONS,
   ANSWER_RATINGS,
   DOCUMENT_CATEGORIES,
+  DOCUMENT_VISIBILITIES,
   KNOWLEDGE_ISSUE_DETAIL_MAX_CHARS,
   KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS,
   KNOWLEDGE_ISSUE_EVIDENCE_MAX,
@@ -2212,9 +2213,15 @@ export class McpService {
             .describe('Placeholder values by name: text, an ISO date, or a user/page id, as knowledge_get_template declares'),
           kind: z.enum(API_DOCUMENT_KINDS).optional().describe('page (default), openapi, asyncapi or test-fixture'),
           syntax: z.enum(API_SPEC_SYNTAXES).optional().describe('Spec and test fixture documents only: yaml (default) or json'),
+          visibility: z
+            .enum(DOCUMENT_VISIBILITIES)
+            .optional()
+            .describe(
+              'private (default): a draft only you can open until it is published in the app; workspace: open to everyone who can open its parent',
+            ),
         },
       },
-      async ({ workspaceId, projectId, title, content, parentId, category, templateRef, templateVersion, values, kind, syntax }) => {
+      async ({ workspaceId, projectId, title, content, parentId, category, templateRef, templateVersion, values, kind, syntax, visibility }) => {
         await guard.ws(workspaceId, 'editor');
         if (!content && !templateRef) throw new Error('Pass content, or a templateRef to start from.');
         await this.permissions.requireCreateUnder(await guard.scope(workspaceId), {
@@ -2234,6 +2241,8 @@ export class McpService {
               ...(parentId ? { parentId } : {}),
               ...(category ? { category } : {}),
               ...(templateRef ? { template: { ref: templateRef, version: templateVersion, values } } : {}),
+              // An agent writing for a person starts a private draft, as the REST route does (#474).
+              visibility: visibility ?? 'private',
             },
             principal.userId,
           ),

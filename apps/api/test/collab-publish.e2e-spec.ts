@@ -128,6 +128,7 @@ describe('publishing a shared draft (e2e)', () => {
       .post('/v1/documents')
       .send({
         workspaceId,
+        visibility: 'workspace',
         projectId: project.id,
         title: `Publish ${randomUUID().slice(0, 8)}`,
         content: { mode: 'inline', format: 'markdown', text: '# Published\n\nThe head.\n' },

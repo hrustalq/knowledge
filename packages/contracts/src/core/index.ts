@@ -58,6 +58,15 @@ export function parseAcceptLanguage(header: string | undefined | null): Locale |
 export const API_DOCUMENT_KINDS = ['page', 'openapi', 'asyncapi', 'test-fixture'] as const;
 export type ApiDocumentKind = (typeof API_DOCUMENT_KINDS)[number];
 
+/**
+ * Who a newly created page is open to (#474). `private` is a draft only its
+ * author can open until they publish it; `workspace` is everything before
+ * #474. The default is `private` over REST and MCP, `workspace` for every
+ * system writer (import, connectors, workflows, agents).
+ */
+export const DOCUMENT_VISIBILITIES = ['private', 'workspace'] as const;
+export type DocumentVisibility = (typeof DOCUMENT_VISIBILITIES)[number];
+
 export interface DocumentSummary {
   documentId: string;
   workspaceId: string;
@@ -120,6 +129,11 @@ export interface DocumentSummary {
    * ancestor is restricted (#76). Drawn as a lock.
    */
   restricted?: boolean;
+  /**
+   * A private draft (#474): the person who created it and may publish it.
+   * Drawn as "Draft · private" instead of a lock. Null once published.
+   */
+  draftOwnerId?: string | null;
   /**
    * The caller may not open this page, so only its id is real and `title` is
    * blank. Only ever an ancestor in a guest's breadcrumb trail (#76): a member
@@ -309,6 +323,9 @@ export type RepoEventType = (typeof REPO_EVENT_TYPES)[number];
 export const KNOWN_EVENT_TYPES = [
   'document.created',
   'document.updated',
+  // A private draft opened to the workspace (#474): its watchers hear about it
+  // here, not at `document.created`, which nobody but the author could read.
+  'document.published',
   // A person stamped the page as checked at its current head, or took the
   // stamp off (docs/features/38). The stamp itself lives on the document row;
   // whether it still holds is derived against the head at read time.

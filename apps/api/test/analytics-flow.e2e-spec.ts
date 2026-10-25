@@ -115,6 +115,7 @@ describe('usage analytics, recorded end to end (e2e, #79)', () => {
       .set({ Authorization: `Bearer ${session}` })
       .send({
         workspaceId: WORKSPACE,
+        visibility: 'workspace',
         projectId,
         title: `Release checklist ${word}`,
         content: { mode: 'inline', format: 'markdown', text: `# Release checklist ${word}\n\nWho signs the ${word} release, and where its record lives.\n` },

@@ -43,6 +43,9 @@ export class ResourceAccessService {
     const level = levelOn(scope, chain, grants);
     const self = chain[chain.length - 1];
     const canManage = level === 'manage';
+    const draft =
+      resource.type === 'document' &&
+      !!(await this.prisma.document.findUnique({ where: { id: resource.id }, select: { draftOwnerId: true } }))?.draftOwnerId;
     // Read again for who wrote each row: a mirrored grant is shown, never sent back.
     const own = canManage
       ? await this.prisma.accessGrant.findMany({
@@ -54,6 +57,7 @@ export class ResourceAccessService {
       resourceType: resource.type,
       resourceId: resource.id,
       restricted: self.restricted,
+      draft,
       inherited: chain.slice(0, -1).flatMap((node, i) =>
         node.restricted
           ? [
@@ -102,6 +106,19 @@ export class ResourceAccessService {
     const scope = await this.permissions.scopeFor(principal, workspaceId);
     if (levelOn(scope, chain, grants) !== 'manage') {
       await this.permissions.requireLevel(scope, resource, 'manage'); // throws the guard's 403
+    }
+
+    // A private draft leaves its restriction one way, so its watchers and the
+    // feed are told (#474): publish.
+    if (resource.type === 'document' && !dto.restricted) {
+      const doc = await this.prisma.document.findUnique({ where: { id: resource.id }, select: { draftOwnerId: true } });
+      if (doc?.draftOwnerId) {
+        throw new ConflictException({
+          statusCode: 409,
+          message: t('error.access.draftPublishFirst'),
+          reason: 'access.draftPublishFirst',
+        });
+      }
     }
 
     const wanted = dedupe(dto.grants);

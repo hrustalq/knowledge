@@ -121,6 +121,9 @@ const NOTIFIED_ACCESS_TYPES: readonly string[] = [
 const NOTIFIED_DOCUMENT_TYPES: readonly string[] = [
   'revision.finalized',
   'document.updated',
+  // A private draft opened to the workspace (#474): the first moment anyone
+  // but its author could be told about it.
+  'document.published',
   // Somebody says the page is wrong (docs/features/38, phase 3): the author
   // hears directly, a watcher through the fan-out. What became of the report
   // is a feed row, not an inbox one.

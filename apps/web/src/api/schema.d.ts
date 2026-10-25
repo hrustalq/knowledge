@@ -1153,6 +1153,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a private draft to the workspace (#474): lifts its restriction and drops the grants it was shared with; it keeps its parent's and project's restrictions. Needs manage on the page. A no-op on a published page */
+        post: operations["DocumentsController_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/content": {
         parameters: {
             query?: never;
@@ -7307,6 +7324,11 @@ export interface components {
             kind?: "page" | "openapi" | "asyncapi" | "test-fixture";
             /** @description Start from a template (issue #69). Without `content` the template is rendered server-side: its title pattern, body, tags and relations become the page, and its category is the default. */
             template?: components["schemas"]["DocumentTemplateDto"];
+            /**
+             * @description Who may open the new page (#474). `private` (when omitted) is a draft only its author can open until `POST /v1/documents/:id/publish`; the author shares it through the page's access grants. `workspace` opens it at once, under its parent's and project's restrictions.
+             * @enum {string}
+             */
+            visibility?: "private" | "workspace";
         };
         UpdateDocumentDto: {
             title?: string;
@@ -13263,6 +13285,46 @@ export interface operations {
         responses: {
             /** @description beforeId no longer names a child of parentId — the tree moved */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_publish: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

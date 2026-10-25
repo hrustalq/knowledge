@@ -108,6 +108,7 @@ describe('page verification (e2e)', () => {
       .post('/v1/documents')
       .send({
         workspaceId: WORKSPACE,
+        visibility: 'workspace',
         projectId: project.id,
         title,
         content: {

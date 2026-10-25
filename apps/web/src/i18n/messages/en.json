@@ -1195,7 +1195,8 @@
         "outdated": "marked outdated",
         "verification-requested": "asked to verify",
         "verification-cleared": "cleared the verification flag on",
-        "verification-expired": "verification lapsed on"
+        "verification-expired": "verification lapsed on",
+        "published": "published"
       },
       "revision": {
         "finalized": "published a revision of"
@@ -3261,6 +3262,15 @@
         "apiKeys": "{n} API key | {n} API keys",
         "publishedSites": "{n} published site | {n} published sites"
       }
+    },
+    "draft": {
+      "label": "Draft · private",
+      "hint": "Only you and the people you share it with can open this draft",
+      "share": "Share draft…",
+      "publish": "Publish",
+      "publishHint": "Open this page to everyone who can open its parent",
+      "published": "Published — the workspace can open it now",
+      "dialogNote": "Only you and the people below can open this draft. Publishing opens it to the workspace and clears this list."
     }
   },
   "users": {
@@ -3361,7 +3371,7 @@
     "draftCreatedForFiles": "Draft page created so files can be attached",
     "titleAndContentRequired": "Title and content are required",
     "pickProject": "Pick a project for this page",
-    "documentCreated": "Document created — indexing started",
+    "draftSaved": "Draft saved — only you can open it until you publish it",
     "noContentChanges": "No content changes — metadata updated",
     "revisionPublished": "Revision published — indexing started",
     "headMoved": "The document head moved while you were editing — reload and compare before retrying",
@@ -3511,7 +3521,7 @@
     },
     "moreActions": "More actions",
     "publish": "Publish",
-    "createAndIndex": "Create & index",
+    "saveDraft": "Save draft",
     "collapseSection": "Collapse section",
     "expandSection": "Expand section",
     "mentioned": "Mentioned: {name}",
@@ -4224,6 +4234,7 @@
     "event": {
       "revision.finalized": "edited this page",
       "document.updated": "updated this page",
+      "document.published": "published this page",
       "document.comment.created": "commented",
       "document.comment.updated": "answered a comment",
       "merge-request.created": "opened a merge request",

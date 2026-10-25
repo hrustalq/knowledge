@@ -136,6 +136,7 @@ describe('who may co-edit a draft over /v1/collab (e2e, #80 phase 2)', () => {
       .set(as(people.admin))
       .send({
         workspaceId: WORKSPACE,
+        visibility: 'workspace',
         projectId: project.id,
         title: `Shared ${nonce}`,
         content: { mode: 'inline', format: 'markdown', text: '# Shared\n\nSeed.\n' },

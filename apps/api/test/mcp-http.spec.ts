@@ -555,7 +555,7 @@ describe('McpService over a principal', () => {
     });
     expect(created.isError).toBeFalsy();
     expect(documents.createDocument).toHaveBeenCalledWith(
-      { workspaceId: WS_A, projectId: project, title: 'Use Postgres', template: { ref: 'builtin:adr', version: undefined, values: { number: '1' } } },
+      { workspaceId: WS_A, projectId: project, title: 'Use Postgres', template: { ref: 'builtin:adr', version: undefined, values: { number: '1' } }, visibility: 'private' },
       expect.any(String),
     );
   });

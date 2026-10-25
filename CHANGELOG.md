@@ -13,6 +13,35 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Breaking
+
+- A page created over REST or MCP is now a **private draft** that only its author can open, until they
+  publish it (#474). `HTTP` `POST /v1/documents`, `MCP` `knowledge_create_document`. Search, the graph,
+  the assistant, notifications, the activity feed, share links, sites, `llms.txt` and export leave it out
+  for everyone else; workspace admins still open it, and each open is audited as before. Pages that
+  imports, connector pulls, workflows, the repo wiki, agents and captures create are unchanged.
+  **Migration:** a client that should create a page the workspace sees at once sends
+  `"visibility": "workspace"` (MCP: `visibility: "workspace"`).
+
+### Added
+
+- Private drafts (#474). A new page shows as **Draft · private** in the tree, the page list and its
+  header, where **Publish** opens it to everyone who can open its parent and project, and the same chip
+  opens the Access dialog to share it with people or groups at view, edit or manage. Publishing
+  (`POST /v1/documents/:id/publish`, which needs manage on the page) tells the page's and the project's
+  watchers once, adds a **published** row to the activity feed, and drops the draft's share list. A child
+  page created under a draft stays hidden until the draft is published, and a private child stays private
+  after it. The Access dialog no longer offers to turn a draft's restriction off (409
+  `access.draftPublishFirst` over the API): publish is the one way out. The editor's button on a draft
+  reads **Save draft**.
+
+### Operations
+
+- Migration `20261213100000_document_draft_owner` adds a nullable `documents.draft_owner_id`. Additive:
+  every existing page stays published, and the previous image runs against it.
+
 ## [0.33.1] — 2026-10-24
 
 ### Fixed

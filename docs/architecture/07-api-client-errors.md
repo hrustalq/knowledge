@@ -173,6 +173,13 @@ cache identity follows the schema rather than a hand-written string. The
 optimistic-write composable `useApiMutation` is documented with the live cache
 it cooperates with, in [08-events-live.md](08-events-live.md).
 
+This is the web app's **only** API client (#472). The older untyped
+`apiFetch` / `apiFetchText` / `apiFetchBlob` in `lib/api.ts` are gone. Stores
+read through `fetchApi` and `bindStoreQuery`, files through `requestFile`, and a
+raw `fetch(` fails lint outside the allowlist in `eslint.config.js`. How long
+each answer stays fresh, and how stores share the cache with components, is in
+[10-caching.md](10-caching.md#the-web-client-one-client-one-cache).
+
 ## Response types come from contracts
 
 The shapes a route answers with already live in `@knowledge/contracts` as
@@ -194,6 +201,10 @@ fed from the interfaces instead (#472):
   puts the `$ref` on whichever 2xx the route already declares — 201 for a POST
   unless `@HttpCode` says otherwise — so a route never grows a second success
   code.
+
+A handler that may answer `304 Not Modified` returns `undefined` on that path:
+`@Returns(name, { conditional: true })` allows it and still checks the JSON
+shape ([10-caching.md](10-caching.md#cheap-304s)).
 
 The web client then reads typed data with no cast. A route without `@Returns`
 (a file, a stream, a redirect, `void`) still types as `unknown`; a new JSON route

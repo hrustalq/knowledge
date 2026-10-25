@@ -81,6 +81,7 @@ import { TemporalResolverService } from '../temporal/temporal-resolver.service.j
 import { CommunitiesService } from '../communities/communities.service.js';
 import { AnalyticsRecorder, noTrackOf } from '../analytics/analytics.recorder.js';
 import { Returns } from '../common/returns.decorator.js';
+import { notModified, setCachePolicy } from '../common/http-cache.js';
 
 /** A query-string boolean: `1`, `true` and `yes` are on; anything else, including absence, is off. */
 function flag(value?: string): boolean {
@@ -222,11 +223,19 @@ export class DocumentsController {
   }
 
   @Get(':id')
-  @Returns('DocumentDetailResponse')
+  @Returns('DocumentDetailResponse', { conditional: true })
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Get document + its head (or given) revision + chunk summaries' })
-  get(@Param('id', ParseUUIDPipe) id: string, @Query('revision') revision?: string): Promise<DocumentDetailResponse> {
-    return this.documents.getDocument(id, revision);
+  async get(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Query('revision') revision?: string,
+  ): Promise<DocumentDetailResponse | undefined> {
+    // The same for every reader the guard admits, so no scope in the validator.
+    const head = await this.documents.getDocumentHead(id, revision);
+    if (notModified(req, res, head)) return undefined;
+    return this.documents.withChunks(head);
   }
 
   @Patch(':id')
@@ -306,6 +315,7 @@ export class DocumentsController {
   ): Promise<DocumentContentResponse | string | undefined> {
     // `asOf` (#81) picks the default-branch revision that was the page's
     // content then; an explicit `revision` wins over it.
+    const named = Boolean(revision);
     const at = revision ? undefined : await this.temporal.resolve(await this.documents.workspaceOf(id), asOf, knownAt);
     if (at) revision = await this.documents.revisionAsOf(id, at);
     // Read off the request rather than via @Headers(): that decorator emits the
@@ -313,7 +323,7 @@ export class DocumentsController {
     const accept = req.headers.accept;
     const ifNoneMatch = req.headers['if-none-match'];
     // The representation depends on Accept either way, so both branches say so.
-    res.setHeader('Vary', 'Accept');
+    res.vary('Accept');
     // A key's read is a view (#79); a session's is dropped by the recorder —
     // SSR and prefetch call this too, so the web counts its own on the page.
     const caller = { principal, noTrack: noTrackOf(req.headers) };
@@ -326,9 +336,12 @@ export class DocumentsController {
       if (result.status === 200) void this.analytics.view(caller, id, revision || null);
       return sendPageMarkdown(res, result);
     }
-    const content = await this.documents.getContent(id, revision);
-    void this.analytics.view(caller, id, content.revisionId);
-    return withAsOf(content, at);
+    const target = await this.documents.contentRevision(id, revision);
+    // A named revision's bytes never change; the head moves, so it revalidates.
+    if (named) setCachePolicy(res, 'immutable');
+    void this.analytics.view(caller, id, target.revision.id);
+    if (notModified(req, res, 'content', target.revision.id, at ?? null)) return undefined;
+    return withAsOf(await this.documents.readContent(target), at);
   }
 
   @Get(':id/connectors')

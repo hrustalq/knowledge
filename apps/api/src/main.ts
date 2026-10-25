@@ -1,4 +1,4 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -6,6 +6,7 @@ import { SwaggerModule } from '@nestjs/swagger';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module.js';
 import { ApiExceptionFilter } from './common/api-exception.filter.js';
+import { HttpCacheInterceptor } from './common/http-cache.js';
 import { SCIM_CONTENT_TYPE } from './common/scim-error-body.js';
 import { validationExceptionFactory } from './common/validation.js';
 import { createOpenApiDocument } from './config/swagger.js';
@@ -61,6 +62,10 @@ async function bootstrap() {
   );
   // Strict error contract: every non-2xx response is an ApiErrorPayload envelope.
   app.useGlobalFilters(new ApiExceptionFilter());
+  // A deliberate Cache-Control/Vary on every response (#472). Express's own weak
+  // ETag stays on as the fallback for routes with no cheap validator; a route
+  // that sets its ETag (notModified) is left alone by it.
+  app.useGlobalInterceptors(new HttpCacheInterceptor(app.get(Reflector)));
 
   SwaggerModule.setup('docs', app, createOpenApiDocument(app));
 

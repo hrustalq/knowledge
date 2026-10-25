@@ -11,6 +11,7 @@ import { scimEnabled } from './scim-enabled.js';
 import { CreateScimTokenDto, PutScimSettingsDto } from './scim-tokens.dto.js';
 import { ScimTokensService } from './scim-tokens.service.js';
 import { Returns } from '../common/returns.decorator.js';
+import { CachePolicy } from '../common/http-cache.js';
 
 /** The admin routes 404 with the protocol ones, so the Provisioning tab can tell "off" from "empty". */
 @Injectable()
@@ -29,6 +30,8 @@ export class ScimEnabledGuard implements CanActivate {
 
 /** SCIM provisioning settings and tokens (#75 phase 5), Settings → Security → Provisioning. Workspace admins only. */
 @ApiTags('auth')
+// Sessions, keys and sign-in answers carry credentials: never kept (#472).
+@CachePolicy('no-store')
 @Controller('v1/workspaces')
 @UseGuards(ScimEnabledGuard)
 export class ScimTokensController {

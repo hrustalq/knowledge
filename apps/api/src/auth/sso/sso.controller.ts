@@ -10,6 +10,7 @@ import { LdapLoginDto, SsoDiscoverDto, SsoExchangeDto } from './identity-provide
 import { SsoEnabledGuard } from './sso-enabled.guard.js';
 import { SsoFlowService } from './sso-flow.service.js';
 import { Returns } from '../../common/returns.decorator.js';
+import { CachePolicy } from '../../common/http-cache.js';
 
 /**
  * Anonymous SSO sign-in routes (#75). `@Public()` because the caller has no
@@ -19,6 +20,8 @@ import { Returns } from '../../common/returns.decorator.js';
  * a JSON error would strand it on a blank page.
  */
 @ApiTags('auth')
+// Sessions, keys and sign-in answers carry credentials: never kept (#472).
+@CachePolicy('no-store')
 @Controller('v1/auth')
 @UseGuards(SsoEnabledGuard)
 export class SsoController {

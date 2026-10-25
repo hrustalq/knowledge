@@ -12,9 +12,12 @@ import { CreateIdentityProviderDto, UpdateIdentityProviderDto } from './identity
 import { IdentityProvidersService } from './identity-providers.service.js';
 import { SsoEnabledGuard } from './sso-enabled.guard.js';
 import { Returns } from '../../common/returns.decorator.js';
+import { CachePolicy } from '../../common/http-cache.js';
 
 /** A workspace's identity providers (#75), Settings → Security → Providers. Workspace admins only. */
 @ApiTags('auth')
+// Sessions, keys and sign-in answers carry credentials: never kept (#472).
+@CachePolicy('no-store')
 @Controller('v1/workspaces')
 @UseGuards(SsoEnabledGuard)
 export class IdentityProvidersController {

@@ -36,11 +36,22 @@ in the pull request that introduces them — see
   after it. The Access dialog no longer offers to turn a draft's restriction off (409
   `access.draftPublishFirst` over the API): publish is the one way out. The editor's button on a draft
   reads **Save draft**.
+- Private branches, API side (#474, phase 2a). `POST /v1/documents/:id/branches` and MCP
+  `knowledge_create_branch` take `visibility: "private"`: only the person who started the branch, the
+  people they share it with (`GET`/`PUT /v1/documents/:id/branches/:branchId/access`, at view or edit)
+  and workspace admins can read it or its revisions. That holds on every REST route that names a branch
+  or revision, on the MCP tools, and for joining the branch's co-editing draft. Branch, revision and
+  draft lists leave it out, and revisions on it make no activity row, live event, watcher notification
+  or workflow trigger. Export and published sites never read a private branch. Opening a merge request
+  from it makes it readable to everyone who can read the page. Nothing in the app creates one yet; the
+  editor moves onto private branches in phase 2b.
 
 ### Operations
 
 - Migration `20261213100000_document_draft_owner` adds a nullable `documents.draft_owner_id`. Additive:
   every existing page stays published, and the previous image runs against it.
+- Migration `20261214100000_branch_owner` adds `document_branches.owner_id` (nullable) and
+  `restricted` (default false). Additive: every existing branch stays as readable as its page.
 
 ## [0.33.1] — 2026-10-24
 

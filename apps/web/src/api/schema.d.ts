@@ -927,6 +927,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{id}/branches/{branchId}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A private branch's grants (#474); listed for its owner and admins */
+        get: operations["AccessController_branchAccess"];
+        /** Replace a private branch's grants, at view or edit (#474; its owner or an admin) */
+        put: operations["AccessController_updateBranchAccess"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/access": {
         parameters: {
             query?: never;
@@ -7233,6 +7251,10 @@ export interface components {
             /** @enum {string} */
             level: "view" | "edit" | "manage";
         };
+        UpdateBranchAccessDto: {
+            /** @description Replaces the private branch's grants as a whole (#474); `view` or `edit` only */
+            grants: components["schemas"]["AccessGrantInputDto"][];
+        };
         UpdateResourceAccessDto: {
             /** @description On: only grantees (and workspace admins) open this node and everything under it */
             restricted: boolean;
@@ -7360,6 +7382,11 @@ export interface components {
              * @description Defaults to the default-branch head
              */
             fromRevisionId?: string;
+            /**
+             * @description Who may read the branch and its revisions (#474). `workspace` (when omitted): everyone who can open the page. `private`: only its creator, the people they share it with (`PUT …/branches/:branchId/access`) and admins; opening a merge request from it makes it readable to the page's readers.
+             * @enum {string}
+             */
+            visibility?: "private" | "workspace";
         };
         AddRelationsDto: {
             relations: components["schemas"]["RelationInputDto"][];
@@ -12496,6 +12523,92 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AccessController_branchAccess: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                branchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AccessController_updateBranchAccess: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                branchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBranchAccessDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {

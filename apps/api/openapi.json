@@ -4474,6 +4474,144 @@
         ]
       }
     },
+    "/v1/documents/{id}/branches/{branchId}/access": {
+      "get": {
+        "operationId": "AccessController_branchAccess",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A private branch's grants (#474); listed for its owner and admins",
+        "tags": [
+          "access"
+        ]
+      },
+      "put": {
+        "operationId": "AccessController_updateBranchAccess",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBranchAccessDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Replace a private branch's grants, at view or edit (#474; its owner or an admin)",
+        "tags": [
+          "access"
+        ]
+      }
+    },
     "/v1/documents/{id}/access": {
       "get": {
         "operationId": "AccessController_documentAccess",
@@ -34711,6 +34849,21 @@
           "level"
         ]
       },
+      "UpdateBranchAccessDto": {
+        "type": "object",
+        "properties": {
+          "grants": {
+            "description": "Replaces the private branch's grants as a whole (#474); `view` or `edit` only",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessGrantInputDto"
+            }
+          }
+        },
+        "required": [
+          "grants"
+        ]
+      },
       "UpdateResourceAccessDto": {
         "type": "object",
         "properties": {
@@ -35035,6 +35188,14 @@
             "type": "string",
             "format": "uuid",
             "description": "Defaults to the default-branch head"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "workspace"
+            ],
+            "description": "Who may read the branch and its revisions (#474). `workspace` (when omitted): everyone who can open the page. `private`: only its creator, the people they share it with (`PUT …/branches/:branchId/access`) and admins; opening a merge request from it makes it readable to the page's readers."
           }
         },
         "required": [

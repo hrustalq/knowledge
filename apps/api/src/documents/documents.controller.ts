@@ -351,22 +351,30 @@ export class DocumentsController {
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'List revisions with DAG parentage (optionally filtered by branch)' })
   @ApiQuery({ name: 'branch', required: false })
-  listRevisions(@Param('id', ParseUUIDPipe) id: string, @Query('branch') branch?: string) {
-    return this.documents.listRevisions(id, branch);
+  async listRevisions(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+    @Query('branch') branch?: string,
+  ) {
+    return this.documents.listRevisions(id, await this.permissions.scopeForDocument(principal, id), branch);
   }
 
   @Post(':id/branches')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Create a branch from a revision (defaults to default-branch head)' })
-  createBranch(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateBranchDto) {
-    return this.documents.createBranch(id, dto);
+  createBranch(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateBranchDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.documents.createBranch(id, dto, principal.userId);
   }
 
   @Get(':id/branches')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'List branches with head revisions' })
-  listBranches(@Param('id', ParseUUIDPipe) id: string) {
-    return this.documents.listBranches(id);
+  async listBranches(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
+    return this.documents.listBranches(id, await this.permissions.scopeForDocument(principal, id));
   }
 
   @Get(':id/compare')

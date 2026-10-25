@@ -343,6 +343,17 @@ export class CreateBranchDto {
   @IsOptional()
   @IsUUID()
   fromRevisionId?: string;
+
+  @ApiPropertyOptional({
+    enum: DOCUMENT_VISIBILITIES,
+    description:
+      'Who may read the branch and its revisions (#474). `workspace` (when omitted): everyone who can open the page. ' +
+      '`private`: only its creator, the people they share it with (`PUT …/branches/:branchId/access`) and admins; ' +
+      'opening a merge request from it makes it readable to the page\'s readers.',
+  })
+  @IsOptional()
+  @IsIn(DOCUMENT_VISIBILITIES as unknown as string[])
+  visibility?: DocumentVisibility;
 }
 
 export class CurateRelationDto {

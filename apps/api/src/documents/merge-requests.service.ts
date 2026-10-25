@@ -147,6 +147,13 @@ export class MergeRequestsService {
       },
       include: MR_INCLUDE,
     });
+    // A merge request is read by everyone who can read the page, so a private
+    // branch it names stops being private (#474). Only someone who may edit
+    // that branch got this far (the guard holds `sourceBranch` and `targetBranch`).
+    await this.prisma.documentBranch.updateMany({
+      where: { id: { in: [source.id, target.id] }, restricted: true },
+      data: { restricted: false },
+    });
     const page = await this.recordActivity(mr.documentId, 'merge-request.created', mr.id, authorId, {
       title: dto.title,
       sourceBranch: source.name,

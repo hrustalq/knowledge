@@ -160,12 +160,13 @@ export class SiteBuildService {
 
     const docs = await this.prisma.document.findMany({
       where: { id: { in: documentIds } },
-      select: { id: true, defaultBranch: true, branches: { select: { id: true, name: true, headRevisionId: true } } },
+      select: { id: true, defaultBranch: true, branches: { select: { id: true, name: true, headRevisionId: true, restricted: true } } },
     });
     const branchFor = new Map<string, { id: string; headRevisionId: string | null }>();
     for (const doc of docs) {
+      // A private branch (#474) never matches by name: the page falls back to its default branch.
       const branch =
-        (sourceBranch ? doc.branches.find((b) => b.name === sourceBranch) : undefined) ??
+        (sourceBranch ? doc.branches.find((b) => b.name === sourceBranch && !b.restricted) : undefined) ??
         doc.branches.find((b) => b.name === doc.defaultBranch);
       if (branch) branchFor.set(doc.id, branch);
     }

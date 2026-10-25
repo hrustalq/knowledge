@@ -638,6 +638,118 @@ describe('page permissions (e2e, #76)', () => {
     });
   });
 
+  describe('private branches (#474, phase 2)', () => {
+    let page: string;
+    let branchId: string;
+    let privateRev: string;
+    const secret = `branchsecret${nonce}`;
+
+    const createRevision = async (p: Person, branch: string, text: string) =>
+      mcp(p, 'knowledge_create_revision', { documentId: page, branch, content: text });
+    const shareBranch = (grants: Array<{ subjectType: 'user'; subjectId: string; level: string }>, as_ = people.alice) =>
+      http().put(`/v1/documents/${page}/branches/${branchId}/access`).set(as(as_)).send({ grants });
+    const branchNames = async (p: Person) =>
+      (await http().get(`/v1/documents/${page}/branches`).set(as(p)).expect(ok(200))).body.branches.map((b: { name: string }) => b.name);
+    const revisionIds = async (p: Person) =>
+      (await http().get(`/v1/documents/${page}/revisions`).set(as(p)).expect(ok(200))).body.revisions.map(
+        (r: { revisionId: string }) => r.revisionId,
+      );
+
+    beforeAll(async () => {
+      const created = await http()
+        .post('/v1/documents')
+        .set(as(people.alice))
+        .send({
+          workspaceId: WORKSPACE,
+          projectId,
+          title: `Branching handbook ${word}`,
+          visibility: 'workspace',
+          content: { mode: 'inline', format: 'markdown', text: `# Handbook\n\nThe published ${word} text.\n` },
+        })
+        .expect(ok(201));
+      page = created.body.documentId;
+      const branch = await http()
+        .post(`/v1/documents/${page}/branches`)
+        .set(as(people.alice))
+        .send({ name: `draft/${people.alice.id}`, visibility: 'private' })
+        .expect(ok(201));
+      branchId = branch.body.branch.branchId;
+      expect(branch.body.branch).toMatchObject({ restricted: true, ownerId: people.alice.id });
+      const rev = await createRevision(people.alice, `draft/${people.alice.id}`, `# Handbook\n\nThe ${secret} rewrite.\n`);
+      expect(rev.isError).toBeFalsy();
+      privateRev = JSON.parse(rev.content[0].text).revisionId;
+      // Not recorded, so never published: no feed row, live frame, watcher notification or workflow trigger.
+      expect(await prisma.activityLog.count({ where: { subjectId: privateRev } })).toBe(0);
+    });
+
+    afterAll(async () => {
+      if (page) await http().post(`/v1/documents/${page}/archive`).set(as(people.admin)).send({});
+    });
+
+    it('is left out of the branch and revision lists for anyone it is not shared with', async () => {
+      expect(await branchNames(people.bob)).toEqual(['main']);
+      expect(await revisionIds(people.bob)).not.toContain(privateRev);
+      expect(await branchNames(people.alice)).toContain(`draft/${people.alice.id}`);
+      expect(await revisionIds(people.alice)).toContain(privateRev);
+    });
+
+    it('refuses every read that names it, over REST and MCP, with no content in the body', async () => {
+      const main = (await http().get(`/v1/documents/${page}`).set(as(people.bob)).expect(ok(200))).body.revision.revisionId;
+      for (const path of [
+        `/v1/documents/${page}/content?revision=${privateRev}`,
+        `/v1/documents/${page}?revision=${privateRev}`,
+        `/v1/documents/${page}/revisions?branch=draft/${people.alice.id}`,
+        `/v1/documents/${page}/compare?from=${main}&to=${privateRev}`,
+        `/v1/documents/${page}/branches/${branchId}/access`,
+      ]) {
+        const res = await http().get(path).set(as(people.bob));
+        expect([path, res.status]).toEqual([path, 403]);
+        expect(res.body.details).toMatchObject({ resourceType: 'branch', resourceId: branchId });
+        expect(JSON.stringify(res.body)).not.toContain(secret);
+      }
+      const viaMcp = await mcp(people.bob, 'knowledge_get_document_content', { documentId: page, revisionId: privateRev });
+      expect(viaMcp.isError).toBe(true);
+      expect(JSON.stringify(viaMcp)).not.toContain(secret);
+      const write = await createRevision(people.bob, `draft/${people.alice.id}`, 'Not yours.');
+      expect(write.isError).toBe(true);
+      const feed = await http().get('/v1/activity').query({ workspaceId: WORKSPACE, projectId, limit: 100 }).set(as(people.bob)).expect(ok(200));
+      expect(JSON.stringify(feed.body)).not.toContain(privateRev);
+    });
+
+    it('shared at view: readable, still not writable, and only its owner manages the list', async () => {
+      await shareBranch([{ subjectType: 'user', subjectId: people.bob.id, level: 'view' }]).expect(ok(200));
+      expect(await status(people.bob, `/v1/documents/${page}/content?revision=${privateRev}`)).toBe(200);
+      expect(await branchNames(people.bob)).toContain(`draft/${people.alice.id}`);
+      expect((await createRevision(people.bob, `draft/${people.alice.id}`, 'Still not yours.')).isError).toBe(true);
+      await shareBranch([], people.bob).expect(ok(403));
+      await shareBranch([]).expect(ok(200));
+      expect(await status(people.bob, `/v1/documents/${page}/content?revision=${privateRev}`)).toBe(403);
+    });
+
+    it('a workspace admin reads it, audited', async () => {
+      expect(await status(people.admin, `/v1/documents/${page}/content?revision=${privateRev}`)).toBe(200);
+      const deadline = Date.now() + 5_000;
+      while (
+        !(await prisma.auditLog.findFirst({
+          where: { workspaceId: WORKSPACE, actor: people.admin.id, action: 'acl.bypass', params: { path: ['resourceId'], equals: branchId } },
+        }))
+      ) {
+        if (Date.now() > deadline) throw new Error('no acl.bypass audit row for the admin read of a private branch');
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    });
+
+    it('opening a merge request from it makes it readable to the page\'s readers', async () => {
+      await http()
+        .post(`/v1/documents/${page}/merge-requests`)
+        .set(as(people.alice))
+        .send({ sourceBranch: `draft/${people.alice.id}`, title: 'Rewrite' })
+        .expect(ok(201));
+      expect(await status(people.bob, `/v1/documents/${page}/content?revision=${privateRev}`)).toBe(200);
+      expect(await branchNames(people.bob)).toContain(`draft/${people.alice.id}`);
+    });
+  });
+
   describe('access requests', () => {
     it('request → duplicate 409 → approve opens the subtree to the requester', async () => {
       const body = { workspaceId: WORKSPACE, resourceType: 'document', resourceId: ids.C, level: 'view' };

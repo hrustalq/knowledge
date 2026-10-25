@@ -190,6 +190,9 @@ export class ProjectCascadeService {
     // go; the row would resolve to nothing (docs/features/44).
     await tx.siteVersionPage.deleteMany({ where: docs });
     await tx.documentRevision.deleteMany({ where: docs });
+    // A private branch's grants (#474) point at a branch id, not the page.
+    const branchIds = (await tx.documentBranch.findMany({ where: docs, select: { id: true } })).map((b) => b.id);
+    await tx.accessGrant.deleteMany({ where: { resourceType: 'branch', resourceId: { in: branchIds } } });
     await tx.documentBranch.deleteMany({ where: docs });
 
     // Referencing tables with no FK. Each would otherwise point at an id that

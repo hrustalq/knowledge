@@ -1384,6 +1384,24 @@ export interface ResourceAccessResponse {
   grants: AccessGrantEntry[];
 }
 
+// GET /v1/documents/:id/branches/:branchId/access (#474)
+export interface BranchAccessResponse {
+  branchId: string;
+  /** Private: only its owner, the grantees below and admins read it. */
+  restricted: boolean;
+  ownerId: string | null;
+  /** The owner or a workspace admin: who may change the grants. */
+  canManage: boolean;
+  /** View or edit grants on the branch. Empty unless `canManage`. */
+  grants: AccessGrantEntry[];
+}
+
+// PUT /v1/documents/:id/branches/:branchId/access
+export interface UpdateBranchAccessRequest {
+  /** Replaces the branch's grants as a whole; `view` or `edit` only. */
+  grants: AccessGrantInput[];
+}
+
 // PUT /v1/documents/:id/access · PUT /v1/projects/:id/access
 export interface UpdateResourceAccessRequest {
   restricted: boolean;

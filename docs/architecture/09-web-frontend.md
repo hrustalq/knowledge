@@ -206,10 +206,11 @@ const base = import.meta.env.SSR
 
 The server talks to the API directly; the browser goes through the Vite dev
 proxy, which rewrites `/api` away and forwards to `API_URL_INTERNAL` — so the
-browser is always same-origin and there is no CORS configuration anywhere. Both
-HTTP stacks (`lib/api.ts`'s `apiFetch` and `api/http.ts`'s axios instance) spell
-the same rule, and both attach `Authorization`, `Accept-Language` and
-`x-request-id`.
+browser is always same-origin and there is no CORS configuration anywhere. There
+is one HTTP stack, `api/http.ts`'s axios instance, which attaches
+`Authorization`, `Accept-Language` and `x-request-id` (#472 removed the older
+`apiFetch`; raw `fetch` is a lint error outside an allowlist,
+[10](10-caching.md#the-web-client-one-client-one-cache)).
 
 `resolveAssetUrl()` is the exception that proves the rule: attachment and avatar
 links are stored in markdown as bare `/v1/...` paths with no host and no
@@ -326,9 +327,14 @@ editor's existing skeleton. In collab mode the editor never calls
 
 ## Limits
 
-Pinia state is transferred, but vue-query's cache is not: a server-rendered page
-re-fetches on the client. Route-level data therefore arrives twice on first
-paint for anything the stores do not hold.
+Pinia state is transferred, and so are the queries the stores are bound to
+(`window.__QUERIES__`, [10](10-caching.md#the-web-client-one-client-one-cache)).
+A component's own `useQuery` data is not: a server-rendered page re-fetches it on
+the client, so that data arrives twice on first paint.
+
+The service worker keeps only the build's code and an offline page, never a
+render: every member page is drawn with that person's state in it
+([10](10-caching.md#the-service-worker)).
 
 `sirv` serves the built client directly out of the web process in production —
 there is no CDN or asset host in front of it — and `server.js` is an Express app

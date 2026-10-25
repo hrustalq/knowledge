@@ -87,6 +87,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | [07 client & errors](docs/architecture/07-api-client-errors.md)             | `make api-client`, `ApiErrorPayload`, the typed web client          |
 | [08 events & live](docs/architecture/08-events-live.md)                     | Redis pub/sub, SSE, WS gateway, optimistic cache updates            |
 | [09 web frontend](docs/architecture/09-web-frontend.md)                     | SSR shell, per-request isolation, cookies, hydration hazards        |
+| [10 caching](docs/architecture/10-caching.md)                               | Query cache, Cache-Control + 304s, Redis read cache, service worker |
 
 **Features** — [`docs/features/`](docs/README.md):
 

@@ -54,6 +54,7 @@ import type {
   ComponentDeclarationView,
   DocumentConnectorResponse,
   DocumentContentResponse,
+  ListBranchesResponse,
   ResolvedAsOf,
   DocumentDetailResponse,
   ListActivityResponse,
@@ -366,6 +367,18 @@ const asOfParam = computed(() => (route.query.revision ? null : ((route.query.as
 const asOfRevision = ref<string | null>(null)
 const asOfResolved = ref<ResolvedAsOf | null>(null)
 
+/**
+ * #474: `?branch=` reads a working branch — someone's unpublished edit, shared
+ * with this reader (the share notification links here). Its head is shown as
+ * any other revision is: read-only, no comments, the stamp left to the head.
+ */
+const viewingBranch = computed(() =>
+  route.query.revision || route.query.asOf ? null : ((route.query.branch as string | undefined) ?? null),
+)
+const branchRevision = ref<string | null>(null)
+/** Who started the branch being read, once the branch list says. */
+const branchOwner = ref<string | null>(null)
+
 async function loadContent() {
   contentError.value = null
   content.value = null
@@ -374,11 +387,18 @@ async function loadContent() {
       ? `?revision=${route.query.revision as string}`
       : asOfParam.value
         ? `?asOf=${encodeURIComponent(asOfParam.value)}`
-        : ''
+        : viewingBranch.value
+          ? `?branch=${encodeURIComponent(viewingBranch.value)}`
+          : ''
     content.value = await apiFetch<DocumentContentResponse>(
       `/v1/documents/${documentId.value}/content${rev}`,
     )
     asOfRevision.value = asOfParam.value ? content.value.revisionId : null
+    branchRevision.value = viewingBranch.value ? content.value.revisionId : null
+    if (viewingBranch.value) {
+      const { branches } = await apiFetch<ListBranchesResponse>(`/v1/documents/${documentId.value}/branches`)
+      branchOwner.value = branches.find((b) => b.name === viewingBranch.value)?.ownerId ?? null
+    }
     asOfResolved.value = asOfParam.value ? (content.value.resolvedAsOf ?? null) : null
   } catch (e) {
     contentError.value = (e as Error).message
@@ -663,7 +683,9 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
 
 /* ------------------------------------------------------------- lifecycle */
 
-const viewingRevision = computed(() => (route.query.revision as string | undefined) ?? asOfRevision.value)
+const viewingRevision = computed(
+  () => (route.query.revision as string | undefined) ?? asOfRevision.value ?? branchRevision.value,
+)
 // An API spec (#78) renders as a reference rather than a page, and is edited as text.
 const isSpec = computed(() => detail.value?.document.kind === 'openapi' || detail.value?.document.kind === 'asyncapi')
 // A QA test fixture (#483) renders its steps, and has its own step editor.
@@ -693,7 +715,7 @@ onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
 
-watch([() => route.query.revision, () => route.query.asOf], () => void loadContent())
+watch([() => route.query.revision, () => route.query.asOf, () => route.query.branch], () => void loadContent())
 
 // Route reuse: navigating to a different document keeps this component alive.
 watch(documentId, () => {
@@ -1070,6 +1092,28 @@ watch(
           </span>
           <span class="font-mono">({{ viewingRevision.slice(0, 8) }})</span>
           <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
+        </p>
+        <!-- #474: an unpublished edit, named as one, with the way into it for
+             whoever may write there and the way back to what readers see. -->
+        <p v-else-if="viewingBranch && viewingRevision" class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+          <NotepadTextDashed class="size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            {{
+              branchOwner === auth.me?.userId
+                ? t('documents.branchView.mine')
+                : branchOwner
+                  ? t('documents.branchView.theirs', { name: nameOf(branchOwner) })
+                  : t('documents.branchView.named', { name: viewingBranch })
+            }}
+          </span>
+          <RouterLink
+            v-if="auth.canEdit && !archived"
+            :to="branchOwner === auth.me?.userId ? `/documents/${documentId}/edit` : `/documents/${documentId}/edit?branch=${encodeURIComponent(viewingBranch)}`"
+            class="underline"
+          >
+            {{ t('documents.branchView.edit') }}
+          </RouterLink>
+          <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.branchView.published') }}</RouterLink>
         </p>
         <p v-else-if="viewingRevision" class="text-xs text-muted-foreground">
           {{ t('documents.viewingRevision', { id: viewingRevision.slice(0, 8) }) }}

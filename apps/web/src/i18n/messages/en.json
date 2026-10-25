@@ -311,6 +311,13 @@
     "unplacedCommentsHint": "On the page as a whole, or on a passage that has since changed.",
     "menu": {
       "view": "View"
+    },
+    "branchView": {
+      "mine": "Your draft — not published yet.",
+      "theirs": "{name}'s draft — not published yet.",
+      "named": "Branch {name} — not published.",
+      "edit": "Open in editor",
+      "published": "Published page"
     }
   },
   "settings": {
@@ -3271,6 +3278,12 @@
       "publishHint": "Open this page to everyone who can open its parent",
       "published": "Published — the workspace can open it now",
       "dialogNote": "Only you and the people below can open this draft. Publishing opens it to the workspace and clears this list."
+    },
+    "branch": {
+      "title": "Share your draft of {title}",
+      "intro": "Your edit stays private until you publish it. The people below can read it, and those at Edit can co-edit it.",
+      "noGrants": "Nobody yet — only you and workspace admins can read this draft.",
+      "askOwner": "Only the person who started this draft, or an admin, changes who it is shared with."
     }
   },
   "users": {
@@ -3622,6 +3635,34 @@
       "template": "Template",
       "insertTemplate": "Insert template…",
       "discardBody": "Every edit made since the page was last published is lost, and the editor goes back to the published page."
+    },
+    "draftBranch": {
+      "private": "Your draft · private",
+      "privateHint": "Only you and the people you share it with can read this edit until you publish it",
+      "inReview": "Your draft · in review",
+      "inReviewHint": "A merge request is open for this edit, so everyone who can read the page can read it",
+      "share": "Share",
+      "shareHint": "Let specific people read or co-edit this draft before it is published",
+      "saved": "Draft saved — only you and the people you shared it with can read it",
+      "publishing": "Publishing…",
+      "published": "Published — readers see your edit now",
+      "mrTitle": "Edit {title}",
+      "held": {
+        "title": "Opened a merge request for review",
+        "protected": "The page's main branch is protected, so an admin merges it.",
+        "approvals": "It merges once a reviewer approves it.",
+        "lint": "The style check has to pass before it merges.",
+        "breaking-api": "It breaks the API, so an admin has to acknowledge that first.",
+        "draft": "The merge request is marked as a draft."
+      },
+      "past": {
+        "title": "The page was published since your draft began",
+        "body": "Publishing now replaces that version with yours. Review what changed first.",
+        "review": "Review changes",
+        "publishOver": "Publish over it",
+        "reviewTitle": "Published page → your draft",
+        "reviewDesc": "Removed lines are on the published page and not in your draft: publishing drops them."
+      }
     }
   },
   "toolbar": {

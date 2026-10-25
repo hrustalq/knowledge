@@ -43,8 +43,25 @@ in the pull request that introduces them — see
   or revision, on the MCP tools, and for joining the branch's co-editing draft. Branch, revision and
   draft lists leave it out, and revisions on it make no activity row, live event, watcher notification
   or workflow trigger. Export and published sites never read a private branch. Opening a merge request
-  from it makes it readable to everyone who can read the page. Nothing in the app creates one yet; the
-  editor moves onto private branches in phase 2b.
+  from it makes it readable to everyone who can read the page.
+- Editing a published page happens on your own private draft (#474, phase 2b,
+  [docs/features/66](docs/features/66-drafts-publishing.md)). The editor reads **Your draft · private**:
+  **Save draft** keeps the edit where only you and the people you **Share** it with (at view or edit)
+  can read it, and nothing about it reaches the feed, notifications or search. **Publish** puts it on the
+  page through a merge request that merges at once, or stays open for review when a gate holds it — the
+  page's branch is protected, approvals are required, the style lint blocks or the API breaks. If the
+  page was published since your draft began, the editor shows what changed and offers **Publish over
+  it**. A person you shared the draft with gets a notification that opens it on the page view
+  (`/documents/:id?branch=…`), with a way into the editor when they may edit. `HTTP`
+  `POST /v1/documents/:id/branches/mine` returns your working branch for a page, and
+  `POST /v1/documents/:id/branches/:branchId/publish` publishes one; it refuses an empty publish and a
+  page that moved on before it opens anything.
+
+### Changed
+
+- Publishing an edit from the web editor now leaves a merged merge request on the page instead of a
+  bare revision, and goes through the same merge gates as any merge request (#474). The page's title,
+  category and place in the tree still change at Publish and are not part of the review.
 
 ### Operations
 
@@ -52,6 +69,9 @@ in the pull request that introduces them — see
   every existing page stays published, and the previous image runs against it.
 - Migration `20261214100000_branch_owner` adds `document_branches.owner_id` (nullable) and
   `restricted` (default false). Additive: every existing branch stays as readable as its page.
+- With `MR_REQUIRED_APPROVALS` at 1 or more (the default), a non-admin's Publish from the editor now
+  waits for a reviewer's approval, where it used to land at once (#474). Set `MR_REQUIRED_APPROVALS=0`
+  to keep editor publishing direct; production already runs with 0.
 
 ## [0.33.1] — 2026-10-24
 

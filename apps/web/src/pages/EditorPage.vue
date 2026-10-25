@@ -23,6 +23,11 @@
 // the page edits at once, the working copy steps aside for the draft's own
 // copy on this device, and publishing is unchanged.
 //
+// An existing, published page is edited on its author's private working
+// branch (#474, docs/features/66): Save draft writes a revision only they and
+// who they share it with can read, and Publish merges it onto the page — or
+// opens a merge request when a gate holds it.
+//
 // A new page can start from a template (issue #69): `/create?template=` opens
 // on the skeleton the gallery rendered, and the template is sent as provenance
 // when the page is created. `/template` inserts one at the cursor of any page,
@@ -39,19 +44,23 @@ import {
   History,
   LayoutTemplate,
   MoreHorizontal,
+  NotepadTextDashed,
   Route,
   Save,
   Settings2,
   Sparkles,
   Undo2,
+  UserPlus,
   X,
 } from 'lucide-vue-next'
 import {
   AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
+  DRAFT_BRANCH_PREFIX,
   collabDocName,
   type CollabCapabilitiesResponse,
   type CompareResponse,
+  type CreateBranchResponse,
   type CreateDocumentResponse,
   type CreateUploadResponse,
   type DocumentCategory,
@@ -61,12 +70,13 @@ import {
   type FinalizeRevisionResponse,
   type ListBranchesResponse,
   type ListCollabDraftsResponse,
+  type PublishBranchResponse,
   type RenderTemplateResponse,
   type RevisionInfo,
 } from '@knowledge/contracts'
 import { SCHEMA_VERSION, editorSchema, parseMarkdown } from '@knowledge/editor-schema'
 import { ApiError, apiFetch, apiFetchText, getWorkspaceId } from '@/lib/api'
-import { errorMessage } from '@/api/errors'
+import { errorDetails, errorMessage, errorReason } from '@/api/errors'
 import { presignedPut } from '@/lib/presigned-put'
 import { labelFor } from '@/lib/labels'
 import { formatDateTime } from '@/lib/format'
@@ -144,6 +154,7 @@ import CollabStatus from '@/components/editor/CollabStatus.vue'
 import CollabPresence from '@/components/editor/CollabPresence.vue'
 import DiffView from '@/components/knowledge/DiffView.vue'
 import EditorAiPanel from '@/components/editor/EditorAiPanel.vue'
+import PageAccessDialog from '@/components/access/PageAccessDialog.vue'
 import { connectDraft } from '@/stores/assistant'
 import { useSidebarStore } from '@/stores/sidebar'
 
@@ -199,6 +210,16 @@ const requestedBranch = typeof route.query.branch === 'string' ? route.query.bra
 const branch = ref<BranchInfo | null>(null)
 /** `branch`'s name when it is not the page's default: its working copy has a slot of its own. */
 const branchSlot = ref<string | null>(null)
+/**
+ * A working branch (#474): the caller's own, or one its owner shared with
+ * them. Saving writes a private revision; Publish merges it onto the page.
+ */
+const onWorkingBranch = computed(() => !isDraft.value && !!branch.value?.name.startsWith(DRAFT_BRANCH_PREFIX))
+/** Who it is shared with is its owner's to change, or an admin's — as the API has it. */
+const canShareBranch = computed(
+  () => onWorkingBranch.value && (branch.value?.ownerId === auth.me?.userId || auth.canAdminWorkspace),
+)
+const shareOpen = ref(false)
 
 /**
  * `/create?parent=&project=&template=` (issue #69): where a new page goes and
@@ -806,6 +827,10 @@ watch(
 /* ---------------------------------------------------------- review */
 
 const reviewOpen = ref(false)
+// The page published past a working branch is looked at once, not kept.
+watch(reviewOpen, (isOpen) => {
+  if (!isOpen) pastCompare.value = null
+})
 
 function openReview() {
   // The model trails typing by the editor's pause; the diff must not.
@@ -816,7 +841,7 @@ function openReview() {
 /** Placement and title changes: not in the source file, so not in the diff. */
 const reviewFieldChanges = computed(() => {
   const base = baseFields.value
-  if (!reviewOpen.value || !base) return []
+  if (!reviewOpen.value || !base || pastCompare.value) return []
   const now = currentFields()
   const pageTitle = (id: string) =>
     id ? (store.items.find((d) => d.documentId === id)?.title ?? id) : t('documents.topLevel')
@@ -848,6 +873,7 @@ const reviewFieldChanges = computed(() => {
 const reviewCompare = computed<CompareResponse | null>(() => {
   const base = baseFields.value
   if (!reviewOpen.value || !base) return null
+  if (pastCompare.value) return pastCompare.value
   const before = buildSource(base, otherFrontmatter.value)
   const after = buildSource(currentFields(), otherFrontmatter.value)
   const { hunks, additions, deletions } = lineDiff(before, after)
@@ -898,8 +924,17 @@ async function loadPage() {
     }
     const byName = (name: string | null) => branches.find((b) => b.name === name)
     if (requestedBranch && !byName(requestedBranch)) toast.error(t('editor.branchNotFound', { name: requestedBranch }))
-    branch.value = byName(requestedBranch) ?? byName(detail.document.defaultBranch) ?? null
-    branchSlot.value = branch.value && branch.value.name !== detail.document.defaultBranch ? branch.value.name : null
+    // A published page is edited on the caller's own working branch (#474),
+    // unless a link named another. A private draft page is private already.
+    const mine =
+      !requestedBranch && !detail.document.draftOwnerId
+        ? (await apiFetch<CreateBranchResponse>(`/v1/documents/${id}/branches/mine`, { method: 'POST' })).branch
+        : null
+    branch.value = mine ?? byName(requestedBranch) ?? byName(detail.document.defaultBranch) ?? null
+    // One working branch at a time per page and person, so it keeps the
+    // page's own slot: edits stored before #474 are offered back, and the
+    // page view's unstaged dot still finds them.
+    branchSlot.value = branch.value && branch.value.name !== detail.document.defaultBranch && !mine ? branch.value.name : null
     const head = branch.value?.headRevisionId ?? detail.document.headRevisionId
     const content =
       head && head !== defaultContent.revisionId
@@ -1019,31 +1054,128 @@ async function publishRevision(
   )
 }
 
-async function save(onTop = false) {
-  if (loadError.value) return
+/** The checks every write passes first: the markdown to write, or null when refused (and the author told why). */
+function readyToWrite(): string | null {
   // Publishing would drop them silently — the serializer skips suggestions — so
   // they are decided first, where the author can see what they are deciding.
   if (aiPending.value.count > 0) {
     toast.error(t('editorAi.decideBeforePublish', { n: aiPending.value.count }, aiPending.value.count))
     setAiOpen(true)
     editorRef.value?.revealAi()
-    return
+    return null
   }
   const markdown = editorRef.value?.flush() ?? body.value
   if (!title.value.trim() || !markdown.trim()) {
     toast.error(t('editor.titleAndContentRequired'))
-    return
+    return null
   }
   if (!projectId.value) {
     toast.error(t('editor.pickProject'))
     settingsOpen.value = true
+    return null
+  }
+  return markdown
+}
+
+/** The page's own fields — title, category, placement. Not versioned, so not on any branch. */
+function patchPageFields() {
+  return apiFetch(`/v1/documents/${editId.value}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      title: title.value,
+      category: category.value,
+      parentId: parentId.value || null,
+      ...(projectId.value ? { projectId: projectId.value } : {}),
+    }),
+  })
+}
+
+/**
+ * A new revision on the branch being edited, with If-Match (plan.md §7).
+ * `patchFields` sends the page fields first, as a publish onto the default
+ * branch always has; a working branch keeps them for its Publish instead.
+ */
+async function writeRevision(markdown: string, sentMessage: string, onTop: boolean, patchFields: boolean): Promise<FinalizeRevisionResponse> {
+  let text = pageSource(markdown)
+  // A shared draft is published as of one snapshot (#80): finalize rebases
+  // the draft onto it, and what peers typed after it stays unpublished. The
+  // revision builds on the draft's base, not on the head this tab loaded:
+  // a peer may have published since. "Publish on top" builds on the head
+  // that moved instead, once the author has seen the difference.
+  let draftFields = {}
+  let ifMatch = headRevisionId.value
+  if (collab.value && branch.value) {
+    const { drafts } = await apiFetch<ListCollabDraftsResponse>(`/v1/documents/${editId.value}/drafts`)
+    const draft = drafts.find((d) => d.branchId === branch.value?.branchId)
+    if (draft) {
+      ifMatch = onTop && headMoved.value ? headMoved.value : draft.baseRevisionId
+      draftFields = { collabDraftId: draft.draftId, draftSnapshot: collab.value.seal() }
+      // Read again in the same tick as the seal: a peer's edit that landed
+      // while the draft was fetched must be in the revision it is marked as.
+      text = pageSource(editorRef.value?.flush() ?? markdown)
+      // Sealing cleared it for everyone; this tab's field follows.
+      message.value = ''
+    }
+  }
+
+  if (patchFields) await patchPageFields()
+  // Claim the empty draft ensureDocumentId may have left, rather than opening
+  // a second revision and orphaning it.
+  const claimed = pendingRevisionId.value
+  pendingRevisionId.value = null
+  const revisionId =
+    claimed ??
+    (
+      await apiFetch<RevisionInfo>(`/v1/documents/${editId.value}/revisions`, {
+        method: 'POST',
+        headers: ifMatch ? { 'If-Match': ifMatch } : {},
+        body: JSON.stringify({
+          ...(branch.value ? { branch: branch.value.name } : {}),
+          message: sentMessage || 'Edited in web editor',
+          contentType: 'text/markdown',
+          ...draftFields,
+        }),
+      })
+    ).revisionId
+  return publishRevision(editId.value as string, revisionId, text)
+}
+
+/**
+ * The editor stays on a working branch after Save draft, so the baseline moves
+ * to what the branch now holds. The body and its frontmatter are in the
+ * revision; the page fields are not, so they stay unstaged until Publish.
+ */
+async function followSavedRevision(revisionId: string) {
+  if (collab.value) {
+    await followHead().catch(() => {})
     return
   }
+  const now = currentFields()
+  headRevisionId.value = revisionId
+  if (baseFields.value) baseFields.value = { ...baseFields.value, body: now.body, relations: now.relations, tags: now.tags }
+}
+
+function onWriteError(e: unknown, sentMessage: string) {
+  // Was a prefix match on the message text, which breaks the moment that
+  // message is translated and could never distinguish a 413 from anything
+  // else. Branch on the envelope instead.
+  if (collab.value && !message.value) message.value = sentMessage
+  if (e instanceof ApiError && e.status === 409) {
+    if (collab.value) void followHead().catch(() => {})
+    if (!headMoved.value) toast.error(t('editor.headMoved'))
+  } else {
+    toast.error(errorMessage(e, t))
+  }
+}
+
+async function save(onTop = false) {
+  if (loadError.value) return
+  const markdown = readyToWrite()
+  if (markdown === null) return
   busy.value = true
   // Read before a shared draft's seal clears it, and put back if the publish fails.
   const sentMessage = message.value
   try {
-    let text = pageSource(markdown)
     if (!isEdit.value) {
       const res = await apiFetch<CreateDocumentResponse>('/v1/documents', {
         method: 'POST',
@@ -1057,79 +1189,95 @@ async function save(onTop = false) {
         }),
       })
       // The body goes to storage, not through the API — see publishRevision.
-      await publishRevision(res.documentId, res.revisionId, text)
+      await publishRevision(res.documentId, res.revisionId, pageSource(markdown))
       workingCopy.settle()
       toast.success(t('editor.draftSaved'))
       await router.push(`/documents/${res.documentId}`)
       return
     }
 
-    // A shared draft is published as of one snapshot (#80): finalize rebases
-    // the draft onto it, and what peers typed after it stays unpublished. The
-    // revision builds on the draft's base, not on the head this tab loaded:
-    // a peer may have published since. "Publish on top" builds on the head
-    // that moved instead, once the author has seen the difference.
-    let draftFields = {}
-    let ifMatch = headRevisionId.value
-    if (collab.value && branch.value) {
-      const { drafts } = await apiFetch<ListCollabDraftsResponse>(`/v1/documents/${editId.value}/drafts`)
-      const draft = drafts.find((d) => d.branchId === branch.value?.branchId)
-      if (draft) {
-        ifMatch = onTop && headMoved.value ? headMoved.value : draft.baseRevisionId
-        draftFields = { collabDraftId: draft.draftId, draftSnapshot: collab.value.seal() }
-        // Read again in the same tick as the seal: a peer's edit that landed
-        // while the draft was fetched must be in the revision it is marked as.
-        text = pageSource(editorRef.value?.flush() ?? markdown)
-        // Sealing cleared it for everyone; this tab's field follows.
-        message.value = ''
-      }
+    const fin = await writeRevision(markdown, sentMessage, onTop, !onWorkingBranch.value)
+    if (onWorkingBranch.value) {
+      await followSavedRevision(fin.revisionId)
+      message.value = ''
+      toast.success(fin.deduplicated ? t('editor.noContentChanges') : t('editor.draftBranch.saved'))
+      return
     }
-
-    // Edit: metadata via PATCH, then a new revision with If-Match (plan.md §7).
-    await apiFetch(`/v1/documents/${editId.value}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        title: title.value,
-        category: category.value,
-        parentId: parentId.value || null,
-        ...(projectId.value ? { projectId: projectId.value } : {}),
-      }),
-    })
-    // Claim the empty draft ensureDocumentId may have left, rather than opening
-    // a second revision and orphaning it.
-    const claimed = pendingRevisionId.value
-    pendingRevisionId.value = null
-    const revisionId =
-      claimed ??
-      (
-        await apiFetch<RevisionInfo>(`/v1/documents/${editId.value}/revisions`, {
-          method: 'POST',
-          headers: ifMatch ? { 'If-Match': ifMatch } : {},
-          body: JSON.stringify({
-            ...(branch.value ? { branch: branch.value.name } : {}),
-            message: sentMessage || 'Edited in web editor',
-            contentType: 'text/markdown',
-            ...draftFields,
-          }),
-        })
-      ).revisionId
-    const fin = await publishRevision(editId.value as string, revisionId, text)
     workingCopy.settle()
     toast.success(fin.deduplicated ? t('editor.noContentChanges') : t('editor.revisionPublished'))
     await router.push(`/documents/${editId.value}`)
   } catch (e) {
-    // Was a prefix match on the message text, which breaks the moment that
-    // message is translated and could never distinguish a 413 from anything
-    // else. Branch on the envelope instead.
-    if (collab.value && !message.value) message.value = sentMessage
-    if (e instanceof ApiError && e.status === 409) {
-      if (collab.value) await followHead().catch(() => {})
-      if (!headMoved.value) toast.error(t('editor.headMoved'))
-    } else {
-      toast.error(errorMessage(e, t))
-    }
+    onWriteError(e, sentMessage)
   } finally {
     busy.value = false
+  }
+}
+
+/* ------------------------------------------------ publishing a branch */
+
+/**
+ * The default head a Publish was refused over (#474): the page was published
+ * since this branch began, and publishing now would replace that with this
+ * version. Set from the 409; the author reviews, then publishes over it.
+ */
+const publishedPast = ref<string | null>(null)
+/** The comparison the review dialog shows while `publishedPast` is being looked at. */
+const pastCompare = ref<CompareResponse | null>(null)
+const publishing = ref(false)
+
+async function reviewPast() {
+  if (!publishedPast.value || !headRevisionId.value) return
+  try {
+    pastCompare.value = await apiFetch<CompareResponse>(
+      `/v1/documents/${editId.value}/compare?from=${publishedPast.value}&to=${headRevisionId.value}&mode=direct`,
+    )
+    reviewOpen.value = true
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  }
+}
+
+/**
+ * Save what is unsaved onto the branch, then publish it: merged onto the page
+ * when nothing holds it, otherwise a merge request opened for review. The page
+ * fields go with it, merged or held — they are not versioned, so they cannot
+ * wait in review.
+ */
+async function publish(onTopOf?: string) {
+  if (loadError.value || !editId.value || !branch.value) return
+  const markdown = readyToWrite()
+  if (markdown === null) return
+  const id = editId.value
+  const branchId = branch.value.branchId
+  busy.value = true
+  publishing.value = true
+  const sentMessage = message.value
+  try {
+    if (unstaged.value) await followSavedRevision((await writeRevision(markdown, sentMessage, false, false)).revisionId)
+    const res = await apiFetch<PublishBranchResponse>(`/v1/documents/${id}/branches/${branchId}/publish`, {
+      method: 'POST',
+      body: JSON.stringify({
+        title: sentMessage.trim() || t('editor.draftBranch.mrTitle', { title: title.value }),
+        ...(onTopOf ? { onTopOf } : {}),
+      }),
+    })
+    await patchPageFields()
+    publishedPast.value = null
+    workingCopy.settle()
+    if (res.merged) {
+      toast.success(t('editor.draftBranch.published'))
+      await router.push(`/documents/${id}`)
+    } else {
+      toast.info(t('editor.draftBranch.held.title'), { description: t(`editor.draftBranch.held.${res.reason ?? 'approvals'}`) })
+      await router.push(`/merge-requests/${res.mergeRequest.mergeRequestId}`)
+    }
+  } catch (e) {
+    const head = errorDetails(e)?.currentHeadRevisionId
+    if (errorReason(e) === 'diverged' && typeof head === 'string') publishedPast.value = head
+    else onWriteError(e, sentMessage)
+  } finally {
+    busy.value = false
+    publishing.value = false
   }
 }
 
@@ -1244,6 +1392,16 @@ onBeforeUnmount(() => {
       <Teleport to="#kn-page-toolbar">
         <div class="kn-bar-start kn-page-crumb">
           <span class="kn-page-state">{{ isEdit ? t('editor.editing') : t('editor.newPage') }}</span>
+          <!-- Whose eyes this edit is under (#474): private until shared or
+               published, readable by the page's readers once in review. -->
+          <span
+            v-if="onWorkingBranch"
+            class="kn-page-state inline-flex items-center gap-1"
+            :title="branch?.restricted ? t('editor.draftBranch.privateHint') : t('editor.draftBranch.inReviewHint')"
+          >
+            <NotepadTextDashed class="size-3.5" aria-hidden="true" />
+            {{ branch?.restricted ? t('editor.draftBranch.private') : t('editor.draftBranch.inReview') }}
+          </span>
           <span v-if="!isEdit && template" class="kn-page-state">
             {{ templateName ? t('editor.fromTemplate', { name: templateName }) : t('editor.fromATemplate') }}
           </span>
@@ -1340,12 +1498,42 @@ onBeforeUnmount(() => {
               </DropdownMenuSub>
             </DropdownMenuContent>
           </DropdownMenu>
+          <!-- A working branch (#474): saving keeps it private, publishing is
+               the act that reaches readers, so it keeps the primary weight. -->
           <Button
+            v-if="canShareBranch"
+            variant="ghost"
             size="sm"
+            :title="t('editor.draftBranch.shareHint')"
+            @click="shareOpen = true"
+          >
+            <UserPlus class="size-4" /> <span class="kn-bar-label">{{ t('editor.draftBranch.share') }}</span>
+          </Button>
+          <Button
+            v-if="onWorkingBranch"
+            size="sm"
+            variant="outline"
             :disabled="busy || loading || loadError !== null || (collab !== null && !collab.status.writable)"
             @click="save()"
           >
-            {{ busy ? t('common.saving') : isDraft ? t('editor.saveDraft') : t('editor.publish') }}
+            {{ busy && !publishing ? t('common.saving') : t('editor.saveDraft') }}
+          </Button>
+          <Button
+            size="sm"
+            :disabled="busy || loading || loadError !== null || (collab !== null && !collab.status.writable)"
+            @click="onWorkingBranch ? publish() : save()"
+          >
+            {{
+              onWorkingBranch
+                ? publishing
+                  ? t('editor.draftBranch.publishing')
+                  : t('editor.publish')
+                : busy
+                  ? t('common.saving')
+                  : isDraft
+                    ? t('editor.saveDraft')
+                    : t('editor.publish')
+            }}
           </Button>
         </div>
       </Teleport>
@@ -1423,6 +1611,20 @@ onBeforeUnmount(() => {
               <Button size="sm" variant="ghost" @click="openReview">{{ t('editor.collab.headMoved.review') }}</Button>
               <Button size="sm" variant="outline" :disabled="busy || !collab?.status.writable" @click="save(true)">
                 {{ t('editor.collab.headMoved.publishOnTop') }}
+              </Button>
+            </div>
+
+            <!-- Published since this branch began (#474): publishing now replaces
+                 that version with this one, so it is looked at first. -->
+            <div v-if="publishedPast" class="kn-stale-copy" role="status">
+              <GitCompareArrows class="size-4 shrink-0" aria-hidden="true" />
+              <div class="min-w-0 flex-1">
+                <p class="font-medium">{{ t('editor.draftBranch.past.title') }}</p>
+                <p class="text-muted-foreground">{{ t('editor.draftBranch.past.body') }}</p>
+              </div>
+              <Button size="sm" variant="ghost" @click="reviewPast">{{ t('editor.draftBranch.past.review') }}</Button>
+              <Button size="sm" variant="outline" :disabled="busy" @click="publish(publishedPast ?? undefined)">
+                {{ t('editor.draftBranch.past.publishOver') }}
               </Button>
             </div>
 
@@ -1543,8 +1745,14 @@ onBeforeUnmount(() => {
       <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <!-- Named like the chip that opened it: a shared draft is unpublished, not unstaged in this browser. -->
-          <DialogTitle>{{ t(collab ? 'editor.collab.unpublished.label' : 'editor.unstaged.reviewTitle') }}</DialogTitle>
-          <DialogDescription>{{ t('editor.unstaged.reviewDesc') }}</DialogDescription>
+          <DialogTitle>
+            {{
+              t(pastCompare ? 'editor.draftBranch.past.reviewTitle' : collab ? 'editor.collab.unpublished.label' : 'editor.unstaged.reviewTitle')
+            }}
+          </DialogTitle>
+          <DialogDescription>
+            {{ t(pastCompare ? 'editor.draftBranch.past.reviewDesc' : 'editor.unstaged.reviewDesc') }}
+          </DialogDescription>
         </DialogHeader>
 
         <dl v-if="reviewFieldChanges.length" class="kn-unstaged-fields">
@@ -1562,7 +1770,15 @@ onBeforeUnmount(() => {
         <p v-else class="text-sm text-muted-foreground">{{ t('editor.unstaged.noSourceChanges') }}</p>
 
         <DialogFooter>
-          <Button v-if="!collab" variant="ghost" class="text-destructive" @click="discardUnstaged">
+          <Button
+            v-if="pastCompare"
+            variant="outline"
+            :disabled="busy || !publishedPast"
+            @click="(reviewOpen = false, publish(publishedPast ?? undefined))"
+          >
+            {{ t('editor.draftBranch.past.publishOver') }}
+          </Button>
+          <Button v-else-if="!collab" variant="ghost" class="text-destructive" @click="discardUnstaged">
             {{ t('editor.unstaged.discardAll') }}
           </Button>
           <!-- A shared draft is everyone's: discarding it resets it for every peer, so it asks first. -->
@@ -1579,6 +1795,16 @@ onBeforeUnmount(() => {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <!-- Who this working branch is shared with (#474): view or edit. -->
+    <PageAccessDialog
+      v-if="canShareBranch && branch && editId"
+      v-model:open="shareOpen"
+      resource-type="document"
+      :resource-id="editId"
+      :title="title"
+      :branch-id="branch.branchId"
+    />
 
     <!-- Page settings: everything that is metadata rather than the page. -->
     <Sheet v-model:open="settingsOpen">

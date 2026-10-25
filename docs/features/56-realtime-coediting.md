@@ -169,6 +169,18 @@ path: notice, review diff against the new head, then **Publish on top** or
 **Discard draft**. There is no automatic content merge; the diff review is the
 only safeguard ([02](../architecture/02-persistence-revisions.md#limits)).
 
+### On a working branch (#474)
+
+Since [66](66-drafts-publishing.md), the editor edits a published page on its
+author's private working branch, so the shared draft it joins is that
+branch's. Only the owner, the people they shared the branch with at edit, and
+admins can join it; the gateway checks the branch on join and on every
+re-check, so a revoked share closes the connection. A revision published from
+it lands on the branch, not the page: the page changes when the branch's
+**Publish** merges it. A revision on a private branch publishes no
+`revision.finalized`, so the editor follows its own save directly
+(`followSavedRevision`) instead of waiting for the event.
+
 ### Discard and generations
 
 `DELETE /v1/documents/:id/drafts/:branchId` (editor) reseeds the row in place

@@ -18,6 +18,10 @@
  * dialog opens — never during SSR. A caller who may not read the roster (a
  * guest handed `manage`) gets an empty picker rather than an error: they can
  * still change levels and remove grants.
+ *
+ * With `branchId` it shares a private working branch of the page instead
+ * (#474): the same grant list at `view` or `edit`, and nothing else — a branch
+ * has no switch, no inheritance and no managers but its owner and admins.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -28,6 +32,7 @@ import {
   type AccessGrantEntry,
   type AccessLevel,
   type AccessResourceType,
+  type BranchAccessResponse,
   type ListUserGroupsResponse,
   type ListWorkspaceMembersResponse,
   type ResourceAccessResponse,
@@ -55,6 +60,8 @@ const props = defineProps<{
   resourceId: string
   /** The page's title or the project's name, for the header. */
   title: string
+  /** A private branch of the page `resourceId` names, shared rather than the page (#474). */
+  branchId?: string
 }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ saved: [ResourceAccessResponse] }>()
@@ -92,11 +99,11 @@ async function load() {
   loadError.value = null
   access.value = null
   try {
-    const res = (
-      props.resourceType === 'project'
-        ? await api.get('/v1/projects/{id}/access', { path: { id: props.resourceId } })
-        : await api.get('/v1/documents/{id}/access', { path: { id: props.resourceId } })
-    ) as ResourceAccessResponse
+    const res = props.branchId
+      ? asResource(await apiFetch<BranchAccessResponse>(branchPath()))
+      : ((props.resourceType === 'project'
+          ? await api.get('/v1/projects/{id}/access', { path: { id: props.resourceId } })
+          : await api.get('/v1/documents/{id}/access', { path: { id: props.resourceId } })) as ResourceAccessResponse)
     seed(res)
     if (res.canManage) void loadCandidates()
   } catch (e) {
@@ -105,6 +112,23 @@ async function load() {
     loading.value = false
   }
 }
+
+const branchPath = () => `/v1/documents/${props.resourceId}/branches/${props.branchId}/access`
+/** A branch's list in the page's shape, so one editor serves both. Its own level is never shown. */
+function asResource(res: BranchAccessResponse): ResourceAccessResponse {
+  return {
+    resourceType: 'document',
+    resourceId: props.resourceId,
+    restricted: res.restricted,
+    draft: false,
+    inherited: [],
+    level: 'view',
+    canManage: res.canManage,
+    grants: res.grants,
+  }
+}
+/** A branch is shared to read or to co-edit; managing it stays with its owner. */
+const levels = computed(() => (props.branchId ? ACCESS_LEVELS.filter((l) => l !== 'manage') : ACCESS_LEVELS))
 
 async function loadCandidates() {
   const ws = getWorkspaceId()
@@ -237,11 +261,11 @@ async function save() {
     grants: manual.value.map(({ subjectType, subjectId, level }) => ({ subjectType, subjectId, level })),
   }
   try {
-    const res = (
-      props.resourceType === 'project'
-        ? await api.put('/v1/projects/{id}/access', { path: { id: props.resourceId }, body })
-        : await api.put('/v1/documents/{id}/access', { path: { id: props.resourceId }, body })
-    ) as ResourceAccessResponse
+    const res = props.branchId
+      ? asResource(await apiFetch<BranchAccessResponse>(branchPath(), { method: 'PUT', body: JSON.stringify({ grants: body.grants }) }))
+      : ((props.resourceType === 'project'
+          ? await api.put('/v1/projects/{id}/access', { path: { id: props.resourceId }, body })
+          : await api.put('/v1/documents/{id}/access', { path: { id: props.resourceId }, body })) as ResourceAccessResponse)
     seed(res)
     savedCount.value += 1
     toast.success(t('access.page.saved'))
@@ -266,9 +290,11 @@ const tabs = computed(() => [
 ])
 
 const heading = computed(() =>
-  props.resourceType === 'project'
-    ? t('access.page.titleProject', { title: props.title })
-    : t('access.page.title', { title: props.title }),
+  props.branchId
+    ? t('access.branch.title', { title: props.title })
+    : props.resourceType === 'project'
+      ? t('access.page.titleProject', { title: props.title })
+      : t('access.page.title', { title: props.title }),
 )
 </script>
 
@@ -278,7 +304,7 @@ const heading = computed(() =>
       <DialogHeader>
         <DialogTitle class="truncate">{{ heading }}</DialogTitle>
         <DialogDescription>
-          {{ resourceType === 'project' ? t('access.page.introProject') : t('access.page.intro') }}
+          {{ branchId ? t('access.branch.intro') : resourceType === 'project' ? t('access.page.introProject') : t('access.page.intro') }}
         </DialogDescription>
       </DialogHeader>
 
@@ -289,7 +315,7 @@ const heading = computed(() =>
       <p v-else-if="loadError" class="text-destructive text-sm">{{ loadError }}</p>
 
       <template v-else-if="access">
-        <PageTabs v-if="access.canManage" v-model="tab" :tabs="tabs" :label="t('access.page.tabsLabel')" />
+        <PageTabs v-if="access.canManage && !branchId" v-model="tab" :tabs="tabs" :label="t('access.page.tabsLabel')" />
 
         <div
           v-show="tab === 'access-settings' || !access.canManage"
@@ -348,7 +374,7 @@ const heading = computed(() =>
               </Button>
             </section>
             <Label
-              v-else
+              v-else-if="!branchId"
               for="kn-access-restricted"
               class="has-[[data-state=checked]]:border-primary flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal"
             >
@@ -406,7 +432,9 @@ const heading = computed(() =>
                 {{
                   mirrored.length
                     ? t('access.page.noManualGrants')
-                    : restricted
+                    : branchId
+                      ? t('access.branch.noGrants')
+                      : restricted
                       ? t('access.page.noGrantsRestricted')
                       : t('access.page.noGrants')
                 }}
@@ -441,7 +469,7 @@ const heading = computed(() =>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem v-for="level in ACCESS_LEVELS" :key="level" :value="level">
+                      <SelectItem v-for="level in levels" :key="level" :value="level">
                         {{ t(`access.level.${level}`) }}
                       </SelectItem>
                     </SelectContent>
@@ -472,10 +500,11 @@ const heading = computed(() =>
                   <UserPlus class="size-3.5" /> {{ t('common.add') }}
                 </Button>
               </form>
-              <p class="text-muted-foreground text-xs">{{ t('access.page.ceilingHint') }}</p>
+              <p v-if="!branchId" class="text-muted-foreground text-xs">{{ t('access.page.ceilingHint') }}</p>
             </section>
           </template>
 
+          <p v-else-if="branchId" class="text-muted-foreground text-xs">{{ t('access.branch.askOwner') }}</p>
           <section v-else class="space-y-2">
             <p class="flex items-center gap-2">
               <Lock v-if="access.restricted" class="size-3.5 shrink-0" aria-hidden="true" />

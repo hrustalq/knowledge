@@ -87,6 +87,10 @@ export function notificationLink(entry: NotificationEntry): string | null {
   if (entry.type.startsWith('access.') && entry.subjectType === 'project' && entry.subjectId) {
     return `/projects/${entry.subjectId}`
   }
+  // Shared a working branch (#474): the edit itself, not the published page.
+  if (entry.type === 'access.granted' && entry.metadata.resourceType === 'branch' && typeof entry.metadata.branch === 'string' && entry.documentId) {
+    return `/documents/${entry.documentId}?branch=${encodeURIComponent(entry.metadata.branch)}`
+  }
   if (entry.documentId) return `/documents/${entry.documentId}`
   return null
 }

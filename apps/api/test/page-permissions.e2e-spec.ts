@@ -750,6 +750,103 @@ describe('page permissions (e2e, #76)', () => {
     });
   });
 
+  describe('editing on a working branch and publishing it (#474, phase 2b)', () => {
+    let page: string;
+    const mine = () => http().post(`/v1/documents/${page}/branches/mine`).set(as(people.alice)).expect(ok(201));
+    const write = async (p: Person, branch: string, text: string) => {
+      const res = await mcp(p, 'knowledge_create_revision', { documentId: page, branch, content: text });
+      expect(res.isError).toBeFalsy();
+      return JSON.parse(res.content[0].text).revisionId as string;
+    };
+    const publish = (branchId: string, body: Record<string, unknown> = {}) =>
+      http().post(`/v1/documents/${page}/branches/${branchId}/publish`).set(as(people.alice)).send({ title: 'Edit', ...body });
+    /** Publish, and when the approval gate holds it, approve as bob and publish again — the env decides which. */
+    const publishThrough = async (branchId: string, body: Record<string, unknown> = {}) => {
+      const first = await publish(branchId, body).expect(ok(201));
+      if (first.body.merged) return first.body;
+      expect(first.body.reason).toBe('approvals');
+      await http().post(`/v1/merge-requests/${first.body.mergeRequest.mergeRequestId}/approve`).set(as(people.bob)).expect(ok(201));
+      const again = await publish(branchId, body).expect(ok(201));
+      expect(again.body.merged).toBe(true);
+      return again.body;
+    };
+    const published = async () =>
+      (await http().get(`/v1/documents/${page}/content`).set(as(people.bob)).expect(ok(200))).body.markdown as string;
+
+    beforeAll(async () => {
+      const created = await http()
+        .post('/v1/documents')
+        .set(as(people.alice))
+        .send({
+          workspaceId: WORKSPACE,
+          projectId,
+          title: `Publishing handbook ${word}`,
+          visibility: 'workspace',
+          content: { mode: 'inline', format: 'markdown', text: `# Handbook\n\nThe first ${word} text.\n` },
+        })
+        .expect(ok(201));
+      page = created.body.documentId;
+    });
+
+    afterAll(async () => {
+      if (page) await http().post(`/v1/documents/${page}/archive`).set(as(people.admin)).send({});
+    });
+
+    it('hands its author one private branch, the same one on every ask, and nobody else sees it', async () => {
+      const first = (await mine()).body.branch;
+      expect(first).toMatchObject({ name: `draft/${people.alice.id}`, restricted: true, ownerId: people.alice.id });
+      expect((await mine()).body.branch.branchId).toBe(first.branchId);
+      const names = (await http().get(`/v1/documents/${page}/branches`).set(as(people.bob)).expect(ok(200))).body.branches;
+      expect(names.map((b: { name: string }) => b.name)).toEqual(['main']);
+    });
+
+    it('refuses an empty publish and a publish by someone it is not shared with, opening nothing', async () => {
+      const { branchId } = (await mine()).body.branch;
+      await publish(branchId).expect(ok(400));
+      await http().post(`/v1/documents/${page}/branches/${branchId}/publish`).set(as(people.bob)).send({ title: 'x' }).expect(ok(403));
+      expect(await prisma.mergeRequest.count({ where: { documentId: page } })).toBe(0);
+    });
+
+    it('a protected default branch holds the publish as a merge request its reviewers can read', async () => {
+      const { branchId, name } = (await mine()).body.branch;
+      await write(people.alice, name, `# Handbook\n\nThe reviewed ${word} text.\n`);
+      await prisma.documentBranch.update({ where: { documentId_name: { documentId: page, name: 'main' } }, data: { protected: true } });
+      try {
+        const held = await publish(branchId).expect(ok(201));
+        expect(held.body).toMatchObject({ merged: false, reason: 'protected' });
+        const mr = held.body.mergeRequest.mergeRequestId;
+        expect(await status(people.bob, `/v1/merge-requests/${mr}/diff`)).toBe(200);
+        expect(await published()).not.toContain('reviewed');
+      } finally {
+        await prisma.documentBranch.update({ where: { documentId_name: { documentId: page, name: 'main' } }, data: { protected: false } });
+      }
+    });
+
+    it('publishing merges it onto the page, and the next edit starts a fresh private branch', async () => {
+      const { branchId } = (await mine()).body.branch;
+      const done = await publishThrough(branchId);
+      expect(done.mergeRequest.status).toBe('merged');
+      expect(await published()).toContain('reviewed');
+      expect(await prisma.mergeRequest.count({ where: { documentId: page } })).toBe(1);
+      const next = (await mine()).body.branch;
+      expect(next).toMatchObject({ name: `draft/${people.alice.id}-2`, restricted: true });
+      expect(next.branchId).not.toBe(branchId);
+    });
+
+    it('refuses a publish over a head the author has not seen, and lands over it once named', async () => {
+      const { branchId, name } = (await mine()).body.branch;
+      await write(people.alice, name, `# Handbook\n\nThe ${word} text, mine again.\n`);
+      const theirs = await write(people.bob, 'main', `# Handbook\n\nThe ${word} text, bob's.\n`);
+      const mrsBefore = await prisma.mergeRequest.count({ where: { documentId: page } });
+      const refused = await publish(branchId).expect(ok(409));
+      expect(refused.body.details).toMatchObject({ reason: 'diverged', currentHeadRevisionId: theirs });
+      // Refused before an MR could make the branch readable.
+      expect(await prisma.mergeRequest.count({ where: { documentId: page } })).toBe(mrsBefore);
+      await publishThrough(branchId, { onTopOf: theirs });
+      expect(await published()).toContain('mine again');
+    });
+  });
+
   describe('access requests', () => {
     it('request → duplicate 409 → approve opens the subtree to the requester', async () => {
       const body = { workspaceId: WORKSPACE, resourceType: 'document', resourceId: ids.C, level: 'view' };

@@ -63,6 +63,13 @@ in the pull request that introduces them — see
   bare revision, and goes through the same merge gates as any merge request (#474). The page's title,
   category and place in the tree still change at Publish and are not part of the review.
 
+### Fixed
+
+- Search no longer drops a good match because a better one was a page the reader cannot open, an
+  archived page, or one outside the search's filters (#526). The relevance floors are now measured
+  against the best hit the search can actually return. Before, a project-filtered search could come
+  back short or empty when another project held a closer match.
+
 ### Operations
 
 - Migration `20261213100000_document_draft_owner` adds a nullable `documents.draft_owner_id`. Additive:

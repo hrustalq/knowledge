@@ -30,6 +30,8 @@ import type { PrismaService } from '../src/prisma/prisma.service.js';
 const WORKSPACE = '76000000-0000-4076-8076-000000000076';
 const INDEX_TIMEOUT_MS = 120_000;
 const RESTAMP_TIMEOUT_MS = 30_000;
+/** Seven searches, each an embedder round trip: a cold local Ollama takes seconds per call. */
+const SEARCHES_TIMEOUT_MS = 60_000;
 
 type Role = 'admin' | 'editor' | 'guest';
 type Person = { id: string; email: string; key: string; keyId: string };
@@ -122,7 +124,8 @@ describe('page permissions (e2e, #76)', () => {
         content: {
           mode: 'inline',
           format: 'markdown',
-          text: `# ${titles[key]}\n\nThe ${word} procedure for ${key}: who signs it, where the record lives, and when it is reviewed.\n`,
+          // The title in the body too: BM25 reads chunk text only, never the heading (#526).
+          text: `# ${titles[key]}\n\nThe ${word} procedure for ${titles[key]}: who signs it, where the record lives, and when it is reviewed.\n`,
         },
       })
       .expect(ok(201));
@@ -209,6 +212,17 @@ describe('page permissions (e2e, #76)', () => {
     people.bob = await person('bob', 'editor');
     people.gus = await person('gus', 'guest');
     projectId = (await prisma.project.create({ data: { workspaceId: WORKSPACE, name: `ACL e2e ${nonce}` } })).id;
+    // Earlier runs' pages are archived, not deleted, so both search stores keep
+    // them, and their near-identical text fills a small over-fetch before this
+    // run's pages are reached (#526). Destroy them; the last-project rule is
+    // why this run's project exists first.
+    for (const old of await prisma.project.findMany({ where: { workspaceId: WORKSPACE, id: { not: projectId } } })) {
+      await http()
+        .delete(`/v1/projects/${old.id}`)
+        .query({ mode: 'cascade', confirm: old.name })
+        .set(as(people.admin))
+        .expect(ok(200));
+    }
 
     const group = await http()
       .post('/v1/groups')
@@ -325,7 +339,7 @@ describe('page permissions (e2e, #76)', () => {
       }
       // P and C rank first for this query; two visible pages still come back.
       expect(await search(people.bob, 'semantic', 2)).toHaveLength(2);
-    });
+    }, SEARCHES_TIMEOUT_MS);
 
     it('stamps the restriction onto the search stores within a sweeper tick', async () => {
       const deadline = Date.now() + RESTAMP_TIMEOUT_MS;

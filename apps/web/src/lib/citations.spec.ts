@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { AssistantSource } from '@knowledge/contracts'
-import { CITE_MARKER_RE, citeLabels, citeNumber, headingAnchor, sourceByCite, sourceHref, verificationTone } from './citations'
+import {
+  CITE_MARKER_RE,
+  citeLabels,
+  citeNumber,
+  headingAnchor,
+  sourceByCite,
+  sourceHref,
+  unsupportedMarkers,
+  verificationTone,
+} from './citations'
 
 /**
  * The read side of sentence citations (docs/features/38). `decorateCitations`
@@ -51,5 +60,28 @@ describe('verificationTone', () => {
     expect(verificationTone('flagged')).toBe('bad')
     expect(verificationTone('unverified')).toBe('none')
     expect(verificationTone(undefined)).toBe('none')
+  })
+})
+
+describe('unsupportedMarkers (#530)', () => {
+  // Offsets as the API stores them: a sentence span ends after its markers.
+  const text = 'Deploys run on Tuesdays. [S1] Use `arr[S2]` here. [S2]\n\n```\nx = y[S3]\n```\n\nThe bot is Hermes. [S3]'
+  const span = (sentence: string) => {
+    const start = text.indexOf(sentence)
+    return { start, end: start + sentence.length }
+  }
+
+  it('counts markers in drawing order, skipping code, and picks those closing an unsupported sentence', () => {
+    const citations = [
+      { ...span('Deploys run on Tuesdays. [S1]'), cites: ['S1'], support: 'supported' as const },
+      { ...span('Use `arr[S2]` here. [S2]'), cites: ['S2'] },
+      { ...span('The bot is Hermes. [S3]'), cites: ['S3'], support: 'unsupported' as const },
+    ]
+    // Markers drawn: [S1] = 0, [S2] = 1, [S3] = 2; the two inside code are not.
+    expect([...unsupportedMarkers(text, citations)]).toEqual([2])
+  })
+
+  it('is empty with no marks', () => {
+    expect(unsupportedMarkers(text, undefined).size).toBe(0)
   })
 })

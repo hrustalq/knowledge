@@ -11,7 +11,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { BookmarkCheck, BookmarkPlus, Check, Copy, CornerDownRight, Pencil, RotateCcw, Sparkles, X } from 'lucide-vue-next'
+import { BookmarkCheck, BookmarkPlus, Check, CircleHelp, Copy, CornerDownRight, Pencil, RotateCcw, Sparkles, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type { AssistantFlowAnswer, AssistantMessageInfo, AssistantUiBlock, CaptureResult } from '@knowledge/contracts'
 import { assistantSourceHref, assistantSourceKey, isChatSource, isPageSource, isWebSource } from '@knowledge/contracts'
@@ -23,7 +23,15 @@ import AnswerConfidence from './AnswerConfidence.vue'
 import AnswerFeedback from './AnswerFeedback.vue'
 import SourceChip from './SourceChip.vue'
 import { toolVocabulary } from './tool-vocabulary'
-import { citeOfEvent, decorateCitations, highlightCite, sourceByCite, sourceHref } from '@/lib/citations'
+import {
+  citeOfEvent,
+  decorateCitations,
+  highlightCite,
+  markUnsupported,
+  sourceByCite,
+  sourceHref,
+  unsupportedMarkers,
+} from '@/lib/citations'
 import { api } from '@/api/client'
 import { errorMessage } from '@/api/errors'
 import { answerText, type AnswerTurn, type FlowStep } from '@/lib/flow-steps'
@@ -75,9 +83,19 @@ const knownCites = computed(() => new Set(props.message.sources.map((s) => s.cit
 const activeCite = ref<string | null>(null)
 let answerRoot: HTMLElement | null = null
 
+// Sentences the decision model found unsupported (#530). The marks can land
+// after the text — the check runs once the answer is shown — so they are
+// re-applied when they change, not only on render.
+const unsupported = computed(() =>
+  props.streamingText === undefined ? unsupportedMarkers(props.message.content, props.message.citations) : new Set<number>(),
+)
+const unsupportedSentences = computed(() => (props.message.citations ?? []).filter((c) => c.support === 'unsupported').length)
+watch(unsupported, (markers) => markUnsupported(answerRoot, markers, t('assistant.unsupportedCite')))
+
 function onRendered(root: HTMLElement) {
   answerRoot = root
   decorateCitations(root, knownCites.value)
+  markUnsupported(root, unsupported.value, t('assistant.unsupportedCite'))
   if (root.dataset.knCitesBound) return
   root.dataset.knCitesBound = '1'
   const enter = (e: Event) => {
@@ -324,12 +342,20 @@ function saveEdit() {
 
       <!-- What it used, and what it read: the receipts for the answer above. -->
       <footer
-        v-if="message.toolCalls.length > 0 || message.sources.length > 0 || (message.confidence && !qa)"
+        v-if="message.toolCalls.length > 0 || message.sources.length > 0 || ((message.confidence || unsupportedSentences > 0) && !qa)"
         class="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-1"
       >
         <!-- First, because it is the one receipt that is about the answer as a
              whole; everything after it is about one step or one page. -->
         <AnswerConfidence v-if="message.confidence && !qa" :confidence="message.confidence" />
+        <span
+          v-if="unsupportedSentences > 0 && !qa"
+          class="inline-flex items-center gap-1 text-caption text-panel-caution-ink"
+          :title="t('assistant.unsupportedCite')"
+        >
+          <CircleHelp class="size-3" aria-hidden="true" />
+          {{ t('assistant.unsupportedSentences', { n: unsupportedSentences }, unsupportedSentences) }}
+        </span>
         <span
           v-for="(tc, i) in message.toolCalls"
           :key="`t-${i}`"

@@ -7,6 +7,7 @@ import { DocumentsModule } from '../documents/documents.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { AssistantClientModule } from './assistant-client.module.js';
+import { DecisionClientModule } from './decision-client.module.js';
 import { AssistantReadToolsModule } from './assistant-read-tools.module.js';
 import { AssistantToolsService } from './assistant.tools.js';
 import { WebResearchModule } from './web-research.module.js';
@@ -34,6 +35,8 @@ import { FlowsCoreModule } from '../flows/flows-core.module.js';
     // every injection site for no gain (docs/features/25).
     AiCoreModule,
     AssistantClientModule,
+    // The citation support check after every answer (#530).
+    DecisionClientModule,
     // The read half of the tool surface, which AssistantToolsService delegates
     // to and the agent worker loads on its own (see the module's own note).
     AssistantReadToolsModule,

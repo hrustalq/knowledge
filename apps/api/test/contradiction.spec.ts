@@ -227,13 +227,13 @@ describe('prefilterPairs (#530)', () => {
     const r = await prefilterPairs(pairs, ask, 0.2, () => false);
     expect(ask).toHaveBeenCalledTimes(pairs.length);
     expect(r.kept).toEqual(['a', 'c', 'e', 'g', 'i', 'j']);
-    expect(r).toMatchObject({ asked: 10, failed: 0, stopped: null });
+    expect(r).toMatchObject({ asked: 10, stopped: null });
   });
 
   it('keeps a pair whose question failed — the judge sees it as before', async () => {
     const r = await prefilterPairs(pairs, async (x) => (x === 'b' ? Promise.reject(new Error('503')) : p[x]!), 0.2, () => false);
     expect(r.kept).toContain('b');
-    expect(r.failed).toBe(1);
+    expect(r.asked).toBe(9);
   });
 
   it('stops asking on a fatal error and keeps everything not yet asked', async () => {

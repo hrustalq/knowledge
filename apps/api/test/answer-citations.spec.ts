@@ -9,6 +9,9 @@ import {
   finalizeCitations,
   labelsOf,
   splitSentences,
+  checkSupport,
+  notePassage,
+  SUPPORT_PASSAGE_CHARS,
 } from '../src/assistant/citations.js';
 
 /**
@@ -169,5 +172,42 @@ describe('CITATION_CLAUSE', () => {
   it('names the label scheme and the current page', () => {
     expect(CITATION_CLAUSE).toContain('S1');
     expect(CITATION_CLAUSE).toContain('[S2]');
+  });
+});
+
+describe('checkSupport / notePassage (#530)', () => {
+  const text = 'Deploys run on Tuesdays. [S1] The bot is Hermes. [S2] Ask in #ops. [S3]';
+  const final = finalizeCitations(text, new Set(['S1', 'S2', 'S3']));
+
+  it('asks once per cited sentence with a passage, marks by threshold, and leaves the rest unmarked', async () => {
+    const passages = new Map([
+      ['S1', 'We deploy on Tuesdays.'],
+      ['S2', 'Our bot is Zeus.'],
+    ]);
+    const asked: Array<{ sentence: string; passages: Record<string, string> }> = [];
+    const ps = [0.8, 0.1];
+    const out = await checkSupport(final.text, final.citations, passages, async (state) => (asked.push(state), ps.shift()!), 0.5, () => false);
+    expect(asked.map((a) => a.sentence)).toEqual(['Deploys run on Tuesdays.', 'The bot is Hermes.']);
+    expect(Object.keys(asked[0]!.passages)).toEqual(['S1']);
+    expect(out.map((c) => c.support)).toEqual(['supported', 'unsupported', undefined]);
+    // A mark, never an edit.
+    expect(out.map(({ start, end, cites }) => ({ start, end, cites }))).toEqual(final.citations);
+  });
+
+  it('leaves a sentence unmarked when its question fails', async () => {
+    const out = await checkSupport(final.text, final.citations, new Map([['S1', 'x']]), async () => Promise.reject(new Error('503')), 0.5, () => false);
+    expect(out[0]!.support).toBeUndefined();
+  });
+
+  it('notePassage keeps each distinct piece once, capped', () => {
+    const passages = new Map<string, string>();
+    notePassage(passages, 'S1', 'a');
+    notePassage(passages, 'S1', 'a');
+    notePassage(passages, 'S1', 'b');
+    notePassage(passages, undefined, 'c');
+    notePassage(passages, 'S2', '  ');
+    expect([...passages]).toEqual([['S1', 'a\n\nb']]);
+    notePassage(passages, 'S3', 'x'.repeat(SUPPORT_PASSAGE_CHARS + 50));
+    expect(passages.get('S3')!.length).toBe(SUPPORT_PASSAGE_CHARS);
   });
 });

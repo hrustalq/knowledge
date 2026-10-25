@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import type { AssistantAskSource, AssistantChatSource, DocumentTreeNode } from '@knowledge/contracts';
+import { assistantSourceKey } from '@knowledge/contracts';
 import { ChatSearchService } from '../chat/chat-search.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
@@ -570,6 +571,7 @@ export class AssistantReadToolsService {
         }),
         ok: true,
         sources: [source],
+        passages: new Map([[assistantSourceKey(source), content.markdown.slice(0, MAX_DOC_CHARS)]]),
       };
     } catch {
       return this.fail(`Document "${doc.title}" has no readable content yet (draft or unindexed)`);

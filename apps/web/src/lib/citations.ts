@@ -1,4 +1,4 @@
-import type { AssistantAskSource, AssistantSource } from '@knowledge/contracts'
+import type { AnswerCitation, AssistantAskSource, AssistantSource } from '@knowledge/contracts'
 import { isWebSource } from '@knowledge/contracts'
 import { slugifyHeading } from '@/lib/markdown/render'
 
@@ -103,6 +103,50 @@ export function decorateCitations(root: HTMLElement, known?: ReadonlySet<string>
     text.replaceWith(frag)
   }
   return count
+}
+
+/** Fenced blocks and inline code: where neither the API nor `decorateCitations` reads a marker. */
+const CODE_RE = /^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^[ \t]*\1[ \t]*$|(?![\s\S]))|`[^`\n]+`/gm
+
+/**
+ * Which markers, counted in the order `decorateCitations` draws them, close a
+ * sentence the decision model marked unsupported (#530). Counted from the
+ * stored text: a citation's offsets are into it, and code is skipped on both
+ * sides, so the n-th marker here is the n-th `.kn-cites` there.
+ */
+export function unsupportedMarkers(content: string, citations: readonly AnswerCitation[] | undefined): Set<number> {
+  const out = new Set<number>()
+  const flagged = (citations ?? []).filter((c) => c.support === 'unsupported')
+  if (!flagged.length) return out
+  const code: Array<[number, number]> = []
+  for (const m of content.matchAll(CODE_RE)) code.push([m.index, m.index + m[0].length])
+  let n = 0
+  for (const m of content.matchAll(new RegExp(CITE_MARKER_RE.source, 'gi'))) {
+    if (code.some(([a, b]) => m.index >= a && m.index < b) || citeLabels(m[0]).length === 0) continue
+    if (flagged.some((c) => m.index >= c.start && m.index < c.end)) out.add(n)
+    n++
+  }
+  return out
+}
+
+/**
+ * Draw the unsupported marks on an already decorated answer: idempotent, so it
+ * runs after every render and again when the marks arrive after the text did.
+ * `label` is what a screen reader and a hover hear; the dashed caution ring is
+ * the visible half, so the mark is never colour alone.
+ */
+export function markUnsupported(root: HTMLElement | null, markers: ReadonlySet<number>, label: string): void {
+  if (!root) return
+  root.querySelectorAll<HTMLElement>('.kn-cites').forEach((sup, i) => {
+    const on = markers.has(i)
+    sup.classList.toggle('kn-cites-unsupported', on)
+    for (const btn of sup.querySelectorAll<HTMLElement>('.kn-cite')) {
+      if (on) btn.title = label
+      else btn.removeAttribute('title')
+      if (on) btn.setAttribute('aria-description', label)
+      else btn.removeAttribute('aria-description')
+    }
+  })
 }
 
 /** Toggle the hover/focus highlight on every marker for one label. */

@@ -1,5 +1,6 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type {
+  AnswerCitation,
   AnswerSurface,
   AssistantAskResponse,
   AssistantAskSource,
@@ -38,7 +39,7 @@ import { canSee, type Audience } from '../permissions/access-scope.js';
 import { SearchService } from '../search/search.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import type { Principal } from '../auth/principal.js';
-import { AssistantClient, type AiCallContext } from './assistant.client.js';
+import { AssistantClient, ProviderAccountError, type AiCallContext } from './assistant.client.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
@@ -67,7 +68,16 @@ import { applyDraftEdit, refuseDraftEdit } from './draft-edits.js';
 import { templateClause } from './template-clause.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { scanPartialObject } from './partial-args.js';
-import { CITATION_CLAUSE, CiteLabels, answerSignals, finalizeCitations } from './citations.js';
+import {
+  CITATION_CLAUSE,
+  CiteLabels,
+  answerSignals,
+  checkSupport,
+  finalizeCitations,
+  notePassage,
+  SUPPORT_QUESTION,
+} from './citations.js';
+import { DecisionClient } from './decision.client.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
 import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 
@@ -278,6 +288,8 @@ interface PreparedTurn {
   draft: string | null;
   /** Hands every gathered source its `S#` label (docs/features/38). */
   labels: CiteLabels;
+  /** What each label's source said, for the citation support check (#530). */
+  passages: Map<string, string>;
   /** Tool calls that came back `ok: false` — a confidence signal. */
   toolErrors: number;
   /** The user's message this turn answers, kept for the implicit feedback signal (docs/features/38). */
@@ -298,6 +310,8 @@ interface PreparedTurn {
  */
 @Injectable()
 export class AssistantService {
+  private readonly logger = new Logger(AssistantService.name);
+
   constructor(
     private readonly client: AssistantClient,
     private readonly tools: AssistantToolsService,
@@ -321,6 +335,7 @@ export class AssistantService {
     private readonly env: ConfigService,
     private readonly permissions: PermissionService,
     private readonly learnings: AgentLearningsService,
+    private readonly decision: DecisionClient,
   ) {}
 
   /**
@@ -510,6 +525,8 @@ export class AssistantService {
     const collected = new Map<string, AssistantAskSource>([
       [document.id, labels.tag({ documentId: document.id, title: document.title, factClass: 'explicit' })],
     ]);
+    const passages = new Map<string, string>();
+    notePassage(passages, labels.label(document.id), markdown);
     let toolErrors = 0;
     const { content, trace } = await this.client.runWithTools(
       call,
@@ -527,12 +544,15 @@ export class AssistantService {
           // what proves it rather than a cast.
           if (!isPageSource(source)) continue;
           if (!collected.has(source.documentId)) collected.set(source.documentId, source);
+          notePassage(passages, labels.label(source), result.passages?.get(assistantSourceKey(source)) ?? source.snippet);
         }
         return { content: result.content, ok: result.ok };
       },
     );
 
     const settled = await this.settleAnswer(dto.workspaceId, content, [...collected.values()], labels, trace, toolErrors, call.config.maxToolCalls);
+    // One-shot: nothing is shown until this returns, so the check runs inline (#530).
+    const citations = (await this.markSupport(dto.workspaceId, principal.userId, settled, passages)) ?? settled.citations;
     this.feedback.recordSignal({
       workspaceId: dto.workspaceId,
       surface: 'ask',
@@ -552,7 +572,7 @@ export class AssistantService {
       sources: settled.sources as AssistantAskSource[],
       toolCalls: trace,
       model: call.config.model,
-      citations: settled.citations,
+      citations,
       confidence: settled.confidence,
     };
   }
@@ -953,7 +973,43 @@ export class AssistantService {
       workspaceId: thread.workspaceId,
       subjectId: thread.id,
     });
+    // After the answer is shown, never before it: ~2.5 s per batch of
+    // sentences. The marks land on the stored message, and the same event
+    // tells the pane to re-read it (#530).
+    void this.markSupport(thread.workspaceId, principal.userId, settled, turn.passages, thread.id)
+      .then(async (citations) => {
+        if (!citations) return;
+        await this.threads.setCitations(assistantMessage.id, citations);
+        await this.events.publish({ type: 'assistant.turn.finished', workspaceId: thread.workspaceId, subjectId: thread.id });
+      })
+      .catch((err: unknown) => this.logger.warn({ msg: 'citation support check failed', threadId: thread.id, error: String(err) }));
     return assistantMessage;
+  }
+
+  /**
+   * The citation support check (#530): with a Decisions route, one noul per
+   * cited sentence over the passages its labels were handed out with. Null
+   * when there is no route or nothing to check, so the caller leaves the
+   * citations as `finalizeCitations` settled them.
+   */
+  private async markSupport(
+    workspaceId: string,
+    userId: string,
+    settled: { text: string; citations: AnswerCitation[] },
+    passages: ReadonlyMap<string, string>,
+    threadId?: string,
+  ): Promise<AnswerCitation[] | null> {
+    if (settled.citations.length === 0 || passages.size === 0) return null;
+    const route = await this.decision.routeFor(workspaceId);
+    if (!route) return null;
+    return checkSupport(
+      settled.text,
+      settled.citations,
+      passages,
+      (state) => this.decision.noul({ route, userId, operation: 'citation_check', ...(threadId ? { threadId } : {}) }, state, SUPPORT_QUESTION),
+      route.thresholds.citation,
+      (error) => error instanceof ProviderAccountError,
+    );
   }
 
   /**
@@ -1045,6 +1101,7 @@ export class AssistantService {
       // (a web page), so the chips number as one series.
       turn.labels.tag(source);
       if (!turn.collected.has(key)) turn.collected.set(key, source);
+      notePassage(turn.passages, source.cite, result.passages?.get(key) ?? source.snippet);
     }
     if (result.uiBlock) turn.uiBlocks.push(result.uiBlock);
     if (result.prompt && !turn.prompt) turn.prompt = result.prompt;
@@ -1257,6 +1314,11 @@ export class AssistantService {
       }
       manualDocs.push({ id, title: doc.title, markdown });
     }
+    // What S1 and each attached page said, for the support check (#530). The
+    // editor's S1 is the draft the model was shown, not the published page.
+    const passages = new Map<string, string>();
+    if (groundingDoc) notePassage(passages, labels.label(groundingDoc.id), draft ? draft.markdown : groundingMarkdown);
+    for (const d of manualDocs) notePassage(passages, labels.label(d.id), d.markdown);
     const manualDocsBlock = manualDocs
       .map(
         (d) =>
@@ -1358,6 +1420,7 @@ export class AssistantService {
       flow: null,
       draft: draft ? draft.markdown : null,
       labels,
+      passages,
       toolErrors: 0,
       question: dto.content,
     };

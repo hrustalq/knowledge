@@ -130,7 +130,9 @@ export function fetchApi<P extends PathsWithMethod<ApiPaths, 'get'>>(
   opts?: RequestOptions<Op<P, 'get'>>,
   { fresh = false }: { fresh?: boolean } = {},
 ) {
-  return queryClient.fetchQuery({ ...apiQueryOptions(url, opts), ...(fresh ? { staleTime: 0 } : {}) })
+  // No retry: the caller owns its failure (a Retry button, a toast), and two
+  // silent retries would hold an error state back for seconds.
+  return queryClient.fetchQuery({ ...apiQueryOptions(url, opts), retry: false, ...(fresh ? { staleTime: 0 } : {}) })
 }
 
 /** One observer per store and slot — see bindStoreQuery. Keyed by `toRaw(store)` for the reason stores/documents.ts gives (#279). */
@@ -182,7 +184,7 @@ export async function bindStoreQuery<T>(
       slots.set(slot, created)
     }
   }
-  apply((await queryClient.fetchQuery({ ...options, ...(fresh ? { staleTime: 0 } : {}) } as never)) as T)
+  apply((await queryClient.fetchQuery({ ...options, retry: false, ...(fresh ? { staleTime: 0 } : {}) } as never)) as T)
 }
 
 /** Stop following a slot — a scope change that is not refetching it, so it must not keep writing the old scope's answer back. */

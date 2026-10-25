@@ -23,6 +23,12 @@ in the pull request that introduces them — see
   search skips the embedding call, and every page view and search skips the settings read. Nothing
   filtered by page permissions is ever cached, a settings change reaches every process on the next
   request, and with Redis down every read still answers from its source.
+- The web app can be installed on desktop and mobile (#472): a web manifest, icons, and a service worker
+  that keeps the app's code on the device, so a cold start downloads only the page itself. After a
+  deploy an open tab offers **Reload** and keeps working until you take it. While the network is gone
+  the app says so, and opening a page offline shows an offline notice instead of the browser's error
+  page. The worker never stores a page, an API response or a rendered member page, and signing out
+  removes it together with everything it cached.
 
 ### Changed
 
@@ -47,6 +53,8 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- The second line of a toast was barely readable in dark mode: it kept the toast library's light-theme
+  grey (#472).
 - The page picker in a workflow's **Start** dialog listed no pages (#472).
 - Opening a page's editor in two tabs at the same moment could fail one of them with **Internal server
   error**: both asked for the author's working branch and the second insert collided (#472).
@@ -56,6 +64,10 @@ in the pull request that introduces them — see
 - Two env vars, both defaulted (#472): `READ_CACHE_ENABLED` (`false`) and `READ_CACHE_DEFAULT_TTL_MS`
   (`3600000`). Set them in the GitHub `production` environment before the release that ships them —
   `deploy.yml` refuses a variable the environment lacks. Leave the cache off until it has been measured.
+- The first app visit after a release fills the service worker in the background with the app's code,
+  about 8.5 MiB before compression (#472). Later releases fetch only the files that changed. Nothing
+  to configure: `sw.js` and the manifest are served with `max-age=0, must-revalidate`, like the HTML
+  shells.
 
 ## [0.34.0] — 2026-10-26
 

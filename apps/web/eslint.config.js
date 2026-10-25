@@ -52,6 +52,7 @@ const RAW_FETCH = [
 const RAW_FETCH_OK = [
   'src/lib/assistant-stream.ts', // a streamed response body
   'src/lib/use-page-view.ts', // a keepalive beacon that outlives the tab
+  'src/sw.ts', // the service worker passes a navigation through; there is no client in it
   'src/components/api-reference/ApiTryConsole.vue', // try-it: the request is the reader's own
   'src/components/api-reference/ApiTestRun.vue', // the same, for a suite run in the browser
   'src/entry-public.ts', // the public SSR entry: no member client, no credential

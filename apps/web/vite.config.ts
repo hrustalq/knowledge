@@ -2,10 +2,29 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig(({ isSsrBuild }) => ({
-  plugins: [vue(), tailwindcss()],
+  plugins: [
+    vue(),
+    tailwindcss(),
+    // The member app's service worker (#472): src/sw.ts, given the client
+    // build's precache list. Registered from lib/pwa.ts; the manifest is a
+    // static file in public/, linked from index.html only.
+    VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectRegister: false,
+      manifest: false,
+      injectManifest: {
+        // Code and the offline page, never an HTML shell: index.html and
+        // reader.html are SSR templates, not pages.
+        globPatterns: ['assets/**/*.{js,css,woff2,svg,png}', 'offline.html', 'favicon.svg'],
+      },
+    }),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

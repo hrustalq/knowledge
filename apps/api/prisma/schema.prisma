@@ -101,6 +101,12 @@ model Document {
   /// inside the transaction that changed a path, a project or a switch.
   /// GIN-indexed in the migration (not expressible here).
   restrictedBy          String[]  @default([]) @map("restricted_by") @db.Uuid
+  /// A private draft (#474): the person who created it, until they publish.
+  /// Set together with `restricted` and their `manage` grant, so every reader
+  /// already hides it; this column only tells a draft from a page restricted
+  /// on purpose, and is what publish clears. Null = published, the state of
+  /// every page before #474. No FK, house policy.
+  draftOwnerId          String?   @map("draft_owner_id") @db.Uuid
   /// Bumped whenever `restricted_by` changes; the search stores are re-stamped
   /// until `acl_stamped_version` catches up (#76, phase 3).
   aclVersion            Int       @default(0) @map("acl_version")

@@ -65,7 +65,7 @@ describe('community prior under page restrictions (e2e, #475)', () => {
     const res = await http()
       .post('/v1/documents')
       .set(as(people.admin))
-      .send({ workspaceId: WORKSPACE, projectId, title, content: { mode: 'inline', format: 'markdown', text: `# ${title}\n\n${text}\n` } })
+      .send({ workspaceId: WORKSPACE, projectId, title, visibility: 'workspace', content: { mode: 'inline', format: 'markdown', text: `# ${title}\n\n${text}\n` } })
       .expect(ok(201));
     ids[key] = res.body.documentId;
     return res.body.revisionId as string;

@@ -5748,6 +5748,63 @@
         ]
       }
     },
+    "/v1/documents/{id}/publish": {
+      "post": {
+        "operationId": "DocumentsController_publish",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Open a private draft to the workspace (#474): lifts its restriction and drops the grants it was shared with; it keeps its parent's and project's restrictions. Needs manage on the page. A no-op on a published page",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/v1/documents/{id}/content": {
       "get": {
         "operationId": "DocumentsController_content",
@@ -33762,7 +33819,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.32.1",
+    "version": "0.33.1",
     "contact": {}
   },
   "tags": [],
@@ -34892,6 +34949,14 @@
                 "$ref": "#/components/schemas/DocumentTemplateDto"
               }
             ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "workspace"
+            ],
+            "description": "Who may open the new page (#474). `private` (when omitted) is a draft only its author can open until `POST /v1/documents/:id/publish`; the author shares it through the page's access grants. `workspace` opens it at once, under its parent's and project's restrictions."
           }
         },
         "required": [

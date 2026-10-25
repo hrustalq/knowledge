@@ -6,7 +6,7 @@
 import { computed, inject, ref, watch, watchPostEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { Lock } from 'lucide-vue-next'
+import { Lock, NotepadTextDashed } from 'lucide-vue-next'
 import TreeBranch from '@/components/tree/TreeBranch.vue'
 import TreeRow from '@/components/tree/TreeRow.vue'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
@@ -172,9 +172,19 @@ const dnd = useTreeDndRow({
         </RouterLink>
       </template>
       <!-- Restricted (#76): this page, an ancestor or the project is not open
-           to the whole workspace. A glyph rather than a word, for the width. -->
+           to the whole workspace. A glyph rather than a word, for the width.
+           A private draft (#474) is restricted too, but says what it is. -->
       <span
-        v-if="node.restricted"
+        v-if="node.draftOwnerId"
+        class="grid shrink-0 place-items-center text-muted-foreground/70"
+        role="img"
+        :aria-label="t('access.draft.label')"
+        :title="t('access.draft.label')"
+      >
+        <NotepadTextDashed class="size-3" aria-hidden="true" />
+      </span>
+      <span
+        v-else-if="node.restricted"
         class="grid shrink-0 place-items-center text-muted-foreground/70"
         role="img"
         :aria-label="t('access.lockedLabel')"

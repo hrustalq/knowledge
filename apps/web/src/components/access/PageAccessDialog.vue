@@ -22,7 +22,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { Lock, LockOpen, Trash2, UserPlus, Users } from 'lucide-vue-next'
+import { Lock, LockOpen, NotepadTextDashed, Trash2, UserPlus, Users } from 'lucide-vue-next'
 import {
   ACCESS_LEVELS,
   type AccessGrantEntry,
@@ -124,6 +124,22 @@ watch(open, (isOpen) => {
   tab.value = 'access-settings'
   void load()
 }, { immediate: true })
+
+/** Open a private draft to the workspace (#474), then show where it now stands. */
+const publishing = ref(false)
+async function publish() {
+  publishing.value = true
+  try {
+    await apiFetch(`/v1/documents/${props.resourceId}/publish`, { method: 'POST' })
+    toast.success(t('access.draft.published'))
+    await load()
+    if (access.value) emit('saved', access.value)
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  } finally {
+    publishing.value = false
+  }
+}
 
 /* ------------------------------------------------------------ editing */
 
@@ -314,7 +330,25 @@ const heading = computed(() =>
 
           <!-- A manager edits; everyone else is told where they stand. -->
           <template v-if="access.canManage">
+            <!-- A private draft (#474) leaves its restriction one way, so the
+                 switch is not offered: publishing tells its watchers, the
+                 switch would not. The grants below are who it is shared with. -->
+            <section
+              v-if="access.draft"
+              class="flex items-start gap-3 rounded-md border p-3"
+              aria-labelledby="kn-access-draft"
+            >
+              <NotepadTextDashed class="text-muted-foreground mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <div class="min-w-0 flex-1 space-y-0.5">
+                <p id="kn-access-draft" class="font-medium">{{ t('access.draft.label') }}</p>
+                <p class="text-muted-foreground text-xs">{{ t('access.draft.dialogNote') }}</p>
+              </div>
+              <Button size="sm" variant="outline" class="shrink-0" :disabled="publishing" :title="t('access.draft.publishHint')" @click="publish">
+                {{ t('access.draft.publish') }}
+              </Button>
+            </section>
             <Label
+              v-else
               for="kn-access-restricted"
               class="has-[[data-state=checked]]:border-primary flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal"
             >

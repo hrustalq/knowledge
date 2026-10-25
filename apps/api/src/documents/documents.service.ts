@@ -73,6 +73,7 @@ import {
 } from '@knowledge/contracts';
 import { WORKSPACE_READER } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { AclEventsService } from '../permissions/acl-events.service.js';
 import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
 
@@ -122,6 +123,7 @@ export class DocumentsService {
     private readonly permissions: PermissionService,
     private readonly apiSpecs: ApiSpecsService,
     private readonly apiFixtures: ApiFixturesService,
+    private readonly aclEvents: AclEventsService,
   ) {}
 
   async createDocument(input: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
@@ -167,6 +169,10 @@ export class DocumentsService {
     // the column default — one insert instead of insert-then-update. The
     // `@default(uuid())` stays for anyone who does not go through this method.
     const id = randomUUID();
+    // Unset is `workspace`: only the REST route and the MCP tool, where a
+    // person is writing, default to `private` (#474). System writers keep
+    // creating pages the workspace sees, without having to say so.
+    const isPrivate = dto.visibility === 'private';
     const position = await this.prisma.document.count({
       where: { projectId: dto.projectId, parentId: dto.parentId ?? null },
     });
@@ -190,8 +196,26 @@ export class DocumentsService {
           position,
           templateRef: template?.ref ?? null,
           templateVersion: template?.version ?? null,
+          // #474: a private draft is an ordinary restricted page whose author
+          // manages it, so every reader that honours restrictions hides it
+          // with no code of its own. The marker tells it apart from a page
+          // restricted on purpose; `publishDraft` clears all three.
+          ...(isPrivate ? { restricted: true, draftOwnerId: authorId } : {}),
         },
       });
+      if (isPrivate) {
+        await this.prisma.accessGrant.create({
+          data: {
+            workspaceId: dto.workspaceId,
+            resourceType: 'document',
+            resourceId: id,
+            subjectType: 'user',
+            subjectId: authorId,
+            level: 'manage',
+            createdBy: authorId,
+          },
+        });
+      }
       // A page is born under its parent's and project's restrictions (#76).
       await this.permissions.recomputeRestrictedBy({ documentId: id });
       const branch = await this.prisma.documentBranch.create({
@@ -217,6 +241,9 @@ export class DocumentsService {
       await this.prisma.documentRevision.update({ where: { id: revision.id }, data: { s3Key } });
       return { document, revision: { ...revision, s3Key } };
     });
+    // A new restricted node is missing from every cached scope's `denied` set,
+    // so live gateways must forget those before this page's first event goes out.
+    if (isPrivate) this.prisma.onCommit(() => this.aclEvents.changed(dto.workspaceId, authorId));
 
     // Explicit relations (plan.md §5 "explicit" fact class) go straight to the graph.
     //
@@ -672,6 +699,7 @@ export class DocumentsService {
     | 'templateRef'
     | 'templateVersion'
     | 'restricted'
+    | 'draftOwnerId'
   > {
     return {
       verifiedAt: d.verifiedAt?.toISOString() ?? null,
@@ -693,6 +721,7 @@ export class DocumentsService {
       templateRef: d.templateRef,
       templateVersion: d.templateVersion,
       restricted: d.restrictedBy.length > 0,
+      draftOwnerId: d.draftOwnerId,
     };
   }
 
@@ -1025,6 +1054,45 @@ export class DocumentsService {
       frontmatter: Object.keys(parsed.data ?? {}).length > 0 ? (parsed.data as Record<string, unknown>) : null,
       markdown: parsed.content,
     };
+  }
+
+  /**
+   * Open a private draft to the workspace (#474): clear the marker, lift its
+   * own restriction and drop the grants it was shared with, in one
+   * transaction, so it ends like any page that was never a draft and keeps
+   * only what its parent and project restrict. A child is not published with
+   * it, and a draft under a draft stays hidden until the parent is published.
+   *
+   * Guarded on the marker, so a second publish changes and announces nothing.
+   * Watchers hear about the page here, through `document.published`, and not
+   * at creation, when nobody but the author could open it.
+   */
+  async publishDraft(documentId: string, actorId: string): Promise<DocumentDetailResponse> {
+    const document = await this.getDocumentOrThrow(documentId);
+    const published = await this.prisma.withTransaction(async () => {
+      const { count } = await this.prisma.document.updateMany({
+        where: { id: documentId, draftOwnerId: { not: null } },
+        data: { draftOwnerId: null, restricted: false },
+      });
+      if (count === 0) return false;
+      await this.prisma.accessGrant.deleteMany({
+        where: { resourceType: 'document', resourceId: documentId, origin: 'manual' },
+      });
+      await this.permissions.recomputeRestrictedBy({ documentId });
+      return true;
+    });
+    if (published) {
+      await this.aclEvents.changed(document.workspaceId, actorId);
+      await this.activity.record({
+        workspaceId: document.workspaceId,
+        actor: actorId,
+        action: 'document.published',
+        documentId,
+        projectId: document.projectId,
+        metadata: { title: document.title },
+      });
+    }
+    return this.getDocument(documentId);
   }
 
   /** Features 07 + 08 (docs/features): rename, recategorize, move in the tree. */
@@ -1452,6 +1520,7 @@ export class DocumentsService {
       ownerId: d.ownerId,
       archivedAt: d.archivedAt?.toISOString() ?? null,
       restricted: d.restrictedBy.length > 0,
+      draftOwnerId: d.draftOwnerId,
       children: [],
       childCount: childCount ?? 0,
     };

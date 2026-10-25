@@ -15,7 +15,12 @@ import {
 import type { Request, Response } from 'express';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiHeader, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import type { CompareMode, DocumentConnectorResponse, PushDocumentResponse } from '@knowledge/contracts';
+import type {
+  CompareMode,
+  DocumentConnectorResponse,
+  DocumentDetailResponse,
+  PushDocumentResponse,
+} from '@knowledge/contracts';
 import { ConnectorLinksService } from '../connectors/connector-links.service.js';
 import { ConnectorProducer } from '../connectors/connector.producer.js';
 import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.js';
@@ -93,7 +98,8 @@ export class DocumentsController {
       projectId: dto.projectId,
       ...(dto.parentId ? { parentId: dto.parentId } : {}),
     });
-    return this.documents.createDocument(dto, principal?.userId);
+    // A person writing a page starts it private (#474) unless they say otherwise.
+    return this.documents.createDocument({ ...dto, visibility: dto.visibility ?? 'private' }, principal?.userId);
   }
 
   @Get()
@@ -215,6 +221,25 @@ export class DocumentsController {
     @CurrentPrincipal() principal: Principal,
   ) {
     return this.documents.moveDocument(id, dto, principal?.userId);
+  }
+
+  @Post(':id/publish')
+  @Access('editor', 'document')
+  @ApiOperation({
+    summary:
+      'Open a private draft to the workspace (#474): lifts its restriction and drops the grants it was shared with; ' +
+      'it keeps its parent\'s and project\'s restrictions. Needs manage on the page. A no-op on a published page',
+  })
+  async publish(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<DocumentDetailResponse> {
+    await this.permissions.requireLevel(
+      await this.permissions.scopeForDocument(principal, id),
+      { type: 'document', id },
+      'manage',
+    );
+    return this.documents.publishDraft(id, principal.userId);
   }
 
   // `:id/verify`, `:id/verification-request`, `:id/outdated`, `:id/archive` and

@@ -160,6 +160,9 @@ const editId = ref<string | null>((route.params.id as string | undefined) ?? nul
 // Embed groups show the snapshots of what this page has published (#470).
 provide(EMBED_DOCUMENT, editId)
 const isEdit = computed(() => editId.value !== null)
+// A new page is born a private draft (#474), so saving it publishes to nobody
+// but its author; the page itself offers Publish. Read from the page on load.
+const isDraft = ref(true)
 
 const title = ref('')
 const category = ref<DocumentCategory>('other')
@@ -901,6 +904,7 @@ async function loadPage() {
       head && head !== defaultContent.revisionId
         ? await apiFetch<DocumentContentResponse>(`/v1/documents/${id}/content?revision=${head}`)
         : defaultContent
+    isDraft.value = !!detail.document.draftOwnerId
     title.value = detail.document.title
     category.value = detail.document.category
     parentId.value = detail.document.parentId ?? ''
@@ -1054,7 +1058,7 @@ async function save(onTop = false) {
       // The body goes to storage, not through the API — see publishRevision.
       await publishRevision(res.documentId, res.revisionId, text)
       workingCopy.settle()
-      toast.success(t('editor.documentCreated'))
+      toast.success(t('editor.draftSaved'))
       await router.push(`/documents/${res.documentId}`)
       return
     }
@@ -1340,7 +1344,7 @@ onBeforeUnmount(() => {
             :disabled="busy || loading || loadError !== null || (collab !== null && !collab.status.writable)"
             @click="save()"
           >
-            {{ busy ? t('common.saving') : isEdit ? t('editor.publish') : t('editor.createAndIndex') }}
+            {{ busy ? t('common.saving') : isDraft ? t('editor.saveDraft') : t('editor.publish') }}
           </Button>
         </div>
       </Teleport>

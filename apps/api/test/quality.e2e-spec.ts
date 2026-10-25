@@ -77,6 +77,7 @@ describe('docs quality reads (e2e, #74)', () => {
       .set(as(people.admin))
       .send({
         workspaceId,
+        visibility: 'workspace',
         projectId: project,
         title,
         content: { mode: 'inline', format: 'markdown', text: `# ${title}\n\nThe ${nonce} procedure, step by step.\n` },

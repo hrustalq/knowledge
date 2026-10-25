@@ -3,9 +3,11 @@ import {
   API_DOCUMENT_KINDS,
   AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
+  DOCUMENT_VISIBILITIES,
   type ApiDocumentKind,
   type AuthorableRelationType,
   type DocumentCategory,
+  type DocumentVisibility,
 } from '@knowledge/contracts';
 import { Type } from 'class-transformer';
 import {
@@ -183,6 +185,17 @@ export class CreateDocumentDto {
   @ValidateNested()
   @Type(() => DocumentTemplateDto)
   template?: DocumentTemplateDto;
+
+  @ApiPropertyOptional({
+    enum: DOCUMENT_VISIBILITIES,
+    description:
+      'Who may open the new page (#474). `private` (when omitted) is a draft only its author can open until ' +
+      '`POST /v1/documents/:id/publish`; the author shares it through the page\'s access grants. `workspace` ' +
+      'opens it at once, under its parent\'s and project\'s restrictions.',
+  })
+  @IsOptional()
+  @IsIn(DOCUMENT_VISIBILITIES as unknown as string[])
+  visibility?: DocumentVisibility;
 }
 
 export class UpdateDocumentDto {

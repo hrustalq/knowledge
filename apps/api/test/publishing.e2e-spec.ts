@@ -41,6 +41,7 @@ describe('publishing (e2e)', () => {
       .post('/v1/documents')
       .send({
         workspaceId: WORKSPACE,
+        visibility: 'workspace',
         projectId,
         title,
         ...(parent ? { parentId: parent } : {}),

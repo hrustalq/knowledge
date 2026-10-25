@@ -1260,6 +1260,7 @@ export type I18nTranslations = {
             "editRequired": string;
             "manageRequired": string;
             "selfLockout": string;
+            "draftPublishFirst": string;
             "unknownSubjects": string;
             "usersWithoutView": string;
             "requestDuplicate": string;

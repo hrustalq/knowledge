@@ -280,6 +280,8 @@ export type I18nTranslations = {
             "budgetSpent": string;
             "findingTitle": string;
             "summary": string;
+            "screened": string;
+            "screeningStopped": string;
         };
         "atlas": string;
         "atlasDesc": string;
@@ -752,6 +754,9 @@ export type I18nTranslations = {
             "exists": string;
             "headMoved": string;
             "needsFinalized": string;
+            "hidden": string;
+            "defaultNotPrivate": string;
+            "publishDefault": string;
         };
         "collab": {
             "branchNotFound": string;
@@ -870,6 +875,7 @@ export type I18nTranslations = {
             "pluginHostUnresolved": string;
             "pluginUrlPrivate": string;
             "providerNone": string;
+            "decisionNeedsGenApi": string;
             "agentNotFound": string;
             "agentScheduleNeedsOwner": string;
             "agentScheduleNeedsInterval": string;
@@ -1260,6 +1266,7 @@ export type I18nTranslations = {
             "editRequired": string;
             "manageRequired": string;
             "selfLockout": string;
+            "draftPublishFirst": string;
             "unknownSubjects": string;
             "usersWithoutView": string;
             "requestDuplicate": string;
@@ -1269,6 +1276,9 @@ export type I18nTranslations = {
             "alreadyGranted": string;
             "levelAboveRole": string;
             "requestSelf": string;
+            "branchRestricted": string;
+            "branchManageRequired": string;
+            "branchLevel": string;
         };
         "capture": {
             "disabled": string;

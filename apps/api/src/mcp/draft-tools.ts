@@ -24,7 +24,11 @@ export interface McpDraftTools {
 export interface DraftToolDeps {
   drafts: McpDraftTools;
   principal: Principal;
-  guard: { doc(documentId: string, role: WorkspaceRole): Promise<unknown> };
+  guard: {
+    doc(documentId: string, role: WorkspaceRole): Promise<unknown>;
+    /** A private branch narrows the page (#474). */
+    branches(documentId: string, refs: { branchNames?: string[] }, role: WorkspaceRole): Promise<unknown>;
+  };
   json(value: unknown): { content: Array<{ type: 'text'; text: string }> };
 }
 
@@ -59,6 +63,7 @@ export function registerDraftTools(server: McpServer, deps: DraftToolDeps): void
     },
     async ({ documentId, branch: name }) => {
       await guard.doc(documentId, 'viewer');
+      if (name) await guard.branches(documentId, { branchNames: [name] }, 'viewer');
       return json({ draft: await drafts.read(documentId, name) });
     },
   );
@@ -84,6 +89,7 @@ export function registerDraftTools(server: McpServer, deps: DraftToolDeps): void
     },
     async ({ documentId, branch: name, op, anchor, markdown }) => {
       await guard.doc(documentId, 'editor');
+      if (name) await guard.branches(documentId, { branchNames: [name] }, 'editor');
       return json(await drafts.suggest(principal, documentId, name, { op, anchor: anchor ?? null, markdown }));
     },
   );

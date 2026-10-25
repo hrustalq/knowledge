@@ -4,6 +4,7 @@ import type {
   AiPurpose,
   AiSettingsSourceMap,
   CaptureSettings,
+  DecisionSettings,
   ExternalAiActionsSettings,
   WebAccessSettings,
 } from '@knowledge/contracts';
@@ -14,6 +15,7 @@ import { SourcePolicyService } from './source-policy.service.js';
 import { decryptSecret, parseKey } from './secret-box.js';
 import { resolveExternalAiActions } from './external-ai-actions.js';
 import { resolveCaptureSettings } from './capture-settings.js';
+import { resolveDecisionSettings } from './decision-settings.js';
 
 /**
  * Per-provider defaults so `provider=deepseek` works with nothing but an API
@@ -51,6 +53,9 @@ const MODEL_PRICES: Record<string, { prompt: number; completion: number }> = {
   'gpt-4-1': { prompt: 2, completion: 8 },
   'claude-sonnet-4-5': { prompt: 3, completion: 15 },
   'claude-opus-4-5': { prompt: 5, completion: 25 },
+  // TypeSafe Jev through gen-api (#530): input only, output is free.
+  'jev-1-13': { prompt: 0.042, completion: 0 },
+  'jev-latest': { prompt: 0.042, completion: 0 },
 };
 
 /** Effective assistant configuration for one workspace: DB overrides ∪ env ∪ provider defaults. */
@@ -219,6 +224,16 @@ export class AiConfigService {
   }
 
   /**
+   * A workspace's decision pre-filter thresholds (#530) and whether the
+   * deployment allows decision calls at all. Read uncached, like
+   * `captureSettings`: asked once per run, answer or harvest.
+   */
+  async decisionSettings(workspaceId: string): Promise<DecisionSettings> {
+    const row = await this.prisma.aiSettings.findUnique({ where: { workspaceId } });
+    return resolveDecisionSettings(row, this.config.get('DECISION_PROVIDER', { infer: true }) !== 'none');
+  }
+
+  /**
    * The config for one purpose, honouring provider profiles.
    *
    * Resolution order, first hit wins:
@@ -269,14 +284,10 @@ export class AiConfigService {
   private async routedProviderId(workspaceId: string, purpose: AiPurpose): Promise<string | null> {
     const row = await this.prisma.aiSettings.findUnique({
       where: { workspaceId },
-      select: { chatProviderId: true, reviewProviderId: true, extractionProviderId: true },
+      select: { chatProviderId: true, reviewProviderId: true, extractionProviderId: true, decisionProviderId: true },
     });
     if (!row) return null;
-    return purpose === 'chat'
-      ? row.chatProviderId
-      : purpose === 'review'
-        ? row.reviewProviderId
-        : row.extractionProviderId;
+    return { chat: row.chatProviderId, review: row.reviewProviderId, extraction: row.extractionProviderId, decision: row.decisionProviderId }[purpose];
   }
 
   /** Called by every write to ai_settings so the next resolve() sees it immediately. */

@@ -150,11 +150,13 @@ export interface SearchPool {
  */
 export function rankPool(pool: SearchPool, knobs: SearchKnobs): string[] {
   const prior = communityPrior(pool.communities, knobs);
-  const weighted = fuseHits(floorVectorHits(pool.vectorHits, knobs), floorTextHits(pool.textHits), pool.fetchK, knobs.rrfK).flatMap((h) => {
-    const page = pool.pages.get(h.documentId);
-    if (!page || page.archived) return [];
+  // Before the floors, as in the service (#526): a floor measures against a hit the search can return.
+  const admits = (h: ChunkHit) => pool.pages.get(h.documentId)?.archived === false;
+  const vector = floorVectorHits(pool.vectorHits.filter(admits), knobs);
+  const weighted = fuseHits(vector, floorTextHits(pool.textHits.filter(admits)), pool.fetchK, knobs.rrfK).map((h) => {
+    const page = pool.pages.get(h.documentId)!;
     const weight = pool.trustOn ? trustWeight(page.status, page.inactive, knobs.trustWeights) : 1;
-    return [{ documentId: h.documentId, score: h.score * weight * (prior.get(h.documentId) ?? 1) }];
+    return { documentId: h.documentId, score: h.score * weight * (prior.get(h.documentId) ?? 1) };
   });
   if (pool.trustOn || prior.size > 0) weighted.sort((a, b) => b.score - a.score);
   return weighted.slice(0, pool.k).map((w) => w.documentId);

@@ -305,7 +305,7 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
     const workspaceId = await this.drafts.workspaceOfBranch(name.documentId, name.branchId);
     if (!workspaceId || workspaceId !== name.workspaceId) throw deny('forbidden');
-    const access = await this.accessTo(principal, workspaceId, name.documentId);
+    const access = await this.accessTo(principal, workspaceId, name.documentId, name.branchId);
     if (access === 'none') throw deny('forbidden');
     connectionConfig.readOnly = access === 'read';
     await this.settled(documentName);
@@ -331,14 +331,22 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
   }
 
-  /** What the page's permissions let the principal do with it now (feature 48). */
-  private async accessTo(principal: Principal, workspaceId: string, documentId: string): Promise<Access> {
+  /**
+   * What the page's permissions let the principal do with this branch's draft
+   * now (feature 48): the page level, narrowed by a private branch (#474).
+   */
+  private async accessTo(principal: Principal, workspaceId: string, documentId: string, branchId: string): Promise<Access> {
     const resource = { type: 'document' as const, id: documentId };
     const allows = (role: 'viewer' | 'editor') =>
-      this.permissions.requireResource(principal, workspaceId, resource, role, false).then(
-        () => true,
-        () => false,
-      );
+      this.permissions
+        .requireResource(principal, workspaceId, resource, role, false)
+        .then(() =>
+          this.permissions.requireBranches(principal, workspaceId, documentId, { branchIds: [branchId] }, role === 'viewer' ? 'view' : 'edit'),
+        )
+        .then(
+          () => true,
+          () => false,
+        );
     if (!(await allows('viewer'))) return 'none';
     return (await allows('editor')) ? 'write' : 'read';
   }
@@ -406,11 +414,13 @@ export class CollabGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       for (const connection of document.getConnections()) {
         const { principal, workspaceId, documentId } = connection.context;
         if (scope !== 'all' && !scope.has(workspaceId)) continue;
+        const branchId = parseCollabDocName(document.name)?.branchId;
+        if (!branchId) continue;
         try {
           let reason: CollabDenyReason | null = null;
           if (!(await this.tokenAuth.isCurrent(principal))) reason = 'unauthorized';
           else {
-            const access = await this.accessTo(principal, workspaceId, documentId);
+            const access = await this.accessTo(principal, workspaceId, documentId, branchId);
             if (access === 'none') reason = 'forbidden';
             else if ((access === 'read') !== connection.readOnly) reason = 'access-changed';
           }

@@ -126,6 +126,7 @@ describe('workspace deletion (e2e, #479)', () => {
       .set(as(admin))
       .send({
         workspaceId,
+        visibility: 'workspace',
         projectId,
         title: `Teardown runbook ${nonce}`,
         content: { mode: 'inline', format: 'markdown', text: `# Teardown runbook ${nonce}\n\nDepends on [[service:billing-${nonce}]].\n` },

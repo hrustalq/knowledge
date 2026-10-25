@@ -162,6 +162,7 @@ export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
         document: {
           select: {
             workspaceId: true,
+            title: true,
             restrictedBy: true,
             defaultBranch: true,
             branches: { select: { name: true, headRevisionId: true } },
@@ -173,7 +174,7 @@ export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
     });
     let repaired = 0;
     for (const rev of due) {
-      const { workspaceId, restrictedBy, defaultBranch, branches } = rev.document;
+      const { workspaceId, title, restrictedBy, defaultBranch, branches } = rev.document;
       const live = branches.find((b) => b.name === defaultBranch)?.headRevisionId === rev.id;
       try {
         const chunks = await this.graph.getRevisionChunkTexts(workspaceId, rev.id);
@@ -181,7 +182,7 @@ export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
           workspaceId,
           rev.id,
           chunks.map((c) => ({ ...c, revisionId: rev.id })),
-          { live, aclNodes: restrictedBy },
+          { live, aclNodes: restrictedBy, title },
         );
         if (live) await this.fulltext.setLiveRevision(workspaceId, rev.documentId, rev.id);
         // Re-mirrored rows are written unstamped (#81).

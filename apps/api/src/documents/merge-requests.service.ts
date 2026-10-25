@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DEFAULT_API_BREAKING_CHANGE_POLICY, isApiSpecKind } from '@knowledge/contracts';
 import type {
@@ -17,6 +17,7 @@ import type {
   MergeRequestProvenance,
   MergeRequestStatus,
   MergeStrategy,
+  PublishBranchResponse,
 } from '@knowledge/contracts';
 import type { DocumentBranch, MergeRequest, MergeRequestReviewer } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -29,7 +30,7 @@ import { EventsPublisher } from '../events/events.publisher.js';
 import { WORKSPACE_READER, type Principal } from '../auth/principal.js';
 import { DOCUMENT_ARCHIVED, DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
-import type { CreateMergeRequestDto, UpdateMergeRequestDto } from './dto/merge-requests.dto.js';
+import type { CreateMergeRequestDto, PublishBranchDto, UpdateMergeRequestDto } from './dto/merge-requests.dto.js';
 import { t } from '../i18n/t.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
@@ -146,6 +147,13 @@ export class MergeRequestsService {
         ...(opts.captureId ? { captureId: opts.captureId } : {}),
       },
       include: MR_INCLUDE,
+    });
+    // A merge request is read by everyone who can read the page, so a private
+    // branch it names stops being private (#474). Only someone who may edit
+    // that branch got this far (the guard holds `sourceBranch` and `targetBranch`).
+    await this.prisma.documentBranch.updateMany({
+      where: { id: { in: [source.id, target.id] }, restricted: true },
+      data: { restricted: false },
     });
     const page = await this.recordActivity(mr.documentId, 'merge-request.created', mr.id, authorId, {
       title: dto.title,
@@ -616,10 +624,17 @@ export class MergeRequestsService {
     return { mergeRequest: await this.toDetail(updated) };
   }
 
+  /**
+   * `opts.onTopOf` (#474, `publishBranch` only): the target head the author
+   * reviewed after it moved past the source. The merge lands over that head
+   * instead of refusing as diverged — the source's content wins, as it does
+   * for a shared draft's "Publish on top" — and over no other head.
+   */
   async merge(
     mergeRequestId: string,
     strategy: MergeStrategy = 'merge-commit',
     principal?: Principal,
+    opts: { onTopOf?: string } = {},
   ): Promise<MergeMergeRequestResponse> {
     const mr = await this.getMrOrThrow(mergeRequestId);
     if (mr.status !== 'open') {
@@ -690,17 +705,11 @@ export class MergeRequestsService {
     if (mergeBase === sourceHeadId) {
       throw new BadRequestException(t('error.mergeRequest.nothingToMerge'));
     }
-    if (targetHeadId && mergeBase !== targetHeadId) {
+    if (targetHeadId && mergeBase !== targetHeadId && opts.onTopOf !== targetHeadId) {
       // Fast-forward precondition (plan.md §7 conflict semantics): the target
       // advanced past the merge base. 3-way content merge is future work —
       // rebase the source branch (new revision on top of target head) instead.
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.mergeRequest.diverged', { target: mr.targetBranch.name, source: mr.sourceBranch.name }),
-        reason: 'diverged',
-        currentHeadRevisionId: targetHeadId,
-        comparisonUrl: `/v1/documents/${mr.documentId}/compare?from=${targetHeadId}&to=${sourceHeadId}&mode=merge-base`,
-      });
+      throw this.diverged(mr.documentId, mr.targetBranch, mr.sourceBranch, targetHeadId, sourceHeadId);
     }
     // Breaking API changes (#78), last because it parses two specs: the target
     // head is the merge base here, so this is the diff the panel showed.
@@ -809,6 +818,86 @@ export class MergeRequestsService {
       mergeRequest: await this.toDetail(updated),
       mergedRevision: mergedRevision ? toRevisionInfo(mergedRevision) : null,
     };
+  }
+
+  /**
+   * Publish a working branch onto the page's default branch (#474): open a
+   * merge request from it — or reuse the open one — and merge it at once. When
+   * a gate refuses (a protected branch for a non-admin, approvals, lint, a
+   * breaking API change, a draft MR) the merge request stays open for review
+   * and `merged` is false. Nothing to publish and a default head the author has
+   * not seen are refused first, so a refused publish never opens anything.
+   */
+  async publishBranch(
+    documentId: string,
+    branchId: string,
+    dto: PublishBranchDto,
+    principal?: Principal,
+  ): Promise<PublishBranchResponse> {
+    const document = await this.prisma.document.findUnique({ where: { id: documentId } });
+    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
+    const source = await this.prisma.documentBranch.findFirst({ where: { id: branchId, documentId } });
+    if (!source) throw new NotFoundException(t('error.branch.hidden'));
+    const target = await this.getBranchOrThrow(documentId, document.defaultBranch);
+    if (source.id === target.id) throw new BadRequestException(t('error.branch.publishDefault'));
+    const sourceHeadId = source.headRevisionId;
+    if (!sourceHeadId) throw new BadRequestException(t('error.mergeRequest.sourceNotFinalized', { branch: source.name }));
+    const targetHeadId = target.headRevisionId;
+    const mergeBase = targetHeadId ? await this.compare.findMergeBase(documentId, targetHeadId, sourceHeadId) : null;
+    if (mergeBase === sourceHeadId) throw new BadRequestException(t('error.mergeRequest.nothingToMerge'));
+    if (targetHeadId && mergeBase !== targetHeadId && dto.onTopOf !== targetHeadId) {
+      throw this.diverged(documentId, target, source, targetHeadId, sourceHeadId);
+    }
+
+    const open = await this.prisma.mergeRequest.findFirst({
+      where: { documentId, sourceBranchId: source.id, targetBranchId: target.id, status: 'open' },
+      select: { id: true },
+    });
+    const mrId =
+      open?.id ?? (await this.create(documentId, { sourceBranch: source.name, title: dto.title }, principal?.userId)).mergeRequest.mergeRequestId;
+    const held = async (reason: PublishBranchResponse['reason']): Promise<PublishBranchResponse> => ({
+      ...(await this.get(mrId)),
+      mergedRevision: null,
+      merged: false,
+      reason,
+    });
+
+    // merge() asks for admin on a protected target and throws; here that is a
+    // review to wait for, not an error.
+    if (target.protected && principal) {
+      const admin = await this.access.requireRole(principal, document.workspaceId, 'admin').then(
+        () => true,
+        (e: unknown) => {
+          if (e instanceof ForbiddenException) return false;
+          throw e;
+        },
+      );
+      if (!admin) return held('protected');
+    }
+    try {
+      return { ...(await this.merge(mrId, 'merge-commit', principal, { onTopOf: dto.onTopOf })), merged: true, reason: null };
+    } catch (e) {
+      const reason = e instanceof ConflictException ? (e.getResponse() as { reason?: unknown }).reason : undefined;
+      if (reason === 'approvals' || reason === 'lint' || reason === 'breaking-api' || reason === 'draft') return held(reason);
+      throw e;
+    }
+  }
+
+  /** The fast-forward refusal (plan.md §7), with the comparison a client shows before publishing on top. */
+  private diverged(
+    documentId: string,
+    target: DocumentBranch,
+    source: DocumentBranch,
+    targetHeadId: string,
+    sourceHeadId: string,
+  ): ConflictException {
+    return new ConflictException({
+      statusCode: 409,
+      message: t('error.mergeRequest.diverged', { target: target.name, source: source.name }),
+      reason: 'diverged',
+      currentHeadRevisionId: targetHeadId,
+      comparisonUrl: `/v1/documents/${documentId}/compare?from=${targetHeadId}&to=${sourceHeadId}&mode=merge-base`,
+    });
   }
 
   /** 409 when an open MR already exists for the same (source, target) pair. */

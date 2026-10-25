@@ -96,6 +96,14 @@ export interface MergeMergeRequestResponse {
   mergedRevision: RevisionInfo | null;
 }
 
+// POST /v1/documents/:id/branches/:branchId/publish (#474)
+export interface PublishBranchResponse extends MergeMergeRequestResponse {
+  /** False when a gate refused: the merge request stays open for review. */
+  merged: boolean;
+  /** The gate that refused (`protected`: the default branch is protected and the caller is no admin). */
+  reason: MergeGateConflictDetails['reason'] | 'protected' | null;
+}
+
 /** 409 error envelope for If-Match / merge conflicts (plan.md §7): details always carries a comparison link. */
 export interface RevisionConflictResponse extends ApiErrorPayload {
   code: 'CONFLICT';

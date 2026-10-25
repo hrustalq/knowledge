@@ -35,11 +35,13 @@ import {
   Lock,
   LockOpen,
   MoreHorizontal,
+  NotepadTextDashed,
   Plug,
   Info,
   Network,
   Pencil,
   Scale,
+  Send,
   Share2,
   Workflow as WorkflowIcon,
   ListTree,
@@ -52,6 +54,7 @@ import type {
   ComponentDeclarationView,
   DocumentConnectorResponse,
   DocumentContentResponse,
+  ListBranchesResponse,
   ResolvedAsOf,
   DocumentDetailResponse,
   ListActivityResponse,
@@ -333,6 +336,29 @@ function onAccessSaved() {
 }
 
 /**
+ * Publish is the draft's owner's (#474), or a workspace admin's; the API asks
+ * for manage on the page, which a manager the owner shared it with also holds
+ * and can reach from the Access dialog.
+ */
+const canPublish = computed(() => {
+  const owner = detail.value?.document.draftOwnerId
+  return !!owner && !archived.value && (owner === auth.me?.userId || auth.canAdminWorkspace)
+})
+const publishing = ref(false)
+async function publishDraft() {
+  publishing.value = true
+  try {
+    await apiFetch(`/v1/documents/${documentId.value}/publish`, { method: 'POST' })
+    toast.success(t('access.draft.published'))
+    onAccessSaved()
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  } finally {
+    publishing.value = false
+  }
+}
+
+/**
  * #81: `?asOf=` (a date, `tag:` or `rev:`) asks for the page as it read then.
  * The API picks the default-branch revision current at that point; from there
  * it is the ordinary read-only revision view. An explicit `?revision=` wins.
@@ -340,6 +366,18 @@ function onAccessSaved() {
 const asOfParam = computed(() => (route.query.revision ? null : ((route.query.asOf as string | undefined) ?? null)))
 const asOfRevision = ref<string | null>(null)
 const asOfResolved = ref<ResolvedAsOf | null>(null)
+
+/**
+ * #474: `?branch=` reads a working branch — someone's unpublished edit, shared
+ * with this reader (the share notification links here). Its head is shown as
+ * any other revision is: read-only, no comments, the stamp left to the head.
+ */
+const viewingBranch = computed(() =>
+  route.query.revision || route.query.asOf ? null : ((route.query.branch as string | undefined) ?? null),
+)
+const branchRevision = ref<string | null>(null)
+/** Who started the branch being read, once the branch list says. */
+const branchOwner = ref<string | null>(null)
 
 async function loadContent() {
   contentError.value = null
@@ -349,11 +387,18 @@ async function loadContent() {
       ? `?revision=${route.query.revision as string}`
       : asOfParam.value
         ? `?asOf=${encodeURIComponent(asOfParam.value)}`
-        : ''
+        : viewingBranch.value
+          ? `?branch=${encodeURIComponent(viewingBranch.value)}`
+          : ''
     content.value = await apiFetch<DocumentContentResponse>(
       `/v1/documents/${documentId.value}/content${rev}`,
     )
     asOfRevision.value = asOfParam.value ? content.value.revisionId : null
+    branchRevision.value = viewingBranch.value ? content.value.revisionId : null
+    if (viewingBranch.value) {
+      const { branches } = await apiFetch<ListBranchesResponse>(`/v1/documents/${documentId.value}/branches`)
+      branchOwner.value = branches.find((b) => b.name === viewingBranch.value)?.ownerId ?? null
+    }
     asOfResolved.value = asOfParam.value ? (content.value.resolvedAsOf ?? null) : null
   } catch (e) {
     contentError.value = (e as Error).message
@@ -638,7 +683,9 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
 
 /* ------------------------------------------------------------- lifecycle */
 
-const viewingRevision = computed(() => (route.query.revision as string | undefined) ?? asOfRevision.value)
+const viewingRevision = computed(
+  () => (route.query.revision as string | undefined) ?? asOfRevision.value ?? branchRevision.value,
+)
 // An API spec (#78) renders as a reference rather than a page, and is edited as text.
 const isSpec = computed(() => detail.value?.document.kind === 'openapi' || detail.value?.document.kind === 'asyncapi')
 // A QA test fixture (#483) renders its steps, and has its own step editor.
@@ -668,7 +715,7 @@ onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
 
-watch([() => route.query.revision, () => route.query.asOf], () => void loadContent())
+watch([() => route.query.revision, () => route.query.asOf, () => route.query.branch], () => void loadContent())
 
 // Route reuse: navigating to a different document keeps this component alive.
 watch(documentId, () => {
@@ -735,7 +782,22 @@ watch(
       <!-- Who may open the page (#76). Offered to every reader: a manager
            edits it, anyone else is told where they stand. The icon is the
            page's state, so a restricted page reads as one from its row. -->
+      <!-- A private draft (#474) says so in words, and the same control shares
+           it: the Access dialog lists who it is shared with. -->
       <Button
+        v-if="detail.document.draftOwnerId"
+        variant="ghost"
+        size="sm"
+        data-draft="true"
+        :title="t('access.draft.hint')"
+        @click="accessOpen = true"
+      >
+        <NotepadTextDashed class="size-3.5" aria-hidden="true" />
+        <span class="kn-bar-label">{{ t('access.draft.label') }}</span>
+        <span class="sr-only">{{ t('access.draft.share') }}</span>
+      </Button>
+      <Button
+        v-else
         variant="ghost"
         size="icon-sm"
         :data-restricted="detail.document.restricted ? 'true' : undefined"
@@ -753,6 +815,16 @@ watch(
         :title="detail.document.title"
         :revision-id="viewingRevision"
       />
+      <Button
+        v-if="canPublish"
+        size="sm"
+        :disabled="publishing"
+        :title="t('access.draft.publishHint')"
+        @click="publishDraft"
+      >
+        <Send class="size-3.5" aria-hidden="true" />
+        <span class="kn-bar-label">{{ t('access.draft.publish') }}</span>
+      </Button>
       <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
         <RouterLink
           :to="`/documents/${detail.document.documentId}/${isSpec ? 'spec' : isFixture ? 'fixture' : 'edit'}`"
@@ -1020,6 +1092,28 @@ watch(
           </span>
           <span class="font-mono">({{ viewingRevision.slice(0, 8) }})</span>
           <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
+        </p>
+        <!-- #474: an unpublished edit, named as one, with the way into it for
+             whoever may write there and the way back to what readers see. -->
+        <p v-else-if="viewingBranch && viewingRevision" class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+          <NotepadTextDashed class="size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            {{
+              branchOwner === auth.me?.userId
+                ? t('documents.branchView.mine')
+                : branchOwner
+                  ? t('documents.branchView.theirs', { name: nameOf(branchOwner) })
+                  : t('documents.branchView.named', { name: viewingBranch })
+            }}
+          </span>
+          <RouterLink
+            v-if="auth.canEdit && !archived"
+            :to="branchOwner === auth.me?.userId ? `/documents/${documentId}/edit` : `/documents/${documentId}/edit?branch=${encodeURIComponent(viewingBranch)}`"
+            class="underline"
+          >
+            {{ t('documents.branchView.edit') }}
+          </RouterLink>
+          <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.branchView.published') }}</RouterLink>
         </p>
         <p v-else-if="viewingRevision" class="text-xs text-muted-foreground">
           {{ t('documents.viewingRevision', { id: viewingRevision.slice(0, 8) }) }}

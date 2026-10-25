@@ -927,6 +927,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{id}/branches/{branchId}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A private branch's grants (#474); listed for its owner and admins */
+        get: operations["AccessController_branchAccess"];
+        /** Replace a private branch's grants, at view or edit (#474; its owner or an admin) */
+        put: operations["AccessController_updateBranchAccess"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/access": {
         parameters: {
             query?: never;
@@ -1153,6 +1171,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a private draft to the workspace (#474): lifts its restriction and drops the grants it was shared with; it keeps its parent's and project's restrictions. Needs manage on the page. A no-op on a published page */
+        post: operations["DocumentsController_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/content": {
         parameters: {
             query?: never;
@@ -1268,6 +1303,26 @@ export interface paths {
         put?: never;
         /** Create a branch from a revision (defaults to default-branch head) */
         post: operations["DocumentsController_createBranch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/branches/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The caller's private working branch for this page (#474), created on first ask
+         * @description What the editor edits a published page on. Spent once a merge request from it is merged or closed: the next call starts a fresh one. A branch nothing was written on follows the default head.
+         */
+        post: operations["DocumentsController_myDraftBranch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1529,6 +1584,26 @@ export interface paths {
         put?: never;
         /** Open a merge request between two branches of a document */
         post: operations["MergeRequestsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/branches/{branchId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish a working branch onto the default branch (#474)
+         * @description Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — `protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. 400 when there is nothing to publish; 409 `diverged` when the default head moved past the branch and `onTopOf` does not name it. The guard holds the caller to edit on the branch.
+         */
+        post: operations["MergeRequestsController_publishBranch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7216,6 +7291,10 @@ export interface components {
             /** @enum {string} */
             level: "view" | "edit" | "manage";
         };
+        UpdateBranchAccessDto: {
+            /** @description Replaces the private branch's grants as a whole (#474); `view` or `edit` only */
+            grants: components["schemas"]["AccessGrantInputDto"][];
+        };
         UpdateResourceAccessDto: {
             /** @description On: only grantees (and workspace admins) open this node and everything under it */
             restricted: boolean;
@@ -7307,6 +7386,11 @@ export interface components {
             kind?: "page" | "openapi" | "asyncapi" | "test-fixture";
             /** @description Start from a template (issue #69). Without `content` the template is rendered server-side: its title pattern, body, tags and relations become the page, and its category is the default. */
             template?: components["schemas"]["DocumentTemplateDto"];
+            /**
+             * @description Who may open the new page (#474). `private` (when omitted) is a draft only its author can open until `POST /v1/documents/:id/publish`; the author shares it through the page's access grants. `workspace` opens it at once, under its parent's and project's restrictions.
+             * @enum {string}
+             */
+            visibility?: "private" | "workspace";
         };
         UpdateDocumentDto: {
             title?: string;
@@ -7338,6 +7422,11 @@ export interface components {
              * @description Defaults to the default-branch head
              */
             fromRevisionId?: string;
+            /**
+             * @description Who may read the branch and its revisions (#474). `workspace` (when omitted): everyone who can open the page. `private`: only its creator, the people they share it with (`PUT …/branches/:branchId/access`) and admins; opening a merge request from it makes it readable to the page's readers.
+             * @enum {string}
+             */
+            visibility?: "private" | "workspace";
         };
         AddRelationsDto: {
             relations: components["schemas"]["RelationInputDto"][];
@@ -7443,6 +7532,18 @@ export interface components {
             /** @example Shorten access-token TTL */
             title: string;
             description?: string;
+        };
+        PublishBranchDto: {
+            /**
+             * @description Title of the merge request the publish opens (or reuses).
+             * @example Shorten access-token TTL
+             */
+            title: string;
+            /**
+             * Format: uuid
+             * @description The default-branch head the author reviewed after it moved past the branch: the merge lands over that head instead of refusing as `diverged`, and only over that head.
+             */
+            onTopOf?: string;
         };
         SavedFilterChipDto: {
             /** @example reviewer */
@@ -7898,6 +7999,17 @@ export interface components {
              * @description Provider profile serving the worker's relation extraction
              */
             extractionProviderId?: string | null;
+            /**
+             * Format: uuid
+             * @description gen-api profile serving the decision pre-filters (#530). Null turns them off.
+             */
+            decisionProviderId?: string | null;
+            /** @description Decision probability at or above which the arbiter lets an item through (#530). Null inherits the code default (0.2). */
+            decisionArbiterThreshold?: number | null;
+            /** @description Decision probability at or above which the citation check lets an item through (#530). Null inherits the code default (0.5). */
+            decisionCitationThreshold?: number | null;
+            /** @description Decision probability at or above which the harvest lets an item through (#530). Null inherits the code default (0.5). */
+            decisionHarvestThreshold?: number | null;
         };
         TestAiConnectionDto: {
             /** Format: uuid */
@@ -12501,6 +12613,92 @@ export interface operations {
             };
         };
     };
+    AccessController_branchAccess: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                branchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AccessController_updateBranchAccess: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                branchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBranchAccessDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     AccessController_documentAccess: {
         parameters: {
             query?: never;
@@ -13288,6 +13486,46 @@ export interface operations {
             };
         };
     };
+    DocumentsController_publish: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     DocumentsController_content: {
         parameters: {
             query?: {
@@ -13650,6 +13888,46 @@ export interface operations {
                 "application/json": components["schemas"]["CreateBranchDto"];
             };
         };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_myDraftBranch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             201: {
                 headers: {
@@ -14554,6 +14832,51 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateMergeRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_publishBranch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                branchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishBranchDto"];
             };
         };
         responses: {

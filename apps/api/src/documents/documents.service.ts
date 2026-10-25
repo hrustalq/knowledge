@@ -50,6 +50,7 @@ import type {
 } from './dto/documents.dto.js';
 import type { Document, DocumentBranch, DocumentRevision, Prisma } from '@prisma/client';
 import {
+  DRAFT_BRANCH_PREFIX,
   entityLayerFor,
   isInactive,
   verificationStateFor,
@@ -73,6 +74,7 @@ import {
 } from '@knowledge/contracts';
 import { WORKSPACE_READER } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { AclEventsService } from '../permissions/acl-events.service.js';
 import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
 
@@ -122,6 +124,7 @@ export class DocumentsService {
     private readonly permissions: PermissionService,
     private readonly apiSpecs: ApiSpecsService,
     private readonly apiFixtures: ApiFixturesService,
+    private readonly aclEvents: AclEventsService,
   ) {}
 
   async createDocument(input: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
@@ -167,6 +170,10 @@ export class DocumentsService {
     // the column default — one insert instead of insert-then-update. The
     // `@default(uuid())` stays for anyone who does not go through this method.
     const id = randomUUID();
+    // Unset is `workspace`: only the REST route and the MCP tool, where a
+    // person is writing, default to `private` (#474). System writers keep
+    // creating pages the workspace sees, without having to say so.
+    const isPrivate = dto.visibility === 'private';
     const position = await this.prisma.document.count({
       where: { projectId: dto.projectId, parentId: dto.parentId ?? null },
     });
@@ -190,8 +197,26 @@ export class DocumentsService {
           position,
           templateRef: template?.ref ?? null,
           templateVersion: template?.version ?? null,
+          // #474: a private draft is an ordinary restricted page whose author
+          // manages it, so every reader that honours restrictions hides it
+          // with no code of its own. The marker tells it apart from a page
+          // restricted on purpose; `publishDraft` clears all three.
+          ...(isPrivate ? { restricted: true, draftOwnerId: authorId } : {}),
         },
       });
+      if (isPrivate) {
+        await this.prisma.accessGrant.create({
+          data: {
+            workspaceId: dto.workspaceId,
+            resourceType: 'document',
+            resourceId: id,
+            subjectType: 'user',
+            subjectId: authorId,
+            level: 'manage',
+            createdBy: authorId,
+          },
+        });
+      }
       // A page is born under its parent's and project's restrictions (#76).
       await this.permissions.recomputeRestrictedBy({ documentId: id });
       const branch = await this.prisma.documentBranch.create({
@@ -217,6 +242,9 @@ export class DocumentsService {
       await this.prisma.documentRevision.update({ where: { id: revision.id }, data: { s3Key } });
       return { document, revision: { ...revision, s3Key } };
     });
+    // A new restricted node is missing from every cached scope's `denied` set,
+    // so live gateways must forget those before this page's first event goes out.
+    if (isPrivate) this.prisma.onCommit(() => this.aclEvents.changed(dto.workspaceId, authorId));
 
     // Explicit relations (plan.md §5 "explicit" fact class) go straight to the graph.
     //
@@ -504,7 +532,7 @@ export class DocumentsService {
     // will not release until this call returns. Postgres sees the outer as
     // `idle in transaction` rather than blocked, so its deadlock detector never
     // fires and the request hangs until something kills the connection.
-    const { job } = await this.prisma.withTransaction(async () => {
+    const { job, privateBranch } = await this.prisma.withTransaction(async () => {
       await this.prisma.documentRevision.update({
         where: { id: revision.id },
         data: {
@@ -516,11 +544,12 @@ export class DocumentsService {
       });
       // Advance the head of the branch this revision belongs to (branch_id,
       // plan.md §4); legacy rows without branchId fall back to the default branch.
-      await this.prisma.documentBranch.update({
+      const branch = await this.prisma.documentBranch.update({
         where: revision.branchId
           ? { id: revision.branchId }
           : { documentId_name: { documentId, name: document.defaultBranch } },
         data: { headRevisionId: revision.id },
+        select: { restricted: true },
       });
       if (revision.collabDraftId) await this.markPublished(revision.collabDraftId, revision.id, revision.collabSnapshot, true);
       // Outbox (plan.md §5): the job row commits atomically with the status change;
@@ -534,7 +563,7 @@ export class DocumentsService {
           payload: { documentId, revisionId: revision.id, s3Key: revision.s3Key, title: document.title },
         },
       });
-      return { job };
+      return { job, privateBranch: branch.restricted };
     });
 
     // Both of these are post-commit by contract, and `onCommit` is what keeps
@@ -546,16 +575,20 @@ export class DocumentsService {
     // path is unchanged. Failures stay swallowed: the outbox sweeper re-enqueues,
     // and the event bus is best-effort.
     this.prisma.onCommit(() => this.ingestion.enqueue(job.id));
-    this.prisma.onCommit(() =>
-      this.activity.record({
-        workspaceId: document.workspaceId,
-        actor: revision.authorId,
-        action: 'revision.finalized',
-        documentId,
-        subjectId: revision.id,
-        metadata: { title: document.title, revisionNumber: revision.revisionNumber },
-      }),
-    );
+    // A revision on a private branch is nobody's news but its readers' (#474):
+    // no feed row, no live frame, no watcher notification.
+    if (!privateBranch) {
+      this.prisma.onCommit(() =>
+        this.activity.record({
+          workspaceId: document.workspaceId,
+          actor: revision.authorId,
+          action: 'revision.finalized',
+          documentId,
+          subjectId: revision.id,
+          metadata: { title: document.title, revisionNumber: revision.revisionNumber },
+        }),
+      );
+    }
 
     return { revisionId: revision.id, status: 'finalized', ingestionJobId: job.id, deduplicated: false };
   }
@@ -672,6 +705,7 @@ export class DocumentsService {
     | 'templateRef'
     | 'templateVersion'
     | 'restricted'
+    | 'draftOwnerId'
   > {
     return {
       verifiedAt: d.verifiedAt?.toISOString() ?? null,
@@ -693,6 +727,7 @@ export class DocumentsService {
       templateRef: d.templateRef,
       templateVersion: d.templateVersion,
       restricted: d.restrictedBy.length > 0,
+      draftOwnerId: d.draftOwnerId,
     };
   }
 
@@ -809,7 +844,13 @@ export class DocumentsService {
     };
   }
 
-  async createBranch(documentId: string, dto: CreateBranchDto): Promise<CreateBranchResponse> {
+  /**
+   * A new branch off the default head or a finalized revision. `ownerId` is
+   * who started it; `visibility: 'private'` (#474) restricts it to them, the
+   * people they share it with and admins, and announces nothing — a
+   * `branch.created` row would name it to every reader of the page.
+   */
+  async createBranch(documentId: string, dto: CreateBranchDto, ownerId?: string): Promise<CreateBranchResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     const existing = await this.prisma.documentBranch.findUnique({
       where: { documentId_name: { documentId, name: dto.name } },
@@ -834,9 +875,11 @@ export class DocumentsService {
       head = def?.headRevisionId ?? null;
     }
 
+    const isPrivate = dto.visibility === 'private';
     const branch = await this.prisma.documentBranch.create({
-      data: { documentId, name: dto.name, headRevisionId: head },
+      data: { documentId, name: dto.name, headRevisionId: head, ownerId: ownerId ?? null, restricted: isPrivate },
     });
+    if (isPrivate) return { branch: this.toBranchInfo(branch) };
     // Post-commit: publishes onto the bus (see createDocument above).
     this.prisma.onCommit(() =>
       this.activity.record({
@@ -850,17 +893,68 @@ export class DocumentsService {
     return { branch: this.toBranchInfo(branch) };
   }
 
-  async listBranches(documentId: string): Promise<ListBranchesResponse> {
-    await this.getDocumentOrThrow(documentId);
-    const branches = await this.prisma.documentBranch.findMany({
-      where: { documentId },
-      orderBy: { createdAt: 'asc' },
+  /**
+   * The caller's working branch for this page (#474), private and created on
+   * first ask. A branch an MR was merged or closed from is spent — the MR made
+   * it readable — so the next edit starts a fresh `draft/<userId>-<n>`. One
+   * nothing was ever written on follows the default head, so the editor never
+   * opens a page as it read the day the branch was cut.
+   */
+  async myDraftBranch(documentId: string, userId: string): Promise<CreateBranchResponse> {
+    const document = await this.getDocumentOrThrow(documentId);
+    const prefix = `${DRAFT_BRANCH_PREFIX}${userId}`;
+    const mine = await this.prisma.documentBranch.findFirst({
+      where: {
+        documentId,
+        ownerId: userId,
+        name: { startsWith: prefix },
+        mrAsSource: { none: { status: { in: ['merged', 'closed'] } } },
+      },
+      orderBy: { createdAt: 'desc' },
     });
-    return { branches: branches.map((b) => this.toBranchInfo(b)) };
+    if (!mine) {
+      const spent = await this.prisma.documentBranch.count({ where: { documentId, name: { startsWith: prefix } } });
+      const name = spent === 0 ? prefix : `${prefix}-${spent + 1}`;
+      return this.createBranch(documentId, { name, visibility: 'private' }, userId);
+    }
+    const def = await this.prisma.documentBranch.findUnique({
+      where: { documentId_name: { documentId, name: document.defaultBranch } },
+      select: { headRevisionId: true },
+    });
+    if (def?.headRevisionId && def.headRevisionId !== mine.headRevisionId) {
+      // ponytail: a shared draft opened but never saved keeps its stale base; the
+      // publish then asks to review the newer head. Reset such drafts here if
+      // that shows up as confusion.
+      const [own, drafts] = await Promise.all([
+        this.prisma.documentRevision.count({ where: { branchId: mine.id } }),
+        this.prisma.collabDraft.count({ where: { branchId: mine.id } }),
+      ]);
+      if (own === 0 && drafts === 0) {
+        const moved = await this.prisma.documentBranch.update({ where: { id: mine.id }, data: { headRevisionId: def.headRevisionId } });
+        return { branch: this.toBranchInfo(moved) };
+      }
+    }
+    return { branch: this.toBranchInfo(mine) };
   }
 
-  async listRevisions(documentId: string, branchName?: string): Promise<ListRevisionsResponse> {
+  /** The page's branches `scope` may read: a private one only for its owner, its grantees and admins (#474). */
+  async listBranches(documentId: string, scope: AccessScope): Promise<ListBranchesResponse> {
     await this.getDocumentOrThrow(documentId);
+    const [branches, visible] = await Promise.all([
+      this.prisma.documentBranch.findMany({ where: { documentId }, orderBy: { createdAt: 'asc' } }),
+      this.permissions.visibleBranchIds(scope, documentId),
+    ]);
+    return { branches: branches.filter((b) => visible.has(b.id)).map((b) => this.toBranchInfo(b)) };
+  }
+
+  /**
+   * The revision DAG, or one branch of it. Revisions on a private branch
+   * `scope` may not read are left out (#474); naming such a branch is refused
+   * before this runs (the guard, or the MCP tool's).
+   */
+  async listRevisions(documentId: string, scope: AccessScope, branchName?: string): Promise<ListRevisionsResponse> {
+    await this.getDocumentOrThrow(documentId);
+    const visible = await this.permissions.visibleBranchIds(scope, documentId);
 
     let branchId: string | undefined;
     if (branchName) {
@@ -872,7 +966,10 @@ export class DocumentsService {
     }
 
     const revisions = await this.prisma.documentRevision.findMany({
-      where: { documentId, ...(branchId ? { branchId } : {}) },
+      where: {
+        documentId,
+        ...(branchId ? { branchId } : { OR: [{ branchId: null }, { branchId: { in: [...visible] } }] }),
+      },
       include: { parents: { orderBy: { parentOrder: 'asc' } }, branch: true },
       orderBy: { revisionNumber: 'asc' },
     });
@@ -1027,6 +1124,45 @@ export class DocumentsService {
     };
   }
 
+  /**
+   * Open a private draft to the workspace (#474): clear the marker, lift its
+   * own restriction and drop the grants it was shared with, in one
+   * transaction, so it ends like any page that was never a draft and keeps
+   * only what its parent and project restrict. A child is not published with
+   * it, and a draft under a draft stays hidden until the parent is published.
+   *
+   * Guarded on the marker, so a second publish changes and announces nothing.
+   * Watchers hear about the page here, through `document.published`, and not
+   * at creation, when nobody but the author could open it.
+   */
+  async publishDraft(documentId: string, actorId: string): Promise<DocumentDetailResponse> {
+    const document = await this.getDocumentOrThrow(documentId);
+    const published = await this.prisma.withTransaction(async () => {
+      const { count } = await this.prisma.document.updateMany({
+        where: { id: documentId, draftOwnerId: { not: null } },
+        data: { draftOwnerId: null, restricted: false },
+      });
+      if (count === 0) return false;
+      await this.prisma.accessGrant.deleteMany({
+        where: { resourceType: 'document', resourceId: documentId, origin: 'manual' },
+      });
+      await this.permissions.recomputeRestrictedBy({ documentId });
+      return true;
+    });
+    if (published) {
+      await this.aclEvents.changed(document.workspaceId, actorId);
+      await this.activity.record({
+        workspaceId: document.workspaceId,
+        actor: actorId,
+        action: 'document.published',
+        documentId,
+        projectId: document.projectId,
+        metadata: { title: document.title },
+      });
+    }
+    return this.getDocument(documentId);
+  }
+
   /** Features 07 + 08 (docs/features): rename, recategorize, move in the tree. */
   async updateDocument(documentId: string, dto: UpdateDocumentDto, actorId?: string): Promise<DocumentSummary> {
     const document = await this.getDocumentOrThrow(documentId);
@@ -1132,6 +1268,12 @@ export class DocumentsService {
       // Keep the graph vertex label in sync (PG stays authoritative).
       await this.graph.upsertDocumentVertex(document.workspaceId, documentId, data.title).catch(() => {
         /* vertex may not exist yet — created on first index */
+      });
+      // The BM25 rows carry the title (#528): the stale sweeper re-mirrors
+      // them from the graph's chunks, with nothing re-embedded.
+      await this.prisma.documentRevision.updateMany({
+        where: { documentId, status: 'indexed' },
+        data: { fulltextStaleAt: new Date() },
       });
     }
     await this.activity.record({
@@ -1452,6 +1594,7 @@ export class DocumentsService {
       ownerId: d.ownerId,
       archivedAt: d.archivedAt?.toISOString() ?? null,
       restricted: d.restrictedBy.length > 0,
+      draftOwnerId: d.draftOwnerId,
       children: [],
       childCount: childCount ?? 0,
     };
@@ -1820,6 +1963,8 @@ export class DocumentsService {
       name: b.name,
       headRevisionId: b.headRevisionId,
       protected: b.protected,
+      ownerId: b.ownerId,
+      restricted: b.restricted,
       createdAt: b.createdAt.toISOString(),
     };
   }

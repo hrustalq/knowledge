@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { ACCESS_META, PLATFORM_ADMIN_META, PUBLIC_META, READ_KEY_OK_META, type AccessSpec } from './access.decorator.js';
 import { AccessService } from './access.service.js';
-import { PermissionService, type AccessResource } from '../permissions/permission.service.js';
+import { PermissionService, type AccessResource, type BranchRefs } from '../permissions/permission.service.js';
 import type { Principal } from './principal.js';
 import { t } from '../i18n/t.js';
 import { bindTrace } from '@knowledge/observability';
@@ -16,6 +16,34 @@ import { bindTrace } from '@knowledge/observability';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Where a page route names one of its branches or revisions (#474). The guard
+ * holds each to the route's level, so a private branch is refused on every
+ * route that takes one without each handler having to remember: a new route
+ * that names a branch through one of these keys is covered as it lands, and
+ * one that invents a new key must be added here.
+ */
+const BRANCH_REFS = {
+  branchNames: { query: ['branch'], body: ['branch', 'sourceBranch', 'targetBranch'] },
+  branchIds: { params: ['branchId'] },
+  revisionIds: { params: ['revisionId'], query: ['revision', 'from', 'to', 'at'], body: ['revisionId', 'fromRevisionId'] },
+} as const;
+
+type Req = { body?: Record<string, unknown>; query?: Record<string, unknown>; params?: Record<string, string> };
+
+/** The branches and revisions a request names, by `BRANCH_REFS`. Ids that are not uuids are left for the handler to refuse. */
+export function branchRefsOf(req: Req): BranchRefs {
+  const read = (from: Partial<Record<'params' | 'query' | 'body', readonly string[]>>) =>
+    (Object.keys(from) as ('params' | 'query' | 'body')[]).flatMap((where) =>
+      (from[where] ?? []).map((key) => req[where]?.[key]).filter((v): v is string => typeof v === 'string' && v.length > 0),
+    );
+  return {
+    branchNames: read(BRANCH_REFS.branchNames),
+    branchIds: read(BRANCH_REFS.branchIds).filter((v) => UUID_RE.test(v)),
+    revisionIds: read(BRANCH_REFS.revisionIds).filter((v) => UUID_RE.test(v)),
+  };
+}
 
 /**
  * Phase 5 workspace ACL guard. Routes declare `@Access(role, source)`; the
@@ -84,6 +112,16 @@ export class AclGuard implements CanActivate {
         capture: spec.capture === true,
         capability: spec.capability,
       });
+      // Then any of its branches the route names: a private one narrows the page (#474).
+      if (spec.source === 'document') {
+        await this.permissions.requireBranches(
+          principal,
+          workspaceId,
+          resource.id,
+          branchRefsOf(req),
+          spec.role === 'viewer' ? 'view' : 'edit',
+        );
+      }
     } else {
       await this.access.requireRole(principal, workspaceId, spec.role, spec.operator, {
         allowGuest: spec.guests === true,

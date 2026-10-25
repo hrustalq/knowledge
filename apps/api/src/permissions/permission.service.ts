@@ -25,8 +25,17 @@ import {
   type AccessScope,
   type Audience,
   type ChainNode,
+  type GrantRow,
 } from './access-scope.js';
 import { resolveChain, restrictedNodeIds, whoCanOpen, type AccessResource, type ResolvedChain } from './acl-read.js';
+import { branchLevel, type BranchAclRow } from './branch-access.js';
+
+/** What a request names on one page: branches by name or id, revisions by id (#474). */
+export interface BranchRefs {
+  branchNames?: string[];
+  branchIds?: string[];
+  revisionIds?: string[];
+}
 
 export type { AccessResource, ResolvedChain } from './acl-read.js';
 
@@ -171,6 +180,113 @@ export class PermissionService {
       return;
     }
     throw this.refusal(scope, resource, level, needed);
+  }
+
+  /**
+   * Hold every branch and revision a request names on `documentId` to
+   * `needed` (#474), after the page itself passed. Only private branches cost
+   * a scope; a request that names none, or only open ones, reads two indexed
+   * rows at most. A ref from another page is not this check's business — the
+   * service 404s it.
+   */
+  async requireBranches(
+    principal: Principal,
+    workspaceId: string,
+    documentId: string,
+    refs: BranchRefs,
+    needed: 'view' | 'edit',
+  ): Promise<void> {
+    if (principal.mode === 'dev') return;
+    const named = await this.privateBranchesNamed(documentId, refs);
+    if (named.length === 0) return;
+    await this.assertBranches(principal, await this.scopeFor(principal, workspaceId), named, needed);
+  }
+
+  /**
+   * The ids of the page's branches `scope` may read, for the lists (branches,
+   * revisions, collab drafts). Every branch when none is private.
+   */
+  async visibleBranchIds(scope: AccessScope, documentId: string): Promise<Set<string>> {
+    const branches = await this.prisma.documentBranch.findMany({
+      where: { documentId },
+      select: { id: true, ownerId: true, restricted: true },
+    });
+    const grants = await this.branchGrants(branches.filter((b) => b.restricted).map((b) => b.id));
+    return new Set(branches.filter((b) => branchLevel(scope, b, grants) !== 'none').map((b) => b.id));
+  }
+
+  private async privateBranchesNamed(documentId: string, refs: BranchRefs): Promise<BranchAclRow[]> {
+    const revisionIds = refs.revisionIds ?? [];
+    const viaRevisions = revisionIds.length
+      ? await this.prisma.documentRevision.findMany({
+          where: { id: { in: revisionIds }, documentId, branchId: { not: null } },
+          select: { branchId: true },
+        })
+      : [];
+    const ids = [...(refs.branchIds ?? []), ...viaRevisions.map((r) => r.branchId!)];
+    const names = refs.branchNames ?? [];
+    if (ids.length === 0 && names.length === 0) return [];
+    return this.prisma.documentBranch.findMany({
+      where: {
+        documentId,
+        restricted: true,
+        OR: [...(ids.length ? [{ id: { in: ids } }] : []), ...(names.length ? [{ name: { in: names } }] : [])],
+      },
+      select: { id: true, ownerId: true, restricted: true },
+    });
+  }
+
+  private async branchGrants(branchIds: string[]): Promise<GrantRow[]> {
+    if (branchIds.length === 0) return [];
+    return this.prisma.accessGrant.findMany({
+      where: { resourceType: 'branch', resourceId: { in: branchIds } },
+      select: { resourceId: true, subjectType: true, subjectId: true, level: true },
+    });
+  }
+
+  /**
+   * A refused branch reads like a refused page, minus the access request
+   * (#474: a branch is shared by its owner, not asked for): a member gets 403
+   * naming nothing, a guest 404. An admin let in by nothing but the bypass is
+   * audited, as for a page.
+   */
+  private async assertBranches(
+    principal: Principal,
+    scope: AccessScope,
+    branches: BranchAclRow[],
+    needed: 'view' | 'edit',
+  ): Promise<void> {
+    const grants = await this.branchGrants(branches.map((b) => b.id));
+    for (const branch of branches) {
+      const level = branchLevel(scope, branch, grants);
+      if (level === 'none' || (needed === 'edit' && level !== 'edit')) {
+        if (level === 'none' && scope.guest) throw new NotFoundException(t('error.branch.hidden'));
+        throw new ForbiddenException({
+          statusCode: 403,
+          message: t(level === 'none' ? 'error.access.branchRestricted' : 'error.access.editRequired'),
+          canRequestAccess: false,
+          resourceType: 'branch',
+          resourceId: branch.id,
+        });
+      }
+      if (scope.bypass && branchLevel({ ...scope, bypass: false }, branch, grants) === 'none') {
+        this.auditBranchBypass(principal, scope, branch.id);
+      }
+    }
+  }
+
+  private auditBranchBypass(principal: Principal, scope: AccessScope, branchId: string): void {
+    const key = `${principal.userId}:${branchId}`;
+    const now = Date.now();
+    if (now - (this.bypassAudited.get(key) ?? 0) < BYPASS_AUDIT_WINDOW_MS) return;
+    this.bypassAudited.set(key, now);
+    void this.audit.record({
+      workspaceId: scope.workspaceId,
+      actor: principal.userId,
+      action: 'acl.bypass',
+      params: { resourceType: 'branch', resourceId: branchId },
+      ok: true,
+    });
   }
 
   /** What `scope`'s holder may do with one page or project. */

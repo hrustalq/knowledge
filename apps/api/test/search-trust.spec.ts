@@ -310,6 +310,29 @@ describe('SearchService relevance floor (#401)', () => {
       res.results.map((r) => r.documentId),
     );
   });
+
+  it('measures both floors against a hit the search can return, not one PG then drops (#526)', async () => {
+    // `hidden` is absent from PG for this reader; `archived` is put away;
+    // `elsewhere` is outside the project filter. Each tops both legs, and
+    // `plain` sits under both floors measured against any of them.
+    const elsewhere = row('elsewhere', { projectId: 'q' });
+    const vector = [hit('hidden', 0.95), hit('archived', 0.9), hit('elsewhere', 0.85), hit('plain', 0.6)];
+    const text = [hit('hidden', 10), hit('archived', 9), hit('elsewhere', 8), hit('plain', 5)];
+    const knobs = { minCosineShare: 0.9 };
+    const { svc } = build([plain, archived, elsewhere], vector, false, text, knobs);
+    for (const mode of ['semantic', 'keyword', 'hybrid'] as const) {
+      const res = await svc.search({ workspaceId: WS, query: 'q', mode, filters: { projectIds: ['p'] } }, ADMIN);
+      expect([mode, res.results.map((r) => r.documentId)]).toEqual([mode, ['plain']]);
+    }
+
+    // The replay floors the same pool: the pages the join returned, archive dropped.
+    let pool = null as SearchPool | null;
+    const res = await svc.search({ workspaceId: WS, query: 'q' }, ADMIN, undefined, (p) => (pool = p));
+    expect(res.results.map((r) => r.documentId)).toEqual(['elsewhere', 'plain']);
+    expect(rankPool(pool!, { rrfK: SEARCH_RRF_K, minCosine: 0, communityPriorWeight: 0, communityPriorFloor: 0.5, trustWeights: TRUST_WEIGHTS, ...knobs })).toEqual(
+      res.results.map((r) => r.documentId),
+    );
+  });
 });
 
 describe('firstPerPage (#416)', () => {

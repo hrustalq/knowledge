@@ -91,7 +91,10 @@
     "notFound": "Branch {name} not found on document {documentId}",
     "exists": "Branch {name} already exists on document {documentId}",
     "headMoved": "Branch {name} head is {actual}, not {expected} — compare before retrying",
-    "needsFinalized": "Revision {id} is {status} — branches must start from a finalized revision"
+    "needsFinalized": "Revision {id} is {status} — branches must start from a finalized revision",
+    "hidden": "Branch not found on this page",
+    "defaultNotPrivate": "The default branch cannot be private",
+    "publishDefault": "The default branch is what publishing lands on — edit on a branch to publish it"
   },
   "collab": {
     "branchNotFound": "Document {documentId} has no branch named {branch}",
@@ -210,6 +213,7 @@
     "pluginHostUnresolved": "Plugin host {host} does not resolve",
     "pluginUrlPrivate": "Plugin URL resolves to a private address ({address}). Set AI_PLUGINS_ALLOW_PRIVATE_URLS=true if this is intentional.",
     "providerNone": "Provider is set to none for this workspace",
+    "decisionNeedsGenApi": "The decision route needs a gen-api profile of this workspace: Jev is reached only through gen-api.",
     "agentNotFound": "Unknown agent \"{key}\"",
     "agentScheduleNeedsOwner": "A scheduled agent needs an owner to run as.",
     "agentScheduleNeedsInterval": "A scheduled agent needs an interval in minutes.",
@@ -598,6 +602,7 @@
     "editRequired": "Editing this page is restricted to the people it names",
     "manageRequired": "Only this page's managers and workspace admins can change who has access",
     "selfLockout": "This change would leave you without access to manage this page. Keep yourself (or a group you are in) as a manager",
+    "draftPublishFirst": "This page is a private draft. Publish it to open it to the workspace",
     "unknownSubjects": "Not a member or group of this workspace: {subjects}",
     "usersWithoutView": "These people cannot open the page, so they cannot be given work on it: {users}",
     "requestDuplicate": "You already asked for access to this. A manager has your request",
@@ -606,7 +611,10 @@
     "requestOwnOnly": "Only the person who asked can withdraw a request",
     "alreadyGranted": "You can already open this at the level you asked for",
     "levelAboveRole": "Your workspace role does not allow editing, so edit access cannot be requested or granted",
-    "requestSelf": "You manage this already — nothing to ask for"
+    "requestSelf": "You manage this already — nothing to ask for",
+    "branchRestricted": "This branch is private to the person who started it",
+    "branchManageRequired": "Only the person who started this branch, or a workspace admin, can share it",
+    "branchLevel": "A branch can be shared at view or edit"
   },
   "capture": {
     "disabled": "Capturing is switched off for this workspace.",

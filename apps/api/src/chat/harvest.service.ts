@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import type { Principal } from '../auth/principal.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
+import { DecisionClient } from '../assistant/decision.client.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { CaptureService } from '../captures/capture.service.js';
@@ -25,6 +26,15 @@ const QUERY_CHARS = 2_000;
 const SNIPPET_CHARS = 300;
 const HOUR_MS = 3_600_000;
 const SESSION: CaptureSession = { client: 'chat' };
+
+/** The decision model's question for a thread (#530), as measured in docs/features/67. */
+const SETTLES_QUESTION = {
+  instructions: 'Did this team chat thread settle something that belongs in the team knowledge base?',
+  criteria: {
+    true: 'The thread itself states a decision taken, a gotcha somebody hit, a convention agreed, steps that worked, a term defined, or a question answered.',
+    false: 'The thread holds only opinions, open questions, plans not agreed, or chatter.',
+  },
+};
 
 /** A refusal with something to tell the person, as a message key. */
 export class HarvestRefused extends Error {
@@ -83,6 +93,7 @@ export class HarvestService {
     private readonly permissions: PermissionService,
     private readonly search: SearchService,
     config: ConfigService<Env, true>,
+    private readonly decision: DecisionClient,
   ) {
     this.ratePerHour = config.get('HARVEST_RATE_PER_HOUR', { infer: true });
   }
@@ -91,9 +102,16 @@ export class HarvestService {
     const { workspaceId, thread } = input;
     if (!thread.messages.length) throw new HarvestRefused('chat.harvest.empty');
     if (!(await this.aiConfig.captureSettings(workspaceId)).enabled.effective) throw new HarvestRefused('chat.capture.capturesOff');
-    // Counted from the spend itself: a harvest is one `harvest` usage row.
+    // Counted from the spend itself: a harvest is one `harvest` usage row
+    // from the harvester. The decision model's row (#530) is not counted — a
+    // thread it turns away costs a fraction of one and proposes nothing.
     const recent = await this.prisma.aiUsage.count({
-      where: { userId: principal.userId, operation: 'harvest', createdAt: { gt: new Date(Date.now() - HOUR_MS) } },
+      where: {
+        userId: principal.userId,
+        operation: 'harvest',
+        createdAt: { gt: new Date(Date.now() - HOUR_MS) },
+        NOT: { model: { startsWith: 'jev' } },
+      },
     });
     if (recent >= this.ratePerHour) throw new HarvestRefused('chat.harvest.rateLimited');
     const agent = await this.agents.resolve(workspaceId, 'harvester');
@@ -102,6 +120,7 @@ export class HarvestService {
     const projectId = input.projectId ?? (await this.firstProject(workspaceId));
 
     const transcript = maskedTranscript(thread);
+    if (!(await this.settlesSomething(workspaceId, transcript, principal))) return { proposed: 0, duplicates: 0, dropped: 0 };
     const pages = await this.pagesFor(workspaceId, transcript, principal);
     const raw = await this.client.chat(
       { config: agent.config, userId: principal.userId, operation: 'harvest', locale: principal.locale },
@@ -139,6 +158,28 @@ export class HarvestService {
       }
     }
     return outcome;
+  }
+
+  /**
+   * With a decision route (#530), Jev first: a thread it puts below the harvest
+   * threshold settled nothing, and gets the reply an empty harvest gets without
+   * the harvester's call. Fail-open: no route, or a failed question, harvests
+   * as before. Only the masked thread is sent.
+   */
+  private async settlesSomething(workspaceId: string, transcript: string, principal: Principal): Promise<boolean> {
+    const route = await this.decision.routeFor(workspaceId);
+    if (!route) return true;
+    try {
+      const p = await this.decision.noul(
+        { route, userId: principal.userId, operation: 'harvest' },
+        { thread: wrapUntrusted(transcript, 'harvest', 'chat') },
+        SETTLES_QUESTION,
+      );
+      return p >= route.thresholds.harvest;
+    } catch (err) {
+      this.logger.warn({ msg: 'harvest decision failed; harvesting anyway', workspaceId, error: String(err) });
+      return true;
+    }
   }
 
   /**

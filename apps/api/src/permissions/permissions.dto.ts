@@ -124,6 +124,18 @@ export class UpdateResourceAccessDto {
   grants!: AccessGrantInputDto[];
 }
 
+export class UpdateBranchAccessDto {
+  @ApiProperty({
+    type: [AccessGrantInputDto],
+    description: "Replaces the private branch's grants as a whole (#474); `view` or `edit` only",
+  })
+  @IsArray()
+  @ArrayMaxSize(MAX_GRANTS, { message: vmsg('arrayMaxSize') })
+  @ValidateNested({ each: true })
+  @Type(() => AccessGrantInputDto)
+  grants!: AccessGrantInputDto[];
+}
+
 /** A note to a manager, not a document. */
 const MAX_REQUEST_MESSAGE_CHARS = 1000;
 

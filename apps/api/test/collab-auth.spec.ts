@@ -114,8 +114,12 @@ function gatewayWith(opts: { current?: boolean; level: 'none' | 'view' | 'edit' 
       requireResource: async (_p: Principal, _w: string, _r: unknown, role: string) => {
         if ((role === 'editor' ? 2 : 1) > rank) throw new ForbiddenException();
       },
+      // An open branch: the page decides (#474).
+      requireBranches: async () => undefined,
     },
-    hocuspocus: { documents: new Map([[collabDocName(WS, DOC, BRANCH), { getConnections: () => conns }]]) },
+    hocuspocus: {
+      documents: new Map([[collabDocName(WS, DOC, BRANCH), { name: collabDocName(WS, DOC, BRANCH), getConnections: () => conns }]]),
+    },
   });
   const settle = async () => {
     for (let i = 0; i < 20 && (gw.sweeping as boolean); i++) await new Promise((r) => setTimeout(r, 0));

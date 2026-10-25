@@ -6,6 +6,7 @@ import {
   ANSWER_FEEDBACK_REASONS,
   ANSWER_RATINGS,
   DOCUMENT_CATEGORIES,
+  DOCUMENT_VISIBILITIES,
   KNOWLEDGE_ISSUE_DETAIL_MAX_CHARS,
   KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS,
   KNOWLEDGE_ISSUE_EVIDENCE_MAX,
@@ -38,7 +39,7 @@ import { firstPerPage } from '../search/ranking.js';
 import { EntitiesService } from '../entities/entities.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { AuditService } from '../auth/audit.service.js';
-import { PermissionService } from '../permissions/permission.service.js';
+import { PermissionService, type BranchRefs } from '../permissions/permission.service.js';
 import { WorkItemHandoffService } from '../connectors/handoff/work-item-handoff.service.js';
 import { ResourceAccessService } from '../permissions/resource-access.service.js';
 import { AccessRequestsService } from '../permissions/access-requests.service.js';
@@ -119,7 +120,7 @@ import {
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.33.1';
+export const MCP_SERVER_VERSION = '0.34.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -1163,6 +1164,7 @@ export class McpService {
       },
       async ({ documentId, revisionId }) => {
         await guard.doc(documentId, 'viewer');
+        if (revisionId) await guard.branches(documentId, { revisionIds: [revisionId] }, 'viewer');
         const scope = await this.permissions.scopeForDocument(principal, documentId);
         const res = await this.fixtures.get(scope, documentId, revisionId);
         return { content: [{ type: 'text' as const, text: wrapUntrusted(JSON.stringify(res, null, 2), 'knowledge_get_test_fixture', 'spec') }] };
@@ -1397,6 +1399,7 @@ export class McpService {
       async ({ workspaceId, documentId, fromRevisionId, toRevisionId }) => {
         await guard.ws(workspaceId, 'viewer');
         await guard.doc(documentId, 'viewer');
+        await guard.branches(documentId, { revisionIds: [fromRevisionId, toRevisionId].filter((r): r is string => !!r) }, 'viewer');
         return this.json(await this.apiDiffs.require(documentId, fromRevisionId, toRevisionId));
       },
     );
@@ -1464,6 +1467,7 @@ export class McpService {
       },
       async ({ documentId, revisionId }) => {
         await guard.doc(documentId, 'viewer');
+        if (revisionId) await guard.branches(documentId, { revisionIds: [revisionId] }, 'viewer');
         const doc = await this.documents.getDocument(documentId, revisionId);
         void this.analytics.view(caller, documentId, revisionId);
         return this.json(doc);
@@ -1535,6 +1539,7 @@ export class McpService {
       },
       async ({ documentId, revisionId }) => {
         await guard.doc(documentId, 'viewer');
+        if (revisionId) await guard.branches(documentId, { revisionIds: [revisionId] }, 'viewer');
         const content = await this.documents.getContent(documentId, revisionId);
         void this.analytics.view(caller, documentId, content.revisionId);
         return this.json(content);
@@ -1559,6 +1564,7 @@ export class McpService {
       },
       async ({ documentId, group, revisionId }) => {
         await guard.doc(documentId, 'viewer');
+        if (revisionId) await guard.branches(documentId, { revisionIds: [revisionId] }, 'viewer');
         const revision = revisionId ?? (await this.documents.getContent(documentId)).revisionId;
         const items = await this.embeds.group(revision, group ?? 0);
         if (!items) return this.json({ documentId, revisionId: revision, group: group ?? 0, items: [], note: 'No embed group at that index.' });
@@ -1699,7 +1705,10 @@ export class McpService {
       },
       async ({ documentId, branch }) => {
         await guard.doc(documentId, 'viewer');
-        return this.json(await this.documents.listRevisions(documentId, branch));
+        if (branch) await guard.branches(documentId, { branchNames: [branch] }, 'viewer');
+        return this.json(
+          await this.documents.listRevisions(documentId, await this.permissions.scopeForDocument(principal, documentId), branch),
+        );
       },
     );
 
@@ -1718,6 +1727,7 @@ export class McpService {
       },
       async ({ documentId, fromRevisionId, toRevisionId, mode, includeSemanticDiff }) => {
         await guard.doc(documentId, 'viewer');
+        await guard.branches(documentId, { revisionIds: [fromRevisionId, toRevisionId] }, 'viewer');
         return this.json(
             await this.compare.compare(documentId, fromRevisionId, toRevisionId, mode ?? 'direct', {
               structural: true,
@@ -1735,11 +1745,18 @@ export class McpService {
           documentId: z.string().uuid(),
           name: z.string().min(1),
           fromRevisionId: z.string().uuid().optional(),
+          visibility: z
+            .enum(DOCUMENT_VISIBILITIES)
+            .optional()
+            .describe('workspace (default): readable by everyone who can open the page; private: only you, people you share it with, and admins'),
         },
       },
-      async ({ documentId, name, fromRevisionId }) => {
+      async ({ documentId, name, fromRevisionId, visibility }) => {
         await guard.doc(documentId, 'editor');
-        return this.json(await this.documents.createBranch(documentId, { name, fromRevisionId }));
+        if (fromRevisionId) await guard.branches(documentId, { revisionIds: [fromRevisionId] }, 'editor');
+        return this.json(
+          await this.documents.createBranch(documentId, { name, fromRevisionId, ...(visibility ? { visibility } : {}) }, principal.userId),
+        );
       },
     );
 
@@ -1762,6 +1779,11 @@ export class McpService {
       },
       async ({ documentId, branch, baseRevisionId, content, message, syntax }) => {
         await guard.doc(documentId, 'editor');
+        await guard.branches(
+          documentId,
+          { ...(branch ? { branchNames: [branch] } : {}), ...(baseRevisionId ? { revisionIds: [baseRevisionId] } : {}) },
+          'editor',
+        );
         return this.json(
           await this.createRevision(documentId, { branch, baseRevisionId, content, message, syntax }, principal.userId),
         );
@@ -1783,6 +1805,7 @@ export class McpService {
       },
       async ({ documentId, sourceBranch, targetBranch, title, description }) => {
         await guard.doc(documentId, 'editor');
+        await guard.branches(documentId, { branchNames: [sourceBranch, ...(targetBranch ? [targetBranch] : [])] }, 'editor');
         return this.json(await this.mergeRequests.create(documentId, { sourceBranch, targetBranch, title, description }, principal.userId));
       },
     );
@@ -2111,6 +2134,7 @@ export class McpService {
           throw new Error(`Revision ${atRevisionId} not found in workspace ${workspaceId}`);
         }
         await guard.doc(revision.documentId, 'viewer');
+        await guard.branches(revision.documentId, { revisionIds: [atRevisionId] }, 'viewer');
         const at = await this.history.factsAt(revision.documentId, atRevisionId);
         const currentNeighborhood = await this.entities
           .neighbors(await guard.scope(workspaceId), entityId, 1)
@@ -2212,9 +2236,15 @@ export class McpService {
             .describe('Placeholder values by name: text, an ISO date, or a user/page id, as knowledge_get_template declares'),
           kind: z.enum(API_DOCUMENT_KINDS).optional().describe('page (default), openapi, asyncapi or test-fixture'),
           syntax: z.enum(API_SPEC_SYNTAXES).optional().describe('Spec and test fixture documents only: yaml (default) or json'),
+          visibility: z
+            .enum(DOCUMENT_VISIBILITIES)
+            .optional()
+            .describe(
+              'private (default): a draft only you can open until it is published in the app; workspace: open to everyone who can open its parent',
+            ),
         },
       },
-      async ({ workspaceId, projectId, title, content, parentId, category, templateRef, templateVersion, values, kind, syntax }) => {
+      async ({ workspaceId, projectId, title, content, parentId, category, templateRef, templateVersion, values, kind, syntax, visibility }) => {
         await guard.ws(workspaceId, 'editor');
         if (!content && !templateRef) throw new Error('Pass content, or a templateRef to start from.');
         await this.permissions.requireCreateUnder(await guard.scope(workspaceId), {
@@ -2234,6 +2264,8 @@ export class McpService {
               ...(parentId ? { parentId } : {}),
               ...(category ? { category } : {}),
               ...(templateRef ? { template: { ref: templateRef, version: templateVersion, values } } : {}),
+              // An agent writing for a person starts a private draft, as the REST route does (#474).
+              visibility: visibility ?? 'private',
             },
             principal.userId,
           ),
@@ -2517,6 +2549,18 @@ export class McpService {
         this.permissions.requireResource(principal, await this.access.workspaceOfDocument(id), { type: 'document', id }, role, false, {
           capability,
         }),
+      /**
+       * After `doc`: the branches and revisions a tool names on that page, held
+       * to the same role (#474) — the REST guard's `BRANCH_REFS`, per tool.
+       */
+      branches: async (documentId: string, refs: BranchRefs, role: WorkspaceRole) =>
+        this.permissions.requireBranches(
+          principal,
+          await this.access.workspaceOfDocument(documentId),
+          documentId,
+          refs,
+          role === 'viewer' ? 'view' : 'edit',
+        ),
       /** `doc` at editor for a CAPTURE_TOOLS handler, the page twin of `captureWs`. */
       captureDoc: async (id: string) =>
         this.permissions.requireResource(principal, await this.access.workspaceOfDocument(id), { type: 'document', id }, 'editor', false, {

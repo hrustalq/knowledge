@@ -69,6 +69,24 @@ export class MergeMergeRequestDto {
   strategy?: 'merge-commit' | 'squash';
 }
 
+export class PublishBranchDto {
+  @ApiProperty({ description: 'Title of the merge request the publish opens (or reuses).', example: 'Shorten access-token TTL' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  title!: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'The default-branch head the author reviewed after it moved past the branch: the merge lands over that head ' +
+      'instead of refusing as `diverged`, and only over that head.',
+  })
+  @IsOptional()
+  @Matches(UUID_RE)
+  onTopOf?: string;
+}
+
 export class UpdateMergeRequestDto {
   @ApiPropertyOptional()
   @IsOptional()

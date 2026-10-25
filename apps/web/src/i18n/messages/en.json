@@ -311,6 +311,13 @@
     "unplacedCommentsHint": "On the page as a whole, or on a passage that has since changed.",
     "menu": {
       "view": "View"
+    },
+    "branchView": {
+      "mine": "Your draft — not published yet.",
+      "theirs": "{name}'s draft — not published yet.",
+      "named": "Branch {name} — not published.",
+      "edit": "Open in editor",
+      "published": "Published page"
     }
   },
   "settings": {
@@ -1195,7 +1202,8 @@
         "outdated": "marked outdated",
         "verification-requested": "asked to verify",
         "verification-cleared": "cleared the verification flag on",
-        "verification-expired": "verification lapsed on"
+        "verification-expired": "verification lapsed on",
+        "published": "published"
       },
       "revision": {
         "finalized": "published a revision of"
@@ -1754,7 +1762,9 @@
       "staged": "Saved. It will be proposed shortly.",
       "openPage": "Open page",
       "openMergeRequest": "Open merge request"
-    }
+    },
+    "unsupportedCite": "The cited page may not support this sentence",
+    "unsupportedSentences": "{n} sentence may not be supported by its source | {n} sentences may not be supported by their sources"
   },
   "review": {
     "noLineChanges": "No line changes.",
@@ -2292,7 +2302,8 @@
         "linting": "Checking the change against the styleguide",
         "facts": "Checking links, owners and duplicates",
         "scoring": "Scoring pages",
-        "writing": "Saving scores"
+        "writing": "Saving scores",
+        "screening": "Screening page pairs"
       },
       "propose": "Propose fix",
       "proposed": "Opened a merge request: {title}",
@@ -2342,7 +2353,9 @@
       "review": "Review & suggest",
       "reviewHint": "Draft review and writing suggestions",
       "extraction": "Relation extraction",
-      "extractionHint": "Inferred graph edges, in the indexing worker"
+      "extractionHint": "Inferred graph edges, in the indexing worker",
+      "decision": "Decisions",
+      "decisionHint": "Jev pre-filters for the arbiter, harvest and citation support"
     },
     "disabled": "disabled",
     "test": "Test",
@@ -2442,7 +2455,8 @@
       "contradiction": "Contradiction check",
       "community": "Community summary",
       "harvest": "Chat harvest",
-      "coach": "Learner coach"
+      "coach": "Learner coach",
+      "citation_check": "Citation check"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",
@@ -2754,7 +2768,23 @@
     "qualityAudit": "Quality audit",
     "qualityAuditDesc": "How the auditor agent keeps page quality scores current.",
     "qualityAuditDays": "Re-score unchanged pages after (days)",
-    "qualityAuditHint": "A page is re-scored as soon as it changes. An unchanged page keeps its score for {days} days; leave the field empty to use the server default ({defaultDays})."
+    "qualityAuditHint": "A page is re-scored as soon as it changes. An unchanged page keeps its score for {days} days; leave the field empty to use the server default ({defaultDays}).",
+    "decision": {
+      "off": "Off",
+      "unavailable": "Off for this deployment: DECISION_PROVIDER is none.",
+      "notAppliedNamed": "Routed to {name}, not applied: DECISION_PROVIDER is none for this deployment.",
+      "noGenApi": "Add a GenAPI profile to route decisions: Jev is reached only through gen-api.",
+      "dataPath": "Decisions send page passages and masked chat threads to gen-api, which keeps request content and forwards it to TypeSafe in the US.",
+      "thresholds": "Thresholds, tuned on {model}",
+      "thresholdsHint": "An item at or above its threshold goes on to the model; below it, the arbiter skips the pair, harvest replies with nothing to keep and a cited sentence is marked unsupported. Leave a field empty to use the default shown.",
+      "site": {
+        "arbiter": "Arbiter",
+        "citation": "Citation support",
+        "harvest": "Harvest"
+      },
+      "invalid": "A number from 0 to 1",
+      "saved": "Decision thresholds saved"
+    }
   },
   "search": {
     "activeFilters": "{n} filter | {n} filters",
@@ -3261,6 +3291,21 @@
         "apiKeys": "{n} API key | {n} API keys",
         "publishedSites": "{n} published site | {n} published sites"
       }
+    },
+    "draft": {
+      "label": "Draft · private",
+      "hint": "Only you and the people you share it with can open this draft",
+      "share": "Share draft…",
+      "publish": "Publish",
+      "publishHint": "Open this page to everyone who can open its parent",
+      "published": "Published — the workspace can open it now",
+      "dialogNote": "Only you and the people below can open this draft. Publishing opens it to the workspace and clears this list."
+    },
+    "branch": {
+      "title": "Share your draft of {title}",
+      "intro": "Your edit stays private until you publish it. The people below can read it, and those at Edit can co-edit it.",
+      "noGrants": "Nobody yet — only you and workspace admins can read this draft.",
+      "askOwner": "Only the person who started this draft, or an admin, changes who it is shared with."
     }
   },
   "users": {
@@ -3361,7 +3406,7 @@
     "draftCreatedForFiles": "Draft page created so files can be attached",
     "titleAndContentRequired": "Title and content are required",
     "pickProject": "Pick a project for this page",
-    "documentCreated": "Document created — indexing started",
+    "draftSaved": "Draft saved — only you can open it until you publish it",
     "noContentChanges": "No content changes — metadata updated",
     "revisionPublished": "Revision published — indexing started",
     "headMoved": "The document head moved while you were editing — reload and compare before retrying",
@@ -3511,7 +3556,7 @@
     },
     "moreActions": "More actions",
     "publish": "Publish",
-    "createAndIndex": "Create & index",
+    "saveDraft": "Save draft",
     "collapseSection": "Collapse section",
     "expandSection": "Expand section",
     "mentioned": "Mentioned: {name}",
@@ -3612,6 +3657,34 @@
       "template": "Template",
       "insertTemplate": "Insert template…",
       "discardBody": "Every edit made since the page was last published is lost, and the editor goes back to the published page."
+    },
+    "draftBranch": {
+      "private": "Your draft · private",
+      "privateHint": "Only you and the people you share it with can read this edit until you publish it",
+      "inReview": "Your draft · in review",
+      "inReviewHint": "A merge request is open for this edit, so everyone who can read the page can read it",
+      "share": "Share",
+      "shareHint": "Let specific people read or co-edit this draft before it is published",
+      "saved": "Draft saved — only you and the people you shared it with can read it",
+      "publishing": "Publishing…",
+      "published": "Published — readers see your edit now",
+      "mrTitle": "Edit {title}",
+      "held": {
+        "title": "Opened a merge request for review",
+        "protected": "The page's main branch is protected, so an admin merges it.",
+        "approvals": "It merges once a reviewer approves it.",
+        "lint": "The style check has to pass before it merges.",
+        "breaking-api": "It breaks the API, so an admin has to acknowledge that first.",
+        "draft": "The merge request is marked as a draft."
+      },
+      "past": {
+        "title": "The page was published since your draft began",
+        "body": "Publishing now replaces that version with yours. Review what changed first.",
+        "review": "Review changes",
+        "publishOver": "Publish over it",
+        "reviewTitle": "Published page → your draft",
+        "reviewDesc": "Removed lines are on the published page and not in your draft: publishing drops them."
+      }
     }
   },
   "toolbar": {
@@ -4224,6 +4297,7 @@
     "event": {
       "revision.finalized": "edited this page",
       "document.updated": "updated this page",
+      "document.published": "published this page",
       "document.comment.created": "commented",
       "document.comment.updated": "answered a comment",
       "merge-request.created": "opened a merge request",

@@ -149,6 +149,8 @@ function mergeNodes(prev: DocumentTreeNode[], next: DocumentTreeNode[]): Documen
     existing.childCount = incoming.childCount
     // The lock (#76): a restriction saved on a page, an ancestor or the project.
     existing.restricted = incoming.restricted
+    // Draft · private (#474): cleared by publish.
+    existing.draftOwnerId = incoming.draftOwnerId
     if (incoming.children.length) {
       const children = mergeNodes(existing.children, incoming.children)
       if (children !== existing.children) existing.children = children

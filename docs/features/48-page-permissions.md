@@ -43,6 +43,74 @@ and connector mirroring in [19 §Access mirroring](19-connectors.md#access-mirro
   `audit_logs` (at most once a minute per admin and page).
 - **API keys only narrow.** A read-only key caps every level at `view`.
 
+## Private drafts
+
+Issue [#474](https://github.com/hrustalq/knowledge/issues/474), phase 1. A page
+a person creates (the editor, `POST /v1/documents`, MCP
+`knowledge_create_document`) starts as a **private draft**: a restricted page
+whose author holds `manage`, plus `documents.draft_owner_id`, which tells it
+apart from a page restricted on purpose. Nothing else is new: every surface in
+the table below already hides a restricted page, so a draft is hidden from
+search, the graph, the assistant, notifications, activity, share links, sites,
+`llms.txt` and export by the code that was there. Admins still bypass and are
+audited.
+
+- **Opting out.** `visibility: 'workspace'` on the DTO or the MCP tool creates
+  the page open, as before #474. Unset means `private` only at those two doors;
+  `DocumentsService.createDocument` treats unset as `workspace`, so imports,
+  connector pulls, workflows, the repo wiki, agents and captures are unchanged.
+- **Sharing** is the Access dialog: the draft's grants are who it is shared
+  with. The restricted switch is not offered on a draft, and the PUT refuses
+  `restricted: false` with 409 `access.draftPublishFirst`.
+- **Publish** (`POST /v1/documents/:id/publish`, manage on the page) clears the
+  marker and the restriction, drops the draft's manual grants and recomputes
+  `restricted_by`, in one transaction guarded on the marker, so a second call is
+  a no-op. Then `acl.changed` and `document.published`, which reaches the page's
+  and the project's watchers (creation reached nobody they could read).
+- **Children** inherit as always: anything under a draft is hidden until it is
+  published, and a private child stays private after its parent is published.
+- Creating a draft publishes `acl.changed` before the page's first event, since
+  no cached scope has the new node in its `denied` set yet.
+
+### Private branches (phase 2a)
+
+`document_branches.owner_id` + `restricted`, and `access_grants` rows with
+`resource_type = 'branch'` at `view` or `edit`. A branch is not a node in the
+page chain: the page level is decided first (`levelOn`), and
+`branchLevel` (`permissions/branch-access.ts`, one in-memory spelling — a page
+has a handful of branches) only narrows it. An open branch adds nothing; its
+owner and admins edit it; anyone else holds what their or their groups'
+grants on it say; a read-only key caps it at view.
+
+- **Where it is enforced.** `AclGuard`, after the page check on every
+  `'document'` route, reads the request's branch refs (`BRANCH_REFS`: `:branchId`,
+  `:revisionId`, `?branch`, `?revision`, `?from`, `?to`, `?at`, body `branch`,
+  `sourceBranch`, `targetBranch`, `revisionId`, `fromRevisionId`) and holds each
+  to the route's level (`PermissionService.requireBranches`). A new route that
+  names a branch through one of those keys is covered as it lands; a new key
+  must be added there. MCP tools call `guard.branches` after `guard.doc`. The
+  collab gateway checks the branch on join and on every re-check.
+- **Lists** (branches, revisions, collab drafts) filter by
+  `visibleBranchIds`.
+- **Silence.** A revision on a private branch records no activity row and
+  publishes no `revision.finalized`, `revision.indexed` or `revision.failed`,
+  so the feed, live frames, watcher notifications and workflow triggers never
+  hear of it; creating one records no `branch.created`. Its chunks are indexed
+  but never `live`, as for any non-default branch.
+- **Export and sites** never resolve a private branch by name: the page
+  falls back to its default branch.
+- **Refusal.** A member gets 403 `{ resourceType: 'branch', resourceId,
+  canRequestAccess: false }` (a branch is shared by its owner, not requested);
+  a guest 404. An admin let in only by the bypass is audited (`acl.bypass`,
+  `resourceType: 'branch'`).
+- **Opening a merge request** from (or into) a private branch clears its
+  `restricted`: the MR is read by everyone who can read the page.
+
+Phase 2b puts the editor on these branches: each person edits a published page
+on a private working branch (`POST /v1/documents/:id/branches/mine`) and
+**Publish** merges it through a merge request. What the author does and what
+each step writes is [66 — Drafts and publishing](66-drafts-publishing.md).
+
 ## Groups
 
 Workspace-scoped sets of people (`user_groups`, `user_group_members`), managed
@@ -108,6 +176,9 @@ pending requests expire after `ACCESS_REQUEST_TTL_DAYS`.
 | `GET /v1/documents/:id/access` | anyone who can open the page; grants only for managers |
 | `PUT /v1/documents/:id/access` `{ restricted, grants }` | manage on the page; replaces its manual grants; 409 `access.selfLockout` if it would leave a non-admin caller without manage |
 | `GET /v1/documents/:id/access/effective` | manage |
+| `POST /v1/documents/:id/publish` | manage on the page; opens a private draft (#474), no-op on a published page |
+| `GET /v1/documents/:id/branches/:branchId/access` | readers of the branch; grants listed for its owner and admins (#474) |
+| `PUT /v1/documents/:id/branches/:branchId/access` `{ grants }` | the branch's owner or an admin; view/edit grants only |
 | `GET`/`PUT /v1/projects/:id/access`, `…/access/effective` | the same, for a project |
 | `POST /v1/access-requests` · `GET /v1/access-requests?workspaceId=&status=&mine=` | members and guests |
 | `POST /v1/access-requests/:id/approve` · `…/deny` | manage on every node the approval grants on |
@@ -124,7 +195,8 @@ pending requests expire after `ACCESS_REQUEST_TTL_DAYS`.
 On `documents`: `restricted`, `restricted_by` (the ids of every restricted node
 on the chain, GIN-indexed, written only by
 `PermissionService.recomputeRestrictedBy`), and `acl_version` /
-`acl_stamped_version`, which the worker's re-stamp sweeper closes. On
+`acl_stamped_version`, which the worker's re-stamp sweeper closes, and
+`draft_owner_id` (#474: set on a private draft, cleared by publish). On
 `projects`: `restricted`. Every migration is additive and defaults to
 "nothing restricted".
 
@@ -182,7 +254,7 @@ All have defaults. None needs setting to use the feature.
   verification here. Confluence space permissions are not mirrored, and Notion
   pages can only be restricted to one connector-wide group
   ([19](19-connectors.md#access-mirroring-76-phase-6)).
-- **Out of scope:** block- or section-level permissions, per-branch or per-merge-
-  request permissions, SCIM or SSO group claims (the `source` column is ready
+- **Out of scope:** block- or section-level permissions, per-merge-request
+  permissions (a private branch, #474, stops being private when an MR is opened), SCIM or SSO group claims (the `source` column is ready
   for them), Jira issue security, and field-level ACLs on glossary, workflows
   and AI settings, which stay gated by workspace role.

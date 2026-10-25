@@ -20,12 +20,22 @@ const ACL_PROPERTIES = {
  * need no index settings, so an existing index takes them through the same
  * additive `_mapping` update, and `reanalyze` backfills its rows in place.
  */
-const TEXT_PROPERTIES = {
-  text: {
-    type: 'text',
-    fields: { ru: { type: 'text', analyzer: 'russian' }, en: { type: 'text', analyzer: 'english' } },
-  },
+const ANALYZED = {
+  type: 'text',
+  fields: { ru: { type: 'text', analyzer: 'russian' }, en: { type: 'text', analyzer: 'english' } },
 };
+
+/**
+ * #528: `heading` is the page title and the headings above the chunk, so a
+ * page is keyword-findable by words only its title or a section heading
+ * carries. `headingPath` stays a keyword for display. Rows written before the
+ * field have none until the fulltext re-mirror rewrites them (the migration
+ * `20261215100000_fulltext_heading` marks every indexed revision for it).
+ */
+const TEXT_PROPERTIES = { text: ANALYZED, heading: ANALYZED };
+
+/** #528: how much a heading term outweighs the same term in a chunk body. */
+const HEADING_BOOST = 2;
 
 /** #400: rows written before the analyzed fields existed. */
 const UNANALYZED = JSON.stringify({ query: { bool: { must_not: [{ exists: { field: 'text.ru' } }] } } });
@@ -37,10 +47,22 @@ const UNANALYZED = JSON.stringify({ query: { bool: { must_not: [{ exists: { fiel
  * in a Russian query (`main`, `MR`) pass the Russian analyzer unchanged. Up to
  * two terms need every term, longer queries 60% of them (rounded down), so
  * one shared generic token (`base`) no longer makes a hit.
+ *
+ * #528: body and heading are one `cross_fields` match, so the term share
+ * counts across both — a query whose words sit partly in the title and partly
+ * in the body still makes a hit. Both fields of a language share its analyzer,
+ * which is what lets cross_fields blend them as one.
  */
 export function bm25Clause(query: string) {
-  const field = /\p{Script=Cyrillic}/u.test(query) ? 'text.ru' : 'text.en';
-  return { match: { [field]: { query, minimum_should_match: '2<60%' } } };
+  const lang = /\p{Script=Cyrillic}/u.test(query) ? 'ru' : 'en';
+  return {
+    multi_match: {
+      query,
+      type: 'cross_fields',
+      fields: [`text.${lang}`, `heading.${lang}^${HEADING_BOOST}`],
+      minimum_should_match: '2<60%',
+    },
+  };
 }
 
 /** Valid-time stamps (#81), added to an existing index by the same mapping update. */
@@ -149,7 +171,7 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
     workspaceId: string,
     revisionId: string,
     chunks: FulltextChunk[],
-    { live, aclNodes }: { live: boolean; aclNodes: string[] },
+    { live, aclNodes, title }: { live: boolean; aclNodes: string[]; title: string },
   ): Promise<void> {
     await this.ensureIndex();
     await this.deleteRevision(revisionId);
@@ -158,7 +180,15 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
       chunks
         .flatMap((c) => [
           JSON.stringify({ index: { _index: this.index, _id: c.chunkId } }),
-          JSON.stringify({ ...c, workspaceId, live, aclNodes, aclRestricted: aclNodes.length > 0 }),
+          JSON.stringify({
+            ...c,
+            // A page whose body opens with `# <title>` would count the title twice.
+            heading: [...new Set([title, ...c.headingPath])],
+            workspaceId,
+            live,
+            aclNodes,
+            aclRestricted: aclNodes.length > 0,
+          }),
         ])
         .join('\n') + '\n';
     const res = await fetch(`${this.baseUrl}/_bulk?refresh=true`, {

@@ -3,6 +3,7 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
+import { DecisionClientModule } from '../assistant/decision-client.module.js';
 import { CapturesCoreModule } from '../captures/captures-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { SearchCoreModule } from '../search/search-core.module.js';
@@ -16,7 +17,17 @@ import { HarvestService } from './harvest.service.js';
  * person, so only API processes import it.
  */
 @Module({
-  imports: [PrismaModule, AgentCoreModule, AiCoreModule, AssistantClientModule, CapturesCoreModule, PermissionsCoreModule, SearchCoreModule],
+  imports: [
+    PrismaModule,
+    AgentCoreModule,
+    AiCoreModule,
+    AssistantClientModule,
+    // The "settles nothing" pre-filter (#530).
+    DecisionClientModule,
+    CapturesCoreModule,
+    PermissionsCoreModule,
+    SearchCoreModule,
+  ],
   providers: [HarvestService],
   exports: [HarvestService],
 })

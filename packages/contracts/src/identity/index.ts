@@ -1370,6 +1370,11 @@ export interface ResourceAccessResponse {
   resourceType: AccessResourceType;
   resourceId: string;
   restricted: boolean;
+  /**
+   * A private draft (#474): restricted until published, and only publish lifts
+   * it — the PUT refuses `restricted: false` with 409 `access.draftPublishFirst`.
+   */
+  draft: boolean;
   /** Outermost first: the project, then ancestors root-first. Empty when nothing above is restricted. */
   inherited: InheritedRestriction[];
   /** What the caller may do here. */
@@ -1377,6 +1382,24 @@ export interface ResourceAccessResponse {
   canManage: boolean;
   /** Grants on this node itself. Empty unless `canManage`: who holds what is a manager's business. */
   grants: AccessGrantEntry[];
+}
+
+// GET /v1/documents/:id/branches/:branchId/access (#474)
+export interface BranchAccessResponse {
+  branchId: string;
+  /** Private: only its owner, the grantees below and admins read it. */
+  restricted: boolean;
+  ownerId: string | null;
+  /** The owner or a workspace admin: who may change the grants. */
+  canManage: boolean;
+  /** View or edit grants on the branch. Empty unless `canManage`. */
+  grants: AccessGrantEntry[];
+}
+
+// PUT /v1/documents/:id/branches/:branchId/access
+export interface UpdateBranchAccessRequest {
+  /** Replaces the branch's grants as a whole; `view` or `edit` only. */
+  grants: AccessGrantInput[];
 }
 
 // PUT /v1/documents/:id/access · PUT /v1/projects/:id/access

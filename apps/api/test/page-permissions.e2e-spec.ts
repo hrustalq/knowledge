@@ -8,7 +8,8 @@ import type { PrismaService } from '../src/prisma/prisma.service.js';
 /**
  * #76 acceptance, end to end against live infra: page restrictions hold for
  * real users, with real API keys, across REST, search (all three modes), the
- * activity feed and MCP, and for a page a connector mirrored.
+ * activity feed and MCP, and for a page a connector mirrored. #474: a page a
+ * person creates is a private draft until they publish it.
  *
  * Unlike the other e2e specs this one cannot run as the `AUTH_MODE=none` dev
  * principal, which bypasses every restriction. It forces `AUTH_MODE=api-key`
@@ -29,6 +30,8 @@ import type { PrismaService } from '../src/prisma/prisma.service.js';
 const WORKSPACE = '76000000-0000-4076-8076-000000000076';
 const INDEX_TIMEOUT_MS = 120_000;
 const RESTAMP_TIMEOUT_MS = 30_000;
+/** Seven searches, each an embedder round trip: a cold local Ollama takes seconds per call. */
+const SEARCHES_TIMEOUT_MS = 60_000;
 
 type Role = 'admin' | 'editor' | 'guest';
 type Person = { id: string; email: string; key: string; keyId: string };
@@ -115,11 +118,14 @@ describe('page permissions (e2e, #76)', () => {
         workspaceId: WORKSPACE,
         projectId,
         title: titles[key],
+        // These pages exist to be restricted by hand; a private draft is #474's own block below.
+        visibility: 'workspace',
         ...(parentId ? { parentId } : {}),
         content: {
           mode: 'inline',
           format: 'markdown',
-          text: `# ${titles[key]}\n\nThe ${word} procedure for ${key}: who signs it, where the record lives, and when it is reviewed.\n`,
+          // The title in the body too: BM25 reads chunk text only, never the heading (#526).
+          text: `# ${titles[key]}\n\nThe ${word} procedure for ${titles[key]}: who signs it, where the record lives, and when it is reviewed.\n`,
         },
       })
       .expect(ok(201));
@@ -206,6 +212,17 @@ describe('page permissions (e2e, #76)', () => {
     people.bob = await person('bob', 'editor');
     people.gus = await person('gus', 'guest');
     projectId = (await prisma.project.create({ data: { workspaceId: WORKSPACE, name: `ACL e2e ${nonce}` } })).id;
+    // Earlier runs' pages are archived, not deleted, so both search stores keep
+    // them, and their near-identical text fills a small over-fetch before this
+    // run's pages are reached (#526). Destroy them; the last-project rule is
+    // why this run's project exists first.
+    for (const old of await prisma.project.findMany({ where: { workspaceId: WORKSPACE, id: { not: projectId } } })) {
+      await http()
+        .delete(`/v1/projects/${old.id}`)
+        .query({ mode: 'cascade', confirm: old.name })
+        .set(as(people.admin))
+        .expect(ok(200));
+    }
 
     const group = await http()
       .post('/v1/groups')
@@ -322,7 +339,7 @@ describe('page permissions (e2e, #76)', () => {
       }
       // P and C rank first for this query; two visible pages still come back.
       expect(await search(people.bob, 'semantic', 2)).toHaveLength(2);
-    });
+    }, SEARCHES_TIMEOUT_MS);
 
     it('stamps the restriction onto the search stores within a sweeper tick', async () => {
       const deadline = Date.now() + RESTAMP_TIMEOUT_MS;
@@ -505,6 +522,342 @@ describe('page permissions (e2e, #76)', () => {
 
     it('is a 404 for a guest, like the page itself', async () => {
       expect(await status(people.gus, `/v1/documents/${ids.O}/component/usages`)).toBe(404);
+    });
+  });
+
+  describe('private drafts (#474)', () => {
+    const draftTitle = `Draft memo ${word}`;
+    const draftText = `# ${draftTitle}\n\nThe ${word} payroll ledger draft: what changes in the bonuses, and who signs it.\n`;
+    const draft = {} as Record<'rest' | 'mcp' | 'open' | 'nested' | 'system', string>;
+
+    const createAs = (p: Person, body: Record<string, unknown>) =>
+      http()
+        .post('/v1/documents')
+        .set(as(p))
+        .send({ workspaceId: WORKSPACE, projectId, ...body })
+        .expect(ok(201))
+        .then((r) => r.body as { documentId: string; revisionId: string });
+    const share = (grants: Array<{ subjectType: 'user'; subjectId: string; level: string }>) =>
+      http()
+        .put(`/v1/documents/${draft.rest}/access`)
+        .set(as(people.alice))
+        .send({ restricted: true, grants: [{ subjectType: 'user', subjectId: people.alice.id, level: 'manage' }, ...grants] });
+    const listIds = async (p: Person) =>
+      (await http().get('/v1/documents').query({ workspaceId: WORKSPACE, projectId, limit: 100 }).set(as(p)).expect(ok(200))).body.items.map(
+        (d: { documentId: string }) => d.documentId,
+      );
+
+    beforeAll(async () => {
+      const rest = await createAs(people.alice, { title: draftTitle, content: { mode: 'inline', format: 'markdown', text: draftText } });
+      draft.rest = rest.documentId;
+      const viaMcp = await mcp(people.alice, 'knowledge_create_document', {
+        workspaceId: WORKSPACE,
+        projectId,
+        title: `Agent notes ${word}`,
+        content: `Notes for ${word}.`,
+      });
+      draft.mcp = JSON.parse(viaMcp.content[0].text).documentId;
+      draft.open = (await createAs(people.alice, { title: `Open child ${word}`, parentId: draft.rest, visibility: 'workspace' })).documentId;
+      draft.nested = (await createAs(people.alice, { title: `Private child ${word}`, parentId: draft.rest })).documentId;
+      // What import, connector pulls and workflows call: no visibility, no person behind it.
+      const { DocumentsService } = await import('../src/documents/documents.service.js');
+      draft.system = (
+        await app.get(DocumentsService, { strict: false }).createDocument({ workspaceId: WORKSPACE, projectId, title: `Imported ${word}` }, people.admin.id)
+      ).documentId;
+      await prisma.notificationSubscription.create({
+        data: { workspaceId: WORKSPACE, userId: people.bob.id, subjectType: 'project', subjectId: projectId },
+      });
+      await waitIndexed(rest.revisionId);
+    }, INDEX_TIMEOUT_MS + 10_000);
+
+    afterAll(async () => {
+      for (const id of Object.values(draft)) await http().post(`/v1/documents/${id}/archive`).set(as(people.admin)).send({});
+    });
+
+    it('a page created over REST or MCP is hidden from a second editor everywhere, and a 403 with no title by id', async () => {
+      const tree = await treeIds(people.bob);
+      const list = await listIds(people.bob);
+      for (const id of [draft.rest, draft.mcp, draft.open, draft.nested]) {
+        expect(tree).not.toContain(id);
+        expect(list).not.toContain(id);
+        const res = await http().get(`/v1/documents/${id}`).set(as(people.bob));
+        expect(res.status).toBe(403);
+        expect(res.body.details).toMatchObject({ canRequestAccess: true, resourceId: id });
+        expect(JSON.stringify(res.body)).not.toContain(word);
+      }
+      expect(await status(people.gus, `/v1/documents/${draft.rest}`)).toBe(404);
+      expect(await search(people.bob, 'semantic')).not.toContain(draft.rest);
+      const feed = await http().get('/v1/activity').query({ workspaceId: WORKSPACE, projectId, limit: 100 }).set(as(people.bob)).expect(ok(200));
+      expect(JSON.stringify(feed.body)).not.toContain(draft.rest);
+      const viaMcp = await mcp(people.bob, 'knowledge_search', { workspaceId: WORKSPACE, query: `draft memo ${word}`, projectIds: [projectId] });
+      expect(viaMcp.content[0].text).not.toContain(draft.rest);
+    });
+
+    it('its author sees it as a draft, and a system-created page is open to everyone at once', async () => {
+      const res = await http().get(`/v1/documents/${draft.rest}`).set(as(people.alice)).expect(ok(200));
+      expect(res.body.document).toMatchObject({ draftOwnerId: people.alice.id, restricted: true });
+      expect(await search(people.alice, 'semantic')).toContain(draft.rest);
+      expect(await status(people.bob, `/v1/documents/${draft.system}`)).toBe(200);
+      expect(await treeIds(people.bob)).toContain(draft.system);
+    });
+
+    it('sharing it at view shows it to that editor, and revoking hides it again', async () => {
+      await share([{ subjectType: 'user', subjectId: people.bob.id, level: 'view' }]).expect(ok(200));
+      expect(await treeIds(people.bob)).toContain(draft.rest);
+      expect(await status(people.bob, `/v1/documents/${draft.rest}`)).toBe(200);
+      expect(await search(people.bob, 'semantic')).toContain(draft.rest);
+      await share([]).expect(ok(200));
+      expect(await treeIds(people.bob)).not.toContain(draft.rest);
+      expect(await status(people.bob, `/v1/documents/${draft.rest}`)).toBe(403);
+    });
+
+    it('cannot be unrestricted from the access dialog; only publish opens it', async () => {
+      const res = await http()
+        .put(`/v1/documents/${draft.rest}/access`)
+        .set(as(people.alice))
+        .send({ restricted: false, grants: [] });
+      expect(res.status).toBe(409);
+      expect(res.body.details).toMatchObject({ reason: 'access.draftPublishFirst' });
+      await http().post(`/v1/documents/${draft.rest}/publish`).set(as(people.bob)).expect(ok(403));
+    });
+
+    it("a workspace admin opens it, and the read is audited", async () => {
+      expect(await status(people.admin, `/v1/documents/${draft.mcp}`)).toBe(200);
+      const deadline = Date.now() + 5_000;
+      while (
+        !(await prisma.auditLog.findFirst({
+          where: { workspaceId: WORKSPACE, actor: people.admin.id, action: 'acl.bypass', params: { path: ['resourceId'], equals: draft.mcp } },
+        }))
+      ) {
+        if (Date.now() > deadline) throw new Error('no acl.bypass audit row for the admin read of a draft');
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    });
+
+    it('publish opens it to every member, tells watchers once, and leaves a private child private', async () => {
+      const res = await http().post(`/v1/documents/${draft.rest}/publish`).set(as(people.alice)).expect(ok(201));
+      expect(res.body.document).toMatchObject({ draftOwnerId: null, restricted: false });
+      await http().post(`/v1/documents/${draft.rest}/publish`).set(as(people.alice)).expect(ok(201));
+
+      expect(await status(people.bob, `/v1/documents/${draft.rest}`)).toBe(200);
+      expect(await status(people.bob, `/v1/documents/${draft.open}`)).toBe(200);
+      expect(await status(people.bob, `/v1/documents/${draft.nested}`)).toBe(403);
+      expect(await treeIds(people.bob)).toEqual(expect.arrayContaining([draft.rest, draft.open]));
+      expect(await status(people.gus, `/v1/documents/${draft.rest}`)).toBe(404);
+
+      const published = await prisma.notification.findMany({
+        where: { userId: people.bob.id, type: 'document.published', documentId: draft.rest },
+      });
+      expect(published).toHaveLength(1);
+    });
+  });
+
+  describe('private branches (#474, phase 2)', () => {
+    let page: string;
+    let branchId: string;
+    let privateRev: string;
+    const secret = `branchsecret${nonce}`;
+
+    const createRevision = async (p: Person, branch: string, text: string) =>
+      mcp(p, 'knowledge_create_revision', { documentId: page, branch, content: text });
+    const shareBranch = (grants: Array<{ subjectType: 'user'; subjectId: string; level: string }>, as_ = people.alice) =>
+      http().put(`/v1/documents/${page}/branches/${branchId}/access`).set(as(as_)).send({ grants });
+    const branchNames = async (p: Person) =>
+      (await http().get(`/v1/documents/${page}/branches`).set(as(p)).expect(ok(200))).body.branches.map((b: { name: string }) => b.name);
+    const revisionIds = async (p: Person) =>
+      (await http().get(`/v1/documents/${page}/revisions`).set(as(p)).expect(ok(200))).body.revisions.map(
+        (r: { revisionId: string }) => r.revisionId,
+      );
+
+    beforeAll(async () => {
+      const created = await http()
+        .post('/v1/documents')
+        .set(as(people.alice))
+        .send({
+          workspaceId: WORKSPACE,
+          projectId,
+          title: `Branching handbook ${word}`,
+          visibility: 'workspace',
+          content: { mode: 'inline', format: 'markdown', text: `# Handbook\n\nThe published ${word} text.\n` },
+        })
+        .expect(ok(201));
+      page = created.body.documentId;
+      const branch = await http()
+        .post(`/v1/documents/${page}/branches`)
+        .set(as(people.alice))
+        .send({ name: `draft/${people.alice.id}`, visibility: 'private' })
+        .expect(ok(201));
+      branchId = branch.body.branch.branchId;
+      expect(branch.body.branch).toMatchObject({ restricted: true, ownerId: people.alice.id });
+      const rev = await createRevision(people.alice, `draft/${people.alice.id}`, `# Handbook\n\nThe ${secret} rewrite.\n`);
+      expect(rev.isError).toBeFalsy();
+      privateRev = JSON.parse(rev.content[0].text).revisionId;
+      // Not recorded, so never published: no feed row, live frame, watcher notification or workflow trigger.
+      expect(await prisma.activityLog.count({ where: { subjectId: privateRev } })).toBe(0);
+    });
+
+    afterAll(async () => {
+      if (page) await http().post(`/v1/documents/${page}/archive`).set(as(people.admin)).send({});
+    });
+
+    it('is left out of the branch and revision lists for anyone it is not shared with', async () => {
+      expect(await branchNames(people.bob)).toEqual(['main']);
+      expect(await revisionIds(people.bob)).not.toContain(privateRev);
+      expect(await branchNames(people.alice)).toContain(`draft/${people.alice.id}`);
+      expect(await revisionIds(people.alice)).toContain(privateRev);
+    });
+
+    it('refuses every read that names it, over REST and MCP, with no content in the body', async () => {
+      const main = (await http().get(`/v1/documents/${page}`).set(as(people.bob)).expect(ok(200))).body.revision.revisionId;
+      for (const path of [
+        `/v1/documents/${page}/content?revision=${privateRev}`,
+        `/v1/documents/${page}?revision=${privateRev}`,
+        `/v1/documents/${page}/revisions?branch=draft/${people.alice.id}`,
+        `/v1/documents/${page}/compare?from=${main}&to=${privateRev}`,
+        `/v1/documents/${page}/branches/${branchId}/access`,
+      ]) {
+        const res = await http().get(path).set(as(people.bob));
+        expect([path, res.status]).toEqual([path, 403]);
+        expect(res.body.details).toMatchObject({ resourceType: 'branch', resourceId: branchId });
+        expect(JSON.stringify(res.body)).not.toContain(secret);
+      }
+      const viaMcp = await mcp(people.bob, 'knowledge_get_document_content', { documentId: page, revisionId: privateRev });
+      expect(viaMcp.isError).toBe(true);
+      expect(JSON.stringify(viaMcp)).not.toContain(secret);
+      const write = await createRevision(people.bob, `draft/${people.alice.id}`, 'Not yours.');
+      expect(write.isError).toBe(true);
+      const feed = await http().get('/v1/activity').query({ workspaceId: WORKSPACE, projectId, limit: 100 }).set(as(people.bob)).expect(ok(200));
+      expect(JSON.stringify(feed.body)).not.toContain(privateRev);
+    });
+
+    it('shared at view: readable, still not writable, and only its owner manages the list', async () => {
+      await shareBranch([{ subjectType: 'user', subjectId: people.bob.id, level: 'view' }]).expect(ok(200));
+      expect(await status(people.bob, `/v1/documents/${page}/content?revision=${privateRev}`)).toBe(200);
+      expect(await branchNames(people.bob)).toContain(`draft/${people.alice.id}`);
+      expect((await createRevision(people.bob, `draft/${people.alice.id}`, 'Still not yours.')).isError).toBe(true);
+      await shareBranch([], people.bob).expect(ok(403));
+      await shareBranch([]).expect(ok(200));
+      expect(await status(people.bob, `/v1/documents/${page}/content?revision=${privateRev}`)).toBe(403);
+    });
+
+    it('a workspace admin reads it, audited', async () => {
+      expect(await status(people.admin, `/v1/documents/${page}/content?revision=${privateRev}`)).toBe(200);
+      const deadline = Date.now() + 5_000;
+      while (
+        !(await prisma.auditLog.findFirst({
+          where: { workspaceId: WORKSPACE, actor: people.admin.id, action: 'acl.bypass', params: { path: ['resourceId'], equals: branchId } },
+        }))
+      ) {
+        if (Date.now() > deadline) throw new Error('no acl.bypass audit row for the admin read of a private branch');
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    });
+
+    it('opening a merge request from it makes it readable to the page\'s readers', async () => {
+      await http()
+        .post(`/v1/documents/${page}/merge-requests`)
+        .set(as(people.alice))
+        .send({ sourceBranch: `draft/${people.alice.id}`, title: 'Rewrite' })
+        .expect(ok(201));
+      expect(await status(people.bob, `/v1/documents/${page}/content?revision=${privateRev}`)).toBe(200);
+      expect(await branchNames(people.bob)).toContain(`draft/${people.alice.id}`);
+    });
+  });
+
+  describe('editing on a working branch and publishing it (#474, phase 2b)', () => {
+    let page: string;
+    const mine = () => http().post(`/v1/documents/${page}/branches/mine`).set(as(people.alice)).expect(ok(201));
+    const write = async (p: Person, branch: string, text: string) => {
+      const res = await mcp(p, 'knowledge_create_revision', { documentId: page, branch, content: text });
+      expect(res.isError).toBeFalsy();
+      return JSON.parse(res.content[0].text).revisionId as string;
+    };
+    const publish = (branchId: string, body: Record<string, unknown> = {}) =>
+      http().post(`/v1/documents/${page}/branches/${branchId}/publish`).set(as(people.alice)).send({ title: 'Edit', ...body });
+    /** Publish, and when the approval gate holds it, approve as bob and publish again — the env decides which. */
+    const publishThrough = async (branchId: string, body: Record<string, unknown> = {}) => {
+      const first = await publish(branchId, body).expect(ok(201));
+      if (first.body.merged) return first.body;
+      expect(first.body.reason).toBe('approvals');
+      await http().post(`/v1/merge-requests/${first.body.mergeRequest.mergeRequestId}/approve`).set(as(people.bob)).expect(ok(201));
+      const again = await publish(branchId, body).expect(ok(201));
+      expect(again.body.merged).toBe(true);
+      return again.body;
+    };
+    const published = async () =>
+      (await http().get(`/v1/documents/${page}/content`).set(as(people.bob)).expect(ok(200))).body.markdown as string;
+
+    beforeAll(async () => {
+      const created = await http()
+        .post('/v1/documents')
+        .set(as(people.alice))
+        .send({
+          workspaceId: WORKSPACE,
+          projectId,
+          title: `Publishing handbook ${word}`,
+          visibility: 'workspace',
+          content: { mode: 'inline', format: 'markdown', text: `# Handbook\n\nThe first ${word} text.\n` },
+        })
+        .expect(ok(201));
+      page = created.body.documentId;
+    });
+
+    afterAll(async () => {
+      if (page) await http().post(`/v1/documents/${page}/archive`).set(as(people.admin)).send({});
+    });
+
+    it('hands its author one private branch, the same one on every ask, and nobody else sees it', async () => {
+      const first = (await mine()).body.branch;
+      expect(first).toMatchObject({ name: `draft/${people.alice.id}`, restricted: true, ownerId: people.alice.id });
+      expect((await mine()).body.branch.branchId).toBe(first.branchId);
+      const names = (await http().get(`/v1/documents/${page}/branches`).set(as(people.bob)).expect(ok(200))).body.branches;
+      expect(names.map((b: { name: string }) => b.name)).toEqual(['main']);
+    });
+
+    it('refuses an empty publish and a publish by someone it is not shared with, opening nothing', async () => {
+      const { branchId } = (await mine()).body.branch;
+      await publish(branchId).expect(ok(400));
+      await http().post(`/v1/documents/${page}/branches/${branchId}/publish`).set(as(people.bob)).send({ title: 'x' }).expect(ok(403));
+      expect(await prisma.mergeRequest.count({ where: { documentId: page } })).toBe(0);
+    });
+
+    it('a protected default branch holds the publish as a merge request its reviewers can read', async () => {
+      const { branchId, name } = (await mine()).body.branch;
+      await write(people.alice, name, `# Handbook\n\nThe reviewed ${word} text.\n`);
+      await prisma.documentBranch.update({ where: { documentId_name: { documentId: page, name: 'main' } }, data: { protected: true } });
+      try {
+        const held = await publish(branchId).expect(ok(201));
+        expect(held.body).toMatchObject({ merged: false, reason: 'protected' });
+        const mr = held.body.mergeRequest.mergeRequestId;
+        expect(await status(people.bob, `/v1/merge-requests/${mr}/diff`)).toBe(200);
+        expect(await published()).not.toContain('reviewed');
+      } finally {
+        await prisma.documentBranch.update({ where: { documentId_name: { documentId: page, name: 'main' } }, data: { protected: false } });
+      }
+    });
+
+    it('publishing merges it onto the page, and the next edit starts a fresh private branch', async () => {
+      const { branchId } = (await mine()).body.branch;
+      const done = await publishThrough(branchId);
+      expect(done.mergeRequest.status).toBe('merged');
+      expect(await published()).toContain('reviewed');
+      expect(await prisma.mergeRequest.count({ where: { documentId: page } })).toBe(1);
+      const next = (await mine()).body.branch;
+      expect(next).toMatchObject({ name: `draft/${people.alice.id}-2`, restricted: true });
+      expect(next.branchId).not.toBe(branchId);
+    });
+
+    it('refuses a publish over a head the author has not seen, and lands over it once named', async () => {
+      const { branchId, name } = (await mine()).body.branch;
+      await write(people.alice, name, `# Handbook\n\nThe ${word} text, mine again.\n`);
+      const theirs = await write(people.bob, 'main', `# Handbook\n\nThe ${word} text, bob's.\n`);
+      const mrsBefore = await prisma.mergeRequest.count({ where: { documentId: page } });
+      const refused = await publish(branchId).expect(ok(409));
+      expect(refused.body.details).toMatchObject({ reason: 'diverged', currentHeadRevisionId: theirs });
+      // Refused before an MR could make the branch readable.
+      expect(await prisma.mergeRequest.count({ where: { documentId: page } })).toBe(mrsBefore);
+      await publishThrough(branchId, { onTopOf: theirs });
+      expect(await published()).toContain('mine again');
     });
   });
 

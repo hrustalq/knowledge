@@ -190,6 +190,9 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
         granted: new Set(),
       })),
       requireCreateUnder: vi.fn(async () => undefined),
+      // Every branch is open here; private branches are pinned in branch-access.spec.ts (#474).
+      requireBranches: vi.fn(async () => undefined),
+      scopeForDocument: vi.fn(async () => ({ workspaceId: '', bypass: true, guest: false, denied: new Set(), granted: new Set() })),
     },
     history: {},
     ingestionAdmin: {},
@@ -555,7 +558,7 @@ describe('McpService over a principal', () => {
     });
     expect(created.isError).toBeFalsy();
     expect(documents.createDocument).toHaveBeenCalledWith(
-      { workspaceId: WS_A, projectId: project, title: 'Use Postgres', template: { ref: 'builtin:adr', version: undefined, values: { number: '1' } } },
+      { workspaceId: WS_A, projectId: project, title: 'Use Postgres', template: { ref: 'builtin:adr', version: undefined, values: { number: '1' } }, visibility: 'private' },
       expect.any(String),
     );
   });

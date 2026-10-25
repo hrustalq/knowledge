@@ -140,6 +140,7 @@ describe('usage analytics at the HTTP edge (e2e, #79)', () => {
       .set(as('admin'))
       .send({
         workspaceId: WORKSPACE,
+        visibility: 'workspace',
         projectId,
         title: `Onboarding ${word}`,
         content: {

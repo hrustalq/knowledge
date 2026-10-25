@@ -9,6 +9,7 @@
  */
 import { createHash } from 'node:crypto';
 import { cosine } from './coverage.js';
+import { askEach } from '../common/ask-each.js';
 
 export interface CandidateChunk {
   chunkId: string;
@@ -109,4 +110,37 @@ export function readJudgement(raw: unknown, pair: CandidatePair, minConfidence: 
 export function conflictFingerprint(sides: Array<{ documentId: string; quote: string }>): string {
   const parts = sides.map((s) => `${s.documentId}\u0000${fold(s.quote)}`).sort();
   return createHash('sha256').update(parts.join('\u0001')).digest('hex');
+}
+
+/**
+ * The decision model's question for a pair (#530), as measured in
+ * docs/features/67: a noul over both passages, page text wrapped untrusted by
+ * the caller.
+ */
+export const CONTRADICTION_QUESTION = {
+  instructions: 'Do passage A and passage B contradict each other, so that a reader cannot believe both?',
+  criteria: {
+    true: 'They state different values, rules, owners or behaviours for the same thing.',
+    false: 'They differ only in scope, emphasis, detail, wording or recency, or they are about different things.',
+  },
+};
+
+/**
+ * Ask the decision model about every pair and keep, in order, those it puts at
+ * or above `threshold` (#530). Fail-open: a pair whose question failed, or was
+ * never asked because a fatal error stopped the asking, is kept, so it goes to
+ * the judge as it did before.
+ */
+export async function prefilterPairs<P>(
+  pairs: readonly P[],
+  ask: (pair: P) => Promise<number>,
+  threshold: number,
+  isFatal: (error: unknown) => boolean,
+): Promise<{ kept: P[]; asked: number; stopped: unknown }> {
+  const { answers, stopped } = await askEach(pairs, ask, isFatal);
+  return {
+    kept: pairs.filter((_, i) => answers[i] === null || answers[i]! >= threshold),
+    asked: answers.filter((p) => p !== null).length,
+    stopped,
+  };
 }

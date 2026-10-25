@@ -3,7 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { CollabCapabilitiesResponse, ListCollabDraftsResponse } from '@knowledge/contracts';
 import { SCHEMA_VERSION } from '@knowledge/editor-schema';
-import { Access } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import type { Principal } from '../auth/principal.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import type { Env } from '../config/env.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { t } from '../i18n/t.js';
@@ -40,6 +42,7 @@ export class CollabDraftsController {
     private readonly drafts: CollabDraftsService,
     private readonly gateway: CollabGateway,
     private readonly events: EventsPublisher,
+    private readonly permissions: PermissionService,
   ) {}
 
   @Get(':id/drafts')
@@ -47,9 +50,14 @@ export class CollabDraftsController {
   @ApiOperation({
     summary: "Each branch's shared draft: its base, whether it holds unpublished changes, who wrote them, who has it open",
   })
-  async list(@Param('id', ParseUUIDPipe) id: string): Promise<ListCollabDraftsResponse> {
+  async list(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ListCollabDraftsResponse> {
     if (!this.config.get('COLLAB_ENABLED', { infer: true })) return { drafts: [] };
-    return { drafts: await this.drafts.list(id, (workspaceId, branchId) => this.gateway.peersOf(workspaceId, id, branchId)) };
+    // A private branch's draft — who wrote it, who has it open — is its readers' business (#474).
+    const [drafts, visible] = await Promise.all([
+      this.drafts.list(id, (workspaceId, branchId) => this.gateway.peersOf(workspaceId, id, branchId)),
+      this.permissions.scopeForDocument(principal, id).then((scope) => this.permissions.visibleBranchIds(scope, id)),
+    ]);
+    return { drafts: drafts.filter((d) => visible.has(d.branchId)) };
   }
 
   @Delete(':id/drafts/:branchId')

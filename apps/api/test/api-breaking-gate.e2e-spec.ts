@@ -91,6 +91,7 @@ describe('breaking API changes gate a spec merge (e2e)', () => {
       .post('/v1/documents')
       .send({
         workspaceId: WORKSPACE,
+        visibility: 'workspace',
         projectId: project.id,
         title: `Gatekeeper ${nonce}`,
         kind: 'openapi',
@@ -103,6 +104,7 @@ describe('breaking API changes gate a spec merge (e2e)', () => {
       .post('/v1/documents')
       .send({
         workspaceId: WORKSPACE,
+        visibility: 'workspace',
         projectId: project.id,
         title: `Gatekeeper page ${nonce}`,
         content: { mode: 'inline', format: 'markdown', text: '# A page\n' },

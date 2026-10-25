@@ -56,12 +56,12 @@ function hrefOf(source: PublicSiteAskSource): string {
 }
 
 async function render(res: PublicSiteAskResponse) {
-  const [{ markdownToHtml, SANITIZE_CONFIG }, { decorateCitations, headingAnchor }, { default: DOMPurify }] = await Promise.all([
+  const [{ markdownToHtml, SANITIZE_CONFIG }, cites, { default: DOMPurify }] = await Promise.all([
     import('@/lib/markdown/render'),
     import('@/lib/citations'),
     import('dompurify'),
   ])
-  anchorOf = (path) => headingAnchor(path)
+  anchorOf = (path) => cites.headingAnchor(path)
   html.value = DOMPurify.sanitize(markdownToHtml(res.answer), SANITIZE_CONFIG)
   await nextTick()
   if (body.value) {
@@ -69,7 +69,9 @@ async function render(res: PublicSiteAskResponse) {
       a.setAttribute('target', '_blank')
       a.setAttribute('rel', 'noopener noreferrer nofollow')
     }
-    decorateCitations(body.value, new Set(res.sources.map((s) => s.cite)))
+    cites.decorateCitations(body.value, new Set(res.sources.map((s) => s.cite)))
+    // Sentences the decision model found unsupported (#530), when the site's workspace checks.
+    cites.markUnsupported(body.value, cites.unsupportedMarkers(res.answer, res.citations), t('siteReader.askUnsupported'))
   }
 }
 

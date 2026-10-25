@@ -4474,6 +4474,144 @@
         ]
       }
     },
+    "/v1/documents/{id}/branches/{branchId}/access": {
+      "get": {
+        "operationId": "AccessController_branchAccess",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A private branch's grants (#474); listed for its owner and admins",
+        "tags": [
+          "access"
+        ]
+      },
+      "put": {
+        "operationId": "AccessController_updateBranchAccess",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBranchAccessDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Replace a private branch's grants, at view or edit (#474; its owner or an admin)",
+        "tags": [
+          "access"
+        ]
+      }
+    },
     "/v1/documents/{id}/access": {
       "get": {
         "operationId": "AccessController_documentAccess",
@@ -5748,6 +5886,63 @@
         ]
       }
     },
+    "/v1/documents/{id}/publish": {
+      "post": {
+        "operationId": "DocumentsController_publish",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Open a private draft to the workspace (#474): lifts its restriction and drops the grants it was shared with; it keeps its parent's and project's restrictions. Needs manage on the page. A no-op on a published page",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/v1/documents/{id}/content": {
       "get": {
         "operationId": "DocumentsController_content",
@@ -6367,6 +6562,64 @@
           }
         },
         "summary": "List branches with head revisions",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/v1/documents/{id}/branches/mine": {
+      "post": {
+        "description": "What the editor edits a published page on. Spent once a merge request from it is merged or closed: the next call starts a fresh one. A branch nothing was written on follows the default head.",
+        "operationId": "DocumentsController_myDraftBranch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's private working branch for this page (#474), created on first ask",
         "tags": [
           "documents"
         ]
@@ -7810,6 +8063,82 @@
           }
         },
         "summary": "List merge requests of a document (newest first)",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
+    "/v1/documents/{id}/branches/{branchId}/publish": {
+      "post": {
+        "description": "Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — `protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. 400 when there is nothing to publish; 409 `diverged` when the default head moved past the branch and `onTopOf` does not name it. The guard holds the caller to edit on the branch.",
+        "operationId": "MergeRequestsController_publishBranch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishBranchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Publish a working branch onto the default branch (#474)",
         "tags": [
           "merge-requests"
         ]
@@ -33762,7 +34091,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.32.1",
+    "version": "0.33.1",
     "contact": {}
   },
   "tags": [],
@@ -34654,6 +34983,21 @@
           "level"
         ]
       },
+      "UpdateBranchAccessDto": {
+        "type": "object",
+        "properties": {
+          "grants": {
+            "description": "Replaces the private branch's grants as a whole (#474); `view` or `edit` only",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessGrantInputDto"
+            }
+          }
+        },
+        "required": [
+          "grants"
+        ]
+      },
       "UpdateResourceAccessDto": {
         "type": "object",
         "properties": {
@@ -34892,6 +35236,14 @@
                 "$ref": "#/components/schemas/DocumentTemplateDto"
               }
             ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "workspace"
+            ],
+            "description": "Who may open the new page (#474). `private` (when omitted) is a draft only its author can open until `POST /v1/documents/:id/publish`; the author shares it through the page's access grants. `workspace` opens it at once, under its parent's and project's restrictions."
           }
         },
         "required": [
@@ -34970,6 +35322,14 @@
             "type": "string",
             "format": "uuid",
             "description": "Defaults to the default-branch head"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "workspace"
+            ],
+            "description": "Who may read the branch and its revisions (#474). `workspace` (when omitted): everyone who can open the page. `private`: only its creator, the people they share it with (`PUT …/branches/:branchId/access`) and admins; opening a merge request from it makes it readable to the page's readers."
           }
         },
         "required": [
@@ -35262,6 +35622,24 @@
         },
         "required": [
           "sourceBranch",
+          "title"
+        ]
+      },
+      "PublishBranchDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the merge request the publish opens (or reuses).",
+            "example": "Shorten access-token TTL"
+          },
+          "onTopOf": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The default-branch head the author reviewed after it moved past the branch: the merge lands over that head instead of refusing as `diverged`, and only over that head."
+          }
+        },
+        "required": [
           "title"
         ]
       },
@@ -36622,6 +37000,33 @@
             "format": "uuid",
             "nullable": true,
             "description": "Provider profile serving the worker's relation extraction"
+          },
+          "decisionProviderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "gen-api profile serving the decision pre-filters (#530). Null turns them off."
+          },
+          "decisionArbiterThreshold": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Decision probability at or above which the arbiter lets an item through (#530). Null inherits the code default (0.2)."
+          },
+          "decisionCitationThreshold": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Decision probability at or above which the citation check lets an item through (#530). Null inherits the code default (0.5)."
+          },
+          "decisionHarvestThreshold": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Decision probability at or above which the harvest lets an item through (#530). Null inherits the code default (0.5)."
           }
         },
         "required": [

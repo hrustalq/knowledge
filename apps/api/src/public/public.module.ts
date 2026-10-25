@@ -2,6 +2,7 @@ import { EmbedsCoreModule } from '../embeds/embeds-core.module.js';
 import { Module } from '@nestjs/common';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
+import { DecisionClientModule } from '../assistant/decision-client.module.js';
 import { AttachmentsModule } from '../attachments/attachments.module.js';
 import { AvatarsModule } from '../avatars/avatars.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
@@ -41,6 +42,8 @@ import { SiteSignInController } from './site-sign-in.controller.js';
     // A site's Ask (issue #77 phase 3): provider resolution, the client, retrieval.
     AiCoreModule,
     AssistantClientModule,
+    // Site Ask's citation support check (#530).
+    DecisionClientModule,
     GraphModule,
     EmbeddingModule,
     // A share link's download (#161): the same export path as a member's.

@@ -13,6 +13,120 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.34.0] — 2026-10-26
+
+### Breaking
+
+- A page created over REST or MCP is now a **private draft** that only its author can open, until they
+  publish it (#474). `HTTP` `POST /v1/documents`, `MCP` `knowledge_create_document`. Search, the graph,
+  the assistant, notifications, the activity feed, share links, sites, `llms.txt` and export leave it out
+  for everyone else; workspace admins still open it, and each open is audited as before. Pages that
+  imports, connector pulls, workflows, the repo wiki, agents and captures create are unchanged.
+  **Migration:** a client that should create a page the workspace sees at once sends
+  `"visibility": "workspace"` (MCP: `visibility: "workspace"`).
+
+### Added
+
+- Private drafts (#474). A new page shows as **Draft · private** in the tree, the page list and its
+  header, where **Publish** opens it to everyone who can open its parent and project, and the same chip
+  opens the Access dialog to share it with people or groups at view, edit or manage. Publishing
+  (`POST /v1/documents/:id/publish`, which needs manage on the page) tells the page's and the project's
+  watchers once, adds a **published** row to the activity feed, and drops the draft's share list. A child
+  page created under a draft stays hidden until the draft is published, and a private child stays private
+  after it. The Access dialog no longer offers to turn a draft's restriction off (409
+  `access.draftPublishFirst` over the API): publish is the one way out. The editor's button on a draft
+  reads **Save draft**.
+- Private branches, API side (#474, phase 2a). `POST /v1/documents/:id/branches` and MCP
+  `knowledge_create_branch` take `visibility: "private"`: only the person who started the branch, the
+  people they share it with (`GET`/`PUT /v1/documents/:id/branches/:branchId/access`, at view or edit)
+  and workspace admins can read it or its revisions. That holds on every REST route that names a branch
+  or revision, on the MCP tools, and for joining the branch's co-editing draft. Branch, revision and
+  draft lists leave it out, and revisions on it make no activity row, live event, watcher notification
+  or workflow trigger. Export and published sites never read a private branch. Opening a merge request
+  from it makes it readable to everyone who can read the page.
+- Editing a published page happens on your own private draft (#474, phase 2b,
+  [docs/features/66](docs/features/66-drafts-publishing.md)). The editor reads **Your draft · private**:
+  **Save draft** keeps the edit where only you and the people you **Share** it with (at view or edit)
+  can read it, and nothing about it reaches the feed, notifications or search. **Publish** puts it on the
+  page through a merge request that merges at once, or stays open for review when a gate holds it — the
+  page's branch is protected, approvals are required, the style lint blocks or the API breaks. If the
+  page was published since your draft began, the editor shows what changed and offers **Publish over
+  it**. A person you shared the draft with gets a notification that opens it on the page view
+  (`/documents/:id?branch=…`), with a way into the editor when they may edit. `HTTP`
+  `POST /v1/documents/:id/branches/mine` returns your working branch for a page, and
+  `POST /v1/documents/:id/branches/:branchId/publish` publishes one; it refuses an empty publish and a
+  page that moved on before it opens anything.
+- A **Decisions** route in AI settings (#530, [docs/features/67](docs/features/67-decision-model-evaluation.md)).
+  An admin routes a GenAPI profile to it, so TypeSafe Jev can answer the yes/no questions that will
+  pre-filter the arbiter, chat harvest and citation support. Each of those has a threshold, set in the
+  same place; a field left empty uses the measured default (arbiter 0.2, the other two 0.5, tuned on
+  `jev-1-13`). The row says that gen-api keeps request content and forwards it to TypeSafe in the US. A
+  profile whose model is not a Jev release asks `jev-1-13` with that profile's key, and **Test** on a Jev
+  profile asks it one question instead of a chat completion. Unrouted, it is off, and nothing changes.
+  `HTTP` `PATCH /v1/ai/settings` takes `decisionProviderId` (a GenAPI profile of the workspace, else 400)
+  and `decisionArbiterThreshold` / `decisionCitationThreshold` / `decisionHarvestThreshold`. Usage
+  gains a **Citation check** operation.
+- With a Decisions route, the arbiter checks **every** candidate page pair instead of the closest 20
+  (#530). Jev screens each pair first, and only those it puts at or above the arbiter threshold go on
+  to the judge, still at most `CONTRADICTION_MAX_PAIRS_PER_RUN` per run; a pair Jev sets aside never
+  becomes a conflict. A question that fails lets its pair through, and a refused account stops the
+  screening for the rest of the run. The run summary says how many pairs were screened and set aside.
+  Without a route, the arbiter runs exactly as before.
+- With a Decisions route, harvesting a chat thread asks Jev first whether the thread settled anything
+  (#530). Below the harvest threshold, the reply is the one an empty harvest gives, with no harvester
+  call and no page search; only the masked thread is sent. A failed question harvests as before. The
+  decision's usage row is not counted against `HARVEST_RATE_PER_HOUR`.
+- With a Decisions route, every cited sentence of an assistant answer is checked against the passages
+  its `[S#]` labels were handed out with (#530): the page read, the search snippet, the attached or
+  current page. One that Jev finds unsupported gets a dashed caution ring on its marker, with "The cited
+  page may not support this sentence" on hover and for screen readers, and the answer's receipts say how
+  many sentences may not be supported. The check runs after the answer is shown, about 2.5 s later, and
+  never changes the answer's text or labels. It covers the assistant pane, the editor assistant, chat-bot
+  answers (in the stored thread) and `/ask`, where it runs before the response; a published site's Ask
+  returns the marks with its answer too. `HTTP` `AnswerCitation.support` (`supported` | `unsupported`,
+  absent when not checked) on messages, `/v1/assistant/ask` and the site Ask response's new `citations`.
+  Each question writes a **Citation check** usage row.
+
+### Changed
+
+- Publishing an edit from the web editor now leaves a merged merge request on the page instead of a
+  bare revision, and goes through the same merge gates as any merge request (#474). The page's title,
+  category and place in the tree still change at Publish and are not part of the review.
+- Keyword search, and the keyword half of hybrid search, now matches a page's title and the headings
+  above each section (#528). Before, it matched only section bodies, so a page whose text never
+  repeated its title could not be found by keyword at all. Words split between the title and the body
+  count together, and a heading match ranks above the same word in a body.
+
+### Fixed
+
+- Search no longer drops a good match because a better one was a page the reader cannot open, an
+  archived page, or one outside the search's filters (#526). The relevance floors are now measured
+  against the best hit the search can actually return. Before, a project-filtered search could come
+  back short or empty when another project held a closer match.
+
+### Operations
+
+- Migration `20261213100000_document_draft_owner` adds a nullable `documents.draft_owner_id`. Additive:
+  every existing page stays published, and the previous image runs against it.
+- Migration `20261214100000_branch_owner` adds `document_branches.owner_id` (nullable) and
+  `restricted` (default false). Additive: every existing branch stays as readable as its page.
+- With `MR_REQUIRED_APPROVALS` at 1 or more (the default), a non-admin's Publish from the editor now
+  waits for a reviewer's approval, where it used to land at once (#474). Set `MR_REQUIRED_APPROVALS=0`
+  to keep editor publishing direct; production already runs with 0.
+- Migration `20261215100000_fulltext_heading` marks every indexed revision for the fulltext re-mirror
+  (data only, safe under the previous image). With `FULLTEXT_PROVIDER=opensearch`, the worker's stale
+  sweeper rewrites 25 revisions per 5-minute tick from the graph, default-branch heads first, with
+  nothing re-embedded. Until a page's rows are rewritten, keyword search does not match its title, as
+  before. Check progress with
+  `SELECT count(*) FROM document_revisions WHERE fulltext_stale_at IS NOT NULL` (0 = done). Renaming a
+  page re-marks its revisions the same way.
+- New env var `DECISION_PROVIDER` (`none` | `gen-api`, default `none`) is the ceiling for the decision
+  route (#530): at `none`, no workspace's route is honoured, and the settings row says so. It has a
+  default, so the deploy's environment check asks for nothing; to turn decisions on in production, set
+  `DECISION_PROVIDER=gen-api` in the GitHub `production` environment. Migration
+  `20261216100000_decision_route` adds nullable `ai_settings.decision_*` columns. Additive: the previous
+  image ignores them.
+
 ## [0.33.1] — 2026-10-24
 
 ### Fixed
@@ -4862,7 +4976,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.33.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/hrustalq/knowledge/compare/v0.33.1...v0.34.0
 [0.33.1]: https://github.com/hrustalq/knowledge/compare/v0.33.0...v0.33.1
 [0.33.0]: https://github.com/hrustalq/knowledge/compare/v0.32.1...v0.33.0
 [0.32.1]: https://github.com/hrustalq/knowledge/compare/v0.32.0...v0.32.1

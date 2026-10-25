@@ -1,5 +1,6 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
+  BranchAccessResponse,
   AccessGrantEntry,
   AccessGrantInput,
   AccessGrantOrigin,
@@ -43,6 +44,9 @@ export class ResourceAccessService {
     const level = levelOn(scope, chain, grants);
     const self = chain[chain.length - 1];
     const canManage = level === 'manage';
+    const draft =
+      resource.type === 'document' &&
+      !!(await this.prisma.document.findUnique({ where: { id: resource.id }, select: { draftOwnerId: true } }))?.draftOwnerId;
     // Read again for who wrote each row: a mirrored grant is shown, never sent back.
     const own = canManage
       ? await this.prisma.accessGrant.findMany({
@@ -54,6 +58,7 @@ export class ResourceAccessService {
       resourceType: resource.type,
       resourceId: resource.id,
       restricted: self.restricted,
+      draft,
       inherited: chain.slice(0, -1).flatMap((node, i) =>
         node.restricted
           ? [
@@ -102,6 +107,19 @@ export class ResourceAccessService {
     const scope = await this.permissions.scopeFor(principal, workspaceId);
     if (levelOn(scope, chain, grants) !== 'manage') {
       await this.permissions.requireLevel(scope, resource, 'manage'); // throws the guard's 403
+    }
+
+    // A private draft leaves its restriction one way, so its watchers and the
+    // feed are told (#474): publish.
+    if (resource.type === 'document' && !dto.restricted) {
+      const doc = await this.prisma.document.findUnique({ where: { id: resource.id }, select: { draftOwnerId: true } });
+      if (doc?.draftOwnerId) {
+        throw new ConflictException({
+          statusCode: 409,
+          message: t('error.access.draftPublishFirst'),
+          reason: 'access.draftPublishFirst',
+        });
+      }
     }
 
     const wanted = dedupe(dto.grants);
@@ -178,6 +196,120 @@ export class ResourceAccessService {
       ok: true,
     });
     return this.get(principal, resource);
+  }
+
+  /**
+   * A private branch's share list (#474). The guard has already let the caller
+   * read the branch; its grants are shown to who may change them — the owner
+   * and admins — like a page's are to its managers.
+   */
+  async getBranch(principal: Principal, documentId: string, branchId: string): Promise<BranchAccessResponse> {
+    const { branch, scope } = await this.branchFor(principal, documentId, branchId);
+    const canManage = scope.bypass || branch.ownerId === scope.userId;
+    const own = canManage
+      ? await this.prisma.accessGrant.findMany({
+          where: { resourceType: 'branch', resourceId: branchId },
+          select: { subjectType: true, subjectId: true, level: true, origin: true, connectorId: true },
+        })
+      : [];
+    return {
+      branchId,
+      restricted: branch.restricted,
+      ownerId: branch.ownerId,
+      canManage,
+      grants: canManage
+        ? await this.describe(
+            scope.workspaceId,
+            own.map((g) => ({
+              subjectType: g.subjectType as AccessSubjectType,
+              subjectId: g.subjectId,
+              level: g.level as AccessLevel,
+              origin: g.origin as AccessGrantOrigin,
+              connectorId: g.connectorId,
+            })),
+          )
+        : [],
+    };
+  }
+
+  /**
+   * Replace a private branch's grants (#474). Its owner or an admin only, at
+   * `view` or `edit`: a branch has nothing to manage but this list, and that
+   * stays with whoever started it.
+   */
+  async updateBranch(
+    principal: Principal,
+    documentId: string,
+    branchId: string,
+    dto: { grants: AccessGrantInput[] },
+  ): Promise<BranchAccessResponse> {
+    const { branch, scope, title } = await this.branchFor(principal, documentId, branchId);
+    if (!scope.bypass && branch.ownerId !== scope.userId) {
+      throw new ForbiddenException({ statusCode: 403, message: t('error.access.branchManageRequired'), resourceType: 'branch', resourceId: branchId });
+    }
+    const wanted = dedupe(dto.grants);
+    if (wanted.some((g) => g.level === 'manage')) throw new BadRequestException(t('error.access.branchLevel'));
+    await this.assertSubjects(scope.workspaceId, wanted);
+
+    const before = await this.prisma.accessGrant.findMany({
+      where: { resourceType: 'branch', resourceId: branchId, subjectType: 'user' },
+      select: { subjectId: true },
+    });
+    await this.prisma.withTransaction(async () => {
+      await this.prisma.accessGrant.deleteMany({ where: { resourceType: 'branch', resourceId: branchId, origin: 'manual' } });
+      await this.prisma.accessGrant.createMany({
+        data: wanted.map((g) => ({
+          workspaceId: scope.workspaceId,
+          resourceType: 'branch',
+          resourceId: branchId,
+          subjectType: g.subjectType,
+          subjectId: g.subjectId,
+          level: g.level,
+          createdBy: principal.userId,
+        })),
+        skipDuplicates: true,
+      });
+    });
+
+    await this.aclEvents.changed(scope.workspaceId, principal.userId);
+    // Named for the first time: told, with a link to the page.
+    const known = new Set(before.map((g) => g.subjectId));
+    for (const level of ['view', 'edit'] as const) {
+      const userIds = wanted
+        .filter((g) => g.subjectType === 'user' && g.level === level && !known.has(g.subjectId) && g.subjectId !== principal.userId)
+        .map((g) => g.subjectId);
+      if (userIds.length === 0) continue;
+      await this.aclEvents.notify({
+        workspaceId: scope.workspaceId,
+        userIds,
+        type: 'access.granted',
+        reason: 'participant',
+        actor: principal.userId,
+        documentId,
+        subjectType: 'document',
+        subjectId: documentId,
+        title,
+        metadata: { resourceType: 'branch', resourceId: branchId, branch: branch.name, level },
+      });
+    }
+    void this.audit.record({
+      workspaceId: scope.workspaceId,
+      actor: principal.userId,
+      action: 'acl.update',
+      params: { resourceType: 'branch', resourceId: branchId, grants: wanted },
+      ok: true,
+    });
+    return this.getBranch(principal, documentId, branchId);
+  }
+
+  private async branchFor(principal: Principal, documentId: string, branchId: string) {
+    const branch = await this.prisma.documentBranch.findUnique({
+      where: { id: branchId },
+      select: { id: true, documentId: true, name: true, ownerId: true, restricted: true, document: { select: { title: true, workspaceId: true } } },
+    });
+    if (!branch || branch.documentId !== documentId) throw new NotFoundException(t('error.branch.hidden'));
+    const scope = await this.permissions.scopeFor(principal, branch.document.workspaceId);
+    return { branch, scope, title: branch.document.title };
   }
 
   /**

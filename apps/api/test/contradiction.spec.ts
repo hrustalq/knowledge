@@ -1,6 +1,14 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
-import { candidatePairs, conflictFingerprint, quoteIn, readJudgement, SHARED_ENTITY_SLACK, type CandidateChunk } from '../src/agents/contradiction.js';
+import {
+  candidatePairs,
+  conflictFingerprint,
+  prefilterPairs,
+  quoteIn,
+  readJudgement,
+  SHARED_ENTITY_SLACK,
+  type CandidateChunk,
+} from '../src/agents/contradiction.js';
 import { ConflictsService } from '../src/conflicts/conflicts.service.js';
 import { systemScope } from '../src/permissions/access-scope.js';
 
@@ -209,3 +217,33 @@ describe('ConflictsService', () => {
     })
   })
 })
+
+describe('prefilterPairs (#530)', () => {
+  const pairs = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'];
+  const p: Record<string, number> = { a: 0.9, b: 0.05, c: 0.2, d: 0.19, e: 0.5, f: 0.1, g: 0.3, h: 0.0, i: 0.25, j: 0.6 };
+
+  it('asks once per pair and keeps, in order, only those at or above the threshold', async () => {
+    const ask = vi.fn(async (x: string) => p[x]!);
+    const r = await prefilterPairs(pairs, ask, 0.2, () => false);
+    expect(ask).toHaveBeenCalledTimes(pairs.length);
+    expect(r.kept).toEqual(['a', 'c', 'e', 'g', 'i', 'j']);
+    expect(r).toMatchObject({ asked: 10, stopped: null });
+  });
+
+  it('keeps a pair whose question failed — the judge sees it as before', async () => {
+    const r = await prefilterPairs(pairs, async (x) => (x === 'b' ? Promise.reject(new Error('503')) : p[x]!), 0.2, () => false);
+    expect(r.kept).toContain('b');
+    expect(r.asked).toBe(9);
+  });
+
+  it('stops asking on a fatal error and keeps everything not yet asked', async () => {
+    const dead = new Error('402');
+    const ask = vi.fn(async (x: string) => (x === 'a' ? Promise.reject(dead) : p[x]!));
+    const r = await prefilterPairs(pairs, ask, 0.2, (e) => e === dead);
+    // The first batch (8) was in flight together; the last two were never asked.
+    expect(ask).toHaveBeenCalledTimes(8);
+    expect(r.stopped).toBe(dead);
+    expect(r.kept).toEqual(expect.arrayContaining(['a', 'i', 'j']));
+    expect(r.kept).not.toContain('b');
+  });
+});

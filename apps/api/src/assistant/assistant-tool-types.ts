@@ -72,6 +72,12 @@ export interface AssistantToolResult {
   ok: boolean;
   /** What this call cited — workspace pages, or web pages it retrieved. */
   sources: AssistantSource[];
+  /**
+   * The text a source was handed out with, by `assistantSourceKey`, where it
+   * is more than the source's `snippet` (a page read whole). Kept for the
+   * citation support check (#530), never persisted.
+   */
+  passages?: Map<string, string>;
   /** Set only by render_component — an existing product component (GraphView/ActivityFeed/
    * SearchWidget) the assistant wants the chat pane to render inline for this turn. */
   uiBlock?: AssistantUiBlock;

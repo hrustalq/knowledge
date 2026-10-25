@@ -23,7 +23,7 @@ import { computed, onMounted, onServerPrefetch, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useVirtualizer } from '@tanstack/vue-virtual'
-import { Archive, FileText, List, ListTree, Loader2, Network, Plus, SlidersHorizontal, Upload, X } from 'lucide-vue-next'
+import { Archive, FileText, List, ListTree, Loader2, Network, NotepadTextDashed, Plus, SlidersHorizontal, Upload, X } from 'lucide-vue-next'
 import { formatDate } from '@/lib/format'
 import { labelFor } from '@/lib/labels'
 import { useAuthStore } from '@/stores/auth'
@@ -387,6 +387,16 @@ watch(virtualRows, (rows) => {
                   :aria-label="t(`verification.state.${store.items[row.index]!.verification}`)"
                   :title="t(`verification.state.${store.items[row.index]!.verification}`)"
                 />
+                <!-- A private draft (#474): the one row state worth its words here. -->
+                <Badge
+                  v-if="store.items[row.index]!.draftOwnerId"
+                  variant="outline"
+                  class="shrink-0 gap-1 text-xs text-muted-foreground"
+                  :title="t('access.draft.hint')"
+                >
+                  <NotepadTextDashed class="size-3" aria-hidden="true" />
+                  {{ t('access.draft.label') }}
+                </Badge>
                 <Badge variant="outline" class="hidden shrink-0 text-xs sm:inline-flex">
                   {{ labelFor(t, 'category', store.items[row.index]!.category) }}
                 </Badge>

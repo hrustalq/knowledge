@@ -139,7 +139,16 @@ describe('planCaptures — validation, not the prompt', () => {
   });
 });
 
-function harness(opts: { recent?: number; captureResults?: Array<CaptureResult | Error>; agentEnabled?: boolean; searchFails?: boolean } = {}) {
+function harness(
+  opts: {
+    recent?: number;
+    captureResults?: Array<CaptureResult | Error>;
+    agentEnabled?: boolean;
+    searchFails?: boolean;
+    /** The decision model's p for the thread (#530); absent = no decision route. */
+    settles?: number | Error;
+  } = {},
+) {
   const prompts: string[] = [];
   const prisma = {
     aiUsage: { count: vi.fn(async () => opts.recent ?? 0) },
@@ -179,6 +188,13 @@ function harness(opts: { recent?: number; captureResults?: Array<CaptureResult |
     }),
   };
   const config = { get: (key: string) => ({ HARVEST_RATE_PER_HOUR: 10 })[key] };
+  const decision = {
+    routeFor: vi.fn(async () => (opts.settles === undefined ? null : { config: {}, thresholds: { harvest: 0.5 } })),
+    noul: vi.fn(async () => {
+      if (opts.settles instanceof Error) throw opts.settles;
+      return opts.settles!;
+    }),
+  };
   const svc = new HarvestService(
     prisma as never,
     agents as never,
@@ -189,8 +205,9 @@ function harness(opts: { recent?: number; captureResults?: Array<CaptureResult |
     permissions as never,
     search as never,
     config as never,
+    decision as never,
   );
-  return { svc, prisma, client, captures, search, aiUsage, prompts };
+  return { svc, prisma, client, captures, search, aiUsage, prompts, decision };
 }
 
 const input = { workspaceId: WS, projectId: 'p-1', platform: 'time' as const, chatTitle: 'Platform team', thread };
@@ -242,7 +259,13 @@ describe('HarvestService.harvest', () => {
     const h = harness({ recent: 10 });
     await expect(h.svc.harvest(input, DEV_PRINCIPAL)).rejects.toEqual(new HarvestRefused('chat.harvest.rateLimited'));
     expect(h.prisma.aiUsage.count).toHaveBeenCalledWith({
-      where: { userId: DEV_PRINCIPAL.userId, operation: 'harvest', createdAt: { gt: expect.any(Date) } },
+      where: {
+        userId: DEV_PRINCIPAL.userId,
+        operation: 'harvest',
+        createdAt: { gt: expect.any(Date) },
+        // The decision model's rows are not harvests (#530).
+        NOT: { model: { startsWith: 'jev' } },
+      },
     });
     expect(h.client.chat).not.toHaveBeenCalled();
     expect(h.captures.capture).not.toHaveBeenCalled();
@@ -252,6 +275,33 @@ describe('HarvestService.harvest', () => {
     const h = harness({ agentEnabled: false });
     await expect(h.svc.harvest(input, DEV_PRINCIPAL)).rejects.toEqual(new HarvestRefused('chat.capture.disabled'));
     expect(h.client.chat).not.toHaveBeenCalled();
+  });
+
+  it('with no decision route, nothing is asked of the decision model', async () => {
+    const h = harness();
+    await h.svc.harvest(input, DEV_PRINCIPAL);
+    expect(h.decision.noul).not.toHaveBeenCalled();
+    expect(h.client.chat).toHaveBeenCalledOnce();
+  });
+
+  it('a thread Jev scores below the threshold makes no harvester call and replies as an empty harvest (#530)', async () => {
+    const h = harness({ settles: 0.2 });
+    expect(await h.svc.harvest(input, DEV_PRINCIPAL)).toEqual({ proposed: 0, duplicates: 0, dropped: 0 });
+    expect(h.client.chat).not.toHaveBeenCalled();
+    expect(h.search.search).not.toHaveBeenCalled();
+    const [call, state] = h.decision.noul.mock.calls[0] as unknown as [{ operation: string }, { thread: string }];
+    expect(call.operation).toBe('harvest');
+    // Masked and wrapped: the raw thread never leaves.
+    for (const raw of RAW) expect(state.thread).not.toContain(raw);
+    expect(state.thread).toContain('<chat tool="harvest">');
+  });
+
+  it('a thread at the threshold, or a failed question, harvests as before', async () => {
+    for (const settles of [0.5, new Error('503')]) {
+      const h = harness({ settles });
+      expect((await h.svc.harvest(input, DEV_PRINCIPAL)).proposed).toBe(3);
+      expect(h.client.chat).toHaveBeenCalledOnce();
+    }
   });
 
   it('a DM with no project files into the workspace’s first', async () => {

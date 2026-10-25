@@ -1762,7 +1762,9 @@
       "staged": "Saved. It will be proposed shortly.",
       "openPage": "Open page",
       "openMergeRequest": "Open merge request"
-    }
+    },
+    "unsupportedCite": "The cited page may not support this sentence",
+    "unsupportedSentences": "{n} sentence may not be supported by its source | {n} sentences may not be supported by their sources"
   },
   "review": {
     "noLineChanges": "No line changes.",

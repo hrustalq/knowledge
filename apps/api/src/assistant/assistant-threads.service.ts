@@ -281,6 +281,11 @@ export class AssistantThreadsService {
     return this.toMessageInfo(message);
   }
 
+  /** The support marks the decision check adds after a turn (#530); only the citations change. */
+  async setCitations(messageId: string, citations: AnswerCitation[]): Promise<void> {
+    await this.prisma.assistantMessage.update({ where: { id: messageId }, data: { citations: citations as object } });
+  }
+
   private toSummary(t: AssistantThread, lastMessagePreview?: string): AssistantThreadSummary {
     return {
       id: t.id,

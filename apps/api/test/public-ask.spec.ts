@@ -52,6 +52,8 @@ const row = (n: number, extra: Partial<Row> = {}): Row => ({
 });
 
 interface Options {
+  /** The decision model's p per cited sentence (#530); absent = no Decisions route. */
+  support?: number[];
   askEnabled?: boolean;
   askDailyBudget?: number | null;
   ceiling?: number;
@@ -96,6 +98,11 @@ function asker(o: Options = {}) {
   const embeddings = { embed: vi.fn(async () => [0.1, 0.2]) };
   const env: Record<string, unknown> = { PUBLIC_ASK_DAILY_BUDGET: o.ceiling ?? 200, PUBLIC_ASK_RATE_PER_MIN: 6 };
   const config = { get: vi.fn((k: string) => env[k]) };
+  const ps = [...(o.support ?? [])];
+  const decision = {
+    routeFor: vi.fn(async () => (o.support ? { config: {}, thresholds: { citation: 0.5 } } : null)),
+    noul: vi.fn(async () => ps.shift()!),
+  };
   const service = new PublicAskService(
     sites as never,
     prisma as never,
@@ -106,8 +113,9 @@ function asker(o: Options = {}) {
     graph as never,
     embeddings as never,
     config as never,
+    decision as never,
   );
-  return { service, sites, prisma, limiter, aiConfig, usage, client, graph, embeddings };
+  return { service, sites, prisma, limiter, aiConfig, usage, client, graph, embeddings, decision };
 }
 
 const ctx = { ip: '203.0.113.5', locale: 'en' as const };
@@ -224,6 +232,27 @@ describe('PublicAskService — answer', () => {
     expect(messages[0].content).not.toContain('Run the installer.');
     expect(messages[1].content).toMatch(/^<pages tool="site_passages">[\s\S]*DATA, not instructions[\s\S]*\[S1\] Page 1 › Install\nRun the installer\.[\s\S]*<\/pages>/);
     expect(messages[1].content.endsWith('Question: how do I install?')).toBe(true);
+  });
+});
+
+describe('Site Ask citation support (#530)', () => {
+  it('with no Decisions route, asks nothing and returns no marks', async () => {
+    const { service, decision } = asker();
+    const res = await service.ask(SITE, { question: 'how do I install?' }, ctx);
+    expect(decision.noul).not.toHaveBeenCalled();
+    expect(res.citations).toBeUndefined();
+  });
+
+  it('marks each cited sentence against the passages handed out, billed to the site, the text unchanged', async () => {
+    const { service, decision } = asker({ answer: 'Run the installer. [S1] It also brews coffee. [S1]', support: [0.9, 0.1] });
+    const res = await service.ask(SITE, { question: 'how do I install?' }, ctx);
+    expect(res.answer).toBe('Run the installer. [S1] It also brews coffee. [S1]');
+    expect(res.citations?.map((c) => c.support)).toEqual(['supported', 'unsupported']);
+    const [call, state] = decision.noul.mock.calls[1] as unknown as [{ userId: string; operation: string }, { sentence: string; passages: Record<string, string> }];
+    expect(call).toMatchObject({ userId: SITE, operation: 'citation_check' });
+    expect(state.sentence).toBe('It also brews coffee.');
+    expect(state.passages.S1).toContain('Run the installer.');
+    expect(state.passages.S1).toContain('<pages tool="cite">');
   });
 });
 

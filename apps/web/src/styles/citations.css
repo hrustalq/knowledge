@@ -47,3 +47,12 @@
   background: var(--background);
   color: var(--muted-foreground);
 }
+
+/* A sentence the decision model found its sources do not support (#530): the
+   marker keeps working, wears a dashed caution ring, and says why on hover and
+   to a screen reader. Dashed is the non-colour half of the signal. */
+.kn-cites-unsupported .kn-cite {
+  border-style: dashed;
+  border-color: var(--color-panel-caution, oklch(0.56 0.17 25));
+  color: var(--color-panel-caution-ink, oklch(0.42 0.12 25));
+}

@@ -79,7 +79,8 @@
     "askDisclaimer": "AI-generated from this site’s pages. Check the sources.",
     "askClose": "Close",
     "askWidgetUnavailable": "Questions are not available here.",
-    "closePages": "Close pages"
+    "closePages": "Close pages",
+    "askUnsupported": "The cited page may not support this sentence"
   },
   "common": {
     "close": "Close",

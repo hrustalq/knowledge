@@ -1,6 +1,8 @@
 import type { AnswerCitation, AnswerSignals, AssistantSource, AssistantToolCall } from '@knowledge/contracts';
 import { assistantSourceKey, isPageSource, verificationIsStale } from '@knowledge/contracts';
 import { FREE_TOOLS } from './assistant-tool-types.js';
+import { askEach } from '../common/ask-each.js';
+import { wrapUntrusted } from '../common/untrusted.js';
 
 /**
  * Sentence-level citations (docs/features/38, issue #67 phase 1). Nest-free on
@@ -286,4 +288,62 @@ export function answerSignals(input: {
     toolErrors: input.toolErrors,
     budgetExhausted: input.maxToolCalls > 0 && spent >= input.maxToolCalls,
   };
+}
+
+/** Passage text kept per label for the support check; a page longer than this is checked against its start. */
+export const SUPPORT_PASSAGE_CHARS = 12_000;
+
+/**
+ * Remember what a label's source said, for the support check (#530): the text
+ * the turn handed out under that label, appended once per distinct piece and
+ * capped at SUPPORT_PASSAGE_CHARS.
+ */
+export function notePassage(passages: Map<string, string>, label: string | undefined, text: string | undefined): void {
+  if (!label || !text?.trim()) return;
+  const held = passages.get(label) ?? '';
+  if (held.includes(text) || held.length >= SUPPORT_PASSAGE_CHARS) return;
+  passages.set(label, (held ? `${held}\n\n${text}` : text).slice(0, SUPPORT_PASSAGE_CHARS));
+}
+
+/** The decision model's question for one cited sentence (#530), as measured in docs/features/67. */
+export const SUPPORT_QUESTION = {
+  instructions: 'Does the passage support the sentence?',
+  criteria: {
+    true: 'The passage states or directly implies what the sentence says.',
+    false: 'The sentence claims something the passage does not state: a different value, an added condition, or an overreach.',
+  },
+};
+
+/**
+ * Mark each citation supported or unsupported (#530). One question per cited
+ * sentence, over the passages its labels name — only what the turn handed
+ * out, never a new retrieval. A sentence none of whose labels has a passage,
+ * or whose question failed, stays unmarked. The text is never touched.
+ */
+export async function checkSupport(
+  text: string,
+  citations: readonly AnswerCitation[],
+  passages: ReadonlyMap<string, string>,
+  ask: (state: { sentence: string; passages: Record<string, string> }) => Promise<number>,
+  threshold: number,
+  isFatal: (error: unknown) => boolean,
+): Promise<AnswerCitation[]> {
+  const asks = citations.flatMap((c, i) => {
+    const cited = Object.fromEntries(
+      c.cites.flatMap((label) => {
+        const passage = passages.get(label);
+        return passage ? [[label, wrapUntrusted(passage, 'cite', 'page')]] : [];
+      }),
+    );
+    if (Object.keys(cited).length === 0) return [];
+    const sentence = text.slice(c.start, c.end).replace(new RegExp(CITE_MARKER_RE.source, 'gi'), '').trim();
+    return [{ i, state: { sentence, passages: cited } }];
+  });
+  const { answers } = await askEach(asks, (a) => ask(a.state), isFatal);
+  const out = citations.map((c) => ({ ...c }));
+  asks.forEach((a, k) => {
+    const p = answers[k];
+    if (p !== null && p !== undefined) out[a.i]!.support = p >= threshold ? 'supported' : 'unsupported';
+  });
+  return out;
 }

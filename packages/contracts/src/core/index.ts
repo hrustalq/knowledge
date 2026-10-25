@@ -979,6 +979,13 @@ export interface AnswerCitation {
   start: number;
   end: number;
   cites: string[];
+  /**
+   * Whether the decision model found the cited passages support the sentence
+   * (#530). Set after the answer, only when a Decisions route is configured;
+   * absent means not checked. A mark, never an edit: the text and its `[S#]`
+   * labels stay as written.
+   */
+  support?: 'supported' | 'unsupported';
 }
 
 export const ANSWER_CONFIDENCE_LEVELS = ['high', 'medium', 'low', 'none'] as const;

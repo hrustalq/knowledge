@@ -4,7 +4,7 @@
 // Buildless package: no enums, no relative cross-file imports (see
 // src/index.ts).
 
-import type { Locale } from '@knowledge/contracts/core';
+import type { AnswerCitation, Locale } from '@knowledge/contracts/core';
 
 // ---------------------------------------------------------------------------
 // Share links (docs/features/43)
@@ -1089,6 +1089,12 @@ export interface PublicSiteAskResponse {
   answer: string;
   /** The sources the answer cites, in label order. */
   sources: PublicSiteAskSource[];
+  /**
+   * The answer's cited sentences, with a `support` mark on each the decision
+   * model checked (#530). Present only when the workspace has a Decisions
+   * route; never stored, since a site answer is not.
+   */
+  citations?: AnswerCitation[];
 }
 
 /** The Ask route of a site. */

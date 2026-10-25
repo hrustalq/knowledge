@@ -13,7 +13,9 @@ import {
 import { AiConfigService } from '../ai/ai-config.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
-import { finalizeCitations } from '../assistant/citations.js';
+import { checkSupport, finalizeCitations, SUPPORT_QUESTION } from '../assistant/citations.js';
+import { ProviderAccountError } from '../assistant/assistant.client.js';
+import { DecisionClient } from '../assistant/decision.client.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import type { Env } from '../config/env.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
@@ -145,6 +147,7 @@ export class PublicAskService {
     private readonly graph: GraphService,
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
     private readonly config: ConfigService<Env, true>,
+    private readonly decision: DecisionClient,
   ) {}
 
   async ask(
@@ -204,7 +207,37 @@ export class PublicAskService {
         headingPath: p.headingPath,
         url: `${root}${sitePagePath('', versionSlug, p.row.documentId === homeId ? '' : p.row.slugPath)}`,
       }));
-    return { answer: final.text, sources };
+    const citations = await this.supportOf(site, final, passages);
+    return { answer: final.text, sources, ...(citations ? { citations } : {}) };
+  }
+
+  /**
+   * The citation support check (#530), inline: a site answer is one response,
+   * so the visitor gets the marks with it. Only the passages this viewer was
+   * handed are sent, billed to the site like the answer. Null with no route,
+   * and on any failure — the answer stands unmarked.
+   */
+  private async supportOf(
+    site: LiveSite,
+    final: ReturnType<typeof finalizeCitations>,
+    passages: AskPassage[],
+  ): Promise<ReturnType<typeof finalizeCitations>['citations'] | null> {
+    if (final.citations.length === 0) return null;
+    try {
+      const route = await this.decision.routeFor(site.workspaceId);
+      if (!route) return null;
+      return await checkSupport(
+        final.text,
+        final.citations,
+        new Map(passages.map((p) => [p.cite, p.text])),
+        (state) => this.decision.noul({ route, userId: site.id, operation: 'citation_check' }, state, SUPPORT_QUESTION),
+        route.thresholds.citation,
+        (error) => error instanceof ProviderAccountError,
+      );
+    } catch (err) {
+      this.logger.warn({ msg: 'site ask: citation check failed', siteId: site.id, err });
+      return null;
+    }
   }
 
   /** Passages from the rows this viewer may read, labelled in order. */

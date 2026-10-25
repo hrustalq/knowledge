@@ -76,6 +76,16 @@ in the pull request that introduces them — see
   (#530). Below the harvest threshold, the reply is the one an empty harvest gives, with no harvester
   call and no page search; only the masked thread is sent. A failed question harvests as before. The
   decision's usage row is not counted against `HARVEST_RATE_PER_HOUR`.
+- With a Decisions route, every cited sentence of an assistant answer is checked against the passages
+  its `[S#]` labels were handed out with (#530): the page read, the search snippet, the attached or
+  current page. One that Jev finds unsupported gets a dashed caution ring on its marker, with "The cited
+  page may not support this sentence" on hover and for screen readers, and the answer's receipts say how
+  many sentences may not be supported. The check runs after the answer is shown, about 2.5 s later, and
+  never changes the answer's text or labels. It covers the assistant pane, the editor assistant, chat-bot
+  answers (in the stored thread) and `/ask`, where it runs before the response; a published site's Ask
+  returns the marks with its answer too. `HTTP` `AnswerCitation.support` (`supported` | `unsupported`,
+  absent when not checked) on messages, `/v1/assistant/ask` and the site Ask response's new `citations`.
+  Each question writes a **Citation check** usage row.
 
 ### Changed
 

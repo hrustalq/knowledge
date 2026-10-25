@@ -225,6 +225,7 @@ const externalCeiling = computed(() => settings.value?.externalAiActions.ceiling
       v-if="settings"
       :can-manage="canManage"
       :routing="settings.routing"
+      :decision="settings.decision"
       :can-store-secrets="settings.canStoreSecrets"
     />
 

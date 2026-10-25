@@ -56,6 +56,16 @@ in the pull request that introduces them — see
   `POST /v1/documents/:id/branches/mine` returns your working branch for a page, and
   `POST /v1/documents/:id/branches/:branchId/publish` publishes one; it refuses an empty publish and a
   page that moved on before it opens anything.
+- A **Decisions** route in AI settings (#530, [docs/features/67](docs/features/67-decision-model-evaluation.md)).
+  An admin routes a GenAPI profile to it, so TypeSafe Jev can answer the yes/no questions that will
+  pre-filter the arbiter, chat harvest and citation support. Each of those has a threshold, set in the
+  same place; a field left empty uses the measured default (arbiter 0.2, the other two 0.5, tuned on
+  `jev-1-13`). The row says that gen-api keeps request content and forwards it to TypeSafe in the US. A
+  profile whose model is not a Jev release asks `jev-1-13` with that profile's key, and **Test** on a Jev
+  profile asks it one question instead of a chat completion. Unrouted, it is off, and nothing changes.
+  `HTTP` `PATCH /v1/ai/settings` takes `decisionProviderId` (a GenAPI profile of the workspace, else 400)
+  and `decisionArbiterThreshold` / `decisionCitationThreshold` / `decisionHarvestThreshold`. Usage
+  gains a **Citation check** operation.
 
 ### Changed
 
@@ -90,6 +100,12 @@ in the pull request that introduces them — see
   before. Check progress with
   `SELECT count(*) FROM document_revisions WHERE fulltext_stale_at IS NOT NULL` (0 = done). Renaming a
   page re-marks its revisions the same way.
+- New env var `DECISION_PROVIDER` (`none` | `gen-api`, default `none`) is the ceiling for the decision
+  route (#530): at `none`, no workspace's route is honoured, and the settings row says so. It has a
+  default, so the deploy's environment check asks for nothing; to turn decisions on in production, set
+  `DECISION_PROVIDER=gen-api` in the GitHub `production` environment. Migration
+  `20261216100000_decision_route` adds nullable `ai_settings.decision_*` columns. Additive: the previous
+  image ignores them.
 
 ## [0.33.1] — 2026-10-24
 

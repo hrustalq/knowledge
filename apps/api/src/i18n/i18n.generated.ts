@@ -873,6 +873,7 @@ export type I18nTranslations = {
             "pluginHostUnresolved": string;
             "pluginUrlPrivate": string;
             "providerNone": string;
+            "decisionNeedsGenApi": string;
             "agentNotFound": string;
             "agentScheduleNeedsOwner": string;
             "agentScheduleNeedsInterval": string;

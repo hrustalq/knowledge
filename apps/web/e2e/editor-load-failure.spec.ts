@@ -17,6 +17,8 @@ test('a failed load shows an error state, and Retry opens the page', async ({ pa
       workspaceId: WORKSPACE,
       projectId,
       title: 'Load me',
+      // Open to the workspace, as before #474 made a new page a private draft.
+      visibility: 'workspace',
       content: { mode: 'inline', format: 'markdown', text: '# Load me\n\nThe body.\n' },
     },
   })

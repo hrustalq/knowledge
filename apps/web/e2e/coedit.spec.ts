@@ -19,6 +19,8 @@ test('two contexts co-edit one page: body, caret and title', async ({ browser, r
       workspaceId: WORKSPACE,
       projectId,
       title: 'Shared page',
+      // Open to the workspace, as before #474 made a new page a private draft.
+      visibility: 'workspace',
       content: { mode: 'inline', format: 'markdown', text: '# Shared page\n\nSeed paragraph.\n' },
     },
   })

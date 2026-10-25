@@ -136,6 +136,16 @@ WHERE status = 'superseded' [OR (refreshOpen AND status = 'open')]`:
     pages share an entity);
   - at least one side in scope;
   - the closest pair per page pair, up to `CONTRADICTION_MAX_PAIRS_PER_RUN`.
+- With a Decisions route (#530, [67](67-decision-model-evaluation.md)), the
+  cap moves from the candidates to the judge:
+  - `candidatePairs` is uncapped, and PG visibility and titles are resolved
+    over all of them before any passage leaves;
+  - `prefilterPairs` asks TypeSafe Jev one noul per pair, eight in flight,
+    and keeps the pairs at or above the arbiter threshold (default 0.2);
+  - a pair whose question failed is kept, and a dead account stops the
+    screening and keeps the rest;
+  - the survivors go to the judge, up to `CONTRADICTION_MAX_PAIRS_PER_RUN`.
+  A Jev "yes" never writes a conflict: the judge's quotes still decide.
 - The model's answer is kept only if both quoted sentences are in their
   passages (`readJudgement`) and its confidence clears
   `CONTRADICTION_MIN_CONFIDENCE`.
@@ -240,7 +250,10 @@ when both describe the same thing, which is what passage pairing already finds.
   - `COMMUNITY_SUMMARIES_ENABLED` (`false`) and `COMMUNITY_MAX_PER_RUN` (30).
 - Neither agent runs until a person runs it, schedules it or adds a trigger.
   Each arbiter pair and each community summary is one model call, billed to
-  the run's owner. Neither agent runs on `EMBEDDINGS_PROVIDER=stub`.
+  the run's owner. Neither agent runs on `EMBEDDINGS_PROVIDER=stub`. With a
+  Decisions route, every candidate pair also costs one Jev question under
+  `contradiction` (about 13 ₽ per thousand through gen-api, doc 67), and
+  agent runs check the budget only when they start.
 - The OpenSearch index gains `validFrom`, `validTo` and `lineage` through the
   existing mapping update on its first write, with no reindex. The BM25 repair
   sweep re-stamps every revision it re-mirrors.

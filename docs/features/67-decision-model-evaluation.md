@@ -1,9 +1,10 @@
 # 67 — Decision model evaluation: TypeSafe Jev
 
-Issue [#477](https://github.com/hrustalq/knowledge/issues/477). This is research
-only: no product code changed. It records which of our model calls a hosted
-decision model could take over, measured on our own data rather than taken from
-the vendor's claims.
+Issue [#477](https://github.com/hrustalq/knowledge/issues/477). This began as
+research only, and the adopted verdicts shipped in #530
+([What shipped](#what-shipped-530)). It records which of our model calls a
+hosted decision model could take over, measured on our own data rather than
+taken from the vendor's claims.
 
 Several of our model calls are not generation. They are narrow decisions: pick
 one of N, yes/no, or a level on a rubric. Each one goes through a chat LLM with
@@ -28,8 +29,9 @@ Every question in a request is answered in parallel against one shared `state`.
 | Quality auditor, `agent.executor.ts` (#74) | `audit` | **Reject** | Mixed: completeness level 50% vs gpt-6-luna's 72% on Latin-heavy pages, better on 10 ru pages. The issue messages still need the LLM, so Jev would be an extra call, not a replacement |
 | Re-ranking `ranking.ts`'s top-20 | — (new) | **Reject for now** | No gain on ru (MRR 0.73 → 0.72). A small gain on Latin-heavy pages (0.28 → 0.39, n = 15) costs 2.5–3.7 s and 0.24 ₽ per query |
 
-The follow-up implementation issue for the adopted call sites is
-[#530](https://github.com/hrustalq/knowledge/issues/530).
+The adopted call sites were built in
+[#530](https://github.com/hrustalq/knowledge/issues/530); see
+[What shipped](#what-shipped-530).
 
 ## What was measured, and how
 
@@ -375,42 +377,64 @@ gateway.
 `api.telegram.org` is unreachable from the same box, so this is worth having on
 record.
 
-## Integration sketch
+## What shipped (#530)
 
-For the follow-up. It respects the issue's constraints:
+The adopted verdicts were built in [#530](https://github.com/hrustalq/knowledge/issues/530).
+The design follows the sketch this section used to hold.
 
-- **A separate client, not a provider kind.** Jev does not speak the chat
-  protocol, so it is not an `AiProviderKind` behind `AssistantClient`. It
-  becomes a `DecisionClient` in its own controller-free `DecisionClientModule`,
-  shaped like `AssistantClientModule`. The arbiter runs in the worker and the
-  citation check in the API, so both processes import it, and nothing behind a
-  controller does.
-- **Configuration is a sparse override.** Add `'decision'` to `AiPurpose`,
-  resolved through `resolveFor` like the others. With no profile routed to
-  `decision`, every call site behaves exactly as today; that is the
-  "empty table reproduces the old behaviour" rule. An env ceiling
-  (`DECISION_PROVIDER`, default `none`) can switch it off for the whole
-  deployment.
-- **Credentials and usage.** The API key goes through `ai/secret-box.ts`. Each
-  call records an `ai_usage` row under the call site's existing
-  `AiUsageOperation` (`contradiction`, `harvest`), plus a new one for the
-  citation check.
-- **Content and access.**
-  - Page text in `state` stays wrapped with `wrapUntrusted`.
-  - The PG `AccessScope` filter runs before anything is sent, as it already
-    does for the arbiter's pairs.
-  - The citation check sends only passages the turn already handed out.
-- **What does not change.** Typed answers remove `safeJson`. They do not remove
-  `readJudgement`'s quote check or `finalizeCitations`, and a Jev "yes" never
-  writes a conflict or strips a citation on its own:
-  - the arbiter still asks the LLM for quotes;
-  - the citation check marks a sentence; it does not rewrite the answer.
-- **Thresholds are settings.** The pre-filter thresholds are workspace
-  settings with code defaults (0.2 for the arbiter, 0.5 for harvest and
-  citations), each pinned to a model version.
-- **Latency.** The citation check adds about 2.5 s at the end of a turn. Run it
-  after the answer is shown, then mark the sentences, rather than holding the
-  stream.
+**A route, not a provider kind.**
+- Jev does not speak the chat protocol, so it is not an `AiProviderKind`
+  behind `AssistantClient`. It is `DecisionClient`, in the controller-free
+  `DecisionClientModule`, which the worker (arbiter) and the API (harvest,
+  citations) both import.
+- A workspace routes a **GenAPI profile** to the `decision` purpose in AI
+  settings → Providers → Decisions; any other kind is refused with a 400.
+- Unlike chat, review and extraction, an unrouted decision is **off**: it
+  never falls back to the inline config, which is the chat model.
+- `DECISION_PROVIDER` (`none` | `gen-api`, default `none`) is the ceiling. At
+  `none`, a saved route stays visible and the row says it is not applied.
+
+**One question per call.**
+- `DecisionClient.noul` sends one noul to gen-api's `jev` network,
+  `is_sync: true`, with `state` an object.
+- 429 and 529 are retried twice with backoff. 401, 402 and 403 raise
+  `ProviderAccountError`, which stops a pass.
+- Batching several questions into one request stays unmeasured, so it is not
+  used.
+
+**Pinned model and thresholds.**
+- A profile whose model is not a Jev release asks `jev-1-13`
+  (`DECISION_DEFAULT_MODEL`) with the profile's key, and drops the prices the
+  admin set for its chat model.
+- The thresholds are sparse `ai_settings.decision_*_threshold` overrides of
+  `DECISION_THRESHOLDS`: arbiter 0.2, citation 0.5, harvest 0.5, all measured
+  above on `jev-1-13`.
+- Saving an override records the routed model in `decision_tuned_model`, and
+  the settings row shows "tuned on" that model.
+
+**Usage.**
+- Each question is one `ai_usage` row under the call site's operation:
+  `contradiction`, `harvest`, or the new `citation_check`.
+- The row carries the model the response names (`jev-1.13-…`) and gen-api's
+  own cost.
+- The harvest rate limit skips these rows.
+
+**Content and access.**
+- Page and chat text in `state` is `wrapUntrusted`.
+- The arbiter resolves PG visibility over every candidate before a passage
+  leaves.
+- Harvest sends only the masked thread.
+- The citation check sends only text the turn already handed out.
+
+**What did not change.** A Jev answer filters or marks; it never writes:
+- the arbiter still needs the judge's quotes ([57](57-temporal-graph.md));
+- harvest still runs the harvester and `planCaptures` on every thread that
+  passes ([59](59-chat-harvest.md));
+- a citation is marked, never stripped or rewritten ([38](38-answer-provenance.md)).
+
+**Latency.** The citation check runs after a pane answer is shown and is
+written back to the message. `/ask` and site Ask are one-shot, so there it
+adds one gen-api round trip (about 2.5 s) to the response.
 
 ## Reproducing
 

@@ -77,6 +77,7 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { AclEventsService } from '../permissions/acl-events.service.js';
 import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
+import { ReadCache, READ_CACHE_FAMILIES } from '../cache/read-cache.service.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -125,6 +126,7 @@ export class DocumentsService {
     private readonly apiSpecs: ApiSpecsService,
     private readonly apiFixtures: ApiFixturesService,
     private readonly aclEvents: AclEventsService,
+    private readonly cache: ReadCache,
   ) {}
 
   async createDocument(input: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
@@ -1123,7 +1125,10 @@ export class DocumentsService {
    * per revision, so its id is the validator of the conditional GET (#472) —
    * an unchanged page is a 304 without the object-storage read.
    */
-  async contentRevision(documentId: string, revisionId?: string): Promise<{ kind: string; revision: DocumentRevision }> {
+  async contentRevision(
+    documentId: string,
+    revisionId?: string,
+  ): Promise<{ workspaceId: string; kind: string; revision: DocumentRevision }> {
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
       include: { branches: true },
@@ -1141,12 +1146,22 @@ export class DocumentsService {
     if (revision.status === 'draft') {
       throw new BadRequestException(t('error.document.contentIsDraft', { id: revision.id }));
     }
-    return { kind: document.kind, revision };
+    return { workspaceId: document.workspaceId, kind: document.kind, revision };
   }
 
   /** The object-storage half of `getContent`. */
-  async readContent({ kind, revision }: { kind: string; revision: DocumentRevision }): Promise<DocumentContentResponse> {
-    const raw = await this.storage.getObjectText(revision.s3Key);
+  async readContent({
+    workspaceId,
+    kind,
+    revision,
+  }: {
+    workspaceId: string;
+    kind: string;
+    revision: DocumentRevision;
+  }): Promise<DocumentContentResponse> {
+    // A finalized revision's bytes never change (contentRevision refuses a draft).
+    const family = READ_CACHE_FAMILIES.content;
+    const raw = await this.cache.wrap(workspaceId, family.key(revision.id), () => this.storage.getObjectText(revision.s3Key), family.ttlMs);
     // A spec (#78) or fixture (#483) is returned verbatim: it has no
     // frontmatter, and YAML may well open with a `---` marker gray-matter would eat.
     const parsed = isStructuredKind(kind) ? { data: {}, content: raw } : matter(raw);

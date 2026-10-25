@@ -845,6 +845,16 @@ export const envSchema = z.object({
    * Hocuspocus instance or Redis connection is ever created.
    */
   COLLAB_ENABLED: boolish(false),
+
+  /**
+   * The Redis read cache (#472, docs/architecture/10-caching.md): scope-free
+   * answers only — revision bytes, query embeddings, workspace settings. Off
+   * is today's behaviour exactly; on, a Redis failure still falls through to
+   * the source. Off until measured on production.
+   */
+  READ_CACHE_ENABLED: boolish(false),
+  /** TTL for a family that names none; every key has one. */
+  READ_CACHE_DEFAULT_TTL_MS: z.coerce.number().int().positive().default(3_600_000),
   /** A shared draft is persisted this long after the last edit… */
   COLLAB_STORE_DEBOUNCE_MS: z.coerce.number().int().min(100).default(2000),
   /** …and at least this often while someone keeps typing: the most a crash can lose. */

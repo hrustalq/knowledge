@@ -9,6 +9,7 @@ import { ProjectsModule } from '../projects/projects.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { GraphModule } from '../graph/graph.module.js';
 import { FulltextModule } from '../fulltext/fulltext.module.js';
+import { ReadCacheCoreModule } from '../cache/read-cache.module.js';
 
 /**
  * Access-control management (workspaces + members) and workspace deletion
@@ -17,7 +18,7 @@ import { FulltextModule } from '../fulltext/fulltext.module.js';
  * the graph and BM25 may be deleted from.
  */
 @Module({
-  imports: [PrismaModule, AuthCoreModule, ProjectsModule, StorageModule, GraphModule, FulltextModule],
+  imports: [PrismaModule, AuthCoreModule, ProjectsModule, StorageModule, GraphModule, FulltextModule, ReadCacheCoreModule],
   controllers: [WorkspacesController],
   providers: [WorkspacesService, WorkspaceTeardownService, WorkspaceTeardownSweeper],
 })

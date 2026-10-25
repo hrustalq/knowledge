@@ -77,7 +77,7 @@ async function save() {
   if (saving.value || !dirty.value) return
   saving.value = true
   try {
-    const next = (await api.patch('/v1/workspaces/{id}/publishing-settings', {
+    const next = await api.patch('/v1/workspaces/{id}/publishing-settings', {
       path: { id: workspaceId },
       body: {
         allowShareLinks: fromTri(form.allowShareLinks),
@@ -85,7 +85,7 @@ async function save() {
         allowPublicSites: fromTri(form.allowPublicSites),
         allowPublicEmbeds: fromTri(form.allowPublicEmbeds),
       },
-    })) as PublishingSettingsResponse
+    })
     queryClient.setQueryData(settingsOptions.queryKey, next)
     toast.success(t('publishing.saved'))
   } catch (e) {

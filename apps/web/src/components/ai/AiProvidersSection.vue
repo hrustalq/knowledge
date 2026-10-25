@@ -10,7 +10,6 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { CircleCheck, CircleDashed, CircleX, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
 import type {
-  AiConnectionTestResponse,
   AiProviderSummary,
   AiRouting,
   DecisionSettings,
@@ -126,9 +125,9 @@ async function submit() {
 async function test(p: AiProviderSummary) {
   testingId.value = p.id
   try {
-    const result = (await api.post('/v1/ai/settings/test', {
+    const result = await api.post('/v1/ai/settings/test', {
       body: { workspaceId, providerId: p.id },
-    })) as AiConnectionTestResponse
+    })
     if (result.ok) toast.success(t('ai.providerReached', { name: p.name, model: result.model, ms: result.latencyMs }))
     else toast.error(t('ai.nameAndError', { name: p.name, error: result.error }))
   } catch (e) {

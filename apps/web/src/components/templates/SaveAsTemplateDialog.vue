@@ -26,7 +26,8 @@ import {
   type TemplatePlaceholder,
   type TemplateRelationDefault,
 } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { api } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { errorMessage } from '@/api/errors'
 import { canWriteTemplate, unescapePlaceholders } from '@/lib/templates'
 import { useAuthStore } from '@/stores/auth'
@@ -133,9 +134,8 @@ async function save() {
     // `source:` names the connector page this one was synced from; a template
     // passing it on would claim every page created from it came from there.
     const other = Object.fromEntries(Object.entries(page.other).filter(([key]) => key !== 'source'))
-    const created = await apiFetch<TemplateDetail>('/v1/templates', {
-      method: 'POST',
-      body: JSON.stringify({
+    const created = await api.post('/v1/templates', {
+      body: {
         workspaceId: getWorkspaceId(),
         projectId: scope.value === 'project' ? page.projectId : null,
         name: name.value.trim(),
@@ -148,7 +148,7 @@ async function save() {
           other,
           body: body.value,
         }),
-      }),
+      },
     })
     open.value = false
     emit('saved', created)

@@ -1,4 +1,4 @@
-import { createSSRApp } from 'vue'
+import { createSSRApp, markRaw } from 'vue'
 import { createPinia } from 'pinia'
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import App from './App.vue'
@@ -17,11 +17,15 @@ export function createApp() {
   // otherwise share `locale` (docs/features/18). Its catalog arrives async:
   // each entry awaits ensureLocaleMessages(i18n, …) before rendering/mounting.
   const i18n = createI18nFor(getLocale())
+  const queryClient = createQueryClient()
+  // Stores read server data through the same cache components do (#472):
+  // `this.queryClient` in an action. Raw, or Pinia would make it reactive.
+  pinia.use(() => ({ queryClient: markRaw(queryClient) }))
   app.use(i18n)
   app.use(pinia)
   app.use(router)
-  app.use(VueQueryPlugin, { queryClient: createQueryClient() })
+  app.use(VueQueryPlugin, { queryClient })
   installAuthGuard(router, pinia)
   installViewTransitions(router)
-  return { app, router, pinia, i18n }
+  return { app, router, pinia, i18n, queryClient }
 }

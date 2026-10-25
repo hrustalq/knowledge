@@ -8,7 +8,7 @@ import {
   type CompleteAvatarUploadResponse,
   type CreateAvatarUploadResponse,
 } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { api } from '@/api/queries'
 import { presignedPut } from '@/lib/presigned-put'
 import { errorMessage } from '@/api/errors'
 
@@ -21,10 +21,12 @@ import { errorMessage } from '@/api/errors'
  * progress and failure the same way.
  *
  * `base` is the route prefix (`/v1/me` or `/v1/projects/<id>`), which is the
- * only thing that differs between the two kinds.
+ * only thing that differs between the two kinds. The typed client wants each
+ * route by its template, so the project id is read back out of it.
  */
 export function useAvatarUpload(base: () => string) {
   const { t } = useI18n()
+  const projectId = () => /^\/v1\/projects\/([^/]+)$/.exec(base())?.[1]
   const busy = ref(false)
   const progress = ref(0)
 
@@ -53,23 +55,26 @@ export function useAvatarUpload(base: () => string) {
     busy.value = true
     progress.value = 0
     try {
-      const created = await apiFetch<CreateAvatarUploadResponse>(`${base()}/avatar`, {
-        method: 'POST',
-        body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type,
-          sizeBytes: file.size,
-        }),
-      })
+      // validate() has already held the type to the allowed list.
+      const contentType = file.type as (typeof AVATAR_CONTENT_TYPES)[number]
+      const reserve = { body: { filename: file.name, contentType, sizeBytes: file.size } }
+      const id = projectId()
+      const created = (
+        id
+          ? await api.post('/v1/projects/{id}/avatar', { path: { id }, ...reserve })
+          : await api.post('/v1/me/avatar', reserve)
+      ) as CreateAvatarUploadResponse
       // Real bytes, so real progress: XHR, because fetch cannot report an
       // upload's progress at all.
       await presignedPut(created.upload, file, (fraction) => {
         progress.value = Math.round(fraction * 95)
       })
-      const done = await apiFetch<CompleteAvatarUploadResponse>(`${base()}/avatar/complete`, {
-        method: 'POST',
-        body: JSON.stringify({ uploadId: created.uploadId, filename: file.name }),
-      })
+      const complete = { body: { uploadId: created.uploadId, filename: file.name }, config: { timeout: 0 } }
+      const done = (
+        id
+          ? await api.post('/v1/projects/{id}/avatar/complete', { path: { id }, ...complete })
+          : await api.post('/v1/me/avatar/complete', complete)
+      ) as CompleteAvatarUploadResponse
       progress.value = 100
       toast.success(t('avatar.updated'))
       return done.avatarUrl
@@ -84,7 +89,8 @@ export function useAvatarUpload(base: () => string) {
   async function remove(): Promise<boolean> {
     busy.value = true
     try {
-      await apiFetch(`${base()}/avatar`, { method: 'DELETE' })
+      const id = projectId()
+      await (id ? api.delete('/v1/projects/{id}/avatar', { path: { id } }) : api.delete('/v1/me/avatar'))
       toast.success(t('avatar.removed'))
       return true
     } catch (e) {

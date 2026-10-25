@@ -3,15 +3,12 @@ import type {
   AnswerSurface,
   AnswerVote,
   AssistantMessageInfo,
-  DeleteAnswerFeedbackResponse,
   KnowledgeIssueInfo,
   KnowledgeIssueKind,
   KnowledgeIssueSurface,
   ReportKnowledgeIssueResponse,
-  SetAnswerFeedbackResponse,
-  UpdateKnowledgeIssueResponse,
 } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { api } from '@/api/queries'
 import { issueReportBody, optimisticVote, voteBody, type FeedbackTarget, type VoteDraft } from '@/lib/answer-feedback'
 
 /**
@@ -61,9 +58,9 @@ export const useFeedbackStore = defineStore('feedback', {
       this.votes[messageId] = optimisticVote(draft)
       this.busy[messageId] = true
       try {
-        const res = await apiFetch<SetAnswerFeedbackResponse>(`/v1/assistant/messages/${messageId}/feedback`, {
-          method: 'PUT',
-          body: JSON.stringify(voteBody(target, draft, surface)),
+        const res = await api.put('/v1/assistant/messages/{id}/feedback', {
+          path: { id: messageId },
+          body: voteBody(target, draft, surface) as never,
         })
         this.votes[messageId] = {
           rating: res.feedback.rating ?? draft.rating,
@@ -85,7 +82,7 @@ export const useFeedbackStore = defineStore('feedback', {
       this.votes[messageId] = null
       this.busy[messageId] = true
       try {
-        await apiFetch<DeleteAnswerFeedbackResponse>(`/v1/assistant/messages/${messageId}/feedback`, { method: 'DELETE' })
+        await api.delete('/v1/assistant/messages/{id}/feedback', { path: { id: messageId } })
       } catch (e) {
         this.votes[messageId] = current
         throw e
@@ -101,7 +98,7 @@ export const useFeedbackStore = defineStore('feedback', {
      * which, and the caller tells the reporter.
      */
     async reportIssue(body: Record<string, unknown>): Promise<ReportKnowledgeIssueResponse> {
-      return apiFetch<ReportKnowledgeIssueResponse>('/v1/knowledge-issues', { method: 'POST', body: JSON.stringify(body) })
+      return api.post('/v1/knowledge-issues', { body: body as never })
     },
 
     /**
@@ -128,19 +125,13 @@ export const useFeedbackStore = defineStore('feedback', {
 
     /** Close a report by hand — resolved or dismissed. */
     async closeIssue(issueId: string, status: 'resolved' | 'dismissed'): Promise<KnowledgeIssueInfo> {
-      const res = await apiFetch<UpdateKnowledgeIssueResponse>(`/v1/knowledge-issues/${issueId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status }),
-      })
+      const res = await api.patch('/v1/knowledge-issues/{id}', { path: { id: issueId }, body: { status } })
       return res.issue
     },
 
     /** A vote on a one-shot `/ask` answer: stored as its own row, nothing cached here. */
     async voteOnAsk(target: Extract<FeedbackTarget, { kind: 'ask' }>, draft: VoteDraft): Promise<AnswerVote> {
-      const res = await apiFetch<SetAnswerFeedbackResponse>('/v1/assistant/ask/feedback', {
-        method: 'POST',
-        body: JSON.stringify(voteBody(target, draft, 'ask')),
-      })
+      const res = await api.post('/v1/assistant/ask/feedback', { body: voteBody(target, draft, 'ask') as never })
       return {
         rating: res.feedback.rating ?? draft.rating,
         reason: res.feedback.reason,

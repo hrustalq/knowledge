@@ -37,6 +37,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRe
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { onKeyStroke, useStorage } from '@vueuse/core'
+import { useQueryClient } from '@tanstack/vue-query'
 import {
   Eye,
   FilePlus2,
@@ -60,9 +61,6 @@ import {
   collabDocName,
   type CollabCapabilitiesResponse,
   type CompareResponse,
-  type CreateBranchResponse,
-  type CreateDocumentResponse,
-  type CreateUploadResponse,
   type DocumentCategory,
   type DocumentContentResponse,
   type DocumentDetailResponse,
@@ -70,12 +68,11 @@ import {
   type FinalizeRevisionResponse,
   type ListBranchesResponse,
   type ListCollabDraftsResponse,
-  type PublishBranchResponse,
   type RenderTemplateResponse,
-  type RevisionInfo,
 } from '@knowledge/contracts'
 import { SCHEMA_VERSION, editorSchema, parseMarkdown } from '@knowledge/editor-schema'
-import { ApiError, apiFetch, apiFetchText, getWorkspaceId } from '@/lib/api'
+import { getWorkspaceId } from '@/lib/api'
+import { api, fetchApi, isApiRequestError } from '@/api/queries'
 import { errorDetails, errorMessage, errorReason } from '@/api/errors'
 import { presignedPut } from '@/lib/presigned-put'
 import { labelFor } from '@/lib/labels'
@@ -162,6 +159,7 @@ const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
+const queryClient = useQueryClient()
 const store = useDocumentsStore()
 const projects = useProjectsStore()
 const templates = useTemplatesStore()
@@ -520,15 +518,19 @@ const headMoved = ref<string | null>(null)
 async function followHead() {
   if (!collab.value || !editId.value || !branch.value) return
   const id = editId.value
-  const [{ branches }, { drafts }, detail] = await Promise.all([
-    apiFetch<ListBranchesResponse>(`/v1/documents/${id}/branches`),
-    apiFetch<ListCollabDraftsResponse>(`/v1/documents/${id}/drafts`),
-    apiFetch<DocumentDetailResponse>(`/v1/documents/${id}`),
-  ])
+  const path = { id }
+  const [{ branches }, { drafts }, detail] = (await Promise.all([
+    fetchApi(queryClient, '/v1/documents/{id}/branches', { path }, { fresh: true }),
+    fetchApi(queryClient, '/v1/documents/{id}/drafts', { path }, { fresh: true }),
+    fetchApi(queryClient, '/v1/documents/{id}', { path }, { fresh: true }),
+  ])) as [ListBranchesResponse, ListCollabDraftsResponse, DocumentDetailResponse]
   const head = branches.find((b) => b.branchId === branch.value?.branchId)?.headRevisionId ?? null
   const draft = drafts.find((d) => d.branchId === branch.value?.branchId)
   if (!head || !draft || head === headRevisionId.value) return
-  const content = await apiFetch<DocumentContentResponse>(`/v1/documents/${id}/content?revision=${head}`)
+  const content = await fetchApi(queryClient, '/v1/documents/{id}/content', {
+    path,
+    query: { revision: head },
+  })
   baseFields.value = publishedFields(detail.document, content)
   otherFrontmatter.value = readFrontmatter(content.frontmatter).other
   headRevisionId.value = head
@@ -555,7 +557,9 @@ async function discardDraft() {
   reviewOpen.value = false
   if (!editId.value || !branch.value) return
   try {
-    await apiFetchText(`/v1/documents/${editId.value}/drafts/${branch.value.branchId}`, { method: 'DELETE' })
+    await api.delete('/v1/documents/{id}/drafts/{branchId}', {
+      path: { id: editId.value, branchId: branch.value.branchId },
+    })
   } catch (e) {
     toast.error(errorMessage(e, t))
   }
@@ -703,15 +707,14 @@ async function openTemplate(ref: string) {
   let rendered = templates.takeRendered(ref)
   if (!rendered) {
     try {
-      rendered = await apiFetch<RenderTemplateResponse>('/v1/templates/render', {
-        method: 'POST',
-        body: JSON.stringify({
+      rendered = await api.post('/v1/templates/render', {
+        body: {
           workspaceId: getWorkspaceId(),
           ref,
           ...(title.value.trim() ? { title: title.value.trim() } : {}),
           ...(projectId.value ? { projectId: projectId.value } : {}),
           ...(parentId.value ? { parentId: parentId.value } : {}),
-        }),
+        },
       })
     } catch (e) {
       toast.error(errorMessage(e, t))
@@ -908,13 +911,15 @@ async function loadPage() {
   loading.value = true
   loadError.value = null
   try {
-    const [detail, defaultContent, caps, { branches }] = await Promise.all([
-      apiFetch<DocumentDetailResponse>(`/v1/documents/${id}`),
-      apiFetch<DocumentContentResponse>(`/v1/documents/${id}/content`),
+    const path = { id }
+    // Fresh: the editor writes its next revision over what it loads here.
+    const [detail, defaultContent, caps, { branches }] = (await Promise.all([
+      fetchApi(queryClient, '/v1/documents/{id}', { path }, { fresh: true }),
+      fetchApi(queryClient, '/v1/documents/{id}/content', { path }, { fresh: true }),
       // Unknown means off: the page opens single-user, as it always has.
-      apiFetch<CollabCapabilitiesResponse>('/v1/collab/capabilities').catch(() => null),
-      apiFetch<ListBranchesResponse>(`/v1/documents/${id}/branches`),
-    ])
+      fetchApi(queryClient, '/v1/collab/capabilities').catch(() => null),
+      fetchApi(queryClient, '/v1/documents/{id}/branches', { path }, { fresh: true }),
+    ])) as [DocumentDetailResponse, DocumentContentResponse, CollabCapabilitiesResponse | null, ListBranchesResponse]
     // An archived page is read-only until unarchived (docs/features/39);
     // the API would refuse the publish, so refuse the editing first.
     if (detail.document.archivedAt) {
@@ -928,7 +933,7 @@ async function loadPage() {
     // unless a link named another. A private draft page is private already.
     const mine =
       !requestedBranch && !detail.document.draftOwnerId
-        ? (await apiFetch<CreateBranchResponse>(`/v1/documents/${id}/branches/mine`, { method: 'POST' })).branch
+        ? (await api.post('/v1/documents/{id}/branches/mine', { path })).branch
         : null
     branch.value = mine ?? byName(requestedBranch) ?? byName(detail.document.defaultBranch) ?? null
     // One working branch at a time per page and person, so it keeps the
@@ -938,7 +943,10 @@ async function loadPage() {
     const head = branch.value?.headRevisionId ?? detail.document.headRevisionId
     const content =
       head && head !== defaultContent.revisionId
-        ? await apiFetch<DocumentContentResponse>(`/v1/documents/${id}/content?revision=${head}`)
+        ? (await fetchApi(queryClient, '/v1/documents/{id}/content', {
+            path,
+            query: { revision: head },
+          }))
         : defaultContent
     isDraft.value = !!detail.document.draftOwnerId
     title.value = detail.document.title
@@ -992,16 +1000,15 @@ async function ensureDocumentId(): Promise<string | null> {
   try {
     // No `content`: nothing has been saved yet, and inlining the draft body here
     // sent the whole page through a JSON request just to get an id for an image.
-    const res = await apiFetch<CreateDocumentResponse>('/v1/documents', {
-      method: 'POST',
-      body: JSON.stringify({
+    const res = await api.post('/v1/documents', {
+      body: {
         workspaceId: getWorkspaceId(),
         projectId: projectId.value,
         title: title.value.trim() || t('editor.untitledPage'),
         category: category.value,
         ...(parentId.value ? { parentId: parentId.value } : {}),
         ...templateProvenance(),
-      }),
+      },
     })
     editId.value = res.documentId
     headRevisionId.value = res.revisionId
@@ -1040,18 +1047,19 @@ async function publishRevision(
   revisionId: string,
   text: string,
 ): Promise<FinalizeRevisionResponse> {
-  const up = await apiFetch<CreateUploadResponse>(`/v1/documents/${documentId}/uploads`, {
-    method: 'POST',
-    body: JSON.stringify({ revisionId, contentType: 'text/markdown', filename: 'source.md' }),
+  const up = await api.post('/v1/documents/{id}/uploads', {
+    path: { id: documentId },
+    body: { revisionId, contentType: 'text/markdown', filename: 'source.md' },
+    config: { timeout: 0 },
   })
   await presignedPut(
     { url: up.upload.url, headers: { 'Content-Type': 'text/markdown' } },
     new Blob([text], { type: 'text/markdown' }),
   )
-  return apiFetch<FinalizeRevisionResponse>(
-    `/v1/documents/${documentId}/revisions/${revisionId}/finalize`,
-    { method: 'POST' },
-  )
+  return await api.post('/v1/documents/{id}/revisions/{revisionId}/finalize', {
+    path: { id: documentId, revisionId },
+    config: { timeout: 0 },
+  })
 }
 
 /** The checks every write passes first: the markdown to write, or null when refused (and the author told why). */
@@ -1079,14 +1087,14 @@ function readyToWrite(): string | null {
 
 /** The page's own fields — title, category, placement. Not versioned, so not on any branch. */
 function patchPageFields() {
-  return apiFetch(`/v1/documents/${editId.value}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
+  return api.patch('/v1/documents/{id}', {
+    path: { id: editId.value as string },
+    body: {
       title: title.value,
       category: category.value,
       parentId: parentId.value || null,
       ...(projectId.value ? { projectId: projectId.value } : {}),
-    }),
+    },
   })
 }
 
@@ -1105,7 +1113,12 @@ async function writeRevision(markdown: string, sentMessage: string, onTop: boole
   let draftFields = {}
   let ifMatch = headRevisionId.value
   if (collab.value && branch.value) {
-    const { drafts } = await apiFetch<ListCollabDraftsResponse>(`/v1/documents/${editId.value}/drafts`)
+    const { drafts } = await fetchApi(
+      queryClient,
+      '/v1/documents/{id}/drafts',
+      { path: { id: editId.value as string } },
+      { fresh: true },
+    )
     const draft = drafts.find((d) => d.branchId === branch.value?.branchId)
     if (draft) {
       ifMatch = onTop && headMoved.value ? headMoved.value : draft.baseRevisionId
@@ -1123,18 +1136,19 @@ async function writeRevision(markdown: string, sentMessage: string, onTop: boole
   // a second revision and orphaning it.
   const claimed = pendingRevisionId.value
   pendingRevisionId.value = null
+  // No branch means the default one: the server picks it.
   const revisionId =
     claimed ??
     (
-      await apiFetch<RevisionInfo>(`/v1/documents/${editId.value}/revisions`, {
-        method: 'POST',
-        headers: ifMatch ? { 'If-Match': ifMatch } : {},
-        body: JSON.stringify({
+      await api.post('/v1/documents/{id}/revisions', {
+        path: { id: editId.value as string },
+        body: {
           ...(branch.value ? { branch: branch.value.name } : {}),
           message: sentMessage || 'Edited in web editor',
           contentType: 'text/markdown',
           ...draftFields,
-        }),
+        },
+        config: ifMatch ? { headers: { 'If-Match': ifMatch } } : undefined,
       })
     ).revisionId
   return publishRevision(editId.value as string, revisionId, text)
@@ -1160,7 +1174,7 @@ function onWriteError(e: unknown, sentMessage: string) {
   // message is translated and could never distinguish a 413 from anything
   // else. Branch on the envelope instead.
   if (collab.value && !message.value) message.value = sentMessage
-  if (e instanceof ApiError && e.status === 409) {
+  if (isApiRequestError(e) && e.status === 409) {
     if (collab.value) void followHead().catch(() => {})
     if (!headMoved.value) toast.error(t('editor.headMoved'))
   } else {
@@ -1177,16 +1191,15 @@ async function save(onTop = false) {
   const sentMessage = message.value
   try {
     if (!isEdit.value) {
-      const res = await apiFetch<CreateDocumentResponse>('/v1/documents', {
-        method: 'POST',
-        body: JSON.stringify({
+      const res = await api.post('/v1/documents', {
+        body: {
           workspaceId: getWorkspaceId(),
           projectId: projectId.value,
           title: title.value,
           category: category.value,
           ...(parentId.value ? { parentId: parentId.value } : {}),
           ...templateProvenance(),
-        }),
+        },
       })
       // The body goes to storage, not through the API — see publishRevision.
       await publishRevision(res.documentId, res.revisionId, pageSource(markdown))
@@ -1228,9 +1241,10 @@ const publishing = ref(false)
 async function reviewPast() {
   if (!publishedPast.value || !headRevisionId.value) return
   try {
-    pastCompare.value = await apiFetch<CompareResponse>(
-      `/v1/documents/${editId.value}/compare?from=${publishedPast.value}&to=${headRevisionId.value}&mode=direct`,
-    )
+    pastCompare.value = await fetchApi(queryClient, '/v1/documents/{id}/compare', {
+      path: { id: editId.value as string },
+      query: { from: publishedPast.value, to: headRevisionId.value, mode: 'direct' },
+    })
     reviewOpen.value = true
   } catch (e) {
     toast.error(errorMessage(e, t))
@@ -1254,12 +1268,13 @@ async function publish(onTopOf?: string) {
   const sentMessage = message.value
   try {
     if (unstaged.value) await followSavedRevision((await writeRevision(markdown, sentMessage, false, false)).revisionId)
-    const res = await apiFetch<PublishBranchResponse>(`/v1/documents/${id}/branches/${branchId}/publish`, {
-      method: 'POST',
-      body: JSON.stringify({
+    const res = await api.post('/v1/documents/{id}/branches/{branchId}/publish', {
+      path: { id, branchId },
+      body: {
         title: sentMessage.trim() || t('editor.draftBranch.mrTitle', { title: title.value }),
         ...(onTopOf ? { onTopOf } : {}),
-      }),
+      },
+      config: { timeout: 0 },
     })
     await patchPageFields()
     publishedPast.value = null

@@ -48,9 +48,9 @@ async function save() {
   if (saving.value || invalid.value || !dirty.value) return
   saving.value = true
   try {
-    const next = (await api.patch('/v1/chat/search-settings', {
+    const next = await api.patch('/v1/chat/search-settings', {
       body: { workspaceId: props.workspaceId, retentionDays: draft.value },
-    })) as ChatSearchSettings
+    })
     queryClient.setQueryData(options.queryKey, next)
     // Every binding table shows the applied period in its hint.
     void queryClient.invalidateQueries({ queryKey: ['/v1/chat/integrations/{id}/bindings'] })

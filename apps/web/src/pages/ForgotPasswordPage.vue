@@ -3,8 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { toast } from 'vue-sonner'
-import type { ForgotPasswordResponse } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { api } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -20,9 +19,8 @@ const debugToken = ref<string | null>(null)
 async function submit() {
   busy.value = true
   try {
-    const res = await apiFetch<ForgotPasswordResponse>('/v1/auth/forgot-password', {
-      method: 'POST',
-      body: JSON.stringify({ email: email.value }),
+    const res = await api.post('/v1/auth/forgot-password', {
+      body: { email: email.value },
     })
     sent.value = true
     debugToken.value = res.debugToken ?? null

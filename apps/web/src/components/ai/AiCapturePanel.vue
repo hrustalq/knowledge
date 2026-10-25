@@ -18,11 +18,11 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import type { AiSettingsResponse, CaptureSettings, ListDocumentsResponse } from '@knowledge/contracts'
+import type { AiSettingsResponse, CaptureSettings } from '@knowledge/contracts'
 import { api } from '@/api/client'
-import { apiQueryOptions } from '@/api/queries'
+import { apiQueryOptions, fetchApi } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
-import { apiFetch, getProjectId, getWorkspaceId } from '@/lib/api'
+import { getProjectId, getWorkspaceId } from '@/lib/api'
 import { formatNumber } from '@/lib/format'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
@@ -121,7 +121,7 @@ async function save() {
   if (saving.value || anyInvalid.value || !dirty.value) return
   saving.value = true
   try {
-    const next = (await api.patch('/v1/ai/settings', { body: { workspaceId, ...changed.value } })) as AiSettingsResponse
+    const next = await api.patch('/v1/ai/settings', { body: { workspaceId, ...changed.value } })
     queryClient.setQueryData(options.queryKey, next)
     toast.success(t('ai.capture.saved'))
   } catch (e) {
@@ -146,9 +146,9 @@ const foreignParent = ref<string | null>(null)
 onMounted(async () => {
   const projectId = getProjectId()
   try {
-    const res = await apiFetch<ListDocumentsResponse>(
-      `/v1/documents?workspaceId=${workspaceId}${projectId ? `&projectId=${projectId}` : ''}&limit=100`,
-    )
+    const res = await fetchApi(queryClient, '/v1/documents', {
+      query: { workspaceId, ...(projectId ? { projectId } : {}), limit: '100' },
+    })
     pages.value = res.items.map((d) => ({ value: d.documentId, label: d.title }))
   } catch {
     // The picker falls back to the project root and the current value's name.
@@ -161,7 +161,9 @@ watch(
     foreignParent.value = null
     if (!id || pages.value.some((p) => p.value === id)) return
     try {
-      const doc = await apiFetch<{ document: { title: string; projectId: string } }>(`/v1/documents/${id}`)
+      const doc = (await fetchApi(queryClient, '/v1/documents/{id}', { path: { id } })) as {
+        document: { title: string; projectId: string }
+      }
       const project = projects.items.find((p) => p.projectId === doc.document.projectId)?.name
       foreignParent.value = project ? `${doc.document.title} · ${project}` : doc.document.title
     } catch {

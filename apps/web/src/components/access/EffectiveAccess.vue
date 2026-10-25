@@ -14,7 +14,8 @@
 import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AccessResourceType, EffectiveAccessEntry, EffectiveAccessResponse } from '@knowledge/contracts'
-import { api } from '@/api/client'
+import { useQueryClient } from '@tanstack/vue-query'
+import { fetchApi } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -27,15 +28,18 @@ const { t } = useI18n()
 const entries = ref<EffectiveAccessEntry[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
+const queryClient = useQueryClient()
 
 async function load() {
   loading.value = true
   error.value = null
   try {
+    // Fresh: the dialog's own saves change the answer and do not touch the cache.
+    const path = { id: props.resourceId }
     const res = (
       props.resourceType === 'project'
-        ? await api.get('/v1/projects/{id}/access/effective', { path: { id: props.resourceId } })
-        : await api.get('/v1/documents/{id}/access/effective', { path: { id: props.resourceId } })
+        ? await fetchApi(queryClient, '/v1/projects/{id}/access/effective', { path }, { fresh: true })
+        : await fetchApi(queryClient, '/v1/documents/{id}/access/effective', { path }, { fresh: true })
     ) as EffectiveAccessResponse
     entries.value = res.entries
   } catch (e) {

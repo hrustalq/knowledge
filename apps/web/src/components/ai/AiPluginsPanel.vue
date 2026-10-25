@@ -7,7 +7,7 @@ import { computed, ref } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { CircleDashed, CircleCheck, CircleX, Plug, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
-import type { AiPluginSummary, AiPluginTestResponse, ListAiPluginsResponse } from '@knowledge/contracts'
+import type { AiPluginSummary, ListAiPluginsResponse } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { getWorkspaceId, relativeTime } from '@/lib/api'
@@ -114,9 +114,9 @@ async function submit() {
 async function test(plugin: AiPluginSummary) {
   testingId.value = plugin.id
   try {
-    const result = (await api.post('/v1/ai/plugins/{id}/test', {
+    const result = await api.post('/v1/ai/plugins/{id}/test', {
       path: { id: plugin.id },
-    })) as AiPluginTestResponse
+    })
     if (result.ok) toast.success(t('ai.pluginToolsFound', { name: plugin.name, count: result.tools.length }))
     else toast.error(t('ai.nameAndError', { name: plugin.name, error: result.error }))
   } catch (e) {

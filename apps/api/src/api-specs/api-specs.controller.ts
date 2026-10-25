@@ -56,6 +56,7 @@ import {
   SetApiTestBindingsDto,
   UpdateApiSettingsDto,
 } from './api-specs.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * API spec documents (#78, phase 2). A spec is a document, so its writes are
@@ -77,6 +78,7 @@ export class ApiSpecsController {
   ) {}
 
   @Get()
+  @Returns('ListApiSpecsResponse')
   @Access('viewer', 'query', { guests: true })
   @ApiOperation({ summary: 'Spec documents in the workspace (or one project) and how many operations each head defines' })
   async list(@CurrentPrincipal() principal: Principal, @Query() query: ListApiSpecsQueryDto): Promise<ListApiSpecsResponse> {
@@ -84,6 +86,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id')
+  @Returns('ApiSpecDocumentResponse')
   @Access('viewer', 'document')
   @ApiOperation({
     summary:
@@ -95,6 +98,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/operations')
+  @Returns('ListApiOperationsResponse')
   @Access('viewer', 'document')
   @ApiOperation({
     summary:
@@ -109,6 +113,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/diff')
+  @Returns('ApiSpecDiff')
   @Access('viewer', 'document')
   @ApiOperation({
     summary:
@@ -120,6 +125,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/samples')
+  @Returns('ApiOperationSamplesResponse')
   @Access('viewer', 'document')
   @ApiOperation({
     summary:
@@ -157,6 +163,7 @@ export class ApiSpecsController {
   // Viewer, not editor: generating writes no page. The capability is the gate,
   // and the tester run checks it again when it executes.
   @Post(':id/test-suite')
+  @Returns('GenerateApiTestSuiteResponse')
   @HttpCode(200)
   @Access('viewer', 'document', { capability: 'api-test-suites.generate' })
   @ApiOperation({
@@ -174,6 +181,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/test-bindings')
+  @Returns('ApiTestBindingsResponse')
   @Access('viewer', 'document')
   @ApiOperation({
     summary:
@@ -190,6 +198,7 @@ export class ApiSpecsController {
 
   // Viewer + capability, like Generate: binding writes no page.
   @Put(':id/test-bindings')
+  @Returns('ApiTestBindingsResponse')
   @Access('viewer', 'document', { capability: 'api-test-suites.generate' })
   @ApiOperation({
     summary:
@@ -208,6 +217,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/test-fixture-candidates')
+  @Returns('ApiTestFixtureCandidatesResponse')
   @Access('viewer', 'document')
   @ApiOperation({
     summary:
@@ -224,6 +234,7 @@ export class ApiSpecsController {
   }
 
   @Post(':id/test-fixture-candidates/rank')
+  @Returns('RankApiTestFixturesResponse')
   @HttpCode(200)
   @Access('viewer', 'document', { capability: 'api-test-suites.generate' })
   @ApiOperation({
@@ -240,6 +251,7 @@ export class ApiSpecsController {
   }
 
   @Post(':id/try')
+  @Returns('ApiTryResponse')
   @HttpCode(200)
   @Access('editor', 'document')
   @ApiOperation({
@@ -256,6 +268,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/test-run-plan')
+  @Returns('TestRunPlan')
   @Access('viewer', 'document', { capability: 'api-test-suites.run' })
   @ApiOperation({
     summary:
@@ -276,6 +289,7 @@ export class ApiSpecsController {
   // cannot express as role-or-capability. `:id` is the spec defining the
   // step's operation, so a step in another spec is checked against that one.
   @Post(':id/test-run/send')
+  @Returns('ApiTryResponse')
   @HttpCode(200)
   @Access('viewer', 'document', { capability: 'api-test-suites.run' })
   @ApiOperation({
@@ -296,6 +310,7 @@ export class ApiSpecsController {
   // capability on top of viewer, like the browser runner's proxied step; the
   // records are readable by every viewer of the spec.
   @Post(':id/test-runs')
+  @Returns('ApiTestRunSummary')
   @HttpCode(202)
   @Access('viewer', 'document', { capability: 'api-test-suites.run' })
   @ApiOperation({
@@ -314,6 +329,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/test-runs')
+  @Returns('ListApiTestRunsResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: "One operation's server runs, newest first (the last 20 are kept)" })
   async testRuns(@Param('id', ParseUUIDPipe) id: string, @Query() query: ApiTestOperationDto): Promise<ListApiTestRunsResponse> {
@@ -321,6 +337,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/test-runs/:runId')
+  @Returns('ApiTestRunDetail')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'One server run: the plan it walked and each step and case result. Captures named like secrets are never stored' })
   testRun(@Param('id', ParseUUIDPipe) id: string, @Param('runId', ParseUUIDPipe) runId: string): Promise<ApiTestRunDetail> {
@@ -328,6 +345,7 @@ export class ApiSpecsController {
   }
 
   @Post(':id/drift-check')
+  @Returns('ApiDriftCheckResponse')
   @HttpCode(202)
   @Access('editor', 'document')
   @ApiOperation({
@@ -353,6 +371,7 @@ export class ApiSettingsController {
   // Test environments for the QA server runner (#483, phase 5). Editors manage
   // them; a viewer sees names, servers and inputs. Secrets are write-only.
   @Get(':id/test-environments')
+  @Returns('ListApiTestEnvironmentsResponse')
   @Access('viewer', 'workspace')
   @ApiOperation({ summary: "The workspace's QA test environments: server, inputs, and the names of the secrets set (never a value)" })
   async listEnvironments(@Param('id', ParseUUIDPipe) id: string): Promise<ListApiTestEnvironmentsResponse> {
@@ -360,6 +379,7 @@ export class ApiSettingsController {
   }
 
   @Post(':id/test-environments')
+  @Returns('ApiTestEnvironment')
   @Access('editor', 'workspace')
   @ApiOperation({ summary: 'Create a QA test environment. Secrets are encrypted at rest and never returned' })
   createEnvironment(
@@ -371,6 +391,7 @@ export class ApiSettingsController {
   }
 
   @Patch(':id/test-environments/:environmentId')
+  @Returns('ApiTestEnvironment')
   @Access('editor', 'workspace')
   @ApiOperation({ summary: 'Change a QA test environment. inputs replaces the set; a secret set to null is removed, one left out is kept' })
   updateEnvironment(
@@ -392,6 +413,7 @@ export class ApiSettingsController {
 
   // A viewer reads it: the console has to know whether the proxy is there.
   @Get(':id/api-settings')
+  @Returns('ApiSettingsResponse')
   @Access('viewer', 'workspace')
   @ApiOperation({ summary: "The workspace's API reference settings: what is asked for, the deployment ceiling, what applies" })
   get(@Param('id', ParseUUIDPipe) id: string): Promise<ApiSettingsResponse> {
@@ -399,6 +421,7 @@ export class ApiSettingsController {
   }
 
   @Patch(':id/api-settings')
+  @Returns('ApiSettingsResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Override the API reference settings; null on a key inherits the deployment value' })
   update(
@@ -420,6 +443,7 @@ export class ApiOperationsController {
   ) {}
 
   @Get()
+  @Returns('SearchApiOperationsResponse')
   @Access('viewer', 'query', { guests: true })
   @ApiOperation({ summary: 'Search API operations by method + path, summary, operationId or entity key' })
   async search(
@@ -450,6 +474,7 @@ export class TestFixturesController {
   ) {}
 
   @Get()
+  @Returns('ListTestFixturesResponse')
   @Access('viewer', 'query', { guests: true })
   @ApiOperation({
     summary:
@@ -462,6 +487,7 @@ export class TestFixturesController {
   }
 
   @Get(':id')
+  @Returns('TestFixtureResponse')
   @Access('viewer', 'document')
   @ApiOperation({
     summary:
@@ -487,6 +513,7 @@ export class QaController {
   ) {}
 
   @Get('overview')
+  @Returns('QaOverviewResponse')
   @Access('viewer', 'query', { guests: true })
   @ApiOperation({
     summary:

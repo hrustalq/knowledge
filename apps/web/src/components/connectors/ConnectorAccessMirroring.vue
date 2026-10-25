@@ -15,20 +15,18 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { useQuery } from '@tanstack/vue-query'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { RefreshCw } from 'lucide-vue-next'
 import {
   CONNECTOR_ACL_MODES,
   type ConnectorAclMode,
   type ConnectorAclResponse,
-  type ListUserGroupsResponse,
-  type ListWorkspaceMembersResponse,
   type UserGroupSummary,
   type WorkspaceMemberEntry,
 } from '@knowledge/contracts'
-import { apiQueryOptions, useApiMutation } from '@/api/queries'
+import { apiQueryOptions, fetchApi, useApiMutation } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
-import { apiFetch, getWorkspaceId, relativeTime } from '@/lib/api'
+import { getWorkspaceId, relativeTime } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -40,6 +38,7 @@ import { PageState } from '@/components/layout/page'
 
 const props = defineProps<{ connectorId: string }>()
 const { t } = useI18n()
+const queryClient = useQueryClient()
 
 /** Radix Select has no empty value; this stands for "nobody" / "no group". */
 const NONE = '__none'
@@ -82,8 +81,8 @@ watch(
   async () => {
     const ws = getWorkspaceId()
     const [m, g] = await Promise.allSettled([
-      apiFetch<ListWorkspaceMembersResponse>(`/v1/workspaces/${ws}/members`),
-      apiFetch<ListUserGroupsResponse>(`/v1/groups?workspaceId=${ws}`),
+      fetchApi(queryClient, '/v1/workspaces/{id}/members', { path: { id: ws } }),
+      fetchApi(queryClient, '/v1/groups', { query: { workspaceId: ws } }),
     ])
     members.value = m.status === 'fulfilled' ? m.value.members.filter((x) => !x.disabled) : []
     // A connector's own mirrored groups cannot be its audience: they are what

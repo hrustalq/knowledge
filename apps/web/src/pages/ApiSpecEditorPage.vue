@@ -12,20 +12,18 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { FileUp } from 'lucide-vue-next'
 import {
   apiSpecContentType,
   type ApiSpecKind,
   type ApiSpecSyntax,
-  type CreateDocumentResponse,
-  type CreateUploadResponse,
   type DocumentContentResponse,
   type DocumentDetailResponse,
-  type FinalizeRevisionResponse,
-  type RevisionInfo,
 } from '@knowledge/contracts'
-import { ApiError, apiFetch, getProjectId, getWorkspaceId } from '@/lib/api'
+import { getProjectId, getWorkspaceId } from '@/lib/api'
+import { api, fetchApi, isApiRequestError } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { presignedPut } from '@/lib/presigned-put'
 import { Button } from '@/components/ui/button'
@@ -38,6 +36,7 @@ import { PageLayout, PageState } from '@/components/layout/page'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const queryClient = useQueryClient()
 
 const editId = computed(() => (typeof route.params.id === 'string' ? route.params.id : null))
 const title = ref('')
@@ -88,10 +87,12 @@ onMounted(async () => {
   }
   loading.value = true
   try {
-    const [detail, content] = await Promise.all([
-      apiFetch<DocumentDetailResponse>(`/v1/documents/${editId.value}`),
-      apiFetch<DocumentContentResponse>(`/v1/documents/${editId.value}/content`),
-    ])
+    const path = { id: editId.value }
+    // Fresh: the text is what the next revision is written over.
+    const [detail, content] = (await Promise.all([
+      fetchApi(queryClient, '/v1/documents/{id}', { path }, { fresh: true }),
+      fetchApi(queryClient, '/v1/documents/{id}/content', { path }, { fresh: true }),
+    ])) as [DocumentDetailResponse, DocumentContentResponse]
     title.value = detail.document.title
     if (detail.document.kind === 'asyncapi') kind.value = 'asyncapi'
     syntax.value = content.contentType.includes('json') ? 'json' : 'yaml'
@@ -118,7 +119,7 @@ async function onFile(event: Event) {
 }
 
 function refusal(e: unknown): boolean {
-  if (e instanceof ApiError && e.status === 422 && Array.isArray(e.details?.issues)) {
+  if (isApiRequestError(e) && e.status === 422 && Array.isArray(e.details?.issues)) {
     issues.value = e.details.issues as typeof issues.value
     return true
   }
@@ -144,16 +145,17 @@ async function save() {
 
 async function create(): Promise<string> {
   const projectId = getProjectId()
-  const res = await apiFetch<CreateDocumentResponse>('/v1/documents', {
-    method: 'POST',
-    body: JSON.stringify({
+  // No category: the server picks it by kind (a spec's is `reference`).
+  const res = await api.post('/v1/documents', {
+    body: {
       workspaceId: getWorkspaceId(),
-      ...(projectId ? { projectId } : {}),
+      // Required by the API; a workspace with no project yet is refused with its validation message, as before.
+      projectId: projectId ?? '',
       ...(typeof route.query.parent === 'string' ? { parentId: route.query.parent } : {}),
       title: title.value.trim(),
       kind: kind.value,
       content: { mode: 'inline', format: syntax.value, text: text.value },
-    }),
+    },
   })
   toast.success(t('apiSpecEditor.created'))
   return res.documentId
@@ -164,20 +166,23 @@ async function saveRevision(documentId: string): Promise<string> {
   const contentType = apiSpecContentType(kind.value, syntax.value)
   let revisionId = pendingRevision.value
   if (!revisionId) {
-    const rev = await apiFetch<RevisionInfo>(`/v1/documents/${documentId}/revisions`, {
-      method: 'POST',
-      body: JSON.stringify({ contentType }),
+    // No branch: the server picks the default one.
+    const rev = await api.post('/v1/documents/{id}/revisions', {
+      path: { id: documentId },
+      body: { contentType },
     })
     revisionId = rev.revisionId
   }
-  const up = await apiFetch<CreateUploadResponse>(`/v1/documents/${documentId}/uploads`, {
-    method: 'POST',
-    body: JSON.stringify({ revisionId, contentType, filename: `source.${syntax.value}` }),
+  const up = await api.post('/v1/documents/{id}/uploads', {
+    path: { id: documentId },
+    body: { revisionId, contentType, filename: `source.${syntax.value}` },
+    config: { timeout: 0 },
   })
   await presignedPut({ url: up.upload.url, headers: { 'Content-Type': contentType } }, new Blob([text.value], { type: contentType }))
   try {
-    const fin = await apiFetch<FinalizeRevisionResponse>(`/v1/documents/${documentId}/revisions/${revisionId}/finalize`, {
-      method: 'POST',
+    const fin = await api.post('/v1/documents/{id}/revisions/{revisionId}/finalize', {
+      path: { id: documentId, revisionId },
+      config: { timeout: 0 },
     })
     pendingRevision.value = null
     toast.success(fin.deduplicated ? t('apiSpecEditor.unchanged') : t('apiSpecEditor.saved'))

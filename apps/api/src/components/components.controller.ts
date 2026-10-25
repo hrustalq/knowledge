@@ -9,6 +9,7 @@ import { ComponentUsagesService } from './component-usages.service.js';
 import { ComponentDraftsService } from './component-drafts.service.js';
 import { ComponentsService } from './components.service.js';
 import { CodeUsagesQueryDto, ComponentUsagesQueryDto, DraftComponentDto } from './components.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * A page's component declaration (#236). Mounted on `v1/documents` beside
@@ -37,6 +38,7 @@ export class ComponentsController {
   }
 
   @Get(':id/component/usages')
+  @Returns('CodeUsagesResponse')
   @Access('viewer', 'document')
   @ApiOperation({
     summary:
@@ -64,6 +66,7 @@ export class CodeUsagesController {
   ) {}
 
   @Get()
+  @Returns('CodeUsagesResponse')
   @Access('viewer', 'query')
   @ApiOperation({
     summary:
@@ -89,6 +92,7 @@ export class ComponentDraftsController {
   constructor(private readonly drafts: ComponentDraftsService) {}
 
   @Post('drafts')
+  @Returns('DraftComponentResponse')
   @HttpCode(202)
   @Access('editor', 'body')
   @ApiOperation({

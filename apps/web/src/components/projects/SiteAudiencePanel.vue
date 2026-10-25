@@ -29,7 +29,6 @@ import {
   type SiteAudienceRule,
   type SiteAudienceRuleKind,
   type SiteAudiencesResponse,
-  type SiteVisitorSecretResponse,
 } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
@@ -136,7 +135,7 @@ async function rotate() {
   confirming.value = null
   secretBusy.value = true
   try {
-    const res = (await api.post('/v1/sites/{id}/visitor-secret', { path: { id: props.site.id } })) as SiteVisitorSecretResponse
+    const res = await api.post('/v1/sites/{id}/visitor-secret', { path: { id: props.site.id } })
     secret.value = res.secret
     await refetch()
   } catch (e) {

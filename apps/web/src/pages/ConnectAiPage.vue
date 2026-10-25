@@ -33,14 +33,13 @@ import type {
   CaptureKitClient,
   CaptureKitFile,
   CaptureKitResponse,
-  CreateApiKeyResponse,
-  ListApiKeysResponse,
-  ListProjectsResponse,
   McpConnectionInfo,
   ProjectSummary,
 } from '@knowledge/contracts'
 import { API_KEY_SCOPES, CAPTURE_KIT_CLIENTS } from '@knowledge/contracts'
-import { ApiError, apiFetch, apiFetchText, getProjectId, getWorkspaceId, saveFile } from '@/lib/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import { api, fetchApi, isApiRequestError } from '@/api/queries'
+import { getProjectId, getWorkspaceId, saveFile } from '@/lib/api'
 import { formatDate, formatRelative } from '@/lib/format'
 import {
   KEY_ENV,
@@ -75,6 +74,7 @@ const route = useRoute()
 const router = useRouter()
 const workspaces = useWorkspacesStore()
 const projects = useProjectsStore()
+const queryClient = useQueryClient()
 
 const connection = ref<McpConnectionInfo | null>(null)
 const keys = ref<ApiKeyInfo[]>([])
@@ -89,12 +89,12 @@ onMounted(async () => {
   workspaces.ensureLoaded()
   try {
     const [info, md] = await Promise.all([
-      apiFetch<McpConnectionInfo>('/v1/mcp/connection'),
-      apiFetchText('/v1/mcp/skill'),
+      fetchApi(queryClient, '/v1/mcp/connection'),
+      api.get('/v1/mcp/skill', { config: { responseType: 'text' } }) as unknown as Promise<string>,
     ])
     connection.value = info
     skill.value = md
-    if (info.authMode === 'api-key') keys.value = (await apiFetch<ListApiKeysResponse>('/v1/me/api-keys')).keys
+    if (info.authMode === 'api-key') keys.value = (await fetchApi(queryClient, '/v1/me/api-keys', {}, { fresh: true })).keys
   } catch {
     toast.error(t('connect.loadFailed'))
   } finally {
@@ -131,7 +131,7 @@ watch(
     if (scope !== prevScope || ws !== prevWs) form.projectIds = []
     if (scope !== 'capture') return
     try {
-      pinProjects.value = (await apiFetch<ListProjectsResponse>(`/v1/projects?workspaceId=${ws}`)).projects
+      pinProjects.value = (await fetchApi(queryClient, '/v1/projects', { query: { workspaceId: ws } })).projects
     } catch {
       pinProjects.value = []
     }
@@ -159,15 +159,14 @@ async function createKey() {
   if (!form.name.trim()) return
   creating.value = true
   try {
-    const res = await apiFetch<CreateApiKeyResponse>('/v1/me/api-keys', {
-      method: 'POST',
-      body: JSON.stringify({
+    const res = await api.post('/v1/me/api-keys', {
+      body: {
         name: form.name.trim(),
         scope: form.scope,
         ...(form.workspaceId !== ALL_WORKSPACES ? { workspaceId: form.workspaceId } : {}),
         ...(form.expiry !== 'never' ? { expiresInDays: Number(form.expiry) } : {}),
         ...(form.scope === 'capture' && form.projectIds.length ? { projectIds: form.projectIds } : {}),
-      }),
+      },
     })
     fresh.value = { key: res.key, apiKey: res.apiKey }
     keys.value = [res.key, ...keys.value]
@@ -199,7 +198,7 @@ async function revoke() {
   const key = revoking.value
   if (!key) return
   try {
-    await apiFetch(`/v1/me/api-keys/${key.id}`, { method: 'DELETE' })
+    await api.delete('/v1/me/api-keys/{keyId}', { path: { keyId: key.id } })
     keys.value = keys.value.filter((k) => k.id !== key.id)
     if (fresh.value?.key.id === key.id) fresh.value = null
     // Revoking stops new captures and leaves the old ones pending: point at them
@@ -247,7 +246,11 @@ const showSkill = ref(false)
 
 async function refreshSkill(asKey: string) {
   try {
-    skill.value = await apiFetchText('/v1/mcp/skill', { headers: { Authorization: `Bearer ${asKey}` } })
+    // Plain api.get, not the cache: the query key carries no credential, so a
+    // read as the new key would collide with the session's answer.
+    skill.value = (await api.get('/v1/mcp/skill', {
+      config: { responseType: 'text', headers: { Authorization: `Bearer ${asKey}` } },
+    })) as unknown as string
   } catch {
     /* the session's copy stays; it only over-describes a narrower key */
   }
@@ -287,14 +290,15 @@ watch(
     kitState.value = 'loading'
     openFile.value = null
     try {
-      kit.value = await apiFetch<CaptureKitResponse>(
-        `/v1/mcp/capture-kit?client=${pick}`,
-        asKey ? { headers: { Authorization: `Bearer ${asKey}` } } : {},
-      )
+      // Not cached, for the skill's reason: the answer depends on the credential.
+      kit.value = await api.get('/v1/mcp/capture-kit', {
+        query: { client: pick },
+        ...(asKey ? { config: { headers: { Authorization: `Bearer ${asKey}` } } } : {}),
+      })
       kitState.value = 'ready'
     } catch (e) {
       kit.value = null
-      kitState.value = e instanceof ApiError && e.status === 403 ? 'refused' : 'failed'
+      kitState.value = isApiRequestError(e) && e.status === 403 ? 'refused' : 'failed'
     }
   },
   { immediate: true },

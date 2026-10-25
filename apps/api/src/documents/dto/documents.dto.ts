@@ -152,7 +152,7 @@ export class CreateDocumentDto {
   @Type(() => RelationInputDto)
   relations?: RelationInputDto[];
 
-  @ApiPropertyOptional({ enum: DOCUMENT_CATEGORIES, default: 'other', description: 'Feature 07 categorization' })
+  @ApiPropertyOptional({ enum: DOCUMENT_CATEGORIES, description: 'Feature 07 categorization. Default: other.' })
   @IsOptional()
   @IsIn(DOCUMENT_CATEGORIES as unknown as string[])
   category?: DocumentCategory;
@@ -211,7 +211,7 @@ export class UpdateDocumentDto {
   category?: DocumentCategory;
 
   /** Explicit null re-roots the document (feature 08). */
-  @ApiPropertyOptional({ format: 'uuid', nullable: true })
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true })
   @ValidateIf((o: UpdateDocumentDto) => o.parentId !== undefined && o.parentId !== null)
   @IsUUID()
   parentId?: string | null;
@@ -298,7 +298,7 @@ export class CreateUploadDto {
 }
 
 export class CreateRevisionDto {
-  @ApiPropertyOptional({ default: 'main' })
+  @ApiPropertyOptional({ description: 'Default: main.' })
   @IsOptional()
   @IsString()
   branch?: string;

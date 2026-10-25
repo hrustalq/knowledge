@@ -2,8 +2,8 @@
 // page search so the two tabs share their states. A window is never a page:
 // it links out to the platform where there is a link, and is plain text where
 // there is none.
-import type { ChatSearchResponse } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { api } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { formatDateTimeRange } from '@/lib/format'
 import type { SearchSource } from './use-search'
 
@@ -11,13 +11,12 @@ type Translate = (key: string, params?: Record<string, unknown>, plural?: number
 
 export function chatSearchSource(t: Translate): SearchSource {
   return async (state) => {
-    const res = await apiFetch<ChatSearchResponse>('/v1/chat/search', {
-      method: 'POST',
-      body: JSON.stringify({
+    const res = await api.post('/v1/chat/search', {
+      body: {
         workspaceId: getWorkspaceId(),
         query: state.query,
         limit: state.limit,
-      }),
+      },
     })
     return {
       results: res.hits.map((h) => ({

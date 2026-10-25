@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { apiFetchText } from '@/lib/api'
+import { apiUrl, getLocale, getToken } from '@/lib/api'
 import { createPageViewTracker, searchClickOf, TICK_MS, type PageViewTarget } from '@/lib/page-view'
 
 const INPUTS = ['scroll', 'wheel', 'keydown', 'pointerdown', 'pointermove'] as const
@@ -24,9 +24,22 @@ export function usePageView(
   onMounted(() => {
     const nav = navigator as Navigator & { globalPrivacyControl?: boolean }
     const tracker = createPageViewTracker({
-      // keepalive: the last beat is sent as the tab closes. The beacon answers
-      // 204, which apiFetch's JSON parse would turn into a rejection.
-      send: (path, body) => apiFetchText(path, { method: 'POST', body: JSON.stringify(body), keepalive: true }),
+      // Raw fetch, on purpose: the last beat is sent as the tab closes, and only
+      // a `keepalive` fetch outlives the page — the generated client's XHR dies
+      // with it, and sendBeacon cannot carry the Authorization header.
+      send: (path, body) => {
+        const token = getToken()
+        return fetch(apiUrl(path), {
+          method: 'POST',
+          keepalive: true,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept-Language': getLocale(),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(body),
+        })
+      },
       opened: onOpened,
       visible: () => document.visibilityState === 'visible',
       now: Date.now,

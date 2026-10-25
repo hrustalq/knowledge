@@ -18,7 +18,7 @@ import { RouterLink } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { GitMerge, GitPullRequest } from 'lucide-vue-next'
-import type { ConflictSide, KnowledgeConflictDto, ProposeAgentFindingResponse } from '@knowledge/contracts'
+import type { ConflictSide, KnowledgeConflictDto } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { errorMessage, errorReason } from '@/api/errors'
 import { formatDateTime, formatNumber, formatRelative } from '@/lib/format'
@@ -76,7 +76,7 @@ async function propose() {
   if (busy.value) return
   busy.value = 'propose'
   try {
-    const res = (await api.post('/v1/conflicts/{id}/propose', { path: { id: props.conflict.id } })) as ProposeAgentFindingResponse
+    const res = await api.post('/v1/conflicts/{id}/propose', { path: { id: props.conflict.id } })
     toast.success(t('conflicts.toast.proposed', { title: res.documentTitle }))
     refresh()
   } catch (e) {

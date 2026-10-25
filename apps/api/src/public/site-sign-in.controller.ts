@@ -8,6 +8,7 @@ import { t } from '../i18n/t.js';
 import { SiteSignInDto } from '../publishing/sites.dto.js';
 import { PublicSitesService } from './public-sites.service.js';
 import { SiteSessionService } from './site-session.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /** The prefix the front proxy (Caddy, or Vite in dev) strips before the API, on the app's origin and on every site host. */
 const API_PREFIX = '/api';
@@ -34,6 +35,7 @@ export class SiteSignInController {
   ) {}
 
   @Post(':id/sign-in')
+  @Returns('SiteSignInResponse')
   @Access('viewer', 'site')
   @ApiOperation({ summary: 'A one-time sign-in to a live site for the calling member: the URL to send the browser to' })
   @ApiResponse({ status: 400, description: 'The return URL is not on one of the site’s addresses (details.reason site.signInReturnInvalid)' })

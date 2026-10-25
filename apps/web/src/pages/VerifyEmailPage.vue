@@ -11,8 +11,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import type { ResendVerificationResponse } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { api } from '@/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
@@ -31,7 +30,7 @@ const debugToken = ref<string | null>(null)
 onMounted(async () => {
   if (!token.value) return
   try {
-    await apiFetch('/v1/auth/verify-email', { method: 'POST', body: JSON.stringify({ token: token.value }) })
+    await api.post('/v1/auth/verify-email', { body: { token: token.value } })
     state.value = 'done'
     if (auth.authenticated) await auth.reload()
   } catch {
@@ -42,7 +41,7 @@ onMounted(async () => {
 async function resend() {
   busy.value = true
   try {
-    const res = await apiFetch<ResendVerificationResponse>('/v1/auth/resend-verification', { method: 'POST' })
+    const res = await api.post('/v1/auth/resend-verification')
     if (res.alreadyVerified) {
       toast.success(t('auth.verifyAlready'))
       await auth.reload()

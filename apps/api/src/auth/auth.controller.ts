@@ -9,6 +9,7 @@ import { toMeResponse } from './me-response.js';
 import { AccessService } from './access.service.js';
 import { AuditService } from './audit.service.js';
 import type { Principal } from './principal.js';
+import { Returns } from '../common/returns.decorator.js';
 
 @ApiTags('auth')
 @Controller('v1')
@@ -20,6 +21,7 @@ export class AuthController {
   ) {}
 
   @Get('me')
+  @Returns('MeResponse')
   @ApiOperation({ summary: 'Resolved caller identity + workspace memberships (Phase 5)' })
   @UnverifiedOk()
   async me(@CurrentPrincipal() principal: Principal): Promise<MeResponse> {
@@ -31,6 +33,7 @@ export class AuthController {
   }
 
   @Get('audit-logs')
+  @Returns('ListAuditLogsResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: "Workspace audit trail, newest first (admin) — graph queries, ACL changes, the workspace's sign-in config" })
   @ApiQuery({ name: 'limit', required: false })
@@ -52,6 +55,7 @@ export class AuthController {
    * every tenant boundary at once.
    */
   @Get('admin/audit-logs')
+  @Returns('ListPlatformAuditLogsResponse')
   @PlatformAdmin()
   @ApiOperation({ summary: 'Platform audit trail incl. sign-ins and other workspace-less events (platform admin)' })
   @ApiQuery({ name: 'limit', required: false })

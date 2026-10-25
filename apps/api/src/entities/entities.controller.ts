@@ -23,6 +23,13 @@ import { ApiAsOfQuery } from '../temporal/temporal.dto.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { CreateEntityAliasDto, ImpactAnalysisDto } from './dto/entities.dto.js';
 import { t } from '../i18n/t.js';
+import { Returns } from '../common/returns.decorator.js';
+import type {
+  EntityNeighborsResponse,
+  ImpactAnalysisResponse,
+  ListEntitiesResponse,
+  TraceRelationResponse,
+} from '@knowledge/contracts';
 
 @ApiTags('entities')
 @Controller('v1/entities')
@@ -36,6 +43,7 @@ export class EntitiesController {
   ) {}
 
   @Get()
+  @Returns('ListEntitiesResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'List workspace entities with relation degree' })
   @ApiQuery({ name: 'type', required: false, description: 'Entity type, e.g. "tag"' })
@@ -50,7 +58,7 @@ export class EntitiesController {
     @Query('limit') limit?: string,
     @Query('asOf') asOf?: string,
     @Query('knownAt') knownAt?: string,
-  ) {
+  ): Promise<ListEntitiesResponse> {
     const n = limit ? Number(limit) : Number.NaN;
     const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
     const res = await this.entities.listEntities(
@@ -112,6 +120,7 @@ export class EntitiesController {
 
   // NB: declared before :key routes so "trace" is not captured as a key.
   @Get('trace')
+  @Returns('TraceRelationResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Shortest relation path between two entities (knowledge.trace_relation)' })
   @ApiQuery({ name: 'maxDepth', required: false })
@@ -124,13 +133,14 @@ export class EntitiesController {
     @Query('maxDepth') maxDepth?: string,
     @Query('asOf') asOf?: string,
     @Query('knownAt') knownAt?: string,
-  ) {
+  ): Promise<TraceRelationResponse> {
     const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
     const scope = await this.permissions.scopeFor(principal, workspaceId);
     return withAsOf(await this.entities.trace(scope, from, to, maxDepth ? Number(maxDepth) : undefined, at), at);
   }
 
   @Get(':key/neighbors')
+  @Returns('EntityNeighborsResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Entity neighborhood: edges + entities within N hops (knowledge.find_relations)' })
   @ApiQuery({ name: 'depth', required: false })
@@ -144,7 +154,7 @@ export class EntitiesController {
     @Query('types') types?: string,
     @Query('asOf') asOf?: string,
     @Query('knownAt') knownAt?: string,
-  ) {
+  ): Promise<EntityNeighborsResponse> {
     const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
     const res = await this.entities.neighbors(
       await this.permissions.scopeFor(principal, workspaceId),
@@ -157,10 +167,11 @@ export class EntitiesController {
   }
 
   @Post(':key/impact-analysis')
+  @Returns('ImpactAnalysisResponse')
   @HttpCode(200)
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'Transitive impact of changing an entity (knowledge.impact_analysis)' })
-  async impact(@Param('key') key: string, @Body() dto: ImpactAnalysisDto, @CurrentPrincipal() principal: Principal) {
+  async impact(@Param('key') key: string, @Body() dto: ImpactAnalysisDto, @CurrentPrincipal() principal: Principal): Promise<ImpactAnalysisResponse> {
     const at = await this.temporal.resolve(dto.workspaceId, dto.asOf, dto.knownAt);
     const scope = await this.permissions.scopeFor(principal, dto.workspaceId);
     return withAsOf(await this.entities.impactAnalysis(scope, key, dto.direction, dto.maxDepth, at), at);

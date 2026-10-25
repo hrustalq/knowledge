@@ -6,6 +6,7 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ArchiveDocumentDto, FlagDocumentDto, VerifyDocumentDto } from './verification.dto.js';
 import { VerificationService } from './verification.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * A page's verification state, by hand (docs/features/39, issue #66).
@@ -22,6 +23,7 @@ export class VerificationController {
   constructor(private readonly verification: VerificationService) {}
 
   @Post(':id/verify')
+  @Returns('DocumentDetailResponse')
   @Access('editor', 'document')
   @ApiOperation({
     summary:
@@ -39,6 +41,7 @@ export class VerificationController {
   }
 
   @Delete(':id/verify')
+  @Returns('DocumentDetailResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Back to unverified: remove the stamp and any requested/outdated flag' })
   clear(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<DocumentDetailResponse> {
@@ -46,6 +49,7 @@ export class VerificationController {
   }
 
   @Post(':id/verification-request')
+  @Returns('DocumentDetailResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Ask for the page to be checked. Notifies the owner (or the last verifier)' })
   @ApiResponse({ status: 409, description: 'The page is archived' })
@@ -58,6 +62,7 @@ export class VerificationController {
   }
 
   @Post(':id/outdated')
+  @Returns('DocumentDetailResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Declare the page outdated. Ranks it last in search until verified or cleared; notifies the owner' })
   @ApiResponse({ status: 409, description: 'The page is archived' })
@@ -70,6 +75,7 @@ export class VerificationController {
   }
 
   @Post(':id/archive')
+  @Returns('ArchiveDocumentResponse')
   @Access('editor', 'document')
   @ApiOperation({
     summary:
@@ -85,6 +91,7 @@ export class VerificationController {
   }
 
   @Post(':id/unarchive')
+  @Returns('ArchiveDocumentResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Restore an archived page and (by default) its subtree' })
   unarchive(

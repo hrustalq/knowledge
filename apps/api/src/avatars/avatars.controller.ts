@@ -20,6 +20,7 @@ import type { Principal } from '../auth/principal.js';
 import { AvatarsService } from './avatars.service.js';
 import { CompleteAvatarUploadDto, CreateAvatarUploadDto } from './avatars.dto.js';
 import { t } from '../i18n/t.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Avatars for people and projects (docs/features/22).
@@ -42,6 +43,7 @@ export class AvatarsController {
   // ---------------------------------------------------------------- people
 
   @Post('me/avatar')
+  @Returns('CreateAvatarUploadResponse')
   @HttpCode(200)
   @ApiOperation({ summary: "Reserve a presigned upload for the caller's own avatar" })
   reserveMine(
@@ -52,6 +54,7 @@ export class AvatarsController {
   }
 
   @Post('me/avatar/complete')
+  @Returns('CompleteAvatarUploadResponse')
   @HttpCode(200)
   @ApiOperation({ summary: "Confirm the upload and make it the caller's avatar" })
   completeMine(
@@ -90,6 +93,7 @@ export class AvatarsController {
   // -------------------------------------------------------------- projects
 
   @Post('projects/:id/avatar')
+  @Returns('CreateAvatarUploadResponse')
   @HttpCode(200)
   @Access('editor', 'project')
   @ApiOperation({ summary: 'Reserve a presigned upload for a project avatar' })
@@ -101,6 +105,7 @@ export class AvatarsController {
   }
 
   @Post('projects/:id/avatar/complete')
+  @Returns('CompleteAvatarUploadResponse')
   @HttpCode(200)
   @Access('editor', 'project')
   @ApiOperation({ summary: 'Confirm the upload and make it the project’s avatar' })

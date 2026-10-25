@@ -118,9 +118,9 @@ async function check() {
   probing.value = true
   verdict.value = null
   try {
-    verdict.value = (await api.post('/v1/ai/source-policies/check', {
+    verdict.value = await api.post('/v1/ai/source-policies/check', {
       body: { workspaceId, url },
-    })) as CheckSourcePolicyResponse
+    })
   } catch (e) {
     toast.error((e as Error).message)
   } finally {

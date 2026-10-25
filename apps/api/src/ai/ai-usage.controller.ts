@@ -20,6 +20,7 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { AiUsageService, periodStart } from './ai-usage.service.js';
 import { SetAiBudgetDto } from './ai.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Token accounting surface (docs/features/12): the Usage and Logs tabs, plus
@@ -33,6 +34,7 @@ export class AiUsageController {
   constructor(private readonly usage: AiUsageService) {}
 
   @Get('usage')
+  @Returns('AiUsageResponse')
   @Access('admin', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'from', required: false, description: 'ISO timestamp; defaults to 30 days ago' })
@@ -49,6 +51,7 @@ export class AiUsageController {
   }
 
   @Get('usage/logs')
+  @Returns('ListAiUsageLogsResponse')
   @Access('admin', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'cursor', required: false })
@@ -75,6 +78,7 @@ export class AiUsageController {
   }
 
   @Get('usage/me')
+  @Returns('AiMyUsageResponse')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({ summary: "The caller's own usage this month and remaining budget" })
@@ -96,6 +100,7 @@ export class AiUsageController {
   }
 
   @Get('budgets')
+  @Returns('ListAiBudgetsResponse')
   @Access('admin', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({ summary: 'Workspace budget envelope plus every user with an override or spend this month' })
@@ -104,6 +109,7 @@ export class AiUsageController {
   }
 
   @Put('budgets/:userId')
+  @Returns('AiBudgetInfo')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Set one user’s monthly token budget (null = unlimited)' })
   setBudget(

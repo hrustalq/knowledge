@@ -11,6 +11,7 @@ import { EventsPublisher } from '../events/events.publisher.js';
 import { t } from '../i18n/t.js';
 import { CollabDraftsService } from './collab-drafts.service.js';
 import { CollabGateway } from './collab.gateway.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * What a client asks before it opens `/v1/collab` (#80, docs/features/56).
@@ -25,6 +26,7 @@ export class CollabController {
   constructor(private readonly config: ConfigService<Env, true>) {}
 
   @Get('capabilities')
+  @Returns('CollabCapabilitiesResponse')
   @ApiOperation({
     summary: 'Whether this deployment co-edits drafts, and the editor schema version a peer must match to write',
   })
@@ -46,6 +48,7 @@ export class CollabDraftsController {
   ) {}
 
   @Get(':id/drafts')
+  @Returns('ListCollabDraftsResponse')
   @Access('viewer', 'document')
   @ApiOperation({
     summary: "Each branch's shared draft: its base, whether it holds unpublished changes, who wrote them, who has it open",

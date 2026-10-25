@@ -19,13 +19,13 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { useQuery } from '@tanstack/vue-query'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { Bot, Check, ChevronDown, Copy, ExternalLink, FileText, KeyRound, Link2, Plug } from 'lucide-vue-next'
 import type { AiActionId } from '@knowledge/contracts/content'
 import type { AiPageActionsResponse, McpConnectionInfo } from '@knowledge/contracts'
-import { apiQueryOptions } from '@/api/queries'
-import { apiFetch, apiFetchText, getWorkspaceId } from '@/lib/api'
+import { api, apiQueryOptions, fetchApi } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { useCopy } from '@/lib/use-copy'
 import { mcpClients } from '@/lib/mcp-clients'
 import { agentLink, cursorMcpInstallUrl, openInVendor, pageMarkdownUrl, type ExternalVendor } from '@/lib/ai-actions'
@@ -50,6 +50,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const { state: copyState, copy } = useCopy()
+const queryClient = useQueryClient()
 
 const actionsQuery = useQuery(apiQueryOptions('/v1/ai/page-actions', { query: { workspaceId: getWorkspaceId() } }))
 const pageActions = computed(() => actionsQuery.data.value as AiPageActionsResponse | undefined)
@@ -67,8 +68,11 @@ const anyExternal = computed(() => has('open-chatgpt') || has('open-claude') || 
 const webBase = () => window.location.origin
 
 async function fetchMarkdown(): Promise<string> {
-  const q = props.revisionId ? `?revision=${encodeURIComponent(props.revisionId)}` : ''
-  return apiFetchText(`/v1/documents/${props.documentId}/markdown${q}`, { headers: { Accept: 'text/markdown' } })
+  return (await api.get('/v1/documents/{id}/markdown', {
+    path: { id: props.documentId },
+    query: props.revisionId ? { revision: props.revisionId } : {},
+    config: { responseType: 'text', headers: { Accept: 'text/markdown' } },
+  })) as unknown as string
 }
 
 const busy = ref(false)
@@ -133,7 +137,8 @@ const connection = ref<McpConnectionInfo | null>(null)
 
 async function loadConnection() {
   if (connection.value) return
-  connection.value = (await run(() => apiFetch<McpConnectionInfo>('/v1/mcp/connection'))) ?? null
+  connection.value =
+    (await run(async () => await fetchApi(queryClient, '/v1/mcp/connection'))) ?? null
 }
 
 /** Never a key: `key: null`, so every snippet carries the KNOWLEDGE_API_KEY placeholder. */

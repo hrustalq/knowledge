@@ -26,7 +26,7 @@ export class ListCandidatesQueryDto {
   @MaxLength(120, { message: vmsg('maxLength') })
   q?: string;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 50, default: 20 })
+  @ApiPropertyOptional({ minimum: 1, maximum: 50, description: 'Default: 20.' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -64,7 +64,7 @@ export class AddMemberDto {
   @IsIn(ROLES)
   role!: (typeof ROLES)[number];
 
-  @ApiPropertyOptional({ default: false, description: 'Gate for POST /v1/graph/query (plan.md §9)' })
+  @ApiPropertyOptional({ description: 'Gate for POST /v1/graph/query (plan.md §9). Default: false.' })
   @IsOptional()
   @IsBoolean()
   trustedOperator?: boolean;

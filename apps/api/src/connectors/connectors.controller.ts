@@ -55,6 +55,7 @@ import {
   RegenerateWikiDto,
   UpdateConnectorRunItemDto,
 } from './connectors.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Connector administration (docs/features/19).
@@ -83,6 +84,7 @@ export class ConnectorsController {
   ) {}
 
   @Get()
+  @Returns('ListConnectorsResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'List the connectors configured in a workspace' })
   @ApiQuery({ name: 'workspaceId', required: true })
@@ -91,6 +93,7 @@ export class ConnectorsController {
   }
 
   @Post()
+  @Returns('ConnectorResponse')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Register a connection to an external system' })
   async create(
@@ -114,6 +117,7 @@ export class ConnectorsController {
    * already reaches a connector, so the ACL resolves the workspace from the run.
    */
   @Get('runs/:runId')
+  @Returns('ConnectorRunResponse')
   @Access('viewer', 'connector-run')
   @ApiOperation({ summary: 'One sync run — the poll target' })
   async run(@Param('runId', ParseUUIDPipe) runId: string): Promise<ConnectorRunResponse> {
@@ -127,6 +131,7 @@ export class ConnectorsController {
   // otherwise swallow the literal "runs".
 
   @Get('runs/:runId/items')
+  @Returns('ListConnectorRunItemsResponse')
   @Access('viewer', 'connector-run')
   @ApiOperation({ summary: 'The tree of items this run found — flat rows joined by parentItemId' })
   async listItems(@Param('runId', ParseUUIDPipe) runId: string): Promise<ListConnectorRunItemsResponse> {
@@ -135,6 +140,7 @@ export class ConnectorsController {
   }
 
   @Get('runs/:runId/items/:itemId')
+  @Returns('ConnectorRunItemResponse')
   @Access('viewer', 'connector-run')
   @ApiOperation({ summary: 'One item with the document it would write, before it writes it' })
   async getItem(
@@ -168,6 +174,7 @@ export class ConnectorsController {
   }
 
   @Post('runs/:runId/items/:itemId/events')
+  @Returns('ConnectorItemEventResponse')
   @Access('editor', 'connector-run')
   @ApiOperation({ summary: 'Approve, skip, reject, retry or revert an item — optionally its whole subtree' })
   async itemEvent(
@@ -179,6 +186,7 @@ export class ConnectorsController {
   }
 
   @Post('runs/:runId/events')
+  @Returns('ConnectorRunEventResponse')
   @Access('editor', 'connector-run')
   @ApiOperation({ summary: 'Pause, resume, step, cancel, or approve everything staged' })
   async runEvent(
@@ -189,6 +197,7 @@ export class ConnectorsController {
   }
 
   @Get(':id')
+  @Returns('ConnectorResponse')
   @Access('viewer', 'connector')
   @ApiOperation({ summary: 'Read one connector' })
   async get(@Param('id', ParseUUIDPipe) id: string): Promise<ConnectorResponse> {
@@ -202,6 +211,7 @@ export class ConnectorsController {
    * credential's reach.
    */
   @Get(':id/github')
+  @Returns('ConnectorGithubAccessResponse')
   @Access('admin', 'connector')
   @ApiOperation({ summary: "The connector's GitHub App grants and the viewer's GitHub identity" })
   async github(
@@ -212,6 +222,7 @@ export class ConnectorsController {
   }
 
   @Patch(':id')
+  @Returns('ConnectorResponse')
   @Access('admin', 'connector')
   @ApiOperation({ summary: 'Update a connector; null clears a credential, absent keeps it' })
   async update(
@@ -260,6 +271,7 @@ export class ConnectorsController {
   // identity list names people from outside the workspace.
 
   @Get(':id/acl')
+  @Returns('ConnectorAclResponse')
   @Access('admin', 'connector')
   @ApiOperation({ summary: "How the connector mirrors upstream access, and the upstream people it has seen" })
   aclSettings(@Param('id', ParseUUIDPipe) id: string): Promise<ConnectorAclResponse> {
@@ -267,6 +279,7 @@ export class ConnectorsController {
   }
 
   @Put(':id/acl')
+  @Returns('ConnectorAclResponse')
   @Access('admin', 'connector')
   @ApiOperation({ summary: 'Change access mirroring; switching it off turns what it mirrored into manual access' })
   async updateAcl(
@@ -289,6 +302,7 @@ export class ConnectorsController {
   }
 
   @Put(':id/acl/identities/:identityId')
+  @Returns('ConnectorAclResponse')
   @Access('admin', 'connector')
   @ApiOperation({ summary: 'Map an upstream identity to a workspace member by hand, or clear the mapping' })
   async mapIdentity(
@@ -303,6 +317,7 @@ export class ConnectorsController {
   }
 
   @Post(':id/acl/sync')
+  @Returns('ConnectorAclResponse')
   @Access('admin', 'connector')
   @ApiOperation({ summary: 'Refresh mirrored access now — permission calls only, no content' })
   async syncAcl(@Param('id', ParseUUIDPipe) id: string): Promise<ConnectorAclResponse> {
@@ -312,6 +327,7 @@ export class ConnectorsController {
   }
 
   @Post(':id/test')
+  @Returns('ConnectorTestResponse')
   @Access('admin', 'connector')
   @ApiOperation({ summary: 'Prove the credential and configuration reach the external system' })
   test(@Param('id', ParseUUIDPipe) id: string): Promise<ConnectorTestResponse> {
@@ -319,6 +335,7 @@ export class ConnectorsController {
   }
 
   @Post(':id/sync')
+  @Returns('ConnectorRunResponse')
   @Access('editor', 'connector')
   @ApiOperation({ summary: 'Start a sync run' })
   async sync(
@@ -336,6 +353,7 @@ export class ConnectorsController {
   }
 
   @Get(':id/runs')
+  @Returns('ListConnectorRunsResponse')
   @Access('viewer', 'connector')
   @ApiOperation({ summary: 'Recent sync runs, newest first' })
   async runs(
@@ -346,6 +364,7 @@ export class ConnectorsController {
   }
 
   @Get(':id/links')
+  @Returns('ListConnectorLinksResponse')
   @Access('viewer', 'connector')
   @ApiOperation({ summary: 'The external item <-> page identity map' })
   async connectorLinks(
@@ -378,6 +397,7 @@ export class ConnectorsController {
   // --- repo wiki (docs/features/46) ---
 
   @Get(':id/wiki')
+  @Returns('RepoWikiInfo')
   @Access('viewer', 'connector')
   @ApiOperation({ summary: "The repo wiki's sections, steering and asked-vs-applied effort" })
   wiki(@Param('id', ParseUUIDPipe) id: string): Promise<RepoWikiInfo> {
@@ -385,6 +405,7 @@ export class ConnectorsController {
   }
 
   @Post(':id/wiki/regenerate')
+  @Returns('RegenerateWikiResponse')
   @Access('editor', 'connector')
   @ApiOperation({ summary: 'Queue a run that re-derives the repo wiki, or some of its sections' })
   async regenerateWiki(
@@ -398,6 +419,7 @@ export class ConnectorsController {
   }
 
   @Get(':id/releases')
+  @Returns('ListReleasesResponse')
   @Access('viewer', 'connector')
   @ApiOperation({ summary: 'Release notes pages: Unreleased and one per tag, with breaking counts' })
   releases(@Param('id', ParseUUIDPipe) id: string): Promise<ListReleasesResponse> {
@@ -407,6 +429,7 @@ export class ConnectorsController {
   // --- repo guidance (#70) ---
 
   @Post(':id/guidance/import')
+  @Returns('RepoGuidanceImportResponse')
   @Access('admin', 'connector')
   @ApiOperation({
     summary: "Read the repository's AGENTS.md / CLAUDE.md / .cursorrules… into disabled skills now",
@@ -421,6 +444,7 @@ export class ConnectorsController {
   // --- work items (docs/features/32) ---
 
   @Get(':id/work-items')
+  @Returns('ListConnectorWorkItemsResponse')
   @Access('viewer', 'connector')
   @ApiOperation({ summary: 'Issues and pull requests on the connected repository' })
   async workItemList(
@@ -438,6 +462,7 @@ export class ConnectorsController {
    * already syncs, while changing the connector's credential is not.
    */
   @Post(':id/work-items')
+  @Returns('ConnectorWorkItemResponse')
   @Access('editor', 'connector')
   @ApiOperation({ summary: 'Open an issue on the connected repository' })
   async workItemCreate(
@@ -459,6 +484,7 @@ export class ConnectorsController {
   }
 
   @Post(':id/work-items/:workItemId/link')
+  @Returns('ConnectorWorkItemResponse')
   @Access('editor', 'connector')
   @ApiOperation({
     summary: 'Attach a work item to a page, so its events can reach a workflow, or to an anchor, so status syncs (#424)',
@@ -474,6 +500,7 @@ export class ConnectorsController {
   }
 
   @Delete(':id/work-items/:workItemId/link')
+  @Returns('ConnectorWorkItemResponse')
   @Access('editor', 'connector')
   @ApiOperation({ summary: 'Detach a work item from its page and anchor; sync stops, the ticket stays open' })
   async workItemUnlink(
@@ -486,6 +513,7 @@ export class ConnectorsController {
   }
 
   @Get(':id/tracker-routes')
+  @Returns('ListTrackerRoutesResponse')
   @Access('viewer', 'connector')
   @ApiOperation({ summary: 'The knowledge projects that hand off to this tracker connector (#424)' })
   async trackerRoutes(@Param('id', ParseUUIDPipe) id: string): Promise<ListTrackerRoutesResponse> {
@@ -493,6 +521,7 @@ export class ConnectorsController {
   }
 
   @Put(':id/status-map')
+  @Returns('ConnectorResponse')
   @Access('admin', 'connector')
   @ApiOperation({ summary: "Override how the tracker's statuses map onto open / in progress / done / won't do (#424)" })
   async statusMap(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PutStatusMapDto): Promise<ConnectorResponse> {
@@ -502,6 +531,7 @@ export class ConnectorsController {
   }
 
   @Post(':id/work-items/:workItemId/retry')
+  @Returns('ConnectorWorkItemResponse')
   @Access('editor', 'connector')
   @ApiOperation({ summary: 'Retry a failed status transition, or re-check an orphaned ticket (#424)' })
   async workItemRetry(

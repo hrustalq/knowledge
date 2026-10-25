@@ -21,9 +21,8 @@ import type {
   AccessLevel,
   AccessRequestEntry,
   AccessRequestStatus,
-  ListAccessRequestsResponse,
 } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { api } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { formatRelative } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
@@ -57,12 +56,15 @@ const key = computed(() => [
 ])
 const requests = useQuery({
   queryKey: key,
-  queryFn: () => {
-    const params = new URLSearchParams({ workspaceId: props.workspaceId })
-    if (view.value === 'mine') params.set('mine', '1')
-    if (status.value !== 'all') params.set('status', status.value)
-    return apiFetch<ListAccessRequestsResponse>(`/v1/access-requests?${params}`)
-  },
+  queryFn: async ({ signal }) =>
+    await api.get('/v1/access-requests', {
+      query: {
+        workspaceId: props.workspaceId,
+        ...(view.value === 'mine' ? { mine: '1' } : {}),
+        ...(status.value !== 'all' ? { status: status.value } : {}),
+      },
+      signal,
+    }),
 })
 const rows = computed(() => requests.data.value?.requests ?? [])
 
@@ -88,7 +90,7 @@ function openDeny(row: AccessRequestEntry) {
 async function act(row: AccessRequestEntry, path: 'approve' | 'deny' | 'cancel', body: object, done: string) {
   busy.value = row.requestId
   try {
-    await apiFetch(`/v1/access-requests/${row.requestId}/${path}`, { method: 'POST', body: JSON.stringify(body) })
+    await api.post(`/v1/access-requests/{id}/${path}` as const, { path: { id: row.requestId }, body: body as never })
     toast.success(done)
     approving.value = null
     denying.value = null

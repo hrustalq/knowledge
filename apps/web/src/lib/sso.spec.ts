@@ -2,8 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { SSO_LOGIN_ERRORS } from '@knowledge/contracts'
 import en from '@/i18n/messages/en.json'
 import ru from '@/i18n/messages/ru.json'
-import { ApiError } from '@/lib/api'
+import { ApiRequestError } from '@/api/http'
 import { completeSso, fragmentCode, ownPath, reauthKindOf, ssoErrorOf, ssoStartUrl, type CompleteSsoSteps } from './sso'
+
+/** A 400 from the exchange route, as the generated client rejects with it. */
+const refusal = (details: Record<string, unknown>) =>
+  new ApiRequestError({ statusCode: 400, code: 'BAD_REQUEST', message: 'invalid', details, path: '', requestId: '', timestamp: '' })
 
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
@@ -51,14 +55,14 @@ describe('/auth/sso/complete (#293)', () => {
   })
 
   it('a refused exchange goes to /login?error= with the category the API named (#291)', async () => {
-    const refused = new ApiError(400, 'invalid', 'BAD_REQUEST', { loginError: 'exchange-invalid' })
+    const refused = refusal({ loginError: 'exchange-invalid' })
     const { s, order } = steps({ exchange: vi.fn(async () => Promise.reject(refused)) })
     expect(await completeSso(s)).toBe('failed')
     expect(order).toEqual(['replace /auth/sso/complete', 'navigate /login?error=exchange-invalid'])
   })
 
   it('a failure without a known category — or not from the API at all — reads as failed', async () => {
-    for (const e of [new ApiError(400, 'x', 'BAD_REQUEST', { loginError: '<script>' }), new TypeError('fetch failed')]) {
+    for (const e of [refusal({ loginError: '<script>' }), new TypeError('fetch failed')]) {
       const { s } = steps({ exchange: vi.fn(async () => Promise.reject(e)) })
       expect(await completeSso(s)).toBe('failed')
       expect(s.navigate).toHaveBeenCalledExactlyOnceWith('/login?error=failed')

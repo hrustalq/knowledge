@@ -6,6 +6,7 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ResourceAccessService } from './resource-access.service.js';
 import { UpdateBranchAccessDto, UpdateResourceAccessDto } from './permissions.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Page and project restrictions (#76). Every route is `viewer` on the node
@@ -20,6 +21,7 @@ export class AccessController {
 
   // Literal segments under :id/access first — Nest matches in declaration order.
   @Get('documents/:id/access/effective')
+  @Returns('EffectiveAccessResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Who can open this page and at what level (needs manage on it)' })
   documentEffective(
@@ -32,6 +34,7 @@ export class AccessController {
   // A private branch's share list (#474). The guard reads `:branchId` and
   // holds it to the route's level, so only its readers get this far.
   @Get('documents/:id/branches/:branchId/access')
+  @Returns('BranchAccessResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: "A private branch's grants (#474); listed for its owner and admins" })
   branchAccess(
@@ -43,6 +46,7 @@ export class AccessController {
   }
 
   @Put('documents/:id/branches/:branchId/access')
+  @Returns('BranchAccessResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: "Replace a private branch's grants, at view or edit (#474; its owner or an admin)" })
   updateBranchAccess(
@@ -55,6 +59,7 @@ export class AccessController {
   }
 
   @Get('documents/:id/access')
+  @Returns('ResourceAccessResponse')
   @Access('viewer', 'document')
   @ApiOperation({
     summary: "The page's restriction, the restrictions it inherits and the caller's level; grants only for a manager",
@@ -67,6 +72,7 @@ export class AccessController {
   }
 
   @Put('documents/:id/access')
+  @Returns('ResourceAccessResponse')
   @Access('viewer', 'document')
   @ApiOperation({
     summary: "Set the page's restriction and replace its grants (needs manage; 409 when it would lock the caller out)",
@@ -80,6 +86,7 @@ export class AccessController {
   }
 
   @Get('projects/:id/access/effective')
+  @Returns('EffectiveAccessResponse')
   @Access('viewer', 'project')
   @ApiOperation({ summary: 'Who can open this project and at what level (needs manage on it)' })
   projectEffective(
@@ -90,6 +97,7 @@ export class AccessController {
   }
 
   @Get('projects/:id/access')
+  @Returns('ResourceAccessResponse')
   @Access('viewer', 'project')
   @ApiOperation({ summary: "The project's restriction and the caller's level; grants only for a manager" })
   projectAccess(
@@ -100,6 +108,7 @@ export class AccessController {
   }
 
   @Put('projects/:id/access')
+  @Returns('ResourceAccessResponse')
   @Access('viewer', 'project')
   @ApiOperation({ summary: "Set the project's restriction and replace its grants (needs manage on it)" })
   updateProjectAccess(

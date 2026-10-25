@@ -35,10 +35,8 @@ import {
   type ApiOperationInfo,
   type ApiSettingsResponse,
   type ApiTestRunDetail,
-  type ApiTestRunSummary,
   type ListApiTestEnvironmentsResponse,
   type ListApiTestRunsResponse,
-  type ApiTryResponse,
   type TestRunCall,
   type TestRunOutcome,
   type TestRunPlan,
@@ -181,10 +179,10 @@ async function startOnServer() {
   starting.value = true
   serverError.value = null
   try {
-    const run = (await api.post('/v1/api-specs/{id}/test-runs', {
+    const run = await api.post('/v1/api-specs/{id}/test-runs', {
       path: { id: props.operation.documentId },
       body: { entityKey: props.operation.entityKey, environmentId: environmentId.value },
-    })) as ApiTestRunSummary
+    })
     results.value = {}
     runId.value = run.id
     void historyQuery.refetch()
@@ -246,7 +244,7 @@ async function viaBrowser(req: TestRunRequest): Promise<TestRunResponse> {
 async function viaProxy(key: string, target: TestRunTarget, req: TestRunRequest): Promise<TestRunResponse> {
   for (;;) {
     try {
-      const res = (await api.post('/v1/api-specs/{id}/test-run/send', {
+      const res = await api.post('/v1/api-specs/{id}/test-run/send', {
         path: { id: target.documentId },
         body: {
           revisionId: target.revisionId,
@@ -256,7 +254,7 @@ async function viaProxy(key: string, target: TestRunTarget, req: TestRunRequest)
           headers: req.headers,
           body: req.method === 'GET' || req.method === 'HEAD' ? null : req.body,
         },
-      })) as ApiTryResponse
+      })
       // A binary body is base64 and captures nothing; the status still counts.
       return { status: res.status, headers: res.headers, body: res.encoding === 'utf8' ? res.body : '', durationMs: res.durationMs }
     } catch (e) {

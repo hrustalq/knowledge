@@ -13,7 +13,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import type { SiteSignInResponse } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { ApiRequestError } from '@/api/http'
 import { Button } from '@/components/ui/button'
@@ -36,10 +35,10 @@ onMounted(async () => {
     return
   }
   try {
-    const res = (await api.post('/v1/sites/{id}/sign-in', {
+    const res = await api.post('/v1/sites/{id}/sign-in', {
       path: { id: siteId.value },
       body: { returnUrl: returnUrl.value },
-    })) as SiteSignInResponse
+    })
     // replace: the back button should not land on a page that mints a code.
     window.location.replace(res.url)
   } catch (e) {

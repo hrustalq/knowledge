@@ -4,6 +4,7 @@ import type { AgentOutcomesResponse } from '@knowledge/contracts';
 import { Access } from '../auth/access.decorator.js';
 import { AgentOutcomesQueryDto } from './agent-outcomes.dto.js';
 import { AgentOutcomesService } from './agent-outcomes.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * The learning-loop ledger (#305): what became of each agent's output, for the
@@ -16,6 +17,7 @@ export class AgentOutcomesController {
   constructor(private readonly outcomes: AgentOutcomesService) {}
 
   @Get()
+  @Returns('AgentOutcomesResponse')
   @Access('admin', 'query')
   @ApiOperation({
     summary:

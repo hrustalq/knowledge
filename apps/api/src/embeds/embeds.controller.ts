@@ -4,6 +4,7 @@ import type { DocumentEmbedsResponse } from '@knowledge/contracts';
 import { Access, CookieTokenOk } from '../auth/access.decorator.js';
 import { DocumentEmbedsResponseDto } from './embeds.dto.js';
 import { EmbedsService } from './embeds.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * A page's embeds (#470, docs/features/64). The ACL source is `document`, so
@@ -17,6 +18,7 @@ export class EmbedsController {
   constructor(private readonly embeds: EmbedsService) {}
 
   @Get()
+  @Returns('DocumentEmbedsResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'What the reader can show of each pinned embed item on a page' })
   @ApiOkResponse({ type: DocumentEmbedsResponseDto })

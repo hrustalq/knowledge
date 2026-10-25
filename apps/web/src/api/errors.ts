@@ -1,17 +1,14 @@
 import type { ApiErrorCode } from '@knowledge/contracts'
-import { ApiError } from '@/lib/api'
 import { ApiRequestError } from '@/api/http'
 import { UploadError } from '@/lib/presigned-put'
 
 /**
  * One place that turns any thrown request error into something to show a user.
  *
- * The app runs two HTTP stacks — `apiFetch` in lib/api.ts throws `ApiError`,
- * the generated client throws `ApiRequestError` — so every call site that
- * wanted a readable message either handled one and not the other, or gave up
- * and toasted `error.message`. For a 413 that message used to be the raw
- * response body, which is how `500 Internal Server Error: {"statusCode":500,…}`
- * ended up in front of someone who had merely pasted a long page.
+ * Before it, call sites toasted `error.message`, and for a 413 that used to be
+ * the raw response body — which is how `500 Internal Server Error:
+ * {"statusCode":500,…}` ended up in front of someone who had merely pasted a
+ * long page.
  *
  * Branch on `code`, never on message text: the message is translated, so any
  * prefix or substring match against it breaks in Russian.
@@ -21,9 +18,7 @@ import { UploadError } from '@/lib/presigned-put'
 type Translate = (key: string, params?: Record<string, unknown>) => string
 
 function codeOf(error: unknown): ApiErrorCode | undefined {
-  if (error instanceof ApiRequestError) return error.code
-  if (error instanceof ApiError) return error.code
-  return undefined
+  return error instanceof ApiRequestError ? error.code : undefined
 }
 
 function firstValidationError(error: unknown): string | undefined {
@@ -53,11 +48,9 @@ function messageOrFallback(error: unknown, t: Translate): string {
   return message.length > 0 ? message : t('common.unknownError')
 }
 
-/** The envelope's `details` from either HTTP stack, or undefined. */
+/** The envelope's `details`, or undefined. */
 export function errorDetails(error: unknown): Record<string, unknown> | undefined {
-  if (error instanceof ApiRequestError) return error.details
-  if (error instanceof ApiError) return error.details
-  return undefined
+  return error instanceof ApiRequestError ? error.details : undefined
 }
 
 /**
@@ -74,6 +67,6 @@ export function errorReason(error: unknown): string | undefined {
  * answers 403 with `details.canRequestAccess`, and never the page's title.
  */
 export function isRestrictedRefusal(error: unknown): boolean {
-  const status = error instanceof ApiRequestError || error instanceof ApiError ? error.status : 0
+  const status = error instanceof ApiRequestError ? error.status : 0
   return status === 403 && errorDetails(error)?.canRequestAccess === true
 }

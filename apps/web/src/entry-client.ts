@@ -1,4 +1,5 @@
 import type { StateTree } from 'pinia'
+import { hydrate, type DehydratedState } from '@tanstack/vue-query'
 import { createApp } from './main'
 import { ensureLocaleMessages } from './i18n'
 import { getLocale, getProjectId, getWorkspaceId, setActiveProject, setActiveWorkspace } from './lib/api'
@@ -8,10 +9,11 @@ import { useWorkspacesStore } from './stores/workspaces'
 declare global {
   interface Window {
     __PINIA__?: Record<string, StateTree>
+    __QUERIES__?: DehydratedState
   }
 }
 
-const { app, router, pinia, i18n } = createApp()
+const { app, router, pinia, i18n, queryClient } = createApp()
 // Only the language the server rendered with (`<html lang>`, via getLocale) is
 // fetched, alongside the route's own chunks rather than after them.
 const messagesReady = ensureLocaleMessages(i18n, getLocale())
@@ -31,6 +33,12 @@ if (window.__PINIA__) {
   // or every API call this page makes would ask for another scope (#279).
   const projects = useProjectsStore(pinia)
   if (projects.loaded && projects.activeId !== getProjectId()) setActiveProject(projects.activeId)
+  // The answers those stores were filled from (#472). Re-reading them binds the
+  // stores to their keys — so a live invalidation reaches them — from the
+  // cache, without a request.
+  if (window.__QUERIES__) hydrate(queryClient, window.__QUERIES__)
+  if (workspaces.loaded) void workspaces.fetchList().catch(() => undefined)
+  if (projects.loaded) void projects.fetchList().catch(() => undefined)
 }
 
 Promise.all([router.isReady(), messagesReady]).then(() => {

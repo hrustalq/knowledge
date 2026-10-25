@@ -4,13 +4,15 @@ import { useI18n } from 'vue-i18n'
 import { formatDateTime } from '@/lib/format'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useQueryClient } from '@tanstack/vue-query'
 import type {
   CompareResponse,
   ListBranchesResponse,
   ListRevisionsResponse,
   RevisionNode,
 } from '@knowledge/contracts'
-import { apiFetch, statusVariant } from '@/lib/api'
+import { fetchApi } from '@/api/queries'
+import { statusVariant } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -30,6 +32,7 @@ import ApiChangesPanel from '@/components/api-reference/ApiChangesPanel.vue'
 const { t } = useI18n()
 
 const props = defineProps<{ documentId: string }>()
+const queryClient = useQueryClient()
 
 const revisions = ref<RevisionNode[] | null>(null)
 const branches = ref<ListBranchesResponse['branches']>([])
@@ -50,11 +53,14 @@ const busy = ref(false)
 const error = ref<string | null>(null)
 
 async function load() {
-  const params = branchFilter.value ? `?branch=${encodeURIComponent(branchFilter.value)}` : ''
-  const [revs, brs] = await Promise.all([
-    apiFetch<ListRevisionsResponse>(`/v1/documents/${props.documentId}/revisions${params}`),
-    apiFetch<ListBranchesResponse>(`/v1/documents/${props.documentId}/branches`),
-  ])
+  const path = { id: props.documentId }
+  const [revs, brs] = (await Promise.all([
+    fetchApi(queryClient, '/v1/documents/{id}/revisions', {
+      path,
+      query: branchFilter.value ? { branch: branchFilter.value } : {},
+    }),
+    fetchApi(queryClient, '/v1/documents/{id}/branches', { path }),
+  ])) as [ListRevisionsResponse, ListBranchesResponse]
   revisions.value = [...revs.revisions].reverse() // newest first
   branches.value = brs.branches
 }
@@ -64,9 +70,10 @@ async function runCompare() {
   busy.value = true
   error.value = null
   try {
-    compare.value = await apiFetch<CompareResponse>(
-      `/v1/documents/${props.documentId}/compare?from=${from.value}&to=${to.value}&mode=merge-base`,
-    )
+    compare.value = await fetchApi(queryClient, '/v1/documents/{id}/compare', {
+      path: { id: props.documentId },
+      query: { from: from.value, to: to.value, mode: 'merge-base' },
+    })
   } catch (e) {
     error.value = (e as Error).message
     compare.value = null

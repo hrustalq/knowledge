@@ -84,7 +84,7 @@ async function create() {
   if (busy.value || needsPassword.value || passwordTooShort.value) return
   busy.value = true
   try {
-    const res = (await api.post('/v1/documents/{id}/shares', {
+    const res = await api.post('/v1/documents/{id}/shares', {
       path: { id: props.documentId },
       body: {
         includeSubtree: includeSubtree.value,
@@ -92,7 +92,7 @@ async function create() {
         expiresAt: shareExpiryFor(expiry.value)?.toISOString() ?? null,
         ...(password.value ? { password: password.value } : {}),
       },
-    })) as CreateShareLinkResponse
+    })
     created.value = res
     password.value = ''
     await copy(res.url)

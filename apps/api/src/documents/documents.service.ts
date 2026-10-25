@@ -48,7 +48,7 @@ import type {
   RelationInputDto,
   UpdateDocumentDto,
 } from './dto/documents.dto.js';
-import type { Document, DocumentBranch, DocumentRevision, Prisma } from '@prisma/client';
+import { Prisma, type Document, type DocumentBranch, type DocumentRevision } from '@prisma/client';
 import {
   DRAFT_BRANCH_PREFIX,
   entityLayerFor,
@@ -915,7 +915,16 @@ export class DocumentsService {
     if (!mine) {
       const spent = await this.prisma.documentBranch.count({ where: { documentId, name: { startsWith: prefix } } });
       const name = spent === 0 ? prefix : `${prefix}-${spent + 1}`;
-      return this.createBranch(documentId, { name, visibility: 'private' }, userId);
+      try {
+        return await this.createBranch(documentId, { name, visibility: 'private' }, userId);
+      } catch (e) {
+        // Two of the caller's tabs asked in the same instant: the unique
+        // (document, name) let one insert win, and that one is the answer.
+        const lost =
+          (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') || e instanceof ConflictException;
+        if (!lost) throw e;
+        return this.myDraftBranch(documentId, userId);
+      }
     }
     const def = await this.prisma.documentBranch.findUnique({
       where: { documentId_name: { documentId, name: document.defaultBranch } },

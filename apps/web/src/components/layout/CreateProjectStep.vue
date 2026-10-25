@@ -12,7 +12,7 @@ import { useI18n } from 'vue-i18n'
 import { nextTick, onMounted, ref } from 'vue'
 import { Loader2 } from 'lucide-vue-next'
 import type { ProjectSummary } from '@knowledge/contracts'
-import { ApiError } from '@/lib/api'
+import { isApiRequestError } from '@/api/queries'
 import { createProject } from '@/lib/scopes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,7 +41,7 @@ async function submit() {
     emit('created', await createProject(props.workspaceId, trimmed))
   } catch (e) {
     error.value =
-      e instanceof ApiError && e.status === 403
+      isApiRequestError(e) && e.status === 403
         ? t('nav.noProjectPermission')
         : (e as Error).message
     submitting.value = false

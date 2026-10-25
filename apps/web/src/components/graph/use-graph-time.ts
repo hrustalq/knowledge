@@ -8,8 +8,9 @@
  * state, like `?tab=`); the slider never writes it back.
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import type { GraphTimelineResponse, ListReleaseTagsResponse, ResolvedAsOf } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import type { GraphTimelineResponse, ResolvedAsOf } from '@knowledge/contracts'
+import { fetchApi } from '@/api/queries'
 import { diffSince, type GraphPair } from './graph-model'
 import { asOfParam, timelineWindow, type TimePoint } from './graph-time'
 
@@ -21,11 +22,12 @@ export function useGraphTime(opts: {
   now: () => GraphPair | null
   /** The graph at an `asOf`, echoing what it resolved to. */
   fetchAt: (asOf: string) => Promise<{ pair: GraphPair; resolvedAsOf?: ResolvedAsOf }>
-  /** `workspaceId=…&projectId=…` for the tag and timeline reads. */
-  scopeQuery: () => string
+  /** `{ workspaceId, projectId? }` for the tag and timeline reads. */
+  scopeQuery: () => { workspaceId: string; projectId?: string }
   /** `?asOf=` as the page opened with it: a date, `tag:<name>` or `rev:<id>`. */
   initial?: string | null
 }) {
+  const queryClient = useQueryClient()
   const point = ref<TimePoint | null>(null)
   /** A deep-linked `tag:`/`rev:` waiting for the API to say which instant it is. */
   const pendingParam = ref<string | null>(opts.initial?.trim() || null)
@@ -91,12 +93,12 @@ export function useGraphTime(opts: {
   async function loadTimeline() {
     try {
       const q = opts.scopeQuery()
-      const { tags } = await apiFetch<ListReleaseTagsResponse>(`/v1/release-tags?${q}`)
+      const { tags } = await fetchApi(queryClient, '/v1/release-tags', { query: q })
       const w = timelineWindow(tags, Date.now())
       span.value = w
-      timeline.value = await apiFetch<GraphTimelineResponse>(
-        `/v1/graph/timeline?${q}&from=${encodeURIComponent(new Date(w.from).toISOString())}&to=${encodeURIComponent(new Date(w.to).toISOString())}`,
-      )
+      timeline.value = await fetchApi(queryClient, '/v1/graph/timeline', {
+        query: { ...q, from: new Date(w.from).toISOString(), to: new Date(w.to).toISOString() },
+      })
     } catch {
       // The slider still works without markers; the graph read reports errors.
       timeline.value = null

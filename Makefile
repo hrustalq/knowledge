@@ -159,6 +159,7 @@ clean-all: clean ## Also remove node_modules everywhere
 
 .PHONY: api-schema
 api-schema: ## Generate the OpenAPI schema from the NestJS app -> apps/api/openapi.json (no server needed)
+	$(API) run generate:contract-schemas
 	$(API) run build
 	node --env-file=apps/api/.env apps/api/dist/scripts/generate-openapi.main.js --out apps/api/openapi.json
 

@@ -3,8 +3,9 @@
 import { defineStore } from 'pinia'
 import { toast } from 'vue-sonner'
 import type { ComposerTranslation } from 'vue-i18n'
-import type { KnowledgeEvent, UrlTicketResponse } from '@knowledge/contracts'
-import { ApiError, apiFetch, getToken, getWorkspaceId } from '@/lib/api'
+import type { KnowledgeEvent } from '@knowledge/contracts'
+import { api, isApiRequestError } from '@/api/queries'
+import { getToken, getWorkspaceId } from '@/lib/api'
 import { useAssistantStore } from '@/stores/assistant'
 import { useDocumentsStore } from '@/stores/documents'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -22,7 +23,7 @@ const RETRY_MAX_MS = 30_000
 export async function eventsStreamUrl(workspaceId: string): Promise<string> {
   const url = `/api/v1/events?workspaceId=${encodeURIComponent(workspaceId)}`
   if (!getToken()) return url
-  const { ticket } = await apiFetch<UrlTicketResponse>('/v1/auth/url-ticket', { method: 'POST' })
+  const { ticket } = await api.post('/v1/auth/url-ticket')
   return `${url}&token=${encodeURIComponent(ticket)}`
 }
 
@@ -53,7 +54,7 @@ export const useEventsStore = defineStore('events', {
         url = await eventsStreamUrl(getWorkspaceId())
       } catch (e) {
         // Signed out (or the session died): stop; the next sign-in connects again.
-        if (e instanceof ApiError && e.status === 401) {
+        if (isApiRequestError(e) && e.status === 401) {
           this.connected = false
           return
         }

@@ -24,6 +24,7 @@ import {
   SuggestGlossaryTermsDto,
   UpdateGlossaryTermDto,
 } from './glossary.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Glossary (docs/features/14). Reading is `viewer` because every reader needs
@@ -36,6 +37,7 @@ export class GlossaryController {
   constructor(private readonly glossary: GlossaryService) {}
 
   @Get()
+  @Returns('ListGlossaryResponse')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'projectId', required: false, description: 'Restrict to one project' })
@@ -49,6 +51,7 @@ export class GlossaryController {
   }
 
   @Post()
+  @Returns('GlossaryTerm')
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Add a term to a project (409 when that project already defines it)' })
   create(
@@ -64,6 +67,7 @@ export class GlossaryController {
    * `GET /v1/documents/tree` precedes `GET /v1/documents/:id`).
    */
   @Post('suggest')
+  @Returns('SuggestGlossaryTermsResponse')
   @Access('viewer', 'body')
   @ApiOperation({
     summary:
@@ -78,6 +82,7 @@ export class GlossaryController {
   }
 
   @Get(':id')
+  @Returns('GlossaryTerm')
   @Access('viewer', 'glossary-term')
   @ApiOperation({ summary: 'One glossary entry' })
   get(@Param('id', ParseUUIDPipe) id: string): Promise<GlossaryTerm> {
@@ -85,6 +90,7 @@ export class GlossaryController {
   }
 
   @Patch(':id')
+  @Returns('GlossaryTerm')
   @Access('editor', 'glossary-term')
   @ApiOperation({ summary: 'Edit a term, its aliases, its definition or its defining page' })
   update(

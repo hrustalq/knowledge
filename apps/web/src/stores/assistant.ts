@@ -22,14 +22,11 @@ import type {
   AssistantThreadSummary,
   AssistantToolCall,
   AssistantUiBlock,
-  CreateAssistantThreadResponse,
-  GetAssistantThreadResponse,
   ListAssistantThreadsResponse,
-  TruncateAssistantThreadResponse,
-  UpdateAssistantThreadResponse,
 } from '@knowledge/contracts'
 import { assistantSourceKey } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { api, fetchApi } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { streamAssistantTurn } from '@/lib/assistant-stream'
 import { useFeedbackStore } from '@/stores/feedback'
 
@@ -189,10 +186,13 @@ export const useAssistantStore = defineStore('assistant', {
     },
 
     loadPage(cursor?: string): Promise<ListAssistantThreadsResponse> {
-      const params = new URLSearchParams({ workspaceId: getWorkspaceId(), limit: String(PAGE_SIZE) })
-      if (cursor) params.set('cursor', cursor)
-      if (this.search.trim()) params.set('search', this.search.trim())
-      return apiFetch<ListAssistantThreadsResponse>(`/v1/assistant/threads?${params}`)
+      const search = this.search.trim()
+      return fetchApi(
+        this.queryClient,
+        '/v1/assistant/threads',
+        { query: { workspaceId: getWorkspaceId(), limit: PAGE_SIZE, ...(cursor ? { cursor } : {}), ...(search ? { search } : {}) } },
+        { fresh: true },
+      )
     },
 
     // ---- Thread lifecycle -------------------------------------------------
@@ -236,9 +236,8 @@ export const useAssistantStore = defineStore('assistant', {
     },
 
     async newThread(documentId?: string) {
-      const res = await apiFetch<CreateAssistantThreadResponse>('/v1/assistant/threads', {
-        method: 'POST',
-        body: JSON.stringify({ workspaceId: getWorkspaceId(), ...(documentId ? { documentId } : {}) }),
+      const res = await api.post('/v1/assistant/threads', {
+        body: { workspaceId: getWorkspaceId(), ...(documentId ? { documentId } : {}) },
       })
       this.threads.unshift(res.thread)
       this.activeThread = res.thread
@@ -253,7 +252,7 @@ export const useAssistantStore = defineStore('assistant', {
       this.messagesLoading = true
       this.error = null
       try {
-        const res = await apiFetch<GetAssistantThreadResponse>(`/v1/assistant/threads/${threadId}`)
+        const res = await fetchApi(this.queryClient, '/v1/assistant/threads/{id}', { path: { id: threadId } }, { fresh: true })
         this.activeThread = res.thread
         this.messages = res.messages
         useFeedbackStore().hydrate(res.messages)
@@ -268,10 +267,7 @@ export const useAssistantStore = defineStore('assistant', {
 
     async renameThread(threadId: string, title: string | null) {
       const trimmed = title?.trim() || null
-      const res = await apiFetch<UpdateAssistantThreadResponse>(`/v1/assistant/threads/${threadId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ title: trimmed }),
-      })
+      const res = await api.patch('/v1/assistant/threads/{id}', { path: { id: threadId }, body: { title: trimmed } })
       this.syncSummary(res.thread)
       if (this.activeThread?.id === threadId) this.activeThread = res.thread
     },
@@ -284,17 +280,14 @@ export const useAssistantStore = defineStore('assistant', {
      * sender having to re-pick.
      */
     async setThreadProvider(threadId: string, providerId: string | null) {
-      const res = await apiFetch<UpdateAssistantThreadResponse>(`/v1/assistant/threads/${threadId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ providerId }),
-      })
+      const res = await api.patch('/v1/assistant/threads/{id}', { path: { id: threadId }, body: { providerId } })
       this.syncSummary(res.thread)
       if (this.activeThread?.id === threadId) this.activeThread = res.thread
     },
 
     /** Deletes the thread; if it was open, falls back to the next one in the roster. */
     async deleteThread(threadId: string) {
-      await apiFetch(`/v1/assistant/threads/${threadId}`, { method: 'DELETE' })
+      await api.delete('/v1/assistant/threads/{id}', { path: { id: threadId } })
       const index = this.threads.findIndex((t) => t.id === threadId)
       if (index >= 0) this.threads.splice(index, 1)
       if (this.activeThread?.id !== threadId) return
@@ -319,10 +312,9 @@ export const useAssistantStore = defineStore('assistant', {
     async rewindTo(messageId: string) {
       const threadId = this.activeThread?.id
       if (!threadId || this.sending) return
-      const res = await apiFetch<TruncateAssistantThreadResponse>(
-        `/v1/assistant/threads/${threadId}/messages/${messageId}`,
-        { method: 'DELETE' },
-      )
+      const res = await api.delete('/v1/assistant/threads/{id}/messages/{messageId}', {
+        path: { id: threadId, messageId },
+      })
       this.messages = res.messages
         useFeedbackStore().hydrate(res.messages)
       this.live = null
@@ -552,7 +544,7 @@ export const useAssistantStore = defineStore('assistant', {
       const id = this.activeThread?.id
       if (!id) return
       try {
-        const res = await apiFetch<GetAssistantThreadResponse>(`/v1/assistant/threads/${id}`)
+        const res = await fetchApi(this.queryClient, '/v1/assistant/threads/{id}', { path: { id } }, { fresh: true })
         this.messages = res.messages
         useFeedbackStore().hydrate(res.messages)
         this.live = null

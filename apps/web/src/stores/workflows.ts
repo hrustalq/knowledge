@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import type { ListWorkflowsResponse, WorkflowDefinitionInfo } from '@knowledge/contracts'
-import { apiFetch, getProjectId, getWorkspaceId } from '@/lib/api'
+import { apiQueryOptions, bindStoreQuery, unbindStoreQuery } from '@/api/queries'
+import { getProjectId, getWorkspaceId } from '@/lib/api'
 
 /**
  * The workflow definitions available in the active project (docs/features/17).
@@ -38,15 +39,21 @@ export const useWorkflowsStore = defineStore('workflows', {
       this.pending = this.fetchList().finally(() => (this.pending = null))
       return this.pending
     },
-    async fetchList() {
+    async fetchList(fresh = false) {
       try {
         // No active project yet (the store resolves one asynchronously) means
         // "the whole workspace" — the same fallback the documents store uses.
         const projectId = getProjectId()
-        const res = await apiFetch<ListWorkflowsResponse>(
-          `/v1/workflows?workspaceId=${getWorkspaceId()}${projectId ? `&projectId=${projectId}` : ''}`,
+        await bindStoreQuery<ListWorkflowsResponse>(
+          this,
+          'list',
+          this.queryClient,
+          apiQueryOptions('/v1/workflows', { query: { workspaceId: getWorkspaceId(), ...(projectId ? { projectId } : {}) } }),
+          (res) => {
+            this.workflows = res.workflows
+          },
+          { fresh },
         )
-        this.workflows = res.workflows
       } catch {
         // A page must not die because the workflow roster is unavailable: the
         // Run affordance simply does not appear.
@@ -56,7 +63,8 @@ export const useWorkflowsStore = defineStore('workflows', {
     },
     async refresh() {
       this.loaded = false
-      await this.ensureLoaded()
+      this.pending = this.fetchList(true).finally(() => (this.pending = null))
+      await this.pending
     },
     /**
      * Project switch: drop the roster immediately — offering the old project's
@@ -65,6 +73,7 @@ export const useWorkflowsStore = defineStore('workflows', {
      */
     async rescope() {
       const wanted = this.loaded
+      unbindStoreQuery(this, 'list')
       this.workflows = []
       this.loaded = false
       if (wanted) await this.ensureLoaded()

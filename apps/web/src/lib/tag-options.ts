@@ -1,5 +1,6 @@
-import type { ListEntitiesResponse } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import { fetchApi } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 
 /** The `AutocompleteOption` shape, spelled out: lib/ may not import from components/. */
 export interface TagOption {
@@ -14,11 +15,15 @@ export interface TagOption {
  * locally. Values are entity keys (`tag:billing`); shared by every tag picker
  * so the search sheet and a chat subscription pick tags the same way.
  */
-export async function loadTagOptions(query: string): Promise<TagOption[]> {
-  const params = new URLSearchParams({ workspaceId: getWorkspaceId(), type: 'tag', limit: '200' })
-  if (query.trim()) params.set('q', query.trim())
-  const res = await apiFetch<ListEntitiesResponse>(`/v1/entities?${params}`)
-  return res.entities.map((e) => ({ value: e.key, label: e.name, meta: e.degree }))
+export function useTagOptions(): (query: string) => Promise<TagOption[]> {
+  const queryClient = useQueryClient()
+  return async (query) => {
+    const q = query.trim()
+    const res = await fetchApi(queryClient, '/v1/entities', {
+      query: { workspaceId: getWorkspaceId(), type: 'tag', limit: '200', ...(q ? { q } : {}) },
+    })
+    return res.entities.map((e) => ({ value: e.key, label: e.name, meta: e.degree }))
+  }
 }
 
 /** What a selected tag reads as before its option is loaded. */

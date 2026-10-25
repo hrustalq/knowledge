@@ -19,6 +19,7 @@ import {
   TemplateVersionQueryDto,
   UpdateTemplateDto,
 } from './templates.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Page templates (issue #69).
@@ -44,6 +45,7 @@ export class TemplatesController {
   // Literal segments before `:id` — Nest matches in declaration order.
 
   @Get()
+  @Returns('ListTemplatesResponse')
   @Access('viewer', 'query')
   @ApiOperation({
     summary: 'The template gallery: built-ins (in the caller’s language) merged with the workspace’s own',
@@ -56,6 +58,7 @@ export class TemplatesController {
   }
 
   @Get('built-in/:key')
+  @Returns('TemplateDetail')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'A built-in template as this workspace sees it — its override when it has one' })
   getBuiltIn(@Param('key') key: string, @Query() query: BuiltInTemplateQueryDto): Promise<TemplateDetail> {
@@ -63,6 +66,7 @@ export class TemplatesController {
   }
 
   @Post('render')
+  @Returns('RenderTemplateResponse')
   @Access('viewer', 'body')
   @ReadKeyOk()
   @ApiOperation({
@@ -76,6 +80,7 @@ export class TemplatesController {
   }
 
   @Post()
+  @Returns('TemplateDetail')
   @Access('editor', 'body')
   @ApiOperation({
     summary: 'Create a template, or override a built-in (`builtInKey`)',
@@ -89,6 +94,7 @@ export class TemplatesController {
   }
 
   @Get(':id')
+  @Returns('TemplateDetail')
   @Access('viewer', 'template')
   @ApiOperation({ summary: 'A template with its source and parsed metadata (current version unless `version` is given)' })
   get(@Param('id', ParseUUIDPipe) id: string, @Query() query: TemplateVersionQueryDto): Promise<TemplateDetail> {
@@ -96,6 +102,7 @@ export class TemplatesController {
   }
 
   @Get(':id/versions')
+  @Returns('ListTemplateVersionsResponse')
   @Access('viewer', 'template')
   @ApiOperation({ summary: 'Version history, newest first' })
   versions(@Param('id', ParseUUIDPipe) id: string): Promise<ListTemplateVersionsResponse> {
@@ -103,6 +110,7 @@ export class TemplatesController {
   }
 
   @Get(':id/versions/:version')
+  @Returns('TemplateDetail')
   @Access('viewer', 'template')
   @ApiOperation({ summary: 'One past version' })
   version(
@@ -113,6 +121,7 @@ export class TemplatesController {
   }
 
   @Patch(':id')
+  @Returns('TemplateDetail')
   @Access('editor', 'template')
   @ApiOperation({ summary: 'Update a template; a changed source appends a version, a rename does not' })
   async update(
@@ -125,6 +134,7 @@ export class TemplatesController {
   }
 
   @Post(':id/archive')
+  @Returns('TemplateDetail')
   @Access('editor', 'template')
   @ApiOperation({ summary: 'Archive a custom template: hidden from the gallery, still resolvable by its pages' })
   async archive(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<TemplateDetail> {
@@ -133,6 +143,7 @@ export class TemplatesController {
   }
 
   @Post(':id/unarchive')
+  @Returns('TemplateDetail')
   @Access('editor', 'template')
   @ApiOperation({ summary: 'Bring an archived template back into the gallery' })
   async unarchive(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<TemplateDetail> {

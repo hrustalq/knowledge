@@ -7,6 +7,7 @@ import { t } from '../i18n/t.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { EmbedUsagesQueryDto, EmbedUsagesResponseDto } from './embeds.dto.js';
 import { EmbedsService } from './embeds.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /** The REST twin of `knowledge_find_embeds` (#470): which pages embed a Figma file or frame. */
 @ApiTags('embeds')
@@ -18,6 +19,7 @@ export class EmbedUsagesController {
   ) {}
 
   @Get()
+  @Returns('EmbedUsagesResponse')
   // Guests too: the scope below returns only pages they were granted (#76).
   @Access('viewer', 'query', { guests: true })
   @ApiOperation({ summary: 'Pages whose current version embeds a Figma file or frame' })

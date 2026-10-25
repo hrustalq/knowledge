@@ -67,7 +67,7 @@ describe('redirectForReauth (#293)', () => {
     expect(assign).toHaveBeenCalledOnce()
   })
 
-  it('apiFetch hands a 403 ssoRequired to it, and still rejects for the caller', async () => {
+  it('the API client hands a 403 ssoRequired to it, and still rejects for the caller', async () => {
     await at('/documents')
     const body = {
       statusCode: 403,
@@ -78,9 +78,20 @@ describe('redirectForReauth (#293)', () => {
       requestId: 'r1',
       details: sso,
     }
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status: 403 })))
-    const { apiFetch, ApiError } = await import('./api')
-    await expect(apiFetch('/v1/documents')).rejects.toBeInstanceOf(ApiError)
+    const { AxiosError } = await import('axios')
+    const { http, ApiRequestError } = await import('@/api/http')
+    // An adapter in place of the network: the 403 goes through the client's
+    // own response interceptor, which is the thing under test.
+    http.defaults.adapter = async (config) => {
+      throw new AxiosError('Forbidden', 'ERR_BAD_REQUEST', config, null, {
+        status: 403,
+        statusText: 'Forbidden',
+        data: body,
+        headers: {},
+        config,
+      })
+    }
+    await expect(http.get('/v1/documents')).rejects.toBeInstanceOf(ApiRequestError)
     expect(assign).toHaveBeenCalledExactlyOnceWith(`/login?reauth=sso&workspaceId=${WS}&redirect=%2Fdocuments`)
   })
 })

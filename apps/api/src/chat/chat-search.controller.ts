@@ -7,6 +7,7 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { ChatSearchService } from './chat-search.service.js';
 import { ChatSearchDto } from './chat.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /** Chat search (#339), apart from page search: results are never mixed into `POST /v1/search`. */
 @ApiTags('chat')
@@ -18,6 +19,7 @@ export class ChatSearchController {
   ) {}
 
   @Get()
+  @Returns('ChatSearchAvailability')
   @Access('viewer', 'query', { guests: true })
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({ summary: 'Whether the caller may read any searchable group — the same ACL as the search, without a query' })
@@ -30,6 +32,7 @@ export class ChatSearchController {
   }
 
   @Post()
+  @Returns('ChatSearchResponse')
   @HttpCode(200)
   // Guests too: a guest reads only the chat of projects they were granted (#76).
   @Access('viewer', 'body', { guests: true })

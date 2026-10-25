@@ -9,6 +9,7 @@ import { LintChecksService } from './lint-checks.service.js';
 import { lintGateEnforced } from './lint-check.js';
 import { LintTriggerSweeper } from './lint-trigger.sweeper.js';
 import { LintPolicyQueryDto, UpdateLintPolicyDto } from './lint.dto.js';
+import { Returns } from '../../common/returns.decorator.js';
 
 /**
  * Merge request checks and the lint policy (#74, phase 2). Its own controller
@@ -26,6 +27,7 @@ export class LintController {
   ) {}
 
   @Get('lint-policy')
+  @Returns('LintPolicySettings')
   @Access('viewer', 'query')
   @ApiOperation({
     summary:
@@ -37,6 +39,7 @@ export class LintController {
   }
 
   @Put('lint-policy')
+  @Returns('LintPolicySettings')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Set the style lint policy of the workspace or of one project; null inherits' })
   async setPolicy(@Body() dto: UpdateLintPolicyDto, @CurrentPrincipal() principal: Principal): Promise<LintPolicySettings> {
@@ -51,6 +54,7 @@ export class LintController {
   }
 
   @Get('merge-requests/:id/checks')
+  @Returns('ListMergeRequestChecksResponse')
   @Access('viewer', 'merge-request')
   @ApiOperation({
     summary: "A merge request's checks, newest first, with the lint policy of its page and whether it holds a merge by the caller",

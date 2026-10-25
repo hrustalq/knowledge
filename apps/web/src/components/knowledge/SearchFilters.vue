@@ -8,9 +8,11 @@
 // is only meaningful while searching: which workspace, and how the query runs.
 import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref } from 'vue'
-import type { DocumentCategory, ListReleaseTagsResponse, ReleaseTagDto } from '@knowledge/contracts'
+import { useQueryClient } from '@tanstack/vue-query'
+import type { DocumentCategory, ReleaseTagDto } from '@knowledge/contracts'
 import { X } from 'lucide-vue-next'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { fetchApi } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import { Input } from '@/components/ui/input'
 import { useWorkspacesStore } from '@/stores/workspaces'
@@ -28,6 +30,7 @@ import {
 import type { UseSearch } from './use-search'
 
 const { t } = useI18n()
+const queryClient = useQueryClient()
 
 const props = defineProps<{ search: UseSearch }>()
 const emit = defineEmits<{ 'switch-workspace': [workspaceId: string] }>()
@@ -64,7 +67,9 @@ const selectedTags = computed({
 const releaseTags = ref<ReleaseTagDto[]>([])
 onMounted(async () => {
   try {
-    releaseTags.value = (await apiFetch<ListReleaseTagsResponse>(`/v1/release-tags?workspaceId=${getWorkspaceId()}`)).tags
+    releaseTags.value = (
+      await fetchApi(queryClient, '/v1/release-tags', { query: { workspaceId: getWorkspaceId() } })
+    ).tags
   } catch {
     // The date field still works; tags are a shortcut to a date.
   }

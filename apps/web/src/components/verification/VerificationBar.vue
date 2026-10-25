@@ -18,9 +18,10 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Archive, ArchiveRestore, BadgeCheck, ChevronDown, ExternalLink, MoreHorizontal } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import type { ArchiveDocumentResponse, DocumentDetailResponse, DocumentSummary, VerificationFlag } from '@knowledge/contracts'
+import type { DocumentDetailResponse, VerificationFlag } from '@knowledge/contracts'
 import { VERIFICATION_NOTE_MAX_CHARS } from '@knowledge/contracts'
-import { apiFetch, relativeTime } from '@/lib/api'
+import { api } from '@/api/queries'
+import { relativeTime } from '@/lib/api'
 import { formatDate, formatDateTime } from '@/lib/format'
 import { errorMessage } from '@/api/errors'
 import { useAuthStore } from '@/stores/auth'
@@ -149,14 +150,15 @@ function verify(key: string) {
   // omitted: omitting keeps whatever is stored, which is the same thing, but
   // sending it makes the request say what the person saw checked.
   void run(
-    () => apiFetch<DocumentDetailResponse>(`/v1/documents/${id.value}/verify`, { method: 'POST', body: JSON.stringify({ intervalDays: days }) }),
+    async () =>
+      await api.post('/v1/documents/{id}/verify', { path: { id: id.value }, body: { intervalDays: days } }),
     'verification.toast.verified',
   )
 }
 
 function clear() {
   void run(
-    () => apiFetch<DocumentDetailResponse>(`/v1/documents/${id.value}/verify`, { method: 'DELETE' }),
+    async () => await api.delete('/v1/documents/{id}/verify', { path: { id: id.value } }),
     'verification.toast.cleared',
   )
 }
@@ -171,18 +173,20 @@ function openFlag(flag: VerificationFlag) {
 function submitFlag() {
   const flag = flagDialog.value
   if (!flag) return
-  const route = flag === 'outdated' ? 'outdated' : 'verification-request'
   const body = flagNote.value.trim() ? { note: flagNote.value.trim() } : {}
   flagDialog.value = null
   void run(
-    () => apiFetch<DocumentDetailResponse>(`/v1/documents/${id.value}/${route}`, { method: 'POST', body: JSON.stringify(body) }),
+    async () =>
+      (flag === 'outdated'
+        ? await api.post('/v1/documents/{id}/outdated', { path: { id: id.value }, body })
+        : await api.post('/v1/documents/{id}/verification-request', { path: { id: id.value }, body })) as DocumentDetailResponse,
     flag === 'outdated' ? 'verification.toast.outdated' : 'verification.toast.requested',
   )
 }
 
 function setOwner(ownerId: string | null) {
   void run(async () => {
-    await apiFetch<DocumentSummary>(`/v1/documents/${id.value}`, { method: 'PATCH', body: JSON.stringify({ ownerId }) })
+    await api.patch('/v1/documents/{id}', { path: { id: id.value }, body: { ownerId } })
     return null
   }, 'verification.toast.ownerChanged')
 }
@@ -192,16 +196,16 @@ const withDescendants = ref(true)
 function archive() {
   archiveOpen.value = false
   void run(async () => {
-    await apiFetch<ArchiveDocumentResponse>(`/v1/documents/${id.value}/archive`, {
-      method: 'POST',
-      body: JSON.stringify({ includeDescendants: withDescendants.value }),
+    await api.post('/v1/documents/{id}/archive', {
+      path: { id: id.value },
+      body: { includeDescendants: withDescendants.value },
     })
     return null
   }, 'verification.toast.archived')
 }
 function unarchive() {
   void run(async () => {
-    await apiFetch<ArchiveDocumentResponse>(`/v1/documents/${id.value}/unarchive`, { method: 'POST', body: '{}' })
+    await api.post('/v1/documents/{id}/unarchive', { path: { id: id.value }, body: {} })
     return null
   }, 'verification.toast.unarchived')
 }

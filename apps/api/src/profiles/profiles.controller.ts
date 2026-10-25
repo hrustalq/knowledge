@@ -5,6 +5,7 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ProfilesService } from './profiles.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * A member's profile within one workspace.
@@ -21,6 +22,7 @@ export class ProfilesController {
   constructor(private readonly profiles: ProfilesService) {}
 
   @Get(':userId')
+  @Returns('UserProfileResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: "A workspace member's identity, membership, open work and pages" })
   @ApiQuery({ name: 'workspaceId', required: true })

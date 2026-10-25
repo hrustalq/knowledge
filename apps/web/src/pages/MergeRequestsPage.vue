@@ -13,15 +13,14 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useQuery } from '@tanstack/vue-query'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import type {
   ListWorkspaceMergeRequestsResponse,
   MergeRequestInfo,
   SavedFilter,
 } from '@knowledge/contracts'
-import { apiQueryOptions } from '@/api/queries'
-import { api } from '@/api/client'
+import { apiQueryOptions, fetchApi } from '@/api/queries'
 import { getFilterRailOpen, getWorkspaceId, setFilterRailOpen } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import {
@@ -47,6 +46,7 @@ import {
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const queryClient = useQueryClient()
 
 const state = ref<MrState>('open')
 const filters = ref<ActiveFilter[]>([])
@@ -176,9 +176,9 @@ async function restoreFromUrl() {
   if (!Number.isInteger(raw) || raw <= 0) return
   try {
     applySaved(
-      (await api.get('/v1/merge-requests/filters/{filterId}', {
+      await fetchApi(queryClient, '/v1/merge-requests/filters/{filterId}', {
         path: { filterId: raw },
-      })) as SavedFilter,
+      }),
     )
   } catch {
     setActiveView(null)

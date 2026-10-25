@@ -23,14 +23,15 @@ import { computed, onMounted, onServerPrefetch, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useVirtualizer } from '@tanstack/vue-virtual'
+import { useQueryClient } from '@tanstack/vue-query'
 import { Archive, FileText, List, ListTree, Loader2, Network, NotepadTextDashed, Plus, SlidersHorizontal, Upload, X } from 'lucide-vue-next'
 import { formatDate } from '@/lib/format'
 import { labelFor } from '@/lib/labels'
 import { useAuthStore } from '@/stores/auth'
 import { EMPTY_FILTERS, useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
-import { apiFetch, getProjectId, getWorkspaceId, statusDot, statusVariant } from '@/lib/api'
-import type { WorkspaceGraphResponse } from '@knowledge/contracts'
+import { getProjectId, getWorkspaceId, statusDot, statusVariant } from '@/lib/api'
+import { fetchApi } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -54,6 +55,7 @@ provideTreeDnd((message: string) => toast.error(message))
 const projects = useProjectsStore()
 const router = useRouter()
 const route = useRoute()
+const queryClient = useQueryClient()
 
 type View = 'graph' | 'tree' | 'list'
 const VIEW_KEY = 'kn_docs_view'
@@ -145,14 +147,14 @@ const graphTime = useGraphTime({
   now: () => (store.graph ? { nodes: toGraphNodes(store.graph.nodes), edges: store.graph.edges } : null),
   fetchAt: async (asOf) => {
     const projectId = getProjectId()
-    const res = await apiFetch<WorkspaceGraphResponse>(
-      `/v1/documents/graph?workspaceId=${getWorkspaceId()}${projectId ? `&projectId=${projectId}` : ''}&asOf=${encodeURIComponent(asOf)}`,
-    )
+    const res = await fetchApi(queryClient, '/v1/documents/graph', {
+      query: { workspaceId: getWorkspaceId(), ...(projectId ? { projectId } : {}), asOf },
+    })
     return { pair: { nodes: toGraphNodes(res.nodes), edges: res.edges }, resolvedAsOf: res.resolvedAsOf }
   },
   scopeQuery: () => {
     const projectId = getProjectId()
-    return `workspaceId=${getWorkspaceId()}${projectId ? `&projectId=${projectId}` : ''}`
+    return { workspaceId: getWorkspaceId(), ...(projectId ? { projectId } : {}) }
   },
   initial: typeof route.query.asOf === 'string' ? route.query.asOf : null,
 })

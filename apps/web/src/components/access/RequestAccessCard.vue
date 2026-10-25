@@ -15,10 +15,10 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Lock } from 'lucide-vue-next'
 import type {
   AccessResourceType,
-  ListAccessRequestsResponse,
   RequestableAccessLevel,
 } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { api } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { errorMessage } from '@/api/errors'
 import { formatRelative } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -43,15 +43,11 @@ const key = computed(() => [
 ])
 const mine = useQuery({
   queryKey: key,
-  queryFn: () =>
-    apiFetch<ListAccessRequestsResponse>(
-      `/v1/access-requests?${new URLSearchParams({
-        workspaceId,
-        mine: '1',
-        resourceType: props.resourceType,
-        resourceId: props.resourceId,
-      })}`,
-    ),
+  queryFn: async ({ signal }) =>
+    await api.get('/v1/access-requests', {
+      query: { workspaceId, mine: '1', resourceType: props.resourceType, resourceId: props.resourceId },
+      signal,
+    }),
 })
 const pending = computed(() => mine.data.value?.requests.find((r) => r.status === 'pending') ?? null)
 const lastDenied = computed(() => {
@@ -66,15 +62,14 @@ const busy = ref(false)
 async function send() {
   busy.value = true
   try {
-    await apiFetch('/v1/access-requests', {
-      method: 'POST',
-      body: JSON.stringify({
+    await api.post('/v1/access-requests', {
+      body: {
         workspaceId,
         resourceType: props.resourceType,
         resourceId: props.resourceId,
         level: level.value,
         message: message.value.trim() || null,
-      }),
+      },
     })
     toast.success(t('access.request.sent'))
     message.value = ''
@@ -90,7 +85,7 @@ async function withdraw() {
   if (!pending.value) return
   busy.value = true
   try {
-    await apiFetch(`/v1/access-requests/${pending.value.requestId}/cancel`, { method: 'POST', body: '{}' })
+    await api.post('/v1/access-requests/{id}/cancel', { path: { id: pending.value.requestId } })
     toast.success(t('access.requests.cancelled'))
     await queryClient.invalidateQueries({ queryKey: ['/v1/access-requests'] })
   } catch (e) {

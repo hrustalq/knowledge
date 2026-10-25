@@ -7,6 +7,7 @@ import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { ActivityService } from './activity.service.js';
 import { t } from '../i18n/t.js';
+import { Returns } from '../common/returns.decorator.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -24,6 +25,7 @@ export class ActivityController {
   // Declared before @Get() so the literal segment is matched first — house
   // style (see EntitiesController's /trace), not a Nest requirement here.
   @Get('calendar')
+  @Returns('ActivityCalendarResponse')
   @Access('viewer', 'query')
   @ApiOperation({
     summary: "One person's activity aggregated per UTC day, for the profile contribution ledger",
@@ -53,6 +55,7 @@ export class ActivityController {
   }
 
   @Get()
+  @Returns('ListActivityResponse')
   // Guests too: the feed is filtered to rows about pages they can open (#76).
   @Access('viewer', 'query', { guests: true })
   @ApiOperation({ summary: 'Workspace activity feed, newest first (docs/features/10)' })

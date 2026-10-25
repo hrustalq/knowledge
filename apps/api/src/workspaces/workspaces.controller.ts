@@ -30,6 +30,7 @@ import {
   UpdateWorkspaceDto,
 } from './workspaces.dto.js';
 import { WorkspacesService } from './workspaces.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Access-control management. Listing your workspaces / creating one needs
@@ -42,18 +43,21 @@ export class WorkspacesController {
   constructor(private readonly workspaces: WorkspacesService) {}
 
   @Get()
+  @Returns('ListWorkspacesResponse')
   @ApiOperation({ summary: "Caller's workspaces (platform admins see all)" })
   list(@CurrentPrincipal() principal: Principal): Promise<ListWorkspacesResponse> {
     return this.workspaces.list(principal);
   }
 
   @Post()
+  @Returns('CreateWorkspaceResponse')
   @ApiOperation({ summary: 'Create a workspace — the creator becomes its admin + trusted operator' })
   create(@CurrentPrincipal() principal: Principal, @Body() dto: CreateWorkspaceDto): Promise<CreateWorkspaceResponse> {
     return this.workspaces.create(principal, dto.name);
   }
 
   @Get(':id/deletion-preview')
+  @Returns('WorkspaceDeletionPreviewResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'What deleting the workspace would destroy, counted (workspace admin)' })
   deletionPreview(@Param('id', ParseUUIDPipe) id: string): Promise<WorkspaceDeletionPreviewResponse> {
@@ -61,6 +65,7 @@ export class WorkspacesController {
   }
 
   @Patch(':id')
+  @Returns('UpdateWorkspaceResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Rename the workspace (workspace admin)' })
   update(
@@ -72,6 +77,7 @@ export class WorkspacesController {
   }
 
   @Delete(':id')
+  @Returns('DeleteWorkspaceResponse')
   @Access('admin', 'workspace')
   @ApiOperation({
     summary: 'Delete the workspace and everything in it (workspace admin). Gone at once; contents removed in the background',
@@ -85,6 +91,7 @@ export class WorkspacesController {
   }
 
   @Get(':id/members')
+  @Returns('ListWorkspaceMembersResponse')
   @Access('viewer', 'workspace')
   @ApiOperation({ summary: 'Workspace member roster (any member)' })
   listMembers(@Param('id', ParseUUIDPipe) id: string): Promise<ListWorkspaceMembersResponse> {
@@ -92,6 +99,7 @@ export class WorkspacesController {
   }
 
   @Get(':id/candidates')
+  @Returns('ListWorkspaceCandidatesResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Users who are not members yet, for the add-member picker (workspace admin)' })
   listCandidates(
@@ -102,6 +110,7 @@ export class WorkspacesController {
   }
 
   @Post(':id/members')
+  @Returns('ListWorkspaceMembersResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Add (or re-role) a member by email (workspace admin)' })
   addMember(
@@ -113,6 +122,7 @@ export class WorkspacesController {
   }
 
   @Patch(':id/members/:userId')
+  @Returns('ListWorkspaceMembersResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Change a member role / trusted-operator flag / capabilities (workspace admin)' })
   updateMember(
@@ -125,6 +135,7 @@ export class WorkspacesController {
   }
 
   @Delete(':id/members/:userId')
+  @Returns('ListWorkspaceMembersResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Remove a member (workspace admin; last admin is protected)' })
   removeMember(

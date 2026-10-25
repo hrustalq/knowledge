@@ -190,6 +190,8 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - A route with no single workspace to resolve cannot use `@Access` — write an explicit assertion instead (`assertCanSeeUser`).
 - Custom 4xx bodies use the **flat-extras pattern**: `ConflictException({statusCode, message, ...extras})`. `ApiExceptionFilter` hoists extras into `details`. **Never nest `details` manually.**
 - Literal route segments must be declared **before** `@Get(':id')` — Nest matches in declaration order.
+- A new JSON route carries **`@Returns('<contracts type>')`**: it type-checks the handler and gives the web client a typed response. `make api-schema` picks up a new name ([07](docs/architecture/07-api-client-errors.md)).
+- The web app calls the API only through the generated client (`api.*`, `fetchApi`, `apiQueryOptions`). A raw `fetch(` fails lint outside the allowlist in `apps/web/eslint.config.js`.
 - Every new env var needs a **default**: `generate-openapi.main.ts` runs zod validation with no infrastructure.
 - `AiUsageOperation` must gain a value for every new model call site.
 

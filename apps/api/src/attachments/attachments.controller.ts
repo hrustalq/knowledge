@@ -19,6 +19,7 @@ import { Access, CookieTokenOk, CurrentPrincipal } from '../auth/access.decorato
 import type { Principal } from '../auth/principal.js';
 import { CreateAttachmentDto } from './attachments.dto.js';
 import { AttachmentsService } from './attachments.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Page attachments for the rich editor. The ACL source is `document`, so the
@@ -36,6 +37,7 @@ export class AttachmentsController {
   constructor(private readonly attachments: AttachmentsService) {}
 
   @Get()
+  @Returns('ListAttachmentsResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'List a page’s attachments' })
   list(@Param('id', ParseUUIDPipe) id: string): Promise<ListAttachmentsResponse> {
@@ -43,6 +45,7 @@ export class AttachmentsController {
   }
 
   @Post()
+  @Returns('CreateAttachmentResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Reserve an attachment and get a presigned upload URL' })
   create(
@@ -54,6 +57,7 @@ export class AttachmentsController {
   }
 
   @Post(':attachmentId/complete')
+  @Returns('CompleteAttachmentResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Confirm the upload landed; marks the attachment ready' })
   complete(

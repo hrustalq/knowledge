@@ -15,13 +15,11 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { BookMarked, Check, Send, Sparkles, X } from 'lucide-vue-next'
 import type {
-  AssistantAskResponse,
   AssistantAskSource,
-  GlossaryTerm,
   GlossaryTermSuggestion,
-  SuggestGlossaryTermsResponse,
 } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { api } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useGlossaryStore } from '@/stores/glossary'
 import { Badge } from '@/components/ui/badge'
@@ -112,14 +110,14 @@ async function send() {
   error.value = null
   void scrollToEnd()
   try {
-    const res = await apiFetch<AssistantAskResponse>('/v1/assistant/ask', {
-      method: 'POST',
-      body: JSON.stringify({
+    const res = await api.post('/v1/assistant/ask', {
+      body: {
         workspaceId: getWorkspaceId(),
         documentId: props.documentId,
         question: q,
         ...(history.length > 0 ? { history } : {}),
-      }),
+      },
+      config: { timeout: 0 },
     })
     messages.value.push({
       role: 'assistant',
@@ -144,9 +142,9 @@ async function buildGlossary() {
   error.value = null
   void scrollToEnd()
   try {
-    const res = await apiFetch<SuggestGlossaryTermsResponse>('/v1/glossary/suggest', {
-      method: 'POST',
-      body: JSON.stringify({ workspaceId: getWorkspaceId(), documentId: props.documentId }),
+    const res = await api.post('/v1/glossary/suggest', {
+      body: { workspaceId: getWorkspaceId(), documentId: props.documentId },
+      config: { timeout: 0 },
     })
     messages.value.push({
       role: 'assistant',
@@ -170,9 +168,8 @@ async function buildGlossary() {
 async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggestion) {
   if (!message.projectId) return
   try {
-    await apiFetch<GlossaryTerm>('/v1/glossary', {
-      method: 'POST',
-      body: JSON.stringify({
+    await api.post('/v1/glossary', {
+      body: {
         workspaceId: getWorkspaceId(),
         projectId: message.projectId,
         term: suggestion.term,
@@ -180,7 +177,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
         aliases: suggestion.aliases,
         documentId: props.documentId,
         source: 'ai',
-      }),
+      },
     })
     message.accepted = [...(message.accepted ?? []), suggestion.term]
     // The page under this widget links glossary terms as it renders, so the

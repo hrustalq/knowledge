@@ -74,10 +74,10 @@ function setRunner(mode: ApiTestRunnerMode) {
 async function save(body: UpdateApiSettingsRequest) {
   if (!canManage.value) return
   try {
-    const next = (await api.patch('/v1/workspaces/{id}/api-settings', {
+    const next = await api.patch('/v1/workspaces/{id}/api-settings', {
       path: { id: workspaceId },
       body,
-    })) as ApiSettingsResponse
+    })
     queryClient.setQueryData(options.queryKey, next)
     toast.success(t('apiSettings.saved'))
   } catch (e) {

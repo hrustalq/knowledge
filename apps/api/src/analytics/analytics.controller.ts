@@ -30,6 +30,7 @@ import {
   RecordPageViewDto,
   UpdateAnalyticsSettingsDto,
 } from './analytics.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /** Beacon hits one principal may send a minute: a heartbeat per open tab every 15 s, with room for many tabs. */
 const BEACON_PER_MIN = 120;
@@ -58,6 +59,7 @@ export class AnalyticsController {
   ) {}
 
   @Get('analytics/overview')
+  @Returns('AnalyticsOverviewResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: "The workspace's headline usage: views by traffic class, searches, click-through, assistant and MCP volume" })
   async overview(@Query() q: AnalyticsWorkspaceQueryDto, @CurrentPrincipal() principal: Principal): Promise<AnalyticsOverviewResponse> {
@@ -65,6 +67,7 @@ export class AnalyticsController {
   }
 
   @Get('analytics/pages')
+  @Returns('AnalyticsPagesResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: "The workspace's most read, never read and dead pages" })
   async pages(@Query() q: AnalyticsWorkspaceQueryDto, @CurrentPrincipal() principal: Principal): Promise<AnalyticsPagesResponse> {
@@ -72,6 +75,7 @@ export class AnalyticsController {
   }
 
   @Get('analytics/search')
+  @Returns('AnalyticsSearchResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: 'Top queries, queries that found nothing, and web searches whose results nobody opened' })
   search(@Query() q: AnalyticsWorkspaceQueryDto): Promise<AnalyticsSearchResponse> {
@@ -79,6 +83,7 @@ export class AnalyticsController {
   }
 
   @Get('analytics/agents')
+  @Returns('AnalyticsAgentsResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: 'MCP calls by tool and by API key, and the in-app assistant\'s questions and model calls' })
   agents(@Query() q: AnalyticsWorkspaceQueryDto): Promise<AnalyticsAgentsResponse> {
@@ -110,6 +115,7 @@ export class AnalyticsController {
   }
 
   @Get('analytics/settings')
+  @Returns('AnalyticsSettingsResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: "The workspace's analytics settings: what it asks for, the deployment's ceiling, and what applies" })
   getSettings(@Query() q: AnalyticsSettingsQueryDto): Promise<AnalyticsSettingsResponse> {
@@ -117,6 +123,7 @@ export class AnalyticsController {
   }
 
   @Put('analytics/settings')
+  @Returns('AnalyticsSettingsResponse')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Set recording and retention for the workspace; null inherits the env, which is a ceiling' })
   setSettings(@Body() dto: UpdateAnalyticsSettingsDto, @CurrentPrincipal() principal: Principal): Promise<AnalyticsSettingsResponse> {
@@ -124,6 +131,7 @@ export class AnalyticsController {
   }
 
   @Get('documents/:id/insights')
+  @Returns('PageInsightsResponse')
   // Anyone who may open the page may see how often it is read: counts only,
   // never who read it.
   @Access('viewer', 'document')
@@ -133,6 +141,7 @@ export class AnalyticsController {
   }
 
   @Get('projects/:id/analytics')
+  @Returns('ProjectAnalyticsResponse')
   // Editors, like the rest of a project's curation: a viewer reads pages, an
   // editor decides which ones nobody needs.
   @Access('editor', 'project')

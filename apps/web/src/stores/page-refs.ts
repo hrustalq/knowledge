@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import type { DocumentTreeNode, DocumentTreeResponse } from '@knowledge/contracts'
-import { apiFetch, getProjectId, getWorkspaceId } from '@/lib/api'
+import { apiQueryOptions, bindStoreQuery } from '@/api/queries'
+import { getProjectId, getWorkspaceId } from '@/lib/api'
 import { buildPageRefResolver, type PageRef, type PageRefResolver } from '@/lib/page-refs'
 
 /**
@@ -48,31 +49,29 @@ export const usePageRefsStore = defineStore('pageRefs', {
 
     async load() {
       try {
-        const res = await apiFetch<DocumentTreeResponse>(
-          `/v1/documents/tree?workspaceId=${getWorkspaceId()}`,
+        // Bound, so the `document.*` live rule that invalidates the tree
+        // re-reads this index too — a new or renamed page resolves at once.
+        await bindStoreQuery<DocumentTreeResponse>(
+          this,
+          'tree',
+          this.queryClient,
+          apiQueryOptions('/v1/documents/tree', { query: { workspaceId: getWorkspaceId() } }),
+          (res) => {
+            const flat: PageRef[] = []
+            const walk = (nodes: DocumentTreeNode[]) => {
+              for (const node of nodes) {
+                flat.push({ documentId: node.documentId, title: node.title, projectId: node.projectId })
+                walk(node.children)
+              }
+            }
+            walk(res.roots)
+            this.pages = flat
+            this.loaded = true
+          },
         )
-        const flat: PageRef[] = []
-        const walk = (nodes: DocumentTreeNode[]) => {
-          for (const node of nodes) {
-            flat.push({ documentId: node.documentId, title: node.title, projectId: node.projectId })
-            walk(node.children)
-          }
-        }
-        walk(res.roots)
-        this.pages = flat
-        this.loaded = true
       } finally {
         this.pending = null
       }
-    },
-
-    /**
-     * Workspace-wide, so a project switch leaves it valid — but a new or
-     * renamed page does not, and `document.updated` is what says so.
-     */
-    invalidate() {
-      this.loaded = false
-      this.pages = []
     },
   },
 })

@@ -173,13 +173,31 @@ cache identity follows the schema rather than a hand-written string. The
 optimistic-write composable `useApiMutation` is documented with the live cache
 it cooperates with, in [08-events-live.md](08-events-live.md).
 
-## Limits
+## Response types come from contracts
 
-Response bodies type as `unknown` wherever the schema declares no response
-content — `ApiData<O>` falls back to it by construction. Tightening is per-route
-and server-side: add `@ApiOkResponse({ type })` to the controller, or cast at
-the call site with a `@knowledge/contracts` type. That is the one place the
-generated client is weaker than it looks.
+The shapes a route answers with already live in `@knowledge/contracts` as
+TypeScript interfaces, and the controllers return them. Mirroring each one in a
+Swagger DTO class would be a second copy of every response, so the document is
+fed from the interfaces instead (#472):
+
+- **`@Returns('ListProjectsResponse')`** (`apps/api/src/common/returns.decorator.ts`)
+  names the contracts type a handler returns. Its type parameter is checked
+  against the handler: a method whose return type is not assignable to the named
+  type fails to compile ("Unable to resolve signature of method decorator"), and
+  an unknown name fails as a bad key. The schema and the code cannot disagree.
+- **`scripts/generate-contract-schemas.mjs`** (first step of `make api-schema`)
+  collects every `@Returns` name from the controllers, turns each type into a
+  JSON schema with `ts-json-schema-generator`, and writes
+  `src/config/contract-schemas.json` plus `src/common/contract-responses.generated.ts`
+  (name → type, which is what the decorator checks against). Both are committed.
+- **`createOpenApiDocument`** merges the schemas into `components.schemas` and
+  puts the `$ref` on whichever 2xx the route already declares — 201 for a POST
+  unless `@HttpCode` says otherwise — so a route never grows a second success
+  code.
+
+The web client then reads typed data with no cast. A route without `@Returns`
+(a file, a stream, a redirect, `void`) still types as `unknown`; a new JSON route
+should carry one.
 
 Two Swagger-decorator traps are load-bearing for this pipeline.
 `openapi-typescript` promotes any property declaring a `default:` to

@@ -13,6 +13,7 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../../common/validation.js';
 import { ClaimSsoDomainDto, PutAuthPolicyDto, UpdateSsoDomainDto, VerifySsoDomainDto } from './enforcement.dto.js';
 import { SsoDomainsService } from './sso-domains.service.js';
 import { SsoEnabledGuard } from './sso-enabled.guard.js';
+import { Returns } from '../../common/returns.decorator.js';
 
 /**
  * A workspace's sign-in policy (#75 phase 4), Settings → Security → Policy.
@@ -25,6 +26,7 @@ export class AuthPolicyController {
   constructor(private readonly policy: AuthPolicyService) {}
 
   @Get(':id/auth-policy')
+  @Returns('WorkspaceAuthPolicyView')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: "The workspace's sign-in policy: what was asked, what applies, and the instance ceilings" })
   get(@Param('id', ParseUUIDPipe) id: string): Promise<WorkspaceAuthPolicyView> {
@@ -32,6 +34,7 @@ export class AuthPolicyController {
   }
 
   @Put(':id/auth-policy')
+  @Returns('WorkspaceAuthPolicyView')
   @Access('admin', 'workspace')
   @ApiOperation({
     summary: 'Replace the sign-in policy. 409 policyLocksYouOut when the caller would fail it; 400 without a provider to enforce',
@@ -62,6 +65,7 @@ export class SsoDomainsController {
   constructor(private readonly domains: SsoDomainsService) {}
 
   @Get(':id/sso-domains')
+  @Returns('ListSsoDomainsResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: "The workspace's claimed domains, with the DNS record each one is proven by" })
   list(@CurrentPrincipal() principal: Principal, @Param('id', ParseUUIDPipe) id: string): Promise<ListSsoDomainsResponse> {
@@ -69,6 +73,7 @@ export class SsoDomainsController {
   }
 
   @Post(':id/sso-domains')
+  @Returns('SsoDomainView')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Claim a domain. 409 domainTaken when another workspace holds it' })
   claim(
@@ -80,6 +85,7 @@ export class SsoDomainsController {
   }
 
   @Post(':id/sso-domains/:domain/verify')
+  @Returns('VerifySsoDomainResponse')
   @HttpCode(200)
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Check the TXT record now. A platform admin may pass manual: true to verify without DNS' })
@@ -93,6 +99,7 @@ export class SsoDomainsController {
   }
 
   @Patch(':id/sso-domains/:domain')
+  @Returns('SsoDomainView')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Enforce SSO on a verified domain, or change where its people sign in' })
   update(

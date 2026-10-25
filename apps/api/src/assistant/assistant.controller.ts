@@ -36,6 +36,20 @@ import {
   PostAssistantMessageDto,
   UpdateAssistantThreadDto,
 } from './assistant.dto.js';
+import { Returns } from '../common/returns.decorator.js';
+import type {
+  AssistantAskResponse,
+  AssistantRelatedResponse,
+  AssistantReviewResponse,
+  AssistantSuggestResponse,
+  CreateAssistantThreadResponse,
+  DeleteAssistantThreadResponse,
+  GetAssistantThreadResponse,
+  ListAssistantThreadsResponse,
+  PostAssistantMessageResponse,
+  TruncateAssistantThreadResponse,
+  UpdateAssistantThreadResponse,
+} from '@knowledge/contracts';
 
 @ApiTags('assistant')
 @Controller('v1/assistant')
@@ -49,13 +63,15 @@ export class AssistantController {
   ) {}
 
   @Post('review')
+  @Returns('AssistantReviewResponse')
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'LLM review of a draft (docs/features/09); enabled=false when the provider is none' })
-  review(@Body() dto: AssistantReviewDto, @CurrentPrincipal() principal: Principal) {
+  review(@Body() dto: AssistantReviewDto, @CurrentPrincipal() principal: Principal): Promise<AssistantReviewResponse> {
     return this.assistant.review(dto, principal);
   }
 
   @Post('lint')
+  @Returns('AssistantLintResponse')
   @Access('viewer', 'body')
   @ApiOperation({
     summary:
@@ -67,26 +83,29 @@ export class AssistantController {
   }
 
   @Post('suggest')
+  @Returns('AssistantSuggestResponse')
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'LLM writing suggestion for a draft (outline / continuation / rewrite)' })
-  suggest(@Body() dto: AssistantSuggestDto, @CurrentPrincipal() principal: Principal) {
+  suggest(@Body() dto: AssistantSuggestDto, @CurrentPrincipal() principal: Principal): Promise<AssistantSuggestResponse> {
     return this.assistant.suggest(dto, principal);
   }
 
   @Post('ask')
+  @Returns('AssistantAskResponse')
   @Access('viewer', 'body')
   @ApiOperation({
     summary:
       'Chat about a document — tool-calling harness (search/read/graph), every tool call authorized against the caller session',
   })
-  ask(@Body() dto: AssistantAskDto, @CurrentPrincipal() principal: Principal) {
+  ask(@Body() dto: AssistantAskDto, @CurrentPrincipal() principal: Principal): Promise<AssistantAskResponse> {
     return this.assistant.ask(dto, principal);
   }
 
   @Post('related')
+  @Returns('AssistantRelatedResponse')
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'Relevant documents for a draft — hybrid search, no LLM required' })
-  related(@Body() dto: AssistantRelatedDto, @CurrentPrincipal() principal: Principal) {
+  related(@Body() dto: AssistantRelatedDto, @CurrentPrincipal() principal: Principal): Promise<AssistantRelatedResponse> {
     return this.assistant.related(dto, principal);
   }
 
@@ -96,18 +115,20 @@ export class AssistantController {
   // -------------------------------------------------------------------------
 
   @Post('threads')
+  @Returns('CreateAssistantThreadResponse')
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'Start a new chat pane thread, optionally pinned to a document' })
-  createThread(@Body() dto: CreateAssistantThreadDto, @CurrentPrincipal() principal: Principal) {
+  createThread(@Body() dto: CreateAssistantThreadDto, @CurrentPrincipal() principal: Principal): Promise<CreateAssistantThreadResponse> {
     return this.threads.createThread(dto.workspaceId, principal.userId, dto);
   }
 
   @Get('threads')
+  @Returns('ListAssistantThreadsResponse')
   @Access('viewer', 'query')
   @ApiOperation({
     summary: 'List chat pane threads for a workspace, most recently active first (search + keyset pagination)',
   })
-  listThreads(@Query() query: ListAssistantThreadsQueryDto) {
+  listThreads(@Query() query: ListAssistantThreadsQueryDto): Promise<ListAssistantThreadsResponse> {
     return this.threads.listThreads(query.workspaceId, query);
   }
 
@@ -116,23 +137,26 @@ export class AssistantController {
   // to be a member of and have the ACL pass.
 
   @Get('threads/:id')
+  @Returns('GetAssistantThreadResponse')
   @Access('viewer', 'assistant-thread')
   @ApiOperation({ summary: 'A thread with its full message history, each reply carrying your own vote on it' })
-  getThread(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
+  getThread(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<GetAssistantThreadResponse> {
     return this.threads.getThread(id, principal.userId);
   }
 
   @Patch('threads/:id')
+  @Returns('UpdateAssistantThreadResponse')
   @Access('viewer', 'assistant-thread')
   @ApiOperation({ summary: 'Rename a chat thread (null title restores the auto-derived one)' })
-  updateThread(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAssistantThreadDto) {
+  updateThread(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAssistantThreadDto): Promise<UpdateAssistantThreadResponse> {
     return this.threads.updateThread(id, dto);
   }
 
   @Delete('threads/:id')
+  @Returns('DeleteAssistantThreadResponse')
   @Access('viewer', 'assistant-thread')
   @ApiOperation({ summary: 'Delete a chat thread and its whole message history' })
-  deleteThread(@Param('id', ParseUUIDPipe) id: string) {
+  deleteThread(@Param('id', ParseUUIDPipe) id: string): Promise<DeleteAssistantThreadResponse> {
     return this.threads.deleteThread(id);
   }
 
@@ -141,6 +165,7 @@ export class AssistantController {
    * truncating one cannot need more than removing all of it.
    */
   @Delete('threads/:id/messages/:messageId')
+  @Returns('TruncateAssistantThreadResponse')
   @Access('viewer', 'assistant-thread')
   @ApiOperation({
     summary: 'Rewind a chat thread — deletes this message and every message after it, and returns what survives',
@@ -148,11 +173,12 @@ export class AssistantController {
   truncateThread(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('messageId', ParseUUIDPipe) messageId: string,
-  ) {
+  ): Promise<TruncateAssistantThreadResponse> {
     return this.threads.truncateFrom(id, messageId);
   }
 
   @Post('threads/:id/messages')
+  @Returns('PostAssistantMessageResponse')
   @Access('viewer', 'assistant-thread')
   @ApiOperation({
     summary:
@@ -163,7 +189,7 @@ export class AssistantController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: PostAssistantMessageDto,
     @CurrentPrincipal() principal: Principal,
-  ) {
+  ): Promise<PostAssistantMessageResponse> {
     return this.assistant.postMessage(id, dto, principal);
   }
 

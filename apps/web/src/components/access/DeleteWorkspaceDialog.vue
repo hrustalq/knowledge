@@ -18,7 +18,8 @@ import type {
   WorkspaceDeletionPreviewResponse,
   WorkspaceSummary,
 } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import { api, fetchApi } from '@/api/queries'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +41,7 @@ const preview = ref<WorkspaceDeletionPreviewResponse | null>(null)
 const failed = ref<string | null>(null)
 const typedName = ref('')
 const working = ref(false)
+const queryClient = useQueryClient()
 
 // Re-seeded per opening: a workspace's holdings change while the page is up,
 // and a stale manifest is worse than a moment's wait.
@@ -51,8 +53,11 @@ watch(
     failed.value = null
     typedName.value = ''
     try {
-      preview.value = await apiFetch<WorkspaceDeletionPreviewResponse>(
-        `/v1/workspaces/${props.workspace.workspaceId}/deletion-preview`,
+      preview.value = await fetchApi(
+        queryClient,
+        '/v1/workspaces/{id}/deletion-preview',
+        { path: { id: props.workspace.workspaceId } },
+        { fresh: true },
       )
     } catch (e) {
       failed.value = (e as Error).message
@@ -71,10 +76,10 @@ async function confirm() {
   working.value = true
   failed.value = null
   try {
-    const res = await apiFetch<DeleteWorkspaceResponse>(
-      `/v1/workspaces/${props.workspace.workspaceId}?confirm=${encodeURIComponent(typedName.value)}`,
-      { method: 'DELETE' },
-    )
+    const res = await api.delete('/v1/workspaces/{id}', {
+      path: { id: props.workspace.workspaceId },
+      query: { confirm: typedName.value },
+    })
     emit('deleted', res)
     emit('update:open', false)
   } catch (e) {

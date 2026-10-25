@@ -7,6 +7,7 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { QualityListQueryDto, QualitySummaryQueryDto } from './quality.dto.js';
 import { QualityService } from './quality.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Docs quality reads (#74, phase 5): the Quality tab of knowledge health and
@@ -23,6 +24,7 @@ export class QualityController {
   ) {}
 
   @Get('quality/summary')
+  @Returns('QualitySummaryResponse')
   @Access('viewer', 'query')
   @ApiOperation({
     summary:
@@ -34,6 +36,7 @@ export class QualityController {
   }
 
   @Get('quality/documents')
+  @Returns('QualityListResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: "Scored pages with their newest score, worst first unless sorted otherwise" })
   async list(@Query() query: QualityListQueryDto, @CurrentPrincipal() principal: Principal): Promise<QualityListResponse> {
@@ -41,6 +44,7 @@ export class QualityController {
   }
 
   @Get('documents/:id/quality')
+  @Returns('DocumentQualityResponse')
   @Access('viewer', 'document')
   @ApiOperation({
     summary:

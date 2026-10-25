@@ -23,6 +23,7 @@ import { SessionsService } from './sessions.service.js';
 import { AuditService } from './audit.service.js';
 import { requestMeta } from '../common/client-ip.js';
 import { t } from '../i18n/t.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * The caller's own account.
@@ -46,6 +47,7 @@ export class MeController {
   ) {}
 
   @Patch()
+  @Returns('MeResponse')
   // Changing the language is how a Russian speaker gets a verify mail they can read.
   @UnverifiedOk()
   @ApiOperation({ summary: "Update the caller's own display name and language (docs/features/18)" })
@@ -77,6 +79,7 @@ export class MeController {
   }
 
   @Post('api-key')
+  @Returns('RotateApiKeyResponse')
   @HttpCode(200)
   @ApiOperation({
     summary: 'Deprecated — revoke every key the caller has and mint one full-scope key (use /v1/me/api-keys)',
@@ -88,12 +91,14 @@ export class MeController {
   }
 
   @Get('api-keys')
+  @Returns('ListApiKeysResponse')
   @ApiOperation({ summary: "The caller's active API keys (docs/features/33) — names and prefixes, never the keys" })
   listApiKeys(@CurrentPrincipal() principal: Principal): Promise<ListApiKeysResponse> {
     return this.apiKeys.list(principal);
   }
 
   @Post('api-keys')
+  @Returns('CreateApiKeyResponse')
   @ApiOperation({ summary: 'Mint a named API key, optionally read-only, workspace-pinned or expiring (shown once)' })
   createApiKey(@CurrentPrincipal() principal: Principal, @Body() dto: CreateApiKeyDto): Promise<CreateApiKeyResponse> {
     return this.apiKeys.create(principal, dto);
@@ -111,6 +116,7 @@ export class MeController {
 
   /** The caller's live sign-ins (#75): where and how each was opened, and when last used. */
   @Get('sessions')
+  @Returns('ListSessionsResponse')
   @UnverifiedOk()
   @ApiOperation({ summary: "The caller's live login sessions — method, IP, user agent, last seen; never the tokens" })
   async listSessions(@CurrentPrincipal() principal: Principal): Promise<ListSessionsResponse> {

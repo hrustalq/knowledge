@@ -9,8 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { MailWarning, X } from 'lucide-vue-next'
-import type { ResendVerificationResponse } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { api } from '@/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 
@@ -24,7 +23,7 @@ const busy = ref(false)
 async function resend() {
   busy.value = true
   try {
-    const res = await apiFetch<ResendVerificationResponse>('/v1/auth/resend-verification', { method: 'POST' })
+    const res = await api.post('/v1/auth/resend-verification')
     if (res.alreadyVerified) await auth.reload()
     toast.success(res.alreadyVerified ? t('auth.verifyAlready') : t('auth.verifyResent'))
   } catch (e) {

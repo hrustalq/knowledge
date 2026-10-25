@@ -16,11 +16,11 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type {
   CompareResponse,
-  ListTemplateVersionsResponse,
   TemplateSummary,
   TemplateVersionInfo,
 } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import { fetchApi } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { formatDateTime } from '@/lib/format'
 import { lineDiff } from '@/lib/line-diff'
@@ -35,6 +35,7 @@ const props = defineProps<{ template: TemplateSummary }>()
 const { t } = useI18n()
 const templates = useTemplatesStore()
 const { nameOf } = useMembers()
+const queryClient = useQueryClient()
 
 const versions = ref<TemplateVersionInfo[] | null>(null)
 const error = ref<string | null>(null)
@@ -46,14 +47,15 @@ const comparing = ref(false)
 
 watch(
   () => [props.template.ref, props.template.currentVersion] as const,
-  async () => {
+  async ([ref], prev) => {
     versions.value = null
     error.value = null
     compare.value = null
     try {
       const id = props.template.id
+      // The same template at a new version: the list just grew, so ask again.
       versions.value = id
-        ? (await apiFetch<ListTemplateVersionsResponse>(`/v1/templates/${id}/versions`)).versions
+        ? (await fetchApi(queryClient, '/v1/templates/{id}/versions', { path: { id } }, { fresh: prev?.[0] === ref })).versions
         : [{ version: props.template.currentVersion, createdBy: null, createdAt: null, builtIn: true }]
       selectVersion(versions.value[0]?.version ?? null)
     } catch (e) {

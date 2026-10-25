@@ -34,7 +34,7 @@ onMounted(async () => {
     return
   }
   try {
-    preview.value = (await api.post('/v1/chat/link/preview', { body: { code: code.value } })) as ChatLinkPreview
+    preview.value = await api.post('/v1/chat/link/preview', { body: { code: code.value } })
     state.value = 'ready'
   } catch (e) {
     error.value = errorMessage(e, t)

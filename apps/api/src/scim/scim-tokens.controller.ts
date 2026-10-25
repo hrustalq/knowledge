@@ -10,6 +10,7 @@ import { t } from '../i18n/t.js';
 import { scimEnabled } from './scim-enabled.js';
 import { CreateScimTokenDto, PutScimSettingsDto } from './scim-tokens.dto.js';
 import { ScimTokensService } from './scim-tokens.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /** The admin routes 404 with the protocol ones, so the Provisioning tab can tell "off" from "empty". */
 @Injectable()
@@ -34,6 +35,7 @@ export class ScimTokensController {
   constructor(private readonly tokens: ScimTokensService) {}
 
   @Get(':id/scim')
+  @Returns('ScimSettingsView')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: "The workspace's SCIM base URL, live tokens, default role and what has been provisioned" })
   view(@Param('id', ParseUUIDPipe) id: string): Promise<ScimSettingsView> {
@@ -41,6 +43,7 @@ export class ScimTokensController {
   }
 
   @Put(':id/scim')
+  @Returns('ScimSettingsView')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Set the role a provisioned user gets without a mapped group. Re-syncs provisioned members at once' })
   put(
@@ -52,6 +55,7 @@ export class ScimTokensController {
   }
 
   @Post(':id/scim-tokens')
+  @Returns('ScimTokenCreated')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Mint a kscim_ bearer token for an IdP. The secret is in this response only' })
   create(

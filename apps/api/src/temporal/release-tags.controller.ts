@@ -7,6 +7,7 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { ReleaseTagsService } from './release-tags.service.js';
 import { CreateReleaseTagDto, GraphTimelineQueryDto, ListReleaseTagsQueryDto } from './temporal.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Release tags and the graph timeline (#81, phase 2). A tag is a named
@@ -22,6 +23,7 @@ export class ReleaseTagsController {
   ) {}
 
   @Get('release-tags')
+  @Returns('ListReleaseTagsResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Release tags of the workspace, oldest first' })
   async list(@Query() query: ListReleaseTagsQueryDto): Promise<ListReleaseTagsResponse> {
@@ -29,6 +31,7 @@ export class ReleaseTagsController {
   }
 
   @Post('release-tags')
+  @Returns('ReleaseTagDto')
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Name an instant (now, or `at`) so the graph can be read as of it. 409 on a duplicate name' })
   create(@Body() dto: CreateReleaseTagDto, @CurrentPrincipal() principal: Principal): Promise<ReleaseTagDto> {
@@ -44,6 +47,7 @@ export class ReleaseTagsController {
   }
 
   @Get('graph/timeline')
+  @Returns('GraphTimelineResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Markers for the graph time slider: release tags and per-day fact changes in a window' })
   async timeline(@Query() query: GraphTimelineQueryDto, @CurrentPrincipal() principal: Principal): Promise<GraphTimelineResponse> {

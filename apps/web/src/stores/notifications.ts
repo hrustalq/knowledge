@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
 import type {
-  ListNotificationsResponse,
   NotificationCategory,
   NotificationEntry,
   NotificationUnreadCountResponse,
 } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { api, apiQueryOptions, bindStoreQuery, fetchApi } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 
 /**
  * The caller's inbox (docs/features/22).
@@ -63,11 +63,18 @@ export const useNotificationsStore = defineStore('notifications', {
     async refreshCount() {
       if (import.meta.env.SSR) return
       try {
-        const res = await apiFetch<NotificationUnreadCountResponse>(
-          `/v1/notifications/unread-count?workspaceId=${getWorkspaceId()}`,
+        // Bound, so the `notification.created` live rule re-reads it too.
+        await bindStoreQuery<NotificationUnreadCountResponse>(
+          this,
+          'count',
+          this.queryClient,
+          apiQueryOptions('/v1/notifications/unread-count', { query: { workspaceId: getWorkspaceId() } }),
+          (res) => {
+            this.unreadCount = res.count
+            this.counts = { ...emptyCounts(), ...res.counts }
+          },
+          { fresh: true },
         )
-        this.unreadCount = res.count
-        this.counts = { ...emptyCounts(), ...res.counts }
       } catch {
         // A badge that fails to load is not worth telling anybody about.
       }
@@ -75,9 +82,12 @@ export const useNotificationsStore = defineStore('notifications', {
 
     async fetchPage(cursor?: string) {
       try {
-        const params = new URLSearchParams({ workspaceId: getWorkspaceId(), limit: '20' })
-        if (cursor) params.set('cursor', cursor)
-        const res = await apiFetch<ListNotificationsResponse>(`/v1/notifications?${params}`)
+        const res = await fetchApi(
+          this.queryClient,
+          '/v1/notifications',
+          { query: { workspaceId: getWorkspaceId(), limit: 20, ...(cursor ? { cursor } : {}) } },
+          { fresh: true },
+        )
         this.entries = cursor ? [...this.entries, ...res.entries] : res.entries
         this.nextCursor = res.nextCursor
         this.unreadCount = res.unreadCount
@@ -121,10 +131,7 @@ export const useNotificationsStore = defineStore('notifications', {
       }
       this.unreadCount = Math.max(0, this.unreadCount - pending.length)
       try {
-        await apiFetch('/v1/notifications/read', {
-          method: 'POST',
-          body: JSON.stringify({ workspaceId: getWorkspaceId(), ids: pending }),
-        })
+        await api.post('/v1/notifications/read', { body: { workspaceId: getWorkspaceId(), ids: pending } })
       } finally {
         await this.refreshCount()
       }
@@ -136,10 +143,7 @@ export const useNotificationsStore = defineStore('notifications', {
         if (entry.readAt === null && (!category || entry.category === category)) entry.readAt = at
       }
       try {
-        await apiFetch('/v1/notifications/read', {
-          method: 'POST',
-          body: JSON.stringify({ workspaceId: getWorkspaceId(), all: true, category }),
-        })
+        await api.post('/v1/notifications/read', { body: { workspaceId: getWorkspaceId(), all: true, category } })
       } finally {
         await this.refreshCount()
       }

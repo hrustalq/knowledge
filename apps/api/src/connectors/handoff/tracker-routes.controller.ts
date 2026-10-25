@@ -6,6 +6,7 @@ import type { Principal } from '../../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../../common/validation.js';
 import { WorkItemHandoffService } from './work-item-handoff.service.js';
 import { PutTrackerRouteDto } from './work-items.dto.js';
+import { Returns } from '../../common/returns.decorator.js';
 
 /**
  * Which tracker a knowledge project hands off to (#424). Reading it is any
@@ -18,6 +19,7 @@ export class TrackerRoutesController {
   constructor(private readonly handoffs: WorkItemHandoffService) {}
 
   @Get(':id/tracker-route')
+  @Returns('TrackerRouteResponse')
   @Access('viewer', 'project')
   @ApiOperation({ summary: "The project's tracker route, or null when it has none" })
   async get(@Param('id', ParseUUIDPipe) id: string): Promise<TrackerRouteResponse> {
@@ -25,6 +27,7 @@ export class TrackerRoutesController {
   }
 
   @Put(':id/tracker-route')
+  @Returns('TrackerRouteResponse')
   @Access('admin', 'project')
   @ApiOperation({ summary: 'Route the project to a tracker connector, with an optional Jira project, issue type or GitHub org board' })
   async put(

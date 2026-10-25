@@ -53,7 +53,7 @@ export class AssistantRelatedDto {
   @MaxLength(50_000, { message: vmsg('maxLength') })
   text!: string;
 
-  @ApiPropertyOptional({ default: 5, minimum: 1, maximum: 20 })
+  @ApiPropertyOptional({ minimum: 1, maximum: 20, description: 'Default: 5.' })
   @IsOptional()
   @IsInt()
   @Min(1, { message: vmsg('min') })
@@ -127,7 +127,7 @@ export class ListAssistantThreadsQueryDto {
   @MaxLength(200, { message: vmsg('maxLength') })
   search?: string;
 
-  @ApiPropertyOptional({ default: 50, minimum: 1, maximum: 100 })
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, description: 'Default: 50.' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -238,7 +238,6 @@ export class PostAssistantMessageDto {
 
   @ApiPropertyOptional({
     enum: ['ask', 'agent'],
-    default: 'ask',
     description: "'ask' (default) excludes write tools this turn regardless of role; 'agent' allows them (still gated by editor role)",
   })
   @IsOptional()

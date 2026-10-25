@@ -28,8 +28,9 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { KeyRound } from 'lucide-vue-next'
-import { SUPPORTED_LOCALES, type Locale, type MeResponse } from '@knowledge/contracts'
-import { apiFetch, getLocale, setLocale } from '@/lib/api'
+import { SUPPORTED_LOCALES, type Locale } from '@knowledge/contracts'
+import { api } from '@/api/queries'
+import { getLocale, setLocale } from '@/lib/api'
 import { ensureLocaleMessages } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
@@ -60,10 +61,7 @@ async function saveName() {
   if (!nameDirty.value) return
   savingName.value = true
   try {
-    const me = await apiFetch<MeResponse>('/v1/me', {
-      method: 'PATCH',
-      body: JSON.stringify({ displayName: name.value.trim() }),
-    })
+    const me = await api.patch('/v1/me', { body: { displayName: name.value.trim() } })
     auth.adopt(me)
     toast.success(t('profileSettings.name.saved'))
   } catch {
@@ -109,9 +107,8 @@ async function savePassword() {
   if (!canSavePassword.value) return
   savingPassword.value = true
   try {
-    await apiFetch('/v1/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify({ currentPassword: current.value, newPassword: next.value }),
+    await api.post('/v1/auth/change-password', {
+      body: { currentPassword: current.value, newPassword: next.value },
     })
     current.value = ''
     next.value = ''

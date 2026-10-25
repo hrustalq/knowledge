@@ -51,7 +51,8 @@ import type {
   ProjectDeletionPreview,
   ProjectSummary,
 } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import { api, fetchApi } from '@/api/queries'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -94,6 +95,7 @@ const working = ref(false)
 const mode = ref<ProjectDeletionMode>('move')
 /** The project name, typed back. Checked here and again on the server. */
 const typedName = ref('')
+const queryClient = useQueryClient()
 
 /**
  * The preview is fetched twice on purpose.
@@ -107,9 +109,11 @@ async function load(withTarget?: string) {
   loading.value = true
   failed.value = null
   try {
-    const q = withTarget ? `?target=${withTarget}` : ''
-    preview.value = await apiFetch<ProjectDeletionPreview>(
-      `/v1/projects/${props.project.projectId}/deletion-preview${q}`,
+    preview.value = await fetchApi(
+      queryClient,
+      '/v1/projects/{id}/deletion-preview',
+      { path: { id: props.project.projectId }, query: withTarget ? { target: withTarget } : {} },
+      { fresh: true },
     )
   } catch (e) {
     failed.value = (e as Error).message
@@ -206,15 +210,17 @@ async function confirm() {
   if (!ready.value || working.value) return
   working.value = true
   try {
-    const q = empty.value
-      ? ''
+    const query = empty.value
+      ? {}
       : mode.value === 'cascade'
-        ? `?mode=cascade&confirm=${encodeURIComponent(props.project.name)}`
-        : `?moveContentsTo=${target.value}`
-    const res = await apiFetch<DeleteProjectResponse>(
-      `/v1/projects/${props.project.projectId}${q}`,
-      { method: 'DELETE' },
-    )
+        ? { mode: 'cascade' as const, confirm: props.project.name }
+        : { moveContentsTo: target.value }
+    // No timeout: a cascade deletes every page inline before it answers.
+    const res = await api.delete('/v1/projects/{id}', {
+      path: { id: props.project.projectId },
+      query,
+      config: { timeout: 0 },
+    })
     emit('deleted', res)
     emit('update:open', false)
   } catch (e) {

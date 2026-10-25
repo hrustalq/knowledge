@@ -192,6 +192,10 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
     ],
   },
   { on: 'workflow.*', invalidate: () => [['/v1/workflows']] },
+  // The glossary and template rosters (#472): their stores follow these keys,
+  // so a term or template edited in another tab reaches every page's copy.
+  { on: 'glossary.*', invalidate: () => [['/v1/glossary']] },
+  { on: 'template.*', invalidate: () => [['/v1/templates']] },
   // A project rename/delete changes the switcher, and re-scopes the page tree.
   { on: 'project.*', invalidate: () => [['/v1/projects'], ['/v1/documents'], ['/v1/documents/tree']] },
   { on: 'relations.*', invalidate: (e) => [['/v1/entities'], ...(e.documentId ? [['/v1/documents/{id}/graph', { id: e.documentId }]] : [])] },

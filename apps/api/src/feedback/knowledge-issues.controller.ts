@@ -10,6 +10,7 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { KnowledgeIssuesService } from './knowledge-issues.service.js';
 import { CloseKnowledgeIssueDto, ListKnowledgeIssuesQueryDto, ReportKnowledgeIssueDto } from './knowledge-issues.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Reports against pages (docs/features/38, issue #67 phase 3).
@@ -25,6 +26,7 @@ export class KnowledgeIssuesController {
   constructor(private readonly issues: KnowledgeIssuesService) {}
 
   @Post()
+  @Returns('ReportKnowledgeIssueResponse')
   @Access('viewer', 'body')
   @ApiOperation({
     summary:
@@ -39,6 +41,7 @@ export class KnowledgeIssuesController {
   }
 
   @Get()
+  @Returns('ListKnowledgeIssuesResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'List reports in a workspace, newest first; narrow by page or status' })
   async list(@Query() query: ListKnowledgeIssuesQueryDto): Promise<ListKnowledgeIssuesResponse> {
@@ -46,6 +49,7 @@ export class KnowledgeIssuesController {
   }
 
   @Patch(':id')
+  @Returns('UpdateKnowledgeIssueResponse')
   @Access('editor', 'knowledge-issue')
   @ApiOperation({ summary: 'Close a report by hand: resolved (the page is right now) or dismissed (the report was not)' })
   async close(

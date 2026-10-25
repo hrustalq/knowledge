@@ -95,6 +95,7 @@ import {
   UpdateAiSkillDto,
   UpsertStyleguideDto,
 } from './ai.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -129,6 +130,7 @@ export class AiController {
   // ---- Settings ------------------------------------------------------------
 
   @Get('settings')
+  @Returns('AiSettingsResponse')
   @Access('admin', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({ summary: 'Effective assistant configuration (DB overrides ∪ env). Never returns the API key.' })
@@ -137,6 +139,7 @@ export class AiController {
   }
 
   @Get('page-actions')
+  @Returns('AiPageActionsResponse')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({
@@ -149,6 +152,7 @@ export class AiController {
   }
 
   @Patch('settings')
+  @Returns('AiSettingsResponse')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Update the workspace assistant config. Omitted fields keep, null clears (inherit env).' })
   async updateSettings(
@@ -168,6 +172,7 @@ export class AiController {
   }
 
   @Post('settings/test')
+  @Returns('AiConnectionTestResponse')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'One tiny completion against the effective config — reports the upstream error verbatim' })
   async testConnection(
@@ -183,6 +188,7 @@ export class AiController {
   // ---- Provider profiles ---------------------------------------------------
 
   @Get('providers')
+  @Returns('ListAiProvidersResponse')
   @Access('admin', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({ summary: 'Provider profiles (admin — rows carry endpoints and credential metadata)' })
@@ -191,6 +197,7 @@ export class AiController {
   }
 
   @Get('providers/choices')
+  @Returns('ListAiProviderChoicesResponse')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({
@@ -210,6 +217,7 @@ export class AiController {
   }
 
   @Post('providers')
+  @Returns('AiProviderSummary')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Add a provider profile' })
   async createProvider(
@@ -229,6 +237,7 @@ export class AiController {
   }
 
   @Patch('providers/:id')
+  @Returns('AiProviderSummary')
   @Access('admin', 'ai-provider')
   @ApiOperation({ summary: 'Update a profile. Omit apiKey to keep the stored credential; null clears it.' })
   async updateProvider(
@@ -271,6 +280,7 @@ export class AiController {
   // ---- Skills --------------------------------------------------------------
 
   @Get('skills')
+  @Returns('ListAiSkillsResponse')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({ summary: 'Skills in the workspace (viewer — the chat composer offers them)' })
@@ -279,6 +289,7 @@ export class AiController {
   }
 
   @Post('skills')
+  @Returns('AiSkillSummary')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Create a skill' })
   async createSkill(
@@ -298,6 +309,7 @@ export class AiController {
   }
 
   @Get('skills/:id')
+  @Returns('AiSkillSummary')
   @Access('viewer', 'ai-skill')
   @ApiOperation({ summary: 'One skill' })
   getSkill(@Param('id', ParseUUIDPipe) id: string): Promise<AiSkillSummary> {
@@ -305,6 +317,7 @@ export class AiController {
   }
 
   @Patch('skills/:id')
+  @Returns('AiSkillSummary')
   @Access('admin', 'ai-skill')
   @ApiOperation({ summary: 'Update a skill' })
   async updateSkill(
@@ -324,6 +337,7 @@ export class AiController {
   }
 
   @Post('skills/:id/accept-upstream')
+  @Returns('AiSkillSummary')
   @Access('admin', 'ai-skill')
   @ApiOperation({ summary: "Make an imported skill's pending upstream text its instructions (#70)" })
   async acceptSkillUpstream(
@@ -363,6 +377,7 @@ export class AiController {
   // ---- Styleguides (#74) ---------------------------------------------------
 
   @Get('styleguides')
+  @Returns('GetStyleguideResponse')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'projectId', required: false })
@@ -382,6 +397,7 @@ export class AiController {
   }
 
   @Put('styleguides')
+  @Returns('StyleguideSummary')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Create or replace the styleguide of the workspace, or of one project' })
   async upsertStyleguide(
@@ -426,6 +442,7 @@ export class AiController {
   // ---- Agents (docs/features/20) -------------------------------------------
 
   @Get('agents')
+  @Returns('ListAiAgentsResponse')
   @Access('admin', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({ summary: 'Effective agent roster: built-in defaults ∪ this workspace overrides' })
@@ -435,6 +452,7 @@ export class AiController {
 
   // Declared before ':key' or the router would match "choices" as an agent key.
   @Get('agents/choices')
+  @Returns('ListAiAgentChoicesResponse')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({
@@ -454,6 +472,7 @@ export class AiController {
   // Runs (background execution). Declared before ':key' so "runs" is not read
   // as an agent key.
   @Get('agents/runs')
+  @Returns('ListAgentRunsResponse')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'agentKey', required: false })
@@ -470,6 +489,7 @@ export class AiController {
   }
 
   @Get('agents/runs/:id')
+  @Returns('AgentRunSummary')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({ summary: 'One run, with its findings' })
@@ -483,6 +503,7 @@ export class AiController {
   // Triggers (#70). Declared before ':key' so "triggers" is not read as an
   // agent key by PATCH and DELETE.
   @Get('agents/triggers')
+  @Returns('ListAgentTriggersResponse')
   @Access('admin', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({ summary: "Every agent trigger in the workspace, grouped by agent" })
@@ -493,6 +514,7 @@ export class AiController {
   }
 
   @Patch('agents/triggers/:id')
+  @Returns('AgentTriggerSummary')
   @Access('admin', 'agent-trigger')
   @ApiOperation({
     summary: 'Change a trigger. Enabling it makes the caller the owner its runs execute as; null clears a filter.',
@@ -514,6 +536,7 @@ export class AiController {
   }
 
   @Post('agents/triggers/:id/rotate-secret')
+  @Returns('RotateAgentTriggerSecretResponse')
   @Access('admin', 'agent-trigger')
   @ApiOperation({
     summary: "Give a webhook trigger a new signing secret. Returned once; the previous one stops verifying at once.",
@@ -552,6 +575,7 @@ export class AiController {
 
   // Learnings (#70). Literal segments, declared before ':key' with the rest.
   @Get('agents/learnings')
+  @Returns('ListAgentLearningsResponse')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'agentKey', required: false, description: "This agent's learnings and those for every agent" })
@@ -582,6 +606,7 @@ export class AiController {
   }
 
   @Post('agents/learnings')
+  @Returns('AgentLearningSummary')
   @Access('editor', 'body')
   @ApiOperation({
     summary: 'Teach an agent something. Proposed unless an admin creates it active; only active learnings reach a prompt.',
@@ -605,6 +630,7 @@ export class AiController {
   }
 
   @Patch('agents/learnings/:id')
+  @Returns('AgentLearningSummary')
   @Access('admin', 'agent-learning')
   @ApiOperation({
     summary:
@@ -628,6 +654,7 @@ export class AiController {
 
   // Recipes (#70). A literal segment, so declared before ':key' with the rest.
   @Post('agents/recipes/:recipe/apply')
+  @Returns('ApplyAgentRecipeResponse')
   @Access('admin', 'body')
   @ApiParam({ name: 'recipe', enum: AGENT_RECIPE_KEYS })
   @ApiOperation({
@@ -651,6 +678,7 @@ export class AiController {
   }
 
   @Post('agents/:key/triggers')
+  @Returns('AgentTriggerSummary')
   @Access('admin', 'body')
   @ApiOperation({
     summary: 'Add a trigger to an agent. Off unless enabled is sent; enabling makes the caller its owner.',
@@ -672,6 +700,7 @@ export class AiController {
   }
 
   @Post('agents/:key/run')
+  @Returns('AgentRunSummary')
   @Access('editor', 'body')
   @ApiOperation({
     summary: 'Start a background run. It executes as the caller and is capped by the caller\'s role.',
@@ -697,6 +726,7 @@ export class AiController {
    * draft; this is the person publishing it, attributed to them.
    */
   @Post('agents/runs/:id/findings/:index/create-page')
+  @Returns('CreatePageFromFindingResponse')
   @Access('editor', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
@@ -718,6 +748,7 @@ export class AiController {
    * the agent proposed, this person is the one asking for the change.
    */
   @Post('agents/runs/:id/findings/:index/propose')
+  @Returns('ProposeAgentFindingResponse')
   @Access('editor', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
@@ -739,6 +770,7 @@ export class AiController {
    * to the person pressing the button, never to the run.
    */
   @Post('agents/runs/:id/findings/:index/mark-outdated')
+  @Returns('FlagFindingOutdatedResponse')
   @Access('editor', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
@@ -758,6 +790,7 @@ export class AiController {
    * made from the finding and attributed to the caller.
    */
   @Post('agents/runs/:id/findings/:index/add-term')
+  @Returns('AddFindingTermResponse')
   @Access('editor', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
@@ -778,6 +811,7 @@ export class AiController {
    * learning. The agent's later runs are told not to report it again.
    */
   @Post('agents/runs/:id/findings/:index/dismiss')
+  @Returns('DismissAgentFindingResponse')
   @Access('editor', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
@@ -804,6 +838,7 @@ export class AiController {
    * caller, not as the run's owner.
    */
   @Post('agents/runs/:id/findings/:index/apply-relations')
+  @Returns('ProposeRelationsResponse')
   @Access('editor', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
@@ -818,6 +853,7 @@ export class AiController {
   }
 
   @Post('agents/route')
+  @Returns('AgentRouteDecision')
   @Access('viewer', 'body')
   @ApiOperation({
     summary: 'Ask the router which agent and model would handle a request, without running it',
@@ -840,6 +876,7 @@ export class AiController {
   }
 
   @Post('agents')
+  @Returns('AiAgentSummary')
   @Access('admin', 'body')
   @ApiOperation({ summary: "Create an agent of the workspace's own, alongside the built-in roster" })
   async createAgent(
@@ -858,6 +895,7 @@ export class AiController {
   }
 
   @Patch('agents/:key')
+  @Returns('AiAgentSummary')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Override an agent. Sending null for a field restores its shipped default.' })
   async updateAgent(
@@ -877,6 +915,7 @@ export class AiController {
   }
 
   @Delete('agents/:key/override')
+  @Returns('AiAgentSummary')
   @Access('admin', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({ summary: 'Reset a built-in agent: drop the override row so every field inherits again' })
@@ -916,6 +955,7 @@ export class AiController {
   // ---- Plugins (MCP servers) ----------------------------------------------
 
   @Get('plugins')
+  @Returns('ListAiPluginsResponse')
   @Access('admin', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({ summary: 'MCP plugins in the workspace (admin — rows carry endpoints and credential metadata)' })
@@ -924,6 +964,7 @@ export class AiController {
   }
 
   @Post('plugins')
+  @Returns('AiPluginSummary')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Register an MCP server and discover its tools' })
   async createPlugin(
@@ -943,6 +984,7 @@ export class AiController {
   }
 
   @Patch('plugins/:id')
+  @Returns('AiPluginSummary')
   @Access('admin', 'ai-plugin')
   @ApiOperation({ summary: 'Update a plugin. Omit authValue to keep the stored credential; null clears it.' })
   async updatePlugin(
@@ -981,6 +1023,7 @@ export class AiController {
   }
 
   @Post('plugins/:id/test')
+  @Returns('AiPluginTestResponse')
   @Access('admin', 'ai-plugin')
   @ApiOperation({ summary: 'Reconnect and re-discover the plugin tool list' })
   testPlugin(@Param('id', ParseUUIDPipe) id: string): Promise<AiPluginTestResponse> {
@@ -995,6 +1038,7 @@ export class AiController {
   // other reach the model has.
 
   @Get('source-policies')
+  @Returns('ListSourcePoliciesResponse')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiOperation({ summary: 'Domains this workspace may or may not fetch, and the access mode they are read under' })
@@ -1015,6 +1059,7 @@ export class AiController {
   // is: whoever hit a refusal should be able to find out which rule refused
   // them without asking an admin to read the table for them.
   @Post('source-policies/check')
+  @Returns('CheckSourcePolicyResponse')
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'Dry-run one URL against this workspace’s source policy' })
   checkSourcePolicy(@Body() dto: CheckSourcePolicyDto): Promise<CheckSourcePolicyResponse> {
@@ -1022,6 +1067,7 @@ export class AiController {
   }
 
   @Post('source-policies')
+  @Returns('SourcePolicy')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Add a domain exception' })
   async createSourcePolicy(
@@ -1041,6 +1087,7 @@ export class AiController {
   }
 
   @Patch('source-policies/:id')
+  @Returns('SourcePolicy')
   @Access('admin', 'source-policy')
   @ApiOperation({ summary: 'Edit a domain exception' })
   async updateSourcePolicy(

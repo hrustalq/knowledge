@@ -7,6 +7,7 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../../common/validation.js';
 import { UpsertGroupMappingDto } from './identity-providers.dto.js';
 import { GroupMappingsService } from './group-mappings.service.js';
 import { SsoOrScimEnabledGuard } from './sso-enabled.guard.js';
+import { Returns } from '../../common/returns.decorator.js';
 
 /** IdP and SCIM group → workspace role mappings (#75), Settings → Security → Group mapping. Workspace admins only. */
 @ApiTags('auth')
@@ -16,6 +17,7 @@ export class GroupMappingsController {
   constructor(private readonly mappings: GroupMappingsService) {}
 
   @Get(':id/group-mappings')
+  @Returns('ListGroupMappingsResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: "The workspace's group → role mappings, and the providers a mapping may name" })
   list(@Param('id', ParseUUIDPipe) id: string): Promise<ListGroupMappingsResponse> {
@@ -23,6 +25,7 @@ export class GroupMappingsController {
   }
 
   @Post(':id/group-mappings')
+  @Returns('GroupMappingView')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Map a provider or SCIM group to a role. The same group again replaces its role. A provider mapping applies at next sign-in, a SCIM one at once' })
   upsert(

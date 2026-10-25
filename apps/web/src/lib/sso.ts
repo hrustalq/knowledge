@@ -1,5 +1,6 @@
 import { SSO_LOGIN_ERRORS, type IdpKind, type SsoLoginError } from '@knowledge/contracts'
-import { ApiError, apiUrl } from '@/lib/api'
+import { isApiRequestError } from '@/api/http'
+import { apiUrl } from '@/lib/api'
 
 /**
  * SSO sign-in helpers (#75), kept out of the pages so they can be tested.
@@ -61,7 +62,7 @@ export async function completeSso(steps: CompleteSsoSteps): Promise<'done' | 'fa
   try {
     returnTo = await steps.exchange(code)
   } catch (e) {
-    const error = (e instanceof ApiError ? ssoErrorOf(e.details?.loginError) : null) ?? 'failed'
+    const error = (isApiRequestError(e) ? ssoErrorOf(e.details?.loginError) : null) ?? 'failed'
     await steps.navigate(`/login?error=${error}`)
     return 'failed'
   }

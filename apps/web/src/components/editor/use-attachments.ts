@@ -10,11 +10,9 @@ import { toast } from 'vue-sonner'
 import type { Editor } from '@tiptap/core'
 import type {
   AttachmentSummary,
-  CompleteAttachmentResponse,
-  CreateAttachmentResponse,
 } from '@knowledge/contracts'
 import { ATTACHMENT_CONTENT_TYPES } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { api } from '@/api/queries'
 import { presignedPut } from '@/lib/presigned-put'
 import { errorMessage } from '@/api/errors'
 
@@ -58,17 +56,16 @@ export function useAttachments(resolveDocumentId: () => Promise<string | null>) 
     }
 
     try {
-      const created = await apiFetch<CreateAttachmentResponse>(
-        `/v1/documents/${documentId}/attachments`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            filename: file.name,
-            contentType: file.type,
-            sizeBytes: file.size,
-          }),
+      const created = await api.post('/v1/documents/{id}/attachments', {
+        path: { id: documentId },
+        body: {
+          filename: file.name,
+          // insertFiles only hands over files whose type is in the list.
+          contentType: file.type as (typeof ATTACHMENT_CONTENT_TYPES)[number],
+          sizeBytes: file.size,
         },
-      )
+        config: { timeout: 0 },
+      })
       task.progress = 10
 
       // Presigned PUT goes direct to storage; the shared helper is the same one
@@ -77,10 +74,10 @@ export function useAttachments(resolveDocumentId: () => Promise<string | null>) 
         task.progress = 10 + Math.round(fraction * 85)
       })
 
-      const done = await apiFetch<CompleteAttachmentResponse>(
-        `/v1/documents/${documentId}/attachments/${created.attachment.attachmentId}/complete`,
-        { method: 'POST' },
-      )
+      const done = await api.post('/v1/documents/{id}/attachments/{attachmentId}/complete', {
+        path: { id: documentId, attachmentId: created.attachment.attachmentId },
+        config: { timeout: 0 },
+      })
       finish()
       return done.attachment
     } catch (e) {

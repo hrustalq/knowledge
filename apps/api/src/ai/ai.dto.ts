@@ -459,7 +459,7 @@ export class CreateAiProviderDto {
   @Min(0, { message: vmsg('min') })
   priceCompletionPerMTok?: number | null;
 
-  @ApiPropertyOptional({ default: true })
+  @ApiPropertyOptional({ description: 'Default: true.' })
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
@@ -606,7 +606,7 @@ export class CreateAiSkillDto {
   @IsString({ each: true })
   triggers?: string[];
 
-  @ApiPropertyOptional({ default: true })
+  @ApiPropertyOptional({ description: 'Default: true.' })
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
@@ -736,7 +736,7 @@ export class CreateAiPluginDto {
   @MaxLength(120, { message: vmsg('maxLength') })
   name!: string;
 
-  @ApiPropertyOptional({ enum: ['streamable-http', 'sse'], default: 'streamable-http' })
+  @ApiPropertyOptional({ enum: ['streamable-http', 'sse'], description: 'Default: streamable-http.' })
   @IsOptional()
   @IsIn(['streamable-http', 'sse'])
   transport?: 'streamable-http' | 'sse';
@@ -761,7 +761,7 @@ export class CreateAiPluginDto {
   @MaxLength(2_000, { message: vmsg('maxLength') })
   authValue?: string | null;
 
-  @ApiPropertyOptional({ default: true })
+  @ApiPropertyOptional({ description: 'Default: true.' })
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;

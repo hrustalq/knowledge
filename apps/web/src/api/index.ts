@@ -1,7 +1,7 @@
 // Generated, strictly-typed API client. Regenerate with `make api-client`.
-export { api, request, type ApiData, type ApiPaths, type Op, type RequestOptions } from './client'
+export { api, request, requestFile, type ApiData, type ApiPaths, type Op, type RequestOptions } from './client'
 export { http, ApiRequestError, isApiRequestError, toApiRequestError } from './http'
-export { createQueryClient, apiQueryOptions, apiMutationOptions } from './queries'
+export { createQueryClient, apiQueryOptions, apiMutationOptions, fetchApi, bindStoreQuery } from './queries'
 export {
   apiQueryOptions as queryOptions,
   useApiMutation,

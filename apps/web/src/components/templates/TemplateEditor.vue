@@ -33,7 +33,8 @@ import {
   type TemplatePlaceholder,
   type TemplateRelationDefault,
 } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { api } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { errorMessage } from '@/api/errors'
 import { canWriteTemplate, templateSourceFields, unescapePlaceholders } from '@/lib/templates'
 import { useAuthStore } from '@/stores/auth'
@@ -193,28 +194,26 @@ async function save() {
     const d = props.detail
     let saved: TemplateDetail
     if (props.mode === 'create') {
-      saved = await apiFetch<TemplateDetail>('/v1/templates', {
-        method: 'POST',
-        body: JSON.stringify({
+      saved = await api.post('/v1/templates', {
+        body: {
           workspaceId: getWorkspaceId(),
           projectId: scope.value === 'project' ? activeProjectId.value : null,
           ...rowFields(),
           source,
-        }),
+        },
       })
     } else if (d?.builtInKey && !d.id) {
       // An untouched built-in has no row yet: the override starts here.
-      saved = await apiFetch<TemplateDetail>('/v1/templates', {
-        method: 'POST',
-        body: JSON.stringify({ workspaceId: getWorkspaceId(), builtInKey: d.builtInKey, source }),
+      saved = await api.post('/v1/templates', {
+        body: { workspaceId: getWorkspaceId(), builtInKey: d.builtInKey, source },
       })
     } else if (d?.id) {
       // A built-in that is only hidden has a row but no versions of its own;
       // its first source continues the shipped line all the same.
       const changed = source !== baseline.value || (d.builtInKey !== null && !d.customized)
-      saved = await apiFetch<TemplateDetail>(`/v1/templates/${d.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ ...rowFields(), ...(changed ? { source } : {}) }),
+      saved = await api.patch('/v1/templates/{id}', {
+        path: { id: d.id },
+        body: { ...rowFields(), ...(changed ? { source } : {}) },
       })
     } else {
       return

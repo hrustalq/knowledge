@@ -33,7 +33,8 @@ import {
   Search,
 } from 'lucide-vue-next'
 import type { TemplateDetail, TemplateSummary } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { api } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { errorMessage } from '@/api/errors'
 import { labelFor } from '@/lib/labels'
 import { canWriteTemplate, groupTemplates, matchesTemplate } from '@/lib/templates'
@@ -167,9 +168,13 @@ async function act(run: () => Promise<unknown>, done: string) {
 
 function setArchived(archived: boolean) {
   const tpl = selected.value
-  if (!tpl?.id) return
+  const id = tpl?.id
+  if (!tpl || !id) return
   void act(
-    () => apiFetch(`/v1/templates/${tpl.id}/${archived ? 'archive' : 'unarchive'}`, { method: 'POST' }),
+    () =>
+      archived
+        ? api.post('/v1/templates/{id}/archive', { path: { id } })
+        : api.post('/v1/templates/{id}/unarchive', { path: { id } }),
     archived ? t('templates.settings.archivedToast', { name: tpl.name }) : t('templates.settings.unarchivedToast', { name: tpl.name }),
   )
 }
@@ -177,14 +182,15 @@ function setArchived(archived: boolean) {
 /** Hiding a built-in is a row with `enabled: false`; showing it again flips the row back. */
 function setHidden(hidden: boolean) {
   const tpl = selected.value
-  if (!tpl?.builtInKey) return
+  const builtInKey = tpl?.builtInKey
+  if (!tpl || !builtInKey) return
+  const id = tpl.id
   void act(
     () =>
-      tpl.id
-        ? apiFetch(`/v1/templates/${tpl.id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !hidden }) })
-        : apiFetch('/v1/templates', {
-            method: 'POST',
-            body: JSON.stringify({ workspaceId: getWorkspaceId(), builtInKey: tpl.builtInKey, enabled: !hidden }),
+      id
+        ? api.patch('/v1/templates/{id}', { path: { id }, body: { enabled: !hidden } })
+        : api.post('/v1/templates', {
+            body: { workspaceId: getWorkspaceId(), builtInKey, enabled: !hidden },
           }),
     hidden ? t('templates.settings.hiddenToast', { name: tpl.name }) : t('templates.settings.shownToast', { name: tpl.name }),
   )
@@ -192,9 +198,10 @@ function setHidden(hidden: boolean) {
 
 function reset() {
   const tpl = selected.value
+  const id = tpl?.id
   confirmReset.value = false
-  if (!tpl?.id) return
-  void act(() => apiFetch(`/v1/templates/${tpl.id}`, { method: 'DELETE' }), t('templates.settings.resetToast', { name: tpl.name }))
+  if (!tpl || !id) return
+  void act(() => api.delete('/v1/templates/{id}', { path: { id } }), t('templates.settings.resetToast', { name: tpl.name }))
 }
 
 function useTemplate() {

@@ -66,9 +66,9 @@ async function save() {
   if (saving.value || retentionInvalid.value || !dirty.value) return
   saving.value = true
   try {
-    const next = (await api.put('/v1/analytics/settings', {
+    const next = await api.put('/v1/analytics/settings', {
       body: { workspaceId: props.workspaceId, enabled: enabledDraft.value, retentionDays: retentionDraft.value },
-    })) as AnalyticsSettingsResponse
+    })
     queryClient.setQueryData(options.queryKey, next)
     void queryClient.invalidateQueries({ queryKey: ['/v1/analytics/overview'] })
     toast.success(t('analytics.settings.saved'))

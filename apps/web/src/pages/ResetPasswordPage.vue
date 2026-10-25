@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { apiFetch } from '@/lib/api'
+import { api } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -27,9 +27,8 @@ async function submit() {
   }
   busy.value = true
   try {
-    await apiFetch('/v1/auth/reset-password', {
-      method: 'POST',
-      body: JSON.stringify({ token: token.value, password: password.value }),
+    await api.post('/v1/auth/reset-password', {
+      body: { token: token.value, password: password.value },
     })
     toast.success(invite.value ? t('auth.passwordSet') : t('auth.passwordUpdated'))
     await router.push('/login')

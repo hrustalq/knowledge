@@ -21,7 +21,7 @@ import { readFrontmatter } from '@/lib/page-source'
 import { usePageView } from '@/lib/use-page-view'
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { useQuery } from '@tanstack/vue-query'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
   Activity as ActivityIcon,
   BadgeCheck,
@@ -54,7 +54,6 @@ import type {
   ComponentDeclarationView,
   DocumentConnectorResponse,
   DocumentContentResponse,
-  ListBranchesResponse,
   ResolvedAsOf,
   DocumentDetailResponse,
   ListActivityResponse,
@@ -69,9 +68,9 @@ import type {
   ReviewThreadAnchor,
   DocumentWorkflowRunsResponse,
 } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId, relativeTime, statusVariant } from '@/lib/api'
+import { getWorkspaceId, relativeTime, statusVariant } from '@/lib/api'
 import { EXPORT_FORMATS, isOpenIssueStatus, type ExportFormat } from '@knowledge/contracts'
-import { apiQueryOptions, useApiMutation } from '@/api/queries'
+import { api, apiQueryOptions, fetchApi, useApiMutation } from '@/api/queries'
 import CollabDraftBadge from '@/components/editor/CollabDraftBadge.vue'
 import ComponentDeclarationNotice from '@/components/code/ComponentDeclarationNotice.vue'
 import UsedByRail from '@/components/code/UsedByRail.vue'
@@ -134,6 +133,7 @@ const GraphView = defineAsyncComponent(() => import('@/components/knowledge/Grap
 const { t } = useI18n()
 
 const route = useRoute()
+const queryClient = useQueryClient()
 const auth = useAuthStore()
 const layout = useLayoutStore()
 const store = useDocumentsStore()
@@ -307,7 +307,13 @@ const archived = computed(() => !!detail.value?.document.archivedAt)
 
 async function load() {
   try {
-    const next = await apiFetch<DocumentDetailResponse>(`/v1/documents/${documentId.value}`)
+    // Always fresh: this is the two-second poll and the live-event re-read.
+    const next = await fetchApi(
+      queryClient,
+      '/v1/documents/{id}',
+      { path: { id: documentId.value } },
+      { fresh: true },
+    )
     /*
      * Only when something actually moved. This runs every two seconds while a
      * revision is in flight, and again on every live event for this page — and
@@ -348,7 +354,7 @@ const publishing = ref(false)
 async function publishDraft() {
   publishing.value = true
   try {
-    await apiFetch(`/v1/documents/${documentId.value}/publish`, { method: 'POST' })
+    await api.post('/v1/documents/{id}/publish', { path: { id: documentId.value } })
     toast.success(t('access.draft.published'))
     onAccessSaved()
   } catch (e) {
@@ -383,20 +389,27 @@ async function loadContent() {
   contentError.value = null
   content.value = null
   try {
-    const rev = route.query.revision
-      ? `?revision=${route.query.revision as string}`
+    const query = route.query.revision
+      ? { revision: route.query.revision as string }
       : asOfParam.value
-        ? `?asOf=${encodeURIComponent(asOfParam.value)}`
-        : viewingBranch.value
-          ? `?branch=${encodeURIComponent(viewingBranch.value)}`
-          : ''
-    content.value = await apiFetch<DocumentContentResponse>(
-      `/v1/documents/${documentId.value}/content${rev}`,
+        ? { asOf: asOfParam.value }
+        : // The content route declares no `branch` query and never read the
+          // one this used to send, so a branch view still reads the default head.
+          {}
+    // A named revision never changes; the head may have moved under a cached
+    // copy (an editor save lands here), so that read is always fresh.
+    content.value = await fetchApi(
+      queryClient,
+      '/v1/documents/{id}/content',
+      { path: { id: documentId.value }, query },
+      { fresh: !route.query.revision },
     )
     asOfRevision.value = asOfParam.value ? content.value.revisionId : null
     branchRevision.value = viewingBranch.value ? content.value.revisionId : null
     if (viewingBranch.value) {
-      const { branches } = await apiFetch<ListBranchesResponse>(`/v1/documents/${documentId.value}/branches`)
+      const { branches } = await fetchApi(queryClient, '/v1/documents/{id}/branches', {
+        path: { id: documentId.value },
+      })
       branchOwner.value = branches.find((b) => b.name === viewingBranch.value)?.ownerId ?? null
     }
     asOfResolved.value = asOfParam.value ? (content.value.resolvedAsOf ?? null) : null
@@ -405,10 +418,13 @@ async function loadContent() {
   }
 }
 
-async function loadRelations() {
+async function loadRelations(fresh = false) {
   try {
-    const res = await apiFetch<ListDocumentRelationsResponse>(
-      `/v1/documents/${documentId.value}/relations`,
+    const res = await fetchApi(
+      queryClient,
+      '/v1/documents/{id}/relations',
+      { path: { id: documentId.value } },
+      { fresh },
     )
     relations.value = res.relations
   } catch {
@@ -753,7 +769,7 @@ watch(
     // it regardless tore down and rebuilt the whole editor — losing the
     // selection, the scroll position and every comment decoration — each time a
     // cascade touched this page.
-    void loadRelations()
+    void loadRelations(true)
     void load().then(() => {
       if (detail.value?.revision.revisionId !== before) void loadContent()
     })

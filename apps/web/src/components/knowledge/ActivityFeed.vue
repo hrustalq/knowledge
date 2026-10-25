@@ -21,9 +21,11 @@ import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useInfiniteScroll, useVirtualList } from '@vueuse/core'
+import { useQueryClient } from '@tanstack/vue-query'
 import { ChevronRight, History } from 'lucide-vue-next'
 import type { ActivityEntry, ListActivityResponse } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId, relativeTime } from '@/lib/api'
+import { fetchApi } from '@/api/queries'
+import { getWorkspaceId, relativeTime } from '@/lib/api'
 import { useHydratedMediaQuery } from '@/lib/use-hydrated'
 import { useEventsStore } from '@/stores/events'
 import { Button } from '@/components/ui/button'
@@ -35,6 +37,7 @@ import { isRealAccount } from '@/components/merge-requests/mr-ui'
 
 const { t } = useI18n()
 const { nameOf } = useMembers()
+const queryClient = useQueryClient()
 
 const props = withDefaults(
   defineProps<{
@@ -127,15 +130,21 @@ function summary(e: ActivityEntry): string {
   return [actor(e), label(e), title(e)].filter(Boolean).join(' ')
 }
 
-async function fetchPage(cursor?: string): Promise<ListActivityResponse> {
-  const params = new URLSearchParams({
-    workspaceId: getWorkspaceId(),
-    limit: String(props.limit ?? props.pageSize),
-  })
-  if (props.documentId) params.set('documentId', props.documentId)
-  if (props.projectId) params.set('projectId', props.projectId)
-  if (cursor) params.set('cursor', cursor)
-  return apiFetch<ListActivityResponse>(`/v1/activity?${params}`)
+async function fetchPage(cursor?: string, fresh = false): Promise<ListActivityResponse> {
+  return await fetchApi(
+    queryClient,
+    '/v1/activity',
+    {
+      query: {
+        workspaceId: getWorkspaceId(),
+        limit: String(props.limit ?? props.pageSize),
+        ...(props.documentId ? { documentId: props.documentId } : {}),
+        ...(props.projectId ? { projectId: props.projectId } : {}),
+        ...(cursor ? { cursor } : {}),
+      },
+    },
+    { fresh },
+  )
 }
 
 /** First page — resets the list (initial mount / workspace or document change). */
@@ -188,7 +197,7 @@ async function refreshHead() {
 }
 
 async function pullHead() {
-  const res = await fetchPage()
+  const res = await fetchPage(undefined, true)
   const known = new Set(entries.value.map((e) => e.id))
   const fresh = res.entries.filter((e) => !known.has(e.id))
   if (fresh.length === 0) return

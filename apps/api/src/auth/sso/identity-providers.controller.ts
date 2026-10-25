@@ -11,6 +11,7 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../../common/validation.js';
 import { CreateIdentityProviderDto, UpdateIdentityProviderDto } from './identity-providers.dto.js';
 import { IdentityProvidersService } from './identity-providers.service.js';
 import { SsoEnabledGuard } from './sso-enabled.guard.js';
+import { Returns } from '../../common/returns.decorator.js';
 
 /** A workspace's identity providers (#75), Settings → Security → Providers. Workspace admins only. */
 @ApiTags('auth')
@@ -20,6 +21,7 @@ export class IdentityProvidersController {
   constructor(private readonly providers: IdentityProvidersService) {}
 
   @Get(':id/identity-providers')
+  @Returns('ListIdentityProvidersResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: "The workspace's identity providers. Client secrets are never returned (hasSecret only)" })
   list(@Param('id', ParseUUIDPipe) id: string): Promise<ListIdentityProvidersResponse> {
@@ -27,6 +29,7 @@ export class IdentityProvidersController {
   }
 
   @Post(':id/identity-providers')
+  @Returns('IdentityProviderView')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Add an OIDC provider (starts disabled). 400 secretKeyMissing without SETTINGS_ENCRYPTION_KEY' })
   create(
@@ -38,6 +41,7 @@ export class IdentityProvidersController {
   }
 
   @Patch(':id/identity-providers/:providerId')
+  @Returns('IdentityProviderView')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: "Change a provider. clientSecret: a value sets it, '' clears it, absent keeps it" })
   update(
@@ -62,6 +66,7 @@ export class IdentityProvidersController {
   }
 
   @Post(':id/identity-providers/:providerId/test')
+  @Returns('TestIdentityProviderResponse')
   @HttpCode(200)
   @Access('admin', 'workspace')
   @ApiOperation({ summary: "Fetch the provider's discovery document and report what it names" })

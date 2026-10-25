@@ -21,7 +21,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageState } from '@/components/layout/page'
 import { activityKindStyle } from '@/lib/activity-kinds'
-import { api } from '@/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import { fetchApi } from '@/api/queries'
 import { getWorkspaceId } from '@/lib/api'
 import { formatDate, formatRelative } from '@/lib/format'
 
@@ -53,25 +54,32 @@ const nextCursor = ref<string | null>(null)
 const loading = ref(true)
 const busy = ref(false)
 const failed = ref(false)
+const queryClient = useQueryClient()
 
-async function fetchPage(cursor?: string): Promise<ListActivityResponse> {
-  return (await api.get('/v1/activity', {
-    query: {
-      workspaceId: getWorkspaceId(),
-      actor: props.actor,
-      ...(props.from ? { from: props.from } : {}),
-      ...(props.to ? { to: props.to } : {}),
-      limit: '60',
-      ...(cursor ? { cursor } : {}),
+async function fetchPage(cursor?: string, opts: { fresh?: boolean } = {}): Promise<ListActivityResponse> {
+  return await fetchApi(
+    queryClient,
+    '/v1/activity',
+    {
+      query: {
+        workspaceId: getWorkspaceId(),
+        actor: props.actor,
+        ...(props.from ? { from: props.from } : {}),
+        ...(props.to ? { to: props.to } : {}),
+        limit: '60',
+        ...(cursor ? { cursor } : {}),
+      },
     },
-  })) as ListActivityResponse
+    opts,
+  )
 }
 
-async function reload() {
+/** `fresh` from the retry button. */
+async function reload(opts: { fresh?: boolean } = {}) {
   loading.value = true
   failed.value = false
   try {
-    const res = await fetchPage()
+    const res = await fetchPage(undefined, opts)
     entries.value = res.entries
     nextCursor.value = res.nextCursor
   } catch {
@@ -144,7 +152,7 @@ function title(entry: ActivityEntry): string {
 
     <PageState v-else-if="failed" state="error" :description="t('profile.activity.failed')">
       <template #actions>
-        <Button size="sm" variant="outline" @click="reload">{{ t('common.retry') }}</Button>
+        <Button size="sm" variant="outline" @click="reload({ fresh: true })">{{ t('common.retry') }}</Button>
       </template>
     </PageState>
 

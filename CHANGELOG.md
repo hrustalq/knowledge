@@ -13,6 +13,27 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Changed
+
+- The web app makes every API call through one typed client and one cache (#472). Project, workspace,
+  glossary, workflow and template rosters, the AI pickers and the settings pages are reused for five
+  minutes instead of being fetched again on every mount, and a page's content at a named revision for
+  the whole session; everything else keeps the 30-second window. The sidebar, glossary links, page
+  references and the template gallery read the same cache their pages do, so an edit announced on the
+  live feed — a glossary term or template changed in another tab included — reaches them without a
+  reload. Signing out empties the cache.
+- The OpenAPI document (`/docs`, `apps/api/openapi.json`) now declares the response body of 316 JSON
+  routes, generated from the `@knowledge/contracts` types they return (#472). A client generated from
+  it gets typed responses where it used to get untyped ones. `HTTP` `GET /docs-json`
+- Optional request fields with a server-side default (`limit`, `mode`, `branch`, `category`, …) are no
+  longer marked required in the OpenAPI document; the default is stated in their description (#472).
+
+### Fixed
+
+- The page picker in a workflow's **Start** dialog listed no pages (#472).
+
 ## [0.34.0] — 2026-10-26
 
 ### Breaking

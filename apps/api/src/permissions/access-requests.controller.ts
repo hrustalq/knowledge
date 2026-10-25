@@ -11,6 +11,7 @@ import {
   DenyAccessRequestDto,
   ListAccessRequestsQueryDto,
 } from './permissions.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Access requests (#76, phase 5). Asking and listing are open to guests, who
@@ -23,6 +24,7 @@ export class AccessRequestsController {
   constructor(private readonly requests: AccessRequestsService) {}
 
   @Post()
+  @Returns('AccessRequestEntry')
   @Access('viewer', 'body', { guests: true })
   @ApiOperation({ summary: 'Ask for a level on a page or project (409 when already granted, or already asked)' })
   create(@Body() dto: CreateAccessRequestDto, @CurrentPrincipal() principal: Principal): Promise<AccessRequestEntry> {
@@ -30,6 +32,7 @@ export class AccessRequestsController {
   }
 
   @Get()
+  @Returns('ListAccessRequestsResponse')
   @Access('viewer', 'query', { guests: true })
   @ApiOperation({ summary: "The caller's own requests (mine=1), or the ones they may decide" })
   list(@Query() query: ListAccessRequestsQueryDto, @CurrentPrincipal() principal: Principal): Promise<ListAccessRequestsResponse> {
@@ -42,6 +45,7 @@ export class AccessRequestsController {
   }
 
   @Post(':id/approve')
+  @Returns('AccessRequestEntry')
   @Access('viewer', 'access-request')
   @ApiOperation({ summary: 'Approve with a level: grants it on every restricted node that kept the requester out (needs manage on each)' })
   approve(
@@ -53,6 +57,7 @@ export class AccessRequestsController {
   }
 
   @Post(':id/deny')
+  @Returns('AccessRequestEntry')
   @Access('viewer', 'access-request')
   @ApiOperation({ summary: 'Deny, optionally saying why (needs manage)' })
   deny(
@@ -64,6 +69,7 @@ export class AccessRequestsController {
   }
 
   @Post(':id/cancel')
+  @Returns('AccessRequestEntry')
   @Access('viewer', 'access-request', { guests: true })
   @ApiOperation({ summary: 'Withdraw your own pending request' })
   cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<AccessRequestEntry> {

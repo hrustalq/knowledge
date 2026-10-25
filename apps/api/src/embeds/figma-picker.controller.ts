@@ -11,6 +11,7 @@ import {
   FigmaWorkspaceQueryDto,
 } from './embeds.dto.js';
 import { FigmaFilesService } from './figma-files.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * The editor's Figma picker (#470, docs/features/64), proxied so the browser
@@ -24,6 +25,7 @@ export class FigmaPickerController {
   constructor(private readonly figma: FigmaFilesService) {}
 
   @Get('files')
+  @Returns('FigmaPickerFilesResponse')
   @Access('editor', 'query')
   @ApiOperation({ summary: 'Figma files the workspace may embed' })
   @ApiOkResponse({ type: FigmaPickerFilesResponseDto })
@@ -33,6 +35,7 @@ export class FigmaPickerController {
   }
 
   @Get('files/:fileKey')
+  @Returns('FigmaPickerFileResponse')
   @Access('editor', 'query')
   @ApiOperation({ summary: 'A Figma file’s pages and top-level frames, with thumbnails, at its current version' })
   @ApiOkResponse({ type: FigmaPickerFileResponseDto })
@@ -43,6 +46,7 @@ export class FigmaPickerController {
   }
 
   @Post('resolve')
+  @Returns('FigmaResolveResponse')
   @HttpCode(200)
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Pin a pasted Figma link to the file’s current version' })

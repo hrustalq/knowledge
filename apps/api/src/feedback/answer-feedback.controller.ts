@@ -6,6 +6,7 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { AnswerFeedbackService } from './answer-feedback.service.js';
 import { AskFeedbackDto, SetMessageFeedbackDto } from './answer-feedback.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Votes on answers (docs/features/38, issue #67 phase 2).
@@ -25,6 +26,7 @@ export class AnswerFeedbackController {
   // another tenant 403s before the handler runs.
 
   @Put('messages/:id/feedback')
+  @Returns('SetAnswerFeedbackResponse')
   @Access('viewer', 'assistant-message')
   @ApiOperation({ summary: 'Rate an assistant reply (thumbs up/down with a reason); re-voting replaces the vote' })
   async vote(
@@ -36,6 +38,7 @@ export class AnswerFeedbackController {
   }
 
   @Delete('messages/:id/feedback')
+  @Returns('DeleteAnswerFeedbackResponse')
   @Access('viewer', 'assistant-message')
   @ApiOperation({ summary: 'Retract your own vote on an assistant reply' })
   async retract(
@@ -47,6 +50,7 @@ export class AnswerFeedbackController {
   }
 
   @Post('ask/feedback')
+  @Returns('SetAnswerFeedbackResponse')
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'Rate a one-shot POST /v1/assistant/ask answer — the client sends what it saw' })
   async voteOnAsk(

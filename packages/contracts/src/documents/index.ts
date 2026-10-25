@@ -9,6 +9,7 @@ import type {
 import type { ApiSpecDiff } from '@knowledge/contracts/api/diff';
 import type { AuthorableRelationType, EntityLayer, FactExtractor, ResolvedAsOf } from '@knowledge/contracts/graph';
 import type { DeleteReviewCommentResponse, ReviewComment, ReviewThread, SemanticDiff, StructuralDiff } from '@knowledge/contracts/reviews';
+import type { MentionAccessNote } from '@knowledge/contracts/identity';
 
 // rich editor. Two-step by design (presign → confirm), mirroring the revision
 // upload flow: the API never streams file bodies, and a row only becomes
@@ -403,8 +404,13 @@ export interface ListDocumentThreadsResponse {
   threads: DocumentThread[];
 }
 
+// PATCH /v1/documents/:id/threads/:threadId, PATCH …/comments/:commentId
+export interface DocumentThreadResponse {
+  thread: DocumentThread;
+}
 
-
+// POST /v1/documents/:id/threads, POST …/threads/:threadId/comments
+export interface CreateDocumentThreadResponse extends DocumentThreadResponse, MentionAccessNote {}
 
 // DELETE /v1/documents/:id/threads/:threadId/comments/:commentId
 export interface DeleteDocumentCommentResponse extends DeleteReviewCommentResponse {

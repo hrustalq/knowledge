@@ -9,6 +9,7 @@ import { t } from '../../i18n/t.js';
 import { LdapLoginDto, SsoDiscoverDto, SsoExchangeDto } from './identity-providers.dto.js';
 import { SsoEnabledGuard } from './sso-enabled.guard.js';
 import { SsoFlowService } from './sso-flow.service.js';
+import { Returns } from '../../common/returns.decorator.js';
 
 /**
  * Anonymous SSO sign-in routes (#75). `@Public()` because the caller has no
@@ -25,6 +26,7 @@ export class SsoController {
 
   @Public()
   @Get('sso/providers')
+  @Returns('SsoProvidersResponse')
   @ApiQuery({ name: 'workspaceId', required: false, description: "The workspace whose buttons to show (the kn_ws cookie's)" })
   @ApiOperation({ summary: 'Login buttons: enabled providers of the workspace plus every platform-wide one. 404 when SSO is off' })
   providers(@Query('workspaceId') workspaceId?: string): Promise<SsoProvidersResponse> {
@@ -34,6 +36,7 @@ export class SsoController {
   @Public()
   @HttpCode(200)
   @Post('sso/discover')
+  @Returns('SsoDiscoverResponse')
   @UseGuards(AuthRateLimitGuard)
   @AuthRateLimit('discover')
   @ApiOperation({ summary: "Email-first sign-in: the providers that assert this address's domain (never whether an account exists)" })
@@ -44,6 +47,7 @@ export class SsoController {
   @Public()
   @HttpCode(200)
   @Post('sso/exchange')
+  @Returns('SsoExchangeResponse')
   @UseGuards(AuthRateLimitGuard)
   @AuthRateLimit('exchange')
   @ApiOperation({ summary: 'Trade the single-use code from /auth/sso/complete for a ks_ session token' })
@@ -118,6 +122,7 @@ export class SsoController {
   @Public()
   @HttpCode(200)
   @Post('ldap/:providerId/login')
+  @Returns('AuthSessionResponse')
   @UseGuards(AuthRateLimitGuard)
   @AuthRateLimit('ldap')
   @ApiOperation({

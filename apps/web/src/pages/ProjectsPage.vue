@@ -8,11 +8,12 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { useInfiniteQuery } from '@tanstack/vue-query'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/vue-query'
 import { useInfiniteScroll, useVirtualList } from '@vueuse/core'
 import { Plus } from 'lucide-vue-next'
 import type { ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { api, fetchApi } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { errorMessage } from '@/api/errors'
 import type { ScopeCreated } from '@/lib/scopes'
 import { useAuthStore } from '@/stores/auth'
@@ -28,22 +29,26 @@ const auth = useAuthStore()
 const store = useProjectsStore()
 const route = useRoute()
 const router = useRouter()
+const queryClient = useQueryClient()
 
 const PAGE_SIZE = 50
 /** Row height must match the markup below — the virtualizer positions by it. */
 const ROW_HEIGHT = 36
 
-function listUrl(cursor?: string, search?: string): string {
-  const params = new URLSearchParams({ workspaceId: getWorkspaceId(), limit: String(PAGE_SIZE) })
-  if (cursor) params.set('cursor', cursor)
-  if (search) params.set('search', search)
-  return `/v1/projects?${params}`
+function listQuery(cursor?: string, search?: string) {
+  return {
+    workspaceId: getWorkspaceId(),
+    limit: PAGE_SIZE,
+    ...(cursor ? { cursor } : {}),
+    ...(search ? { search } : {}),
+  }
 }
 
 const roster = useInfiniteQuery({
   queryKey: ['projects', 'rail'],
   initialPageParam: undefined as string | undefined,
-  queryFn: ({ pageParam }) => apiFetch<ListProjectsResponse>(listUrl(pageParam)),
+  queryFn: async ({ pageParam, signal }) =>
+    await api.get('/v1/projects', { query: listQuery(pageParam), signal }),
   getNextPageParam: (last: ListProjectsResponse) => last.nextCursor ?? undefined,
 })
 
@@ -61,14 +66,22 @@ useInfiniteScroll(containerProps.ref, async () => { await roster.fetchNextPage()
   canLoadMore: () => roster.hasNextPage.value && !roster.isFetchingNextPage.value,
 })
 
-/** The store backs the sidebar switcher, breadcrumbs and the active marker. */
+/**
+ * The store backs the sidebar switcher, breadcrumbs and the active marker.
+ * Runs after a create or an edit, which the live feed may not have announced yet.
+ */
 async function reload() {
-  await Promise.all([roster.refetch(), store.fetchList().catch(() => undefined)])
+  await Promise.all([roster.refetch(), store.fetchList({ fresh: true }).catch(() => undefined)])
 }
 
 // Server-side search — the picker jumps straight to a project.
 async function searchProjects(query: string): Promise<AutocompleteOption[]> {
-  const res = await apiFetch<ListProjectsResponse>(listUrl(undefined, query.trim() || undefined))
+  const res = await fetchApi(
+    queryClient,
+    '/v1/projects',
+    { query: listQuery(undefined, query.trim() || undefined) },
+    { fresh: true },
+  )
   return res.projects.map((p) => ({ value: p.projectId, label: p.name, meta: p.documentCount }))
 }
 

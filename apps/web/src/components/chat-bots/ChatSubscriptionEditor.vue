@@ -22,12 +22,14 @@ import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { formatRelative } from '@/lib/format'
-import { loadTagOptions, tagLabel } from '@/lib/tag-options'
+import { tagLabel, useTagOptions } from '@/lib/tag-options'
 import { useProjectsStore } from '@/stores/projects'
 import { Autocomplete } from '@/components/ui/autocomplete'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+const loadTagOptions = useTagOptions()
 
 const props = defineProps<{ bindingId: string; defaultProjectId: string | null }>()
 const emit = defineEmits<{ changed: [] }>()

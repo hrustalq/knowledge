@@ -8,6 +8,10 @@
       {
         "include": "i18n/**/*.json",
         "outDir": "dist"
+      },
+      {
+        "include": "config/contract-schemas.json",
+        "outDir": "dist"
       }
     ],
     "watchAssets": true

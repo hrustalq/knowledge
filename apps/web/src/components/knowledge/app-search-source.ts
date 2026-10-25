@@ -2,11 +2,16 @@
 // workspace. Kept out of use-search.ts so the public reader, which searches a
 // site's snapshot instead, never bundles the app's API client.
 import type { SearchRequest, SearchResponse } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { api } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import type { SearchSnapshot, SearchSource, SearchView } from './use-search'
 
-/** The one SearchRequest every app surface sends for a given state. */
-export function searchRequestOf(state: SearchSnapshot): SearchRequest {
+/**
+ * The one SearchRequest every app surface sends for a given state. Typed by
+ * what it holds (`satisfies`), not widened to the contract: the generated
+ * client requires the fields the DTO defaults, and this always sets them.
+ */
+export function searchRequestOf(state: SearchSnapshot) {
   const hasFilters = state.categories.length > 0 || state.projectIds.length > 0 || state.tags.length > 0
   return {
     workspaceId: getWorkspaceId(),
@@ -26,7 +31,7 @@ export function searchRequestOf(state: SearchSnapshot): SearchRequest {
           },
         }
       : {}),
-  }
+  } satisfies SearchRequest
 }
 
 export function searchViewOf(res: SearchResponse): SearchView {
@@ -64,8 +69,5 @@ export function searchViewOf(res: SearchResponse): SearchView {
 
 export const appSearchSource: SearchSource = async (state) =>
   searchViewOf(
-    await apiFetch<SearchResponse>('/v1/search', {
-      method: 'POST',
-      body: JSON.stringify(searchRequestOf(state)),
-    }),
+    await api.post('/v1/search', { body: searchRequestOf(state) }),
   )

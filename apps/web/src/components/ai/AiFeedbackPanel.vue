@@ -16,8 +16,9 @@ import type {
   ListAnswerFeedbackResponse,
 } from '@knowledge/contracts'
 import { Download, MessageSquareWarning, ThumbsDown, ThumbsUp, TriangleAlert, CircleHelp } from 'lucide-vue-next'
+import { requestFile } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
-import { apiFetchBlob, getWorkspaceId, relativeTime, saveFile } from '@/lib/api'
+import { getWorkspaceId, relativeTime, saveFile } from '@/lib/api'
 import { labelFor } from '@/lib/labels'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -92,7 +93,10 @@ const exporting = ref(false)
 async function exportDataset() {
   exporting.value = true
   try {
-    const { blob, filename } = await apiFetchBlob(`/v1/ai/feedback/export?workspaceId=${encodeURIComponent(workspaceId)}`)
+    const { blob, filename } = await requestFile('get', '/v1/ai/feedback/export', {
+      query: { workspaceId },
+      config: { timeout: 0 },
+    })
     saveFile(blob, filename ?? `feedback-${workspaceId}.ndjson`)
     toast.success(t('ai.feedback.exported'))
   } catch (e) {

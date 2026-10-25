@@ -36,7 +36,6 @@ import type {
   ConnectorKind,
   ConnectorSummary,
   ConnectorSyncMode,
-  ConnectorTestResponse,
 } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { Button } from '@/components/ui/button'
@@ -169,7 +168,7 @@ async function testConnection(ctx: SetupContext) {
   // first. That is also what makes the flow resumable server-side: from here on
   // the setup has an id, not just a snapshot.
   const id = ctx.connectorId ?? ctx.editingId ?? (await saveConnector(ctx, true))
-  const res = (await api.post('/v1/connectors/{id}/test', { path: { id } })) as ConnectorTestResponse
+  const res = await api.post('/v1/connectors/{id}/test', { path: { id } })
   if (actor.value) actor.value.send({ type: 'SET', patch: { connectorId: id } })
   return res
 }

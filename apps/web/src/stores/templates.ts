@@ -7,7 +7,8 @@ import {
   type TemplateRef,
   type TemplateSummary,
 } from '@knowledge/contracts'
-import { apiFetch, getProjectId, getWorkspaceId } from '@/lib/api'
+import { apiQueryOptions, bindStoreQuery, fetchApi, unbindStoreQuery } from '@/api/queries'
+import { getProjectId, getWorkspaceId } from '@/lib/api'
 import { offeredTemplates } from '@/lib/templates'
 
 /** Where a page started from the gallery goes. */
@@ -95,15 +96,23 @@ export const useTemplatesStore = defineStore('templates', {
       this.pending = this.fetchList().finally(() => (this.pending = null))
       return this.pending
     },
-    async fetchList() {
+    async fetchList(fresh = false) {
       try {
         // No active project yet means "the whole workspace", the same fallback
         // the documents store uses.
         const projectId = getProjectId()
-        const params = new URLSearchParams({ workspaceId: getWorkspaceId(), includeArchived: 'true' })
-        if (projectId) params.set('projectId', projectId)
-        const res = await apiFetch<ListTemplatesResponse>(`/v1/templates?${params}`)
-        this.templates = res.templates
+        await bindStoreQuery<ListTemplatesResponse>(
+          this,
+          'list',
+          this.queryClient,
+          apiQueryOptions('/v1/templates', {
+            query: { workspaceId: getWorkspaceId(), includeArchived: true, ...(projectId ? { projectId } : {}) },
+          }),
+          (res) => {
+            this.templates = res.templates
+          },
+          { fresh },
+        )
       } catch {
         // Starting blank still works; the gallery says it has nothing to offer.
         this.templates = []
@@ -112,7 +121,8 @@ export const useTemplatesStore = defineStore('templates', {
     },
     async refresh() {
       this.loaded = false
-      await this.ensureLoaded()
+      this.pending = this.fetchList(true).finally(() => (this.pending = null))
+      await this.pending
     },
     /**
      * Project switch: drop the roster at once — offering the old project's
@@ -121,6 +131,7 @@ export const useTemplatesStore = defineStore('templates', {
      */
     async rescope() {
       const wanted = this.loaded
+      unbindStoreQuery(this, 'list')
       this.templates = []
       this.loaded = false
       if (wanted) await this.ensureLoaded()
@@ -130,11 +141,10 @@ export const useTemplatesStore = defineStore('templates', {
     async detail(ref: TemplateRef, version?: number): Promise<TemplateDetail> {
       const parsed = parseTemplateRef(ref)
       if (!parsed) throw new Error(`Unknown template ${ref}`)
-      const params = new URLSearchParams({ workspaceId: getWorkspaceId() })
-      if (version) params.set('version', String(version))
-      return parsed.kind === 'builtin'
-        ? apiFetch<TemplateDetail>(`/v1/templates/built-in/${parsed.key}?${params}`)
-        : apiFetch<TemplateDetail>(`/v1/templates/${parsed.id}${version ? `?version=${version}` : ''}`)
+      const v = version ? { version } : {}
+      return (await (parsed.kind === 'builtin'
+        ? fetchApi(this.queryClient, '/v1/templates/built-in/{key}', { path: { key: parsed.key }, query: { workspaceId: getWorkspaceId(), ...v } })
+        : fetchApi(this.queryClient, '/v1/templates/{id}', { path: { id: parsed.id }, query: v }))) as TemplateDetail
     },
 
     openGallery(target: GalleryTarget = {}) {

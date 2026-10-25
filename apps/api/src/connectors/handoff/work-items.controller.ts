@@ -6,6 +6,7 @@ import type { Principal } from '../../auth/principal.js';
 import { WorkItemHandoffService } from './work-item-handoff.service.js';
 import { WorkItemRulesService } from './work-item-rules.service.js';
 import { AnchorWorkItemsQueryDto, PutWorkItemRulesDto, WorkItemHandoffDto, WorkItemRulesQueryDto } from './work-items.dto.js';
+import { Returns } from '../../common/returns.decorator.js';
 
 /**
  * Work items by what they are for (#424), rather than by connector: the chip on
@@ -22,6 +23,7 @@ export class WorkItemsController {
   ) {}
 
   @Get('rules')
+  @Returns('WorkItemRulesResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: 'The handoff rules, and the env ceiling they run under' })
   getRules(@Query() query: WorkItemRulesQueryDto): Promise<WorkItemRulesResponse> {
@@ -29,6 +31,7 @@ export class WorkItemsController {
   }
 
   @Put('rules')
+  @Returns('WorkItemRulesResponse')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Turn handoff rules on or off; each creates tickets only into a project with a tracker route' })
   putRules(@Body() dto: PutWorkItemRulesDto, @CurrentPrincipal() principal: Principal): Promise<WorkItemRulesResponse> {
@@ -40,6 +43,7 @@ export class WorkItemsController {
   }
 
   @Get()
+  @Returns('ListAnchorWorkItemsResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Tickets anchored on one knowledge object; ones on pages the caller cannot open are left out' })
   async list(@Query() query: AnchorWorkItemsQueryDto, @CurrentPrincipal() principal: Principal): Promise<ListAnchorWorkItemsResponse> {
@@ -47,6 +51,7 @@ export class WorkItemsController {
   }
 
   @Post('handoff')
+  @Returns('ConnectorWorkItemResponse')
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Create a ticket for a knowledge object in its tracker, or attach an existing one (idempotent per connector)' })
   async handoff(@Body() dto: WorkItemHandoffDto, @CurrentPrincipal() principal: Principal): Promise<ConnectorWorkItemResponse> {

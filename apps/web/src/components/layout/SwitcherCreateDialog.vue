@@ -20,7 +20,8 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { Check, Folder, Library, Loader2 } from 'lucide-vue-next'
-import { ApiError, getWorkspaceId } from '@/lib/api'
+import { isApiRequestError } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import {
   createProject,
   createWorkspace,
@@ -159,7 +160,7 @@ async function submit() {
     }
   } catch (e) {
     error.value =
-      e instanceof ApiError && e.status === 403
+      isApiRequestError(e) && e.status === 403
         ? t(props.kind === 'workspace' ? 'nav.noWorkspacePermission' : 'nav.noProjectPermission')
         : (e as Error).message
   } finally {
@@ -192,7 +193,7 @@ async function finish() {
     // cannot name. Neither is allowed to throw — the project already exists on
     // the server, and a refetch that fails on the way out must not cost the
     // user the scope switch as well. The live event heals a stale roster.
-    await projects.fetchList().catch((e) => console.error('post-create roster refresh failed', e))
+    await projects.fetchList({ fresh: true }).catch((e) => console.error('post-create roster refresh failed', e))
     await projects.switchProject(created.id).catch((e) => console.error('post-create switch failed', e))
     emit('created', created)
   } else {

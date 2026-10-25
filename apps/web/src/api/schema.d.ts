@@ -7211,8 +7211,8 @@ export interface components {
             displayName: string;
             /** @description Optional initial password; omit to let the user set one via password reset */
             password?: string;
-            /** @default false */
-            isAdmin: boolean;
+            /** @description Default: false. */
+            isAdmin?: boolean;
         };
         UpdateUserDto: {
             displayName?: string;
@@ -7238,11 +7238,8 @@ export interface components {
             email: string;
             /** @enum {string} */
             role: "guest" | "viewer" | "editor" | "admin";
-            /**
-             * @description Gate for POST /v1/graph/query (plan.md §9)
-             * @default false
-             */
-            trustedOperator: boolean;
+            /** @description Gate for POST /v1/graph/query (plan.md §9). Default: false. */
+            trustedOperator?: boolean;
             /** @description Grained permissions beside the role (#468). Replaces the list; admins hold every one implicitly. */
             capabilities?: ("api-test-suites.generate" | "api-test-suites.run")[];
         };
@@ -7369,11 +7366,10 @@ export interface components {
             content?: components["schemas"]["InlineContentDto"];
             relations?: components["schemas"]["RelationInputDto"][];
             /**
-             * @description Feature 07 categorization
-             * @default other
+             * @description Feature 07 categorization. Default: other.
              * @enum {string}
              */
-            category: "process" | "use-case" | "contract" | "erd" | "architecture" | "guide" | "reference" | "other";
+            category?: "process" | "use-case" | "contract" | "erd" | "architecture" | "guide" | "reference" | "other";
             /**
              * Format: uuid
              * @description Feature 08 nesting: create under this document
@@ -7397,7 +7393,7 @@ export interface components {
             /** @enum {string} */
             category?: "process" | "use-case" | "contract" | "erd" | "architecture" | "guide" | "reference" | "other";
             /** Format: uuid */
-            parentId?: Record<string, never> | null;
+            parentId?: string | null;
             /** Format: uuid */
             projectId?: string;
             /**
@@ -7459,8 +7455,8 @@ export interface components {
             filename: string;
         };
         CreateRevisionDto: {
-            /** @default main */
-            branch: string;
+            /** @description Default: main. */
+            branch?: string;
             message?: string;
             /** @example text/markdown */
             contentType?: string;
@@ -7592,10 +7588,10 @@ export interface components {
         };
         MergeMergeRequestDto: {
             /**
-             * @default merge-commit
+             * @description Default: merge-commit.
              * @enum {string}
              */
-            strategy: "merge-commit" | "squash";
+            strategy?: "merge-commit" | "squash";
         };
         CreateEntityAliasDto: {
             /** Format: uuid */
@@ -7609,12 +7605,12 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /**
-             * @default dependents
+             * @description Default: dependents.
              * @enum {string}
              */
-            direction: "dependents" | "dependencies";
-            /** @default 3 */
-            maxDepth: number;
+            direction?: "dependents" | "dependencies";
+            /** @description Default: 3. */
+            maxDepth?: number;
             /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
             asOf?: string;
             /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
@@ -7716,11 +7712,8 @@ export interface components {
             filename: string;
         };
         ExpandGraphDto: {
-            /**
-             * @description Entity hops from the vector hits
-             * @default 1
-             */
-            depth: number;
+            /** @description Entity hops from the vector hits. Default: 1. */
+            depth?: number;
             /** @description Relation edge types to follow (default: all) */
             relationTypes?: string[];
         };
@@ -7741,12 +7734,12 @@ export interface components {
             workspaceId: string;
             query: string;
             /**
-             * @default hybrid
+             * @description Default: hybrid.
              * @enum {string}
              */
-            mode: "hybrid" | "semantic" | "keyword";
-            /** @default 20 */
-            limit: number;
+            mode?: "hybrid" | "semantic" | "keyword";
+            /** @description Default: 20. */
+            limit?: number;
             /**
              * @description 'page': one result per page (its best-ranked chunk), limit counting pages, each with snippetParts. Omitted: one result per chunk
              * @enum {string}
@@ -7853,8 +7846,8 @@ export interface components {
             workspaceId: string;
             /** @description Draft text (an excerpt is used as the search query) */
             text: string;
-            /** @default 5 */
-            limit: number;
+            /** @description Default: 5. */
+            limit?: number;
         };
         CreateAssistantThreadDto: {
             /** Format: uuid */
@@ -7913,10 +7906,9 @@ export interface components {
             documentId?: string;
             /**
              * @description 'ask' (default) excludes write tools this turn regardless of role; 'agent' allows them (still gated by editor role)
-             * @default ask
              * @enum {string}
              */
-            mode: "ask" | "agent";
+            mode?: "ask" | "agent";
             /** @description Agent to run this turn (docs/features/20). 'auto' asks the router to choose. Omitted, the mode picks: researcher for ask, author for agent. The mode is still the ceiling — an agent can never gain write tools in ask mode. */
             agentKey?: string;
             /** @description Ephemeral file content for this turn only — not persisted verbatim into thread history */
@@ -8040,8 +8032,8 @@ export interface components {
             pricePromptPerMTok?: number | null;
             /** @description USD per 1M completion tokens */
             priceCompletionPerMTok?: number | null;
-            /** @default true */
-            enabled: boolean;
+            /** @description Default: true. */
+            enabled?: boolean;
             /** @description What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20). */
             capabilities?: ("tools" | "vision" | "json")[] | null;
         };
@@ -8073,8 +8065,8 @@ export interface components {
             instructions: string;
             /** @description Keywords that pull this skill into a turn */
             triggers?: string[];
-            /** @default true */
-            enabled: boolean;
+            /** @description Default: true. */
+            enabled?: boolean;
         };
         UpdateAiSkillDto: {
             /** @example Release notes writer */
@@ -8338,18 +8330,18 @@ export interface components {
             /** @example Jira */
             name: string;
             /**
-             * @default streamable-http
+             * @description Default: streamable-http.
              * @enum {string}
              */
-            transport: "streamable-http" | "sse";
+            transport?: "streamable-http" | "sse";
             /** @example https://mcp.example.com/jira */
             url: string;
             /** @example Authorization */
             authHeader?: string | null;
             /** @description Write-only credential; null clears it */
             authValue?: string | null;
-            /** @default true */
-            enabled: boolean;
+            /** @description Default: true. */
+            enabled?: boolean;
             /** @description Tools offered to the model; empty = every discovered tool */
             enabledTools?: string[];
         };
@@ -9564,6 +9556,5286 @@ export interface components {
             /** @description Correlation id — echoed from the x-request-id request header (also set as a response header) */
             requestId: string;
         };
+        AccessGrantEntry: {
+            subjectType: components["schemas"]["AccessSubjectType"];
+            subjectId: string;
+            level: components["schemas"]["AccessLevel"];
+            origin: components["schemas"]["AccessGrantOrigin"];
+            connectorId: string | null;
+            name: string | null;
+            email: string | null;
+            avatarUrl: components["schemas"]["AvatarUrl"];
+            memberCount: number | null;
+        };
+        /** @enum {string} */
+        AccessGrantOrigin: "manual" | "connector";
+        /** @enum {string} */
+        AccessLevel: "view" | "edit" | "manage";
+        AccessRequestEntry: {
+            requestId: string;
+            workspaceId: string;
+            resourceType: components["schemas"]["AccessResourceType"];
+            resourceId: string;
+            resourceTitle: string | null;
+            requester: components["schemas"]["AccessRequestPerson"];
+            level: components["schemas"]["RequestableAccessLevel"];
+            message: string | null;
+            status: components["schemas"]["AccessRequestStatus"];
+            decidedBy: components["schemas"]["AccessRequestPerson"] | null;
+            decidedLevel: components["schemas"]["AccessLevel"] | null;
+            decidedAt: string | null;
+            reason: string | null;
+            expiresAt: string;
+            createdAt: string;
+            canDecide: boolean;
+        };
+        AccessRequestPerson: {
+            userId: string;
+            displayName: string | null;
+            email: string | null;
+            avatarUrl: components["schemas"]["AvatarUrl"];
+        };
+        /** @enum {string} */
+        AccessRequestStatus: "pending" | "approved" | "denied" | "cancelled" | "expired";
+        /** @enum {string} */
+        AccessResourceType: "project" | "document";
+        /** @enum {string} */
+        AccessSubjectType: "user" | "group";
+        ActivityCalendarDay: {
+            date: string;
+            total: number;
+            byKind: {
+                write: number;
+                review: number;
+                discuss: number;
+                curate: number;
+            };
+        };
+        ActivityCalendarResponse: {
+            workspaceId: string;
+            actor: string;
+            from: string;
+            to: string;
+            days: components["schemas"]["ActivityCalendarDay"][];
+            total: number;
+            byKind: {
+                write: number;
+                review: number;
+                discuss: number;
+                curate: number;
+            };
+            busiestDay: number;
+            currentStreak: number;
+            longestStreak: number;
+        };
+        ActivityEntry: {
+            id: string;
+            workspaceId: string;
+            actor: string;
+            action: string;
+            documentId: string | null;
+            documentTitle: string | null;
+            projectId: string | null;
+            subjectId: string | null;
+            metadata: {
+                [key: string]: unknown;
+            };
+            createdAt: string;
+        };
+        AddFindingTermResponse: {
+            termId: string;
+            term: string;
+            projectId: string;
+        };
+        /** @enum {string} */
+        AgentCapability: "tools" | "vision" | "json";
+        AgentFinding: {
+            kind: components["schemas"]["AgentFindingKind"];
+            /** @enum {string} */
+            severity: "info" | "warning" | "error";
+            title: string;
+            detail: string;
+            documentIds: string[];
+            documentTitles: string[];
+            mergeRequestId?: string | null;
+            proposedAt?: string | null;
+            flaggedAt?: string | null;
+            dismissedAt?: string | null;
+            dismissedBy?: string | null;
+            conflictId?: string;
+            learningId?: string | null;
+            issueId?: string;
+            relations?: components["schemas"]["RelationInput"][];
+            sources?: components["schemas"]["AssistantWebSource"][];
+            draft?: components["schemas"]["AgentFindingDraft"];
+            coverage?: components["schemas"]["AgentFindingCoverage"];
+            componentPaths?: components["schemas"]["ComponentPathFix"][];
+            apiDrift?: components["schemas"]["ApiDriftSpec"];
+            ruleId?: string;
+            anchor?: components["schemas"]["ReviewThreadAnchor"];
+            suggestion?: string;
+            term?: components["schemas"]["AgentFindingTerm"];
+            termId?: string | null;
+        };
+        AgentFindingCoverage: {
+            questions: string[];
+            count: number;
+            signals: {
+                vote: number;
+                "low-confidence": number;
+                "no-answer": number;
+            };
+            surfaces: components["schemas"]["AnswerSurface"][];
+            recommendation: components["schemas"]["CoverageRecommendation"];
+        };
+        AgentFindingDraft: {
+            title: string;
+            markdown: string;
+            template?: {
+                ref: string;
+                version: number;
+            };
+        };
+        /** @enum {string} */
+        AgentFindingKind: "stale" | "duplicate" | "contradiction" | "orphan" | "gap" | "relation" | "style" | "quality" | "other";
+        AgentFindingTerm: {
+            term: string;
+            aliases: string[];
+            definition: string;
+            projectId: string;
+        };
+        AgentLearningArchiveCheck: {
+            before: components["schemas"]["AgentLearningSideCounts"];
+            after: components["schemas"]["AgentLearningSideCounts"];
+            checkedAt: string;
+            keptAt?: string;
+            keptBy?: string;
+        };
+        AgentLearningEvidence: {
+            findings: components["schemas"]["AgentLearningEvidenceFinding"][];
+            hidden: number;
+        };
+        AgentLearningEvidenceFinding: {
+            agentKey: string;
+            kind: string;
+            title: string;
+            dismissedAt: string | null;
+            runId: string;
+            findingIndex: number;
+        } | {
+            agentKey: string;
+            kind: string;
+            title: string;
+            dismissedAt: string | null;
+            captureId: string;
+        } | {
+            agentKey: string;
+            kind: string;
+            title: string;
+            dismissedAt: string | null;
+            feedbackId: string;
+        };
+        AgentLearningSideCounts: {
+            runs: number;
+            findings: number;
+            dismissed: number;
+        };
+        /** @enum {string} */
+        AgentLearningSource: "document-thread" | "mr-thread" | "finding" | "manual" | "derived";
+        /** @enum {string} */
+        AgentLearningStatus: "proposed" | "active" | "archived";
+        AgentLearningSummary: {
+            id: string;
+            workspaceId: string;
+            projectId: string | null;
+            agentKey: string | null;
+            text: string;
+            status: components["schemas"]["AgentLearningStatus"];
+            sourceKind: components["schemas"]["AgentLearningSource"];
+            sourceId: string | null;
+            sourceDocumentId: string | null;
+            sourceMergeRequestId: string | null;
+            runId: string | null;
+            findingIndex: number | null;
+            evidenceCount: number;
+            evidence?: components["schemas"]["AgentLearningEvidence"];
+            archiveProposedAt: string | null;
+            archiveCheck: components["schemas"]["AgentLearningArchiveCheck"] | null;
+            createdBy: string;
+            approvedBy: string | null;
+            approvedAt: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        AgentOutcomeGroup: {
+            source: components["schemas"]["AgentOutcomeSource"];
+            agentKey: string | null;
+            promptHash: string | null;
+            model: string | null;
+            runs: number;
+            counts: {
+                accepted: number;
+                dismissed: number;
+                downvoted: number;
+                pending: number;
+            };
+        };
+        /** @enum {string} */
+        AgentOutcomeSource: "finding" | "answer";
+        /** @enum {string} */
+        AgentOutcomeSplit: "none" | "prompt" | "model";
+        AgentOutcomesResponse: {
+            workspaceId: string;
+            since: string;
+            split: components["schemas"]["AgentOutcomeSplit"];
+            settleDays: number;
+            minRuns: number;
+            groups: components["schemas"]["AgentOutcomeGroup"][];
+        };
+        /** @enum {string} */
+        AgentRecipeKey: "weekly-digest" | "freshness-sweep" | "glossary-suggester" | "docs-from-tickets";
+        AgentRouteDecision: {
+            agentKey: string;
+            providerId: string | null;
+            providerName: string | null;
+            model: string;
+            via: string;
+            reason: string;
+            confidence: number;
+            rejected: {
+                agentKey: string;
+                reason: string;
+            }[];
+        };
+        AgentRunComponent: {
+            name: string;
+            paths: string[];
+            symbols?: string[];
+            projectId?: string;
+            parentId?: string;
+        };
+        AgentRunEvent: {
+            type: components["schemas"]["AgentTriggerEvent"];
+            source: string;
+            subjectId?: string;
+            documentId?: string;
+            revisionId?: string;
+            deliveryId?: string;
+            threadId?: string;
+        };
+        AgentRunInput: {
+            note?: string;
+            connectorId?: string;
+            documentIds?: string[];
+            pullRequest?: components["schemas"]["AgentRunPullRequest"];
+            issueId?: string;
+            apiSpecDocumentId?: string;
+            apiTestSuite?: {
+                documentId: string;
+                entityKey: string;
+                revisionId: string;
+            };
+            apiFixtureRanking?: {
+                documentId: string;
+                entityKey: string;
+                candidatesHash: string;
+            };
+            coverage?: {
+                windowDays: number;
+            };
+            publishedAt?: string;
+            mergedAt?: string;
+            outdatedAt?: string;
+            event?: components["schemas"]["AgentRunEvent"];
+            payload?: string;
+            component?: components["schemas"]["AgentRunComponent"];
+            lint?: components["schemas"]["AgentRunLint"];
+        };
+        AgentRunLint: {
+            mergeRequestId: string;
+            headRevisionId: string;
+            checkId: string;
+        };
+        AgentRunPullRequest: {
+            number: number;
+            title: string;
+            url: string;
+            headSha: string;
+            headRef: string | null;
+            baseRef: string | null;
+            author: string | null;
+        };
+        /** @enum {string} */
+        AgentRunStatus: "pending" | "running" | "succeeded" | "failed" | "cancelled";
+        AgentRunSummary: {
+            id: string;
+            workspaceId: string;
+            agentKey: string;
+            agentName: string;
+            trigger: components["schemas"]["AgentRunTrigger"];
+            triggerId: string | null;
+            subjectKey: string | null;
+            status: components["schemas"]["AgentRunStatus"];
+            createdBy: string;
+            input: components["schemas"]["AgentRunInput"] | null;
+            summary: string | null;
+            findings: components["schemas"]["AgentFinding"][];
+            findingCount: number;
+            error: string | null;
+            stage: string | null;
+            progress: number | null;
+            warnings: string[];
+            startedAt: string | null;
+            finishedAt: string | null;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        AgentRunTrigger: "manual" | "schedule" | "event" | "webhook" | "report" | "merge-request";
+        /** @enum {string} */
+        AgentScheduleKind: "interval" | "daily" | "weekly";
+        /** @enum {string} */
+        AgentSurface: "interactive" | "background" | "workflow";
+        /** @enum {string} */
+        AgentTriggerEvent: "page.merged" | "page.indexed" | "merge-request.opened" | "connector.synced" | "webhook" | "comment.mention" | "work-item.updated";
+        AgentTriggerFilter: {
+            categories?: string[];
+            connectorIds?: string[];
+            branch?: string;
+            labels?: string[];
+        };
+        AgentTriggerSummary: {
+            id: string;
+            workspaceId: string;
+            projectId: string | null;
+            agentKey: string;
+            event: components["schemas"]["AgentTriggerEvent"];
+            filter: components["schemas"]["AgentTriggerFilter"];
+            enabled: boolean;
+            ownerId: string | null;
+            cooldownMinutes: number;
+            note: string | null;
+            webhook: {
+                url: string;
+                secretSet: boolean;
+            } | null;
+            lastFiredAt: string | null;
+            createdBy: string;
+            createdAt: string;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        AiActionId: "copy-markdown" | "view-markdown" | "open-chatgpt" | "open-claude" | "open-cursor" | "copy-mcp-config" | "copy-agent-link";
+        AiAgentChoice: {
+            key: string;
+            name: string;
+            description: string;
+        };
+        AiAgentSummary: {
+            id: string | null;
+            key: string;
+            builtIn: boolean;
+            name: string;
+            description: string;
+            instructions: string;
+            tools: string[];
+            skillIds: string[];
+            providerId: string | null;
+            providerName: string | null;
+            temperature: number;
+            maxToolCalls: number;
+            timeoutMs: number;
+            surfaces: components["schemas"]["AgentSurface"][];
+            runnable: boolean;
+            requires: components["schemas"]["AgentCapability"][];
+            missing: components["schemas"]["AgentCapability"][];
+            purpose: components["schemas"]["AiPurpose"];
+            enabled: boolean;
+            overridden: string[];
+            scheduleEnabled: boolean;
+            scheduleKind: components["schemas"]["AgentScheduleKind"];
+            scheduleMinutes: number | null;
+            scheduleTime: string | null;
+            scheduleWeekdays: number[] | null;
+            scheduleTimezone: string | null;
+            scheduleNote: string | null;
+            scheduleOwner: string | null;
+            lastRunAt: string | null;
+            nextRunAt: string | null;
+            updatedAt: string | null;
+        };
+        AiBudgetInfo: {
+            userId: string;
+            monthlyTokenBudget: number | null;
+            overridden: boolean;
+            usedTokens: number;
+            remainingTokens: number | null;
+            enforced: boolean;
+            periodStart: string;
+        };
+        AiConnectionTestResponse: {
+            ok: boolean;
+            model: string;
+            latencyMs: number;
+            error?: string;
+        };
+        AiMyUsageResponse: {
+            budget: components["schemas"]["AiBudgetInfo"];
+            calls: number;
+            totalTokens: number;
+            costUsdMicros: number | null;
+        };
+        AiPageActionsResponse: {
+            externalAiActions: boolean;
+            actions: components["schemas"]["AiActionId"][];
+            inlineMaxChars: number;
+        };
+        /** @enum {string} */
+        AiPluginStatus: "unknown" | "connected" | "error";
+        AiPluginSummary: {
+            id: string;
+            workspaceId: string;
+            name: string;
+            transport: components["schemas"]["AiPluginTransport"];
+            url: string;
+            authHeader: string | null;
+            hasAuthValue: boolean;
+            enabled: boolean;
+            enabledTools: string[];
+            discoveredTools: components["schemas"]["AiPluginTool"][];
+            status: components["schemas"]["AiPluginStatus"];
+            lastError: string | null;
+            lastCheckedAt: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        AiPluginTestResponse: {
+            ok: boolean;
+            tools: components["schemas"]["AiPluginTool"][];
+            error?: string;
+        };
+        AiPluginTool: {
+            name: string;
+            description: string;
+            inputSchema?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @enum {string} */
+        AiPluginTransport: "streamable-http" | "sse";
+        /** @enum {string} */
+        AiProvider: "none" | "openai-compatible" | "deepseek" | "gen-api";
+        AiProviderChoice: {
+            id: string;
+            name: string;
+            model: string;
+        };
+        /** @enum {string} */
+        AiProviderKind: "openai-compatible" | "deepseek" | "gen-api";
+        /** @enum {string} */
+        AiProviderStatus: "unknown" | "ok" | "error";
+        AiProviderSummary: {
+            id: string;
+            workspaceId: string;
+            name: string;
+            provider: components["schemas"]["AiProviderKind"];
+            baseUrl: string | null;
+            model: string;
+            hasApiKey: boolean;
+            apiKeyHint: string | null;
+            temperature: number | null;
+            maxToolCalls: number | null;
+            timeoutMs: number | null;
+            pricePromptPerMTok: number | null;
+            priceCompletionPerMTok: number | null;
+            enabled: boolean;
+            status: components["schemas"]["AiProviderStatus"];
+            lastError: string | null;
+            lastCheckedAt: string | null;
+            createdAt: string;
+            updatedAt: string;
+            capabilities: components["schemas"]["AgentCapability"][] | null;
+        };
+        /** @enum {string} */
+        AiPurpose: "chat" | "review" | "extraction" | "decision";
+        AiRouting: {
+            chat: string | null;
+            review: string | null;
+            extraction: string | null;
+            decision: string | null;
+        };
+        AiSettingsResponse: {
+            workspaceId: string;
+            provider: components["schemas"]["AiProvider"];
+            baseUrl: string;
+            model: string;
+            hasApiKey: boolean;
+            apiKeyHint: string | null;
+            temperature: number;
+            maxToolCalls: number;
+            timeoutMs: number;
+            extractionMinConfidence: number;
+            extractionMaxChunks: number;
+            agentModeEnabled: boolean;
+            pricePromptPerMTok: number | null;
+            priceCompletionPerMTok: number | null;
+            workspaceMonthlyTokenBudget: number | null;
+            defaultUserMonthlyTokenBudget: number | null;
+            enforceBudget: boolean;
+            sources: components["schemas"]["AiSettingsSourceMap"];
+            webAccess: components["schemas"]["WebAccessSettings"];
+            qualityAudit: components["schemas"]["QualityAuditSettings"];
+            externalAiActions: components["schemas"]["ExternalAiActionsSettings"];
+            capture: components["schemas"]["CaptureSettings"];
+            routing: components["schemas"]["AiRouting"];
+            decision: components["schemas"]["DecisionSettings"];
+            canStoreSecrets: boolean;
+            updatedAt: string | null;
+            updatedBy: string | null;
+        };
+        /** @enum {string} */
+        AiSettingsSource: "db" | "env" | "clamped";
+        AiSettingsSourceMap: {
+            provider: components["schemas"]["AiSettingsSource"];
+            baseUrl: components["schemas"]["AiSettingsSource"];
+            model: components["schemas"]["AiSettingsSource"];
+            apiKey: components["schemas"]["AiSettingsSource"];
+            temperature: components["schemas"]["AiSettingsSource"];
+            maxToolCalls: components["schemas"]["AiSettingsSource"];
+            timeoutMs: components["schemas"]["AiSettingsSource"];
+            extractionMinConfidence: components["schemas"]["AiSettingsSource"];
+            extractionMaxChunks: components["schemas"]["AiSettingsSource"];
+            webAccessMode: components["schemas"]["AiSettingsSource"];
+            externalAiActions: components["schemas"]["AiSettingsSource"];
+        };
+        /** @enum {string} */
+        AiSkillSource: "manual" | "repo";
+        AiSkillSummary: {
+            id: string;
+            workspaceId: string;
+            name: string;
+            description: string;
+            instructions: string;
+            triggers: string[];
+            enabled: boolean;
+            createdBy: string | null;
+            createdAt: string;
+            updatedAt: string;
+            source: components["schemas"]["AiSkillSource"];
+            sourceConnectorId: string | null;
+            sourceConnectorName: string | null;
+            sourcePath: string | null;
+            sourceSha: string | null;
+            pendingInstructions: string | null;
+            sourceRemovedAt: string | null;
+        };
+        AiUsageBucket: {
+            key: string;
+            label: string;
+            calls: number;
+            promptTokens: number;
+            completionTokens: number;
+            totalTokens: number;
+            costUsdMicros: number | null;
+            errors: number;
+        };
+        AiUsageLogEntry: {
+            id: string;
+            userId: string;
+            userLabel: string;
+            operation: components["schemas"]["AiUsageOperation"];
+            provider: string;
+            model: string;
+            providerId: string | null;
+            promptTokens: number;
+            completionTokens: number;
+            totalTokens: number;
+            estimated: boolean;
+            costUsdMicros: number | null;
+            durationMs: number;
+            ok: boolean;
+            errorCode: string | null;
+            error: string | null;
+            threadId: string | null;
+            toolCallCount: number;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking";
+        AiUsageResponse: {
+            from: string;
+            to: string;
+            /** @enum {string} */
+            groupBy: "user" | "model" | "day";
+            totals: {
+                calls: number;
+                promptTokens: number;
+                completionTokens: number;
+                totalTokens: number;
+                costUsdMicros: number | null;
+                unpricedCalls: number;
+                errors: number;
+            };
+            buckets: components["schemas"]["AiUsageBucket"][];
+            series: components["schemas"]["AiUsageSeriesPoint"][];
+        };
+        AiUsageSeriesPoint: {
+            date: string;
+            totalTokens: number;
+            calls: number;
+            costUsdMicros: number | null;
+        };
+        AnalyticsAgentsResponse: {
+            workspaceId: string;
+            from: string;
+            to: string;
+            tools: components["schemas"]["AnalyticsToolRow"][];
+            keys: components["schemas"]["AnalyticsKeyRow"][];
+            assistantQuestions: number;
+            questionSeries: {
+                date: string;
+                count: number;
+            }[];
+            operations: components["schemas"]["AnalyticsOperationRow"][];
+        };
+        AnalyticsDayPoint: {
+            date: string;
+            human: number;
+            assisted: number;
+            agent: number;
+        };
+        AnalyticsKeyRow: {
+            apiKeyId: string;
+            name: string | null;
+            prefix: string | null;
+            mcpCalls: number;
+            views: number;
+            searches: number;
+        };
+        AnalyticsOperationRow: {
+            operation: string;
+            calls: number;
+        };
+        AnalyticsOverviewResponse: {
+            from: string;
+            to: string;
+            traffic: components["schemas"]["AnalyticsTrafficFilter"];
+            collectingSince: string | null;
+            views: number;
+            byClass: {
+                human: number;
+                assisted: number;
+                agent: number;
+            };
+            uniqueReaders: number;
+            medianReadMs: number | null;
+            series: components["schemas"]["AnalyticsDayPoint"][];
+            workspaceId: string;
+            recording: boolean;
+            searches: number;
+            zeroResultSearches: number;
+            clickThrough: number | null;
+            assistantQuestions: number | null;
+            mcpCalls: number | null;
+        };
+        AnalyticsPageRow: {
+            documentId: string;
+            title: string;
+            views: number;
+            uniqueReaders: number;
+            medianReadMs: number | null;
+        };
+        AnalyticsPagesResponse: {
+            from: string;
+            to: string;
+            traffic: components["schemas"]["AnalyticsTrafficFilter"];
+            collectingSince: string | null;
+            topPages: components["schemas"]["AnalyticsPageRow"][];
+            neverRead: components["schemas"]["AnalyticsQuietPage"][];
+            dead: components["schemas"]["AnalyticsQuietPage"][];
+            deadAfterDays: number;
+            workspaceId: string;
+        };
+        AnalyticsQueryRow: {
+            queryHash: string;
+            queryText: string | null;
+            searches: number;
+            zeroResults: number;
+            clickThrough: number | null;
+            meanClickedRank: number | null;
+            lastSearchedAt: string;
+        };
+        AnalyticsQuietPage: {
+            documentId: string;
+            title: string;
+            createdAt: string;
+            lastHumanViewAt: string | null;
+        };
+        AnalyticsSearchResponse: {
+            from: string;
+            to: string;
+            traffic: components["schemas"]["AnalyticsTrafficFilter"];
+            collectingSince: string | null;
+            workspaceId: string;
+            top: components["schemas"]["AnalyticsQueryRow"][];
+            zeroResult: components["schemas"]["AnalyticsQueryRow"][];
+            noClick: components["schemas"]["AnalyticsQueryRow"][];
+        };
+        AnalyticsSettingsResponse: {
+            workspaceId: string;
+            requested: {
+                enabled: boolean | null;
+                retentionDays: number | null;
+            };
+            ceiling: components["schemas"]["AnalyticsSettingsValues"];
+            effective: components["schemas"]["AnalyticsSettingsValues"];
+            queryTextDays: number;
+            deadPageDays: number;
+        };
+        AnalyticsSettingsValues: {
+            enabled: boolean;
+            retentionDays: number;
+        };
+        AnalyticsToolRow: {
+            tool: string;
+            calls: number;
+            errors: number;
+            medianMs: number | null;
+        };
+        /** @enum {string} */
+        AnalyticsTrafficFilter: "all" | "human" | "assisted" | "agent";
+        AnswerCapturePayload: {
+            question: string;
+            answer: string;
+            citedDocumentIds: string[];
+        };
+        AnswerCitation: {
+            start: number;
+            end: number;
+            cites: string[];
+            /** @enum {string} */
+            support?: "supported" | "unsupported";
+        };
+        AnswerConfidence: {
+            level: components["schemas"]["AnswerConfidenceLevel"];
+            score: number;
+            reasons: components["schemas"]["AnswerConfidenceReason"][];
+        };
+        /** @enum {string} */
+        AnswerConfidenceLevel: "high" | "medium" | "low" | "none";
+        AnswerConfidenceReason: {
+            key: components["schemas"]["AnswerConfidenceReasonKey"];
+            value: number;
+        };
+        /** @enum {string} */
+        AnswerConfidenceReasonKey: "no-sources" | "uncited-sentences" | "stale-sources" | "inferred-only" | "unknown-citation" | "budget-exhausted" | "tool-errors" | "low-retrieval-score" | "flagged-sources" | "verified-sources";
+        AnswerFeedbackInfo: {
+            id: string;
+            workspaceId: string;
+            kind: components["schemas"]["AnswerSignalKind"];
+            surface: components["schemas"]["AnswerSurface"];
+            rating: components["schemas"]["AnswerRating"] | null;
+            reason: components["schemas"]["AnswerFeedbackReason"] | null;
+            comment: string | null;
+            query: string;
+            messageId: string | null;
+            threadId: string | null;
+            traceId: string | null;
+            citedDocumentIds: string[];
+            confidence: components["schemas"]["AnswerConfidence"] | null;
+            createdBy: string;
+            createdAt: string;
+        };
+        AnswerFeedbackListEntry: {
+            id: string;
+            workspaceId: string;
+            kind: components["schemas"]["AnswerSignalKind"];
+            surface: components["schemas"]["AnswerSurface"];
+            rating: components["schemas"]["AnswerRating"] | null;
+            reason: components["schemas"]["AnswerFeedbackReason"] | null;
+            comment: string | null;
+            query: string;
+            messageId: string | null;
+            threadId: string | null;
+            traceId: string | null;
+            citedDocumentIds: string[];
+            confidence: components["schemas"]["AnswerConfidence"] | null;
+            createdBy: string;
+            createdAt: string;
+            answerExcerpt: string | null;
+            citedDocuments: {
+                id: string;
+                title: string | null;
+            }[];
+        };
+        /** @enum {string} */
+        AnswerFeedbackReason: "wrong" | "outdated" | "incomplete" | "irrelevant-sources" | "no-answer" | "unclear" | "other";
+        AnswerFeedbackSummary: {
+            workspaceId: string;
+            from: string;
+            to: string;
+            votes: {
+                up: number;
+                down: number;
+            };
+            signals: {
+                "low-confidence": number;
+                "no-answer": number;
+            };
+            byReason: {
+                reason: components["schemas"]["AnswerFeedbackReason"];
+                count: number;
+            }[];
+            bySurface: {
+                surface: components["schemas"]["AnswerSurface"];
+                count: number;
+            }[];
+            issues: {
+                status: components["schemas"]["KnowledgeIssueStatus"];
+                count: number;
+            }[];
+            datasetVotes: number;
+        };
+        /** @enum {string} */
+        AnswerRating: "up" | "down";
+        /** @enum {string} */
+        AnswerSignalKind: "vote" | "low-confidence" | "no-answer";
+        /** @enum {string} */
+        AnswerSurface: "assistant" | "editor-assistant" | "ask" | "mcp" | "chat";
+        AnswerVote: {
+            rating: components["schemas"]["AnswerRating"];
+            reason: components["schemas"]["AnswerFeedbackReason"] | null;
+            comment: string | null;
+            createdAt: string;
+        };
+        ApiAffectedPage: {
+            documentId: string;
+            title: string;
+            relationType: string;
+            extractor: string;
+        };
+        ApiBreakingAck: {
+            by: string;
+            at: string;
+            revisionId: string;
+            current: boolean;
+        };
+        /** @enum {string} */
+        ApiBreakingChangePolicy: "off" | "warn" | "block";
+        /** @enum {string} */
+        ApiChangeRule: "operation-removed" | "operation-added" | "operation-deprecated" | "required-param-added" | "optional-param-added" | "param-removed" | "param-became-required" | "param-type-changed" | "request-body-required" | "request-property-required-added" | "property-type-changed" | "enum-value-removed" | "enum-value-added" | "response-status-removed" | "response-status-added" | "response-property-removed" | "response-property-added" | "security-requirement-added" | "security-requirement-removed" | "channel-removed" | "channel-added" | "message-payload-field-removed" | "message-payload-field-added";
+        /** @enum {string} */
+        ApiChangeSeverity: "breaking" | "non-breaking" | "info";
+        /** @enum {string} */
+        ApiDocumentKind: "page" | "openapi" | "asyncapi" | "test-fixture";
+        ApiDriftCheckResponse: {
+            runId: string;
+            existing: boolean;
+        };
+        /** @enum {string} */
+        ApiDriftKind: "missing-in-code" | "missing-in-spec" | "method-mismatch";
+        ApiDriftMismatch: {
+            kind: components["schemas"]["ApiDriftKind"];
+            path: string;
+            methods: string[];
+            codeMethods?: string[];
+            file?: string;
+            line?: number;
+        };
+        ApiDriftSpec: {
+            documentId: string;
+            title: string;
+            specPath: string;
+            routes: number;
+            frameworks: string[];
+            dynamic: number;
+            mismatches: components["schemas"]["ApiDriftMismatch"][];
+            mismatchTotal: number;
+            changes?: components["schemas"]["ApiSpecDiffSummary"];
+        };
+        ApiKeyInfo: {
+            id: string;
+            name: string;
+            prefix: string;
+            scope: components["schemas"]["ApiKeyScope"];
+            workspaceId: string | null;
+            projectIds: string[] | null;
+            expiresAt: string | null;
+            lastUsedAt: string | null;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        ApiKeyScope: "read" | "capture" | "write";
+        ApiOperationInfo: {
+            protocol: components["schemas"]["ApiOperationProtocol"];
+            method: string | null;
+            path: string;
+            operationId: string | null;
+            entityKey: string;
+            summary: string | null;
+            tags: string[];
+            deprecated: boolean;
+            pointer: string;
+            documentId: string;
+            revisionId: string;
+        };
+        /** @enum {string} */
+        ApiOperationProtocol: "http" | "async";
+        ApiOperationSamplesResponse: {
+            documentId: string;
+            revisionId: string;
+            entityKey: string;
+            samples: components["schemas"]["CodeSample"][];
+        };
+        ApiSettingsResponse: {
+            workspaceId: string;
+            tryProxy: components["schemas"]["ApiTryProxySettings"];
+            breakingChanges: {
+                requested: components["schemas"]["ApiBreakingChangePolicy"] | null;
+                effective: components["schemas"]["ApiBreakingChangePolicy"];
+            };
+            tryLimits: {
+                timeoutMs: number;
+                maxRequestBytes: number;
+                maxResponseBytes: number;
+                perMinute: number;
+            };
+            testRunner: components["schemas"]["ApiTestRunnerSettings"];
+            updatedAt: string | null;
+        };
+        ApiSpecChange: {
+            rule: components["schemas"]["ApiChangeRule"];
+            severity: components["schemas"]["ApiChangeSeverity"];
+            entityKey: string;
+            /** @enum {string} */
+            protocol: "http" | "async";
+            method: string | null;
+            path: string;
+            pointer: string;
+            subject: string | null;
+            before: string | null;
+            after: string | null;
+        };
+        ApiSpecDiff: {
+            documentId: string;
+            fromRevisionId: string | null;
+            toRevisionId: string;
+            summary: components["schemas"]["ApiSpecDiffSummary"];
+            changes: components["schemas"]["ApiSpecChange"][];
+        };
+        ApiSpecDiffSummary: {
+            breaking: number;
+            nonBreaking: number;
+            info: number;
+        };
+        ApiSpecDocumentResponse: {
+            documentId: string;
+            revisionId: string;
+            kind: components["schemas"]["ApiSpecKind"];
+            specVersion: string;
+            title: string;
+            version: string | null;
+            slug: string | null;
+            document: {
+                [key: string]: unknown;
+            };
+        };
+        /** @enum {string} */
+        ApiSpecKind: "openapi" | "asyncapi";
+        ApiSpecSummary: {
+            documentId: string;
+            projectId: string;
+            title: string;
+            kind: components["schemas"]["ApiSpecKind"];
+            slug: string | null;
+            headRevisionId: string | null;
+            headRevisionStatus: string | null;
+            operationCount: number;
+            createdAt: string;
+        };
+        ApiTestBindingInfo: {
+            fixtureId: string;
+            title: string | null;
+            headRevisionId: string | null;
+            archived: boolean;
+        };
+        ApiTestBindingsResponse: {
+            documentId: string;
+            entityKey: string;
+            suite: components["schemas"]["ApiTestBindingInfo"][];
+            cases: {
+                [key: string]: components["schemas"]["ApiTestBindingInfo"][];
+            };
+        };
+        ApiTestCase: {
+            id: string;
+            kind: components["schemas"]["ApiTestCaseKind"];
+            rule: components["schemas"]["ApiTestRule"];
+            target: string | null;
+            name: string;
+            description: string;
+            request: components["schemas"]["SampleRequest"];
+            expected: {
+                status: string;
+                description: string | null;
+                expectation: string | null;
+                example: unknown;
+            };
+        };
+        /** @enum {string} */
+        ApiTestCaseKind: "positive" | "negative";
+        ApiTestEnvironment: {
+            id: string;
+            name: string;
+            server: string | null;
+            inputs: {
+                [key: string]: string;
+            };
+            secrets: string[];
+            updatedAt: string;
+        };
+        ApiTestFixtureCandidate: {
+            documentId: string;
+            title: string;
+            headRevisionId: string | null;
+            source: components["schemas"]["SuitePrerequisiteSource"];
+            producers: string[];
+            reason: string;
+            explanation: string | null;
+            bound: boolean;
+        };
+        ApiTestFixtureCandidatesResponse: {
+            documentId: string;
+            entityKey: string;
+            prerequisites: components["schemas"]["ApiTestPrerequisite"][];
+            candidates: components["schemas"]["ApiTestFixtureCandidate"][];
+            ranking: {
+                status: components["schemas"]["ApiTestRankingStatus"];
+                runId: string | null;
+            };
+        };
+        ApiTestPrerequisite: {
+            source: components["schemas"]["SuitePrerequisiteSource"];
+            producer: string;
+            param: string | null;
+            field: string | null;
+            operation: {
+                method: string | null;
+                path: string;
+                summary: string | null;
+            } | null;
+        };
+        /** @enum {string} */
+        ApiTestRankingStatus: "none" | "pending" | "ready" | "failed";
+        /** @enum {string} */
+        ApiTestRule: "success" | "missing-required" | "wrong-type" | "enum-outside" | "minimum" | "maximum" | "min-length" | "max-length" | "pattern" | "missing-credentials" | "documented-error";
+        ApiTestRunDetail: {
+            id: string;
+            documentId: string;
+            entityKey: string;
+            environment: {
+                id: string;
+                name: string;
+            } | null;
+            status: components["schemas"]["ApiTestRunStatus"];
+            counts: {
+                passed: number;
+                failed: number;
+                notRun: number;
+            };
+            error: string | null;
+            createdBy: string;
+            createdAt: string;
+            finishedAt: string | null;
+            plan: components["schemas"]["TestRunPlan"];
+            results: {
+                [key: string]: components["schemas"]["TestRunResult"];
+            };
+        };
+        /** @enum {string} */
+        ApiTestRunStatus: "queued" | "running" | "passed" | "failed" | "error";
+        ApiTestRunSummary: {
+            id: string;
+            documentId: string;
+            entityKey: string;
+            environment: {
+                id: string;
+                name: string;
+            } | null;
+            status: components["schemas"]["ApiTestRunStatus"];
+            counts: {
+                passed: number;
+                failed: number;
+                notRun: number;
+            };
+            error: string | null;
+            createdBy: string;
+            createdAt: string;
+            finishedAt: string | null;
+        };
+        /** @enum {string} */
+        ApiTestRunnerMode: "off" | "on";
+        ApiTestRunnerSettings: {
+            requested: components["schemas"]["ApiTestRunnerMode"] | null;
+            ceiling: components["schemas"]["ApiTestRunnerMode"];
+            effective: components["schemas"]["ApiTestRunnerMode"];
+        };
+        ApiTestSuiteResponse: {
+            documentId: string;
+            entityKey: string;
+            revisionId: string;
+            generatedAt: string;
+            generatedBy: string;
+            catalogueVersion: number;
+            cases: components["schemas"]["ApiTestCase"][];
+        };
+        ApiTryHeader: {
+            name: string;
+            value: string;
+        };
+        /** @enum {string} */
+        ApiTryProxyMode: "off" | "allowlist" | "open";
+        ApiTryProxySettings: {
+            requested: components["schemas"]["ApiTryProxyMode"] | null;
+            ceiling: components["schemas"]["ApiTryProxyMode"];
+            effective: components["schemas"]["ApiTryProxyMode"];
+            /** @enum {string} */
+            source: "env" | "db" | "clamped";
+        };
+        ApiTryResponse: {
+            status: number;
+            statusText: string;
+            headers: components["schemas"]["ApiTryHeader"][];
+            body: string;
+            /** @enum {string} */
+            encoding: "utf8" | "base64";
+            bytes: number;
+            truncated: boolean;
+            durationMs: number;
+            droppedHeaders: string[];
+        };
+        ApplyAgentRecipeResponse: {
+            recipe: components["schemas"]["AgentRecipeKey"];
+            agent: components["schemas"]["AiAgentSummary"];
+            triggers: components["schemas"]["AgentTriggerSummary"][];
+            created: {
+                schedule: boolean;
+                triggers: number;
+            };
+        };
+        ArchiveDocumentResponse: {
+            documentId: string;
+            archivedAt: string | null;
+            affected: number;
+        };
+        /** @enum {string} */
+        AsOfKind: "date" | "revision" | "tag" | "now";
+        AssistantAskResponse: {
+            enabled: boolean;
+            answer: string;
+            sources: components["schemas"]["AssistantAskSource"][];
+            toolCalls?: components["schemas"]["AssistantToolCall"][];
+            model?: string;
+            citations?: components["schemas"]["AnswerCitation"][];
+            confidence?: components["schemas"]["AnswerConfidence"] | null;
+        };
+        AssistantAskSource: {
+            revisionId?: string;
+            revisionNumber?: number;
+            chunkId?: string;
+            headingPath?: string[];
+            authorId?: string;
+            authorName?: string;
+            changedAt?: string;
+            verification?: components["schemas"]["SourceVerificationState"];
+            verifiedAt?: string;
+            verifiedByName?: string;
+            factClass?: components["schemas"]["FactExtractor"];
+            score?: number;
+            vectorScore?: number;
+            /** @enum {string} */
+            kind?: "document";
+            documentId: string;
+            title: string;
+            snippet?: string;
+            cite?: string;
+        };
+        AssistantChatSource: {
+            /** @enum {string} */
+            kind: "chat";
+            chunkId: string;
+            bindingId: string;
+            title: string;
+            url: string | null;
+            firstAt: string;
+            lastAt: string;
+            snippet?: string;
+            cite?: string;
+        };
+        AssistantFlowAnswer: {
+            flow: components["schemas"]["FlowKey"];
+            questionId: string;
+            value: components["schemas"]["FlowAnswer"];
+        };
+        AssistantFormPrompt: {
+            /** @enum {string} */
+            kind: "form";
+            question: string;
+            fields: components["schemas"]["AssistantPromptField"][];
+            submitLabel?: string;
+            allowOther?: boolean;
+            flow?: components["schemas"]["FlowKey"];
+            questionId?: string;
+            step?: number;
+            of?: number;
+        };
+        AssistantIssue: {
+            /** @enum {string} */
+            severity: "error" | "warning" | "suggestion";
+            message: string;
+            section?: string;
+        };
+        AssistantLintResponse: {
+            enabled: boolean;
+            styleguide: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                scope: "project" | "workspace";
+            } | null;
+            violations: components["schemas"]["LintViolation"][];
+            dropped: number;
+        };
+        AssistantMessageInfo: {
+            id: string;
+            threadId: string;
+            role: components["schemas"]["AssistantMessageRole"];
+            content: string;
+            toolCalls: components["schemas"]["AssistantToolCall"][];
+            sources: components["schemas"]["AssistantSource"][];
+            uiBlocks: components["schemas"]["AssistantUiBlock"][];
+            prompt: components["schemas"]["AssistantPrompt"] | null;
+            citations: components["schemas"]["AnswerCitation"][];
+            confidence: components["schemas"]["AnswerConfidence"] | null;
+            answer?: components["schemas"]["AssistantFlowAnswer"] | null;
+            feedback?: components["schemas"]["AnswerVote"] | null;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        AssistantMessageRole: "user" | "assistant";
+        AssistantModeSwitchPrompt: {
+            /** @enum {string} */
+            kind: "mode-switch";
+            intent: string;
+        };
+        AssistantPrompt: components["schemas"]["AssistantFormPrompt"] | components["schemas"]["AssistantModeSwitchPrompt"];
+        AssistantPromptField: {
+            /** @enum {string} */
+            type: "choice";
+            name: string;
+            label: string;
+            options: components["schemas"]["AssistantPromptOption"][];
+            required?: boolean;
+        } | {
+            /** @enum {string} */
+            type: "checklist";
+            name: string;
+            label: string;
+            options: components["schemas"]["AssistantPromptOption"][];
+            required?: boolean;
+        } | {
+            /** @enum {string} */
+            type: "text";
+            name: string;
+            label: string;
+            placeholder?: string;
+            multiline?: boolean;
+            required?: boolean;
+        };
+        AssistantPromptOption: {
+            value: string;
+            label: string;
+            description?: string;
+            recommended?: boolean;
+        };
+        AssistantRelatedResponse: {
+            results: components["schemas"]["SearchResult"][];
+            related?: components["schemas"]["RelatedDocumentResult"][];
+        };
+        AssistantReviewResponse: {
+            enabled: boolean;
+            issues: components["schemas"]["AssistantIssue"][];
+            summary: string;
+        };
+        AssistantSource: components["schemas"]["AssistantAskSource"] | components["schemas"]["AssistantWebSource"] | components["schemas"]["AssistantChatSource"];
+        AssistantSuggestResponse: {
+            enabled: boolean;
+            suggestion: string;
+        };
+        AssistantThreadSummary: {
+            id: string;
+            workspaceId: string;
+            documentId: string | null;
+            title: string | null;
+            providerId: string | null;
+            createdBy: string;
+            createdAt: string;
+            updatedAt: string;
+            lastMessagePreview?: string;
+        };
+        AssistantToolCall: {
+            tool: string;
+            arguments: string;
+            ok: boolean;
+        };
+        AssistantUiBlock: {
+            component: components["schemas"]["AssistantUiComponent"];
+            props: {
+                [key: string]: unknown;
+            };
+        };
+        /** @enum {string} */
+        AssistantUiComponent: "graph" | "activity" | "search";
+        AssistantWebSource: {
+            /** @enum {string} */
+            kind: "web";
+            url: string;
+            site: string;
+            title: string;
+            snippet?: string;
+            fetchedAt?: string;
+            cite?: string;
+        };
+        /** @enum {string} */
+        AttachmentStatus: "pending" | "ready";
+        AttachmentSummary: {
+            attachmentId: string;
+            documentId: string;
+            filename: string;
+            contentType: string;
+            sizeBytes: number;
+            status: components["schemas"]["AttachmentStatus"];
+            uploadedBy: string;
+            createdAt: string;
+            url: string;
+        };
+        AuditLogEntry: {
+            id: string;
+            workspaceId: string | null;
+            actor: string;
+            action: string;
+            ip: string | null;
+            target: string | null;
+            params: {
+                [key: string]: unknown;
+            };
+            rowCount: number | null;
+            durationMs: number | null;
+            ok: boolean;
+            error: string | null;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        AuthMethod: "password" | "oidc" | "saml" | "ldap";
+        AuthSessionResponse: {
+            token: string;
+            expiresAt: string;
+            me: components["schemas"]["MeResponse"];
+        };
+        /** @enum {string} */
+        AuthorableRelationType: "DESCRIBES" | "DEPENDS_ON" | "IMPLEMENTS" | "RELATED_TO" | "OWNED_BY" | "SUPERSEDES" | "CONTRADICTS";
+        AvatarUrl: string | null;
+        BranchAccessResponse: {
+            branchId: string;
+            restricted: boolean;
+            ownerId: string | null;
+            canManage: boolean;
+            grants: components["schemas"]["AccessGrantEntry"][];
+        };
+        BranchInfo: {
+            branchId: string;
+            documentId: string;
+            name: string;
+            headRevisionId: string | null;
+            protected: boolean;
+            ownerId: string | null;
+            restricted: boolean;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        BuiltInTemplateKey: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report";
+        BulkRejectCapturesResponse: {
+            rejected: number;
+            closed: number;
+            skippedInFlight: number;
+            skippedNoAccess: number;
+        };
+        CaptureApiKey: {
+            id: string;
+            name: string;
+            prefix: string;
+            revoked: boolean;
+        };
+        /** @enum {string} */
+        CaptureClient: "claude-code" | "cursor" | "codex" | "gemini" | "assistant" | "chat" | "other";
+        CaptureInfo: {
+            captureId: string;
+            state: components["schemas"]["CaptureState"];
+            outcome: components["schemas"]["CaptureOutcome"] | null;
+            mergeRequestId: string | null;
+            targetDocumentId: string | null;
+            glossaryTermId: string | null;
+            webUrl: string | null;
+            similar: components["schemas"]["CaptureSimilar"][];
+            workspaceId: string;
+            projectId: string;
+            kind: components["schemas"]["CaptureKind"];
+            title: string;
+            payload: components["schemas"]["CapturePayload"];
+            session: components["schemas"]["CaptureSession"];
+            origin: components["schemas"]["CaptureOrigin"] | null;
+            createdBy: string;
+            apiKeyId: string | null;
+            apiKey: components["schemas"]["CaptureApiKey"] | null;
+            error: string | null;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        CaptureKind: "decision" | "gotcha" | "convention" | "howto" | "glossary" | "relation" | "answer";
+        /** @enum {string} */
+        CaptureKitClient: "claude-code" | "cursor";
+        CaptureKitFile: {
+            path: string;
+            content: string;
+            /** @enum {string} */
+            mode: "write" | "merge";
+            executable: boolean;
+        };
+        CaptureKitResponse: {
+            client: components["schemas"]["CaptureKitClient"];
+            version: number;
+            files: components["schemas"]["CaptureKitFile"][];
+        };
+        CaptureOrigin: {
+            platform: string;
+            chatTitle: string | null;
+            threadUrl?: string;
+            from: string;
+            to: string;
+        };
+        /** @enum {string} */
+        CaptureOutcome: "new-page" | "amend-page" | "glossary" | "relation" | "none";
+        CapturePayload: components["schemas"]["DecisionCapturePayload"] | components["schemas"]["NoteCapturePayload"] | components["schemas"]["GlossaryCapturePayload"] | components["schemas"]["RelationCapturePayload"] | components["schemas"]["AnswerCapturePayload"];
+        CaptureResult: {
+            captureId: string;
+            state: components["schemas"]["CaptureState"];
+            outcome: components["schemas"]["CaptureOutcome"] | null;
+            mergeRequestId: string | null;
+            targetDocumentId: string | null;
+            glossaryTermId: string | null;
+            webUrl: string | null;
+            similar: components["schemas"]["CaptureSimilar"][];
+        };
+        CaptureSession: {
+            client: components["schemas"]["CaptureClient"];
+            clientVersion?: string;
+            sessionId?: string;
+            repo?: string;
+            branch?: string;
+            commit?: string;
+            files?: string[];
+            startedAt?: string;
+        };
+        CaptureSettings: {
+            enabled: components["schemas"]["CeilingSetting<boolean>"];
+            perKeyPerHour: components["schemas"]["CeilingSetting<number>"];
+            perWorkspacePerDay: components["schemas"]["CeilingSetting<number>"];
+            dedupeThreshold: components["schemas"]["OverrideSetting<number>"];
+            amendThreshold: components["schemas"]["OverrideSetting<number>"];
+            parentDocumentId: string | null;
+        };
+        CaptureSimilar: {
+            documentId: string;
+            title: string;
+            score: number;
+        };
+        CaptureState: components["schemas"]["CaptureStatus"] | "merged" | "closed";
+        /** @enum {string} */
+        CaptureStatus: "staged" | "proposed" | "duplicate" | "rejected" | "failed";
+        "CeilingSetting<boolean>": {
+            requested: boolean | null;
+            ceiling: boolean;
+            effective: boolean;
+            source: components["schemas"]["AiSettingsSource"];
+        };
+        "CeilingSetting<number>": {
+            requested: number | null;
+            ceiling: number;
+            effective: number;
+            source: components["schemas"]["AiSettingsSource"];
+        };
+        /** @enum {string} */
+        ChatAnswerMode: "mention" | "all" | "off";
+        ChatAutoHarvestLimits: {
+            available: boolean;
+            minMessages: number;
+            quietMinutes: number;
+        };
+        ChatBindingEntry: {
+            id: string;
+            integrationId: string;
+            externalChatId: string;
+            title: string | null;
+            projectId: string | null;
+            agentKey: string | null;
+            answerMode: components["schemas"]["ChatAnswerMode"];
+            locale: components["schemas"]["Locale"] | null;
+            subscriptionCount: number;
+            listening: boolean;
+            autoHarvestBy: string | null;
+            autoHarvestAt: string | null;
+            searchableBy: string | null;
+            searchableAt: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        ChatBindingsResponse: {
+            bindings: components["schemas"]["ChatBindingEntry"][];
+            listenTtlDays: number;
+            autoHarvest: components["schemas"]["ChatAutoHarvestLimits"];
+            search: components["schemas"]["ChatSearchSettings"];
+        };
+        /** @enum {number} */
+        ChatDigestMinutes: 60 | 240 | 1440;
+        ChatIdentitiesResponse: {
+            identities: components["schemas"]["ChatIdentityEntry"][];
+        };
+        ChatIdentityEntry: {
+            id: string;
+            integrationId: string;
+            integrationName: string;
+            kind: components["schemas"]["ChatPlatformKind"];
+            workspaceId: string;
+            externalUserId: string;
+            externalUserName: string | null;
+            userId: string;
+            userDisplayName: string | null;
+            linkedAt: string;
+        };
+        ChatIntegrationSummary: {
+            id: string;
+            workspaceId: string;
+            kind: components["schemas"]["ChatPlatformKind"];
+            name: string;
+            enabled: boolean;
+            credentialHint: string | null;
+            serverUrl: string | null;
+            botUsername: string | null;
+            defaultAgentKey: string | null;
+            locale: components["schemas"]["Locale"];
+            webhookUrl: string;
+            webhookError: string | null;
+            bindingCount: number;
+            identityCount: number;
+            createdAt: string;
+            updatedAt: string;
+        };
+        ChatIntegrationTestResponse: {
+            ok: boolean;
+            botUsername: string | null;
+            error: string | null;
+        };
+        ChatIntegrationsResponse: {
+            integrations: components["schemas"]["ChatIntegrationSummary"][];
+            enabled: boolean;
+        };
+        ChatLinkPreview: {
+            kind: components["schemas"]["ChatPlatformKind"];
+            integrationName: string;
+            botUsername: string | null;
+            externalUserName: string | null;
+            workspaceId: string;
+            workspaceName: string;
+            expiresAt: string;
+        };
+        /** @enum {string} */
+        ChatPlatformKind: "telegram" | "time" | "mattermost" | "slack" | "teams";
+        ChatSearchAvailability: {
+            readable: boolean;
+        };
+        ChatSearchHit: {
+            chunkId: string;
+            bindingId: string;
+            chatTitle: string | null;
+            platform: components["schemas"]["ChatPlatformKind"];
+            projectId: string | null;
+            firstAt: string;
+            lastAt: string;
+            messageCount: number;
+            snippet: string;
+            url: string | null;
+            score: number;
+        };
+        ChatSearchResponse: {
+            hits: components["schemas"]["ChatSearchHit"][];
+        };
+        ChatSearchSettings: {
+            available: boolean;
+            retentionDays: {
+                ceiling: number;
+                requested: number | null;
+                applied: number;
+            };
+        };
+        /** @enum {string} */
+        ChatSubscriptionDelivery: "instant" | "digest";
+        ChatSubscriptionEntry: {
+            id: string;
+            bindingId: string;
+            projectId: string | null;
+            tags: string[];
+            eventKinds: components["schemas"]["ChatSubscriptionEventKind"][];
+            delivery: components["schemas"]["ChatSubscriptionDelivery"];
+            digestMinutes: components["schemas"]["ChatDigestMinutes"] | null;
+            lastDeliveredAt: string | null;
+            lastError: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        ChatSubscriptionEventKind: "page-published" | "page-updated" | "merge-request-opened" | "merge-request-merged";
+        ChatSubscriptionsResponse: {
+            subscriptions: components["schemas"]["ChatSubscriptionEntry"][];
+        };
+        CheckSourcePolicyResponse: {
+            allowed: boolean;
+            reason?: components["schemas"]["WebAccessDenial"];
+            host: string;
+            matchedPattern: string | null;
+            effective: components["schemas"]["WebAccessMode"];
+        };
+        ChunkSummary: {
+            chunkId: string;
+            headingPath: string[];
+            snippet: string;
+        };
+        CodeSample: {
+            lang: components["schemas"]["CodeSampleLang"];
+            source: string;
+            /** @enum {string} */
+            origin: "spec" | "generated";
+            label: string | null;
+        };
+        /** @enum {string} */
+        CodeSampleLang: "curl" | "javascript" | "python" | "go";
+        CodeUsagePage: {
+            id: string;
+            title: string;
+        };
+        CodeUsageSite: {
+            path: string;
+            imports: {
+                path: string;
+                names: string[];
+            }[];
+            pages: components["schemas"]["CodeUsagePage"][];
+            hiddenPages: number;
+        };
+        CodeUsagesResponse: {
+            connector: {
+                id: string;
+                name: string;
+            } | null;
+            headSha: string | null;
+            paths: string[];
+            symbols: string[];
+            components: components["schemas"]["CodeUsagePage"][];
+            hiddenComponents: number;
+            usages: components["schemas"]["CodeUsageSite"][];
+            truncated: number;
+            warning: components["schemas"]["ComponentDeclarationWarning"] | null;
+        };
+        CollabCapabilitiesResponse: {
+            enabled: boolean;
+            schemaVersion: string;
+        };
+        CollabDraftInfo: {
+            draftId: string;
+            branchId: string;
+            branch: string;
+            baseRevisionId: string | null;
+            hasUnpublishedChanges: boolean;
+            contributors: string[];
+            activePeers: number;
+            updatedAt: string;
+        };
+        CommunitySummaryDto: {
+            communityId: string;
+            level: number;
+            parentId: string | null;
+            title: string;
+            summary: string;
+            documents: {
+                documentId: string;
+                title: string;
+            }[];
+            builtAt: string;
+            score: number;
+        };
+        /** @enum {string} */
+        CompareMode: "direct" | "merge-base";
+        CompareResponse: {
+            documentId: string;
+            from: components["schemas"]["CompareRevisionRef"] | null;
+            to: components["schemas"]["CompareRevisionRef"];
+            comparisonMode: components["schemas"]["CompareMode"];
+            mergeBaseRevisionId: string | null;
+            summary: {
+                additions: number;
+                deletions: number;
+            };
+            hunks: components["schemas"]["DiffHunk"][];
+            structural?: components["schemas"]["StructuralDiff"] | null;
+            semantic?: components["schemas"]["SemanticDiff"] | null;
+            api?: components["schemas"]["ApiSpecDiff"] | null;
+        };
+        CompareRevisionRef: {
+            revisionId: string;
+            revisionNumber: number;
+            branch: string | null;
+            contentHash: string | null;
+        };
+        CompleteAttachmentResponse: {
+            attachment: components["schemas"]["AttachmentSummary"];
+        };
+        CompleteAvatarUploadResponse: {
+            avatarUrl: components["schemas"]["AvatarUrl"];
+        };
+        /** @enum {string} */
+        ComponentDeclarationWarning: "no-connector" | "ambiguous-repository" | "unknown-repository" | "no-paths";
+        ComponentPathFix: {
+            from: string;
+            to: string | null;
+        };
+        ConflictCodeRef: {
+            connectorId: string;
+            repository: string;
+            pullRequestNumber: number;
+            pullRequestUrl: string;
+            headSha: string;
+            paths: string[];
+        };
+        /** @enum {string} */
+        ConflictKind: "doc-doc" | "doc-code";
+        ConflictSide: {
+            documentId: string;
+            title: string;
+            revisionId: string;
+            chunkId: string | null;
+            quote: string;
+        };
+        /** @enum {string} */
+        ConflictStatus: "open" | "resolved" | "dismissed" | "superseded";
+        /** @enum {string} */
+        ConnectorAclMode: "off" | "mirror" | "mirror_strict";
+        ConnectorAclResponse: {
+            connectorId: string;
+            mode: components["schemas"]["ConnectorAclMode"];
+            syncIntervalMinutes: number | null;
+            defaultSyncIntervalMinutes: number;
+            audienceGroupId: string | null;
+            perItem: boolean;
+            syncedAt: string | null;
+            restrictedPages: number;
+            groupCount: number;
+            identities: components["schemas"]["ExternalIdentityEntry"][];
+        };
+        ConnectorCapabilities: {
+            pull: boolean;
+            push: boolean;
+            webhook: boolean;
+            tree: boolean;
+            tasks?: boolean;
+            acl?: boolean;
+            harvest?: boolean;
+            embeds?: boolean;
+        };
+        /** @enum {string} */
+        ConnectorConflictPolicy: "manual" | "external-wins" | "local-wins";
+        /** @enum {string} */
+        ConnectorDirection: "pull" | "push" | "both";
+        ConnectorGithubAccessResponse: {
+            configured: boolean;
+            /** @enum {string} */
+            auth: "app" | "token" | "none";
+            installation: {
+                installationId: string;
+                accountLogin: string;
+                /** @enum {string} */
+                accountType: "User" | "Organization";
+                accountAvatarUrl: string | null;
+                /** @enum {string} */
+                repositorySelection: "all" | "selected";
+                suspended: boolean;
+                settingsUrl: string | null;
+            } | null;
+            appSettingsUrl: string | null;
+            permissions: components["schemas"]["GithubPermissionRow"][];
+            events: components["schemas"]["GithubEventRow"][];
+            identity: {
+                login: string;
+                avatarUrl: string | null;
+                usable: boolean;
+            } | null;
+            reconnectUrl: string | null;
+            error?: string;
+        };
+        /** @enum {string} */
+        ConnectorItemAction: "create" | "update" | "unchanged" | "conflict";
+        /** @enum {string} */
+        ConnectorItemAiOp: "cleanup" | "merge";
+        ConnectorItemEventResponse: {
+            items: components["schemas"]["ConnectorRunItemInfo"][];
+            run: components["schemas"]["ConnectorRunInfo"];
+        };
+        /** @enum {string} */
+        ConnectorKind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma";
+        ConnectorLinkSummary: {
+            id: string;
+            connectorId: string;
+            documentId: string;
+            documentTitle: string | null;
+            externalId: string;
+            externalUrl: string | null;
+            externalTitle: string | null;
+            externalVersion: string | null;
+            lastPulledAt: string | null;
+            lastPushedAt: string | null;
+            createdAt: string;
+        };
+        ConnectorResponse: {
+            connector: components["schemas"]["ConnectorSummary"];
+        };
+        /** @enum {string} */
+        ConnectorRunDirection: "pull" | "push";
+        ConnectorRunEventResponse: {
+            run: components["schemas"]["ConnectorRunInfo"];
+        };
+        ConnectorRunInfo: {
+            id: string;
+            connectorId: string;
+            workspaceId: string;
+            direction: components["schemas"]["ConnectorRunDirection"];
+            trigger: components["schemas"]["ConnectorTrigger"];
+            status: components["schemas"]["ConnectorRunStatus"];
+            mode: components["schemas"]["ConnectorSyncMode"];
+            phase: components["schemas"]["ConnectorRunPhase"] | null;
+            stage: string | null;
+            progress: number | null;
+            created: number;
+            updated: number;
+            skipped: number;
+            failed: number;
+            conflicts: number;
+            discovered: number;
+            applied: number;
+            reverted: number;
+            awaitingReview: number;
+            warnings: components["schemas"]["ConnectorRunWarning"][];
+            error: {
+                message: string;
+            } | null;
+            startedAt: string | null;
+            completedAt: string | null;
+            createdAt: string;
+        };
+        ConnectorRunItemInfo: {
+            id: string;
+            runId: string;
+            parentItemId: string | null;
+            externalId: string;
+            externalUrl: string | null;
+            externalVersion: string | null;
+            title: string;
+            depth: number;
+            position: number;
+            hasChildren: boolean;
+            status: components["schemas"]["ConnectorRunItemStatus"];
+            action: components["schemas"]["ConnectorItemAction"] | null;
+            warnings: string[];
+            aiOp: components["schemas"]["ConnectorItemAiOp"] | null;
+            edited: boolean;
+            specKind: components["schemas"]["ApiSpecKind"] | null;
+            documentId: string | null;
+            error: string | null;
+            updatedAt: string;
+        };
+        ConnectorRunItemResponse: {
+            item: components["schemas"]["ConnectorRunItemInfo"];
+            markdown: string;
+            incoming: string | null;
+            localHead: string | null;
+        };
+        /** @enum {string} */
+        ConnectorRunItemStatus: "discovered" | "fetching" | "staged" | "approved" | "applying" | "applied" | "unchanged" | "skipped" | "rejected" | "failed" | "reverted";
+        /** @enum {string} */
+        ConnectorRunPhase: "discovering" | "fetching" | "awaiting-review" | "applying" | "reverting";
+        ConnectorRunResponse: {
+            run: components["schemas"]["ConnectorRunInfo"];
+        };
+        /** @enum {string} */
+        ConnectorRunStatus: "queued" | "running" | "paused" | "awaiting-review" | "succeeded" | "partial" | "failed" | "cancelled";
+        ConnectorRunWarning: {
+            externalId: string | null;
+            title: string | null;
+            message: string;
+        };
+        ConnectorSummary: {
+            id: string;
+            workspaceId: string;
+            kind: components["schemas"]["ConnectorKind"];
+            name: string;
+            enabled: boolean;
+            config: {
+                [key: string]: string;
+            };
+            hasCredential: boolean;
+            credentialHint: string | null;
+            canStoreSecrets: boolean;
+            projectId: string;
+            parentId: string | null;
+            category: components["schemas"]["DocumentCategory"];
+            direction: components["schemas"]["ConnectorDirection"];
+            conflict: components["schemas"]["ConnectorConflictPolicy"];
+            pushOnPublish: boolean;
+            syncMode: components["schemas"]["ConnectorSyncMode"];
+            preserveHierarchy: boolean;
+            syncIntervalMinutes: number | null;
+            aclMode: components["schemas"]["ConnectorAclMode"];
+            aclSyncedAt: string | null;
+            hasWebhookSecret: boolean;
+            webhookPath: string | null;
+            capabilities: components["schemas"]["ConnectorCapabilities"];
+            linkCount: number;
+            lastRun: components["schemas"]["ConnectorRunInfo"] | null;
+            lastSyncedAt: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        ConnectorSyncMode: "auto" | "review" | "step";
+        ConnectorTestResponse: {
+            ok: boolean;
+            detail: string | null;
+            apiSpecSuggestions?: string[];
+        };
+        /** @enum {string} */
+        ConnectorTrigger: "manual" | "schedule" | "webhook";
+        ConnectorWorkItemInfo: {
+            id: string;
+            connectorId: string;
+            kind: components["schemas"]["ConnectorWorkItemKind"];
+            number: number;
+            title: string;
+            state: components["schemas"]["ConnectorWorkItemState"];
+            url: string;
+            authorLogin: string | null;
+            assigneeLogins: string[];
+            labels: string[];
+            documentId: string | null;
+            documentTitle: string | null;
+            boards: string[];
+            externalCreatedAt: string | null;
+            externalUpdatedAt: string | null;
+            createdAt: string;
+            updatedAt: string;
+            key: string;
+            sourceKind: components["schemas"]["WorkItemSourceKind"] | null;
+            sourceId: string | null;
+            status: components["schemas"]["WorkItemStatus"];
+            externalStatus: string | null;
+            syncState: components["schemas"]["WorkItemSyncState"];
+            syncError: string | null;
+        };
+        /** @enum {string} */
+        ConnectorWorkItemKind: "issue" | "pull-request";
+        ConnectorWorkItemResponse: {
+            workItem: components["schemas"]["ConnectorWorkItemInfo"];
+        };
+        /** @enum {string} */
+        ConnectorWorkItemState: "open" | "closed" | "merged" | "draft";
+        /** @enum {string} */
+        CoverageRecommendation: "create-page" | "update-page" | "run-archaeologist";
+        CreateApiKeyResponse: {
+            key: components["schemas"]["ApiKeyInfo"];
+            apiKey: string;
+        };
+        CreateAssistantThreadResponse: {
+            thread: components["schemas"]["AssistantThreadSummary"];
+        };
+        CreateAttachmentResponse: {
+            attachment: components["schemas"]["AttachmentSummary"];
+            upload: {
+                url: string;
+                /** @enum {string} */
+                method: "PUT";
+                headers: {
+                    [key: string]: string;
+                };
+                expiresAt: string;
+            };
+        };
+        CreateAvatarUploadResponse: {
+            uploadId: string;
+            upload: {
+                url: string;
+                /** @enum {string} */
+                method: "PUT";
+                headers: {
+                    [key: string]: string;
+                };
+                expiresAt: string;
+            };
+        };
+        CreateBranchResponse: {
+            branch: components["schemas"]["BranchInfo"];
+        };
+        CreateDocumentResponse: {
+            documentId: string;
+            revisionId: string;
+            branch: string;
+            status: components["schemas"]["RevisionStatus"];
+        };
+        CreateDocumentThreadResponse: {
+            mentionedWithoutAccess: string[];
+            thread: components["schemas"]["DocumentThread"];
+        };
+        CreateImportResponse: {
+            import: components["schemas"]["ImportJobInfo"];
+            upload: {
+                url: string;
+                /** @enum {string} */
+                method: "PUT";
+                headers: {
+                    [key: string]: string;
+                };
+                expiresAt: string;
+            };
+        };
+        CreateMergeRequestResponse: {
+            mergeRequest: components["schemas"]["MergeRequestInfo"];
+        };
+        CreateMergeRequestThreadResponse: {
+            mentionedWithoutAccess: string[];
+            thread: components["schemas"]["MergeRequestThread"];
+        };
+        CreatePageFromFindingResponse: {
+            documentId: string;
+            title: string;
+        };
+        CreateProjectResponse: {
+            project: components["schemas"]["ProjectSummary"];
+        };
+        CreateShareLinkResponse: {
+            share: components["schemas"]["ShareLinkSummary"];
+            url: string;
+            requestedExpiresAt: string | null;
+        };
+        CreateUploadResponse: {
+            documentId: string;
+            revisionId: string;
+            upload: {
+                /** @enum {string} */
+                method: "PUT";
+                url: string;
+                objectKey: string;
+            };
+        };
+        CreateWorkspaceResponse: {
+            workspaceId: string;
+            name: string;
+        };
+        DecisionCapturePayload: {
+            context: string;
+            decision: string;
+            consequences?: string;
+            alternatives?: string[];
+            relatedDocumentIds?: string[];
+        };
+        DecisionSettings: {
+            available: boolean;
+            thresholds: {
+                arbiter: {
+                    requested: number | null;
+                    effective: number;
+                };
+                citation: {
+                    requested: number | null;
+                    effective: number;
+                };
+                harvest: {
+                    requested: number | null;
+                    effective: number;
+                };
+            };
+            tunedOn: string;
+        };
+        DeleteAnswerFeedbackResponse: {
+            /** @enum {boolean} */
+            ok: true;
+            removed: boolean;
+        };
+        DeleteAssistantThreadResponse: {
+            ok: boolean;
+        };
+        DeleteDocumentCommentResponse: {
+            threadId: string;
+            thread: components["schemas"]["DocumentThread"] | null;
+        };
+        DeleteMergeRequestCommentResponse: {
+            threadId: string;
+            thread: components["schemas"]["MergeRequestThread"] | null;
+        };
+        DeleteProjectResponse: {
+            /** @enum {boolean} */
+            deleted: true;
+            mode: components["schemas"]["ProjectDeletionMode"];
+            movedTo: string | null;
+            moved: components["schemas"]["ProjectDeletionCounts"];
+            destroyed: components["schemas"]["ProjectCascadeCounts"] | null;
+            droppedGlossaryTerms: string[];
+        };
+        DeleteWorkspaceResponse: {
+            workspaceId: string;
+            deletedAt: string;
+            counts: components["schemas"]["WorkspaceDeletionCounts"];
+        };
+        DiffHunk: {
+            oldStart: number;
+            oldLines: number;
+            newStart: number;
+            newLines: number;
+            lines: components["schemas"]["DiffLine"][];
+        };
+        DiffLine: {
+            /** @enum {string} */
+            kind: "context" | "added" | "deleted";
+            old?: number;
+            new?: number;
+            text: string;
+        };
+        DismissAgentFindingResponse: {
+            dismissedAt: string;
+            dismissedBy: string;
+            learningId: string | null;
+            dismissed: boolean;
+        };
+        DocumentAncestorsResponse: {
+            documentId: string;
+            ancestors: components["schemas"]["DocumentSummary"][];
+        };
+        /** @enum {string} */
+        DocumentCategory: "process" | "use-case" | "contract" | "erd" | "architecture" | "guide" | "reference" | "other";
+        DocumentConnectorLink: {
+            connectorId: string;
+            connectorName: string;
+            kind: components["schemas"]["ConnectorKind"];
+            canPush: boolean;
+            link: components["schemas"]["ConnectorLinkSummary"];
+        };
+        DocumentConnectorResponse: {
+            documentId: string;
+            links: components["schemas"]["DocumentConnectorLink"][];
+        };
+        DocumentContentResponse: {
+            documentId: string;
+            revisionId: string;
+            contentType: string;
+            frontmatter: {
+                [key: string]: unknown;
+            } | null;
+            markdown: string;
+            resolvedAsOf?: components["schemas"]["ResolvedAsOf"];
+        };
+        DocumentDetailResponse: {
+            document: components["schemas"]["DocumentSummary"];
+            revision: components["schemas"]["RevisionInfo"];
+            chunks: components["schemas"]["ChunkSummary"][];
+        };
+        DocumentEmbedsResponse: {
+            items: components["schemas"]["EmbedItemStatus"][];
+        };
+        DocumentGraphEdge: {
+            from: string;
+            to: string;
+            type: string;
+            extractor: components["schemas"]["FactExtractor"] | string;
+            confidence: number;
+        };
+        DocumentGraphNode: {
+            id: string;
+            /** @enum {string} */
+            kind: "document" | "entity";
+            label: string;
+            category?: components["schemas"]["DocumentCategory"] | string;
+            entityType?: string;
+            layer?: components["schemas"]["EntityLayer"];
+            distance: number;
+        };
+        DocumentGraphResponse: {
+            documentId: string;
+            depth: number;
+            nodes: components["schemas"]["DocumentGraphNode"][];
+            edges: components["schemas"]["DocumentGraphEdge"][];
+            resolvedAsOf?: components["schemas"]["ResolvedAsOf"];
+        };
+        DocumentQualityResponse: {
+            documentId: string;
+            score: components["schemas"]["QualityScore"] | null;
+            peers: components["schemas"]["QualityPeer"][];
+            stale: boolean;
+            history: components["schemas"]["QualityHistoryPoint"][];
+            lowThreshold: number;
+        };
+        DocumentSummary: {
+            documentId: string;
+            workspaceId: string;
+            projectId: string;
+            title: string;
+            defaultBranch: string;
+            category: components["schemas"]["DocumentCategory"];
+            parentId: string | null;
+            headRevisionId: string | null;
+            headRevisionStatus: components["schemas"]["RevisionStatus"] | null;
+            createdAt: string;
+            kind?: components["schemas"]["ApiDocumentKind"];
+            verifiedAt?: string | null;
+            verifiedBy?: string | null;
+            verifiedRevisionId?: string | null;
+            verification?: components["schemas"]["SourceVerificationState"];
+            ownerId?: string | null;
+            reviewIntervalDays?: number | null;
+            verificationExpiresAt?: string | null;
+            verificationFlag?: components["schemas"]["VerificationFlag"] | null;
+            verificationNote?: string | null;
+            verificationSource?: components["schemas"]["VerificationSource"] | null;
+            lastActivityAt?: string;
+            inactive?: boolean;
+            archivedAt?: string | null;
+            archivedBy?: string | null;
+            templateRef?: string | null;
+            templateVersion?: number | null;
+            restricted?: boolean;
+            draftOwnerId?: string | null;
+            hidden?: boolean;
+        };
+        DocumentThread: {
+            threadId: string;
+            source: components["schemas"]["ReviewThreadSource"];
+            resolvable: boolean;
+            resolved: boolean;
+            resolvedBy: string | null;
+            resolvedAt: string | null;
+            anchor: components["schemas"]["ReviewThreadAnchor"] | null;
+            comments: components["schemas"]["ReviewComment"][];
+            createdAt: string;
+            documentId: string;
+        };
+        DocumentThreadResponse: {
+            thread: components["schemas"]["DocumentThread"];
+        };
+        DocumentTreeNode: {
+            documentId: string;
+            workspaceId: string;
+            projectId: string;
+            title: string;
+            defaultBranch: string;
+            category: components["schemas"]["DocumentCategory"];
+            parentId: string | null;
+            headRevisionId: string | null;
+            headRevisionStatus: components["schemas"]["RevisionStatus"] | null;
+            createdAt: string;
+            kind?: components["schemas"]["ApiDocumentKind"];
+            verifiedAt?: string | null;
+            verifiedBy?: string | null;
+            verifiedRevisionId?: string | null;
+            verification?: components["schemas"]["SourceVerificationState"];
+            ownerId?: string | null;
+            reviewIntervalDays?: number | null;
+            verificationExpiresAt?: string | null;
+            verificationFlag?: components["schemas"]["VerificationFlag"] | null;
+            verificationNote?: string | null;
+            verificationSource?: components["schemas"]["VerificationSource"] | null;
+            lastActivityAt?: string;
+            inactive?: boolean;
+            archivedAt?: string | null;
+            archivedBy?: string | null;
+            templateRef?: string | null;
+            templateVersion?: number | null;
+            restricted?: boolean;
+            draftOwnerId?: string | null;
+            hidden?: boolean;
+            children: components["schemas"]["DocumentTreeNode"][];
+            childCount: number;
+        };
+        DocumentTreeResponse: {
+            workspaceId: string;
+            projectId: string | null;
+            parentId: string | null;
+            roots: components["schemas"]["DocumentTreeNode"][];
+        };
+        DocumentTrust: {
+            status: components["schemas"]["SourceVerificationState"];
+            verifiedAt?: string | null;
+            expiresAt?: string | null;
+            ownerId?: string | null;
+            inactive: boolean;
+        };
+        DocumentWorkflowRunsResponse: {
+            documentId: string;
+            runs: components["schemas"]["WorkflowRunInfo"][];
+            available: {
+                id: string;
+                name: string;
+            }[];
+        };
+        DraftComponentResponse: {
+            runId: string;
+            connectorId: string;
+            title: string;
+            paths: string[];
+        };
+        DraftWorkflowResponse: {
+            enabled: boolean;
+            reply: string;
+            graph: components["schemas"]["WorkflowGraph"] | null;
+            name: string | null;
+            description: string | null;
+            issues: components["schemas"]["WorkflowValidationIssue"][];
+        };
+        EffectiveAccessEntry: {
+            userId: string;
+            displayName: string;
+            email: string;
+            avatarUrl: components["schemas"]["AvatarUrl"];
+            role: components["schemas"]["WorkspaceRole"];
+            level: components["schemas"]["AccessLevel"];
+            source: components["schemas"]["EffectiveAccessSource"];
+        };
+        EffectiveAccessLevel: components["schemas"]["AccessLevel"] | "none";
+        EffectiveAccessResponse: {
+            resourceType: components["schemas"]["AccessResourceType"];
+            resourceId: string;
+            entries: components["schemas"]["EffectiveAccessEntry"][];
+        };
+        /** @enum {string} */
+        EffectiveAccessSource: "admin" | "role" | "grant";
+        /** @enum {string} */
+        EmbedItemState: "ready" | "rendering" | "unavailable" | "failed";
+        EmbedItemStatus: {
+            fileKey: string;
+            nodeId: string;
+            version: string;
+            state: components["schemas"]["EmbedItemState"];
+            name: string | null;
+            width: number | null;
+            height: number | null;
+            changed: boolean;
+        };
+        EmbedUsagesResponse: {
+            pages: {
+                documentId: string;
+                title: string;
+                revisionId: string;
+                groups: {
+                    group: number;
+                    items: {
+                        url: string;
+                        caption: string;
+                        version: string | null;
+                    }[];
+                }[];
+            }[];
+        };
+        /** @enum {string} */
+        EntityLayer: "system" | "component" | "interface" | "code" | "concept";
+        EntityNeighborsResponse: {
+            resolvedAsOf?: components["schemas"]["ResolvedAsOf"];
+            entity: components["schemas"]["EntityRef"];
+            edges: components["schemas"]["EntityRelationEdge"][];
+            relatedEntities: {
+                distance: number;
+                key: string;
+                type: string;
+                name: string;
+            }[];
+        };
+        EntityRef: {
+            key: string;
+            type: string;
+            name: string;
+        };
+        EntityRelationEdge: {
+            documentId: string;
+            documentTitle: string;
+            entityKey: string;
+            relationType: string;
+            extractor: components["schemas"]["FactExtractor"] | string;
+            confidence: number;
+            /** @enum {string} */
+            direction: "out";
+        };
+        EntitySummary: {
+            key: string;
+            type: string;
+            name: string;
+            degree: number;
+        };
+        ExportCapabilitiesResponse: {
+            formats: {
+                zip: boolean;
+                html: boolean;
+                pdf: boolean;
+                docx: boolean;
+            };
+            maxPages: number;
+            ttlHours: number;
+        };
+        ExportDownloadResponse: {
+            url: string;
+            filename: string;
+        };
+        /** @enum {string} */
+        ExportErrorCode: "tooLarge" | "renderFailed" | "convertFailed" | "formatUnavailable" | "timedOut" | "failed";
+        /** @enum {string} */
+        ExportFormat: "zip" | "html" | "pdf" | "docx";
+        ExportJobSummary: {
+            id: string;
+            workspaceId: string;
+            scope: components["schemas"]["ExportScope"];
+            format: components["schemas"]["ExportFormat"];
+            documentId: string | null;
+            projectId: string | null;
+            branch: string | null;
+            title: string;
+            status: components["schemas"]["ExportStatus"];
+            stage: components["schemas"]["ExportStage"] | null;
+            pageCount: number | null;
+            sizeBytes: number | null;
+            error: {
+                code: components["schemas"]["ExportErrorCode"];
+                message: string;
+            } | null;
+            requestedBy: string;
+            createdAt: string;
+            completedAt: string | null;
+            expiresAt: string | null;
+        };
+        ExportListResponse: {
+            exports: components["schemas"]["ExportJobSummary"][];
+        };
+        /** @enum {string} */
+        ExportScope: "page" | "subtree" | "project";
+        /** @enum {string} */
+        ExportStage: "collecting" | "rendering" | "converting" | "packaging";
+        /** @enum {string} */
+        ExportStatus: "queued" | "running" | "completed" | "failed" | "expired";
+        ExternalAiActionsSettings: {
+            requested: boolean | null;
+            ceiling: boolean;
+            effective: boolean;
+            source: components["schemas"]["AiSettingsSource"];
+        };
+        ExternalIdentityEntry: {
+            id: string;
+            externalId: string;
+            displayName: string | null;
+            email: string | null;
+            userId: string | null;
+            userDisplayName: string | null;
+            mappedBy: components["schemas"]["ExternalIdentityMapping"] | null;
+            lastSeenAt: string;
+        };
+        /** @enum {string} */
+        ExternalIdentityMapping: "manual" | "provider" | "email";
+        /** @enum {string} */
+        FactExtractor: "explicit" | "frontmatter" | "inferred" | "curated" | "code" | "spec";
+        FactTimelineEntry: {
+            type: string;
+            targetKey: string;
+            extractor: components["schemas"]["FactExtractor"] | string;
+            /** @enum {string} */
+            status: "active" | "removed" | "retracted";
+            introducedInRevisionId: string | null;
+            introducedAt: string | null;
+            removedInRevisionId: string | null;
+            removedAt: string | null;
+            retractedAt: string | null;
+            retractedBy: string | null;
+        };
+        FactTimelineResponse: {
+            documentId: string;
+            branch: string;
+            entries: components["schemas"]["FactTimelineEntry"][];
+        };
+        FactsAtResponse: {
+            documentId: string;
+            atRevisionId: string;
+            effectiveRevisionId: string | null;
+            facts: components["schemas"]["HistoricalFact"][];
+        };
+        FigmaPickerFileResponse: {
+            fileKey: string;
+            name: string;
+            version: string;
+            board: boolean;
+            pages: {
+                id: string;
+                name: string;
+                frames: {
+                    id: string;
+                    name: string;
+                    type: string;
+                    thumbnailUrl: string | null;
+                }[];
+            }[];
+        };
+        FigmaPickerFilesResponse: {
+            connected: boolean;
+            files: {
+                fileKey: string;
+                name: string;
+            }[];
+        };
+        FigmaResolveResponse: {
+            url: string;
+            version: string | null;
+            name: string | null;
+            allowed: boolean;
+        };
+        FinalizeRevisionResponse: {
+            revisionId: string;
+            status: components["schemas"]["RevisionStatus"];
+            ingestionJobId: string | null;
+            deduplicated: boolean;
+        };
+        FixtureCallInfo: {
+            stepId: string;
+            /** @enum {string} */
+            phase: "setup" | "teardown";
+            entityKey: string;
+            operation: {
+                documentId: string;
+                specTitle: string;
+                method: string | null;
+                path: string;
+                summary: string | null;
+            } | null;
+        };
+        FixtureCallStep: {
+            id: string;
+            call: string;
+            request: components["schemas"]["FixtureRequest"];
+            expect: number | null;
+            capture: {
+                [key: string]: string;
+            };
+        };
+        /** @enum {string} */
+        FixtureIssueCode: "syntax" | "too-large" | "not-object" | "version" | "steps-missing" | "too-many-steps" | "inputs-shape" | "step-shape" | "step-id" | "duplicate-id" | "call-invalid" | "expect-invalid" | "request-shape" | "capture-name" | "capture-rule" | "placeholder-invalid" | "undefined-variable" | "unknown-operation" | "literal-credential";
+        FixtureIssueInfo: {
+            code: components["schemas"]["FixtureIssueCode"];
+            step: string | null;
+            path: string;
+            params?: {
+                [key: string]: string | number;
+            };
+            message: string;
+        };
+        FixtureManualStep: {
+            id: string;
+            manual: string;
+        };
+        FixtureRequest: {
+            path?: {
+                [key: string]: components["schemas"]["FixtureScalar"];
+            };
+            query?: {
+                [key: string]: components["schemas"]["FixtureScalar"];
+            };
+            headers?: {
+                [key: string]: components["schemas"]["FixtureScalar"];
+            };
+            body?: unknown;
+        };
+        FixtureScalar: string | number | boolean;
+        FixtureStep: components["schemas"]["FixtureCallStep"] | components["schemas"]["FixtureManualStep"];
+        FlagFindingOutdatedResponse: {
+            documentId: string;
+            documentTitle: string;
+            verification: components["schemas"]["SourceVerificationState"];
+        };
+        FlowAnswer: (string | string[]) | null;
+        /** @enum {string} */
+        FlowKey: "capture-decision" | "mark-outdated";
+        ForgotPasswordResponse: {
+            ok: boolean;
+            debugToken?: string;
+        };
+        GenerateApiTestSuiteResponse: {
+            suite: components["schemas"]["ApiTestSuiteResponse"] | null;
+            runId: string | null;
+            existing: boolean;
+        };
+        GetAssistantThreadResponse: {
+            thread: components["schemas"]["AssistantThreadSummary"];
+            messages: components["schemas"]["AssistantMessageInfo"][];
+        };
+        GetStyleguideResponse: {
+            styleguide: components["schemas"]["StyleguideSummary"] | null;
+            /** @enum {string|null} */
+            scope: "project" | "workspace" | null;
+            maxRules: number;
+        };
+        /** @enum {string} */
+        GithubAccessPurpose: "sync" | "push" | "work-items" | "drift-check" | "boards" | "repo-events" | "wiki" | "changelog" | "acl";
+        GithubBranchSummary: {
+            name: string;
+            isDefault: boolean;
+        };
+        GithubBranchesResponse: {
+            ok: boolean;
+            branches: components["schemas"]["GithubBranchSummary"][];
+            error?: string;
+        };
+        GithubEventRow: {
+            name: string;
+            subscribed: boolean;
+            requested: boolean;
+            purposes: components["schemas"]["GithubAccessPurpose"][];
+            active: boolean;
+            status: components["schemas"]["GithubGrantStatus"];
+        };
+        /** @enum {string} */
+        GithubGrantLevel: "read" | "write" | "admin";
+        /** @enum {string} */
+        GithubGrantStatus: "granted" | "pending" | "missing" | "extra";
+        GithubInstallationSummary: {
+            installationId: string;
+            accountLogin: string;
+            /** @enum {string} */
+            accountType: "User" | "Organization";
+            accountAvatarUrl: string | null;
+            /** @enum {string} */
+            repositorySelection: "all" | "selected";
+            suspended: boolean;
+        };
+        GithubInstallationsResponse: {
+            configured: boolean;
+            connected: boolean;
+            authorizeUrl: string | null;
+            installUrl: string | null;
+            installations: components["schemas"]["GithubInstallationSummary"][];
+            error?: string;
+        };
+        GithubPermissionRow: {
+            name: string;
+            granted: components["schemas"]["GithubGrantLevel"] | null;
+            requested: components["schemas"]["GithubGrantLevel"] | null;
+            needed: components["schemas"]["GithubGrantLevel"] | null;
+            purposes: components["schemas"]["GithubAccessPurpose"][];
+            active: boolean;
+            status: components["schemas"]["GithubGrantStatus"];
+        };
+        GithubRepoSummary: {
+            fullName: string;
+            name: string;
+            ownerLogin: string;
+            private: boolean;
+            description: string | null;
+            defaultBranch: string;
+            htmlUrl: string;
+            pushedAt: string | null;
+            language: string | null;
+        };
+        GithubReposResponse: {
+            ok: boolean;
+            repositories: components["schemas"]["GithubRepoSummary"][];
+            error?: string;
+        };
+        GlossaryCapturePayload: {
+            term: string;
+            definition: string;
+            aliases?: string[];
+            documentId?: string;
+        };
+        GlossaryExclusion: {
+            exclusionId: string;
+            documentId: string;
+            termId: string;
+            anchor: components["schemas"]["GlossaryExclusionAnchor"];
+            createdBy: string | null;
+            createdAt: string;
+        };
+        GlossaryExclusionAnchor: {
+            quote: string;
+            prefix?: string;
+            suffix?: string;
+        };
+        GlossaryTerm: {
+            termId: string;
+            workspaceId: string;
+            projectId: string;
+            term: string;
+            aliases: string[];
+            definition: string;
+            documentId: string | null;
+            documentTitle: string | null;
+            source: components["schemas"]["GlossaryTermSource"];
+            enabled: boolean;
+            matchAliases: boolean;
+            caseSensitive: boolean;
+            maxLinksPerPage: number | null;
+            createdBy: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        GlossaryTermSource: "manual" | "ai" | "captured";
+        GlossaryTermSuggestion: {
+            term: string;
+            aliases: string[];
+            definition: string;
+            occurrences: number;
+            existingTermId: string | null;
+        };
+        GraphQueryResponse: {
+            rows: {
+                [key: string]: unknown;
+            }[];
+            rowCount: number;
+            truncated: boolean;
+            durationMs: number;
+        };
+        GraphTimelineDay: {
+            day: string;
+            opened: number;
+            closed: number;
+        };
+        GraphTimelineResponse: {
+            workspaceId: string;
+            projectId: string | null;
+            from: string;
+            to: string;
+            tags: components["schemas"]["ReleaseTagDto"][];
+            days: components["schemas"]["GraphTimelineDay"][];
+        };
+        GroupMappingView: {
+            id: string;
+            workspaceId: string;
+            providerId: string | null;
+            providerName: string | null;
+            externalGroup: string;
+            scimGroupName: string | null;
+            role: components["schemas"]["WorkspaceRole"];
+            trustedOperator: boolean;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        GroupSource: "manual" | "connector" | "scim";
+        /** @enum {string} */
+        GroupSyncMode: "additive" | "authoritative";
+        /** @enum {string} */
+        HealthBulkAction: "verify" | "request" | "outdated" | "clear" | "reassign" | "archive" | "unarchive";
+        HistoricalFact: {
+            type: string;
+            targetKey: string;
+            entityType: string;
+            name: string;
+            extractor: components["schemas"]["FactExtractor"] | string;
+            confidence: number;
+            assertedByRevisionId: string | null;
+        };
+        IdentityProviderView: {
+            id: string;
+            workspaceId: string;
+            kind: components["schemas"]["IdpKind"];
+            preset: components["schemas"]["IdpPreset"];
+            name: string;
+            enabled: boolean;
+            showOnLogin: boolean;
+            platformWide: boolean;
+            config: components["schemas"]["OidcProviderConfig"];
+            saml: components["schemas"]["SamlProviderView"] | null;
+            ldap: components["schemas"]["LdapProviderConfig"] | null;
+            hasSecret: boolean;
+            jitEnabled: boolean;
+            defaultRole: components["schemas"]["WorkspaceRole"] | null;
+            allowedDomains: string[];
+            groupsClaim: string | null;
+            groupSyncMode: components["schemas"]["GroupSyncMode"];
+            sessionTtlHours: number | null;
+            redirectUri: string;
+            backchannelLogoutUri: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        IdpKind: "oidc" | "saml" | "ldap";
+        /** @enum {string} */
+        IdpPreset: "keycloak" | "entra" | "google" | "yandex" | "generic";
+        ImpactAnalysisResponse: {
+            resolvedAsOf?: components["schemas"]["ResolvedAsOf"];
+            entity: components["schemas"]["EntityRef"];
+            /** @enum {string} */
+            direction: "dependents" | "dependencies";
+            impactedEntities: components["schemas"]["ImpactedNode"][];
+            affectedDocuments: {
+                documentId: string;
+                title: string;
+                distance: number;
+            }[];
+        };
+        ImpactPathStep: {
+            /** @enum {string} */
+            kind: "entity" | "document";
+            id: string;
+            label: string;
+            viaType?: string;
+        };
+        ImpactedNode: {
+            entity: components["schemas"]["EntityRef"];
+            distance: number;
+            path: components["schemas"]["ImpactPathStep"][];
+        };
+        ImportContentResponse: {
+            importId: string;
+            title: string | null;
+            markdown: string;
+            warnings: string[];
+            meta: components["schemas"]["ImportMeta"];
+        };
+        ImportJobInfo: {
+            importId: string;
+            workspaceId: string;
+            projectId: string;
+            parentId: string | null;
+            category: components["schemas"]["DocumentCategory"];
+            status: components["schemas"]["ImportStatus"];
+            stage: string | null;
+            progress: number | null;
+            sourceFilename: string;
+            contentType: string;
+            sizeBytes: number;
+            parser: components["schemas"]["ImportParserId"] | null;
+            title: string | null;
+            warnings: string[];
+            meta: components["schemas"]["ImportMeta"];
+            error: string | null;
+            documentId: string | null;
+            createdAt: string;
+        };
+        ImportJobResponse: {
+            import: components["schemas"]["ImportJobInfo"];
+        };
+        ImportMeta: {
+            pages?: number;
+            slides?: number;
+            sections?: number;
+            words?: number;
+            images?: number;
+            needsOcr?: boolean;
+        };
+        /** @enum {string} */
+        ImportParserId: "pdf" | "docx" | "pptx" | "html" | "tabular" | "structured" | "plaintext" | "ocr";
+        /** @enum {string} */
+        ImportStatus: "awaiting-upload" | "queued" | "running" | "parsed" | "failed" | "submitted";
+        IngestionJobInfo: {
+            jobId: string;
+            workspaceId: string;
+            revisionId: string;
+            type: string;
+            status: components["schemas"]["IngestionJobStatus"] | string;
+            attempts: number;
+            error: unknown;
+            startedAt: string | null;
+            completedAt: string | null;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        IngestionJobStatus: "queued" | "running" | "completed" | "failed";
+        InheritedRestriction: {
+            resourceType: components["schemas"]["AccessResourceType"];
+            resourceId: string;
+            title: string | null;
+            grantCount: number;
+        };
+        KnowledgeConflictDto: {
+            id: string;
+            workspaceId: string;
+            kind: components["schemas"]["ConflictKind"];
+            status: components["schemas"]["ConflictStatus"];
+            a: components["schemas"]["ConflictSide"];
+            b: components["schemas"]["ConflictSide"] | null;
+            codeRef: components["schemas"]["ConflictCodeRef"] | null;
+            explanation: string;
+            confidence: number;
+            agentRunId: string | null;
+            mergeRequestId: string | null;
+            detectedAt: string;
+            resolvedAt: string | null;
+            resolvedBy: string | null;
+            resolution: string | null;
+        };
+        KnowledgeHealthBulkResponse: {
+            action: components["schemas"]["HealthBulkAction"];
+            results: components["schemas"]["KnowledgeHealthBulkResult"][];
+        };
+        KnowledgeHealthBulkResult: {
+            documentId: string;
+            ok: boolean;
+            error?: string;
+        };
+        KnowledgeHealthListResponse: {
+            workspaceId: string;
+            rows: components["schemas"]["KnowledgeHealthRow"][];
+            nextCursor: string | null;
+        };
+        KnowledgeHealthRow: {
+            documentId: string;
+            projectId: string;
+            title: string;
+            breadcrumb: string;
+            status: components["schemas"]["SourceVerificationState"];
+            ownerId: string | null;
+            verifiedBy: string | null;
+            verifiedAt: string | null;
+            expiresAt: string | null;
+            lastActivityAt: string;
+            inactive: boolean;
+            lastReadAt: string | null;
+            empty: boolean | null;
+            archivedAt: string | null;
+            childCount: number;
+            verificationFlag: components["schemas"]["VerificationFlag"] | null;
+            verificationNote: string | null;
+            missingPaths: string[];
+            brokenCalls: string[];
+            workItem: {
+                key: string;
+                /** @enum {string} */
+                status: "open" | "in_progress" | "done" | "wont_do";
+                /** @enum {string} */
+                syncState: "synced" | "pending" | "failed" | "orphaned";
+                url: string;
+            } | null;
+        };
+        KnowledgeHealthSettingsOverride: {
+            trustWeights: {
+                verified?: number;
+                expired?: number;
+                edited?: number;
+                requested?: number;
+                outdated?: number;
+                flagged?: number;
+                unverified?: number;
+                inactive?: number;
+            } | null;
+            reviewIntervalDays: number | null;
+            remindBeforeDays: number | null;
+            inactiveAfterDays: number | null;
+            emptyMaxChars: number | null;
+            trustRanking: boolean | null;
+            rrfK: number | null;
+            minCosine: number | null;
+            minCosineShare: number | null;
+            communityPriorWeight: number | null;
+            communityPriorFloor: number | null;
+            layeredExpansion: boolean | null;
+        };
+        KnowledgeHealthSettingsResponse: {
+            workspaceId: string;
+            effective: components["schemas"]["KnowledgeHealthSettingsValues"];
+            override: components["schemas"]["KnowledgeHealthSettingsOverride"];
+            defaults: components["schemas"]["KnowledgeHealthSettingsValues"];
+        };
+        KnowledgeHealthSettingsValues: {
+            reviewIntervalDays: number;
+            remindBeforeDays: number;
+            inactiveAfterDays: number;
+            emptyMaxChars: number;
+            trustRanking: boolean;
+            rrfK: number;
+            minCosine: number;
+            minCosineShare: number;
+            communityPriorWeight: number;
+            communityPriorFloor: number;
+            layeredExpansion: boolean;
+            trustWeights: components["schemas"]["TrustWeights"];
+        };
+        KnowledgeHealthSummaryResponse: {
+            workspaceId: string;
+            total: number;
+            counts: {
+                stale: number;
+                unowned: number;
+                empty: number;
+                expired: number;
+                edited: number;
+                outdated: number;
+                requested: number;
+                flagged: number;
+                inactive: number;
+                "missing-paths": number;
+                "broken-calls": number;
+                unread: number;
+                dead: number;
+                archived: number;
+                "handed-off": number;
+                "stale-mockups": number;
+            };
+        };
+        KnowledgeIssueEvidence: {
+            quote?: string;
+            url?: string;
+            note?: string;
+        };
+        KnowledgeIssueInfo: {
+            id: string;
+            workspaceId: string;
+            documentId: string;
+            documentTitle: string | null;
+            revisionId: string | null;
+            kind: components["schemas"]["KnowledgeIssueKind"];
+            status: components["schemas"]["KnowledgeIssueStatus"];
+            detail: string;
+            evidence: components["schemas"]["KnowledgeIssueEvidence"][];
+            hasSuggestion: boolean;
+            surface: components["schemas"]["KnowledgeIssueSurface"];
+            reportCount: number;
+            agentRunId: string | null;
+            mergeRequestId: string | null;
+            createdBy: string;
+            resolvedBy: string | null;
+            resolvedAt: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        KnowledgeIssueKind: "stale" | "wrong" | "missing" | "duplicate" | "other";
+        /** @enum {string} */
+        KnowledgeIssueStatus: "open" | "checking" | "proposed" | "resolved" | "dismissed";
+        /** @enum {string} */
+        KnowledgeIssueSurface: "assistant" | "editor-assistant" | "ask" | "mcp" | "chat" | "web";
+        LdapProviderConfig: {
+            url: string;
+            startTls: boolean;
+            bindDn: string | null;
+            baseDn: string;
+            userFilter: string | null;
+            emailAttribute: string | null;
+            nameAttribute: string | null;
+        };
+        LintGateState: {
+            policy: components["schemas"]["LintPolicy"];
+            blocked: boolean;
+            checkId: string | null;
+            checkStatus: components["schemas"]["MergeRequestCheckStatus"] | "missing";
+            blockingCount: number;
+            overridden: boolean;
+        };
+        /** @enum {string} */
+        LintPolicy: "off" | "warn" | "block";
+        LintPolicySettings: {
+            workspaceId: string;
+            projectId: string | null;
+            requested: components["schemas"]["LintPolicy"] | null;
+            inherited: components["schemas"]["LintPolicy"];
+            ceiling: components["schemas"]["LintPolicy"];
+            effective: components["schemas"]["LintPolicy"];
+            /** @enum {string} */
+            source: "scope" | "inherited" | "ceiling" | "agent-disabled";
+            linterEnabled: boolean;
+        };
+        LintViolation: {
+            ruleId: string;
+            severity: components["schemas"]["StyleRuleSeverity"];
+            quote: string;
+            message: string;
+            suggestion?: string;
+        };
+        ListAccessRequestsResponse: {
+            workspaceId: string;
+            requests: components["schemas"]["AccessRequestEntry"][];
+        };
+        ListActivityResponse: {
+            workspaceId: string;
+            entries: components["schemas"]["ActivityEntry"][];
+            nextCursor: string | null;
+        };
+        ListAgentLearningsResponse: {
+            learnings: components["schemas"]["AgentLearningSummary"][];
+            promptLimit: number;
+        };
+        ListAgentRunsResponse: {
+            runs: components["schemas"]["AgentRunSummary"][];
+            nextCursor: string | null;
+            counts: {
+                pending: number;
+                running: number;
+                succeeded: number;
+                failed: number;
+                cancelled: number;
+            };
+        };
+        ListAgentTriggersResponse: {
+            triggers: components["schemas"]["AgentTriggerSummary"][];
+            listening: boolean;
+        };
+        ListAiAgentChoicesResponse: {
+            agents: components["schemas"]["AiAgentChoice"][];
+        };
+        ListAiAgentsResponse: {
+            agents: components["schemas"]["AiAgentSummary"][];
+        };
+        ListAiBudgetsResponse: {
+            workspace: {
+                monthlyTokenBudget: number | null;
+                usedTokens: number;
+                remainingTokens: number | null;
+                enforced: boolean;
+                periodStart: string;
+            };
+            users: components["schemas"]["AiBudgetInfo"][];
+        };
+        ListAiPluginsResponse: {
+            plugins: components["schemas"]["AiPluginSummary"][];
+        };
+        ListAiProviderChoicesResponse: {
+            providers: components["schemas"]["AiProviderChoice"][];
+            defaultProviderId: string | null;
+        };
+        ListAiProvidersResponse: {
+            providers: components["schemas"]["AiProviderSummary"][];
+        };
+        ListAiSkillsResponse: {
+            skills: components["schemas"]["AiSkillSummary"][];
+        };
+        ListAiUsageLogsResponse: {
+            entries: components["schemas"]["AiUsageLogEntry"][];
+            nextCursor: string | null;
+        };
+        ListAnchorWorkItemsResponse: {
+            workItems: components["schemas"]["ConnectorWorkItemInfo"][];
+        };
+        ListAnswerFeedbackResponse: {
+            workspaceId: string;
+            entries: components["schemas"]["AnswerFeedbackListEntry"][];
+            nextCursor: string | null;
+        };
+        ListApiKeysResponse: {
+            keys: components["schemas"]["ApiKeyInfo"][];
+        };
+        ListApiOperationsResponse: {
+            documentId: string;
+            revisionId: string | null;
+            revisionStatus: string | null;
+            operations: components["schemas"]["ApiOperationInfo"][];
+        };
+        ListApiSpecsResponse: {
+            specs: components["schemas"]["ApiSpecSummary"][];
+        };
+        ListApiTestEnvironmentsResponse: {
+            environments: components["schemas"]["ApiTestEnvironment"][];
+        };
+        ListApiTestRunsResponse: {
+            runs: components["schemas"]["ApiTestRunSummary"][];
+        };
+        ListAssistantThreadsResponse: {
+            threads: components["schemas"]["AssistantThreadSummary"][];
+            nextCursor: string | null;
+        };
+        ListAttachmentsResponse: {
+            attachments: components["schemas"]["AttachmentSummary"][];
+        };
+        ListAuditLogsResponse: {
+            workspaceId: string;
+            entries: components["schemas"]["AuditLogEntry"][];
+            nextCursor: string | null;
+        };
+        ListBranchesResponse: {
+            branches: components["schemas"]["BranchInfo"][];
+        };
+        ListCapturesResponse: {
+            captures: components["schemas"]["CaptureInfo"][];
+            nextCursor: string | null;
+            apiKey?: components["schemas"]["CaptureApiKey"];
+        };
+        ListCollabDraftsResponse: {
+            drafts: components["schemas"]["CollabDraftInfo"][];
+        };
+        ListCommunitiesResponse: {
+            communities: components["schemas"]["CommunitySummaryDto"][];
+        };
+        ListConflictsResponse: {
+            conflicts: components["schemas"]["KnowledgeConflictDto"][];
+        };
+        ListConnectorLinksResponse: {
+            connectorId: string;
+            links: components["schemas"]["ConnectorLinkSummary"][];
+            nextCursor: string | null;
+        };
+        ListConnectorRunItemsResponse: {
+            runId: string;
+            items: components["schemas"]["ConnectorRunItemInfo"][];
+            truncated: boolean;
+        };
+        ListConnectorRunsResponse: {
+            connectorId: string;
+            runs: components["schemas"]["ConnectorRunInfo"][];
+            nextCursor: string | null;
+        };
+        ListConnectorWorkItemsResponse: {
+            workItems: components["schemas"]["ConnectorWorkItemInfo"][];
+            total: number;
+            nextCursor: string | null;
+        };
+        ListConnectorsResponse: {
+            workspaceId: string;
+            connectors: components["schemas"]["ConnectorSummary"][];
+        };
+        ListDocumentRelationsResponse: {
+            documentId: string;
+            relations: components["schemas"]["RelationWithProvenance"][];
+        };
+        ListDocumentThreadsResponse: {
+            documentId: string;
+            threads: components["schemas"]["DocumentThread"][];
+        };
+        ListDocumentsResponse: {
+            items: components["schemas"]["DocumentSummary"][];
+            nextCursor: string | null;
+        };
+        ListEntitiesResponse: {
+            resolvedAsOf?: components["schemas"]["ResolvedAsOf"];
+            entities: components["schemas"]["EntitySummary"][];
+        };
+        ListGlossaryExclusionsResponse: {
+            documentId: string;
+            exclusions: components["schemas"]["GlossaryExclusion"][];
+        };
+        ListGlossaryResponse: {
+            workspaceId: string;
+            projectId: string | null;
+            terms: components["schemas"]["GlossaryTerm"][];
+        };
+        ListGroupMappingsResponse: {
+            mappings: components["schemas"]["GroupMappingView"][];
+            providers: {
+                id: string;
+                name: string;
+                groupSyncMode: components["schemas"]["GroupSyncMode"];
+                groupsClaim: string | null;
+            }[];
+            scimGroups: {
+                id: string;
+                displayName: string;
+                memberCount: number;
+            }[];
+            enabled: {
+                sso: boolean;
+                scim: boolean;
+            };
+        };
+        ListIdentityProvidersResponse: {
+            providers: components["schemas"]["IdentityProviderView"][];
+            secretsWritable: boolean;
+            kinds: components["schemas"]["IdpKind"][];
+        };
+        ListKnowledgeIssuesResponse: {
+            workspaceId: string;
+            issues: components["schemas"]["KnowledgeIssueInfo"][];
+        };
+        ListMergeRequestChecksResponse: {
+            mergeRequestId: string;
+            policy: components["schemas"]["LintPolicySettings"];
+            gate: components["schemas"]["LintGateState"];
+            checks: components["schemas"]["MergeRequestCheckInfo"][];
+        };
+        ListMergeRequestThreadsResponse: {
+            mergeRequestId: string;
+            threads: components["schemas"]["MergeRequestThread"][];
+        };
+        ListMergeRequestsResponse: {
+            documentId: string;
+            mergeRequests: components["schemas"]["MergeRequestInfo"][];
+        };
+        ListNotificationSubscriptionsResponse: {
+            workspaceId: string;
+            subscriptions: components["schemas"]["NotificationSubscriptionEntry"][];
+            nextCursor: string | null;
+        };
+        ListNotificationsResponse: {
+            workspaceId: string;
+            entries: components["schemas"]["NotificationEntry"][];
+            nextCursor: string | null;
+            unreadCount: number;
+            counts: {
+                mention: number;
+                review: number;
+                comment: number;
+                document: number;
+                verification: number;
+                access: number;
+                job: number;
+            };
+        };
+        ListPlatformAuditLogsResponse: {
+            entries: components["schemas"]["AuditLogEntry"][];
+            nextCursor: string | null;
+        };
+        ListProjectsResponse: {
+            projects: components["schemas"]["ProjectSummary"][];
+            nextCursor: string | null;
+        };
+        ListReleaseTagsResponse: {
+            tags: components["schemas"]["ReleaseTagDto"][];
+        };
+        ListReleasesResponse: {
+            connectorId: string;
+            releases: components["schemas"]["ReleaseNoteInfo"][];
+            error: string | null;
+        };
+        ListRevisionsResponse: {
+            documentId: string;
+            revisions: components["schemas"]["RevisionNode"][];
+        };
+        ListSavedFiltersResponse: {
+            workspaceId: string;
+            filters: components["schemas"]["SavedFilter"][];
+        };
+        ListSessionsResponse: {
+            sessions: components["schemas"]["SessionView"][];
+        };
+        ListSourcePoliciesResponse: {
+            policies: components["schemas"]["SourcePolicy"][];
+            webAccess: components["schemas"]["WebAccessSettings"];
+        };
+        ListSsoDomainsResponse: {
+            domains: components["schemas"]["SsoDomainView"][];
+            providers: {
+                id: string;
+                name: string;
+            }[];
+            canVerifyManually: boolean;
+        };
+        ListTemplateVersionsResponse: {
+            versions: components["schemas"]["TemplateVersionInfo"][];
+        };
+        ListTemplatesResponse: {
+            templates: components["schemas"]["TemplateSummary"][];
+        };
+        ListTestFixturesResponse: {
+            fixtures: components["schemas"]["TestFixtureSummary"][];
+        };
+        ListTrackerRoutesResponse: {
+            routes: components["schemas"]["TrackerRouteInfo"][];
+        };
+        ListUserGroupMembersResponse: {
+            groupId: string;
+            members: components["schemas"]["UserGroupMemberEntry"][];
+        };
+        ListUserGroupsResponse: {
+            workspaceId: string;
+            groups: components["schemas"]["UserGroupSummary"][];
+        };
+        ListUsersResponse: {
+            users: components["schemas"]["UserSummary"][];
+        };
+        ListWorkflowRunsResponse: {
+            runs: components["schemas"]["WorkflowRunInfo"][];
+            nextCursor: string | null;
+            counts: {
+                pending: number;
+                running: number;
+                "awaiting-review": number;
+                paused: number;
+                completed: number;
+                failed: number;
+                cancelled: number;
+            };
+        };
+        ListWorkflowsResponse: {
+            workflows: components["schemas"]["WorkflowDefinitionInfo"][];
+        };
+        ListWorkspaceCandidatesResponse: {
+            workspaceId: string;
+            candidates: components["schemas"]["WorkspaceCandidate"][];
+        };
+        ListWorkspaceMembersResponse: {
+            workspaceId: string;
+            members: components["schemas"]["WorkspaceMemberEntry"][];
+        };
+        ListWorkspaceMergeRequestsResponse: {
+            workspaceId: string;
+            mergeRequests: components["schemas"]["MergeRequestInfo"][];
+            nextCursor: string | null;
+            counts: {
+                open: number;
+                merged: number;
+                closed: number;
+            };
+        };
+        ListWorkspacesResponse: {
+            workspaces: components["schemas"]["WorkspaceSummary"][];
+        };
+        /** @enum {string} */
+        Locale: "en" | "ru";
+        LogoutResponse: {
+            ok: boolean;
+        };
+        MarkNotificationsReadResponse: {
+            updated: number;
+            unreadCount: number;
+        };
+        McpConnectionInfo: {
+            url: string;
+            serverName: string;
+            /** @enum {string} */
+            authMode: "none" | "api-key";
+            version: string;
+            tools: components["schemas"]["McpToolSummary"][];
+        };
+        McpToolSummary: {
+            name: string;
+            description: string;
+            readOnly: boolean;
+        };
+        MeResponse: {
+            userId: string;
+            email: string;
+            displayName: string;
+            avatarUrl: components["schemas"]["AvatarUrl"];
+            /** @enum {string} */
+            mode: "dev" | "api-key" | "session";
+            isAdmin: boolean;
+            locale: components["schemas"]["Locale"];
+            authMethod: components["schemas"]["AuthMethod"] | null;
+            emailVerified: boolean;
+            emailVerificationRequired: boolean;
+            memberships: components["schemas"]["WorkspaceMembership"][];
+        };
+        /** @enum {string} */
+        MemberCapability: "api-test-suites.generate" | "api-test-suites.run";
+        /** @enum {string} */
+        MembershipSource: "manual" | "jit" | "group" | "scim";
+        MergeMergeRequestResponse: {
+            mergeRequest: components["schemas"]["MergeRequestInfo"];
+            mergedRevision: components["schemas"]["RevisionInfo"] | null;
+        };
+        MergeRequestApiChangesResponse: {
+            mergeRequestId: string;
+            documentId: string;
+            applicable: boolean;
+            policy: components["schemas"]["ApiBreakingChangePolicy"];
+            diff: components["schemas"]["ApiSpecDiff"] | null;
+            affectedPages: {
+                [key: string]: components["schemas"]["ApiAffectedPage"][];
+            };
+            ack: components["schemas"]["ApiBreakingAck"] | null;
+            blocked: boolean;
+        };
+        MergeRequestCheckCounts: {
+            error: number;
+            warning: number;
+            suggestion: number;
+        };
+        MergeRequestCheckInfo: {
+            checkId: string;
+            mergeRequestId: string;
+            kind: components["schemas"]["MergeRequestCheckKind"];
+            headRevisionId: string;
+            current: boolean;
+            status: components["schemas"]["MergeRequestCheckStatus"];
+            reason: components["schemas"]["MergeRequestCheckReason"] | null;
+            styleguideId: string | null;
+            agentRunId: string | null;
+            counts: components["schemas"]["MergeRequestCheckCounts"] | null;
+            unresolved: number;
+            override: components["schemas"]["MergeRequestCheckOverride"] | null;
+            createdAt: string;
+            publishedAt: string | null;
+        };
+        /** @enum {string} */
+        MergeRequestCheckKind: "lint";
+        MergeRequestCheckOverride: {
+            by: string;
+            at: string;
+            reason: string;
+        };
+        /** @enum {string} */
+        MergeRequestCheckReason: "superseded" | "no-styleguide" | "restricted" | "author-unavailable" | "budget" | "run-failed" | "stale";
+        /** @enum {string} */
+        MergeRequestCheckStatus: "pending" | "running" | "passed" | "failed" | "error" | "skipped";
+        MergeRequestDiffResponse: {
+            mergeRequest: components["schemas"]["MergeRequestInfo"];
+            compare: components["schemas"]["CompareResponse"];
+        };
+        MergeRequestInfo: {
+            mergeRequestId: string;
+            documentId: string;
+            title: string;
+            description: string | null;
+            sourceBranch: string;
+            targetBranch: string;
+            sourceHeadRevisionId: string | null;
+            targetHeadRevisionId: string | null;
+            mergeBaseRevisionId: string | null;
+            status: components["schemas"]["MergeRequestStatus"];
+            isDraft: boolean;
+            authorId: string;
+            assigneeId: string | null;
+            approvedBy: string[];
+            reviewers: string[];
+            threadStats: {
+                total: number;
+                unresolved: number;
+            };
+            strategy: components["schemas"]["MergeStrategy"] | null;
+            mergedRevisionId: string | null;
+            createdAt: string;
+            mergedAt: string | null;
+            closedAt: string | null;
+            provenance: components["schemas"]["MergeRequestProvenance"];
+            captureId: string | null;
+        };
+        /** @enum {string} */
+        MergeRequestProvenance: "manual" | "agent" | "captured";
+        /** @enum {string} */
+        MergeRequestStatus: "open" | "merged" | "closed";
+        MergeRequestThread: {
+            threadId: string;
+            source: components["schemas"]["ReviewThreadSource"];
+            resolvable: boolean;
+            resolved: boolean;
+            resolvedBy: string | null;
+            resolvedAt: string | null;
+            anchor: components["schemas"]["ReviewThreadAnchor"] | null;
+            comments: components["schemas"]["ReviewComment"][];
+            createdAt: string;
+            mergeRequestId: string;
+            checkId: string | null;
+            ruleId: string | null;
+        };
+        MergeRequestThreadAnchor: {
+            /** @enum {string} */
+            type: "line";
+            revisionId: string;
+            line: number;
+            excerpt?: string;
+        } | {
+            /** @enum {string} */
+            type: "text";
+            revisionId: string;
+            quote: string;
+            prefix?: string;
+            suffix?: string;
+        } | {
+            /** @enum {string} */
+            type: "section";
+            heading: string;
+        } | {
+            /** @enum {string} */
+            type: "entity";
+            entityKey: string;
+        };
+        MergeRequestThreadResponse: {
+            thread: components["schemas"]["MergeRequestThread"];
+        };
+        /** @enum {string} */
+        MergeStrategy: "merge-commit" | "squash";
+        NoteCapturePayload: {
+            body: string;
+            appliesTo?: string[];
+        };
+        /** @enum {string} */
+        NotificationCategory: "mention" | "review" | "comment" | "document" | "verification" | "access" | "job";
+        NotificationEntry: {
+            id: string;
+            workspaceId: string;
+            type: string;
+            category: components["schemas"]["NotificationCategory"] | null;
+            reason: components["schemas"]["NotificationReason"] | string;
+            actor: string | null;
+            documentId: string | null;
+            subjectType: components["schemas"]["NotificationSubjectType"] | null;
+            subjectId: string | null;
+            title: string | null;
+            metadata: {
+                [key: string]: unknown;
+            };
+            readAt: string | null;
+            createdAt: string;
+        };
+        NotificationPreferences: {
+            workspaceId: string;
+            mutedCategories: components["schemas"]["NotificationCategory"][];
+            autoWatchOnComment: boolean;
+            emailDirected: boolean;
+        };
+        /** @enum {string} */
+        NotificationReason: "watching" | "manager" | "participant" | "author" | "owner" | "assigned" | "review-requested" | "mention";
+        /** @enum {string} */
+        NotificationSubjectType: "document" | "merge-request" | "project";
+        NotificationSubscriptionEntry: {
+            id: string;
+            subjectType: components["schemas"]["NotificationSubjectType"];
+            subjectId: string;
+            title: string | null;
+            /** @enum {string} */
+            state: "watching" | "muted";
+            reason: string;
+            createdAt: string;
+        };
+        NotificationUnreadCountResponse: {
+            workspaceId: string;
+            count: number;
+            counts: {
+                mention: number;
+                review: number;
+                comment: number;
+                document: number;
+                verification: number;
+                access: number;
+                job: number;
+            };
+        };
+        OidcProviderConfig: {
+            issuer: string;
+            clientId: string;
+            scopes: string[];
+        };
+        "OverrideSetting<number>": {
+            requested: number | null;
+            effective: number;
+            /** @enum {string} */
+            source: "db" | "env";
+        };
+        PageInsightsResponse: {
+            views: number;
+            byClass: {
+                human: number;
+                assisted: number;
+                agent: number;
+            };
+            uniqueReaders: number;
+            medianReadMs: number | null;
+            series: components["schemas"]["AnalyticsDayPoint"][];
+            documentId: string;
+            from: string;
+            to: string;
+            lastHumanViewAt: string | null;
+            collectingSince: string | null;
+        };
+        PostAssistantMessageResponse: {
+            enabled: boolean;
+            userMessage: components["schemas"]["AssistantMessageInfo"];
+            assistantMessage: components["schemas"]["AssistantMessageInfo"];
+        };
+        ProfileOpenWork: {
+            authoredMergeRequests: number;
+            awaitingTheirReview: number;
+            unresolvedThreads: number;
+        };
+        ProfilePage: {
+            documentId: string;
+            title: string;
+            category: string;
+            projectId: string;
+            status: components["schemas"]["RevisionStatus"] | null;
+            authored: boolean;
+            revisions: number;
+            lastTouchedAt: string;
+        };
+        ProjectAnalyticsResponse: {
+            from: string;
+            to: string;
+            traffic: components["schemas"]["AnalyticsTrafficFilter"];
+            collectingSince: string | null;
+            topPages: components["schemas"]["AnalyticsPageRow"][];
+            neverRead: components["schemas"]["AnalyticsQuietPage"][];
+            dead: components["schemas"]["AnalyticsQuietPage"][];
+            deadAfterDays: number;
+            views: number;
+            byClass: {
+                human: number;
+                assisted: number;
+                agent: number;
+            };
+            uniqueReaders: number;
+            medianReadMs: number | null;
+            series: components["schemas"]["AnalyticsDayPoint"][];
+            projectId: string;
+        };
+        ProjectCascadeCounts: {
+            documents: number;
+            revisions: number;
+            attachments: number;
+            mergeRequests: number;
+            discussions: number;
+            workflowRuns: number;
+            storedFiles: number;
+        };
+        ProjectContributor: {
+            userId: string;
+            pageCount: number;
+            lastActiveAt: string;
+        };
+        ProjectDeletionCounts: {
+            documents: number;
+            glossaryTerms: number;
+            connectors: number;
+            workflowDefinitions: number;
+            activeWorkflowRuns: number;
+            pendingImports: number;
+            watchers: number;
+        };
+        /** @enum {string} */
+        ProjectDeletionMode: "move" | "cascade";
+        ProjectDeletionPreview: {
+            projectId: string;
+            name: string;
+            empty: boolean;
+            lastInWorkspace: boolean;
+            counts: components["schemas"]["ProjectDeletionCounts"];
+            glossaryConflicts: string[];
+            cascade: components["schemas"]["ProjectCascadeCounts"];
+        };
+        ProjectOverviewResponse: {
+            project: components["schemas"]["ProjectSummary"];
+            contributors: components["schemas"]["ProjectContributor"][];
+            counts: {
+                documents: number;
+                glossaryTerms: number;
+                connectors: number;
+                workflows: number;
+                openMergeRequests: number;
+            };
+            recentPages: {
+                documentId: string;
+                title: string;
+                updatedAt: string;
+            }[];
+        };
+        ProjectSiteResponse: {
+            site: components["schemas"]["PublishedSiteSummary"] | null;
+            policy: {
+                enabled: boolean;
+                ceiling: boolean;
+                baseDomain: string | null;
+                customDomains: boolean;
+                suggestedSlug: string;
+                askDailyCeiling: number;
+                askModelConfigured: boolean;
+            };
+        };
+        ProjectSummary: {
+            projectId: string;
+            workspaceId: string;
+            name: string;
+            description: string | null;
+            avatarUrl: components["schemas"]["AvatarUrl"];
+            avatarEmoji: string | null;
+            avatarColor: string | null;
+            documentCount: number;
+            createdAt: string;
+            restricted?: boolean;
+        };
+        ProposeAgentFindingResponse: {
+            mergeRequestId: string;
+            documentId: string;
+            documentTitle: string;
+            branch: string;
+            title: string;
+        };
+        ProposeRelationsResponse: {
+            documentId: string;
+            changed: boolean;
+            mergeRequestId: string | null;
+            branch: string | null;
+            title: string | null;
+            added: components["schemas"]["RelationInput"][];
+            removed: components["schemas"]["RelationRef"][];
+            tags: string[];
+        };
+        PublicShareDownloadOffer: {
+            formats: {
+                zip: boolean;
+                html: boolean;
+                pdf: boolean;
+                docx: boolean;
+            };
+            ttlHours: number;
+        };
+        PublicShareExport: {
+            id: string;
+            format: components["schemas"]["ExportFormat"];
+            status: components["schemas"]["ExportStatus"];
+            stage: components["schemas"]["ExportStage"] | null;
+            pageCount: number | null;
+            sizeBytes: number | null;
+            error: {
+                code: components["schemas"]["ExportErrorCode"];
+                message: string;
+            } | null;
+            createdAt: string;
+            expiresAt: string | null;
+        };
+        PublicSharePage: {
+            documentId: string;
+            title: string;
+            markdown: string;
+            updatedAt: string | null;
+        };
+        PublicShareResponse: {
+            /** @enum {boolean} */
+            locked: true;
+        } | {
+            /** @enum {boolean} */
+            locked: false;
+            rootDocumentId: string;
+            title: string;
+            includeSubtree: boolean;
+            tree: components["schemas"]["PublicShareTreeNode"][];
+            treeTruncated: boolean;
+            expiresAt: string | null;
+            download: components["schemas"]["PublicShareDownloadOffer"] | null;
+        };
+        PublicShareTreeNode: {
+            documentId: string;
+            parentId: string | null;
+            title: string;
+            position: number;
+        };
+        PublicSiteAskResponse: {
+            answer: string;
+            sources: components["schemas"]["PublicSiteAskSource"][];
+            citations?: components["schemas"]["AnswerCitation"][];
+        };
+        PublicSiteAskSource: {
+            cite: string;
+            documentId: string;
+            title: string;
+            headingPath: string[];
+            url: string;
+        };
+        PublicSiteFacetsResponse: {
+            categories: {
+                value: string;
+                count: number;
+            }[];
+            tags: {
+                count: number;
+                key: string;
+                name: string;
+            }[];
+        };
+        PublicSiteLogo: ({
+            /** @enum {string} */
+            kind: "image";
+            url: string;
+        } | {
+            /** @enum {string} */
+            kind: "emoji";
+            emoji: string;
+            color: string | null;
+        }) | null;
+        PublicSiteSearchResponse: {
+            results: components["schemas"]["PublicSiteSearchResult"][];
+        };
+        PublicSiteSearchResult: {
+            documentId: string;
+            title: string;
+            slugPath: string;
+            snippet: components["schemas"]["PublicSiteSearchSnippetPart"][];
+            category: string;
+            tags: components["schemas"]["SiteSearchTag"][];
+        };
+        PublicSiteSearchSnippetPart: {
+            text: string;
+            hit: boolean;
+        };
+        PublicSiteTreeNode: {
+            documentId: string;
+            parentId: string | null;
+            title: string;
+            slugPath: string;
+            position: number;
+            childCount: number;
+        };
+        PublicSiteTreeResponse: {
+            nodes: components["schemas"]["PublicSiteTreeNode"][];
+        };
+        PublicSiteWidgetResponse: {
+            site: {
+                id: string;
+                title: string;
+                theme: components["schemas"]["SiteTheme"];
+                logo: components["schemas"]["PublicSiteLogo"];
+                rootUrl: string;
+            };
+            embedOrigins: string[];
+        };
+        PublishBranchResponse: {
+            mergeRequest: components["schemas"]["MergeRequestInfo"];
+            mergedRevision: components["schemas"]["RevisionInfo"] | null;
+            merged: boolean;
+            /** @enum {string|null} */
+            reason: "draft" | "approvals" | "diverged" | "breaking-api" | "lint" | "protected" | null;
+        };
+        /** @enum {string} */
+        PublishedSiteStatus: "draft" | "live" | "unpublished";
+        PublishedSiteSummary: {
+            id: string;
+            workspaceId: string;
+            projectId: string;
+            slug: string;
+            status: components["schemas"]["PublishedSiteStatus"];
+            rootDocumentId: string | null;
+            rootDocumentTitle: string | null;
+            theme: components["schemas"]["SiteTheme"];
+            seoIndexable: boolean;
+            defaultVersionId: string | null;
+            url: string;
+            versions: components["schemas"]["SiteVersionSummary"][];
+            domains: components["schemas"]["SiteDomainSummary"][];
+            ask: components["schemas"]["SiteAskSettings"];
+            createdAt: string;
+            updatedAt: string;
+        };
+        PublishingSettingsOverride: {
+            allowShareLinks: boolean | null;
+            allowPasswordlessShares: boolean | null;
+            allowPublicSites: boolean | null;
+            allowPublicEmbeds: boolean | null;
+        };
+        PublishingSettingsResponse: {
+            workspaceId: string;
+            effective: components["schemas"]["PublishingSettingsValues"];
+            override: components["schemas"]["PublishingSettingsOverride"];
+            ceiling: {
+                sharingEnabled: boolean;
+                sitesEnabled: boolean;
+                maxTtlDays: number;
+            };
+        };
+        PublishingSettingsValues: {
+            allowShareLinks: boolean;
+            allowPasswordlessShares: boolean;
+            allowPublicSites: boolean;
+            allowPublicEmbeds: boolean;
+        };
+        PushDocumentResponse: {
+            run: components["schemas"]["ConnectorRunInfo"];
+        };
+        QaOperationRow: {
+            documentId: string;
+            specTitle: string;
+            entityKey: string;
+            method: string | null;
+            path: string;
+            summary: string | null;
+            deprecated: boolean;
+            status: components["schemas"]["QaSuiteStatus"];
+            suite: {
+                state: components["schemas"]["QaSuiteState"];
+                cases: number | null;
+            };
+            prerequisites: number;
+            bound: {
+                suite: number;
+                cases: number;
+            };
+            reviewFixtures: number;
+            fixtures: number;
+            lastRun: {
+                id: string;
+                status: components["schemas"]["ApiTestRunStatus"];
+                counts: {
+                    passed: number;
+                    failed: number;
+                    notRun: number;
+                };
+                finishedAt: string | null;
+            } | null;
+        };
+        QaOverviewResponse: {
+            operations: components["schemas"]["QaOperationRow"][];
+            specs: number;
+            runner: boolean;
+        };
+        /** @enum {string} */
+        QaSuiteState: "none" | "outdated" | "current";
+        /** @enum {string} */
+        QaSuiteStatus: "review" | "unbound" | "outdated" | "none" | "ready";
+        QualityAuditSettings: {
+            days: number;
+            /** @enum {string} */
+            source: "db" | "env";
+            defaultDays: number;
+        };
+        /** @enum {string} */
+        QualityDimension: "clarity" | "completeness" | "links" | "ownership" | "duplication" | "style";
+        QualityDimensionMean: {
+            mean: number | null;
+            measured: number;
+        };
+        QualityDimensionScores: {
+            clarity: number | null;
+            completeness: number | null;
+            links: number | null;
+            ownership: number | null;
+            duplication: number | null;
+            style: number | null;
+        };
+        QualityDuplicate: {
+            documentId: string;
+            similarity: number;
+        };
+        QualityHistoryPoint: {
+            date: string;
+            overall: number;
+        };
+        QualityIssue: {
+            dimension: components["schemas"]["QualityDimension"];
+            severity: components["schemas"]["QualityIssueSeverity"];
+            message: string;
+            quote?: string;
+            ruleId?: string;
+            link?: string;
+            documentId?: string;
+        };
+        /** @enum {string} */
+        QualityIssueSeverity: "error" | "warning" | "info";
+        QualityListResponse: {
+            rows: components["schemas"]["QualityPageRow"][];
+            total: number;
+            nextCursor: string | null;
+        };
+        QualityPageRow: {
+            documentId: string;
+            projectId: string;
+            title: string;
+            overall: number;
+            dimensions: components["schemas"]["QualityDimensionScores"];
+            issueCount: number;
+            stale: boolean;
+            scoredAt: string;
+        };
+        QualityPeer: {
+            documentId: string;
+            similarity: number;
+            title: string;
+        };
+        QualityRuleCount: {
+            ruleId: string;
+            text: string | null;
+            count: number;
+            pages: number;
+        };
+        QualityScore: {
+            id: string;
+            documentId: string;
+            projectId: string;
+            revisionId: string;
+            agentRunId: string | null;
+            rubricVersion: number;
+            overall: number;
+            dimensions: components["schemas"]["QualityDimensionScores"];
+            issues: components["schemas"]["QualityIssue"][];
+            duplicates: components["schemas"]["QualityDuplicate"][];
+            createdAt: string;
+        };
+        QualitySummaryResponse: {
+            totalPages: number;
+            scoredPages: number;
+            average: number | null;
+            distribution: number[];
+            dimensions: {
+                clarity: components["schemas"]["QualityDimensionMean"];
+                completeness: components["schemas"]["QualityDimensionMean"];
+                links: components["schemas"]["QualityDimensionMean"];
+                ownership: components["schemas"]["QualityDimensionMean"];
+                duplication: components["schemas"]["QualityDimensionMean"];
+                style: components["schemas"]["QualityDimensionMean"];
+            };
+            history: components["schemas"]["QualityHistoryPoint"][];
+            worst: components["schemas"]["QualityPageRow"][];
+            rules: components["schemas"]["QualityRuleCount"][];
+            lastAuditAt: string | null;
+            lowThreshold: number;
+        };
+        RankApiTestFixturesResponse: {
+            runId: string | null;
+            existing: boolean;
+        };
+        RegenerateWikiResponse: {
+            runId: string;
+        };
+        ReindexResponse: {
+            workspaceId: string;
+            enqueued: number;
+            jobIds: string[];
+        };
+        RelatedDocumentResult: {
+            documentId: string;
+            title: string;
+            distance: number;
+            via: {
+                entityKey: string;
+                relationType: string;
+                confidence: number;
+            }[];
+        };
+        RelationCapturePayload: {
+            documentId: string;
+            type: string;
+            targetKey: string;
+            rationale: string;
+        };
+        RelationInput: {
+            type: components["schemas"]["AuthorableRelationType"];
+            target: components["schemas"]["RelationTarget"];
+        };
+        RelationRef: {
+            type: string;
+            targetKey: string;
+        };
+        RelationTarget: {
+            type: string;
+            key: string;
+            name?: string;
+        };
+        RelationWithProvenance: {
+            type: string;
+            from: string;
+            to: components["schemas"]["EntityRef"];
+            provenance: {
+                revisionId: string;
+                extractor: components["schemas"]["FactExtractor"];
+                confidence: number;
+                sourceChunkId?: string;
+                snippet?: string;
+            };
+        };
+        ReleaseNoteInfo: {
+            tag: string | null;
+            date: string | null;
+            documentId: string | null;
+            breakingCount: number;
+            suspectedCount: number;
+            generated: boolean;
+        };
+        ReleaseTagDto: {
+            id: string;
+            workspaceId: string;
+            projectId: string | null;
+            name: string;
+            at: string;
+            note: string | null;
+            createdBy: string;
+            createdAt: string;
+        };
+        RenderTemplateResponse: {
+            templateRef: components["schemas"]["TemplateRef"];
+            templateVersion: number;
+            title: string;
+            category: components["schemas"]["DocumentCategory"];
+            frontmatter: {
+                [key: string]: unknown;
+            };
+            body: string;
+            markdown: string;
+        };
+        RepoGuidanceImportResponse: {
+            connectorId: string;
+            found: number;
+            created: number;
+            updated: number;
+            pending: number;
+            removed: number;
+            unchanged: number;
+            truncated: string[];
+            skipped: {
+                path: string;
+                /** @enum {string} */
+                reason: "oversize" | "empty" | "limit";
+            }[];
+        };
+        RepoWikiInfo: {
+            connectorId: string;
+            enabled: boolean;
+            changelog: boolean;
+            delivery: components["schemas"]["WikiDelivery"];
+            autoRegenerate: components["schemas"]["WikiAutoRegenerate"];
+            effort: {
+                asked: components["schemas"]["WikiEffort"];
+                applied: components["schemas"]["WikiEffort"];
+                clamped: boolean;
+            };
+            /** @enum {string} */
+            source: "repo-file" | "default";
+            configErrors: string[];
+            configUnreadable: string | null;
+            sections: components["schemas"]["RepoWikiSection"][];
+        };
+        RepoWikiSection: {
+            key: string;
+            section: components["schemas"]["WikiSection"];
+            title: string;
+            documentId: string | null;
+            version: string | null;
+            lastRegeneratedAt: string | null;
+            stale: boolean;
+            openMergeRequestId: string | null;
+        };
+        ReportKnowledgeIssueResponse: {
+            issue: components["schemas"]["KnowledgeIssueInfo"];
+            deduplicated: boolean;
+        };
+        /** @enum {string} */
+        RequestableAccessLevel: "view" | "edit";
+        ResendVerificationResponse: {
+            ok: boolean;
+            alreadyVerified: boolean;
+            debugToken?: string;
+        };
+        ResetPasswordResponse: {
+            ok: boolean;
+        };
+        ResolvedAsOf: {
+            kind: components["schemas"]["AsOfKind"];
+            ref: string;
+            at: string;
+            knownAt: string | null;
+        };
+        ResourceAccessResponse: {
+            resourceType: components["schemas"]["AccessResourceType"];
+            resourceId: string;
+            restricted: boolean;
+            draft: boolean;
+            inherited: components["schemas"]["InheritedRestriction"][];
+            level: components["schemas"]["EffectiveAccessLevel"];
+            canManage: boolean;
+            grants: components["schemas"]["AccessGrantEntry"][];
+        };
+        ReviewComment: {
+            commentId: string;
+            threadId: string;
+            authorId: string;
+            body: string;
+            replyToId: string | null;
+            createdAt: string;
+            updatedAt: string | null;
+            agentKey: string | null;
+            pending: boolean;
+        };
+        ReviewThreadAnchor: components["schemas"]["MergeRequestThreadAnchor"];
+        /** @enum {string} */
+        ReviewThreadSource: "human" | "ai";
+        RevisionInfo: {
+            revisionId: string;
+            documentId: string;
+            revisionNumber: number;
+            contentHash: string | null;
+            contentType: string;
+            status: components["schemas"]["RevisionStatus"];
+            message: string | null;
+            createdAt: string;
+            finalizedAt: string | null;
+            coAuthorIds: string[];
+        };
+        RevisionNode: {
+            revisionId: string;
+            documentId: string;
+            revisionNumber: number;
+            contentHash: string | null;
+            contentType: string;
+            status: components["schemas"]["RevisionStatus"];
+            message: string | null;
+            createdAt: string;
+            finalizedAt: string | null;
+            coAuthorIds: string[];
+            branch: string | null;
+            parentRevisionIds: string[];
+        };
+        /** @enum {string} */
+        RevisionStatus: "draft" | "finalized" | "indexing" | "indexed" | "failed";
+        RevokeSessionsResponse: {
+            revoked: number;
+        };
+        RotateAgentTriggerSecretResponse: {
+            secret: string;
+            url: string;
+        };
+        RotateApiKeyResponse: {
+            apiKey: string;
+            rotatedAt: string;
+        };
+        SamlProviderView: {
+            idpEntityId: string;
+            ssoUrl: string;
+            idpCert: string;
+            allowIdpInitiated: boolean;
+            emailAttribute: string | null;
+            nameAttribute: string | null;
+            entityId: string;
+        };
+        SampleRequest: {
+            method: string;
+            url: string;
+            query: {
+                name: string;
+                value: components["schemas"]["SampleText"];
+            }[];
+            headers: {
+                name: string;
+                value: components["schemas"]["SampleText"];
+            }[];
+            body: {
+                contentType: string;
+                text: string;
+                json?: unknown;
+            } | null;
+        };
+        SampleText: (string | {
+            env: string;
+        })[];
+        SavedFilter: {
+            id: number;
+            workspaceId: string;
+            ownerId: string;
+            name: string;
+            query: components["schemas"]["SavedFilterQuery"];
+            createdAt: string;
+            updatedAt: string;
+        };
+        SavedFilterChip: {
+            key: string;
+            operator: string;
+            values: string[];
+        };
+        SavedFilterQuery: {
+            status?: components["schemas"]["MergeRequestStatus"] | "all";
+            search?: string;
+            chips: components["schemas"]["SavedFilterChip"][];
+        };
+        /** @enum {string} */
+        ScimDefaultRole: "none" | "guest" | "viewer" | "editor" | "admin";
+        ScimSettingsView: {
+            workspaceId: string;
+            baseUrl: string;
+            defaultRole: components["schemas"]["ScimDefaultRole"];
+            tokens: components["schemas"]["ScimTokenView"][];
+            users: number;
+            activeUsers: number;
+            groups: number;
+        };
+        ScimTokenCreated: {
+            token: components["schemas"]["ScimTokenView"];
+            secret: string;
+        };
+        ScimTokenView: {
+            id: string;
+            name: string;
+            prefix: string;
+            createdAt: string;
+            lastUsedAt: string | null;
+        };
+        SearchApiOperationsResponse: {
+            operations: {
+                specTitle: string;
+                protocol: components["schemas"]["ApiOperationProtocol"];
+                method: string | null;
+                path: string;
+                operationId: string | null;
+                entityKey: string;
+                summary: string | null;
+                tags: string[];
+                deprecated: boolean;
+                pointer: string;
+                documentId: string;
+                revisionId: string;
+            }[];
+        };
+        /** @enum {string} */
+        SearchDegradedLeg: "fulltext";
+        SearchResponse: {
+            results: components["schemas"]["SearchResult"][];
+            related?: components["schemas"]["RelatedDocumentResult"][];
+            degraded?: components["schemas"]["SearchDegradedLeg"][];
+            resolvedAsOf?: components["schemas"]["ResolvedAsOf"];
+            searchId?: string;
+        };
+        SearchResult: {
+            documentId: string;
+            revisionId: string;
+            chunkId: string;
+            title: string;
+            snippet: string;
+            snippetParts?: {
+                text: string;
+                hit: boolean;
+            }[];
+            score: number;
+            vectorScore?: number;
+            trust?: components["schemas"]["DocumentTrust"];
+            headingPath?: string[];
+            entities?: components["schemas"]["EntityRef"][];
+            layer?: components["schemas"]["EntityLayer"];
+            communityPath?: string[];
+            validFrom?: string | null;
+            validTo?: string | null;
+        };
+        SemanticDiff: {
+            entities: {
+                added: string[];
+                removed: string[];
+            };
+            relations: {
+                added: components["schemas"]["SemanticRelationChange"][];
+                removed: components["schemas"]["SemanticRelationChange"][];
+            };
+            embeddingShift: {
+                score: number;
+                meaningful: boolean;
+            } | null;
+        };
+        SemanticRelationChange: {
+            type: string;
+            targetKey: string;
+            extractor: string;
+            confidence: number;
+        };
+        SessionView: {
+            id: string;
+            authMethod: components["schemas"]["AuthMethod"];
+            providerId: string | null;
+            providerName: string | null;
+            ip: string | null;
+            userAgent: string | null;
+            createdAt: string;
+            lastSeenAt: string | null;
+            expiresAt: string;
+            current: boolean;
+        };
+        SetAnswerFeedbackResponse: {
+            feedback: components["schemas"]["AnswerFeedbackInfo"];
+        };
+        ShareLinkListResponse: {
+            shares: components["schemas"]["ShareLinkSummary"][];
+            policy: {
+                enabled: boolean;
+                allowPasswordlessShares: boolean;
+                maxTtlDays: number;
+            };
+        };
+        ShareLinkSummary: {
+            id: string;
+            workspaceId: string;
+            documentId: string;
+            documentTitle: string;
+            includeSubtree: boolean;
+            url: string | null;
+            hasPassword: boolean;
+            allowDownload: boolean;
+            expiresAt: string | null;
+            revokedAt: string | null;
+            createdBy: string;
+            createdAt: string;
+        };
+        SiteAskSettings: {
+            enabled: boolean;
+            dailyBudget: number | null;
+            effectiveDailyBudget: number;
+            embedOrigins: string[];
+        };
+        SiteAudienceClaims: {
+            [key: string]: string[];
+        };
+        SiteAudienceRule: {
+            documentId: string;
+            documentTitle: string;
+            audience: components["schemas"]["SiteAudienceRuleKind"];
+            claims: components["schemas"]["SiteAudienceClaims"] | null;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        SiteAudienceRuleKind: "visitors" | "members";
+        SiteAudiencesResponse: {
+            rules: components["schemas"]["SiteAudienceRule"][];
+            visitorAuth: {
+                configured: boolean;
+                setAt: string | null;
+                canStore: boolean;
+            };
+            sessionTtlMinutes: number;
+        };
+        SiteBuildWarning: {
+            code: components["schemas"]["SiteBuildWarningCode"];
+            documentId: string | null;
+            title: string | null;
+        };
+        /** @enum {string} */
+        SiteBuildWarningCode: "headNotIndexed" | "noIndexedRevision" | "pageLimit";
+        /** @enum {string} */
+        SiteDomainCheckError: "txtMissing" | "txtMismatch" | "dnsError";
+        SiteDomainSummary: {
+            id: string;
+            hostname: string;
+            verified: boolean;
+            verifiedAt: string | null;
+            lastCheckAt: string | null;
+            lastError: components["schemas"]["SiteDomainCheckError"] | null;
+            txtName: string;
+            txtValue: string;
+            dnsTarget: string;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        SiteFont: "system" | "serif" | "rounded" | "mono";
+        SiteHeaderLink: {
+            label: string;
+            url: string;
+        };
+        SiteSearchTag: {
+            key: string;
+            name: string;
+        };
+        SiteSignInResponse: {
+            url: string;
+        };
+        SiteTheme: {
+            primaryColor: string | null;
+            primaryColorDark: string | null;
+            font: components["schemas"]["SiteFont"];
+            showLogo: boolean;
+            headerLinks: components["schemas"]["SiteHeaderLink"][];
+            footerText: string | null;
+        };
+        /** @enum {string} */
+        SiteVersionKind: "live" | "frozen";
+        /** @enum {string} */
+        SiteVersionStatus: "building" | "ready" | "failed";
+        SiteVersionSummary: {
+            id: string;
+            name: string;
+            slug: string;
+            kind: components["schemas"]["SiteVersionKind"];
+            sourceBranch: string | null;
+            status: components["schemas"]["SiteVersionStatus"];
+            builtAt: string | null;
+            pageCount: number;
+            warnings: components["schemas"]["SiteBuildWarning"][];
+            error: string | null;
+            isDefault: boolean;
+            createdAt: string;
+        };
+        SiteVisitorSecretResponse: {
+            secret: string;
+            setAt: string;
+        };
+        SourcePolicy: {
+            id: string;
+            workspaceId: string;
+            pattern: string;
+            allow: boolean;
+            note: string | null;
+            createdAt: string;
+            updatedAt: string;
+            createdBy: string | null;
+        };
+        /** @enum {string} */
+        SourceVerificationState: "verified" | "expired" | "edited" | "requested" | "outdated" | "flagged" | "unverified";
+        SsoDiscoverResponse: {
+            /** @enum {string} */
+            method: "password" | "sso";
+            enforced: boolean;
+            providers: components["schemas"]["SsoLoginProvider"][];
+            passwordAllowed: boolean;
+        };
+        SsoDomainView: {
+            domain: string;
+            workspaceId: string;
+            providerId: string | null;
+            providerName: string | null;
+            recordName: string;
+            verificationToken: string;
+            verifiedAt: string | null;
+            enforced: boolean;
+            createdAt: string;
+            recheckUntil: string | null;
+        };
+        SsoExchangeResponse: {
+            token: string;
+            expiresAt: string;
+            me: components["schemas"]["MeResponse"];
+            returnTo: string;
+        };
+        SsoLoginProvider: {
+            id: string;
+            name: string;
+            kind: components["schemas"]["IdpKind"];
+            preset: components["schemas"]["IdpPreset"];
+        };
+        SsoProvidersResponse: {
+            providers: components["schemas"]["SsoLoginProvider"][];
+            passwordLogin: boolean;
+        };
+        StaleReportResponse: {
+            workspaceId: string;
+            embeddingSignature: string;
+            driftedHeads: {
+                documentId: string;
+                revisionId: string;
+                title: string;
+                embeddingModel: string | null;
+                indexedAt: string | null;
+            }[];
+            stuckIndexing: {
+                jobId: string;
+                revisionId: string;
+                startedAt: string | null;
+            }[];
+            failedJobs: {
+                jobId: string;
+                revisionId: string;
+                attempts: number;
+                error: unknown;
+            }[];
+        };
+        StructuralChange: {
+            path: string;
+            /** @enum {string} */
+            kind: "added" | "removed" | "changed";
+            before?: unknown;
+            after?: unknown;
+        };
+        StructuralDiff: {
+            /** @enum {string} */
+            source: "content" | "frontmatter";
+            changes: components["schemas"]["StructuralChange"][];
+            summary: {
+                added: number;
+                removed: number;
+                changed: number;
+            };
+        };
+        StyleRule: {
+            id: string;
+            text: string;
+            severity: components["schemas"]["StyleRuleSeverity"];
+            enabled: boolean;
+            example?: {
+                bad: string;
+                good: string;
+            };
+        };
+        /** @enum {string} */
+        StyleRuleSeverity: "error" | "warning" | "suggestion";
+        StyleguideSummary: {
+            id: string;
+            workspaceId: string;
+            projectId: string | null;
+            name: string;
+            description: string;
+            rules: components["schemas"]["StyleRule"][];
+            createdBy: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        SubmitImportResponse: {
+            documentId: string;
+            revisionId: string;
+            attachmentId: string | null;
+        };
+        SuggestGlossaryTermsResponse: {
+            enabled: boolean;
+            projectId: string | null;
+            suggestions: components["schemas"]["GlossaryTermSuggestion"][];
+        };
+        /** @enum {string} */
+        SuitePrerequisiteSource: "link" | "path-param";
+        TemplateDetail: {
+            ref: components["schemas"]["TemplateRef"];
+            id: string | null;
+            builtInKey: components["schemas"]["BuiltInTemplateKey"] | null;
+            scope: components["schemas"]["TemplateScope"];
+            workspaceId: string;
+            projectId: string | null;
+            name: string;
+            description: string | null;
+            icon: string | null;
+            category: components["schemas"]["DocumentCategory"];
+            currentVersion: number;
+            enabled: boolean;
+            customized: boolean;
+            archivedAt: string | null;
+            updatedAt: string | null;
+            source: string;
+            meta: components["schemas"]["TemplateMeta"];
+            body: string;
+            tags: string[];
+            relations: components["schemas"]["TemplateRelationDefault"][];
+            frontmatter: {
+                [key: string]: unknown;
+            };
+            version: number;
+        };
+        TemplateMeta: {
+            category: components["schemas"]["DocumentCategory"];
+            titlePattern?: string;
+            description?: string;
+            placeholders: components["schemas"]["TemplatePlaceholder"][];
+            aiInstructions?: string;
+        };
+        TemplatePlaceholder: {
+            name: string;
+            label?: string;
+            kind: components["schemas"]["TemplatePlaceholderKind"];
+            required?: boolean;
+            hint?: string;
+        };
+        /** @enum {string} */
+        TemplatePlaceholderKind: "text" | "date" | "user" | "page" | "entity";
+        TemplateRef: string;
+        TemplateRelationDefault: {
+            type: string;
+            target: string;
+        };
+        /** @enum {string} */
+        TemplateScope: "built-in" | "workspace" | "project";
+        TemplateSummary: {
+            ref: components["schemas"]["TemplateRef"];
+            id: string | null;
+            builtInKey: components["schemas"]["BuiltInTemplateKey"] | null;
+            scope: components["schemas"]["TemplateScope"];
+            workspaceId: string;
+            projectId: string | null;
+            name: string;
+            description: string | null;
+            icon: string | null;
+            category: components["schemas"]["DocumentCategory"];
+            currentVersion: number;
+            enabled: boolean;
+            customized: boolean;
+            archivedAt: string | null;
+            updatedAt: string | null;
+        };
+        TemplateVersionInfo: {
+            version: number;
+            createdBy: string | null;
+            createdAt: string | null;
+            builtIn: boolean;
+        };
+        TestFixture: {
+            description: string | null;
+            inputs: {
+                [key: string]: components["schemas"]["FixtureScalar"] | null;
+            };
+            steps: components["schemas"]["FixtureStep"][];
+            teardown: components["schemas"]["FixtureCallStep"][];
+        };
+        TestFixtureResponse: {
+            documentId: string;
+            revisionId: string;
+            title: string;
+            fixture: components["schemas"]["TestFixture"] | null;
+            calls: components["schemas"]["FixtureCallInfo"][];
+            runValues: {
+                inputs: string[];
+                secrets: string[];
+            };
+            issues: components["schemas"]["FixtureIssueInfo"][];
+        };
+        TestFixtureSummary: {
+            documentId: string;
+            projectId: string;
+            title: string;
+            headRevisionId: string | null;
+            calls: string[];
+            brokenCalls: string[];
+            updatedAt: string;
+        };
+        TestIdentityProviderResponse: {
+            ok: boolean;
+            issuer: string | null;
+            authorizationEndpoint: string | null;
+            error: string | null;
+        };
+        TestRunCall: {
+            id: string;
+            /** @enum {string} */
+            kind: "call";
+            label: string;
+            target: components["schemas"]["TestRunTarget"];
+            request: components["schemas"]["TestRunRequest"];
+            expect: string;
+            capture: {
+                [key: string]: string;
+            };
+        };
+        TestRunCase: {
+            id: string;
+            /** @enum {string} */
+            kind: "positive" | "negative";
+            name: string;
+            target: components["schemas"]["TestRunTarget"];
+            request: components["schemas"]["TestRunRequest"];
+            expect: string;
+            setup: components["schemas"]["TestRunStep"][];
+            teardown: components["schemas"]["TestRunCall"][];
+            captures: string[];
+        };
+        TestRunNote: {
+            id: string;
+            /** @enum {string} */
+            kind: "manual";
+            label: string;
+            note: string;
+        };
+        /** @enum {string} */
+        TestRunOutcome: "pass" | "fail" | "error" | "skipped" | "not-run" | "manual";
+        TestRunPlan: {
+            documentId: string;
+            entityKey: string;
+            title: string;
+            setup: components["schemas"]["TestRunStep"][];
+            cases: components["schemas"]["TestRunCase"][];
+            teardown: components["schemas"]["TestRunCall"][];
+            inputs: {
+                [key: string]: components["schemas"]["FixtureScalar"] | null;
+            };
+            secrets: string[];
+        };
+        TestRunRequest: {
+            method: string;
+            url: string;
+            headers: {
+                name: string;
+                value: string;
+            }[];
+            body: string | null;
+        };
+        TestRunResult: {
+            outcome: components["schemas"]["TestRunOutcome"];
+            status: number | null;
+            durationMs: number | null;
+            captures: {
+                [key: string]: string;
+            };
+            reason: string | null;
+        };
+        TestRunStep: components["schemas"]["TestRunCall"] | components["schemas"]["TestRunNote"];
+        TestRunTarget: {
+            documentId: string;
+            revisionId: string;
+            entityKey: string;
+            server: string;
+        };
+        TraceRelationResponse: {
+            resolvedAsOf?: components["schemas"]["ResolvedAsOf"];
+            from: string;
+            to: string;
+            path: components["schemas"]["ImpactPathStep"][] | null;
+            hops: number | null;
+        };
+        TrackerRouteInfo: {
+            projectId: string;
+            connectorId: string;
+            externalProject: string | null;
+            issueType: string | null;
+            boardUrl: string | null;
+            updatedAt: string;
+        };
+        TrackerRouteResponse: {
+            route: components["schemas"]["TrackerRouteInfo"] | null;
+        };
+        TruncateAssistantThreadResponse: {
+            removed: number;
+            thread: components["schemas"]["AssistantThreadSummary"];
+            messages: components["schemas"]["AssistantMessageInfo"][];
+        };
+        TrustWeights: {
+            verified: number;
+            expired: number;
+            edited: number;
+            requested: number;
+            outdated: number;
+            flagged: number;
+            unverified: number;
+            inactive: number;
+        };
+        UpdateAssistantThreadResponse: {
+            thread: components["schemas"]["AssistantThreadSummary"];
+        };
+        UpdateKnowledgeIssueResponse: {
+            issue: components["schemas"]["KnowledgeIssueInfo"];
+        };
+        UpdateWorkspaceResponse: {
+            workspaceId: string;
+            name: string;
+        };
+        UrlTicketResponse: {
+            ticket: string;
+            expiresAt: string;
+        };
+        UserGroupMemberEntry: {
+            userId: string;
+            email: string;
+            displayName: string;
+            avatarUrl: components["schemas"]["AvatarUrl"];
+            role: components["schemas"]["WorkspaceRole"];
+            source: components["schemas"]["GroupSource"];
+            createdAt: string;
+        };
+        UserGroupSummary: {
+            groupId: string;
+            workspaceId: string;
+            name: string;
+            description: string | null;
+            source: components["schemas"]["GroupSource"];
+            memberCount: number;
+            createdAt: string;
+        };
+        UserProfileResponse: {
+            userId: string;
+            email: string;
+            displayName: string;
+            avatarUrl: components["schemas"]["AvatarUrl"];
+            isAdmin: boolean;
+            disabled: boolean;
+            createdAt: string;
+            role: components["schemas"]["WorkspaceRole"] | null;
+            trustedOperator: boolean;
+            memberSince: string | null;
+            isSelf: boolean;
+            hasPassword: boolean;
+            hasApiKey: boolean;
+            pages: components["schemas"]["ProfilePage"][];
+            pageCount: number;
+            openWork: components["schemas"]["ProfileOpenWork"];
+        };
+        UserSummary: {
+            userId: string;
+            email: string;
+            displayName: string;
+            avatarUrl: components["schemas"]["AvatarUrl"];
+            isAdmin: boolean;
+            disabled: boolean;
+            hasPassword: boolean;
+            emailVerified: boolean;
+            hasApiKey: boolean;
+            createdAt: string;
+            memberships: components["schemas"]["WorkspaceMembership"][];
+        };
+        ValidateWorkflowResponse: {
+            valid: boolean;
+            issues: components["schemas"]["WorkflowValidationIssue"][];
+        };
+        /** @enum {string} */
+        VerificationFlag: "requested" | "outdated";
+        VerificationSource: {
+            kind: components["schemas"]["VerificationSourceKind"];
+            by?: string;
+            runId?: string;
+            url?: string;
+            at: string;
+        };
+        /** @enum {string} */
+        VerificationSourceKind: "person" | "drift" | "curator" | "mcp";
+        VerifyEmailResponse: {
+            ok: boolean;
+        };
+        VerifySsoDomainResponse: {
+            domain: components["schemas"]["SsoDomainView"];
+            /** @enum {string|null} */
+            error: "no-record" | "mismatch" | "lookup-failed" | null;
+        };
+        /** @enum {string} */
+        WebAccessDenial: "mode-off" | "not-allowlisted" | "blocked" | "unsafe";
+        /** @enum {string} */
+        WebAccessMode: "off" | "allowlist" | "open";
+        WebAccessSettings: {
+            requested: components["schemas"]["WebAccessMode"] | null;
+            ceiling: components["schemas"]["WebAccessMode"];
+            effective: components["schemas"]["WebAccessMode"];
+            source: components["schemas"]["AiSettingsSource"];
+            searchConfigured: boolean;
+        };
+        /** @enum {string} */
+        WikiAutoRegenerate: "off" | "on-push";
+        /** @enum {string} */
+        WikiDelivery: "direct" | "merge-request";
+        /** @enum {string} */
+        WikiEffort: "low" | "medium" | "high";
+        /** @enum {string} */
+        WikiSection: "overview" | "architecture" | "modules" | "data-flow" | "api" | "changelog";
+        /** @enum {string} */
+        WorkItemConflictRule: "off" | "on";
+        /** @enum {string} */
+        WorkItemIssueRule: "off" | "high" | "medium" | "all";
+        WorkItemRules: {
+            issues: components["schemas"]["WorkItemIssueRule"] | null;
+            conflicts: components["schemas"]["WorkItemConflictRule"] | null;
+            verification: components["schemas"]["WorkItemVerificationRule"] | null;
+        };
+        WorkItemRulesResponse: {
+            workspaceId: string;
+            requested: components["schemas"]["WorkItemRules"];
+            ceiling: {
+                maxPerTick: number;
+                syncEnabled: boolean;
+            };
+        };
+        /** @enum {string} */
+        WorkItemSourceKind: "issue" | "conflict" | "verification" | "document";
+        /** @enum {string} */
+        WorkItemStatus: "open" | "in_progress" | "done" | "wont_do";
+        /** @enum {string} */
+        WorkItemSyncState: "synced" | "pending" | "failed" | "orphaned";
+        /** @enum {string} */
+        WorkItemVerificationRule: "off" | "outdated" | "all";
+        WorkflowDefinitionInfo: {
+            id: string;
+            workspaceId: string;
+            projectId: string | null;
+            name: string;
+            description: string | null;
+            enabled: boolean;
+            version: number;
+            graph: components["schemas"]["WorkflowGraph"];
+            trigger: components["schemas"]["WorkflowTrigger"];
+            createdAt: string;
+            updatedAt: string;
+        };
+        WorkflowGraph: {
+            steps: components["schemas"]["WorkflowStep"][];
+            layout?: {
+                [key: string]: {
+                    x: number;
+                    y: number;
+                };
+            };
+        };
+        /** @enum {string} */
+        WorkflowIssueCode: "empty" | "badId" | "duplicateId" | "unknownKind" | "missingTitle" | "unknownTarget" | "selfLoop" | "missingPrompt" | "producesNeedsCategory" | "unknownRelationType" | "unknownTemplate" | "deadEnd" | "maxItemsRange" | "fanOutIgnored" | "cycle" | "noEntry" | "manyEntries";
+        WorkflowNodeDraft: {
+            title: string;
+            markdown: string;
+            frontmatter?: {
+                [key: string]: unknown;
+            };
+            relations?: components["schemas"]["RelationInput"][];
+            summary?: string;
+            templateRef?: components["schemas"]["TemplateRef"];
+            templateVersion?: number;
+            operationKey?: string;
+        };
+        WorkflowNodeEventResponse: {
+            node: components["schemas"]["WorkflowRunNodeInfo"];
+            run: components["schemas"]["WorkflowRunInfo"];
+        };
+        /** @enum {string} */
+        WorkflowNodeStatus: "pending" | "running" | "awaiting-review" | "approved" | "materializing" | "materialized" | "rejected" | "skipped" | "failed";
+        WorkflowRunInfo: {
+            id: string;
+            workspaceId: string;
+            projectId: string;
+            definitionId: string;
+            definitionName: string;
+            rootDocumentId: string;
+            rootDocumentTitle: string | null;
+            status: components["schemas"]["WorkflowRunStatus"];
+            error: string | null;
+            startedBy: string;
+            createdBy: string;
+            startedAt: string | null;
+            finishedAt: string | null;
+            createdAt: string;
+            nodeStats: {
+                total: number;
+                awaitingReview: number;
+                materialized: number;
+                failed: number;
+            };
+        };
+        WorkflowRunNodeInfo: {
+            id: string;
+            runId: string;
+            parentId: string | null;
+            stepId: string;
+            status: components["schemas"]["WorkflowNodeStatus"];
+            draft: components["schemas"]["WorkflowNodeDraft"] | null;
+            documentId: string | null;
+            error: string | null;
+            attempt: number;
+            createdAt: string;
+            updatedAt: string;
+        };
+        WorkflowRunResponse: {
+            run: components["schemas"]["WorkflowRunInfo"];
+            graph: components["schemas"]["WorkflowGraph"];
+            nodes: components["schemas"]["WorkflowRunNodeInfo"][];
+        };
+        /** @enum {string} */
+        WorkflowRunStatus: "pending" | "running" | "awaiting-review" | "paused" | "completed" | "failed" | "cancelled";
+        WorkflowStep: {
+            id: string;
+            kind: components["schemas"]["WorkflowStepKind"];
+            title: string;
+            description?: string;
+            next: string[];
+            fanOut: boolean;
+            autoApprove: boolean;
+            maxItems?: number;
+            produces?: components["schemas"]["WorkflowStepProduces"];
+            prompt?: {
+                system?: string;
+                user: string;
+            };
+            tools?: string[];
+            skillIds?: string[];
+            providerId?: string | null;
+            filters?: components["schemas"]["WorkflowStepFilters"];
+        };
+        WorkflowStepFilters: {
+            categories?: components["schemas"]["DocumentCategory"][];
+            projectIds?: string[];
+            tags?: string[];
+            limit?: number;
+        };
+        /** @enum {string} */
+        WorkflowStepKind: "ai.generate" | "ai.draft" | "search" | "review" | "task.update";
+        WorkflowStepProduces: {
+            category: components["schemas"]["DocumentCategory"];
+            relationToParent: components["schemas"]["AuthorableRelationType"];
+            nestUnderParent?: boolean;
+            templateRef?: components["schemas"]["TemplateRef"];
+        };
+        WorkflowTrigger: {
+            manual: boolean;
+            autoStart: boolean;
+            events: string[];
+            categories: components["schemas"]["DocumentCategory"][];
+        };
+        WorkflowValidationIssue: {
+            stepId?: string;
+            message: string;
+            code: components["schemas"]["WorkflowIssueCode"];
+            params?: {
+                [key: string]: string | number;
+            };
+            /** @enum {string} */
+            severity: "error" | "warning";
+        };
+        WorkspaceAuthPolicyApplied: {
+            ssoEnforced: boolean;
+            allowApiKeys: boolean;
+            allowPasswordForAdmins: boolean;
+            sessionMaxAgeHours: number | null;
+        };
+        WorkspaceAuthPolicySettings: {
+            ssoEnforced: boolean | null;
+            allowApiKeys: boolean | null;
+            allowPasswordForAdmins: boolean | null;
+            sessionMaxAgeHours: number | null;
+        };
+        WorkspaceAuthPolicyView: {
+            workspaceId: string;
+            asked: components["schemas"]["WorkspaceAuthPolicySettings"];
+            applied: components["schemas"]["WorkspaceAuthPolicyApplied"];
+            ceilings: {
+                ssoEnabled: boolean;
+                sessionTtlHours: number;
+            };
+            providers: {
+                id: string;
+                name: string;
+            }[];
+            updatedAt: string | null;
+        };
+        WorkspaceCandidate: {
+            userId: string;
+            email: string;
+            displayName: string;
+            disabled: boolean;
+        };
+        WorkspaceDeletionCounts: {
+            projects: number;
+            documents: number;
+            revisions: number;
+            storedFiles: number;
+            connectors: number;
+            chatBindings: number;
+            apiKeys: number;
+            publishedSites: number;
+        };
+        WorkspaceDeletionPreviewResponse: {
+            workspaceId: string;
+            name: string;
+            counts: components["schemas"]["WorkspaceDeletionCounts"];
+        };
+        WorkspaceGraphNode: {
+            id: string;
+            /** @enum {string} */
+            kind: "document" | "entity";
+            label: string;
+            category?: components["schemas"]["DocumentCategory"] | string;
+            entityType?: string;
+            layer?: components["schemas"]["EntityLayer"];
+            status?: components["schemas"]["RevisionStatus"] | null;
+            degree: number;
+            community?: string;
+        };
+        WorkspaceGraphResponse: {
+            workspaceId: string;
+            projectId: string | null;
+            nodes: components["schemas"]["WorkspaceGraphNode"][];
+            edges: components["schemas"]["DocumentGraphEdge"][];
+            truncated: boolean;
+            resolvedAsOf?: components["schemas"]["ResolvedAsOf"];
+        };
+        WorkspaceMemberEntry: {
+            userId: string;
+            email: string;
+            displayName: string;
+            avatarUrl: components["schemas"]["AvatarUrl"];
+            role: components["schemas"]["WorkspaceRole"];
+            trustedOperator: boolean;
+            capabilities: components["schemas"]["MemberCapability"][];
+            source: components["schemas"]["MembershipSource"];
+            disabled: boolean;
+            createdAt: string;
+        };
+        WorkspaceMembership: {
+            workspaceId: string;
+            role: components["schemas"]["WorkspaceRole"];
+            trustedOperator: boolean;
+            capabilities: components["schemas"]["MemberCapability"][];
+            source: components["schemas"]["MembershipSource"];
+        };
+        /** @enum {string} */
+        WorkspaceRole: "guest" | "viewer" | "editor" | "admin";
+        WorkspaceShareLinksResponse: {
+            shares: components["schemas"]["ShareLinkSummary"][];
+        };
+        WorkspaceSummary: {
+            workspaceId: string;
+            name: string;
+            createdAt: string;
+            memberCount: number;
+            myRole: components["schemas"]["WorkspaceRole"] | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -9627,7 +14899,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -9669,7 +14943,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -9714,7 +14990,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAuditLogsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -9758,7 +15036,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListPlatformAuditLogsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -9800,7 +15080,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -9842,7 +15124,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -9880,7 +15164,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["LogoutResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -9922,7 +15208,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ForgotPasswordResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -9964,7 +15252,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResetPasswordResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10006,7 +15296,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["VerifyEmailResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10044,7 +15336,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResendVerificationResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10082,7 +15376,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UrlTicketResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10124,7 +15420,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResetPasswordResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10162,7 +15460,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RotateApiKeyResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10200,7 +15500,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListApiKeysResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10242,7 +15544,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateApiKeyResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10320,7 +15624,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListSessionsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10401,7 +15707,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SsoProvidersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10443,7 +15751,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SsoDiscoverResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10485,7 +15795,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SsoExchangeResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10529,7 +15841,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10569,7 +15883,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListIdentityProvidersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10613,7 +15929,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["IdentityProviderView"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10699,7 +16017,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["IdentityProviderView"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10740,7 +16060,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TestIdentityProviderResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10780,7 +16102,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListGroupMappingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10824,7 +16148,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GroupMappingView"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10905,7 +16231,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkspaceAuthPolicyView"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10949,7 +16277,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkspaceAuthPolicyView"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -10989,7 +16319,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListSsoDomainsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11033,7 +16365,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SsoDomainView"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11078,7 +16412,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["VerifySsoDomainResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11164,7 +16500,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SsoDomainView"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11204,7 +16542,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ScimSettingsView"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11248,7 +16588,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ScimSettingsView"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11292,7 +16634,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ScimTokenCreated"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11371,7 +16715,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListUsersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11413,7 +16759,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UserSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11457,7 +16805,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UserSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11497,7 +16847,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListSessionsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11578,7 +16930,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RevokeSessionsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11616,7 +16970,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListWorkspacesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11658,7 +17014,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateWorkspaceResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11698,7 +17056,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDeletionPreviewResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11741,7 +17101,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeleteWorkspaceResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11785,7 +17147,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UpdateWorkspaceResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11825,7 +17189,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListWorkspaceMembersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11869,7 +17235,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListWorkspaceMembersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11896,6 +17264,7 @@ export interface operations {
             query?: {
                 /** @description Case-insensitive email/display-name substring match */
                 q?: string;
+                /** @description Default: 20. */
                 limit?: number;
             };
             header?: {
@@ -11913,7 +17282,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListWorkspaceCandidatesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11954,7 +17325,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListWorkspaceMembersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -11999,7 +17372,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListWorkspaceMembersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12045,7 +17420,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListProjectsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12087,7 +17464,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateProjectResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12127,7 +17506,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProjectSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12174,7 +17555,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeleteProjectResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12218,7 +17601,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProjectSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12258,7 +17643,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProjectOverviewResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12301,7 +17688,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProjectDeletionPreview"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12341,7 +17730,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListUserGroupsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12383,7 +17774,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UserGroupSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12467,7 +17860,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UserGroupSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12507,7 +17902,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListUserGroupMembersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12551,7 +17948,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListUserGroupMembersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12591,7 +17990,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EffectiveAccessResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12632,7 +18033,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["BranchAccessResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12677,7 +18080,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["BranchAccessResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12717,7 +18122,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResourceAccessResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12761,7 +18168,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResourceAccessResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12801,7 +18210,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EffectiveAccessResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12841,7 +18252,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResourceAccessResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12885,7 +18298,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResourceAccessResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12931,7 +18346,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAccessRequestsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -12973,7 +18390,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRequestEntry"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13017,7 +18436,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRequestEntry"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13061,7 +18482,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRequestEntry"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13101,7 +18524,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRequestEntry"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13143,7 +18568,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UserProfileResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13169,8 +18596,10 @@ export interface operations {
         parameters: {
             query: {
                 workspaceId: string;
-                limit: string;
-                cursor: string;
+                /** @description Rows per batch; 20 when omitted */
+                limit?: string;
+                /** @description Opaque cursor from a previous batch */
+                cursor?: string;
                 /** @description Restrict to one category */
                 category?: string;
                 /** @description Restrict to one project */
@@ -13197,7 +18626,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListDocumentsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13239,7 +18670,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateDocumentResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13287,7 +18720,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentTreeResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13333,7 +18768,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkspaceGraphResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13375,7 +18812,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentDetailResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13419,7 +18858,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13459,6 +18900,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"];
+                };
+            };
             /** @description beforeId no longer names a child of parentId — the tree moved */
             409: {
                 headers: {
@@ -13504,7 +18953,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentDetailResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13554,7 +19005,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentContentResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13594,7 +19047,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentConnectorResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13634,7 +19089,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PushDocumentResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13674,7 +19131,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentAncestorsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13720,7 +19179,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentGraphResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13762,7 +19223,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListRevisionsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13809,7 +19272,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RevisionInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13849,7 +19314,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListBranchesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13893,7 +19360,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateBranchResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13933,7 +19402,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateBranchResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -13981,7 +19452,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CompareResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14021,7 +19494,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListDocumentRelationsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14065,7 +19540,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListDocumentRelationsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14109,7 +19586,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListDocumentRelationsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14153,7 +19632,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListDocumentRelationsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14197,7 +19678,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProposeRelationsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14241,7 +19724,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateUploadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14282,7 +19767,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["FinalizeRevisionResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14325,7 +19812,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["FactsAtResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14368,7 +19857,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["FactTimelineResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14408,7 +19899,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListGlossaryExclusionsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14452,7 +19945,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GlossaryExclusion"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14533,7 +20028,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListDocumentThreadsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14577,7 +20074,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateDocumentThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14622,7 +20121,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateDocumentThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14664,7 +20165,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeleteDocumentCommentResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14710,7 +20213,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14755,7 +20260,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14795,7 +20302,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListMergeRequestsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14839,7 +20348,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateMergeRequestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14884,7 +20395,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PublishBranchResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14927,6 +20440,7 @@ export interface operations {
                 provenance?: "manual" | "agent" | "captured";
                 /** @description Opaque cursor from a previous page */
                 cursor?: string;
+                /** @description Default: 50. */
                 limit?: number;
             };
             header?: {
@@ -14942,7 +20456,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListWorkspaceMergeRequestsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -14982,7 +20498,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListSavedFiltersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15024,7 +20542,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SavedFilter"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15064,7 +20584,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SavedFilter"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15148,7 +20670,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SavedFilter"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15188,7 +20712,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateMergeRequestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15232,7 +20758,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateMergeRequestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15272,7 +20800,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateMergeRequestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15316,7 +20846,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateMergeRequestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15359,7 +20891,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MergeRequestDiffResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15399,7 +20933,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MergeRequestApiChangesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15439,7 +20975,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MergeRequestApiChangesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15479,7 +21017,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MergeRequestApiChangesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15564,7 +21104,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateMergeRequestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15608,7 +21150,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MergeMergeRequestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15648,7 +21192,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateMergeRequestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15688,7 +21234,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListMergeRequestThreadsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15732,7 +21280,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateMergeRequestThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15777,7 +21327,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateMergeRequestThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15819,7 +21371,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeleteMergeRequestCommentResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15865,7 +21419,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MergeRequestThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15910,7 +21466,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MergeRequestThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -15956,7 +21514,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ActivityCalendarResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -16009,7 +21569,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListActivityResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -16059,7 +21621,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListEntitiesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -16230,7 +21794,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TraceRelationResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -16279,7 +21845,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EntityNeighborsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -16323,7 +21891,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ImpactAnalysisResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -16363,7 +21933,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAttachmentsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -16407,7 +21979,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateAttachmentResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -16448,7 +22022,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CompleteAttachmentResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -16530,7 +22106,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentEmbedsResponseDto"];
+                    "application/json": components["schemas"]["DocumentEmbedsResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -16572,7 +22148,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FigmaPickerFilesResponseDto"];
+                    "application/json": components["schemas"]["FigmaPickerFilesResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -16616,7 +22192,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FigmaPickerFileResponseDto"];
+                    "application/json": components["schemas"]["FigmaPickerFileResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -16660,7 +22236,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FigmaResolveResponseDto"];
+                    "application/json": components["schemas"]["FigmaResolveResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -16706,7 +22282,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EmbedUsagesResponseDto"];
+                    "application/json": components["schemas"]["EmbedUsagesResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -16749,7 +22325,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateAvatarUploadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -16829,7 +22407,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CompleteAvatarUploadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -16953,7 +22533,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateAvatarUploadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17037,7 +22619,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CompleteAvatarUploadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17079,7 +22663,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SearchResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17121,7 +22707,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GraphQueryResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17161,7 +22749,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["IngestionJobInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17201,7 +22791,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StaleReportResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17243,7 +22835,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReindexResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17283,7 +22877,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["NotificationUnreadCountResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17329,7 +22925,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListNotificationSubscriptionsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17371,7 +22969,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListNotificationSubscriptionsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17411,7 +23011,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferences"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17453,7 +23055,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferences"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17495,7 +23099,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MarkNotificationsReadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17541,7 +23147,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListNotificationsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17619,7 +23227,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CollabCapabilitiesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17659,7 +23269,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListCollabDraftsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17742,7 +23354,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AssistantReviewResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17784,7 +23398,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AssistantLintResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17826,7 +23442,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AssistantSuggestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17868,7 +23486,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AssistantAskResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17910,7 +23530,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AssistantRelatedResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17938,6 +23560,7 @@ export interface operations {
                 workspaceId: string;
                 /** @description Case-insensitive substring over the title and the messages */
                 search?: string;
+                /** @description Default: 50. */
                 limit?: number;
                 /** @description updatedAt of the last row of the previous page (keyset cursor) */
                 cursor?: string;
@@ -17955,7 +23578,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAssistantThreadsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -17997,7 +23622,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateAssistantThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18037,7 +23664,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GetAssistantThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18077,7 +23706,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeleteAssistantThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18121,7 +23752,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UpdateAssistantThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18162,7 +23795,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TruncateAssistantThreadResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18206,7 +23841,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PostAssistantMessageResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18290,7 +23927,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiSettingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18332,7 +23971,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiSettingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18372,7 +24013,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiPageActionsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18414,7 +24057,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiConnectionTestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18454,7 +24099,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAiProvidersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18496,7 +24143,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiProviderSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18536,7 +24185,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAiProviderChoicesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18620,7 +24271,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiProviderSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18660,7 +24313,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAiSkillsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18702,7 +24357,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiSkillSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18742,7 +24399,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiSkillSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18826,7 +24485,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiSkillSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18866,7 +24527,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiSkillSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18907,7 +24570,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GetStyleguideResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -18949,7 +24614,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StyleguideSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19029,7 +24696,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAiAgentsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19071,7 +24740,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiAgentSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19113,7 +24784,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAiAgentChoicesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19156,7 +24829,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAgentRunsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19198,7 +24873,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentRunSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19238,7 +24915,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAgentTriggersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19322,7 +25001,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentTriggerSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19362,7 +25043,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RotateAgentTriggerSecretResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19405,7 +25088,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAgentLearningsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19447,7 +25132,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentLearningSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19491,7 +25178,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentLearningSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19535,7 +25224,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApplyAgentRecipeResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19579,7 +25270,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentTriggerSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19623,7 +25316,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentRunSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19667,7 +25362,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreatePageFromFindingResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19711,7 +25408,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProposeAgentFindingResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19755,7 +25454,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["FlagFindingOutdatedResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19803,7 +25504,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AddFindingTermResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19851,7 +25554,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DismissAgentFindingResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19895,7 +25600,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProposeRelationsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -19937,7 +25644,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentRouteDecision"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20023,7 +25732,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiAgentSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20065,7 +25776,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiAgentSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20105,7 +25818,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAiPluginsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20147,7 +25862,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiPluginSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20231,7 +25948,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiPluginSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20271,7 +25990,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiPluginTestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20311,7 +26032,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListSourcePoliciesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20353,7 +26076,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SourcePolicy"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20395,7 +26120,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CheckSourcePolicyResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20479,7 +26206,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SourcePolicy"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20524,7 +26253,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiUsageResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20570,7 +26301,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAiUsageLogsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20610,7 +26343,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiMyUsageResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20650,7 +26385,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAiBudgetsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20694,7 +26431,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AiBudgetInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20784,7 +26523,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentOutcomesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20824,7 +26565,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListConnectorsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20866,7 +26609,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20906,7 +26651,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorRunResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20946,7 +26693,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListConnectorRunItemsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -20987,7 +26736,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorRunItemResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21122,7 +26873,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorItemEventResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21166,7 +26919,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorRunEventResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21206,7 +26961,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21290,7 +27047,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21330,7 +27089,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorGithubAccessResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21370,7 +27131,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorAclResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21414,7 +27177,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorAclResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21459,7 +27224,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorAclResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21499,7 +27266,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorAclResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21539,7 +27308,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorTestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21583,7 +27354,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorRunResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21628,7 +27401,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListConnectorRunsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21673,7 +27448,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListConnectorLinksResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21754,7 +27531,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RepoWikiInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21798,7 +27577,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RegenerateWikiResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21838,7 +27619,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListReleasesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21878,7 +27661,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RepoGuidanceImportResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21923,7 +27708,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListConnectorWorkItemsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -21967,7 +27754,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorWorkItemResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22012,7 +27801,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorWorkItemResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22053,7 +27844,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorWorkItemResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22093,7 +27886,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListTrackerRoutesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22137,7 +27932,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22178,7 +27975,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorWorkItemResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22219,7 +28018,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GithubInstallationsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22261,7 +28062,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GithubReposResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22304,7 +28107,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GithubBranchesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22382,7 +28187,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkItemRulesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22424,7 +28231,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkItemRulesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22466,7 +28275,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAnchorWorkItemsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22508,7 +28319,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConnectorWorkItemResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22548,7 +28361,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TrackerRouteResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22592,7 +28407,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TrackerRouteResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22674,7 +28491,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["LintPolicySettings"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22716,7 +28535,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["LintPolicySettings"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22756,7 +28577,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListMergeRequestChecksResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22840,7 +28663,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListGlossaryResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22882,7 +28707,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GlossaryTerm"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22924,7 +28751,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SuggestGlossaryTermsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -22964,7 +28793,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GlossaryTerm"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23048,7 +28879,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GlossaryTerm"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23090,7 +28923,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreateImportResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23130,7 +28965,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ImportJobResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23170,7 +29007,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ImportJobResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23250,7 +29089,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ImportContentResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23294,7 +29135,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SubmitImportResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23336,7 +29179,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DraftWorkflowResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23384,7 +29229,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListWorkflowRunsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23426,7 +29273,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23466,7 +29315,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23510,7 +29361,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23555,7 +29408,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunNodeInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23600,7 +29455,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkflowNodeEventResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23642,7 +29499,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListWorkflowsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23684,7 +29543,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinitionInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23724,7 +29585,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinitionInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23808,7 +29671,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinitionInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23852,7 +29717,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ValidateWorkflowResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23892,7 +29759,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentWorkflowRunsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23936,7 +29805,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListTemplatesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -23978,7 +29849,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24022,7 +29895,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24064,7 +29939,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RenderTemplateResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24107,7 +29984,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24191,7 +30070,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24231,7 +30112,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListTemplateVersionsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24272,7 +30155,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24312,7 +30197,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24352,7 +30239,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24437,7 +30326,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CodeUsagesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24485,7 +30376,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CodeUsagesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24527,7 +30420,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DraftComponentResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24569,7 +30464,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListApiSpecsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24612,7 +30509,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiSpecDocumentResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24655,7 +30554,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListApiOperationsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24700,7 +30601,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiSpecDiff"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24749,7 +30652,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiOperationSamplesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24839,7 +30744,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GenerateApiTestSuiteResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24882,7 +30789,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTestBindingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24926,7 +30835,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTestBindingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -24969,7 +30880,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTestFixtureCandidatesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25013,7 +30926,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RankApiTestFixturesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25057,7 +30972,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTryResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25100,7 +31017,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TestRunPlan"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25144,7 +31063,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTryResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25187,7 +31108,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListApiTestRunsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25231,7 +31154,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTestRunSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25272,7 +31197,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTestRunDetail"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25312,7 +31239,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiDriftCheckResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25360,7 +31289,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SearchApiOperationsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25400,7 +31331,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListApiTestEnvironmentsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25444,7 +31377,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTestEnvironment"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25530,7 +31465,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTestEnvironment"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25570,7 +31507,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiSettingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25614,7 +31553,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiSettingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25660,7 +31601,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListTestFixturesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25703,7 +31646,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TestFixtureResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -25747,7 +31692,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["QaOverviewResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26038,7 +31985,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SetAnswerFeedbackResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26078,7 +32027,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeleteAnswerFeedbackResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26120,7 +32071,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SetAnswerFeedbackResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26164,7 +32117,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AnswerFeedbackSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26256,7 +32211,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListAnswerFeedbackResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26298,7 +32255,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListKnowledgeIssuesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26340,7 +32299,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReportKnowledgeIssueResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26384,7 +32345,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UpdateKnowledgeIssueResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26424,6 +32387,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentDetailResponse"];
+                };
+            };
             /** @description No finalized head to vouch for (no_head_revision), or the page is archived (document_archived) */
             409: {
                 headers: {
@@ -26469,7 +32440,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentDetailResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26509,6 +32482,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentDetailResponse"];
+                };
+            };
             /** @description The page is archived */
             409: {
                 headers: {
@@ -26554,6 +32535,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentDetailResponse"];
+                };
+            };
             /** @description The page is archived */
             409: {
                 headers: {
@@ -26603,7 +32592,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ArchiveDocumentResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26647,7 +32638,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ArchiveDocumentResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26700,7 +32693,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["KnowledgeHealthListResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26741,7 +32736,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["KnowledgeHealthSummaryResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26779,6 +32776,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeHealthBulkResponse"];
+                };
+            };
             /** @description Some ids belong to another workspace, or archive/unarchive without admin */
             403: {
                 headers: {
@@ -26824,7 +32829,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["KnowledgeHealthSettingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26868,7 +32875,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["KnowledgeHealthSettingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26910,7 +32919,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["QualitySummaryResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -26960,7 +32971,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["QualityListResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27000,7 +33013,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentQualityResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27042,7 +33057,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListReleaseTagsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27084,7 +33101,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReleaseTagDto"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27170,7 +33189,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GraphTimelineResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27215,7 +33236,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListConflictsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27255,7 +33278,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["KnowledgeConflictDto"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27299,7 +33324,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["KnowledgeConflictDto"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27343,7 +33370,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["KnowledgeConflictDto"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27383,7 +33412,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProposeAgentFindingResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27431,7 +33462,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListCommunitiesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27471,7 +33504,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ShareLinkListResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27511,6 +33546,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateShareLinkResponse"];
+                };
+            };
             /** @description Sharing is off for the workspace or the deployment (details.reason share.disabledByWorkspace) */
             403: {
                 headers: {
@@ -27600,7 +33643,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ShareLinkSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27640,7 +33685,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WorkspaceShareLinksResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27680,7 +33727,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PublishingSettingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27724,7 +33773,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PublishingSettingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27764,7 +33815,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProjectSiteResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27804,6 +33857,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedSiteSummary"];
+                };
+            };
             /** @description Sites are off for the workspace or the deployment (details.reason site.disabledByWorkspace) */
             403: {
                 headers: {
@@ -27900,7 +33961,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PublishedSiteSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -27936,6 +33999,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedSiteSummary"];
+                };
+            };
             /** @description Sites are off for the workspace or the deployment */
             403: {
                 headers: {
@@ -27981,7 +34052,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PublishedSiteSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -28021,6 +34094,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteVersionSummary"];
+                };
+            };
             /** @description Slug taken or shadowing a top-level page, or the version limit is reached */
             409: {
                 headers: {
@@ -28110,7 +34191,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SiteVersionSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -28150,7 +34233,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SiteVersionSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -28190,6 +34275,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteDomainSummary"];
+                };
+            };
             /** @description Not a hostname, or one of the platform’s own (details.reason site.domainInvalid | site.domainReserved) */
             400: {
                 headers: {
@@ -28249,7 +34342,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SiteDomainSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -28329,7 +34424,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SiteAudiencesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -28370,6 +34467,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteAudienceRule"];
+                };
+            };
             /** @description Not a page of this site, or the claims are malformed (details.reason site.audiencePageNotInSite | site.audienceClaimsInvalid) */
             400: {
                 headers: {
@@ -28452,6 +34557,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteVisitorSecretResponse"];
+                };
+            };
             /** @description SETTINGS_ENCRYPTION_KEY is not set (details.reason site.visitorSecretNeedsKey) */
             409: {
                 headers: {
@@ -28533,6 +34646,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicShareResponse"];
+                };
+            };
             /** @description Unknown, revoked or expired link, or sharing is off */
             404: {
                 headers: {
@@ -28627,6 +34748,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSharePage"];
+                };
+            };
             /** @description Not a page this link reaches */
             404: {
                 headers: {
@@ -28672,6 +34801,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicShareExport"];
+                };
+            };
             /** @description The link is locked: unlock it first */
             401: {
                 headers: {
@@ -28735,6 +34872,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicShareExport"];
+                };
+            };
             /** @description Dead link, download off, or not this link’s export */
             404: {
                 headers: {
@@ -28834,6 +34979,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSiteWidgetResponse"];
+                };
+            };
             /** @description No live site there, or it does not answer questions */
             404: {
                 headers: {
@@ -28879,6 +35032,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSiteAskResponse"];
+                };
+            };
             /** @description No live site with this id, or it does not answer questions */
             404: {
                 headers: {
@@ -28939,6 +35100,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSiteTreeResponse"];
+                };
+            };
             /** @description No live site with this id, no such version, or a parent the viewer may not see */
             404: {
                 headers: {
@@ -28989,6 +35158,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSiteSearchResponse"];
+                };
+            };
             /** @description A parameter the route does not read, such as a workspace or project filter */
             400: {
                 headers: {
@@ -29040,6 +35217,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSiteFacetsResponse"];
+                };
+            };
             /** @description No live site with this id, or no such version */
             404: {
                 headers: {
@@ -29458,6 +35643,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteSignInResponse"];
+                };
+            };
             /** @description The return URL is not on one of the site’s addresses (details.reason site.signInReturnInvalid) */
             400: {
                 headers: {
@@ -29510,7 +35703,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ExportCapabilitiesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -29550,7 +35745,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ExportListResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -29590,6 +35787,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportJobSummary"];
+                };
+            };
             /** @description Too many pages (details.reason export.tooManyPages) or nothing to export */
             400: {
                 headers: {
@@ -29642,6 +35847,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportJobSummary"];
+                };
+            };
             /** @description Too many pages (details.reason export.tooManyPages) or nothing to export */
             400: {
                 headers: {
@@ -29694,7 +35907,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ExportJobSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -29730,6 +35945,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportDownloadResponse"];
+                };
+            };
             /** @description Not finished (details.reason export.notReady) */
             409: {
                 headers: {
@@ -29782,7 +36005,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatSearchSettings"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -29824,7 +36049,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatSearchSettings"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -29864,7 +36091,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatIntegrationsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -29902,6 +36131,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatIntegrationSummary"];
+                };
+            };
             /** @description Name taken in the workspace, or the bot is connected elsewhere (details.reason) */
             409: {
                 headers: {
@@ -29991,7 +36228,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatIntegrationSummary"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30031,7 +36270,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatIntegrationTestResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30071,7 +36312,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatBindingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30115,7 +36358,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatBindingEntry"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30199,7 +36444,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatBindingEntry"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30239,7 +36486,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatSubscriptionsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30279,6 +36528,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSubscriptionEntry"];
+                };
+            };
             /** @description A digest without a window, or a project from another workspace */
             400: {
                 headers: {
@@ -30368,7 +36625,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatSubscriptionEntry"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30408,7 +36667,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatIdentitiesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30491,7 +36752,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatLinkPreview"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30533,7 +36796,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatIdentityEntry"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30571,7 +36836,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatIdentitiesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30651,7 +36918,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatSearchAvailability"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30693,7 +36962,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatSearchResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30745,7 +37016,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListCapturesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30787,7 +37060,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CaptureResult"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30829,7 +37104,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["BulkRejectCapturesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30869,7 +37146,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CaptureInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30909,7 +37188,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CaptureInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30953,7 +37234,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CaptureInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -30997,7 +37280,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CaptureResult"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -31149,7 +37434,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["McpConnectionInfo"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -31227,7 +37514,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CaptureKitResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -31311,7 +37600,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOverviewResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -31355,7 +37646,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AnalyticsPagesResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -31399,7 +37692,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AnalyticsSearchResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -31443,7 +37738,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AnalyticsAgentsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -31529,7 +37826,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AnalyticsSettingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -31571,7 +37870,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AnalyticsSettingsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -31611,7 +37912,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PageInsightsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -31656,7 +37959,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProjectAnalyticsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {

@@ -9,6 +9,7 @@ import { AgentFindingsService } from '../ai/agent-findings.service.js';
 import { t } from '../i18n/t.js';
 import { ConflictsService } from './conflicts.service.js';
 import { CloseConflictDto, ListConflictsQueryDto } from './conflicts.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Contradictions between pages (#81, phase 5). Viewers read, editors act.
@@ -25,6 +26,7 @@ export class ConflictsController {
   ) {}
 
   @Get()
+  @Returns('ListConflictsResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Contradictions the arbiter found, newest first; only those whose pages the caller may open' })
   async list(@Query() query: ListConflictsQueryDto, @CurrentPrincipal() principal: Principal): Promise<ListConflictsResponse> {
@@ -33,6 +35,7 @@ export class ConflictsController {
   }
 
   @Get(':id')
+  @Returns('KnowledgeConflictDto')
   @Access('viewer', 'conflict')
   @ApiOperation({ summary: 'One conflict with both quotes' })
   async get(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<KnowledgeConflictDto> {
@@ -40,6 +43,7 @@ export class ConflictsController {
   }
 
   @Post(':id/resolve')
+  @Returns('KnowledgeConflictDto')
   @HttpCode(200)
   @Access('editor', 'conflict')
   @ApiOperation({ summary: 'Mark an open conflict resolved, with an optional note. 409 when it is no longer open' })
@@ -48,6 +52,7 @@ export class ConflictsController {
   }
 
   @Post(':id/dismiss')
+  @Returns('KnowledgeConflictDto')
   @HttpCode(200)
   @Access('editor', 'conflict')
   @ApiOperation({ summary: 'Dismiss an open conflict as not one. It stays dismissed when found again' })
@@ -62,6 +67,7 @@ export class ConflictsController {
    * on a second press.
    */
   @Post(':id/propose')
+  @Returns('ProposeAgentFindingResponse')
   @HttpCode(200)
   @Access('editor', 'conflict')
   @ApiOperation({ summary: 'Open a merge request that fixes the conflict on its first page. 409 when one was proposed already' })

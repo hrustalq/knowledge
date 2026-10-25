@@ -15,6 +15,7 @@ import { safeReturnTo } from '../../common/safe-return-to.js';
 import { GithubAppService } from './github-app.service.js';
 import { GithubBrowseService } from './github-browse.service.js';
 import { GithubOauthService } from './github-oauth.service.js';
+import { Returns } from '../../common/returns.decorator.js';
 
 /**
  * The repository picker's own surface (docs/features/30).
@@ -51,6 +52,7 @@ export class GithubController {
    * worse than one that waits.
    */
   @Get('installations')
+  @Returns('GithubInstallationsResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: 'GitHub accounts and orgs this workspace can pick repositories from' })
   @ApiQuery({ name: 'workspaceId', required: true })
@@ -93,6 +95,7 @@ export class GithubController {
   }
 
   @Get('repos')
+  @Returns('GithubReposResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: 'Repositories in one installation, newest-pushed first' })
   @ApiQuery({ name: 'workspaceId', required: true })
@@ -109,6 +112,7 @@ export class GithubController {
   }
 
   @Get('branches')
+  @Returns('GithubBranchesResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: 'Branches of one repository, its default first' })
   @ApiQuery({ name: 'workspaceId', required: true })

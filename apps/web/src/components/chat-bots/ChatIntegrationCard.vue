@@ -21,7 +21,6 @@ import {
   chatPlatformPastesEndpoint,
   type ChatIdentitiesResponse,
   type ChatIntegrationSummary,
-  type ChatIntegrationTestResponse,
 } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
@@ -84,7 +83,7 @@ async function update(body: Record<string, unknown>) {
 async function test() {
   busy.value = true
   try {
-    const res = (await api.post('/v1/chat/integrations/{id}/test', { path: { id: props.bot.id } })) as ChatIntegrationTestResponse
+    const res = await api.post('/v1/chat/integrations/{id}/test', { path: { id: props.bot.id } })
     if (res.ok) toast.success(t(socket.value ? 'chatBots.card.testOkSocket' : pasted.value ? (props.bot.kind === 'teams' ? 'chatBots.card.testOkTeams' : 'chatBots.card.testOkSlack') : 'chatBots.card.testOk', { bot: res.botUsername ? chatBotHandle(props.bot.kind, res.botUsername) : props.bot.name, platform: platform.value }))
     else toast.error(t('chatBots.card.testFailed', { reason: res.error ?? '' }))
     emit('changed')

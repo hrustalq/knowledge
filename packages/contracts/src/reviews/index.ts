@@ -1,6 +1,7 @@
 import type { ApiErrorPayload, RevisionInfo } from '@knowledge/contracts/core';
 import type { CompareResponse } from '@knowledge/contracts/documents';
 import type { MergeRequestProvenance } from '@knowledge/contracts/captures';
+import type { MentionAccessNote } from '@knowledge/contracts/identity';
 
 // ---------------------------------------------------------------------------
 
@@ -512,8 +513,13 @@ export interface ListMergeRequestThreadsResponse {
   threads: MergeRequestThread[];
 }
 
+// PATCH /v1/merge-requests/:id/threads/:threadId, PATCH …/comments/:commentId
+export interface MergeRequestThreadResponse {
+  thread: MergeRequestThread;
+}
 
-
+// POST /v1/merge-requests/:id/threads, POST …/threads/:threadId/comments
+export interface CreateMergeRequestThreadResponse extends MergeRequestThreadResponse, MentionAccessNote {}
 
 // DELETE /v1/merge-requests/:id/threads/:threadId/comments/:commentId
 export interface DeleteMergeRequestCommentResponse extends DeleteReviewCommentResponse {

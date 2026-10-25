@@ -1,10 +1,7 @@
 import { defineStore } from 'pinia'
-import { toRaw } from 'vue'
 import type { ListWorkspacesResponse, WorkspaceSummary } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId, setActiveWorkspace } from '@/lib/api'
-
-/** The roster request in flight, per store instance — see stores/projects.ts (#279). */
-const listFetches = new WeakMap<object, Promise<void>>()
+import { apiQueryOptions, bindStoreQuery } from '@/api/queries'
+import { getWorkspaceId, setActiveWorkspace } from '@/lib/api'
 
 /**
  * Workspace roster + the one place the active workspace is switched. Mirrors
@@ -17,16 +14,20 @@ export const useWorkspacesStore = defineStore('workspaces', {
     loaded: false,
   }),
   actions: {
-    fetchList(): Promise<void> {
-      const pending = listFetches.get(toRaw(this))
-      if (pending) return pending
-      const job = (async () => {
-        const res = await apiFetch<ListWorkspacesResponse>('/v1/workspaces')
-        this.items = res.workspaces
-        this.loaded = true
-      })().finally(() => listFetches.delete(toRaw(this)))
-      listFetches.set(toRaw(this), job)
-      return job
+    fetchList(opts: { fresh?: boolean } = {}): Promise<void> {
+      // The rail, the breadcrumbs and the page ask on mount in the same tick;
+      // the query cache joins them onto one request (#279).
+      return bindStoreQuery<ListWorkspacesResponse>(
+        this,
+        'list',
+        this.queryClient,
+        apiQueryOptions('/v1/workspaces'),
+        (res) => {
+          this.items = res.workspaces
+          this.loaded = true
+        },
+        opts,
+      )
     },
     /** Lazy, fire-and-forget: no roster access just leaves the switcher hidden. */
     ensureLoaded() {
@@ -45,7 +46,7 @@ export const useWorkspacesStore = defineStore('workspaces', {
      * it), and if it was the active one the app moves to the next it can see.
      */
     async forget(workspaceId: string) {
-      await this.fetchList().catch(() => {
+      await this.fetchList({ fresh: true }).catch(() => {
         this.items = this.items.filter((w) => w.workspaceId !== workspaceId)
       })
       if (workspaceId !== getWorkspaceId()) return

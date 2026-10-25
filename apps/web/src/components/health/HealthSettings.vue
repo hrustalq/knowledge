@@ -200,10 +200,10 @@ async function save() {
   if (saving.value || anyInvalid.value) return
   saving.value = true
   try {
-    const next = (await api.patch('/v1/knowledge-health/settings', {
+    const next = await api.patch('/v1/knowledge-health/settings', {
       query: { workspaceId },
       body: draft.value,
-    })) as KnowledgeHealthSettingsResponse
+    })
     queryClient.setQueryData(options.queryKey, next)
     // The policy decides what `inactive`, `empty` and `expired` mean, so the
     // rows and the counts are stale the moment it changes.

@@ -15,10 +15,12 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { DOCUMENT_CATEGORIES } from '@knowledge/contracts'
-import { loadTagOptions, tagLabel } from '@/lib/tag-options'
+import { tagLabel, useTagOptions } from '@/lib/tag-options'
 import { useProjectsStore } from '@/stores/projects'
 import type { AutocompleteOption } from '@/components/ui/autocomplete'
 import FacetFields from './FacetFields.vue'
+
+const loadTagOptions = useTagOptions()
 
 const { t } = useI18n()
 

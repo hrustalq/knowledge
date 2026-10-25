@@ -161,8 +161,9 @@ const editId = ref<string | null>((route.params.id as string | undefined) ?? nul
 provide(EMBED_DOCUMENT, editId)
 const isEdit = computed(() => editId.value !== null)
 // A new page is born a private draft (#474), so saving it publishes to nobody
-// but its author; the page itself offers Publish. Read from the page on load.
-const isDraft = ref(true)
+// but its author; the page itself offers Publish. An existing page is read on
+// load, and until then (or when the load fails) is taken as published.
+const isDraft = ref(editId.value === null)
 
 const title = ref('')
 const category = ref<DocumentCategory>('other')

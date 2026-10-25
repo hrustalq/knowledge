@@ -32,12 +32,13 @@ export interface FulltextProvider {
   /**
    * Idempotent per revision: previous rows for the revision are dropped first.
    * `aclNodes` is the page's `restricted_by`, stamped on every row (#76).
+   * `title` is the page's, matched beside each chunk's headings (#528).
    */
   indexRevisionChunks(
     workspaceId: string,
     revisionId: string,
     chunks: FulltextChunk[],
-    opts: { live: boolean; aclNodes: string[] },
+    opts: { live: boolean; aclNodes: string[]; title: string },
   ): Promise<void>;
   deleteRevision(revisionId: string): Promise<void>;
   /** Every row of a workspace, for its teardown (#479). */

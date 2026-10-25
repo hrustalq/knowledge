@@ -1269,6 +1269,12 @@ export class DocumentsService {
       await this.graph.upsertDocumentVertex(document.workspaceId, documentId, data.title).catch(() => {
         /* vertex may not exist yet — created on first index */
       });
+      // The BM25 rows carry the title (#528): the stale sweeper re-mirrors
+      // them from the graph's chunks, with nothing re-embedded.
+      await this.prisma.documentRevision.updateMany({
+        where: { documentId, status: 'indexed' },
+        data: { fulltextStaleAt: new Date() },
+      });
     }
     await this.activity.record({
       workspaceId: document.workspaceId,

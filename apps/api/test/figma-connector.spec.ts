@@ -7,8 +7,11 @@ import { figmaTokenExpiry, parseFigmaAllowlist } from '@knowledge/contracts';
  * resolves which files the allowlist reaches. Through a mocked `safeFetch`.
  */
 vi.mock('../src/common/safe-fetch.js', () => ({ safeFetch: vi.fn() }));
+// The key and its arguments, so a test can see what the message names.
+vi.mock('../src/i18n/t.js', () => ({ t: (key: string, args?: object) => `${key} ${JSON.stringify(args ?? {})}` }));
 const { safeFetch } = await import('../src/common/safe-fetch.js');
 const { figmaAllowedFiles, figmaGet } = await import('../src/connectors/adapters/figma.js');
+const { FigmaAdapter } = await import('../src/connectors/adapters/figma.adapter.js');
 const mockFetch = vi.mocked(safeFetch);
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -110,5 +113,31 @@ describe('figmaAllowedFiles', () => {
   it('reaches nothing with an empty allowlist', async () => {
     await expect(figmaAllowedFiles(ctx())).resolves.toEqual([]);
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('FigmaAdapter.testConnection (#545)', () => {
+  const test = (byPath: Record<string, Response>) => {
+    mockFetch.mockImplementation(async (url) => byPath[new URL(String(url)).pathname]?.clone() ?? json({}, 404));
+    return new FigmaAdapter().testConnection(ctx({ allowlist: 'team:111' }) as never);
+  };
+
+  it('passes without current_user:read, leaving out the handle', async () => {
+    const result = await test({
+      '/v1/me': json({ status: 403, err: 'Invalid scope' }, 403),
+      '/v1/teams/111/projects': json({ projects: [{ id: 501 }] }),
+      '/v1/projects/501/files': json({ files: [{ key: 'AAAAAAAAAA1', name: 'App' }] }),
+    });
+    expect(result.ok).toBe(true);
+    expect(result.detail).toMatch(/^connector\.figmaReach/);
+  });
+
+  it('names the allowlist entry and the scope when Figma refuses a listing', async () => {
+    const refused = test({ '/v1/me': json({ handle: 'ada' }), '/v1/teams/111/projects': json({ status: 403, err: 'Forbidden' }, 403) });
+    await expect(refused).rejects.toThrow('error.connector.figmaListRefused {"entry":"team:111","scope":"projects:read"}');
+  });
+
+  it('still fails on a bad token', async () => {
+    await expect(test({ '/v1/me': json({ status: 401, err: 'Invalid token' }, 401) })).rejects.toMatchObject({ status: 401 });
   });
 });

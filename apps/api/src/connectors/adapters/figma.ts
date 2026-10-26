@@ -1,4 +1,5 @@
 import { parseFigmaAllowlist, FIGMA_ALLOWLIST_CONFIG_KEY } from '@knowledge/contracts';
+import { t } from '../../i18n/t.js';
 import { ConnectorRequestError, connectorFetch, type ConnectorContext } from './connector.types.js';
 
 /**
@@ -54,13 +55,29 @@ export async function figmaAllowedFiles(ctx: FigmaContext & Pick<ConnectorContex
   const allowlist = parseFigmaAllowlist(String(ctx.config[FIGMA_ALLOWLIST_CONFIG_KEY] ?? ''));
   const projects = new Map<string, string | null>(allowlist.projects.map((id) => [id, null]));
   for (const teamId of allowlist.teams) {
-    const { projects: listed } = await figmaGet<{ projects?: { id: string | number }[] }>(ctx, `/v1/teams/${teamId}/projects`);
+    const { projects: listed } = await listing<{ projects?: { id: string | number }[] }>(ctx, `/v1/teams/${teamId}/projects`, `team:${teamId}`);
     for (const p of listed ?? []) projects.set(String(p.id), teamId);
   }
   const files: FigmaFileEntry[] = [];
   for (const [projectId, teamId] of projects) {
-    const { files: listed } = await figmaGet<{ files?: { key: string; name: string }[] }>(ctx, `/v1/projects/${projectId}/files`);
+    const { files: listed } = await listing<{ files?: { key: string; name: string }[] }>(ctx, `/v1/projects/${projectId}/files`, `project:${projectId}`);
     for (const f of listed ?? []) files.push({ fileKey: f.key, name: f.name, projectId, teamId });
   }
   return files;
+}
+
+/**
+ * One allowlist listing. Figma answers a bad token with 401, so a 403 here is
+ * a token without `projects:read` or an owner who cannot open the entry —
+ * named, so the admin knows which of their entries to fix (#545).
+ */
+async function listing<T>(ctx: FigmaContext, path: string, entry: string): Promise<T> {
+  try {
+    return await figmaGet<T>(ctx, path);
+  } catch (err) {
+    if (err instanceof ConnectorRequestError && err.status === 403) {
+      throw new Error(t('error.connector.figmaListRefused', { entry, scope: 'projects:read' }));
+    }
+    throw err;
+  }
 }

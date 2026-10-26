@@ -1009,6 +1009,7 @@ export type I18nTranslations = {
             "pullNotSupported": string;
             "pushNotSupported": string;
             "figmaAllowlistInvalid": string;
+            "figmaListRefused": string;
             "directionNotAllowed": string;
             "runInFlight": string;
             "webhookNotConfigured": string;

@@ -827,7 +827,7 @@
           "label": "Token expires on",
           "help": "The expiry you chose when creating the token, as YYYY-MM-DD. Figma does not report it, so the card warns from this date."
         },
-        "credential": "A personal access token from Figma (Settings → Security → Personal access tokens) with read access to file content, file metadata and projects."
+        "credential": "A personal access token from Figma (Settings → Security → Personal access tokens) with the scopes file_content:read, file_metadata:read and projects:read. Its owner must be able to open every team and project listed below."
       },
       "googleDrive": {
         "credential": "Paste the whole JSON key file of a Google Cloud service account with the Drive API enabled. Then share the folder with the service account's email, or add it to the shared drive.",

@@ -122,11 +122,24 @@ refused.
 - **The credential** is a Figma personal access token in the encrypted
   `Connector.credential` (`ai/secret-box.ts`, write-only over the API). It is
   read through `ConnectorsService.credentialFor`, like every other connector's.
+  It needs three scopes, and its owner must be able to open every allowlisted
+  team and project:
+
+  | Scope                | For                                                              |
+  | -------------------- | ---------------------------------------------------------------- |
+  | `projects:read`      | `GET /v1/teams/:id/projects`, `GET /v1/projects/:id/files`       |
+  | `file_content:read`  | `GET /v1/files/:key`, `/v1/files/:key/nodes`, `/v1/images/:key`  |
+  | `file_metadata:read` | `GET /v1/files/:key/meta`                                        |
+
+  Test connection also asks `GET /v1/me` for the owner's handle. That needs
+  `current_user:read`, which embedding never does, so a `403` there only drops
+  the handle (#545).
 - **Token expiry is a config field**, typed in by the admin. Figma's API does
   not report a PAT's expiry, so the card shows the date the admin entered. From
-  14 days before it, the card warns. A `403` from Figma marks the connector's
-  last error the same way, so an expired token is visible even with no date
-  entered.
+  14 days before it, the card warns. A bad token is a `401`. A `403` on a
+  listing is a missing `projects:read` or an entry the owner cannot open, and
+  Test connection names that entry (`team:<id>` / `project:<id>`); it is never
+  read as expiry.
 - **The allowlist** is one config field holding Figma team and project URLs or
   ids, one per line. Figma's file metadata does not name a file's project, so
   membership is resolved by listing:

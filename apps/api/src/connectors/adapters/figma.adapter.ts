@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FIGMA_ALLOWLIST_CONFIG_KEY, parseFigmaAllowlist, type ConnectorCapabilities, type ConnectorKind } from '@knowledge/contracts';
 import { t } from '../../i18n/t.js';
-import type { ConnectorAdapter, ConnectorContext, ExternalDocument, ExternalRef } from './connector.types.js';
+import { ConnectorRequestError, type ConnectorAdapter, type ConnectorContext, type ExternalDocument, type ExternalRef } from './connector.types.js';
 import { figmaAllowedFiles, figmaGet } from './figma.js';
 
 /**
@@ -17,7 +17,11 @@ export class FigmaAdapter implements ConnectorAdapter {
 
   /** The token's owner, then how far the allowlist reaches — the two things a wrong setup gets wrong. */
   async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
-    const me = await figmaGet<{ handle?: string; email?: string }>(ctx, '/v1/me');
+    // Only for the handle: `/v1/me` needs `current_user:read`, which embedding never does (#545).
+    const me = await figmaGet<{ handle?: string; email?: string }>(ctx, '/v1/me').catch((err: unknown) => {
+      if (err instanceof ConnectorRequestError && err.status === 403) return null;
+      throw err;
+    });
     const allowlist = parseFigmaAllowlist(String(ctx.config[FIGMA_ALLOWLIST_CONFIG_KEY] ?? ''));
     if (allowlist.invalid.length) {
       return { ok: false, detail: t('error.connector.figmaAllowlistInvalid', { entries: allowlist.invalid.join(', ') }) };
@@ -26,7 +30,7 @@ export class FigmaAdapter implements ConnectorAdapter {
     const projects = new Set(files.map((f) => f.projectId)).size;
     return {
       ok: true,
-      detail: [me.handle ?? me.email, t('connector.figmaReach', { projects, files: files.length })].filter(Boolean).join(' · '),
+      detail: [me?.handle ?? me?.email, t('connector.figmaReach', { projects, files: files.length })].filter(Boolean).join(' · '),
     };
   }
 

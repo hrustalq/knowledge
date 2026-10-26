@@ -58,6 +58,10 @@ in the pull request that introduces them — see
 - The page picker in a workflow's **Start** dialog listed no pages (#472).
 - Opening a page's editor in two tabs at the same moment could fail one of them with **Internal server
   error**: both asked for the author's working branch and the second insert collided (#472).
+- A Figma token with the scopes the connector form asked for failed **Test connection** with a 403
+  (#545). The test looked up the token's owner, which needs a scope embedding never uses; it now leaves
+  the owner out instead. When Figma refuses a team or project, the result names that entry and the
+  `projects:read` scope rather than a bare 403, and the form lists the exact scope names.
 
 ### Operations
 

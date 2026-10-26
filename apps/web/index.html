@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Installable (#472). The manifest and the worker (src/sw.ts) are the
+         member app's only: the public reader's shell links neither. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fcfbf9" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c0e14" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Knowledge</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />

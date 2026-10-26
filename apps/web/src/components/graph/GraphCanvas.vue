@@ -12,8 +12,8 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { Minus, Plus, Scan } from 'lucide-vue-next'
-import type { SearchApiOperationsResponse } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { api } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { operationHref } from '@/components/api-reference/use-operation'
 import KnowledgeGraph from './KnowledgeGraph.vue'
 import GraphControls from './GraphControls.vue'
@@ -48,9 +48,10 @@ const router = useRouter()
  * have a page of its own.
  */
 async function openOperation(key: string) {
-  const params = new URLSearchParams({ workspaceId: getWorkspaceId(), entityKey: key, limit: '1' })
   try {
-    const { operations } = await apiFetch<SearchApiOperationsResponse>(`/v1/api-operations?${params}`)
+    const { operations } = await api.get('/v1/api-operations', {
+      query: { workspaceId: getWorkspaceId(), entityKey: key, limit: 1 },
+    })
     if (operations[0]) await router.push(operationHref(operations[0]))
     else toast(t('apiLink.gone'), { description: key })
   } catch (e) {

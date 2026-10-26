@@ -1,6 +1,7 @@
-// ESLint here exists for one job: keep UI copy in the i18n catalogs (#85,
-// docs/features/18-i18n.md). General linting stays with vue-tsc; this config
-// deliberately enables nothing else.
+// ESLint here exists for two jobs: keep UI copy in the i18n catalogs (#85,
+// docs/features/18-i18n.md), and keep API calls on the one typed client (#472).
+// General linting stays with vue-tsc; this config deliberately enables nothing
+// else.
 //
 // Existing violations live in eslint-suppressions.json — a shrink-only
 // baseline like `make deps-baseline`: `pnpm lint:i18n-baseline` prunes fixed
@@ -39,6 +40,26 @@ const LOCALE_FORMATTING = [
   },
 ]
 
+// One HTTP client (#472): reads go through the generated client and the query
+// cache, so they are typed, deduped and reached by live invalidation. A raw
+// fetch is allowed only in RAW_FETCH_OK, each with a comment saying why.
+const RAW_FETCH = [
+  {
+    selector: "CallExpression[callee.name='fetch'], CallExpression[callee.property.name='fetch'][callee.object.name=/^(window|globalThis|self)$/]",
+    message: 'Use the generated client (api.* / fetchApi / apiQueryOptions from @/api/queries). Raw fetch is allowlisted in eslint.config.js only where XHR cannot do the job.',
+  },
+]
+const RAW_FETCH_OK = [
+  'src/lib/assistant-stream.ts', // a streamed response body
+  'src/lib/use-page-view.ts', // a keepalive beacon that outlives the tab
+  'src/sw.ts', // the service worker passes a navigation through; there is no client in it
+  'src/components/api-reference/ApiTryConsole.vue', // try-it: the request is the reader's own
+  'src/components/api-reference/ApiTestRun.vue', // the same, for a suite run in the browser
+  'src/entry-public.ts', // the public SSR entry: no member client, no credential
+  'src/pages/public/**',
+  'src/components/public/**',
+]
+
 // The app's catalogs, and the public reader's own small one (docs/features/43):
 // kept apart so a reader's bundle never carries the app's whole catalog.
 const I18N_LOCALE_DIR = ['./src/i18n/messages/*.json', './src/i18n/reader/*.json']
@@ -72,7 +93,7 @@ export default [
         },
       ],
       '@intlify/vue-i18n/no-missing-keys': 'error',
-      'no-restricted-syntax': LOCALE_FORMATTING,
+      'no-restricted-syntax': [...LOCALE_FORMATTING, ...RAW_FETCH],
     },
   },
   {
@@ -85,8 +106,12 @@ export default [
     },
     rules: {
       '@intlify/vue-i18n/no-missing-keys': 'error',
-      'no-restricted-syntax': LOCALE_FORMATTING,
+      'no-restricted-syntax': [...LOCALE_FORMATTING, ...RAW_FETCH],
     },
+  },
+  {
+    files: RAW_FETCH_OK,
+    rules: { 'no-restricted-syntax': LOCALE_FORMATTING },
   },
   {
     // The one place allowed to build Intl formatters.

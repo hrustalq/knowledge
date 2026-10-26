@@ -87,7 +87,7 @@ async function submit() {
   if (!valid.value || saving.value) return
   saving.value = true
   try {
-    const created = (await api.post('/v1/chat/integrations', {
+    const created = await api.post('/v1/chat/integrations', {
       body: {
         workspaceId: getWorkspaceId(),
         kind: form.kind,
@@ -98,7 +98,7 @@ async function submit() {
         defaultAgentKey: form.agentKey,
         locale: form.locale,
       },
-    })) as ChatIntegrationSummary
+    })
     toast.success(t('chatBots.connect.done', { bot: created.botUsername ? chatBotHandle(created.kind, created.botUsername) : created.name }))
     emit('created', created)
     open.value = false

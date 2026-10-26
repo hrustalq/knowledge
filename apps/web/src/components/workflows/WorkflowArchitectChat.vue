@@ -17,7 +17,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowUp, Bot, Loader2, Plus, TriangleAlert } from 'lucide-vue-next'
-import type { DraftWorkflowResponse, WorkflowGraph } from '@knowledge/contracts'
+import type { WorkflowGraph } from '@knowledge/contracts'
 import { api, type Op, type RequestOptions } from '@/api/client'
 import { getProjectId, getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -71,9 +71,9 @@ async function send(text?: string) {
       messages: [...props.turns, { role: 'user' as const, content }],
       ...(props.graph ? { graph: props.graph } : {}),
     }
-    const res = (await api.post('/v1/workflows/draft', {
+    const res = await api.post('/v1/workflows/draft', {
       body: body as unknown as RequestOptions<Op<'/v1/workflows/draft', 'post'>>['body'],
-    })) as DraftWorkflowResponse
+    })
 
     if (!res.enabled) {
       emit('unavailable')

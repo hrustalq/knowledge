@@ -7,12 +7,10 @@
  * retyped at each call site.
  */
 import type {
-  CreateProjectResponse,
   CreateWorkspaceResponse,
-  ListWorkspaceCandidatesResponse,
   ProjectSummary,
 } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { api } from '@/api/queries'
 
 /** What a create dialog hands back once the whole flow (create + follow-up) is done. */
 export interface ScopeCreated {
@@ -22,10 +20,7 @@ export interface ScopeCreated {
 }
 
 export async function createWorkspace(name: string): Promise<CreateWorkspaceResponse> {
-  return apiFetch<CreateWorkspaceResponse>('/v1/workspaces', {
-    method: 'POST',
-    body: JSON.stringify({ name }),
-  })
+  return api.post('/v1/workspaces', { body: { name } })
 }
 
 /**
@@ -38,10 +33,7 @@ export async function createProject(
   name: string,
   description: string | null = null,
 ): Promise<ProjectSummary> {
-  const res = await apiFetch<CreateProjectResponse>('/v1/projects', {
-    method: 'POST',
-    body: JSON.stringify({ workspaceId, name, description }),
-  })
+  const res = await api.post('/v1/projects', { body: { workspaceId, name, description } })
   return res.project
 }
 
@@ -55,9 +47,10 @@ export async function createProject(
  */
 export async function workspaceHasCandidates(workspaceId: string): Promise<boolean> {
   try {
-    const res = await apiFetch<ListWorkspaceCandidatesResponse>(
-      `/v1/workspaces/${workspaceId}/candidates?limit=1`,
-    )
+    const res = await api.get('/v1/workspaces/{id}/candidates', {
+      path: { id: workspaceId },
+      query: { limit: 1 },
+    })
     return res.candidates.length > 0
   } catch {
     return false

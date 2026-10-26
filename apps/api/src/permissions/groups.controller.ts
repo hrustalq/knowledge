@@ -13,6 +13,7 @@ import {
   UpdateUserGroupDto,
   UpdateUserGroupMembersDto,
 } from './permissions.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * User groups (#76). Reading is `viewer`, the same bar as the member roster a
@@ -30,6 +31,7 @@ export class GroupsController {
   ) {}
 
   @Get()
+  @Returns('ListUserGroupsResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: "The workspace's user groups, with member counts" })
   list(@Query() query: ListUserGroupsQueryDto): Promise<ListUserGroupsResponse> {
@@ -37,6 +39,7 @@ export class GroupsController {
   }
 
   @Post()
+  @Returns('UserGroupSummary')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Create a manual group (workspace admin; 409 when the name is taken)' })
   create(@Body() dto: CreateUserGroupDto): Promise<UserGroupSummary> {
@@ -44,6 +47,7 @@ export class GroupsController {
   }
 
   @Patch(':id')
+  @Returns('UserGroupSummary')
   @Access('admin', 'group')
   @ApiOperation({ summary: 'Rename a group or change its description (409 for a connector or SCIM group)' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserGroupDto): Promise<UserGroupSummary> {
@@ -65,6 +69,7 @@ export class GroupsController {
   }
 
   @Get(':id/members')
+  @Returns('ListUserGroupMembersResponse')
   @Access('viewer', 'group')
   @ApiOperation({ summary: "A group's members with their workspace roles" })
   listMembers(@Param('id', ParseUUIDPipe) id: string): Promise<ListUserGroupMembersResponse> {
@@ -72,6 +77,7 @@ export class GroupsController {
   }
 
   @Put(':id/members')
+  @Returns('ListUserGroupMembersResponse')
   @Access('admin', 'group')
   @ApiOperation({
     summary: 'Add and remove members in one transaction (workspace admin; 400 for a non-member, 409 for a connector or SCIM group)',

@@ -92,7 +92,9 @@ export const http: AxiosInstance = axios.create({ baseURL: base, timeout: 30_000
 
 http.interceptors.request.use((config) => {
   const token = getToken()
-  if (token) config.headers.set('Authorization', `Bearer ${token}`)
+  // A call may ask as another credential (Connect AI checks a key it just
+  // minted): its own header wins over the session's.
+  if (token && !config.headers.has('Authorization')) config.headers.set('Authorization', `Bearer ${token}`)
   // Second HTTP stack, same contract: the API replies in the UI's language.
   config.headers.set('Accept-Language', getLocale())
   // Correlates this call to the API's logs — and, under SSR, to the page render

@@ -8,6 +8,7 @@ import type { Principal } from '../auth/principal.js';
 import type { Env } from '../config/env.js';
 import { GraphQueryDto } from './graph-query.dto.js';
 import { GraphService } from './graph.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Phase 5 (plan.md §7/§9): POST /v1/graph/query — trusted-operator-only,
@@ -24,6 +25,7 @@ export class GraphQueryController {
   ) {}
 
   @Post('query')
+  @Returns('GraphQueryResponse')
   @HttpCode(200)
   @Access('admin', 'body', { operator: true })
   @ApiOperation({

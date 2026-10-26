@@ -33,15 +33,14 @@ import {
   type AccessLevel,
   type AccessResourceType,
   type BranchAccessResponse,
-  type ListUserGroupsResponse,
-  type ListWorkspaceMembersResponse,
   type ResourceAccessResponse,
   type UserGroupSummary,
   type WorkspaceMemberEntry,
 } from '@knowledge/contracts'
-import { api } from '@/api/client'
+import { useQueryClient } from '@tanstack/vue-query'
+import { api, fetchApi } from '@/api/queries'
 import { errorMessage, errorReason } from '@/api/errors'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { getWorkspaceId } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import { Badge } from '@/components/ui/badge'
@@ -94,16 +93,27 @@ function seed(res: ResourceAccessResponse) {
   toAdd.value = []
 }
 
+const queryClient = useQueryClient()
+
 async function load() {
   loading.value = true
   loadError.value = null
   access.value = null
+  // Fresh: every opening, and every reload after a write, wants the server's answer now.
+  const path = { id: props.resourceId }
   try {
     const res = props.branchId
-      ? asResource(await apiFetch<BranchAccessResponse>(branchPath()))
+      ? asResource(
+          await fetchApi(
+            queryClient,
+            '/v1/documents/{id}/branches/{branchId}/access',
+            { path: { ...path, branchId: props.branchId } },
+            { fresh: true },
+          ),
+        )
       : ((props.resourceType === 'project'
-          ? await api.get('/v1/projects/{id}/access', { path: { id: props.resourceId } })
-          : await api.get('/v1/documents/{id}/access', { path: { id: props.resourceId } })) as ResourceAccessResponse)
+          ? await fetchApi(queryClient, '/v1/projects/{id}/access', { path }, { fresh: true })
+          : await fetchApi(queryClient, '/v1/documents/{id}/access', { path }, { fresh: true })) as ResourceAccessResponse)
     seed(res)
     if (res.canManage) void loadCandidates()
   } catch (e) {
@@ -113,7 +123,6 @@ async function load() {
   }
 }
 
-const branchPath = () => `/v1/documents/${props.resourceId}/branches/${props.branchId}/access`
 /** A branch's list in the page's shape, so one editor serves both. Its own level is never shown. */
 function asResource(res: BranchAccessResponse): ResourceAccessResponse {
   return {
@@ -133,8 +142,8 @@ const levels = computed(() => (props.branchId ? ACCESS_LEVELS.filter((l) => l !=
 async function loadCandidates() {
   const ws = getWorkspaceId()
   const [m, g] = await Promise.allSettled([
-    apiFetch<ListWorkspaceMembersResponse>(`/v1/workspaces/${ws}/members`),
-    apiFetch<ListUserGroupsResponse>(`/v1/groups?workspaceId=${ws}`),
+    fetchApi(queryClient, '/v1/workspaces/{id}/members', { path: { id: ws } }),
+    fetchApi(queryClient, '/v1/groups', { query: { workspaceId: ws } }),
   ])
   members.value = m.status === 'fulfilled' ? m.value.members : []
   groups.value = g.status === 'fulfilled' ? g.value.groups : []
@@ -154,7 +163,7 @@ const publishing = ref(false)
 async function publish() {
   publishing.value = true
   try {
-    await apiFetch(`/v1/documents/${props.resourceId}/publish`, { method: 'POST' })
+    await api.post('/v1/documents/{id}/publish', { path: { id: props.resourceId } })
     toast.success(t('access.draft.published'))
     await load()
     if (access.value) emit('saved', access.value)
@@ -262,7 +271,12 @@ async function save() {
   }
   try {
     const res = props.branchId
-      ? asResource(await apiFetch<BranchAccessResponse>(branchPath(), { method: 'PUT', body: JSON.stringify({ grants: body.grants }) }))
+      ? asResource(
+          await api.put('/v1/documents/{id}/branches/{branchId}/access', {
+            path: { id: props.resourceId, branchId: props.branchId },
+            body: { grants: body.grants },
+          }),
+        )
       : ((props.resourceType === 'project'
           ? await api.put('/v1/projects/{id}/access', { path: { id: props.resourceId }, body })
           : await api.put('/v1/documents/{id}/access', { path: { id: props.resourceId }, body })) as ResourceAccessResponse)

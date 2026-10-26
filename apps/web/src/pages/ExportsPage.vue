@@ -13,7 +13,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { isActiveExportStatus, type ExportDownloadResponse, type ExportJobSummary, type ExportListResponse } from '@knowledge/contracts'
+import { isActiveExportStatus, type ExportJobSummary, type ExportListResponse } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
@@ -48,7 +48,7 @@ function subjectLink(e: ExportJobSummary): string | null {
 
 async function download(e: ExportJobSummary) {
   try {
-    const res = (await api.get('/v1/exports/{id}/download', { path: { id: e.id } })) as ExportDownloadResponse
+    const res = await api.get('/v1/exports/{id}/download', { path: { id: e.id } })
     // A presigned URL that answers with Content-Disposition: attachment, so
     // the browser saves it and this page stays where it is.
     window.location.assign(res.url)

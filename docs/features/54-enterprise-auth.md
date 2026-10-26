@@ -312,7 +312,8 @@ it only picks a login button.
   exchange, a foreign `returnTo` lands on `/documents`, and a refused code goes
   to `/login?error=`. `lib/reauth.spec.ts` (jsdom) pins `redirectForReauth`:
   one navigation per page load, none from `/login` or `/auth/*`, none for a
-  non-re-auth 403, and its wiring from `apiFetch`.
+  non-re-auth 403, and its wiring from the API client's response interceptor
+  (`api/http.ts`).
 - Live, per phase: Keycloak 26 for OIDC, SAML and back-channel logout
   (`make infra-up-keycloak`), lldap for LDAP, and SCIM driven with curl. The
   phase handoffs on #75 record the recipes.

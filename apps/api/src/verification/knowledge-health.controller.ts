@@ -19,6 +19,7 @@ import {
   KnowledgeHealthSummaryQueryDto,
   UpdateKnowledgeHealthSettingsDto,
 } from './verification.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * The knowledge-health dashboard's API (docs/features/40, issue #66): the
@@ -39,6 +40,7 @@ export class KnowledgeHealthController {
   ) {}
 
   @Get()
+  @Returns('KnowledgeHealthListResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Pages with their derived verification status, filtered and paged; most neglected first' })
   async list(
@@ -49,6 +51,7 @@ export class KnowledgeHealthController {
   }
 
   @Get('summary')
+  @Returns('KnowledgeHealthSummaryResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Live counts per filter — no stored aggregate; equals the list totals' })
   async summary(
@@ -59,6 +62,7 @@ export class KnowledgeHealthController {
   }
 
   @Post('bulk')
+  @Returns('KnowledgeHealthBulkResponse')
   @Access('editor', 'body')
   @ApiOperation({
     summary:
@@ -72,6 +76,7 @@ export class KnowledgeHealthController {
   }
 
   @Get('settings')
+  @Returns('KnowledgeHealthSettingsResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'The freshness policy: what applies (effective), what the workspace overrides, and the env defaults' })
   settings(@Query() query: KnowledgeHealthSettingsQueryDto): Promise<KnowledgeHealthSettingsResponse> {
@@ -79,6 +84,7 @@ export class KnowledgeHealthController {
   }
 
   @Patch('settings')
+  @Returns('KnowledgeHealthSettingsResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: 'Override part of the policy for this workspace; null on a key goes back to the env default' })
   updateSettings(

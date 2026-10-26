@@ -13,6 +13,66 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.35.0] — 2026-10-26
+
+### Added
+
+- A Redis read cache for answers that are the same for every caller (#472): a revision's raw bytes, a
+  search query's embedding and a workspace's knowledge-health settings. Off by default
+  (`READ_CACHE_ENABLED`); with it on, an unchanged page's content skips object storage, a repeated
+  search skips the embedding call, and every page view and search skips the settings read. Nothing
+  filtered by page permissions is ever cached, a settings change reaches every process on the next
+  request, and with Redis down every read still answers from its source.
+- The web app can be installed on desktop and mobile (#472): a web manifest, icons, and a service worker
+  that keeps the app's code on the device, so a cold start downloads only the page itself. After a
+  deploy an open tab offers **Reload** and keeps working until you take it. While the network is gone
+  the app says so, and opening a page offline shows an offline notice instead of the browser's error
+  page. The worker never stores a page, an API response or a rendered member page, and signing out
+  removes it together with everything it cached.
+
+### Changed
+
+- The web app makes every API call through one typed client and one cache (#472). Project, workspace,
+  glossary, workflow and template rosters, the AI pickers and the settings pages are reused for five
+  minutes instead of being fetched again on every mount, and a page's content at a named revision for
+  the whole session; everything else keeps the 30-second window. The sidebar, glossary links, page
+  references and the template gallery read the same cache their pages do, so an edit announced on the
+  live feed — a glossary term or template changed in another tab included — reaches them without a
+  reload. Signing out empties the cache.
+- The OpenAPI document (`/docs`, `apps/api/openapi.json`) now declares the response body of 316 JSON
+  routes, generated from the `@knowledge/contracts` types they return (#472). A client generated from
+  it gets typed responses where it used to get untyped ones. `HTTP` `GET /docs-json`
+- Every API response now says how it may be cached (#472). Authenticated reads are `private, no-cache`
+  with `Vary: Authorization, Cookie, Accept-Language`, so the browser keeps them and revalidates and no
+  shared cache stores them; writes, and every sign-in, session, API-key, SSO and SCIM-token response, are
+  `no-store`. A page's detail and its content answer **304 Not Modified** when nothing changed, without
+  reading the graph or object storage; content at a named revision is cached for a year. Public routes
+  that set their own headers keep them.
+- Optional request fields with a server-side default (`limit`, `mode`, `branch`, `category`, …) are no
+  longer marked required in the OpenAPI document; the default is stated in their description (#472).
+
+### Fixed
+
+- The second line of a toast was barely readable in dark mode: it kept the toast library's light-theme
+  grey (#472).
+- The page picker in a workflow's **Start** dialog listed no pages (#472).
+- Opening a page's editor in two tabs at the same moment could fail one of them with **Internal server
+  error**: both asked for the author's working branch and the second insert collided (#472).
+- A Figma token with the scopes the connector form asked for failed **Test connection** with a 403
+  (#545). The test looked up the token's owner, which needs a scope embedding never uses; it now leaves
+  the owner out instead. When Figma refuses a team or project, the result names that entry and the
+  `projects:read` scope rather than a bare 403, and the form lists the exact scope names.
+
+### Operations
+
+- Two env vars, both defaulted (#472): `READ_CACHE_ENABLED` (`false`) and `READ_CACHE_DEFAULT_TTL_MS`
+  (`3600000`). Set them in the GitHub `production` environment before the release that ships them —
+  `deploy.yml` refuses a variable the environment lacks. Leave the cache off until it has been measured.
+- The first app visit after a release fills the service worker in the background with the app's code,
+  about 8.5 MiB before compression (#472). Later releases fetch only the files that changed. Nothing
+  to configure: `sw.js` and the manifest are served with `max-age=0, must-revalidate`, like the HTML
+  shells.
+
 ## [0.34.0] — 2026-10-26
 
 ### Breaking
@@ -4976,7 +5036,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.34.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/hrustalq/knowledge/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/hrustalq/knowledge/compare/v0.33.1...v0.34.0
 [0.33.1]: https://github.com/hrustalq/knowledge/compare/v0.33.0...v0.33.1
 [0.33.0]: https://github.com/hrustalq/knowledge/compare/v0.32.1...v0.33.0

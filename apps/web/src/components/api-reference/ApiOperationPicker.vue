@@ -13,7 +13,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { refDebounced } from '@vueuse/core'
-import { useQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import {
   ComboboxAnchor,
   ComboboxContent,
@@ -24,7 +24,7 @@ import {
   ComboboxViewport,
 } from 'reka-ui'
 import { Loader2, Search } from 'lucide-vue-next'
-import type { ApiOperationInfo, SearchApiOperationsResponse } from '@knowledge/contracts'
+import type { ApiOperationInfo } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/api/queries'
 import { operationRowKey } from '@/lib/api-spec'
 import ApiEndpoint from './ApiEndpoint.vue'
@@ -55,11 +55,11 @@ const results = useQuery(
       query: { workspaceId: props.workspaceId, q: debounced.value.trim() || undefined, limit: 40 },
     }),
     enabled: open.value,
-    placeholderData: (prev: unknown) => prev,
+    placeholderData: keepPreviousData,
   })),
 )
 const operations = computed(() =>
-  ((results.data.value as SearchApiOperationsResponse | undefined)?.operations ?? []).filter(
+  (results.data.value?.operations ?? []).filter(
     (o) => !props.protocol || o.protocol === props.protocol,
   ),
 )

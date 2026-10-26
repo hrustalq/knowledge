@@ -21,11 +21,10 @@
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Github, Loader2, Lock, Plus, RefreshCw } from 'lucide-vue-next'
-import type { GithubInstallationsResponse, GithubReposResponse } from '@knowledge/contracts'
-import { api } from '@/api/client'
-import { apiQueryOptions } from '@/api/queries'
+import type { GithubInstallationsResponse } from '@knowledge/contracts'
+import { apiQueryOptions, fetchApi } from '@/api/queries'
 import Autocomplete, { type AutocompleteOption } from '@/components/ui/autocomplete/Autocomplete.vue'
 import { Button } from '@/components/ui/button'
 
@@ -42,6 +41,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const queryClient = useQueryClient()
 
 const accounts = useQuery(
   apiQueryOptions('/v1/connectors/github/installations', {
@@ -85,9 +85,14 @@ const noneGranted = ref(false)
 
 async function loadRepos(query: string): Promise<AutocompleteOption[]> {
   if (!selected.value) return []
-  const res = (await api.get('/v1/connectors/github/repos', {
-    query: { workspaceId: props.workspaceId, installationId: selected.value, q: query },
-  })) as GithubReposResponse
+  // Always asked afresh: what the App was granted changes on GitHub, which no
+  // live event here reports.
+  const res = await fetchApi(
+    queryClient,
+    '/v1/connectors/github/repos',
+    { query: { workspaceId: props.workspaceId, installationId: selected.value, q: query } },
+    { fresh: true },
+  )
   if (!res.ok) return []
   if (query.trim() === '') noneGranted.value = res.repositories.length === 0
 

@@ -6,6 +6,7 @@ import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { CreateDocumentExportDto, CreateProjectExportDto } from './export.dto.js';
 import { ExportService } from './export.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Exports (docs/features/45). Asking for one is a viewer's act — it reads
@@ -19,6 +20,7 @@ export class ExportController {
   constructor(private readonly exports: ExportService) {}
 
   @Get('exports/capabilities')
+  @Returns('ExportCapabilitiesResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Which formats this deployment can write, and the limits' })
   capabilities(@Query('workspaceId', ParseUUIDPipe) _workspaceId: string): ExportCapabilitiesResponse {
@@ -26,6 +28,7 @@ export class ExportController {
   }
 
   @Get('exports')
+  @Returns('ExportListResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Your exports in a workspace, newest first; an admin sees everyone’s' })
   list(@Query('workspaceId', ParseUUIDPipe) workspaceId: string, @CurrentPrincipal() principal: Principal): Promise<ExportListResponse> {
@@ -33,6 +36,7 @@ export class ExportController {
   }
 
   @Post('documents/:id/exports')
+  @Returns('ExportJobSummary')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Export a page, or a page and its subpages, as ZIP, HTML or PDF' })
   @ApiResponse({ status: 400, description: 'Too many pages (details.reason export.tooManyPages) or nothing to export' })
@@ -46,6 +50,7 @@ export class ExportController {
   }
 
   @Post('projects/:id/exports')
+  @Returns('ExportJobSummary')
   @Access('viewer', 'project')
   @ApiOperation({ summary: 'Export every page of a project as ZIP, HTML or PDF' })
   @ApiResponse({ status: 400, description: 'Too many pages (details.reason export.tooManyPages) or nothing to export' })
@@ -59,6 +64,7 @@ export class ExportController {
   }
 
   @Get('exports/:id')
+  @Returns('ExportJobSummary')
   @Access('viewer', 'export')
   @ApiOperation({ summary: 'One export — polled while it runs' })
   get(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ExportJobSummary> {
@@ -70,6 +76,7 @@ export class ExportController {
    * which can send an Authorization header to ask for it, so no `?token=`.
    */
   @Get('exports/:id/download')
+  @Returns('ExportDownloadResponse')
   @Access('viewer', 'export')
   @ApiOperation({ summary: 'A short-lived URL to the finished file' })
   @ApiResponse({ status: 409, description: 'Not finished (details.reason export.notReady)' })

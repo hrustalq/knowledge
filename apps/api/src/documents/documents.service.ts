@@ -48,7 +48,7 @@ import type {
   RelationInputDto,
   UpdateDocumentDto,
 } from './dto/documents.dto.js';
-import type { Document, DocumentBranch, DocumentRevision, Prisma } from '@prisma/client';
+import { Prisma, type Document, type DocumentBranch, type DocumentRevision } from '@prisma/client';
 import {
   DRAFT_BRANCH_PREFIX,
   entityLayerFor,
@@ -77,6 +77,7 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { AclEventsService } from '../permissions/acl-events.service.js';
 import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
+import { ReadCache, READ_CACHE_FAMILIES } from '../cache/read-cache.service.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -125,6 +126,7 @@ export class DocumentsService {
     private readonly apiSpecs: ApiSpecsService,
     private readonly apiFixtures: ApiFixturesService,
     private readonly aclEvents: AclEventsService,
+    private readonly cache: ReadCache,
   ) {}
 
   async createDocument(input: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
@@ -790,6 +792,16 @@ export class DocumentsService {
   }
 
   async getDocument(documentId: string, revisionId?: string): Promise<DocumentDetailResponse> {
+    return this.withChunks(await this.getDocumentHead(documentId, revisionId));
+  }
+
+  /**
+   * A page's detail without its chunks: PG only. Everything the full answer
+   * depends on is in it — the chunks follow from the revision it names — so it
+   * is also the validator of the conditional GET (#472): an unchanged page is a
+   * 304 without the graph read.
+   */
+  async getDocumentHead(documentId: string, revisionId?: string): Promise<Omit<DocumentDetailResponse, 'chunks'>> {
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
       include: { branches: true },
@@ -809,11 +821,6 @@ export class DocumentsService {
           });
     }
     if (!revision) throw new NotFoundException(t('error.document.noRevisions', { id: documentId }));
-
-    const chunks =
-      revision.status === 'indexed'
-        ? await this.graph.getRevisionChunks(document.workspaceId, revision.id)
-        : [];
 
     const headId = document.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId ?? null;
     // An open report flags the page (docs/features/38, phase 3) — the same
@@ -840,8 +847,16 @@ export class DocumentsService {
         ...this.trustFields(document, headId, issues.get(documentId) ?? 0, settings.inactiveAfterDays),
       },
       revision: toRevisionInfo(revision),
-      chunks,
     };
+  }
+
+  /** The graph half of `getDocument`: a revision's chunks, once it is indexed. */
+  async withChunks(head: Omit<DocumentDetailResponse, 'chunks'>): Promise<DocumentDetailResponse> {
+    const chunks =
+      head.revision.status === 'indexed'
+        ? await this.graph.getRevisionChunks(head.document.workspaceId, head.revision.revisionId)
+        : [];
+    return { ...head, chunks };
   }
 
   /**
@@ -915,7 +930,16 @@ export class DocumentsService {
     if (!mine) {
       const spent = await this.prisma.documentBranch.count({ where: { documentId, name: { startsWith: prefix } } });
       const name = spent === 0 ? prefix : `${prefix}-${spent + 1}`;
-      return this.createBranch(documentId, { name, visibility: 'private' }, userId);
+      try {
+        return await this.createBranch(documentId, { name, visibility: 'private' }, userId);
+      } catch (e) {
+        // Two of the caller's tabs asked in the same instant: the unique
+        // (document, name) let one insert win, and that one is the answer.
+        const lost =
+          (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') || e instanceof ConflictException;
+        if (!lost) throw e;
+        return this.myDraftBranch(documentId, userId);
+      }
     }
     const def = await this.prisma.documentBranch.findUnique({
       where: { documentId_name: { documentId, name: document.defaultBranch } },
@@ -1093,6 +1117,18 @@ export class DocumentsService {
   }
 
   async getContent(documentId: string, revisionId?: string): Promise<DocumentContentResponse> {
+    return this.readContent(await this.contentRevision(documentId, revisionId));
+  }
+
+  /**
+   * Which revision a content read would return: PG only. Content is immutable
+   * per revision, so its id is the validator of the conditional GET (#472) —
+   * an unchanged page is a 304 without the object-storage read.
+   */
+  async contentRevision(
+    documentId: string,
+    revisionId?: string,
+  ): Promise<{ workspaceId: string; kind: string; revision: DocumentRevision }> {
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
       include: { branches: true },
@@ -1110,13 +1146,27 @@ export class DocumentsService {
     if (revision.status === 'draft') {
       throw new BadRequestException(t('error.document.contentIsDraft', { id: revision.id }));
     }
+    return { workspaceId: document.workspaceId, kind: document.kind, revision };
+  }
 
-    const raw = await this.storage.getObjectText(revision.s3Key);
+  /** The object-storage half of `getContent`. */
+  async readContent({
+    workspaceId,
+    kind,
+    revision,
+  }: {
+    workspaceId: string;
+    kind: string;
+    revision: DocumentRevision;
+  }): Promise<DocumentContentResponse> {
+    // A finalized revision's bytes never change (contentRevision refuses a draft).
+    const family = READ_CACHE_FAMILIES.content;
+    const raw = await this.cache.wrap(workspaceId, family.key(revision.id), () => this.storage.getObjectText(revision.s3Key), family.ttlMs);
     // A spec (#78) or fixture (#483) is returned verbatim: it has no
     // frontmatter, and YAML may well open with a `---` marker gray-matter would eat.
-    const parsed = isStructuredKind(document.kind) ? { data: {}, content: raw } : matter(raw);
+    const parsed = isStructuredKind(kind) ? { data: {}, content: raw } : matter(raw);
     return {
-      documentId,
+      documentId: revision.documentId,
       revisionId: revision.id,
       contentType: revision.contentType,
       frontmatter: Object.keys(parsed.data ?? {}).length > 0 ? (parsed.data as Record<string, unknown>) : null,

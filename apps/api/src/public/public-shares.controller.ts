@@ -26,6 +26,7 @@ import { CreateShareExportDto, UnlockShareDto } from '../publishing/share-links.
 import { PublicRateLimitGuard } from './public-rate-limit.js';
 import { PublicSharesService } from './public-shares.service.js';
 import { unlockCookieName } from './share-unlock.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Set on every share response, errors included (the filter writes onto the
@@ -60,6 +61,7 @@ export class PublicSharesController {
   constructor(private readonly shares: PublicSharesService) {}
 
   @Get(':token')
+  @Returns('PublicShareResponse')
   @ApiOperation({ summary: 'A shared page: its title and the pages the link reaches, or `locked` when a password is needed' })
   @ApiResponse({ status: 404, description: 'Unknown, revoked or expired link, or sharing is off' })
   view(@Param('token') token: string, @Req() req: Request): Promise<PublicShareResponse> {
@@ -89,6 +91,7 @@ export class PublicSharesController {
   }
 
   @Get(':token/pages/:documentId')
+  @Returns('PublicSharePage')
   @ApiOperation({ summary: 'One page the link reaches: title and markdown body, frontmatter stripped' })
   @ApiResponse({ status: 404, description: 'Not a page this link reaches' })
   page(
@@ -100,6 +103,7 @@ export class PublicSharesController {
   }
 
   @Post(':token/exports')
+  @Returns('PublicShareExport')
   @ApiOperation({ summary: 'Export what the link shows as ZIP, HTML or PDF, when the link allows download (#161); poll the job' })
   @ApiResponse({ status: 404, description: 'Dead link, or download is off' })
   @ApiResponse({ status: 401, description: 'The link is locked: unlock it first' })
@@ -110,6 +114,7 @@ export class PublicSharesController {
   }
 
   @Get(':token/exports/:exportId')
+  @Returns('PublicShareExport')
   @ApiOperation({ summary: 'One of this link’s exports — polled while it runs' })
   @ApiResponse({ status: 404, description: 'Dead link, download off, or not this link’s export' })
   getExport(

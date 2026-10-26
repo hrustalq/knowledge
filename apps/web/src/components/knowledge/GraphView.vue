@@ -11,8 +11,9 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { useQueryClient } from '@tanstack/vue-query'
 import type { DocumentGraphResponse } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { fetchApi } from '@/api/queries'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -29,6 +30,7 @@ const props = withDefaults(
 
 const { t } = useI18n()
 const router = useRouter()
+const queryClient = useQueryClient()
 
 const depth = ref(props.variant === 'full' ? 2 : 1)
 const graph = ref<DocumentGraphResponse | null>(null)
@@ -62,12 +64,13 @@ const graphTime = props.variant === 'full'
   ? useGraphTime({
       now: () => (graph.value ? { nodes: toNodes(graph.value), edges: graph.value.edges } : null),
       fetchAt: async (asOf) => {
-        const res = await apiFetch<DocumentGraphResponse>(
-          `/v1/documents/${props.documentId}/graph?depth=${depth.value}&asOf=${encodeURIComponent(asOf)}`,
-        )
+        const res = await fetchApi(queryClient, '/v1/documents/{id}/graph', {
+          path: { id: props.documentId },
+          query: { depth: String(depth.value), asOf },
+        })
         return { pair: { nodes: toNodes(res), edges: res.edges }, resolvedAsOf: res.resolvedAsOf }
       },
-      scopeQuery: () => `workspaceId=${getWorkspaceId()}`,
+      scopeQuery: () => ({ workspaceId: getWorkspaceId() }),
       initial: typeof route.query.asOf === 'string' ? route.query.asOf : null,
     })
   : null
@@ -81,9 +84,10 @@ async function load() {
   error.value = null
   graph.value = null
   try {
-    graph.value = await apiFetch<DocumentGraphResponse>(
-      `/v1/documents/${props.documentId}/graph?depth=${depth.value}`,
-    )
+    graph.value = await fetchApi(queryClient, '/v1/documents/{id}/graph', {
+      path: { id: props.documentId },
+      query: { depth: String(depth.value) },
+    })
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   }

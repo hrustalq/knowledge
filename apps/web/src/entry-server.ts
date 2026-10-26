@@ -3,7 +3,9 @@ import { renderToString } from 'vue/server-renderer'
 import type { Pinia } from 'pinia'
 import type { Router } from 'vue-router'
 import { DEFAULT_LOCALE, type Locale } from '@knowledge/contracts'
+import { dehydrate } from '@tanstack/vue-query'
 import { createApp } from './main'
+import { isStoreQuery } from './api/queries'
 import { ensureLocaleMessages } from './i18n'
 import { useAuthStore } from './stores/auth'
 import { useDocumentsStore } from './stores/documents'
@@ -99,7 +101,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     traceId: ctx.traceId ?? null,
   }
   return ssrCtx.run(request, async () => {
-    const { app, router, pinia, i18n } = createApp()
+    const { app, router, pinia, i18n, queryClient } = createApp()
 
     // The request's catalog only (cached after the first render that asks).
     const messagesReady = ensureLocaleMessages(i18n, request.locale ?? DEFAULT_LOCALE)
@@ -119,7 +121,15 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
 
     // Transfer Pinia state for hydration; escape < to prevent script breakout.
     const state = JSON.stringify(pinia.state.value).replace(/</g, '\\u003c')
-    const head = `<script>window.__PINIA__ = ${state}</script>`
+    // Only what a store read (#472): the client binds those stores to the same
+    // keys without asking again. A component's query is left out on purpose —
+    // vue-query starts it during the render without waiting, so its answer may
+    // land after the component drew a skeleton, and a client that hydrated it
+    // would draw the data instead: a mismatch (#278).
+    const queries = JSON.stringify(
+      dehydrate(queryClient, { shouldDehydrateQuery: (q) => q.state.status === 'success' && isStoreQuery(queryClient, q.queryHash) }),
+    ).replace(/</g, '\\u003c')
+    const head = `<script>window.__PINIA__ = ${state};window.__QUERIES__ = ${queries}</script>`
 
     return { html, head }
   })

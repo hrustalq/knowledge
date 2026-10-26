@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import type { GlossaryTerm, ListGlossaryResponse } from '@knowledge/contracts'
-import { apiFetch, getProjectId, getWorkspaceId } from '@/lib/api'
+import { apiQueryOptions, bindStoreQuery, unbindStoreQuery } from '@/api/queries'
+import { getProjectId, getWorkspaceId } from '@/lib/api'
 
 /**
  * The active project's vocabulary, held once for the whole app
@@ -37,15 +38,21 @@ export const useGlossaryStore = defineStore('glossary', {
       this.pending = this.fetchList().finally(() => (this.pending = null))
       return this.pending
     },
-    async fetchList() {
+    async fetchList(fresh = false) {
       try {
         // No active project yet (the store resolves one asynchronously) means
         // "the whole workspace" — the same fallback the documents store uses.
         const projectId = getProjectId()
-        const res = await apiFetch<ListGlossaryResponse>(
-          `/v1/glossary?workspaceId=${getWorkspaceId()}${projectId ? `&projectId=${projectId}` : ''}`,
+        await bindStoreQuery<ListGlossaryResponse>(
+          this,
+          'list',
+          this.queryClient,
+          apiQueryOptions('/v1/glossary', { query: { workspaceId: getWorkspaceId(), ...(projectId ? { projectId } : {}) } }),
+          (res) => {
+            this.terms = res.terms
+          },
+          { fresh },
         )
-        this.terms = res.terms
       } catch {
         // A glossary that cannot be loaded must never take a page down with
         // it: linking is an enhancement, and the prose is already rendered.
@@ -56,7 +63,8 @@ export const useGlossaryStore = defineStore('glossary', {
     /** Called after a term is created, edited or removed on the glossary page. */
     async refresh() {
       this.loaded = false
-      await this.ensureLoaded()
+      this.pending = this.fetchList(true).finally(() => (this.pending = null))
+      await this.pending
     },
     /**
      * The active project changed. Drop the vocabulary immediately — showing
@@ -65,6 +73,7 @@ export const useGlossaryStore = defineStore('glossary', {
      */
     async rescope() {
       const wanted = this.loaded
+      unbindStoreQuery(this, 'list')
       this.terms = []
       this.loaded = false
       if (wanted) await this.ensureLoaded()

@@ -4,6 +4,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { DocumentWorkflowRunsResponse } from '@knowledge/contracts';
 import { Access } from '../auth/access.decorator.js';
 import { WorkflowsService } from './workflows.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * The document page's workflow rail (docs/features/17).
@@ -19,6 +20,7 @@ export class DocumentWorkflowsController {
   constructor(private readonly workflows: WorkflowsService) {}
 
   @Get(':id/workflow-runs')
+  @Returns('DocumentWorkflowRunsResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Runs rooted at this page, plus the workflows that may be started against it' })
   runsForDocument(@Param('id', ParseUUIDPipe) id: string): Promise<DocumentWorkflowRunsResponse> {

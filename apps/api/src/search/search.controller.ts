@@ -7,6 +7,8 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { noTrackOf } from '../analytics/analytics.recorder.js';
 import { SearchService } from './search.service.js';
 import { SearchDto } from './search.dto.js';
+import { Returns } from '../common/returns.decorator.js';
+import type { SearchResponse } from '@knowledge/contracts';
 
 @ApiTags('search')
 @Controller('v1/search')
@@ -17,11 +19,12 @@ export class SearchController {
   ) {}
 
   @Post()
+  @Returns('SearchResponse')
   @HttpCode(200)
   // Guests too: results are filtered to the pages they were granted (#76).
   @Access('viewer', 'body', { guests: true })
   @ApiOperation({ summary: 'Search indexed chunks: semantic, keyword (BM25) or hybrid (RRF fusion + graph expansion)' })
-  async run(@Body() dto: SearchDto, @CurrentPrincipal() principal: Principal, @Req() req: Request) {
+  async run(@Body() dto: SearchDto, @CurrentPrincipal() principal: Principal, @Req() req: Request): Promise<SearchResponse> {
     return this.search.search(dto, await this.permissions.scopeFor(principal, dto.workspaceId), {
       principal,
       noTrack: noTrackOf(req.headers),

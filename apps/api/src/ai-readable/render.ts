@@ -84,16 +84,6 @@ export function etagFor(input: { revisionId: string; title: string; project: str
   return `"${hash.slice(0, 32)}"`;
 }
 
-/** RFC 9110 §13.1.2: a list, weak comparison, `*` matches any current representation. */
-export function etagMatches(ifNoneMatch: string | undefined, etag: string): boolean {
-  if (!ifNoneMatch) return false;
-  const bare = etag.replace(/^W\//, '');
-  return ifNoneMatch
-    .split(',')
-    .map((v) => v.trim())
-    .some((v) => v === '*' || v.replace(/^W\//, '') === bare);
-}
-
 function qualities(accept: string): Map<string, number> {
   const out = new Map<string, number>();
   for (const part of accept.split(',')) {

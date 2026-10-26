@@ -50,7 +50,6 @@ import {
   X,
 } from 'lucide-vue-next'
 import type {
-  ValidateWorkflowResponse,
   WorkflowDefinitionInfo,
   WorkflowGraph,
   WorkflowStep,
@@ -251,10 +250,10 @@ async function remove() {
 async function validateOnServer() {
   if (!draft.value) return
   try {
-    const res = (await api.post('/v1/workflows/{id}/validate', {
+    const res = await api.post('/v1/workflows/{id}/validate', {
       path: { id: id.value },
       body: { graph: draft.value.graph },
-    })) as ValidateWorkflowResponse
+    })
     if (res.valid) toast.success(t('workflow.builder.serverAccepts'))
     else toast.error(res.issues.map((i) => i.message).join(' '))
   } catch (e) {

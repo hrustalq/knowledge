@@ -17,6 +17,7 @@ import {
   UpdateNotificationPreferencesDto,
 } from './notifications.dto.js';
 import { NotificationsService } from './notifications.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * The caller's own inbox (docs/features/22).
@@ -37,6 +38,7 @@ export class NotificationsController {
   // Literal segments before any parameterised route — house style.
 
   @Get('unread-count')
+  @Returns('NotificationUnreadCountResponse')
   @Access('viewer', 'query')
   @ApiOperation({
     summary: "Unread totals for the caller, overall and per category — the bell's badge",
@@ -50,6 +52,7 @@ export class NotificationsController {
   }
 
   @Get('subscriptions')
+  @Returns('ListNotificationSubscriptionsResponse')
   @Access('viewer', 'query')
   @ApiOperation({
     summary:
@@ -77,6 +80,7 @@ export class NotificationsController {
   }
 
   @Put('subscriptions')
+  @Returns('ListNotificationSubscriptionsResponse')
   @Access('viewer', 'body')
   @ApiOperation({
     summary:
@@ -96,6 +100,7 @@ export class NotificationsController {
   }
 
   @Get('preferences')
+  @Returns('NotificationPreferences')
   @Access('viewer', 'query')
   @ApiOperation({
     summary: "The caller's notification preferences, with the code defaults folded in",
@@ -109,6 +114,7 @@ export class NotificationsController {
   }
 
   @Put('preferences')
+  @Returns('NotificationPreferences')
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'Mute categories, stop auto-watching what the caller comments on, or stop directed email' })
   updatePreferences(
@@ -123,6 +129,7 @@ export class NotificationsController {
   }
 
   @Post('read')
+  @Returns('MarkNotificationsReadResponse')
   @HttpCode(200)
   @Access('viewer', 'body')
   @ApiOperation({
@@ -141,6 +148,7 @@ export class NotificationsController {
   }
 
   @Get()
+  @Returns('ListNotificationsResponse')
   @Access('viewer', 'query')
   @ApiOperation({
     summary: "The caller's inbox, newest first. Coalesced rows carry metadata.count (docs/features/22)",

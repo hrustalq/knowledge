@@ -12,9 +12,10 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { Download } from 'lucide-vue-next'
-import type { AnalyticsReport } from '@knowledge/contracts'
+import type { AnalyticsReport, AnalyticsTrafficFilter } from '@knowledge/contracts'
 import { errorMessage } from '@/api/errors'
-import { apiFetchBlob, saveFile } from '@/lib/api'
+import { requestFile } from '@/api/client'
+import { saveFile } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 
 export interface AnalyticsListRow {
@@ -34,7 +35,7 @@ const props = defineProps<{
   empty: string
   report: AnalyticsReport
   /** The window the rows answer for, sent with the export so the file matches the screen. */
-  params: { workspaceId: string; days: number; traffic?: string }
+  params: { workspaceId: string; days: number; traffic?: AnalyticsTrafficFilter }
 }>()
 
 const { t } = useI18n()
@@ -43,8 +44,10 @@ const exporting = ref(false)
 async function exportCsv() {
   exporting.value = true
   try {
-    const query = new URLSearchParams({ ...props.params, days: String(props.params.days), report: props.report })
-    const { blob, filename } = await apiFetchBlob(`/v1/analytics/export.csv?${query}`)
+    const { blob, filename } = await requestFile('get', '/v1/analytics/export.csv', {
+      query: { ...props.params, report: props.report },
+      config: { timeout: 0 },
+    })
     saveFile(blob, filename ?? `${props.report}.csv`)
   } catch (e) {
     toast.error(errorMessage(e, t))

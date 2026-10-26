@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
-import { useQuery } from '@tanstack/vue-query'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { Play, Workflow } from 'lucide-vue-next'
 import type { ListWorkflowRunsResponse } from '@knowledge/contracts'
 import { WORKFLOW_RUN_STATUSES } from '@knowledge/contracts'
-import { apiQueryOptions, useApiMutation } from '@/api/queries'
-import { apiFetch, getProjectId, getWorkspaceId } from '@/lib/api'
+import { apiQueryOptions, fetchApi, useApiMutation } from '@/api/queries'
+import { getProjectId, getWorkspaceId } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
 import { useWorkflowsStore } from '@/stores/workflows'
@@ -39,6 +39,7 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const projects = useProjectsStore()
 const store = useWorkflowsStore()
+const queryClient = useQueryClient()
 
 onMounted(() => {
   if (!projects.loaded) void projects.fetchList()
@@ -124,20 +125,16 @@ const startRun = useApiMutation('post', '/v1/workflows/runs', {
   invalidates: () => [['/v1/workflows/runs']],
 })
 
-/**
- * `apiFetch` rather than the typed client: `/v1/documents` declares Swagger
- * defaults for `cursor` and `category`, which `openapi-typescript` promotes to
- * required, so the typed call would have to invent values the server already
- * fills in.
- */
-async function loadDocuments(q: string) {
-  const params = new URLSearchParams({ workspaceId: getWorkspaceId(), limit: '20' })
-  if (scopedProjectId.value) params.set('projectId', scopedProjectId.value)
-  if (q) params.set('search', q)
-  const res = await apiFetch<{ documents?: Array<{ id: string; title: string; category?: string }> }>(
-    `/v1/documents?${params}`,
-  )
-  return (res.documents ?? []).map((d) => ({ value: d.id, label: d.title, meta: d.category }))
+/** `/v1/documents` has no text filter (the `search` param this once sent was ignored), so what is typed does not narrow the list. */
+async function loadDocuments() {
+  const res = await fetchApi(queryClient, '/v1/documents', {
+    query: {
+      workspaceId: getWorkspaceId(),
+      limit: '20',
+      ...(scopedProjectId.value ? { projectId: scopedProjectId.value } : {}),
+    },
+  })
+  return res.items.map((d) => ({ value: d.documentId, label: d.title, meta: d.category ?? undefined }))
 }
 
 async function start() {

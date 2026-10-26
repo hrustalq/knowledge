@@ -26,15 +26,16 @@ import {
 import type {
   AssistantIssue,
   AssistantReviewResponse,
-  DocumentContentResponse,
   MergeRequestInfo,
 } from '@knowledge/contracts'
-import { api } from '@/api/queries'
+import { useQueryClient } from '@tanstack/vue-query'
+import { api, fetchApi } from '@/api/queries'
 import { getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { lintCheckView, useLintChecks } from './lint-check'
 
 const { t } = useI18n()
+const queryClient = useQueryClient()
 
 const props = defineProps<{
   mergeRequest: MergeRequestInfo
@@ -77,17 +78,22 @@ async function run() {
   errorMessage.value = ''
   posted.value = false
   try {
-    const content = (await api.get('/v1/documents/{id}/content', {
-      path: { id: props.mergeRequest.documentId },
-      query: { revision: props.mergeRequest.sourceHeadRevisionId ?? undefined },
-    })) as DocumentContentResponse
-    review.value = (await api.post('/v1/assistant/review', {
+    const revision = props.mergeRequest.sourceHeadRevisionId
+    // A named revision never changes, so the cache answers it; a head is asked afresh.
+    const content = await fetchApi(
+      queryClient,
+      '/v1/documents/{id}/content',
+      { path: { id: props.mergeRequest.documentId }, query: { revision: revision ?? undefined } },
+      { fresh: !revision },
+    )
+    review.value = await api.post('/v1/assistant/review', {
       body: {
         workspaceId: getWorkspaceId(),
         title: props.mergeRequest.title,
         markdown: content.markdown,
       },
-    })) as AssistantReviewResponse
+      config: { timeout: 0 },
+    })
     state.value = 'done'
     emit('result', { issues: issues.value.length, errors: errorCount.value })
   } catch (e) {

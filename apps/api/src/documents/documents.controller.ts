@@ -16,10 +16,35 @@ import type { Request, Response } from 'express';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiHeader, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type {
+  DocumentContentResponse,
   CompareMode,
+  CompareResponse,
+  CreateBranchResponse,
+  CreateDocumentResponse,
+  CreateDocumentThreadResponse,
+  CreateUploadResponse,
+  DeleteDocumentCommentResponse,
+  DocumentAncestorsResponse,
   DocumentConnectorResponse,
   DocumentDetailResponse,
+  DocumentGraphResponse,
+  DocumentSummary,
+  DocumentThreadResponse,
+  DocumentTreeResponse,
+  FactsAtResponse,
+  FactTimelineResponse,
+  FinalizeRevisionResponse,
+  GlossaryExclusion,
+  ListBranchesResponse,
+  ListDocumentRelationsResponse,
+  ListDocumentsResponse,
+  ListDocumentThreadsResponse,
+  ListGlossaryExclusionsResponse,
+  ListRevisionsResponse,
+  ProposeRelationsResponse,
   PushDocumentResponse,
+  RevisionInfo,
+  WorkspaceGraphResponse,
 } from '@knowledge/contracts';
 import { ConnectorLinksService } from '../connectors/connector-links.service.js';
 import { ConnectorProducer } from '../connectors/connector.producer.js';
@@ -55,6 +80,8 @@ import { ApiAsOfQuery } from '../temporal/temporal.dto.js';
 import { TemporalResolverService } from '../temporal/temporal-resolver.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
 import { AnalyticsRecorder, noTrackOf } from '../analytics/analytics.recorder.js';
+import { Returns } from '../common/returns.decorator.js';
+import { notModified, setCachePolicy } from '../common/http-cache.js';
 
 /** A query-string boolean: `1`, `true` and `yes` are on; anything else, including absence, is off. */
 function flag(value?: string): boolean {
@@ -89,9 +116,10 @@ export class DocumentsController {
   ) {}
 
   @Post()
+  @Returns('CreateDocumentResponse')
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Create document (optionally inline content, auto-finalizes)' })
-  async create(@Body() dto: CreateDocumentDto, @CurrentPrincipal() principal: Principal) {
+  async create(@Body() dto: CreateDocumentDto, @CurrentPrincipal() principal: Principal): Promise<CreateDocumentResponse> {
     // A page under a restricted node inherits it, so placing one there is
     // editing that node (#76) — and a hidden parent id cannot be probed by it.
     await this.permissions.requireCreateUnder(await this.permissions.scopeFor(principal, dto.workspaceId), {
@@ -103,9 +131,12 @@ export class DocumentsController {
   }
 
   @Get()
+  @Returns('ListDocumentsResponse')
   // Guests too: the list is filtered to what they were granted (#76).
   @Access('viewer', 'query', { guests: true })
   @ApiOperation({ summary: 'List documents in workspace, filtered by the search facets' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Rows per batch; 20 when omitted' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'Opaque cursor from a previous batch' })
   @ApiQuery({ name: 'projectId', required: false, description: 'Restrict to one project' })
   @ApiQuery({ name: 'category', required: false, description: 'Restrict to one category' })
   @ApiQuery({ name: 'projectIds', required: false, description: 'Comma-separated project ids' })
@@ -127,7 +158,7 @@ export class DocumentsController {
     @Query('projectIds') projectIds?: string,
     @Query('tags') tags?: string,
     @Query('includeArchived') includeArchived?: string,
-  ) {
+  ): Promise<ListDocumentsResponse> {
     // The singular params predate the facets and still work; each is folded
     // into its plural so callers never have to know which one won.
     const scope = await this.permissions.scopeFor(principal, workspaceId);
@@ -140,6 +171,7 @@ export class DocumentsController {
   }
 
   @Get('tree')
+  @Returns('DocumentTreeResponse')
   @Access('viewer', 'query', { guests: true })
   @ApiOperation({
     summary: 'Document hierarchy (feature 08). Omit depth for the whole tree; pass depth=1 to walk it a level at a time',
@@ -155,7 +187,7 @@ export class DocumentsController {
     @Query('parentId') parentId?: string,
     @Query('depth') depth?: string,
     @Query('includeArchived') includeArchived?: string,
-  ) {
+  ): Promise<DocumentTreeResponse> {
     const scope = await this.permissions.scopeFor(principal, workspaceId);
     return this.documents.getTree(scope, projectId || undefined, {
       parentId: parentId || null,
@@ -166,6 +198,7 @@ export class DocumentsController {
 
   // Declared before @Get(':id') — 'graph' would otherwise parse as a document id.
   @Get('graph')
+  @Returns('WorkspaceGraphResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Whole-workspace relation graph for the pages landing; scoped to one project when projectId is given' })
   @ApiQuery({ name: 'projectId', required: false, description: 'Restrict the graph to one project' })
@@ -176,7 +209,7 @@ export class DocumentsController {
     @Query('projectId') projectId?: string,
     @Query('asOf') asOf?: string,
     @Query('knownAt') knownAt?: string,
-  ) {
+  ): Promise<WorkspaceGraphResponse> {
     const at = await this.temporal.resolve(workspaceId, asOf, knownAt);
     const scope = await this.permissions.scopeFor(principal, workspaceId);
     const graph = await this.documents.getWorkspaceGraph(scope, projectId || undefined, at);
@@ -190,24 +223,35 @@ export class DocumentsController {
   }
 
   @Get(':id')
+  @Returns('DocumentDetailResponse', { conditional: true })
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Get document + its head (or given) revision + chunk summaries' })
-  get(@Param('id', ParseUUIDPipe) id: string, @Query('revision') revision?: string) {
-    return this.documents.getDocument(id, revision);
+  async get(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Query('revision') revision?: string,
+  ): Promise<DocumentDetailResponse | undefined> {
+    // The same for every reader the guard admits, so no scope in the validator.
+    const head = await this.documents.getDocumentHead(id, revision);
+    if (notModified(req, res, head)) return undefined;
+    return this.documents.withChunks(head);
   }
 
   @Patch(':id')
+  @Returns('DocumentSummary')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Update title / category / parent (features 07 + 08); parentId: null re-roots' })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateDocumentDto,
     @CurrentPrincipal() principal: Principal,
-  ) {
+  ): Promise<DocumentSummary> {
     return this.documents.updateDocument(id, dto, principal?.userId);
   }
 
   @Post(':id/move')
+  @Returns('DocumentSummary')
   @Access('editor', 'document')
   @ApiOperation({
     summary:
@@ -219,11 +263,12 @@ export class DocumentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: MoveDocumentDto,
     @CurrentPrincipal() principal: Principal,
-  ) {
+  ): Promise<DocumentSummary> {
     return this.documents.moveDocument(id, dto, principal?.userId);
   }
 
   @Post(':id/publish')
+  @Returns('DocumentDetailResponse')
   @Access('editor', 'document')
   @ApiOperation({
     summary:
@@ -247,6 +292,7 @@ export class DocumentsController {
   // on the same prefix.
 
   @Get(':id/content')
+  @Returns('DocumentContentResponse', { orText: true })
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Full raw content of a revision (feature 01; head of the default branch by default)' })
   @ApiQuery({ name: 'revision', required: false })
@@ -266,9 +312,10 @@ export class DocumentsController {
     @Query('frontmatter') frontmatter?: string,
     @Query('asOf') asOf?: string,
     @Query('knownAt') knownAt?: string,
-  ) {
+  ): Promise<DocumentContentResponse | string | undefined> {
     // `asOf` (#81) picks the default-branch revision that was the page's
     // content then; an explicit `revision` wins over it.
+    const named = Boolean(revision);
     const at = revision ? undefined : await this.temporal.resolve(await this.documents.workspaceOf(id), asOf, knownAt);
     if (at) revision = await this.documents.revisionAsOf(id, at);
     // Read off the request rather than via @Headers(): that decorator emits the
@@ -276,7 +323,7 @@ export class DocumentsController {
     const accept = req.headers.accept;
     const ifNoneMatch = req.headers['if-none-match'];
     // The representation depends on Accept either way, so both branches say so.
-    res.setHeader('Vary', 'Accept');
+    res.vary('Accept');
     // A key's read is a view (#79); a session's is dropped by the recorder —
     // SSR and prefetch call this too, so the web counts its own on the page.
     const caller = { principal, noTrack: noTrackOf(req.headers) };
@@ -289,12 +336,16 @@ export class DocumentsController {
       if (result.status === 200) void this.analytics.view(caller, id, revision || null);
       return sendPageMarkdown(res, result);
     }
-    const content = await this.documents.getContent(id, revision);
-    void this.analytics.view(caller, id, content.revisionId);
-    return withAsOf(content, at);
+    const target = await this.documents.contentRevision(id, revision);
+    // A named revision's bytes never change; the head moves, so it revalidates.
+    if (named) setCachePolicy(res, 'immutable');
+    void this.analytics.view(caller, id, target.revision.id);
+    if (notModified(req, res, 'content', target.revision.id, at ?? null)) return undefined;
+    return withAsOf(await this.documents.readContent(target), at);
   }
 
   @Get(':id/connectors')
+  @Returns('DocumentConnectorResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'External systems this page is linked to (docs/features/19)' })
   async connectors(@Param('id', ParseUUIDPipe) id: string): Promise<DocumentConnectorResponse> {
@@ -307,6 +358,7 @@ export class DocumentsController {
    * looking at a document, not administering a connection.
    */
   @Post(':id/push')
+  @Returns('PushDocumentResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Publish this page back to its connector (docs/features/19)' })
   async push(
@@ -324,13 +376,15 @@ export class DocumentsController {
   }
 
   @Get(':id/ancestors')
+  @Returns('DocumentAncestorsResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Ancestor chain (root first) — for breadcrumbs and lazy tree expansion' })
-  async ancestors(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
+  async ancestors(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<DocumentAncestorsResponse> {
     return this.documents.getAncestors(id, await this.permissions.scopeForDocument(principal, id));
   }
 
   @Get(':id/graph')
+  @Returns('DocumentGraphResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Document neighbourhood in the knowledge graph (feature 06); depth = entity hops (1-3)' })
   @ApiQuery({ name: 'depth', required: false })
@@ -341,13 +395,14 @@ export class DocumentsController {
     @Query('depth') depth?: string,
     @Query('asOf') asOf?: string,
     @Query('knownAt') knownAt?: string,
-  ) {
+  ): Promise<DocumentGraphResponse> {
     const scope = await this.permissions.scopeForDocument(principal, id);
     const at = await this.temporal.resolve(scope.workspaceId, asOf, knownAt);
     return withAsOf(await this.documents.getDocumentGraph(id, depth ? Number(depth) : 1, scope, at), at);
   }
 
   @Get(':id/revisions')
+  @Returns('ListRevisionsResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'List revisions with DAG parentage (optionally filtered by branch)' })
   @ApiQuery({ name: 'branch', required: false })
@@ -355,22 +410,24 @@ export class DocumentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentPrincipal() principal: Principal,
     @Query('branch') branch?: string,
-  ) {
+  ): Promise<ListRevisionsResponse> {
     return this.documents.listRevisions(id, await this.permissions.scopeForDocument(principal, id), branch);
   }
 
   @Post(':id/branches')
+  @Returns('CreateBranchResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Create a branch from a revision (defaults to default-branch head)' })
   createBranch(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateBranchDto,
     @CurrentPrincipal() principal: Principal,
-  ) {
+  ): Promise<CreateBranchResponse> {
     return this.documents.createBranch(id, dto, principal.userId);
   }
 
   @Post(':id/branches/mine')
+  @Returns('CreateBranchResponse')
   @Access('editor', 'document')
   @ApiOperation({
     summary: "The caller's private working branch for this page (#474), created on first ask",
@@ -378,18 +435,20 @@ export class DocumentsController {
       'What the editor edits a published page on. Spent once a merge request from it is merged or closed: the next ' +
       'call starts a fresh one. A branch nothing was written on follows the default head.',
   })
-  myDraftBranch(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
+  myDraftBranch(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<CreateBranchResponse> {
     return this.documents.myDraftBranch(id, principal.userId);
   }
 
   @Get(':id/branches')
+  @Returns('ListBranchesResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'List branches with head revisions' })
-  async listBranches(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
+  async listBranches(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ListBranchesResponse> {
     return this.documents.listBranches(id, await this.permissions.scopeForDocument(principal, id));
   }
 
   @Get(':id/compare')
+  @Returns('CompareResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Compare two revisions (direct or merge-base mode, plan.md §8)' })
   @ApiQuery({ name: 'from', required: true })
@@ -404,7 +463,7 @@ export class DocumentsController {
     @Query('mode') mode = 'direct',
     @Query('structural') structural?: string,
     @Query('semantic') semantic?: string,
-  ) {
+  ): Promise<CompareResponse> {
     if (mode !== 'direct' && mode !== 'merge-base') {
       throw new BadRequestException(t('error.compare.badMode', { mode }));
     }
@@ -415,20 +474,23 @@ export class DocumentsController {
   }
 
   @Post(':id/relations')
+  @Returns('ListDocumentRelationsResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Attach explicit relations (graph edges with provenance)' })
-  addRelations(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddRelationsDto, @CurrentPrincipal() principal: Principal) {
+  addRelations(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddRelationsDto, @CurrentPrincipal() principal: Principal): Promise<ListDocumentRelationsResponse> {
     return this.documents.addRelations(id, dto.relations, principal.userId);
   }
 
   @Post(':id/relations/curate')
+  @Returns('ListDocumentRelationsResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Curate a relation: user-confirmed, confidence 1, protected from re-extraction (plan.md §5)' })
-  curateRelation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CurateRelationDto, @CurrentPrincipal() principal: Principal) {
+  curateRelation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CurateRelationDto, @CurrentPrincipal() principal: Principal): Promise<ListDocumentRelationsResponse> {
     return this.documents.curateRelation(id, dto.relation, principal.userId);
   }
 
   @Post(':id/relations/propose')
+  @Returns('ProposeRelationsResponse')
   @Access('editor', 'document')
   @ApiOperation({
     summary:
@@ -438,11 +500,12 @@ export class DocumentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ProposeRelationsDto,
     @CurrentPrincipal() principal: Principal,
-  ) {
+  ): Promise<ProposeRelationsResponse> {
     return this.relations.propose(id, dto, principal);
   }
 
   @Delete(':id/relations')
+  @Returns('ListDocumentRelationsResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Delete relation edges by type + targetKey (optionally one extractor class)' })
   @ApiQuery({ name: 'type', required: true })
@@ -454,30 +517,33 @@ export class DocumentsController {
     @Query('targetKey') targetKey: string,
     @CurrentPrincipal() principal: Principal,
     @Query('extractor') extractor?: string,
-  ) {
+  ): Promise<ListDocumentRelationsResponse> {
     if (!type || !targetKey) throw new BadRequestException(t('error.relations.missingParams'));
     return this.documents.deleteRelation(id, type, targetKey, extractor, principal.userId);
   }
 
   @Get(':id/relations')
+  @Returns('ListDocumentRelationsResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'List the document’s relation edges with provenance' })
-  listRelations(@Param('id', ParseUUIDPipe) id: string) {
+  listRelations(@Param('id', ParseUUIDPipe) id: string): Promise<ListDocumentRelationsResponse> {
     return this.documents.listRelations(id);
   }
 
   @Post(':id/uploads')
+  @Returns('CreateUploadResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Create (or reuse) draft revision + get presigned PUT URL' })
   upload(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateUploadDto,
     @CurrentPrincipal() principal: Principal,
-  ) {
+  ): Promise<CreateUploadResponse> {
     return this.documents.createUpload(id, dto, principal?.userId);
   }
 
   @Post(':id/revisions')
+  @Returns('RevisionInfo')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Create new draft revision on branch head (If-Match: expected head revision id)' })
   @ApiHeader({
@@ -490,34 +556,37 @@ export class DocumentsController {
     @Body() dto: CreateRevisionDto,
     @CurrentPrincipal() principal: Principal,
     @Headers('if-match') ifMatch?: string,
-  ) {
+  ): Promise<RevisionInfo> {
     const expectedHead = ifMatch?.trim().replace(/^"+|"+$/g, '') || undefined;
     return this.documents.createRevision(id, dto, expectedHead, principal?.userId);
   }
 
   @Post(':id/revisions/:revisionId/finalize')
+  @Returns('FinalizeRevisionResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Finalize an uploaded revision: hash, dedupe, enqueue indexing' })
   finalize(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('revisionId', ParseUUIDPipe) revisionId: string,
-  ) {
+  ): Promise<FinalizeRevisionResponse> {
     return this.documents.finalizeRevision(id, revisionId);
   }
 
   @Get(':id/facts')
+  @Returns('FactsAtResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Facts asserted as of a revision (Phase 5 historical queries, plan.md §11)' })
   @ApiQuery({ name: 'at', required: true, description: 'Revision id to evaluate the fact set at' })
-  factsAt(@Param('id', ParseUUIDPipe) id: string, @Query('at', ParseUUIDPipe) at: string) {
+  factsAt(@Param('id', ParseUUIDPipe) id: string, @Query('at', ParseUUIDPipe) at: string): Promise<FactsAtResponse> {
     return this.history.factsAt(id, at);
   }
 
   @Get(':id/facts/timeline')
+  @Returns('FactTimelineResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Fact lifecycle along a branch: introduced/removed revisions (removed-facts audit)' })
   @ApiQuery({ name: 'branch', required: false, description: 'Defaults to the default branch' })
-  factTimeline(@Param('id', ParseUUIDPipe) id: string, @Query('branch') branch?: string) {
+  factTimeline(@Param('id', ParseUUIDPipe) id: string, @Query('branch') branch?: string): Promise<FactTimelineResponse> {
     return this.history.timeline(id, branch);
   }
 
@@ -533,20 +602,22 @@ export class DocumentsController {
   // the workspace from `:id` for free, and reading is `viewer` because whoever
   // may read a page may see which of its words are not vocabulary.
   @Get(':id/glossary-exclusions')
+  @Returns('ListGlossaryExclusionsResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Occurrences on this page that are not mentions of a glossary term' })
-  listGlossaryExclusions(@Param('id', ParseUUIDPipe) id: string) {
+  listGlossaryExclusions(@Param('id', ParseUUIDPipe) id: string): Promise<ListGlossaryExclusionsResponse> {
     return this.glossary.listExclusions(id);
   }
 
   @Post(':id/glossary-exclusions')
+  @Returns('GlossaryExclusion')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Stop linking one occurrence of a term on this page' })
   createGlossaryExclusion(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateGlossaryExclusionDto,
     @CurrentPrincipal() principal: Principal,
-  ) {
+  ): Promise<GlossaryExclusion> {
     return this.glossary.addExclusion(id, dto, principal?.userId);
   }
 
@@ -561,24 +632,27 @@ export class DocumentsController {
   }
 
   @Get(':id/threads')
+  @Returns('ListDocumentThreadsResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Comment threads on a document (feature 15)' })
-  listThreads(@Param('id', ParseUUIDPipe) id: string) {
+  listThreads(@Param('id', ParseUUIDPipe) id: string): Promise<ListDocumentThreadsResponse> {
     return this.threads.list(id);
   }
 
   @Post(':id/threads')
+  @Returns('CreateDocumentThreadResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Start a comment thread, optionally anchored to a passage' })
   createThread(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateThreadDto,
     @CurrentPrincipal() principal: Principal,
-  ) {
+  ): Promise<CreateDocumentThreadResponse> {
     return this.threads.createThread(id, dto, principal?.userId);
   }
 
   @Post(':id/threads/:threadId/comments')
+  @Returns('CreateDocumentThreadResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Reply in a comment thread' })
   replyToThread(
@@ -586,11 +660,12 @@ export class DocumentsController {
     @Param('threadId', ParseUUIDPipe) threadId: string,
     @Body() dto: CreateCommentDto,
     @CurrentPrincipal() principal: Principal,
-  ) {
+  ): Promise<CreateDocumentThreadResponse> {
     return this.threads.reply(id, threadId, dto.body, principal?.userId, dto.replyToId);
   }
 
   @Patch(':id/threads/:threadId/comments/:commentId')
+  @Returns('DocumentThreadResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: "Edit a page comment (the comment's own author only)" })
   editThreadComment(
@@ -599,11 +674,12 @@ export class DocumentsController {
     @Param('commentId', ParseUUIDPipe) commentId: string,
     @Body() dto: CreateCommentDto,
     @CurrentPrincipal() principal: Principal,
-  ) {
+  ): Promise<DocumentThreadResponse> {
     return this.threads.editComment(id, threadId, commentId, dto.body, principal?.userId);
   }
 
   @Delete(':id/threads/:threadId/comments/:commentId')
+  @Returns('DeleteDocumentCommentResponse')
   @Access('viewer', 'document')
   @ApiOperation({
     summary: "Delete a page comment (the comment's own author only); removes the thread if it was the last one",
@@ -613,11 +689,12 @@ export class DocumentsController {
     @Param('threadId', ParseUUIDPipe) threadId: string,
     @Param('commentId', ParseUUIDPipe) commentId: string,
     @CurrentPrincipal() principal: Principal,
-  ) {
+  ): Promise<DeleteDocumentCommentResponse> {
     return this.threads.deleteComment(id, threadId, commentId, principal?.userId);
   }
 
   @Patch(':id/threads/:threadId')
+  @Returns('DocumentThreadResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Resolve or reopen a comment thread' })
   resolveThread(
@@ -625,7 +702,7 @@ export class DocumentsController {
     @Param('threadId', ParseUUIDPipe) threadId: string,
     @Body() dto: ResolveThreadDto,
     @CurrentPrincipal() principal: Principal,
-  ) {
+  ): Promise<DocumentThreadResponse> {
     return this.threads.setResolved(id, threadId, dto.resolved, principal?.userId);
   }
 }

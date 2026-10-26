@@ -6,6 +6,7 @@ import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatLinkCodeDto } from './chat.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * The person's side of linking (issue #71). No `@Access`: there is no
@@ -23,6 +24,7 @@ export class ChatLinkController {
   constructor(private readonly identities: ChatIdentityService) {}
 
   @Post('chat/link/preview')
+  @Returns('ChatLinkPreview')
   @HttpCode(200)
   @ApiOperation({ summary: 'Who is asking to be linked, before confirming' })
   preview(@Body() dto: ChatLinkCodeDto, @CurrentPrincipal() principal: Principal): Promise<ChatLinkPreview> {
@@ -30,12 +32,14 @@ export class ChatLinkController {
   }
 
   @Post('chat/link')
+  @Returns('ChatIdentityEntry')
   @ApiOperation({ summary: 'Link the messenger account that asked for this code to the signed-in person' })
   link(@Body() dto: ChatLinkCodeDto, @CurrentPrincipal() principal: Principal): Promise<ChatIdentityEntry> {
     return this.identities.confirm(dto.code, principal);
   }
 
   @Get('me/chat-identities')
+  @Returns('ChatIdentitiesResponse')
   @ApiOperation({ summary: 'My linked messenger accounts' })
   async mine(@CurrentPrincipal() principal: Principal): Promise<ChatIdentitiesResponse> {
     return { identities: await this.identities.listMine(principal.userId) };

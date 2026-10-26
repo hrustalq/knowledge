@@ -27,11 +27,11 @@
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRef, watch } from 'vue'
+import { useQueryClient } from '@tanstack/vue-query'
 import { MessageSquarePlus, X } from 'lucide-vue-next'
 import type {
   GlossaryExclusion,
   GlossaryTerm,
-  ListGlossaryExclusionsResponse,
   ReviewThread,
   ReviewThreadAnchor,
 } from '@knowledge/contracts'
@@ -58,12 +58,14 @@ import { useAnchoredFloating, type AnchorRect } from '@/lib/use-anchored'
 import { mayContainPageRef } from '@/lib/page-refs'
 import { usePageRefsStore } from '@/stores/page-refs'
 import { useGlossaryStore } from '@/stores/glossary'
-import { apiFetch, getGlossaryLinks, setGlossaryLinks } from '@/lib/api'
+import { getGlossaryLinks, setGlossaryLinks } from '@/lib/api'
+import { api, fetchApi } from '@/api/queries'
 import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR } from '@/lib/glossary'
 import GlossaryCard from './GlossaryCard.vue'
 import { useMediaQuery } from '@vueuse/core'
 
 const { t } = useI18n()
+const queryClient = useQueryClient()
 
 const props = withDefaults(
   defineProps<{
@@ -196,9 +198,9 @@ const exclusions = ref<GlossaryExclusion[]>([])
 async function loadExclusions() {
   if (!props.documentId) return
   try {
-    const res = await apiFetch<ListGlossaryExclusionsResponse>(
-      `/v1/documents/${props.documentId}/glossary-exclusions`,
-    )
+    const res = await fetchApi(queryClient, '/v1/documents/{id}/glossary-exclusions', {
+      path: { id: props.documentId },
+    })
     exclusions.value = res.exclusions
   } catch {
     // Linking is an enhancement and the prose is already on screen — the same
@@ -235,17 +237,13 @@ async function excludeHovered() {
   }
   hideGlossary()
   try {
-    const created = await apiFetch<GlossaryExclusion>(
-      `/v1/documents/${props.documentId}/glossary-exclusions`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          termId: term.termId,
-          anchor,
-        }),
-      },
-    )
+    const created = await api.post('/v1/documents/{id}/glossary-exclusions', {
+      path: { id: props.documentId },
+      body: { termId: term.termId, anchor },
+    })
     exclusions.value = [...exclusions.value, created]
+    // The list read above is cached; the next mount must see this one too.
+    void queryClient.invalidateQueries({ queryKey: ['/v1/documents/{id}/glossary-exclusions'] })
   } catch (error) {
     // Unlike loading, this is something someone just asked for: a link that
     // silently stays looks like the button does nothing.

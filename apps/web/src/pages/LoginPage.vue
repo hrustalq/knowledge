@@ -22,7 +22,8 @@ import { toast } from 'vue-sonner'
 import { KeyRound } from 'lucide-vue-next'
 import type { SsoLoginProvider, SsoProvidersResponse } from '@knowledge/contracts'
 import { useAuthStore } from '@/stores/auth'
-import { ApiError, getWorkspaceId } from '@/lib/api'
+import { isApiRequestError } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { ownPath, reauthKindOf, ssoErrorOf, ssoStartUrl } from '@/lib/sso'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
@@ -125,7 +126,7 @@ async function submitLdap() {
     await router.push(redirect.value)
   } catch (e) {
     // A refusal after the directory accepted the password names its reason the way a failed redirect does.
-    const reason = e instanceof ApiError ? ssoErrorOf(e.details?.loginError) : null
+    const reason = isApiRequestError(e) ? ssoErrorOf(e.details?.loginError) : null
     toast.error(reason ? t(`auth.sso.errors.${reason}`) : (e as Error).message)
   } finally {
     busy.value = false

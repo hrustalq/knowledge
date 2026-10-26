@@ -9,11 +9,12 @@ import type {
   MemberCapability,
   MeResponse,
   SsoDiscoverResponse,
-  SsoExchangeResponse,
   SsoProvidersResponse,
   WorkspaceRole,
 } from '@knowledge/contracts'
-import { ApiError, apiFetch, getWorkspaceId, setActiveWorkspace, setToken } from '@/lib/api'
+import { api, fetchApi, isApiRequestError } from '@/api/queries'
+import { getWorkspaceId, setActiveWorkspace, setToken } from '@/lib/api'
+import { clearPwaCaches } from '@/lib/pwa'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -72,9 +73,9 @@ export const useAuthStore = defineStore('auth', {
     async ensureLoaded() {
       if (this.loaded) return
       try {
-        this.adopt(await apiFetch<MeResponse>('/v1/me'))
+        this.adopt(await fetchApi(this.queryClient, '/v1/me', undefined, { fresh: true }))
       } catch (e) {
-        if (!(e instanceof ApiError && e.status === 401)) console.error('auth: /v1/me failed', e)
+        if (!(isApiRequestError(e) && e.status === 401)) console.error('auth: /v1/me failed', e)
         this.me = null
       }
       this.loaded = true
@@ -82,16 +83,13 @@ export const useAuthStore = defineStore('auth', {
     /** Re-resolve /v1/me after a change the principal carries (rename, key rotation). */
     async reload() {
       try {
-        this.adopt(await apiFetch<MeResponse>('/v1/me'))
+        this.adopt(await fetchApi(this.queryClient, '/v1/me', undefined, { fresh: true }))
       } catch {
         /* the caller's own change already succeeded; a stale name is not worth an error */
       }
     },
     async login(email: string, password: string) {
-      const res = await apiFetch<AuthSessionResponse>('/v1/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      })
+      const res = await api.post('/v1/auth/login', { body: { email, password } })
       this.adoptSession(res)
     },
     /**
@@ -101,48 +99,45 @@ export const useAuthStore = defineStore('auth', {
      */
     async ssoProviders(workspaceId: string): Promise<SsoProvidersResponse | null> {
       try {
-        return await apiFetch<SsoProvidersResponse>(`/v1/auth/sso/providers?workspaceId=${encodeURIComponent(workspaceId)}`)
+        return await api.get('/v1/auth/sso/providers', { query: { workspaceId } })
       } catch (e) {
-        if (e instanceof ApiError && e.status === 404) return null
+        if (isApiRequestError(e) && e.status === 404) return null
         throw e
       }
     },
     /** Email-first sign-in: which providers assert this address's domain. */
     discover(email: string): Promise<SsoDiscoverResponse> {
-      return apiFetch<SsoDiscoverResponse>('/v1/auth/sso/discover', { method: 'POST', body: JSON.stringify({ email }) })
+      return api.post('/v1/auth/sso/discover', { body: { email } })
     },
     /** LDAP sign-in (#75): the directory checks the password, so there is no redirect leg. */
     async ldapLogin(providerId: string, username: string, password: string) {
-      const res = await apiFetch<AuthSessionResponse>(`/v1/auth/ldap/${encodeURIComponent(providerId)}/login`, {
-        method: 'POST',
-        body: JSON.stringify({ username, password }),
+      const res = await api.post('/v1/auth/ldap/{providerId}/login', {
+        path: { providerId },
+        body: { username, password },
       })
       this.adoptSession(res)
     },
     /** Trade the callback's fragment code for a session; answers where the sign-in started. */
     async exchangeSsoCode(code: string): Promise<string> {
-      const res = await apiFetch<SsoExchangeResponse>('/v1/auth/sso/exchange', {
-        method: 'POST',
-        body: JSON.stringify({ code }),
-      })
+      const res = await api.post('/v1/auth/sso/exchange', { body: { code } })
       this.adoptSession(res)
       return res.returnTo
     },
     async signup(email: string, displayName: string, password: string) {
-      const res = await apiFetch<AuthSessionResponse>('/v1/auth/signup', {
-        method: 'POST',
-        body: JSON.stringify({ email, displayName, password }),
-      })
+      const res = await api.post('/v1/auth/signup', { body: { email, displayName, password } })
       this.adoptSession(res)
     },
     async logout() {
       try {
-        await apiFetch('/v1/auth/logout', { method: 'POST' })
+        await api.post('/v1/auth/logout')
       } catch {
         /* revoking a dead session is fine */
       }
       setToken(null)
       this.me = null
+      // Nothing the signed-out session read may answer for the next one.
+      this.queryClient.clear()
+      await clearPwaCaches().catch(() => undefined)
     },
     setWorkspace(workspaceId: string) {
       setActiveWorkspace(workspaceId)
@@ -162,7 +157,7 @@ export const useAuthStore = defineStore('auth', {
     async saveLocale(locale: Locale) {
       if (this.me) this.me = { ...this.me, locale }
       try {
-        await apiFetch('/v1/me', { method: 'PATCH', body: JSON.stringify({ locale }) })
+        await api.patch('/v1/me', { body: { locale } })
       } catch {
         /* cookie already holds it; the durable copy can wait for the next switch */
       }

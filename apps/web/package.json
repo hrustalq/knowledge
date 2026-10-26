@@ -101,8 +101,11 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.70.1",
     "vite": "^8.0.3",
+    "vite-plugin-pwa": "2.0.0",
     "vitest": "^4.1.11",
     "vue-eslint-parser": "^10.4.1",
-    "vue-tsc": "^3.2.6"
+    "vue-tsc": "^3.2.6",
+    "workbox-precaching": "7.4.1",
+    "workbox-window": "7.4.1"
   }
 }

@@ -19,12 +19,11 @@ import { computed, onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { AtSign, CircleDashed, Library, Plus, ShieldCheck } from 'lucide-vue-next'
 import type {
-  ListUsersResponse,
-  ListWorkspacesResponse,
   UserSummary,
   WorkspaceSummary,
 } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import { api, fetchApi } from '@/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@/components/ui/badge'
 import UserChip from '@/components/people/UserChip.vue'
@@ -123,14 +122,17 @@ const accessors: FilterAccessors<UserSummary> = {
 
 const visibleUsers = computed(() => filterRows(users.value, filters.value, accessors))
 
-async function load() {
+const queryClient = useQueryClient()
+
+/** `fresh` after a write on this tab. */
+async function load(opts: { fresh?: boolean } = {}) {
   loading.value = true
   try {
     const [userRes, wsRes] = await Promise.all([
-      apiFetch<ListUsersResponse>('/v1/users'),
+      fetchApi(queryClient, '/v1/users', undefined, opts),
       // Platform admins see every workspace, so this is the full roster the
       // workspace filter needs.
-      apiFetch<ListWorkspacesResponse>('/v1/workspaces'),
+      fetchApi(queryClient, '/v1/workspaces', undefined, opts),
     ])
     users.value = userRes.users
     workspaces.value = wsRes.workspaces
@@ -140,25 +142,25 @@ async function load() {
     loading.value = false
   }
 }
-onMounted(load)
+onMounted(() => load())
 
 async function createUser() {
   creating.value = true
   try {
-    await apiFetch<UserSummary>('/v1/users', {
-      method: 'POST',
-      body: JSON.stringify({
+    await api.post('/v1/users', {
+      body: {
         email: newEmail.value,
         displayName: newName.value,
+        isAdmin: false, // the server's default; the generated type marks it required
         ...(newPassword.value ? { password: newPassword.value } : {}),
-      }),
+      },
     })
     toast.success(t('users.created', { email: newEmail.value }))
     newEmail.value = ''
     newName.value = ''
     newPassword.value = ''
     createOpen.value = false
-    await load()
+    await load({ fresh: true })
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -168,9 +170,9 @@ async function createUser() {
 
 async function patchUser(user: UserSummary, patch: Record<string, unknown>, okMessage: string) {
   try {
-    await apiFetch<UserSummary>(`/v1/users/${user.userId}`, { method: 'PATCH', body: JSON.stringify(patch) })
+    await api.patch('/v1/users/{id}', { path: { id: user.userId }, body: patch as never })
     toast.success(okMessage)
-    await load()
+    await load({ fresh: true })
   } catch (e) {
     toast.error((e as Error).message)
   }

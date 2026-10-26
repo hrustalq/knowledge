@@ -25,7 +25,7 @@ import { vmsg } from '../common/validation.js';
 import { AS_OF_DESCRIPTION, KNOWN_AT_DESCRIPTION } from '../temporal/temporal.dto.js';
 
 export class ExpandGraphDto {
-  @ApiPropertyOptional({ default: 1, minimum: 1, maximum: 3, description: 'Entity hops from the vector hits' })
+  @ApiPropertyOptional({ minimum: 1, maximum: 3, description: 'Entity hops from the vector hits. Default: 1.' })
   @IsOptional()
   @IsInt()
   @Min(1, { message: vmsg('min') })
@@ -91,12 +91,12 @@ export class SearchDto {
   @IsNotEmpty()
   query!: string;
 
-  @ApiPropertyOptional({ enum: ['hybrid', 'semantic', 'keyword'], default: 'hybrid' })
+  @ApiPropertyOptional({ enum: ['hybrid', 'semantic', 'keyword'], description: 'Default: hybrid.' })
   @IsOptional()
   @IsIn(['hybrid', 'semantic', 'keyword'])
   mode?: 'hybrid' | 'semantic' | 'keyword';
 
-  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, description: 'Default: 20.' })
   @IsOptional()
   @IsInt()
   @Min(1, { message: vmsg('min') })

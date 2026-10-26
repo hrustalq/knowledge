@@ -18,13 +18,12 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { ChevronRight, Pencil, Plus, Trash2, Users } from 'lucide-vue-next'
 import type {
-  ListUserGroupMembersResponse,
-  ListUserGroupsResponse,
   UserGroupMemberEntry,
   UserGroupSummary,
   WorkspaceMemberEntry,
 } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import { api, fetchApi } from '@/api/queries'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import {
   AlertDialog,
@@ -63,13 +62,21 @@ const props = defineProps<{
 
 const groups = ref<UserGroupSummary[]>([])
 const loading = ref(false)
+const queryClient = useQueryClient()
 
 async function load() {
   if (!props.workspaceId) return
   loading.value = true
   try {
+    // Fresh, as is a group's member list: the writes below patch the lists in
+    // place, not the cache, so a cached copy would be the pre-edit one.
     groups.value = (
-      await apiFetch<ListUserGroupsResponse>(`/v1/groups?workspaceId=${props.workspaceId}`)
+      await fetchApi(
+        queryClient,
+        '/v1/groups',
+        { query: { workspaceId: props.workspaceId } },
+        { fresh: true },
+      )
     ).groups
   } catch (e) {
     groups.value = []
@@ -121,7 +128,12 @@ async function toggle(group: UserGroupSummary) {
   loadingMembers.value = true
   try {
     groupMembers.value = (
-      await apiFetch<ListUserGroupMembersResponse>(`/v1/groups/${group.groupId}/members`)
+      await fetchApi(
+        queryClient,
+        '/v1/groups/{id}/members',
+        { path: { id: group.groupId } },
+        { fresh: true },
+      )
     ).members
   } catch (e) {
     toast.error((e as Error).message)
@@ -139,9 +151,9 @@ const candidates = computed<AutocompleteOption[]>(() => {
 
 async function changeMembers(group: UserGroupSummary, change: { add?: string[]; remove?: string[] }) {
   try {
-    const res = await apiFetch<ListUserGroupMembersResponse>(`/v1/groups/${group.groupId}/members`, {
-      method: 'PUT',
-      body: JSON.stringify(change),
+    const res = await api.put('/v1/groups/{id}/members', {
+      path: { id: group.groupId },
+      body: change,
     })
     groupMembers.value = res.members
     replace({ ...group, memberCount: res.members.length })
@@ -178,16 +190,15 @@ async function submitForm() {
   if (!name) return
   try {
     if (editing.value) {
-      const updated = await apiFetch<UserGroupSummary>(`/v1/groups/${editing.value.groupId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ name, description: formDescription.value }),
+      const updated = await api.patch('/v1/groups/{id}', {
+        path: { id: editing.value.groupId },
+        body: { name, description: formDescription.value },
       })
       replace(updated)
       toast.success(t('access.groups.updated', { name: updated.name }))
     } else {
-      const created = await apiFetch<UserGroupSummary>('/v1/groups', {
-        method: 'POST',
-        body: JSON.stringify({ workspaceId: props.workspaceId, name, description: formDescription.value }),
+      const created = await api.post('/v1/groups', {
+        body: { workspaceId: props.workspaceId, name, description: formDescription.value },
       })
       groups.value = [...groups.value, created].sort((a, b) => a.name.localeCompare(b.name))
       toast.success(t('access.groups.created', { name: created.name }))
@@ -206,7 +217,7 @@ async function confirmDelete() {
   const group = deleting.value
   if (!group) return
   try {
-    await apiFetch(`/v1/groups/${group.groupId}`, { method: 'DELETE' })
+    await api.delete('/v1/groups/{id}', { path: { id: group.groupId } })
     groups.value = groups.value.filter((g) => g.groupId !== group.groupId)
     if (openId.value === group.groupId) openId.value = null
     toast.success(t('access.groups.deleted', { name: group.name }))

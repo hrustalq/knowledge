@@ -13,6 +13,7 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { PublishingSettingsService } from './publishing-settings.service.js';
 import { CreateShareLinkDto, UpdatePublishingSettingsDto, UpdateShareLinkDto } from './share-links.dto.js';
 import { ShareLinksService } from './share-links.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Managing share links and the workspace's publishing switches
@@ -32,6 +33,7 @@ export class ShareLinksController {
   ) {}
 
   @Get('documents/:id/shares')
+  @Returns('ShareLinkListResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'A page’s live share links, and what the workspace allows' })
   list(@Param('id', ParseUUIDPipe) id: string): Promise<ShareLinkListResponse> {
@@ -39,6 +41,7 @@ export class ShareLinksController {
   }
 
   @Post('documents/:id/shares')
+  @Returns('CreateShareLinkResponse')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Create a public, read-only link to the page (and optionally its subpages)' })
   @ApiResponse({ status: 403, description: 'Sharing is off for the workspace or the deployment (details.reason share.disabledByWorkspace)' })
@@ -51,6 +54,7 @@ export class ShareLinksController {
   }
 
   @Patch('shares/:id')
+  @Returns('ShareLinkSummary')
   @Access('editor', 'share-link')
   @ApiOperation({ summary: 'Change a link’s expiry, password or subtree' })
   update(
@@ -69,6 +73,7 @@ export class ShareLinksController {
   }
 
   @Get('workspaces/:id/shares')
+  @Returns('WorkspaceShareLinksResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Every share link in the workspace, revoked and expired included' })
   inventory(@Param('id', ParseUUIDPipe) id: string): Promise<WorkspaceShareLinksResponse> {
@@ -76,6 +81,7 @@ export class ShareLinksController {
   }
 
   @Get('workspaces/:id/publishing-settings')
+  @Returns('PublishingSettingsResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'The publishing switches: what applies, the workspace override, and the deployment ceiling' })
   getSettings(@Param('id', ParseUUIDPipe) id: string): Promise<PublishingSettingsResponse> {
@@ -83,6 +89,7 @@ export class ShareLinksController {
   }
 
   @Patch('workspaces/:id/publishing-settings')
+  @Returns('PublishingSettingsResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Override the publishing switches; null on a key goes back to the default (off)' })
   updateSettings(

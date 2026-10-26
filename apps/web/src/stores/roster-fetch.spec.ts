@@ -1,11 +1,24 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createApp, markRaw } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
+import { QueryClient } from '@tanstack/vue-query'
 
+// The stores read through the query cache (#472); its queryFn is `api.get`.
 const apiFetch = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api')>()),
-  apiFetch,
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/api/client')>()),
+  api: { get: (...args: unknown[]) => apiFetch(...args) },
 }))
+
+/** A Pinia wired the way main.ts wires it: stores see this app's query client. */
+function appPinia(queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+  const pinia = createPinia()
+  pinia.use(() => ({ queryClient: markRaw(queryClient) }))
+  // Pinia applies plugins only once it is installed in an app.
+  createApp({}).use(pinia)
+  return { pinia, queryClient }
+}
 
 const { useProjectsStore } = await import('./projects')
 const { useWorkspacesStore } = await import('./workspaces')
@@ -23,8 +36,12 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
+let queryClient: QueryClient
+
 beforeEach(() => {
-  setActivePinia(createPinia())
+  const app = appPinia()
+  setActivePinia(app.pinia)
+  queryClient = app.queryClient
   apiFetch.mockReset()
 })
 
@@ -43,12 +60,25 @@ describe('roster fetches share one request while in flight (#279)', () => {
     expect(store.items.map((p) => p.projectId)).toEqual(['p-1'])
   })
 
-  it('projects: a call after the answer landed asks again (a refresh is still a refresh)', async () => {
+  it('projects: a call after the answer landed reads the cache; a fresh one asks again', async () => {
     apiFetch.mockResolvedValue({ projects: [project('p-1')] })
     const store = useProjectsStore()
     await store.fetchList()
     await store.fetchList()
+    expect(apiFetch).toHaveBeenCalledTimes(1)
+    await store.fetchList({ fresh: true })
     expect(apiFetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('projects: a live invalidation of the key re-reads it into the store', async () => {
+    apiFetch.mockResolvedValueOnce({ projects: [project('p-1')] })
+    const store = useProjectsStore()
+    await store.fetchList()
+    apiFetch.mockResolvedValueOnce({ projects: [project('p-1'), project('p-2')] })
+    // What live-cache.ts does on `project.*`.
+    await queryClient.invalidateQueries({ queryKey: ['/v1/projects'] })
+    expect(apiFetch).toHaveBeenCalledTimes(2)
+    expect(store.items.map((p) => p.projectId)).toEqual(['p-1', 'p-2'])
   })
 
   it('projects: a failed request is shared too, and does not stick', async () => {
@@ -82,8 +112,8 @@ describe('roster fetches share one request while in flight (#279)', () => {
 
   it('projects: two app instances (two SSR renders) never share a request', async () => {
     apiFetch.mockResolvedValue({ projects: [] })
-    const first = useProjectsStore(createPinia())
-    const second = useProjectsStore(createPinia())
+    const first = useProjectsStore(appPinia().pinia)
+    const second = useProjectsStore(appPinia().pinia)
     await Promise.all([first.fetchList(), second.fetchList()])
     expect(apiFetch).toHaveBeenCalledTimes(2)
   })

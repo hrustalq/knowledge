@@ -32,6 +32,7 @@ import { AccessService } from '../auth/access.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { ProjectOverviewService } from './project-overview.service.js';
 import { ProjectCascadeService } from './project-cascade.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Workspace > Project > Document. Projects are organizational only: the ACL
@@ -54,6 +55,7 @@ export class ProjectsController {
   }
 
   @Get()
+  @Returns('ListProjectsResponse')
   // Guests too: the roster is filtered to projects they reach (#76).
   @Access('viewer', 'query', { guests: true })
   @ApiOperation({ summary: 'List projects in a workspace (searchable; cursor-paginated when limit is given)' })
@@ -62,6 +64,7 @@ export class ProjectsController {
   }
 
   @Post()
+  @Returns('CreateProjectResponse')
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Create a project' })
   create(
@@ -72,6 +75,7 @@ export class ProjectsController {
   }
 
   @Get(':id')
+  @Returns('ProjectSummary')
   @Access('viewer', 'project')
   @ApiOperation({ summary: 'Project detail' })
   async get(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ProjectSummary> {
@@ -86,6 +90,7 @@ export class ProjectsController {
    * matching is not a hazard here the way it is for a bare literal segment.
    */
   @Get(':id/overview')
+  @Returns('ProjectOverviewResponse')
   @Access('viewer', 'project')
   @ApiOperation({ summary: 'Project overview: counts, contributors, recent pages' })
   async overview(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ProjectOverviewResponse> {
@@ -93,6 +98,7 @@ export class ProjectsController {
   }
 
   @Patch(':id')
+  @Returns('ProjectSummary')
   @Access('editor', 'project')
   @ApiOperation({ summary: 'Rename a project / edit its description' })
   update(
@@ -115,6 +121,7 @@ export class ProjectsController {
    * segment would be.
    */
   @Get(':id/deletion-preview')
+  @Returns('ProjectDeletionPreview')
   @Access('admin', 'project')
   @ApiOperation({
     summary: 'What deleting this project would relocate (pass ?target= for glossary conflicts)',
@@ -144,6 +151,7 @@ export class ProjectsController {
    * not gain storage, graph or fulltext dependencies.
    */
   @Delete(':id')
+  @Returns('DeleteProjectResponse')
   @Access('admin', 'project')
   @ApiOperation({
     summary: 'Delete a project: move its contents to another, or cascade-delete them',

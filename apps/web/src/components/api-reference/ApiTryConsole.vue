@@ -222,7 +222,7 @@ async function viaBrowser(r: typeof resolved.value, body: string | null): Promis
 }
 
 async function viaProxy(r: typeof resolved.value, body: string | null): Promise<Result> {
-  const res = (await api.post('/v1/api-specs/{id}/try', {
+  const res = await api.post('/v1/api-specs/{id}/try', {
     path: { id: props.operation.documentId },
     body: {
       revisionId: props.operation.revisionId,
@@ -232,7 +232,7 @@ async function viaProxy(r: typeof resolved.value, body: string | null): Promise<
       headers: r.headers,
       body,
     },
-  })) as ApiTryResponse
+  })
   return { ...res, via: 'proxy' }
 }
 

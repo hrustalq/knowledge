@@ -7,6 +7,7 @@ import { GraphService } from '../graph/graph.service.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { ProjectCascadeService } from '../projects/project-cascade.service.js';
 import { WORKSPACE_ROWS } from './workspace-teardown.inventory.js';
+import { ReadCache } from '../cache/read-cache.service.js';
 
 /** Pages per transaction: each batch commits on its own, so an interrupted teardown resumes where it stopped. */
 const PAGE_BATCH = 200;
@@ -39,6 +40,7 @@ export class WorkspaceTeardownService {
     private readonly storage: StorageService,
     private readonly graph: GraphService,
     @Inject(FULLTEXT_PROVIDER) private readonly fulltext: FulltextProvider,
+    private readonly cache: ReadCache,
   ) {}
 
   async preview(workspaceId: string): Promise<WorkspaceDeletionCounts> {
@@ -112,6 +114,8 @@ export class WorkspaceTeardownService {
     for (const key of avatarKeys) await this.storage.purgeObjectVersions(key).catch(warn(`avatar ${key}`));
     await this.graph.deleteWorkspaceGraph(workspaceId).catch(warn('graph vertices'));
     await this.fulltext.deleteWorkspace(workspaceId).catch(warn('fulltext rows'));
+    // Its revision bytes and settings in the read cache (#472): gone with it, not at TTL.
+    await this.cache.invalidateWorkspace(workspaceId);
   }
 }
 

@@ -15,9 +15,9 @@ import {
   readableDocumentsWhere,
   listedProjectsWhere,
 } from '../src/ai-readable/ai-readable-scope.js';
+import { etagMatches } from '../src/common/http-cache.js';
 import {
   etagFor,
-  etagMatches,
   prefersMarkdown,
   renderPageMarkdown,
   wantsFrontmatter,

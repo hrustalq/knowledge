@@ -63,7 +63,7 @@ export class CreateMergeRequestDto {
 }
 
 export class MergeMergeRequestDto {
-  @ApiPropertyOptional({ enum: ['merge-commit', 'squash'], default: 'merge-commit' })
+  @ApiPropertyOptional({ enum: ['merge-commit', 'squash'], description: 'Default: merge-commit.' })
   @IsOptional()
   @IsIn(['merge-commit', 'squash'])
   strategy?: 'merge-commit' | 'squash';
@@ -175,7 +175,7 @@ export class ListMergeRequestsQueryDto {
   @IsString()
   cursor?: string;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 50 })
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, description: 'Default: 50.' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

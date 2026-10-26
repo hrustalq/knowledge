@@ -1,25 +1,26 @@
 import { defineStore } from 'pinia'
 import { toRaw } from 'vue'
 import type {
-  DocumentAncestorsResponse,
   DocumentCategory,
   DocumentSummary,
   DocumentTreeNode,
-  DocumentTreeResponse,
-  ListDocumentsResponse,
   WorkspaceGraphResponse,
 } from '@knowledge/contracts'
-import { apiFetch, getProjectId, getWorkspaceId } from '@/lib/api'
+import { api, fetchApi } from '@/api/queries'
+import { getProjectId, getWorkspaceId } from '@/lib/api'
 
-/** `&projectId=` when a project is active; without it the API spans the workspace. */
-function projectParam(): string {
+/**
+ * The scope every read here carries: the workspace, the active project when
+ * there is one (without it the API spans the workspace), and archived pages
+ * only when the reader asked to see them.
+ */
+function scopeQuery(showArchived = false) {
   const projectId = getProjectId()
-  return projectId ? `&projectId=${projectId}` : ''
-}
-
-/** `&includeArchived=1` when the reader asked to see put-away pages too. */
-function archivedParam(show: boolean): string {
-  return show ? '&includeArchived=1' : ''
+  return {
+    workspaceId: getWorkspaceId(),
+    ...(projectId ? { projectId } : {}),
+    ...(showArchived ? { includeArchived: '1' } : {}),
+  }
 }
 
 export interface DocumentFilters {
@@ -325,22 +326,22 @@ export const useDocumentsStore = defineStore('documents', {
       if (!opts.reset && this.loaded && this.nextCursor === null) return
       this.listBusy = true
       try {
-        const params = new URLSearchParams({
-          workspaceId: getWorkspaceId(),
+        const { projectId, ...scope } = scopeQuery(this.showArchived)
+        const query = {
+          ...scope,
           limit: String(LIST_PAGE),
-        })
-        const projectId = getProjectId()
-        // An explicit project facet outranks the ambient scope: the reader
-        // asked for those projects, not for the one the switcher happens to
-        // be parked on.
-        if (this.filters.projectIds.length) params.set('projectIds', this.filters.projectIds.join(','))
-        else if (projectId) params.set('projectId', projectId)
-        if (this.filters.categories.length) params.set('categories', this.filters.categories.join(','))
-        if (this.filters.tags.length) params.set('tags', this.filters.tags.join(','))
-        if (this.showArchived) params.set('includeArchived', '1')
-        if (!opts.reset && this.nextCursor) params.set('cursor', this.nextCursor)
+          // An explicit project facet outranks the ambient scope: the reader
+          // asked for those projects, not for the one the switcher happens to
+          // be parked on.
+          ...(this.filters.projectIds.length ? { projectIds: this.filters.projectIds.join(',') } : projectId ? { projectId } : {}),
+          ...(this.filters.categories.length ? { categories: this.filters.categories.join(',') } : {}),
+          ...(this.filters.tags.length ? { tags: this.filters.tags.join(',') } : {}),
+          ...(!opts.reset && this.nextCursor ? { cursor: this.nextCursor } : {}),
+        }
 
-        const res = await apiFetch<ListDocumentsResponse>(`/v1/documents?${params}`)
+        // Fresh: this store has its own live path (the events store calls
+        // `invalidate`), so a cached answer here would only be an older one.
+        const res = await fetchApi(this.queryClient, '/v1/documents', { query }, { fresh: true })
         this.items = opts.reset ? res.items : [...this.items, ...res.items]
         this.nextCursor = res.nextCursor
         this.loaded = true
@@ -381,8 +382,11 @@ export const useDocumentsStore = defineStore('documents', {
       if (pending) return pending
 
       const job = (async () => {
-        const res = await apiFetch<DocumentTreeResponse>(
-          `/v1/documents/tree?workspaceId=${getWorkspaceId()}&depth=1${projectParam()}${archivedParam(this.showArchived)}`,
+        const res = await fetchApi(
+          this.queryClient,
+          '/v1/documents/tree',
+          { query: { ...scopeQuery(this.showArchived), depth: '1' } },
+          { fresh: true },
         )
         // Folded onto what we hold rather than replacing it, so a refresh does
         // not empty every open branch and re-render every row — see mergeNodes.
@@ -424,8 +428,11 @@ export const useDocumentsStore = defineStore('documents', {
         // report work the reader did not ask for.
         if (!opts.background) this.expanding = [...new Set([...this.expanding, parentId])]
         try {
-          const res = await apiFetch<DocumentTreeResponse>(
-            `/v1/documents/tree?workspaceId=${getWorkspaceId()}&depth=1&parentId=${parentId}${projectParam()}${archivedParam(this.showArchived)}`,
+          const res = await fetchApi(
+            this.queryClient,
+            '/v1/documents/tree',
+            { query: { ...scopeQuery(this.showArchived), depth: '1', parentId } },
+            { fresh: true },
           )
           const node = walk(this.tree, parentId)
           if (node) {
@@ -469,13 +476,13 @@ export const useDocumentsStore = defineStore('documents', {
           // what is up there, so the breadcrumbs can say so.
           const top = this.pathTo(documentId)[0]
           if (top?.parentId && !(documentId in this.hiddenAbove)) {
-            const res = await apiFetch<DocumentAncestorsResponse>(`/v1/documents/${documentId}/ancestors`)
+            const res = await fetchApi(this.queryClient, '/v1/documents/{id}/ancestors', { path: { id: documentId } })
             this.recordHiddenAbove(documentId, res.ancestors)
           }
           return this.pathTo(documentId)
         }
 
-        const res = await apiFetch<DocumentAncestorsResponse>(`/v1/documents/${documentId}/ancestors`)
+        const res = await fetchApi(this.queryClient, '/v1/documents/{id}/ancestors', { path: { id: documentId } })
         this.recordHiddenAbove(documentId, res.ancestors)
         // Top-down: each level has to exist before the next can be found in it.
         // A hidden ancestor is never expanded: it is not in the tree, and what
@@ -569,10 +576,7 @@ export const useDocumentsStore = defineStore('documents', {
 
       this.moving = [...this.moving, documentId]
       try {
-        await apiFetch(`/v1/documents/${documentId}/move`, {
-          method: 'POST',
-          body: JSON.stringify({ parentId, beforeId }),
-        })
+        await api.post('/v1/documents/{id}/move', { path: { id: documentId }, body: { parentId, beforeId } })
       } catch (err) {
         // Back to the exact slot it came from. `siblingIdsOf` is re-read here
         // rather than captured, because the run may have shifted while we waited.
@@ -601,8 +605,12 @@ export const useDocumentsStore = defineStore('documents', {
     /* --------------------------------------------------------------- graph */
 
     async fetchGraph() {
-      const res = await apiFetch<WorkspaceGraphResponse>(
-        `/v1/documents/graph?workspaceId=${getWorkspaceId()}${projectParam()}`,
+      const { workspaceId, projectId } = scopeQuery()
+      const res = await fetchApi(
+        this.queryClient,
+        '/v1/documents/graph',
+        { query: { workspaceId, ...(projectId ? { projectId } : {}) } },
+        { fresh: true },
       )
       this.graph = res
       this.graphLoaded = true

@@ -20,7 +20,7 @@ export class CreateUserDto {
   @MaxLength(200, { message: vmsg('maxLength') })
   password?: string;
 
-  @ApiPropertyOptional({ default: false })
+  @ApiPropertyOptional({ description: 'Default: false.' })
   @IsOptional()
   @IsBoolean()
   isAdmin?: boolean;

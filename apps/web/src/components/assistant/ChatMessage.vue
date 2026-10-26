@@ -192,10 +192,10 @@ async function saveToBase() {
   if (saving.value || saved.value) return
   saving.value = true
   try {
-    const result = (await api.post('/v1/assistant/messages/{id}/capture', {
+    const result = await api.post('/v1/assistant/messages/{id}/capture', {
       path: { id: props.message.id },
       body: {},
-    })) as CaptureResult
+    })
     saved.value = result
     if (result.state === 'duplicate' && result.targetDocumentId) {
       const page = result.targetDocumentId

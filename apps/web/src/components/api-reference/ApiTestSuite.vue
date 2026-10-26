@@ -21,7 +21,8 @@ import { renderCodeSample, type ApiOperationInfo, type ApiTestCase, type ApiTest
 import { Button } from '@/components/ui/button'
 import { Collapse } from '@/components/ui/collapse'
 import { statusTone } from '@/lib/api-spec'
-import { apiFetchBlob, saveFile } from '@/lib/api'
+import { requestFile } from '@/api/client'
+import { saveFile } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
 import ApiCode from './ApiCode.vue'
 import ApiSuiteSetup from './ApiSuiteSetup.vue'
@@ -71,8 +72,11 @@ async function download(format: ApiTestSuiteFormat) {
   downloading.value = format
   downloadError.value = null
   try {
-    const query = new URLSearchParams({ entityKey: props.operation.entityKey, format })
-    const { blob, filename } = await apiFetchBlob(`/v1/api-specs/${props.operation.documentId}/test-suite?${query}`)
+    const { blob, filename } = await requestFile('get', '/v1/api-specs/{id}/test-suite', {
+      path: { id: props.operation.documentId },
+      query: { entityKey: props.operation.entityKey, format },
+      config: { timeout: 0 },
+    })
     saveFile(blob, filename ?? (format === 'curl' ? 'suite.sh' : 'suite.postman_collection.json'))
   } catch (e) {
     downloadError.value = (e as Error).message

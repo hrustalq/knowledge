@@ -20,6 +20,7 @@ import { Access, CookieTokenOk, CurrentPrincipal } from '../auth/access.decorato
 import type { Principal } from '../auth/principal.js';
 import { CreateImportDto, SubmitImportDto } from './dto/imports.dto.js';
 import { ImportService } from './import.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Document import (docs/features/16).
@@ -35,6 +36,7 @@ export class ImportController {
   constructor(private readonly imports: ImportService) {}
 
   @Post()
+  @Returns('CreateImportResponse')
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Reserve an import and get a presigned upload URL' })
   create(
@@ -45,6 +47,7 @@ export class ImportController {
   }
 
   @Post(':id/start')
+  @Returns('ImportJobResponse')
   @Access('editor', 'import')
   @ApiOperation({ summary: 'Confirm the upload landed and queue the parse' })
   async start(@Param('id', ParseUUIDPipe) id: string): Promise<ImportJobResponse> {
@@ -52,6 +55,7 @@ export class ImportController {
   }
 
   @Get(':id')
+  @Returns('ImportJobResponse')
   @Access('viewer', 'import')
   @ApiOperation({ summary: 'Import status — polled by the wizard while parsing' })
   async get(@Param('id', ParseUUIDPipe) id: string): Promise<ImportJobResponse> {
@@ -59,6 +63,7 @@ export class ImportController {
   }
 
   @Get(':id/content')
+  @Returns('ImportContentResponse')
   @Access('viewer', 'import')
   @ApiOperation({ summary: 'The parsed markdown, for the review step' })
   content(@Param('id', ParseUUIDPipe) id: string): Promise<ImportContentResponse> {
@@ -84,6 +89,7 @@ export class ImportController {
   }
 
   @Post(':id/submit')
+  @Returns('SubmitImportResponse')
   @Access('editor', 'import')
   @ApiOperation({ summary: 'Create the page from the reviewed result, keeping the original as an attachment' })
   submit(

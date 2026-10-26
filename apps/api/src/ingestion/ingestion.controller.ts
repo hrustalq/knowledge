@@ -12,6 +12,12 @@ import { ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs
 import { IsOptional, IsUUID } from 'class-validator';
 import { Access } from '../auth/access.decorator.js';
 import { IngestionAdminService } from './ingestion-admin.service.js';
+import { Returns } from '../common/returns.decorator.js';
+import type {
+  IngestionJobInfo,
+  ReindexResponse,
+  StaleReportResponse,
+} from '@knowledge/contracts';
 
 export class ReindexDto {
   @ApiProperty({ format: 'uuid' })
@@ -31,24 +37,27 @@ export class IngestionController {
   constructor(private readonly admin: IngestionAdminService) {}
 
   @Get('jobs/:id')
+  @Returns('IngestionJobInfo')
   @Access('viewer', 'job')
   @ApiOperation({ summary: 'Ingestion job status (poll after finalize)' })
-  getJob(@Param('id', ParseUUIDPipe) id: string) {
+  getJob(@Param('id', ParseUUIDPipe) id: string): Promise<IngestionJobInfo> {
     return this.admin.getJob(id);
   }
 
   @Get('stale')
+  @Returns('StaleReportResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: 'Staleness report: embedding drift, stuck and failed jobs (Phase 5)' })
-  stale(@Query('workspaceId', ParseUUIDPipe) workspaceId: string) {
+  stale(@Query('workspaceId', ParseUUIDPipe) workspaceId: string): Promise<StaleReportResponse> {
     return this.admin.staleReport(workspaceId);
   }
 
   @Post('reindex')
+  @Returns('ReindexResponse')
   @HttpCode(202)
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Force reindex of branch-head revisions (workspace or single document)' })
-  reindex(@Body() dto: ReindexDto) {
+  reindex(@Body() dto: ReindexDto): Promise<ReindexResponse> {
     return this.admin.reindex(dto.workspaceId, dto.documentId);
   }
 }

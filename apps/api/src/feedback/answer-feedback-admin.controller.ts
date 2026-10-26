@@ -8,6 +8,7 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import { AuditService } from '../auth/audit.service.js';
 import type { Principal } from '../auth/principal.js';
 import { EXPORT_MAX_ROWS, FeedbackDatasetService } from './feedback-dataset.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * The admin read side of answer feedback (docs/features/38, issue #67 phase
@@ -26,6 +27,7 @@ export class AnswerFeedbackAdminController {
   ) {}
 
   @Get('feedback/summary')
+  @Returns('AnswerFeedbackSummary')
   @Access('admin', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'from', required: false, description: 'ISO timestamp; defaults to 30 days ago' })
@@ -94,6 +96,7 @@ export class AnswerFeedbackAdminController {
   }
 
   @Get('feedback')
+  @Returns('ListAnswerFeedbackResponse')
   @Access('admin', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'kind', required: false, enum: ['vote', 'low-confidence', 'no-answer'] })

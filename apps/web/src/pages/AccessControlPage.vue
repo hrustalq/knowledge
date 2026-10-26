@@ -26,17 +26,16 @@ import { AtSign, Library, ShieldCheck, UserPlus, Wrench } from 'lucide-vue-next'
 import { WORKSPACE_ROLES } from '@knowledge/contracts'
 import type {
   DeleteWorkspaceResponse,
-  ListWorkspaceCandidatesResponse,
   ListWorkspaceMembersResponse,
-  ListWorkspacesResponse,
   MemberCapability,
-  UpdateWorkspaceResponse,
   WorkspaceCandidate,
   WorkspaceMemberEntry,
   WorkspaceRole,
   WorkspaceSummary,
 } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import { api, fetchApi } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import DeleteWorkspaceDialog from '@/components/access/DeleteWorkspaceDialog.vue'
@@ -86,6 +85,7 @@ const { t } = useI18n()
 const ROLES: readonly WorkspaceRole[] = WORKSPACE_ROLES
 
 const auth = useAuthStore()
+const queryClient = useQueryClient()
 const workspaces = ref<WorkspaceSummary[]>([])
 const selected = ref<string>(getWorkspaceId())
 const members = ref<WorkspaceMemberEntry[]>([])
@@ -187,10 +187,13 @@ const workspaceOptions = computed(() =>
 const candidateCache = new Map<string, WorkspaceCandidate>()
 async function loadCandidates(query: string): Promise<AutocompleteOption[]> {
   if (!selected.value) return []
-  const params = new URLSearchParams({ limit: '20' })
-  if (query.trim()) params.set('q', query.trim())
-  const res = await apiFetch<ListWorkspaceCandidatesResponse>(
-    `/v1/workspaces/${selected.value}/candidates?${params}`,
+  const q = query.trim()
+  // Fresh: an add on this page makes a candidate a member, and nothing announces it.
+  const res = await fetchApi(
+    queryClient,
+    '/v1/workspaces/{id}/candidates',
+    { path: { id: selected.value }, query: { limit: 20, ...(q ? { q } : {}) } },
+    { fresh: true },
   )
   for (const c of res.candidates) candidateCache.set(c.userId, c)
   return res.candidates.map((c) => ({
@@ -220,9 +223,11 @@ const canManage = computed(
   () => auth.isDev || auth.isAdmin || selectedWorkspace.value?.myRole === 'admin',
 )
 
+// Fresh, here and for members: this page writes both, and no live event re-asks either.
 async function loadWorkspaces() {
   try {
-    workspaces.value = (await apiFetch<ListWorkspacesResponse>('/v1/workspaces')).workspaces
+    workspaces.value = (await fetchApi(queryClient, '/v1/workspaces', undefined, { fresh: true }))
+      .workspaces
     if (!workspaces.value.some((w) => w.workspaceId === selected.value) && workspaces.value.length > 0) {
       selected.value = workspaces.value[0].workspaceId
     }
@@ -247,9 +252,9 @@ async function renameWorkspace() {
   if (!ws || !nameChanged.value) return
   renaming.value = true
   try {
-    const res = await apiFetch<UpdateWorkspaceResponse>(`/v1/workspaces/${ws.workspaceId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ name: nameDraft.value.trim() }),
+    const res = await api.patch('/v1/workspaces/{id}', {
+      path: { id: ws.workspaceId },
+      body: { name: nameDraft.value.trim() },
     })
     ws.name = res.name
     useWorkspacesStore().rename(res.workspaceId, res.name)
@@ -276,7 +281,14 @@ async function loadMembers() {
   if (!selected.value) return
   loadingMembers.value = true
   try {
-    members.value = (await apiFetch<ListWorkspaceMembersResponse>(`/v1/workspaces/${selected.value}/members`)).members
+    members.value = (
+      await fetchApi(
+        queryClient,
+        '/v1/workspaces/{id}/members',
+        { path: { id: selected.value } },
+        { fresh: true },
+      )
+    ).members
   } catch (e) {
     members.value = []
     toast.error((e as Error).message)
@@ -312,10 +324,11 @@ async function addMember() {
   const user = pickedUser.value
   if (!user) return
   try {
-    const res = await apiFetch<ListWorkspaceMembersResponse>(`/v1/workspaces/${selected.value}/members`, {
-      method: 'POST',
-      body: JSON.stringify({ email: user.email, role: addRole.value, capabilities: addCapabilities.value }),
-    })
+    const res = (await api.post('/v1/workspaces/{id}/members', {
+      path: { id: selected.value },
+      // trustedOperator: the server's default; the generated type marks it required.
+      body: { email: user.email, role: addRole.value, trustedOperator: false, capabilities: addCapabilities.value },
+    })) as ListWorkspaceMembersResponse
     members.value = res.members
     toast.success(t('access.memberAdded', { email: user.email, role: t(`role.${addRole.value}`) }))
     addOpen.value = false
@@ -329,10 +342,10 @@ async function addMember() {
 
 async function patchMember(member: WorkspaceMemberEntry, patch: Record<string, unknown>) {
   try {
-    const res = await apiFetch<ListWorkspaceMembersResponse>(
-      `/v1/workspaces/${selected.value}/members/${member.userId}`,
-      { method: 'PATCH', body: JSON.stringify(patch) },
-    )
+    const res = await api.patch('/v1/workspaces/{id}/members/{userId}', {
+      path: { id: selected.value, userId: member.userId },
+      body: patch as never,
+    })
     members.value = res.members
     toast.success(t('access.memberUpdated', { email: member.email }))
   } catch (e) {
@@ -375,10 +388,9 @@ async function takeOver(member: WorkspaceMemberEntry) {
 
 async function removeMember(member: WorkspaceMemberEntry) {
   try {
-    const res = await apiFetch<ListWorkspaceMembersResponse>(
-      `/v1/workspaces/${selected.value}/members/${member.userId}`,
-      { method: 'DELETE' },
-    )
+    const res = await api.delete('/v1/workspaces/{id}/members/{userId}', {
+      path: { id: selected.value, userId: member.userId },
+    })
     members.value = res.members
     toast.success(t('access.memberRemoved', { email: member.email }))
   } catch (e) {

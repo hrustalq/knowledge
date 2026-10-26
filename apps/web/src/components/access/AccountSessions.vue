@@ -11,7 +11,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import type { ListSessionsResponse, RevokeSessionsResponse, UserSummary } from '@knowledge/contracts'
+import type { ListSessionsResponse, UserSummary } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
@@ -43,7 +43,7 @@ async function revoke(sessionId: string) {
 
 async function revokeAll() {
   try {
-    const res = (await api.post('/v1/users/{id}/revoke-sessions', { path: { id: props.user.userId } })) as RevokeSessionsResponse
+    const res = await api.post('/v1/users/{id}/revoke-sessions', { path: { id: props.user.userId } })
     toast.success(t('users.sessionsRevokedAll', { n: res.revoked }, res.revoked))
   } catch (e) {
     toast.error(errorMessage(e, t) || t('profileSettings.sessions.failed'))

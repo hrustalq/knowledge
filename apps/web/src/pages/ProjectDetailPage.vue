@@ -7,7 +7,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { Lock, LockOpen } from 'lucide-vue-next'
 import type { DeleteProjectResponse } from '@knowledge/contracts'
-import { apiFetch, relativeTime } from '@/lib/api'
+import { api } from '@/api/queries'
+import { relativeTime } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
 import { useDocumentsStore } from '@/stores/documents'
@@ -47,7 +48,7 @@ watch(
     restrictedRefusal.value = false
     if (typeof id !== 'string' || !loaded || found) return
     try {
-      await apiFetch(`/v1/projects/${id}`)
+      await api.get('/v1/projects/{id}', { path: { id } })
     } catch (e) {
       if (route.params.id === id) restrictedRefusal.value = isRestrictedRefusal(e)
     }
@@ -76,9 +77,9 @@ async function save() {
   if (!project.value || !name.value.trim()) return
   saving.value = true
   try {
-    await apiFetch(`/v1/projects/${project.value.projectId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ name: name.value.trim(), description: description.value.trim() || null }),
+    await api.patch('/v1/projects/{id}', {
+      path: { id: project.value.projectId },
+      body: { name: name.value.trim(), description: description.value.trim() || null },
     })
     toast.success(t('project.updated'))
     emit('changed')
@@ -103,10 +104,7 @@ async function setEmoji(emoji: string | null) {
   const p = project.value
   if (!p) return
   try {
-    await apiFetch(`/v1/projects/${p.projectId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ avatarEmoji: emoji }),
-    })
+    await api.patch('/v1/projects/{id}', { path: { id: p.projectId }, body: { avatarEmoji: emoji } })
     emit('changed')
   } catch (e) {
     toast.error((e as Error).message)
@@ -155,7 +153,7 @@ async function onDeleted(result: DeleteProjectResponse) {
   emit('changed')
   // Re-resolves a stale active id against the new roster on its own, which is
   // what covers a cascade — there is nowhere for the scope to follow.
-  await store.fetchList()
+  await store.fetchList({ fresh: true })
   if (wasActive && result.movedTo) await store.switchProject(result.movedTo)
   void router.push('/settings/projects')
 }

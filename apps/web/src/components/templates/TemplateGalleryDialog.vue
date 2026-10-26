@@ -27,8 +27,9 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { FilePlus2, LayoutTemplate, Search } from 'lucide-vue-next'
-import type { Locale, RenderTemplateResponse, TemplateDetail, TemplateValues } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import type { Locale, TemplateDetail, TemplateValues } from '@knowledge/contracts'
+import { api } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { errorMessage } from '@/api/errors'
 import { labelFor } from '@/lib/labels'
 import { groupTemplates, matchesTemplate, previewTemplate } from '@/lib/templates'
@@ -200,9 +201,8 @@ async function create() {
   if (!detail.value || preview.value?.missing.length) return
   creating.value = true
   try {
-    const rendered = await apiFetch<RenderTemplateResponse>('/v1/templates/render', {
-      method: 'POST',
-      body: JSON.stringify({
+    const rendered = await api.post('/v1/templates/render', {
+      body: {
         workspaceId: getWorkspaceId(),
         ref: selectedRef.value,
         version: detail.value.version,
@@ -210,7 +210,7 @@ async function create() {
         values: values.value,
         ...(projectId.value ? { projectId: projectId.value } : {}),
         ...(target.value.parentId ? { parentId: target.value.parentId } : {}),
-      }),
+      },
     })
     if (inserting.value) {
       templates.closeGallery()

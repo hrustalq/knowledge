@@ -15,6 +15,7 @@ import {
   RejectCaptureDto,
   toCaptureRequest,
 } from './captures.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Agent-session captures over REST (issue #73, phase 3) — the same
@@ -35,6 +36,7 @@ export class CapturesController {
   ) {}
 
   @Post()
+  @Returns('CaptureResult')
   @Access('editor', 'body', { capture: true })
   @ApiOperation({
     summary:
@@ -45,6 +47,7 @@ export class CapturesController {
   }
 
   @Get()
+  @Returns('ListCapturesResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Captures in a workspace, newest first; ones on pages or projects the caller cannot open are left out' })
   async list(@Query() query: ListCapturesQueryDto, @CurrentPrincipal() principal: Principal): Promise<ListCapturesResponse> {
@@ -68,6 +71,7 @@ export class CapturesController {
 
   // Declared before `:id`, which would otherwise take `bulk-reject` as an id.
   @Post('bulk-reject')
+  @Returns('BulkRejectCapturesResponse')
   @Access('editor', 'body')
   @ApiOperation({
     summary:
@@ -78,6 +82,7 @@ export class CapturesController {
   }
 
   @Get(':id')
+  @Returns('CaptureInfo')
   @Access('viewer', 'capture')
   @ApiOperation({ summary: 'One capture, with its state read through its merge request' })
   get(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<CaptureInfo> {
@@ -85,6 +90,7 @@ export class CapturesController {
   }
 
   @Post(':id/approve')
+  @Returns('CaptureInfo')
   @Access('editor', 'capture')
   @ApiOperation({
     summary:
@@ -95,6 +101,7 @@ export class CapturesController {
   }
 
   @Post(':id/reject')
+  @Returns('CaptureInfo')
   @Access('editor', 'capture')
   @ApiOperation({
     summary: 'Reject a staged capture. A proposed one is turned down by closing its merge request (409 with mergeRequestId)',
@@ -120,6 +127,7 @@ export class AssistantCaptureController {
   constructor(private readonly inbox: CaptureInboxService) {}
 
   @Post('messages/:id/capture')
+  @Returns('CaptureResult')
   @Access('editor', 'assistant-message', { capture: true })
   @ApiOperation({
     summary:

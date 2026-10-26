@@ -8,7 +8,8 @@ import type {
   AssistantReviewResponse,
   AssistantSuggestResponse,
 } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { api } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -35,11 +36,11 @@ function severityLabel(s: string): string {
   return s === 'error' ? 'mr.severityError' : s === 'warning' ? 'mr.severityWarning' : 'mr.severitySuggestion'
 }
 
-async function call<T>(kind: string, path: string, body: Record<string, unknown>): Promise<T | null> {
+async function call<T>(kind: string, send: () => Promise<unknown>): Promise<T | null> {
   busy.value = kind
   error.value = null
   try {
-    return await apiFetch<T>(path, { method: 'POST', body: JSON.stringify(body) })
+    return (await send()) as T
   } catch (e) {
     error.value = (e as Error).message
     return null
@@ -49,29 +50,36 @@ async function call<T>(kind: string, path: string, body: Record<string, unknown>
 }
 
 async function runReview() {
-  review.value = await call<AssistantReviewResponse>('review', '/v1/assistant/review', {
-    workspaceId: getWorkspaceId(),
-    title: props.title,
-    markdown: props.markdown,
-  })
+  review.value = await call<AssistantReviewResponse>('review', () =>
+    api.post('/v1/assistant/review', {
+      body: { workspaceId: getWorkspaceId(), title: props.title, markdown: props.markdown },
+      config: { timeout: 0 },
+    }),
+  )
 }
 
 async function runRelated() {
-  related.value = await call<AssistantRelatedResponse>('related', '/v1/assistant/related', {
-    workspaceId: getWorkspaceId(),
-    text: props.markdown || props.title,
-    limit: 5,
-  })
+  related.value = await call<AssistantRelatedResponse>('related', () =>
+    api.post('/v1/assistant/related', {
+      body: { workspaceId: getWorkspaceId(), text: props.markdown || props.title, limit: 5 },
+      config: { timeout: 0 },
+    }),
+  )
 }
 
 async function runSuggest() {
   if (!instruction.value.trim()) return
-  suggestion.value = await call<AssistantSuggestResponse>('suggest', '/v1/assistant/suggest', {
-    workspaceId: getWorkspaceId(),
-    title: props.title,
-    markdown: props.markdown,
-    instruction: instruction.value,
-  })
+  suggestion.value = await call<AssistantSuggestResponse>('suggest', () =>
+    api.post('/v1/assistant/suggest', {
+      body: {
+        workspaceId: getWorkspaceId(),
+        title: props.title,
+        markdown: props.markdown,
+        instruction: instruction.value,
+      },
+      config: { timeout: 0 },
+    }),
+  )
 }
 </script>
 

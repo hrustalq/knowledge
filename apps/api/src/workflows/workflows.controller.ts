@@ -38,6 +38,7 @@ import {
   WorkflowNodeEventDto,
   WorkflowRunEventDto,
 } from './workflows.dto.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * Dynamic document workflows (docs/features/17).
@@ -64,6 +65,7 @@ export class WorkflowsController {
   // Also before `:id`, for the reason the runs block gives.
 
   @Post('draft')
+  @Returns('DraftWorkflowResponse')
   @Access('admin', 'body')
   @ApiOperation({
     summary: 'Design a workflow by describing it — returns a proposal, never a saved row',
@@ -82,6 +84,7 @@ export class WorkflowsController {
   // `GET /v1/documents/tree` precedes `GET /v1/documents/:id`).
 
   @Get('runs')
+  @Returns('ListWorkflowRunsResponse')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'projectId', required: false })
@@ -100,6 +103,7 @@ export class WorkflowsController {
   }
 
   @Post('runs')
+  @Returns('WorkflowRunInfo')
   @Access('editor', 'body')
   @ApiOperation({
     summary: 'Start a run against a page (409 when one is already in flight for that page)',
@@ -112,6 +116,7 @@ export class WorkflowsController {
   }
 
   @Get('runs/:id')
+  @Returns('WorkflowRunResponse')
   @Access('viewer', 'workflow-run')
   @ApiOperation({ summary: 'A run with its frozen graph and its node tree — the intermediate results' })
   getRun(@Param('id', ParseUUIDPipe) id: string): Promise<WorkflowRunResponse> {
@@ -119,6 +124,7 @@ export class WorkflowsController {
   }
 
   @Post('runs/:id/events')
+  @Returns('WorkflowRunInfo')
   @Access('editor', 'workflow-run')
   @ApiOperation({ summary: 'Pause, resume or cancel a run (409 when the machine refuses the transition)' })
   runEvent(
@@ -130,6 +136,7 @@ export class WorkflowsController {
   }
 
   @Patch('runs/:id/nodes/:nodeId')
+  @Returns('WorkflowRunNodeInfo')
   @Access('editor', 'workflow-run')
   @ApiOperation({ summary: 'Edit a draft before approving it' })
   updateNode(
@@ -141,6 +148,7 @@ export class WorkflowsController {
   }
 
   @Post('runs/:id/nodes/:nodeId/events')
+  @Returns('WorkflowNodeEventResponse')
   @Access('editor', 'workflow-run')
   @ApiOperation({
     summary:
@@ -161,6 +169,7 @@ export class WorkflowsController {
   // --------------------------------------------------------- definitions
 
   @Get()
+  @Returns('ListWorkflowsResponse')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'projectId', required: false, description: 'Adds this project’s definitions to the workspace-wide ones' })
@@ -170,6 +179,7 @@ export class WorkflowsController {
   }
 
   @Post()
+  @Returns('WorkflowDefinitionInfo')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Create a workflow (400 with per-step issues when the graph is invalid)' })
   create(
@@ -180,12 +190,14 @@ export class WorkflowsController {
   }
 
   @Get(':id')
+  @Returns('WorkflowDefinitionInfo')
   @Access('viewer', 'workflow-definition')
   get(@Param('id', ParseUUIDPipe) id: string): Promise<WorkflowDefinitionInfo> {
     return this.workflows.get(id);
   }
 
   @Patch(':id')
+  @Returns('WorkflowDefinitionInfo')
   @Access('admin', 'workflow-definition')
   @ApiOperation({ summary: 'Update a workflow; a graph change bumps its version' })
   update(
@@ -208,6 +220,7 @@ export class WorkflowsController {
   }
 
   @Post(':id/validate')
+  @Returns('ValidateWorkflowResponse')
   @Access('viewer', 'workflow-definition')
   @ApiOperation({
     summary:

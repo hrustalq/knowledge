@@ -8,12 +8,12 @@ export class ImpactAnalysisDto {
   @IsUUID()
   workspaceId!: string;
 
-  @ApiPropertyOptional({ enum: ['dependents', 'dependencies'], default: 'dependents' })
+  @ApiPropertyOptional({ enum: ['dependents', 'dependencies'], description: 'Default: dependents.' })
   @IsOptional()
   @IsIn(['dependents', 'dependencies'])
   direction?: 'dependents' | 'dependencies';
 
-  @ApiPropertyOptional({ default: 3, minimum: 1, maximum: 5 })
+  @ApiPropertyOptional({ minimum: 1, maximum: 5, description: 'Default: 3.' })
   @IsOptional()
   @IsInt()
   @Min(1, { message: vmsg('min') })

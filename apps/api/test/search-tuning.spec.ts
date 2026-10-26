@@ -31,7 +31,9 @@ const CURRENT = {
 function policy(row: Record<string, unknown> | null) {
   const prisma = { knowledgeHealthSettings: { findUnique: vi.fn(async () => row), upsert: vi.fn(async () => ({})) } };
   const config = { get: vi.fn(() => 1) };
-  return { svc: new VerificationPolicyService(prisma as never, config as never), prisma };
+  // The read cache off: every read goes to the source, as with READ_CACHE_ENABLED=false.
+  const cache = { wrap: (_ns: string, _key: string, load: () => Promise<unknown>) => load(), invalidate: async () => undefined };
+  return { svc: new VerificationPolicyService(prisma as never, config as never, cache as never), prisma };
 }
 
 describe('search knobs settings', () => {

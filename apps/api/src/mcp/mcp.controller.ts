@@ -10,6 +10,7 @@ import { MCP_SERVER_NAME } from './mcp-tools.js';
 import { noTrackOf } from '../analytics/analytics.recorder.js';
 import { CollabDraftToolsService } from '../collab/collab-draft-tools.service.js';
 import { MCP_SERVER_VERSION, McpService, type McpExtras } from './mcp.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 /**
  * MCP over Streamable HTTP (docs/features/33): the stdio server's tool set,
@@ -79,6 +80,7 @@ export class McpController {
   // Declared before nothing parameterised, but kept above the 405s anyway so
   // the literal segments read first.
   @Get('connection')
+  @Returns('McpConnectionInfo')
   @ApiOperation({ summary: 'What an MCP client needs to connect: endpoint URL, auth mode, and the tools it would get' })
   connection(@CurrentPrincipal() principal: Principal): McpConnectionInfo {
     return {
@@ -108,6 +110,7 @@ export class McpController {
    * script, for `curl … | sh` from the repository root.
    */
   @Get('capture-kit')
+  @Returns('CaptureKitResponse')
   @ApiQuery({ name: 'client', enum: CAPTURE_KIT_CLIENTS })
   @ApiOperation({
     summary:

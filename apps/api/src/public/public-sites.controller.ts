@@ -45,6 +45,7 @@ import { PublicRateLimitGuard, clientIp } from './public-rate-limit.js';
 import { PublicSiteSearchService } from './public-site-search.service.js';
 import { PublicSitesService } from './public-sites.service.js';
 import { SiteSessionService } from './site-session.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 export class ResolveSiteQueryDto {
   @ApiPropertyOptional({ description: 'Path mode: the site slug from `/pub/<slug>`' })
@@ -273,6 +274,7 @@ export class PublicSitesController {
   }
 
   @Get('widget')
+  @Returns('PublicSiteWidgetResponse')
   @ApiOperation({ summary: 'What the Ask widget’s frame needs: the site’s chrome and the origins that may embed it' })
   @ApiResponse({ status: 404, description: 'No live site there, or it does not answer questions' })
   widget(@Query() query: WidgetSiteQueryDto): Promise<PublicSiteWidgetResponse> {
@@ -286,6 +288,7 @@ export class PublicSitesController {
    * model is called.
    */
   @Post(':siteId/ask')
+  @Returns('PublicSiteAskResponse')
   @HttpCode(200)
   @ApiOperation({ summary: 'Answer a question from one version of a live site, citing its pages' })
   @ApiResponse({ status: 404, description: 'No live site with this id, or it does not answer questions' })
@@ -305,6 +308,7 @@ export class PublicSitesController {
    * viewer may not see is a 404, and a hidden child is simply not listed.
    */
   @Get(':siteId/tree')
+  @Returns('PublicSiteTreeResponse')
   @ApiOperation({ summary: 'The children of one page of a live site (or its top level), as the viewer sees them' })
   @ApiResponse({ status: 404, description: 'No live site with this id, no such version, or a parent the viewer may not see' })
   treeLevel(
@@ -316,6 +320,7 @@ export class PublicSitesController {
   }
 
   @Get(':siteId/search')
+  @Returns('PublicSiteSearchResponse')
   @ApiOperation({ summary: "Search one version of a live site: its published pages only, at the revisions it shows" })
   @ApiResponse({ status: 400, description: 'A parameter the route does not read, such as a workspace or project filter' })
   @ApiResponse({ status: 404, description: 'No live site with this id, or no such version' })
@@ -329,6 +334,7 @@ export class PublicSitesController {
   }
 
   @Get(':siteId/facets')
+  @Returns('PublicSiteFacetsResponse')
   @ApiOperation({ summary: 'The categories and tags a viewer can filter one version of a live site by, with page counts' })
   @ApiResponse({ status: 404, description: 'No live site with this id, or no such version' })
   facets(

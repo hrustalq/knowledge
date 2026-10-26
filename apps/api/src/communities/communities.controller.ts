@@ -10,6 +10,7 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { ListReleaseTagsQueryDto } from '../temporal/temporal.dto.js';
 import { MAX_COMMUNITY_LEVELS } from '../agents/communities.js';
 import { CommunitiesService } from './communities.service.js';
+import { Returns } from '../common/returns.decorator.js';
 
 export class ListCommunitiesQueryDto extends ListReleaseTagsQueryDto {
   @ApiPropertyOptional({ maxLength: 2000, description: 'A broad question; communities closest to it first. Largest first when absent' })
@@ -45,6 +46,7 @@ export class CommunitiesController {
   ) {}
 
   @Get('communities')
+  @Returns('ListCommunitiesResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Communities of related pages with their summaries, closest to a question first' })
   async list(@Query() query: ListCommunitiesQueryDto, @CurrentPrincipal() principal: Principal): Promise<ListCommunitiesResponse> {

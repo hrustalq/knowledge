@@ -12,12 +12,11 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import type {
-  ListWorkspaceCandidatesResponse,
-  ListWorkspaceMembersResponse,
   WorkspaceCandidate,
   WorkspaceRole,
 } from '@knowledge/contracts'
-import { apiFetch } from '@/lib/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import { api, fetchApi } from '@/api/queries'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
@@ -41,15 +40,19 @@ const role = ref<WorkspaceRole>('editor')
 const adding = ref(false)
 const error = ref<string | null>(null)
 const added = ref<{ email: string; role: WorkspaceRole }[]>([])
+const queryClient = useQueryClient()
 
 // Candidate lookup is server-side and already excludes existing members, so
 // the picker cannot offer someone who is on the list.
 const cache = new Map<string, WorkspaceCandidate>()
 async function loadCandidates(query: string): Promise<AutocompleteOption[]> {
-  const params = new URLSearchParams({ limit: '20' })
-  if (query.trim()) params.set('q', query.trim())
-  const res = await apiFetch<ListWorkspaceCandidatesResponse>(
-    `/v1/workspaces/${props.workspaceId}/candidates?${params}`,
+  const q = query.trim()
+  // Fresh: an add below makes a candidate a member, and nothing announces it.
+  const res = await fetchApi(
+    queryClient,
+    '/v1/workspaces/{id}/candidates',
+    { path: { id: props.workspaceId }, query: { limit: 20, ...(q ? { q } : {}) } },
+    { fresh: true },
   )
   for (const c of res.candidates) cache.set(c.userId, c)
   return res.candidates.map((c) => ({
@@ -73,9 +76,10 @@ async function add() {
   adding.value = true
   error.value = null
   try {
-    await apiFetch<ListWorkspaceMembersResponse>(`/v1/workspaces/${props.workspaceId}/members`, {
-      method: 'POST',
-      body: JSON.stringify({ email: user.email, role: role.value }),
+    await api.post('/v1/workspaces/{id}/members', {
+      path: { id: props.workspaceId },
+      // trustedOperator: the server's default; the generated type marks it required.
+      body: { email: user.email, role: role.value, trustedOperator: false },
     })
     added.value = [...added.value, { email: user.email, role: role.value }]
     picked.value = null

@@ -25,7 +25,7 @@ import { AttachmentsService } from '../attachments/attachments.service.js';
 import { AvatarsService } from '../avatars/avatars.service.js';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
-import { etagMatches } from '../ai-readable/render.js';
+import { etagMatches } from '../common/http-cache.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from '../publishing/publishing-settings.service.js';

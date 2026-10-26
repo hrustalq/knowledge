@@ -76,3 +76,27 @@ export const api = {
   delete: <P extends PathsWithMethod<paths, 'delete'>>(url: P, opts?: RequestOptions<Op<P, 'delete'>>) =>
     request('delete', url, opts),
 }
+
+/**
+ * A route that answers a file (`GET /v1/ai/feedback/export`). `<a href>` cannot
+ * send the Authorization header, so the bytes come through the client and the
+ * caller hands them to the browser (`saveFile` in lib/api).
+ */
+export async function requestFile<M extends HttpMethod, P extends PathsWithMethod<paths, M>>(
+  method: M,
+  url: P,
+  opts?: RequestOptions<Op<P, M>>,
+): Promise<{ blob: Blob; filename: string | null }> {
+  const res = await http.request<Blob>({
+    method,
+    url: buildUrl(url as string, opts?.path as Record<string, unknown> | undefined),
+    params: opts?.query,
+    data: opts?.body,
+    signal: opts?.signal,
+    responseType: 'blob',
+    ...opts?.config,
+  })
+  const disposition = String(res.headers['content-disposition'] ?? '')
+  const match = /filename="?([^";]+)"?/.exec(disposition)
+  return { blob: res.data, filename: match?.[1] ?? null }
+}

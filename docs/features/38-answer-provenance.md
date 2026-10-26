@@ -596,7 +596,7 @@ with `make backtest`, and nothing in search reads `answer_feedback`.
   (`GET /v1/ai/feedback`, `/summary`, `/export`); `scripts/backtest.main.ts`
   (`--export-feedback`, `--feedback`)
 - `apps/web/src/components/ai/AiFeedbackPanel.vue`, `pages/AiSettingsPage.vue`
-  (tab `feedback`), `lib/api.ts` (`apiFetchBlob`)
+  (tab `feedback`), `api/client.ts` (`requestFile`)
 - Specs: `apps/api/test/answer-citations.spec.ts`, `answer-confidence.spec.ts`,
   `provenance.spec.ts`, `answer-feedback.spec.ts`, `knowledge-issues.spec.ts`,
   `coverage.spec.ts`, `feedback-dataset.spec.ts`, `mcp-http.spec.ts`;

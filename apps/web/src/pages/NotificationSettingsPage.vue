@@ -23,18 +23,20 @@ import { RouterLink } from 'vue-router'
 import { useVirtualList } from '@vueuse/core'
 import { Bell, Eye, Mail } from 'lucide-vue-next'
 import type {
-  ListNotificationSubscriptionsResponse,
   NotificationCategory,
   NotificationPreferences,
   NotificationSubscriptionEntry,
 } from '@knowledge/contracts'
 import { NOTIFICATION_CATEGORIES } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import { api, fetchApi } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { categoryLook } from '@/components/notifications/notification-ui'
 
 const { t } = useI18n()
+const queryClient = useQueryClient()
 
 const prefs = ref<NotificationPreferences | null>(null)
 const subscriptions = ref<NotificationSubscriptionEntry[]>([])
@@ -68,22 +70,22 @@ const { list: watchRows, containerProps, wrapperProps } = useVirtualList(subscri
   overscan: 8,
 })
 
-function subscriptionsUrl(cursor?: string): string {
-  const params = new URLSearchParams({
-    workspaceId: getWorkspaceId(),
-    limit: String(WATCH_PAGE),
-  })
-  if (cursor) params.set('cursor', cursor)
-  return `/v1/notifications/subscriptions?${params}`
+// Fresh, every read on this page: its writes patch the lists in place, not the
+// cache, so a cached page would be the pre-edit one.
+function fetchSubscriptions(cursor?: string) {
+  return fetchApi(
+    queryClient,
+    '/v1/notifications/subscriptions',
+    { query: { workspaceId: getWorkspaceId(), limit: String(WATCH_PAGE), ...(cursor ? { cursor } : {}) } },
+    { fresh: true },
+  )
 }
 
 async function loadMoreSubscriptions() {
   if (loadingMore.value || !nextCursor.value) return
   loadingMore.value = true
   try {
-    const res = await apiFetch<ListNotificationSubscriptionsResponse>(
-      subscriptionsUrl(nextCursor.value),
-    )
+    const res = await fetchSubscriptions(nextCursor.value)
     subscriptions.value = [...subscriptions.value, ...res.subscriptions]
     nextCursor.value = res.nextCursor
   } catch {
@@ -114,8 +116,13 @@ async function load() {
   try {
     const ws = getWorkspaceId()
     const [p, s] = await Promise.all([
-      apiFetch<NotificationPreferences>(`/v1/notifications/preferences?workspaceId=${ws}`),
-      apiFetch<ListNotificationSubscriptionsResponse>(subscriptionsUrl()),
+      fetchApi(
+        queryClient,
+        '/v1/notifications/preferences',
+        { query: { workspaceId: ws } },
+        { fresh: true },
+      ),
+      fetchSubscriptions(),
     ])
     prefs.value = p
     subscriptions.value = s.subscriptions
@@ -137,9 +144,8 @@ async function save(
   // a switch that did not register the press.
   prefs.value = { ...prefs.value, ...patch }
   try {
-    prefs.value = await apiFetch<NotificationPreferences>('/v1/notifications/preferences', {
-      method: 'PUT',
-      body: JSON.stringify({ workspaceId: getWorkspaceId(), ...patch }),
+    prefs.value = await api.put('/v1/notifications/preferences', {
+      body: { workspaceId: getWorkspaceId(), ...patch },
     })
   } catch {
     prefs.value = previous
@@ -158,14 +164,13 @@ function toggleCategory(category: NotificationCategory) {
 
 async function unwatch(entry: NotificationSubscriptionEntry) {
   try {
-    await apiFetch('/v1/notifications/subscriptions', {
-      method: 'PUT',
-      body: JSON.stringify({
+    await api.put('/v1/notifications/subscriptions', {
+      body: {
         workspaceId: getWorkspaceId(),
         subjectType: entry.subjectType,
         subjectId: entry.subjectId,
         state: 'default',
-      }),
+      },
     })
     subscriptions.value = subscriptions.value.filter((s) => s.id !== entry.id)
   } catch {

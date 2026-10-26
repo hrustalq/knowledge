@@ -26,11 +26,11 @@ import {
   type CollabDenyReason,
   type CollabJoined,
   type CollabUser,
-  type UrlTicketResponse,
 } from '@knowledge/contracts'
 import { BODY_FIELD } from '@knowledge/editor-schema'
 import { META_FIELD, seedPageMeta } from '@knowledge/editor-schema/page-fields'
-import { apiFetch, getToken } from '@/lib/api'
+import { getToken } from '@/lib/api'
+import { api } from '@/api/queries'
 import { avatarColor, avatarColorDeep } from '@/lib/avatar'
 import { wsBase } from '@/api/live'
 import { SUGGESTIONS_FIELD } from '@knowledge/editor-schema/suggestions'
@@ -117,7 +117,7 @@ export function outcomeOf(reason: string): { rejoin: true } | { rejoin: false; r
 async function ticket(): Promise<string> {
   // AUTH_MODE=none: the server admits anyone, and minting would be a wasted request.
   if (!getToken()) return ''
-  return (await apiFetch<UrlTicketResponse>('/v1/auth/url-ticket', { method: 'POST' })).ticket
+  return (await api.post('/v1/auth/url-ticket')).ticket
 }
 
 export function createCollab(options: {

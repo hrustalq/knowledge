@@ -136,10 +136,10 @@ async function createSite() {
   if (creating.value || !isValidSiteSlug(createForm.slug)) return
   creating.value = true
   try {
-    const created = (await api.post('/v1/projects/{id}/site', {
+    const created = await api.post('/v1/projects/{id}/site', {
       path: { id: projectId.value },
       body: { slug: createForm.slug, rootDocumentId: createForm.root === WHOLE_PROJECT ? null : createForm.root },
-    })) as PublishedSiteSummary
+    })
     setSite(created)
     toast.success(t('site.created'))
   } catch (e) {
@@ -173,7 +173,7 @@ async function patchSite(body: Record<string, unknown>, success: string) {
   if (!site.value || busy.value) return
   busy.value = true
   try {
-    const next = (await api.patch('/v1/sites/{id}', { path: { id: site.value.id }, body })) as PublishedSiteSummary
+    const next = await api.patch('/v1/sites/{id}', { path: { id: site.value.id }, body })
     setSite(next)
     toast.success(t(success))
   } catch (e) {
@@ -342,7 +342,7 @@ async function verifyDomain(d: SiteDomainSummary) {
   if (checkingDomain.value) return
   checkingDomain.value = d.id
   try {
-    const next = (await api.post('/v1/site-domains/{id}/verify', { path: { id: d.id } })) as SiteDomainSummary
+    const next = await api.post('/v1/site-domains/{id}/verify', { path: { id: d.id } })
     if (next.verified) toast.success(t('site.domains.verifiedToast', { hostname: next.hostname }))
     else toast.error(t(`site.domains.error.${next.lastError ?? 'txtMissing'}`))
     await refetch()

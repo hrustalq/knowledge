@@ -1,12 +1,5 @@
-import {
-  DEFAULT_LOCALE,
-  isApiErrorPayload,
-  isLocale,
-  type ApiErrorCode,
-  type Locale,
-} from '@knowledge/contracts'
+import { DEFAULT_LOCALE, isLocale, type Locale } from '@knowledge/contracts'
 import { formatRelative } from './format'
-import { redirectForReauth } from './reauth'
 
 /** Fallback workspace when the caller has no memberships (AUTH_MODE=none demo flow). */
 export const DEMO_WORKSPACE_ID = '11111111-1111-4111-8111-111111111111'
@@ -41,34 +34,6 @@ const LANG_KEY = 'kn_lang'
 
 /** Which level of the sidebar's navigation stack is showing (see stores/sidebar-nav). */
 export type SidebarPane = 'projects' | 'pages'
-
-/** Typed API error so callers (and the router guard) can branch on 401/403. */
-export class ApiError extends Error {
-  readonly status: number
-
-  /**
-   * The envelope's stable code, when the body was an ApiErrorPayload.
-   *
-   * Without it callers branched on message *text* — `msg.startsWith('409')` in
-   * the editor — which breaks the moment the message is translated, and left a
-   * 413 indistinguishable from any other failure.
-   */
-  readonly code?: ApiErrorCode
-
-  /**
-   * The envelope's `details` — the flat extras a 4xx carries, such as a
-   * restricted page's `canRequestAccess` (#76). Branch on these, not on text.
-   */
-  readonly details?: Record<string, unknown>
-
-  constructor(status: number, message: string, code?: ApiErrorCode, details?: Record<string, unknown>) {
-    super(message)
-    this.name = 'ApiError'
-    this.status = status
-    this.code = code
-    this.details = details
-  }
-}
 
 // Client-side auth state lives in localStorage (+ mirrored into cookies so SSR
 // can render authenticated pages). On the server the per-request values come
@@ -439,27 +404,6 @@ export function setRailOpen(open: boolean): void {
   }
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  return (await apiRequest(path, init)).json() as Promise<T>
-}
-
-/** apiFetch for a route that answers text rather than JSON (`GET /v1/mcp/skill`). */
-export async function apiFetchText(path: string, init?: RequestInit): Promise<string> {
-  return (await apiRequest(path, init)).text()
-}
-
-/**
- * apiFetch for a route that answers a file (`GET /v1/ai/feedback/export`).
- * `<a href>` cannot send the Authorization header, so the bytes come through
- * fetch and are handed to the browser as an object URL by the caller.
- */
-export async function apiFetchBlob(path: string, init?: RequestInit): Promise<{ blob: Blob; filename: string | null }> {
-  const res = await apiRequest(path, init)
-  const disposition = res.headers.get('Content-Disposition') ?? ''
-  const match = /filename="?([^";]+)"?/.exec(disposition)
-  return { blob: await res.blob(), filename: match?.[1] ?? null }
-}
-
 /** Hand bytes to the browser as a download: an object URL clicked through a detached link. */
 export function saveFile(blob: Blob, filename: string): void {
   const href = URL.createObjectURL(blob)
@@ -468,44 +412,6 @@ export function saveFile(blob: Blob, filename: string): void {
   a.download = filename
   a.click()
   URL.revokeObjectURL(href)
-}
-
-/** The one request path — headers, credential, and the error envelope — both readers share. */
-async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
-  const token = getToken()
-  const res = await fetch(`${base}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      // The API answers in this language (docs/features/18) — errors included,
-      // and those surface straight into toasts.
-      'Accept-Language': getLocale(),
-      'x-request-id': requestTraceId(),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init?.headers ?? {}),
-    },
-  })
-  if (!res.ok) {
-    // The API normalises every failure into ApiErrorPayload, so prefer its
-    // translated message and stable code. Throwing the raw body is what put
-    // `500 Internal Server Error: {"statusCode":500,…}` into a toast; the
-    // fallback stays for anything that answers before the filter runs (a proxy,
-    // a gateway) and therefore is not an envelope at all.
-    const text = await res.text()
-    let parsed: unknown = null
-    try {
-      parsed = JSON.parse(text)
-    } catch {
-      /* not JSON — fall through to the raw-text form below */
-    }
-    if (isApiErrorPayload(parsed)) {
-      // Enforced SSO (#75): a 403 that asks for a fresh sign-in navigates to /login.
-      redirectForReauth(res.status, parsed.details)
-      throw new ApiError(res.status, parsed.message, parsed.code, parsed.details)
-    }
-    throw new ApiError(res.status, `${res.status} ${res.statusText}: ${text.slice(0, 300)}`)
-  }
-  return res
 }
 
 /**

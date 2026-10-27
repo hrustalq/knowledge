@@ -912,6 +912,8 @@ export type I18nTranslations = {
             "agentRunInFlight": string;
             "agentNeedsConnector": string;
             "agentConnectorInvalid": string;
+            "agentProjectNoRepository": string;
+            "agentProjectManyRepositories": string;
             "agentTriggerNotFound": string;
             "agentLearningNotFound": string;
             "agentLearningText": string;
@@ -1008,6 +1010,7 @@ export type I18nTranslations = {
             "pushNotSupported": string;
             "figmaAllowlistInvalid": string;
             "figmaListRefused": string;
+            "figmaOauthOff": string;
             "directionNotAllowed": string;
             "runInFlight": string;
             "webhookNotConfigured": string;

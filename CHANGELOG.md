@@ -13,6 +13,79 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.36.0] — 2026-10-27
+
+### Added
+
+- A Figma connector can **Connect with Figma** instead of taking a pasted personal access token (#557).
+  The admin approves read access on figma.com and lands back in the setup; the connection renews itself,
+  so there is no token to rotate or expiry date to type in. The connector page's *Figma access* card
+  shows which Figma account it acts as, with Reconnect and Disconnect, and an existing token connector
+  can switch from there. Without the OAuth app configured, the setup and the connector page are exactly
+  as before.
+- A project's page lists the connectors that feed it (#553), with each repository's URL and branch, and
+  a workspace admin can **Connect repository** from there: the setup wizard opens with the project
+  already chosen as the destination.
+- `POST /v1/ai/agents/archaeologist/run` takes `projectId` (#553). Without a `connectorId` it reads that
+  project's only repository, and refuses a project with none or several, naming them.
+
+### Changed
+
+- A connected repository now belongs to its project for the assistant (#553). The *Connected
+  repositories* list names each repository's project and puts the current page's project first. In a
+  workspace with no restricted projects, the same repositories are listed as before.
+
+### Security
+
+- A repository connected to a restricted project could be listed and read through the assistant's code
+  tools (`code_tree`, `code_search`, `code_outline`, `code_read`) and its work-item tools by any member,
+  including people who cannot open a page of that project (#553). It is now left out of the list, and
+  calling a tool with its connector id answers *not found*. This is checked on every call. Background
+  agent runs (archaeologist, component drafts, the PR drift sentinel) write findings the whole workspace
+  reads, so they no longer read a restricted project's repository at all. Starting one against such a
+  repository is refused when you press Run.
+- Any member could see the connectors of a restricted project, with their names, repository URLs and
+  run errors, in *Settings → Connectors*, through `GET /v1/connectors` and `knowledge_list_connectors`,
+  and by opening the connector or its runs by id (#555). Those connectors are now left out of the list
+  for anyone who cannot open the project, and their connector and run routes and MCP tools answer
+  *not found*. A member granted the project, and a workspace admin, see them as before.
+
+### Fixed
+
+- With `AUTH_MODE=none`, pages in the default workspace never finished indexing (#544): they stayed
+  *finalized*, and their ingestion jobs failed with "workspace deleted" whenever `make auth-bootstrap`
+  had not created that workspace's row. Since 0.33.0 the worker had read a missing row as a deleted
+  workspace. Only a deleted workspace (#479) now stops indexing, the same rule the API applies. A job
+  refused for a deleted workspace is no longer retried by the stale sweeper on every tick, where it
+  could crowd out the retry of genuinely failed jobs.
+- The Figma connector's **Test connection** failed with "the token needs the `projects:read` scope"
+  for a token created with the scopes Figma offers today (#549). Figma has renamed projects to folders, and a
+  token issued with the new `folders:read` scope cannot call the old project endpoints. The allowlist is
+  now listed through Figma's folder endpoints, which also reach files in nested subfolders that were
+  previously reported as outside the allowlist. When Figma refuses an entry, the message now includes
+  Figma's own reason. The form asks for `folders:read`, and the allowlist accepts `folder:<id>` and
+  `…/files/folder/<id>` links beside the existing `project:` ones.
+- A git connector's repository step fell back to the Repository URL and token fields with no explanation
+  when the GitHub App was only partly configured, so it looked like a deliberate PAT-only setup (#552).
+  An admin now sees which keys are missing (the App's ID, private key and slug, or OAuth's client ID,
+  secret and `SETTINGS_ENCRYPTION_KEY`) above those fields, and the API logs the same at boot. With
+  every `GITHUB_APP_*` key empty the step looks as it did before: PAT fields, no hint.
+
+### Operations
+
+- Connect with Figma (#557) needs a **private** Figma OAuth app (a draft app works only for its developer
+  and plan admins) with the redirect URL `$API_PUBLIC_URL/v1/connectors/figma/callback` and the scopes
+  `folders:read file_content:read file_metadata:read current_user:read`. Set `FIGMA_OAUTH_CLIENT_ID` as a
+  GH `production` variable and `FIGMA_OAUTH_CLIENT_SECRET` as a secret; both default to empty, which
+  keeps the feature off. It also needs `SETTINGS_ENCRYPTION_KEY`. Migration
+  `20261217100000_figma_oauth_grants` only adds a table, so it survives a rollback; a rolled-back image
+  cannot read the grants, and an OAuth-connected connector then fails Test connection until it is rolled
+  forward or given a token.
+- Production now carries the GitHub App keys (#552): `GH_APP_ID`, `GH_APP_SLUG`, `GH_APP_CLIENT_ID`,
+  `GH_APP_CLIENT_SECRET` and `GH_APP_PRIVATE_KEY` (base64 of the `.pem` on one line) in the GitHub
+  `production` environment. The App must allow installation on **Any account**, or no organisation can
+  install it. Existing token-based connectors are unaffected.
+
 ## [0.35.0] — 2026-10-26
 
 ### Added
@@ -5036,7 +5109,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.35.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.36.0...HEAD
+[0.36.0]: https://github.com/hrustalq/knowledge/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/hrustalq/knowledge/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/hrustalq/knowledge/compare/v0.33.1...v0.34.0
 [0.33.1]: https://github.com/hrustalq/knowledge/compare/v0.33.0...v0.33.1

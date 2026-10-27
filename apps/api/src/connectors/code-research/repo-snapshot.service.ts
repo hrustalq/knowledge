@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Connector } from '@prisma/client';
 import type { Env } from '../../config/env.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { canSeeProject, hidesAnything, type AccessScope } from '../../permissions/access-scope.js';
 import { t } from '../../i18n/t.js';
 import { ConnectorsService } from '../connectors.service.js';
 import {
@@ -28,6 +29,9 @@ export interface RepoSummary {
   /** The configured branch, or null when the connector follows the repository's default. */
   branch: string | null;
   subdir: string;
+  /** The project the repository is connected to (#553): where its pages land, and whose visibility it follows. */
+  projectId: string;
+  projectName: string;
 }
 
 /** A repository's files at one point in time, scoped to the connector's `subdir`. */
@@ -99,16 +103,25 @@ export class RepoSnapshotService {
   }
 
   /**
-   * The repositories this workspace may read — what decides whether the tools
-   * are offered at all, and what the prompt clause lists. No network: it is
+   * The repositories `scope` may read — what decides whether the tools are
+   * offered at all, and what the prompt clause lists. No network: it is
    * called on every chat turn.
+   *
+   * A repository belongs to its connector's project (#553), so it follows
+   * that project's visibility: a restricted project's repositories are not
+   * listed to whoever cannot open the project. `projectId` (the turn's own
+   * project) only ranks its repositories first; it hides nothing.
    */
-  async listRepos(workspaceId: string): Promise<RepoSummary[]> {
+  async listRepos(scope: AccessScope, projectId?: string): Promise<RepoSummary[]> {
     const rows = await this.prisma.connector.findMany({
-      where: { workspaceId, enabled: true, kind: { in: [...REPO_CONNECTOR_KINDS] } },
+      where: { workspaceId: scope.workspaceId, enabled: true, kind: { in: [...REPO_CONNECTOR_KINDS] } },
+      include: { project: { select: { id: true, name: true, restricted: true } } },
       orderBy: { createdAt: 'asc' },
     });
-    return rows.map((row) => this.summarize(row));
+    return rows
+      .filter((row) => canSeeProject(scope, row.project))
+      .sort((a, b) => Number(b.projectId === projectId) - Number(a.projectId === projectId))
+      .map((row) => this.summarize(row, row.project.name));
   }
 
   /**
@@ -117,12 +130,13 @@ export class RepoSnapshotService {
    * Eligibility is re-checked on every call rather than trusted from whoever
    * offered the tool: a turn outlives a settings change, and a connector
    * disabled mid-thread has to actually go away. A connector in another
-   * workspace reads as not found — the id is the model's to guess, and a 403
-   * would confirm the guess.
+   * workspace, or in a project `scope` cannot open (#553), reads as not
+   * found — the id is the model's to guess, and a 403 would confirm the guess.
+   * A caller acting for no person passes `systemScope`.
    */
-  async open(connectorId: string, workspaceId: string): Promise<RepoSnapshot> {
+  async open(connectorId: string, scope: AccessScope): Promise<RepoSnapshot> {
     const row = await this.connectors.require(connectorId);
-    if (row.workspaceId !== workspaceId) {
+    if (row.workspaceId !== scope.workspaceId || !(await this.visible(row, scope))) {
       throw new NotFoundException(t('error.connector.notFound', { id: connectorId }));
     }
     if (!REPO_CONNECTOR_KINDS.has(row.kind)) {
@@ -167,6 +181,16 @@ export class RepoSnapshotService {
   }
 
   // --- internals ---
+
+  /** `canSeeProject` on the connector's project; no query when the scope hides nothing. */
+  private async visible(row: Connector, scope: AccessScope): Promise<boolean> {
+    if (!hidesAnything(scope)) return true;
+    const project = await this.prisma.project.findUnique({
+      where: { id: row.projectId },
+      select: { id: true, restricted: true },
+    });
+    return project !== null && canSeeProject(scope, project);
+  }
 
   private async load(row: Connector): Promise<RepoSnapshot> {
     // The context is kept alive inside the snapshot's `blobUrl` closure. It
@@ -221,7 +245,7 @@ export class RepoSnapshotService {
     }
   }
 
-  private summarize(row: Connector): RepoSummary {
+  private summarize(row: Connector, projectName: string): RepoSummary {
     const config = (row.config ?? {}) as Record<string, unknown>;
     const branch = typeof config.branch === 'string' ? config.branch.trim() : '';
     const subdir = typeof config.subdir === 'string' ? config.subdir.replace(/^\/+|\/+$/g, '') : '';
@@ -231,6 +255,8 @@ export class RepoSnapshotService {
       repoUrl: typeof config.repoUrl === 'string' ? config.repoUrl : '',
       branch: branch || null,
       subdir,
+      projectId: row.projectId,
+      projectName,
     };
   }
 }

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { t } from '../../i18n/t.js';
+import { systemScope } from '../../permissions/access-scope.js';
 import { ConnectorsService } from '../connectors.service.js';
 import { importOutline, collectImportEdges, SFC_FILE } from '../adapters/import-edges.js';
 import { createFileResolver } from '../adapters/import-resolver.js';
@@ -68,7 +69,8 @@ export class PullRequestService {
   async headImports(connectorId: string, workspaceId: string, ref: string, changed: PullRequestFile[]): Promise<HeadImports> {
     const [ctx, snapshot] = await Promise.all([
       this.context(connectorId, workspaceId),
-      this.snapshots.open(connectorId, workspaceId),
+      // Overlay data for the drift check, never shown to a reader as code.
+      this.snapshots.open(connectorId, systemScope(workspaceId)),
     ]);
     const files = new Map(snapshot.files);
     for (const f of changed) {

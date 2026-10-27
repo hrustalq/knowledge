@@ -72,6 +72,19 @@ export class GithubAppService {
   }
 
   /**
+   * The App-half keys still unset or unreadable, for the picker's admin hint
+   * (#552). The slug is listed though `configured` does not need it: without
+   * one the Install button has nowhere to go.
+   */
+  get missing(): string[] {
+    return [
+      !this.appId && 'GITHUB_APP_ID',
+      !this.privateKey && 'GITHUB_APP_PRIVATE_KEY',
+      !this.slug && 'GITHUB_APP_SLUG',
+    ].filter((key): key is string => Boolean(key));
+  }
+
+  /**
    * Where to send a browser to install the App on another account or org.
    *
    * `state` rides along so the callback can tell which workspace asked. GitHub

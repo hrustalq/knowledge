@@ -17,6 +17,7 @@ import { ConnectorsService } from './connectors.service.js';
 import { GithubCoreModule } from './github/github-core.module.js';
 import { RepoWikiService } from './repo-wiki.service.js';
 import { FigmaFilesService } from '../embeds/figma-files.service.js';
+import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
 
 /**
  * Connector configuration, credentials, links and the sync engine, with no
@@ -54,6 +55,8 @@ import { FigmaFilesService } from '../embeds/figma-files.service.js';
     CodeImportsService,
     // The Figma connector's files and calls (#470): the embed picker and renderer, and pinning on pull.
     FigmaFilesService,
+    // Its OAuth grants (#557): every Figma call resolves its token here, in both processes.
+    FigmaOauthService,
   ],
   exports: [
     ConnectorsService,
@@ -69,6 +72,7 @@ import { FigmaFilesService } from '../embeds/figma-files.service.js';
     // routes and MCP tools of later phases.
     CodeImportsService,
     FigmaFilesService,
+    FigmaOauthService,
   ],
 })
 export class ConnectorsCoreModule {}

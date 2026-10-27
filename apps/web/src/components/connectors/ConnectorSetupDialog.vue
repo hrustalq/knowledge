@@ -17,14 +17,18 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { useQueryClient } from '@tanstack/vue-query'
-import { ArrowLeft, Check, CircleAlert, History, Loader2, Plug, X } from 'lucide-vue-next'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { ArrowLeft, Check, CircleAlert, Figma, History, Loader2, Plug, X } from 'lucide-vue-next'
 import {
   API_SPECS_CONFIG_KEY,
   CONNECTOR_KIND_INFO,
   DRIFT_CHECK_CONFIG_KEY,
   DRIFT_CHECK_MODES,
   DRIFT_FLAG_PAGES_CONFIG_KEY,
+  FIGMA_ALLOWLIST_CONFIG_KEY,
+  FIGMA_GRANT_CONFIG_KEY,
+  FIGMA_HANDLE_CONFIG_KEY,
+  FIGMA_TOKEN_EXPIRES_CONFIG_KEY,
   connectorKindInfo,
   driftCheckMode,
   driftFlagPages,
@@ -36,8 +40,11 @@ import type {
   ConnectorKind,
   ConnectorSummary,
   ConnectorSyncMode,
+  FigmaOauthStatusResponse,
 } from '@knowledge/contracts'
 import { api } from '@/api/client'
+import { apiQueryOptions } from '@/api/queries'
+import { errorMessage } from '@/api/errors'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -45,6 +52,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import ImportStepper from '@/components/import/ImportStepper.vue'
 import { getWorkspaceId } from '@/lib/api'
+import { openOauthTab } from '@/lib/oauth-tab'
 import { useProjectsStore } from '@/stores/projects'
 import {
   COULD_NOT_CONNECT,
@@ -62,7 +70,17 @@ import {
 import GithubBranchPicker from './GithubBranchPicker.vue'
 import GithubRepoPicker from './GithubRepoPicker.vue'
 
-const props = defineProps<{ open: boolean; editing: ConnectorSummary | null }>()
+const props = defineProps<{
+  open: boolean
+  editing: ConnectorSummary | null
+  /**
+   * A new connection started from a project's page (#553): a repository
+   * (`codebase`) whose destination is that project. The destination step still
+   * shows it, so it can be changed, and a setup parked elsewhere is not resumed
+   * into it.
+   */
+  projectId?: string
+}>()
 const emit = defineEmits<{ 'update:open': [boolean] }>()
 
 const { t, te } = useI18n()
@@ -90,6 +108,8 @@ const current = computed(() => stepIndex(kind.value, state.value, childStep.valu
 const stepMeta = computed(() => kindStepMeta(kind.value, childStep.value))
 const fieldsFor = computed(() =>
   (stepMeta.value?.fields ?? [])
+    // A Figma grant renews itself, so there is no token expiry to type in (#557).
+    .filter((key) => !(key === FIGMA_TOKEN_EXPIRES_CONFIG_KEY && figmaHandle.value))
     .map((key) => info.value?.fields.find((f) => f.key === key))
     .filter((f): f is NonNullable<typeof f> => !!f)
     .map((f) => ({
@@ -159,6 +179,51 @@ function applyRepoPick(pick: { repoUrl: string; installationId: string; defaultB
   // A picked repository needs no pasted token; clearing it stops a stale one
   // being saved alongside an installation that supersedes it.
   patch({ credential: '' })
+}
+
+/**
+ * Connect with Figma (#557), offered when the deployment has the OAuth app.
+ * The grant is bound to a connector row by the API's callback, so an unsaved
+ * setup saves its draft first — the same reason testing does. The handle comes
+ * back on the connector, reread when this tab regains focus.
+ */
+const figmaOauth = useQuery(
+  computed(() => ({
+    ...apiQueryOptions('/v1/connectors/figma/oauth', { query: { workspaceId } }),
+    enabled: kind.value === 'figma',
+  })),
+)
+const figmaOffered = computed(() => (figmaOauth.data.value as FigmaOauthStatusResponse | undefined)?.configured ?? false)
+const figmaHandle = computed(() => context.value?.config[FIGMA_HANDLE_CONFIG_KEY] ?? '')
+const connectingFigma = ref(false)
+
+async function connectFigma() {
+  const ctx = context.value
+  if (!ctx) return
+  connectingFigma.value = true
+  try {
+    let id = ctx.connectorId ?? ctx.editingId
+    await openOauthTab(
+      async () => {
+        id ??= await saveConnector(ctx, true)
+        patch({ connectorId: id })
+        const res = await api.get('/v1/connectors/{id}/figma/authorize', {
+          path: { id },
+          query: { returnTo: `/settings/connectors/${id}` },
+        })
+        return res.url
+      },
+      async () => {
+        const { connector } = await api.get('/v1/connectors/{id}', { path: { id: id! } })
+        setField(FIGMA_GRANT_CONFIG_KEY, connector.config[FIGMA_GRANT_CONFIG_KEY] ?? '')
+        setField(FIGMA_HANDLE_CONFIG_KEY, connector.config[FIGMA_HANDLE_CONFIG_KEY] ?? '')
+      },
+    )
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  } finally {
+    connectingFigma.value = false
+  }
 }
 
 // --- the services the machine invokes ------------------------------------
@@ -248,7 +313,9 @@ function boot(resume: boolean) {
             preserveHierarchy: editing.preserveHierarchy,
             editingId: editing.id,
           }
-        : {}),
+        : props.projectId
+          ? { projectId: props.projectId }
+          : {}),
     },
     { test: testConnection, save: (ctx) => saveConnector(ctx) },
     snapshot,
@@ -279,8 +346,8 @@ watch(
   ([open, editing]) => {
     if (!open) return
     if (!projects.loaded) void projects.fetchList()
-    kind.value = editing ? editing.kind : kind.value
-    boot(!editing)
+    kind.value = editing ? editing.kind : props.projectId ? 'codebase' : kind.value
+    boot(!editing && !props.projectId)
   },
   { immediate: true },
 )
@@ -492,8 +559,33 @@ function startOver() {
           <!-- Hidden once an installation is carrying the credential: asking for
                a token that will never be read is how a form teaches the wrong
                thing about how it works. -->
-          <label v-if="stepMeta?.credential && !pickedInstallation" class="block space-y-1.5">
-            <span class="text-sm font-medium">{{ t('connectors.credential') }}</span>
+          <!-- Connect with Figma (#557): above the token, which stays the
+               alternative and disappears once a grant carries the credential. -->
+          <div v-if="stepMeta?.credential && kind === 'figma' && (figmaOffered || figmaHandle)" class="space-y-1.5">
+            <p v-if="figmaHandle" class="flex min-w-0 items-center gap-1.5 text-sm">
+              <Check class="text-panel-tip-ink size-4 shrink-0" aria-hidden="true" />
+              <span class="truncate">{{ t('connectors.figmaAccess.connectedAs', { handle: figmaHandle }) }}</span>
+            </p>
+            <template v-else>
+              <Button
+                type="button"
+                variant="outline"
+                class="w-full"
+                :disabled="connectingFigma || !context?.config[FIGMA_ALLOWLIST_CONFIG_KEY]?.trim()"
+                @click="connectFigma"
+              >
+                <Loader2 v-if="connectingFigma" class="size-4 animate-spin" aria-hidden="true" />
+                <Figma v-else class="size-4" aria-hidden="true" />
+                {{ t('connectors.figmaAccess.connect') }}
+              </Button>
+              <p class="text-muted-foreground text-xs">
+                {{ context?.config[FIGMA_ALLOWLIST_CONFIG_KEY]?.trim() ? t('connectors.figmaAccess.connectHint') : t('connectors.figmaAccess.needsAllowlist') }}
+              </p>
+            </template>
+          </div>
+
+          <label v-if="stepMeta?.credential && !pickedInstallation && !figmaHandle" class="block space-y-1.5">
+            <span class="text-sm font-medium">{{ kind === 'figma' && figmaOffered ? t('connectors.figmaAccess.or') : t('connectors.credential') }}</span>
             <Input
               :model-value="context?.credential ?? ''"
               type="password"

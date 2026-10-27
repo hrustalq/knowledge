@@ -2852,6 +2852,35 @@ model GithubUserToken {
   @@map("github_user_tokens")
 }
 
+/// A Figma OAuth grant (#557, docs/features/64), one row per Figma person.
+///
+/// Figma keeps one access token per app per user and a refresh invalidates the
+/// previous one, so connectors reference this row (`config.figmaGrant`) rather
+/// than holding a copy that could invalidate another. Belongs to no workspace:
+/// it is pruned once no connector references it.
+model FigmaOauthGrant {
+  /// Figma's `user_id_string`.
+  figmaUserId String @id @map("figma_user_id")
+  handle      String
+
+  /// secret-box envelopes, like the connector credential. Never leave the API.
+  accessToken  String   @map("access_token")
+  refreshToken String   @map("refresh_token")
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz
+
+  /// The refresh lease: set by the one caller whose guarded update won, so the
+  /// API and the worker never refresh the same grant at once.
+  refreshingUntil DateTime? @map("refreshing_until") @db.Timestamptz
+
+  /// Who last connected it. No FK, per house policy.
+  connectedBy String? @map("connected_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("figma_oauth_grants")
+}
+
 /// A workspace's canonical spelling for an entity key: `сервис:биллинг` →
 /// `service:billing` (docs/features/28).
 ///

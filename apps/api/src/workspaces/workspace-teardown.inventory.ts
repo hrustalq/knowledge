@@ -153,6 +153,8 @@ export const WORKSPACE_TEARDOWN = {
   PasswordResetToken: 'platform',
   EmailVerificationToken: 'platform',
   GithubUserToken: 'platform',
+  // Referenced from connectors' config, pruned by `pruneFigmaGrants` once none does.
+  FigmaOauthGrant: 'platform',
 } as const satisfies Record<Prisma.ModelName, 'workspace' | 'audit' | 'page' | 'parent' | 'platform'>;
 
 /** The `workspace` models in deletion order. */

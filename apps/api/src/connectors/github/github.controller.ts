@@ -64,7 +64,7 @@ export class GithubController {
   ): Promise<GithubInstallationsResponse> {
     const empty = { installations: [], authorizeUrl: null, installUrl: null };
     if (!this.app.configured || !this.oauth.configured) {
-      return { configured: false, connected: false, ...empty };
+      return { configured: false, connected: false, ...empty, ...this.partial() };
     }
 
     const userId = principal.userId;
@@ -204,7 +204,25 @@ export class GithubController {
   private redirectUri(): string {
     return this.oauth.redirectUri();
   }
+
+  /**
+   * Which keys a half-configured deployment still lacks (#552). Nothing when
+   * every picker key is empty: that is the supported off state and stays
+   * silent. The webhook secret is not a picker key — trackers use it alone.
+   */
+  private partial(): { missing?: string[] } {
+    const touched = PICKER_KEYS.some((key) => this.config.get(key, { infer: true }).trim());
+    return touched ? { missing: [...this.app.missing, ...this.oauth.missing] } : {};
+  }
 }
+
+const PICKER_KEYS = [
+  'GITHUB_APP_ID',
+  'GITHUB_APP_SLUG',
+  'GITHUB_APP_PRIVATE_KEY',
+  'GITHUB_APP_CLIENT_ID',
+  'GITHUB_APP_CLIENT_SECRET',
+] as const;
 
 /** GitHub ids are 64-bit integers; anything else is not one and must not reach BigInt(). */
 function isNumericId(value: string | undefined): value is string {

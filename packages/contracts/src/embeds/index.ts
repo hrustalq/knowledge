@@ -95,6 +95,25 @@ export function canonicalizeEmbedUrl(raw: string): string {
 /** The `figma` connector's config keys. */
 export const FIGMA_ALLOWLIST_CONFIG_KEY = 'allowlist';
 export const FIGMA_TOKEN_EXPIRES_CONFIG_KEY = 'tokenExpiresAt';
+/**
+ * The OAuth grant a connector dials with (#557): the Figma user id its
+ * `figma_oauth_grants` row is keyed by, and that person's handle for the card.
+ * Server-owned: only the OAuth callback writes them, and a create or update
+ * that names them is ignored, so no admin can point a connector at a grant
+ * another workspace connected.
+ */
+export const FIGMA_GRANT_CONFIG_KEY = 'figmaGrant';
+export const FIGMA_HANDLE_CONFIG_KEY = 'figmaHandle';
+
+// GET /v1/connectors/figma/oauth
+export interface FigmaOauthStatusResponse {
+  /** False with the client id unset (the off switch) or no encryption key; the PAT field is then the only way in. */
+  configured: boolean;
+}
+// GET /v1/connectors/:id/figma/authorize
+export interface FigmaAuthorizeResponse {
+  url: string;
+}
 
 /** Days before the typed-in expiry that the connector card starts warning. */
 export const FIGMA_TOKEN_WARN_DAYS = 14;
@@ -107,16 +126,17 @@ export interface FigmaAllowlist {
 }
 
 /**
- * The allowlist field: team and project links or `team:<id>` / `project:<id>`,
+ * The allowlist field: team and folder links or `team:<id>` / `folder:<id>`,
  * separated by whitespace or commas. Figma's links are
- * `/files/team/<id>/…`, `/files/project/<id>/…`, and either one under an
+ * `/files/team/<id>/…`, `/files/folder/<id>/…`, and either one under an
  * organization (`/files/<org>/team/<id>/…`), so the id is the number after
- * the word.
+ * the word. A folder is what Figma used to call a project, with the same id,
+ * so `project:` and `/project/` links still read as folders (#549).
  */
 export function parseFigmaAllowlist(text: string | null | undefined): FigmaAllowlist {
   const out: FigmaAllowlist = { teams: [], projects: [], invalid: [] };
   for (const entry of (text ?? '').split(/[\s,]+/).filter(Boolean)) {
-    const match = /^(team|project):(\d+)$/.exec(entry) ?? /^https:\/\/(?:www\.)?figma\.com\/files\/(?:[^/?#]+\/)*?(team|project)\/(\d+)(?:[/?#]|$)/.exec(entry);
+    const match = /^(team|project|folder):(\d+)$/.exec(entry) ?? /^https:\/\/(?:www\.)?figma\.com\/files\/(?:[^/?#]+\/)*?(team|project|folder)\/(\d+)(?:[/?#]|$)/.exec(entry);
     if (!match) out.invalid.push(entry);
     else (match[1] === 'team' ? out.teams : out.projects).push(match[2]);
   }

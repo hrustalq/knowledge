@@ -4,6 +4,8 @@ import { Prisma, type Connector, type ConnectorRun } from '@prisma/client';
 import {
   connectorKindInfo,
   CHANGELOG_CONFIG_KEY,
+  FIGMA_GRANT_CONFIG_KEY,
+  FIGMA_HANDLE_CONFIG_KEY,
   GITHUB_INSTALLATION_CONFIG_KEY,
   wikiAutoRegenerate,
   wikiEnabled,
@@ -27,11 +29,13 @@ import { assertSafeExternalUrl } from '../common/safe-url.js';
 import type { Env } from '../config/env.js';
 import { currentLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
+import { canSeeProject, type AccessScope } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { ConnectorRegistry } from './adapters/connector.registry.js';
 import { releaseMirroredAccess } from './connector-acl-release.js';
 import { GithubAppService } from './github/github-app.service.js';
+import { FigmaOauthService, pruneFigmaGrants } from '../embeds/figma-oauth.service.js';
 import type { ConnectorContext } from './adapters/connector.types.js';
 
 /** Warnings are capped: a run over a 5 000-page space must not write a novel into one row. */
@@ -79,6 +83,7 @@ export class ConnectorsService {
     private readonly registry: ConnectorRegistry,
     private readonly projects: ProjectsService,
     private readonly githubApp: GithubAppService,
+    private readonly figmaOauth: FigmaOauthService,
   ) {
     this.key = parseKey(this.config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
     this.allowPrivateUrls = this.config.get('CONNECTOR_ALLOW_PRIVATE_URLS', { infer: true });
@@ -93,12 +98,14 @@ export class ConnectorsService {
 
   // --- reads ---
 
-  async list(workspaceId: string): Promise<ConnectorSummary[]> {
+  /** The workspace's connectors in projects `scope` can open (#555), as `RepoSnapshotService.listRepos` reads them. */
+  async list(scope: AccessScope): Promise<ConnectorSummary[]> {
     const rows = await this.prisma.connector.findMany({
-      where: { workspaceId },
+      where: { workspaceId: scope.workspaceId },
+      include: { project: { select: { id: true, restricted: true } } },
       orderBy: { createdAt: 'asc' },
     });
-    return Promise.all(rows.map((row) => this.toSummary(row)));
+    return Promise.all(rows.filter((row) => canSeeProject(scope, row.project)).map((row) => this.toSummary(row)));
   }
 
   async get(connectorId: string): Promise<ConnectorSummary> {
@@ -159,7 +166,7 @@ export class ConnectorsService {
 
     await this.projects.requireProjectInWorkspace(input.projectId, input.workspaceId);
 
-    const config = input.config ?? {};
+    const config = withServerKeys(input.config ?? {}, {});
     await this.validateConfig(info.kind, config);
 
     const taken = await this.prisma.connector.findUnique({
@@ -225,7 +232,9 @@ export class ConnectorsService {
         ...keep('preserveHierarchy'),
         ...keep('syncIntervalMinutes'),
         ...keep('enabled'),
-        ...(input.config === undefined ? {} : { config: input.config as Prisma.InputJsonValue }),
+        ...(input.config === undefined
+          ? {}
+          : { config: withServerKeys(input.config, row.config) as Prisma.InputJsonValue }),
         ...(input.direction === undefined ? {} : { direction: this.checkDirection(kind, input.direction) }),
         ...(input.credential === undefined
           ? {}
@@ -246,6 +255,7 @@ export class ConnectorsService {
     // should it open them: what it mirrored becomes ordinary manual access.
     await releaseMirroredAccess(this.prisma, connectorId);
     await this.prisma.connector.delete({ where: { id: connectorId } });
+    await pruneFigmaGrants(this.prisma);
   }
 
   async testConnection(connectorId: string): Promise<ConnectorTestResponse> {
@@ -323,11 +333,22 @@ export class ConnectorsService {
         }
       : () => undefined;
 
+    // A Figma connector connected over OAuth dials with its grant (#557).
+    const grant = row.kind === 'figma' ? (row.config as Record<string, unknown> | null)?.[FIGMA_GRANT_CONFIG_KEY] : undefined;
+    const oauth =
+      typeof grant === 'string' && grant
+        ? {
+            credential: await this.figmaOauth.tokenFor(grant),
+            bearer: true,
+            renewCredential: (rejected: string) => this.figmaOauth.tokenFor(grant, rejected),
+          }
+        : { credential: await this.credentialFor(row) };
+
     return {
       connectorId: row.id,
       workspaceId: row.workspaceId,
       config: (row.config ?? {}) as Record<string, string>,
-      credential: await this.credentialFor(row),
+      ...oauth,
       webhookSecret: decryptSecret(row.webhookSecret, this.key),
       onStage,
       debug,
@@ -649,3 +670,21 @@ export function toRunInfo(row: ConnectorRun, awaitingReview = 0): ConnectorRunIn
 }
 
 export { MAX_WARNINGS };
+
+/**
+ * Config keys only the server writes (#557): the Figma grant a connector dials
+ * with is bound by the OAuth callback, never named in a request — otherwise an
+ * admin could point their connector at a grant another workspace connected.
+ * Whatever the request says, the stored values stand.
+ */
+const SERVER_CONFIG_KEYS = [FIGMA_GRANT_CONFIG_KEY, FIGMA_HANDLE_CONFIG_KEY];
+
+export function withServerKeys(incoming: Record<string, string>, stored: Prisma.JsonValue): Record<string, string> {
+  const kept = (stored ?? {}) as Record<string, unknown>;
+  const config = { ...incoming };
+  for (const key of SERVER_CONFIG_KEYS) {
+    if (typeof kept[key] === 'string') config[key] = kept[key];
+    else delete config[key];
+  }
+  return config;
+}

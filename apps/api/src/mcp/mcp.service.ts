@@ -120,7 +120,7 @@ import {
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.35.0';
+export const MCP_SERVER_VERSION = '0.36.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -663,7 +663,7 @@ export class McpService {
       },
       async ({ workspaceId }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.connectors.list(workspaceId));
+        return this.json(await this.connectors.list(await guard.scope(workspaceId)));
       },
     );
 
@@ -2587,8 +2587,15 @@ export class McpService {
         }
         return this.permissions.scopeFor(principal, workspaceId);
       },
-      connector: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnector(id), role),
-      connectorRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnectorRun(id), role),
+      // Then the connector's project visibility, as AclGuard does (#555).
+      connector: async (id: string, role: WorkspaceRole) => {
+        await check(() => this.access.workspaceOfConnector(id), role);
+        await this.permissions.requireConnectorVisible(principal, { connectorId: id });
+      },
+      connectorRun: async (id: string, role: WorkspaceRole) => {
+        await check(() => this.access.workspaceOfConnectorRun(id), role);
+        await this.permissions.requireConnectorVisible(principal, { runId: id });
+      },
       workflowRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfWorkflowRun(id), role),
       exportJob: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfExport(id), role),
     };

@@ -17,6 +17,14 @@ Changes, Glossary, Connectors, Workflows — each folded to the one number that
 decides whether to open it. Two pages answering "what is this" should not have to
 be learned twice.
 
+**Connectors (#553)** lists the connectors that feed this project — the same
+`ConnectorList` the settings tab draws, narrowed to the project on the cached
+workspace list, so a repository shows its URL and branch, and a sync, test or
+edit made here is the one made there. A workspace admin gets **Connect
+repository**, which opens the setup wizard with the kind set to *codebase* and
+the destination set to this project (still shown, still changeable); the
+widget therefore stays visible to an admin on a project with none.
+
 `?tab=` is an *opening* instruction rather than two-way state, the same contract,
 because several widgets can be open at once. A widget with nothing in it is
 filtered out entirely: the reader learns "no connectors" from its absence just as

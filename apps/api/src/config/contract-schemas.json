@@ -10971,6 +10971,28 @@
       "facts"
     ]
   },
+  "FigmaAuthorizeResponse": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "url"
+    ]
+  },
+  "FigmaOauthStatusResponse": {
+    "type": "object",
+    "properties": {
+      "configured": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "configured"
+    ]
+  },
   "FigmaPickerFileResponse": {
     "type": "object",
     "properties": {
@@ -11625,6 +11647,12 @@
       },
       "error": {
         "type": "string"
+      },
+      "missing": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
       }
     },
     "required": [

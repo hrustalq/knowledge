@@ -39,6 +39,14 @@ describe('parseFigmaAllowlist', () => {
     ).toEqual({ teams: ['111', '333'], projects: ['222', '444'], invalid: [] });
   });
 
+  it('reads folder links and ids as projects, the same id under its new name (#549)', () => {
+    expect(parseFigmaAllowlist('folder:555 https://www.figma.com/files/9876/folder/666/Web https://figma.com/files/folder/777')).toEqual({
+      teams: [],
+      projects: ['555', '666', '777'],
+      invalid: [],
+    });
+  });
+
   it('echoes what it cannot read', () => {
     expect(parseFigmaAllowlist('https://www.figma.com/design/AbCdEfGhIj12/ team:abc https://evil.test/files/team/1').invalid).toEqual([
       'https://www.figma.com/design/AbCdEfGhIj12/',
@@ -93,21 +101,61 @@ describe('figmaGet', () => {
     await expect(figmaGet(ctx(), '/v1/me')).rejects.toMatchObject({ status: 403 });
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
+
+  it('sends an OAuth connector’s token as Bearer, and renews it once on 401 (#557)', async () => {
+    const renewCredential = vi.fn(async () => 'fresh');
+    const oauth = { ...ctx(), credential: 'stale', bearer: true, renewCredential };
+    mockFetch.mockResolvedValueOnce(json({ status: 401 }, 401)).mockResolvedValueOnce(json({ handle: 'ada' }));
+    await expect(figmaGet(oauth, '/v1/me')).resolves.toEqual({ handle: 'ada' });
+    const headers = mockFetch.mock.calls.map(([, init]) => init!.headers as Record<string, string>);
+    expect(headers.map((h) => h.Authorization)).toEqual(['Bearer stale', 'Bearer fresh']);
+    expect(headers.every((h) => !('X-Figma-Token' in h))).toBe(true);
+    expect(renewCredential).toHaveBeenCalledExactlyOnceWith('stale');
+
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue(json({ status: 401 }, 401));
+    await expect(figmaGet(oauth, '/v1/me')).rejects.toMatchObject({ status: 401 });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('figmaAllowedFiles', () => {
-  it('expands teams into projects and projects into files', async () => {
+  const byPath = (paths: Record<string, unknown>) =>
     mockFetch.mockImplementation(async (url) => {
-      const path = new URL(String(url)).pathname;
-      if (path === '/v1/teams/111/projects') return json({ projects: [{ id: 501 }] });
-      if (path === '/v1/projects/501/files') return json({ files: [{ key: 'AAAAAAAAAA1', name: 'App' }] });
-      if (path === '/v1/projects/222/files') return json({ files: [{ key: 'BBBBBBBBBB2', name: 'Web' }] });
-      return json({}, 404);
+      const body = paths[new URL(String(url)).pathname];
+      return body ? json(body) : json({}, 404);
+    });
+
+  it('walks team → folder → subfolder → files on the v2 folder endpoints (#549)', async () => {
+    byPath({
+      '/v2/teams/111/folders': { name: 'Design', folders: [{ id: '501', parent_folder_id: null }] },
+      '/v2/folders/501/folders': { name: 'App', folders: [{ id: '502', parent_folder_id: '501' }] },
+      '/v2/folders/502/folders': { name: 'Flows', folders: [] },
+      '/v2/folders/222/folders': { name: 'Web', folders: [] },
+      '/v2/folders/501/files': { name: 'App', files: [{ key: 'AAAAAAAAAA1', name: 'App' }] },
+      '/v2/folders/502/files': { name: 'Flows', files: [{ key: 'CCCCCCCCCC3', name: 'Sign-in' }] },
+      '/v2/folders/222/files': { name: 'Web', files: [{ key: 'BBBBBBBBBB2', name: 'Web' }] },
     });
     await expect(figmaAllowedFiles(ctx({ allowlist: 'team:111 project:222' }))).resolves.toEqual([
-      { fileKey: 'BBBBBBBBBB2', name: 'Web', projectId: '222', teamId: null },
       { fileKey: 'AAAAAAAAAA1', name: 'App', projectId: '501', teamId: '111' },
+      { fileKey: 'BBBBBBBBBB2', name: 'Web', projectId: '222', teamId: null },
+      // Stored under the folder the allowlist reached, so the read-time check needs no tree.
+      { fileKey: 'CCCCCCCCCC3', name: 'Sign-in', projectId: '501', teamId: '111' },
     ]);
+    expect(mockFetch.mock.calls.every(([url]) => new URL(String(url)).pathname.startsWith('/v2/'))).toBe(true);
+  });
+
+  it('walks a folder reached twice once', async () => {
+    byPath({
+      '/v2/folders/222/folders': { name: 'Web', folders: [{ id: '223' }] },
+      '/v2/folders/223/folders': { name: 'Sub', folders: [] },
+      '/v2/folders/222/files': { name: 'Web', files: [] },
+      '/v2/folders/223/files': { name: 'Sub', files: [{ key: 'DDDDDDDDDD4', name: 'Sub' }] },
+    });
+    await expect(figmaAllowedFiles(ctx({ allowlist: 'project:222 folder:223' }))).resolves.toEqual([
+      { fileKey: 'DDDDDDDDDD4', name: 'Sub', projectId: '223', teamId: null },
+    ]);
+    expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 
   it('reaches nothing with an empty allowlist', async () => {
@@ -125,16 +173,19 @@ describe('FigmaAdapter.testConnection (#545)', () => {
   it('passes without current_user:read, leaving out the handle', async () => {
     const result = await test({
       '/v1/me': json({ status: 403, err: 'Invalid scope' }, 403),
-      '/v1/teams/111/projects': json({ projects: [{ id: 501 }] }),
-      '/v1/projects/501/files': json({ files: [{ key: 'AAAAAAAAAA1', name: 'App' }] }),
+      '/v2/teams/111/folders': json({ name: 'Design', folders: [{ id: '501', parent_folder_id: null }] }),
+      '/v2/folders/501/folders': json({ name: 'App', folders: [] }),
+      '/v2/folders/501/files': json({ name: 'App', files: [{ key: 'AAAAAAAAAA1', name: 'App' }] }),
     });
     expect(result.ok).toBe(true);
     expect(result.detail).toMatch(/^connector\.figmaReach/);
   });
 
-  it('names the allowlist entry and the scope when Figma refuses a listing', async () => {
-    const refused = test({ '/v1/me': json({ handle: 'ada' }), '/v1/teams/111/projects': json({ status: 403, err: 'Forbidden' }, 403) });
-    await expect(refused).rejects.toThrow('error.connector.figmaListRefused {"entry":"team:111","scope":"projects:read"}');
+  it("names the allowlist entry, the scope and Figma's own reason when Figma refuses a listing", async () => {
+    const refused = test({ '/v1/me': json({ handle: 'ada' }), '/v2/teams/111/folders': json({ status: 403, err: 'Invalid scope(s): projects:read' }, 403) });
+    await expect(refused).rejects.toThrow(
+      'error.connector.figmaListRefused {"entry":"team:111","scope":"folders:read","reason":"Invalid scope(s): projects:read"}',
+    );
   });
 
   it('still fails on a bad token', async () => {

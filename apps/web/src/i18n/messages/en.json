@@ -346,6 +346,9 @@
     "tabRuns": "Runs",
     "tabLinks": "Links",
     "add": "Add connector",
+    "connectRepository": "Connect repository",
+    "projectEmpty": "No connector feeds this project yet.",
+    "defaultBranch": "default branch",
     "addTitle": "Add a connector",
     "editTitle": "Edit connector",
     "dialogHint": "Credentials are encrypted and never shown again. Leave the box empty to keep the one already stored.",
@@ -574,6 +577,7 @@
       "connectHint": "Opens GitHub in a new tab. You stay on this step — come back when you're done and the list refreshes itself.",
       "install": "Install on an account or organisation",
       "installHint": "Choose which repositories this workspace may read. You can grant all of them, or pick a few and change it later.",
+      "partialConfig": "GitHub sign-in is only half set up on this server. Missing: {keys}. Until those are set, connect with a repository URL and token below.",
       "addAccount": "Add account",
       "repository": "Repository",
       "searchPlaceholder": "Search repositories…",
@@ -592,6 +596,25 @@
       "otherAccountHint": "Searching only the selected account. If the repository belongs to another one, switch accounts above.",
       "noneGranted": "This installation has no repositories.",
       "noneGrantedHint": "The GitHub App is installed on this account but was granted access to zero repositories, so there is nothing to search. Choose which ones it may read."
+    },
+    "figmaAccess": {
+      "title": "Figma access",
+      "connect": "Connect with Figma",
+      "connectHint": "Opens Figma in a new tab to approve read access. Come back here when it is done — no token to paste or renew.",
+      "needsAllowlist": "Add a team or folder first: connecting saves this setup as a draft.",
+      "or": "Or paste a personal access token instead",
+      "connectedAs": "Connected as {handle}",
+      "connectedHint": "Figma renews this connection itself.",
+      "reconnect": "Reconnect",
+      "disconnect": "Disconnect",
+      "disconnected": "Figma disconnected. Embeds stop refreshing until you connect again or paste a token.",
+      "usesToken": "Uses a personal access token. Connect with Figma to stop renewing it by hand.",
+      "noCredential": "No credential: connect with Figma or paste a personal access token.",
+      "returned": {
+        "connected": "Figma connected.",
+        "auth-failed": "Figma did not complete the connection. Try again.",
+        "error": "That Figma link had expired or was not ours. Start again from the connector."
+      }
     },
     "githubAccess": {
       "title": "GitHub access",
@@ -820,14 +843,14 @@
     "kindText": {
       "figma": {
         "allowlist": {
-          "label": "Teams and projects",
-          "help": "Figma team or project links (or team:<id>, project:<id>), separated by spaces or commas. Only their files can be embedded; removing one hides its embeds everywhere until it is added back."
+          "label": "Teams and folders",
+          "help": "Figma team or folder links (or team:<id>, folder:<id>), separated by spaces or commas. Only their files can be embedded; removing one hides its embeds everywhere until it is added back."
         },
         "tokenExpiresAt": {
           "label": "Token expires on",
           "help": "The expiry you chose when creating the token, as YYYY-MM-DD. Figma does not report it, so the card warns from this date."
         },
-        "credential": "A personal access token from Figma (Settings → Security → Personal access tokens) with the scopes file_content:read, file_metadata:read and projects:read. Its owner must be able to open every team and project listed below."
+        "credential": "A personal access token from Figma (Settings → Security → Personal access tokens) with the scopes file_content:read, file_metadata:read and folders:read. Its owner must be able to open every team and folder listed below."
       },
       "googleDrive": {
         "credential": "Paste the whole JSON key file of a Google Cloud service account with the Drive API enabled. Then share the folder with the service account's email, or add it to the shared drive.",

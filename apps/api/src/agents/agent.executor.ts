@@ -1609,7 +1609,11 @@ export class AgentExecutor {
     // it, so the only-repository fallback lives here too.
     const connectorId = input.connectorId ?? (await this.onlyRepository(run.workspaceId));
     if (!connectorId) throw new Error(t('error.ai.agentNeedsConnector', { key: agent.key }));
-    const snapshot = await this.snapshots.open(connectorId, run.workspaceId);
+    // The owner's scope clamped to the workspace, like every page this run
+    // reads: findings are read by the workspace, so a restricted project's
+    // repository reads as not found (#553).
+    const scope = await this.runScope(run, principal);
+    const snapshot = await this.snapshots.open(connectorId, scope);
     const connector = await this.prisma.connector.findUnique({
       where: { id: connectorId },
       select: { id: true, name: true, projectId: true, parentId: true },
@@ -1618,7 +1622,7 @@ export class AgentExecutor {
     // --- what is already declared: repo docs + workspace pages, and a digest of them
     await report({ stage: 'docs', progress: 0.15 });
     const docs = selectRepoDocs(snapshot.files);
-    const pages = connector ? await this.destinationPages(await this.runScope(run, principal), connector) : [];
+    const pages = connector ? await this.destinationPages(scope, connector) : [];
     // Lower-cased once: coverage is a substring test against this, per file.
     const declared = [...docs.map((d) => d.text), ...pages.map(declaredText)].join('\n').toLowerCase();
     // Modules the repo wiki documents as a whole (docs/features/46): their
@@ -1798,7 +1802,7 @@ export class AgentExecutor {
       throw new Error(t('agent.component.noModel'));
     }
     await report({ stage: 'snapshot', progress: 0.1 });
-    const snapshot = await this.snapshots.open(input.connectorId, run.workspaceId);
+    const snapshot = await this.snapshots.open(input.connectorId, await this.runScope(run, principal));
     // Settled at enqueue against the request, not the archive: the API cannot
     // afford a download per press, and the head may have moved since anyway.
     const missing = component.paths.filter((path) => !snapshot.files.has(path));

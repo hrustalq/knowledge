@@ -1086,6 +1086,17 @@ export class StartAgentRunDto {
   connectorId?: string;
 
   @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'Narrow a connector-scoped agent to the repositories connected to this project. With no ' +
+      'connectorId, the project\'s only repository is read; a project with none or several is refused, ' +
+      'naming them.',
+  })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
+  @ApiPropertyOptional({
     type: [String],
     description:
       'Restrict a page-reading agent (curator, reviewer, glossarist) to these pages instead of the most ' +

@@ -114,7 +114,8 @@ describe('pinning a pulled page', () => {
     mockFetch.mockImplementation(async (url) => {
       const u = new URL(String(url));
       if (u.pathname === `/v1/files/${KEY}/nodes`) return new Response(JSON.stringify({ version: '42', nodes: { '1:2': { document: { name: 'Sign-in' } } } }));
-      if (u.pathname === '/v1/projects/222/files') return new Response(JSON.stringify({ files: [{ key: KEY, name: 'App' }] }));
+      if (u.pathname === '/v2/folders/222/folders') return new Response(JSON.stringify({ folders: [] }));
+      if (u.pathname === '/v2/folders/222/files') return new Response(JSON.stringify({ files: [{ key: KEY, name: 'App' }] }));
       throw new Error(`unexpected ${u}`);
     });
     const service = new FigmaFilesService(prisma as never, connectors as never);

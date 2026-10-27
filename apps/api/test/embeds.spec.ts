@@ -159,7 +159,8 @@ describe('EmbedSnapshotService.render', () => {
     const connectors = { contextFor: vi.fn(async (row: { config: unknown }) => ({ config: row.config, credential: 'figd_x', allowPrivate: false, debug: () => undefined })) };
     mockFetch.mockImplementation(async (url) => {
       const u = new URL(String(url));
-      if (u.pathname === '/v1/projects/222/files') return json({ files: [{ key: KEY, name: 'App' }] });
+      if (u.pathname === '/v2/folders/222/folders') return json({ folders: [] });
+      if (u.pathname === '/v2/folders/222/files') return json({ files: [{ key: KEY, name: 'App' }] });
       if (u.pathname === `/v1/files/${KEY}/nodes`) {
         expect(u.searchParams.get('version')).toBe('7');
         return json({ nodes: { '1:2': { document: { type: 'FRAME', name: 'Sign-in', absoluteBoundingBox: { width: 390, height: 844 }, children: [{ type: 'TEXT', characters: 'Email' }] } } } });
@@ -191,10 +192,11 @@ describe('EmbedSnapshotService.render', () => {
   it('records a file the allowlist does not reach, and calls Figma for nothing else', async () => {
     const prisma = fakePrisma({ connectors: [figma({ allowlist: 'project:222' })] });
     const connectors = { contextFor: vi.fn(async (row: { config: unknown }) => ({ config: row.config, credential: 'x', allowPrivate: false, debug: () => undefined })) };
-    mockFetch.mockResolvedValue(json({ files: [] }));
+    mockFetch.mockImplementation(async () => json({ folders: [], files: [] }));
     const service = snapshots(prisma, { putObjectBytes: vi.fn() }, connectors);
     await service.render({ workspaceId: WS, fileKey: KEY, nodeId: '1:2', version: '7' });
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    // Only the listing: the folder's subfolders, then its files.
+    expect(mockFetch.mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual(['/v2/folders/222/folders', '/v2/folders/222/files']);
     expect((prisma.embedNode.upsert.mock.calls[0]![0] as { create: Record<string, unknown> }).create.error).toBe(NOT_ALLOWLISTED);
   });
 

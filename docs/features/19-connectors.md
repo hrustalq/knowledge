@@ -286,6 +286,15 @@ in [59 — Chat harvest](59-chat-harvest.md#trackers-and-help-desks-382384).
 The setup dialog asks for the API key, the label, and the webhook's signing
 secret, and skips the sync questions for such a kind.
 
+## Connections (#564)
+
+Since [69](69-connections.md) a connector dials through a workspace
+**connection** (`connectors.connection_id`): a token, a GitHub App installation
+or a Figma grant, shared by every connector of a compatible kind. The inline
+`credential` stays the fallback for one release. New connectors come from the
+connect flow, one per resource↔project pair; the setup wizard edits, and picks a
+connection instead of asking for a token.
+
 ## Surface
 
 ```

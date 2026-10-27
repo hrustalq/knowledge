@@ -56,8 +56,10 @@ in the pull request that introduces them — see
   (#564). It is additive: `connectors.credential` stays populated and is still read when a connector has
   no connection, so rolling back to the previous image keeps every connector syncing. Existing
   connectors are bound to connections by the API on boot (logged as `bound N connector(s) to a
-  connection`), and connectors that hold the same token, App installation or Figma grant share one.
-  Nothing to run by hand.
+  connection`), and connectors that hold the same token, App installation or Figma grant share one;
+  every recorded GitHub App installation also becomes a connection. Nothing to run by hand. The
+  inline `connectors.credential` is dropped in a later release, after which a rollback past this one
+  would need the column restored — see [docs/features/69](docs/features/69-connections.md).
 
 ## [0.36.0] — 2026-10-27
 

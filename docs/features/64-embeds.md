@@ -152,8 +152,11 @@ refused.
     `GET /v1/connectors/figma/callback` verifies that state before it stores
     anything, exchanges the code (`POST /v1/oauth/token`, form body, client
     authenticated with HTTP Basic), reads `/v1/me` for the handle, and binds
-    the connector named in the state, in the state's workspace. A forged or
-    expired state redirects with `?figma=error`; a replayed one fails the
+    the connector named in the state, in the state's workspace. Since #564 the
+    grant also becomes the workspace's `oauth` connection
+    ([69](69-connections.md)), `GET /v1/connectors/figma/authorize?workspaceId=`
+    connects the workspace with no connector at all, and every outcome lands on
+    `/oauth/figma`. A forged or expired state lands there as `outcome=error`; a replayed one fails the
     exchange, because the code is spent and a new code carries another
     challenge.
   - Figma keeps **one access token per app per user**, and a refresh

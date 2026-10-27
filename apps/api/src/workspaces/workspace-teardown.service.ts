@@ -7,6 +7,7 @@ import { GraphService } from '../graph/graph.service.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { ProjectCascadeService } from '../projects/project-cascade.service.js';
 import { WORKSPACE_ROWS } from './workspace-teardown.inventory.js';
+import { pruneFigmaGrants } from '../embeds/figma-oauth.service.js';
 import { ReadCache } from '../cache/read-cache.service.js';
 
 /** Pages per transaction: each batch commits on its own, so an interrupted teardown resumes where it stopped. */
@@ -91,6 +92,8 @@ export class WorkspaceTeardownService {
         // The one child whose FK does not cascade and which has no workspace_id.
         await tx.assistantMessage.deleteMany({ where: { thread: { workspaceId } } });
         for (const model of WORKSPACE_ROWS) await delegateOf(tx, model).deleteMany({ where: { workspaceId } });
+        // Figma grants belong to no workspace: one this workspace alone referenced goes with its connectors (#557).
+        await pruneFigmaGrants(tx);
       },
       // ponytail: one transaction for every event table; batch page_views / chat_messages if a workspace outgrows the timeout.
       { timeout: 300_000, maxWait: 15_000 },

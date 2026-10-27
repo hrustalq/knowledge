@@ -155,6 +155,10 @@ export interface ConnectorContext {
   config: Record<string, unknown>;
   /** Decrypted for the duration of the call; never persisted or logged. */
   credential: string | null;
+  /** The credential is an OAuth access token (a Figma grant, #557), sent as a bearer token. */
+  bearer?: boolean;
+  /** A fresh OAuth token after upstream refused `rejected`; null when the grant cannot renew. */
+  renewCredential?(rejected: string): Promise<string | null>;
   /** Decrypted inbound-webhook secret, for `verifyWebhook`. Null = webhooks refused. */
   webhookSecret?: string | null;
   /** Throttled by the caller — adapters may call it freely. */

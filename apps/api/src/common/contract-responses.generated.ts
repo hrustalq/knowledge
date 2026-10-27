@@ -121,6 +121,8 @@ import type {
   ExportListResponse,
   FactTimelineResponse,
   FactsAtResponse,
+  FigmaAuthorizeResponse,
+  FigmaOauthStatusResponse,
   FigmaPickerFileResponse,
   FigmaPickerFilesResponse,
   FigmaResolveResponse,
@@ -442,6 +444,8 @@ export interface ContractResponses {
   ExportListResponse: ExportListResponse;
   FactTimelineResponse: FactTimelineResponse;
   FactsAtResponse: FactsAtResponse;
+  FigmaAuthorizeResponse: FigmaAuthorizeResponse;
+  FigmaOauthStatusResponse: FigmaOauthStatusResponse;
   FigmaPickerFileResponse: FigmaPickerFileResponse;
   FigmaPickerFilesResponse: FigmaPickerFilesResponse;
   FigmaResolveResponse: FigmaResolveResponse;

@@ -95,6 +95,25 @@ export function canonicalizeEmbedUrl(raw: string): string {
 /** The `figma` connector's config keys. */
 export const FIGMA_ALLOWLIST_CONFIG_KEY = 'allowlist';
 export const FIGMA_TOKEN_EXPIRES_CONFIG_KEY = 'tokenExpiresAt';
+/**
+ * The OAuth grant a connector dials with (#557): the Figma user id its
+ * `figma_oauth_grants` row is keyed by, and that person's handle for the card.
+ * Server-owned: only the OAuth callback writes them, and a create or update
+ * that names them is ignored, so no admin can point a connector at a grant
+ * another workspace connected.
+ */
+export const FIGMA_GRANT_CONFIG_KEY = 'figmaGrant';
+export const FIGMA_HANDLE_CONFIG_KEY = 'figmaHandle';
+
+// GET /v1/connectors/figma/oauth
+export interface FigmaOauthStatusResponse {
+  /** False with the client id unset (the off switch) or no encryption key; the PAT field is then the only way in. */
+  configured: boolean;
+}
+// GET /v1/connectors/:id/figma/authorize
+export interface FigmaAuthorizeResponse {
+  url: string;
+}
 
 /** Days before the typed-in expiry that the connector card starts warning. */
 export const FIGMA_TOKEN_WARN_DAYS = 14;

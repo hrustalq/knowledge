@@ -779,6 +779,15 @@ export const envSchema = z.object({
   API_PUBLIC_URL: z.string().default('http://localhost:3000'),
 
   /**
+   * A private Figma OAuth app for the `figma` connector (#557, docs/features/64).
+   * Empty client id is the off switch: the setup offers only the personal
+   * access token, exactly as before. The redirect URI to register on the app is
+   * `${API_PUBLIC_URL}/v1/connectors/figma/callback`.
+   */
+  FIGMA_OAUTH_CLIENT_ID: z.string().optional().default(''),
+  FIGMA_OAUTH_CLIENT_SECRET: z.string().optional().default(''),
+
+  /**
    * GitHub App backing the repository picker (docs/features/30).
    *
    * Empty GITHUB_APP_ID is the off switch, and it is fail-soft in the same

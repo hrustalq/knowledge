@@ -46,6 +46,7 @@ import ConnectorWiki from '@/components/connectors/ConnectorWiki.vue'
 import ConnectorWorkItems from '@/components/connectors/ConnectorWorkItems.vue'
 import ConnectorTrackerSettings from '@/components/connectors/ConnectorTrackerSettings.vue'
 import GithubAccessCard from '@/components/connectors/GithubAccessCard.vue'
+import FigmaAccessCard from '@/components/connectors/FigmaAccessCard.vue'
 import ConnectorGuidanceCard from '@/components/connectors/ConnectorGuidanceCard.vue'
 import { RUN_STATUS_CLASS, RUN_STATUS_LABEL } from '@/components/connectors/connector-ui'
 import { useAuthStore } from '@/stores/auth'
@@ -167,6 +168,19 @@ watch(
   { immediate: true },
 )
 
+// The same for Figma's callback (#557), which lands a connect or reconnect here.
+watch(
+  () => route.query.figma,
+  (outcome) => {
+    if (typeof outcome !== 'string') return
+    if (outcome === 'connected') toast.success(t('connectors.figmaAccess.returned.connected'))
+    else toast.error(t(`connectors.figmaAccess.returned.${outcome === 'auth-failed' ? outcome : 'error'}`))
+    const { figma: _dropped, ...rest } = route.query
+    void router.replace({ query: rest })
+  },
+  { immediate: true },
+)
+
 // The route component is reused across ids, so a navigation between two
 // connectors has to reset the tab-scoped queries rather than show the last one's.
 watch(connectorId, () => {
@@ -275,6 +289,7 @@ watch(connectorId, () => {
         </div>
 
         <GithubAccessCard v-if="canManage && onGithub" :connector-id="connectorId" />
+        <FigmaAccessCard v-if="canManage && connector.kind === 'figma'" :connector="connector" />
         <ConnectorGuidanceCard v-if="canManage && isRepository" :connector-id="connectorId" />
 
         <!-- Said once, on the connector, rather than as an empty state inside a

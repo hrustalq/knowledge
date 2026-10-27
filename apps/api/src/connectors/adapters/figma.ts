@@ -13,24 +13,34 @@ export const FIGMA_API = 'https://api.figma.com';
 const MAX_ATTEMPTS = 3;
 const MAX_WAIT_MS = 30_000;
 
-type FigmaContext = Pick<ConnectorContext, 'credential' | 'debug' | 'allowPrivate' | 'signal'>;
+type FigmaContext = Pick<ConnectorContext, 'credential' | 'bearer' | 'renewCredential' | 'debug' | 'allowPrivate' | 'signal'>;
 
 /**
  * GET a Figma endpoint as JSON. A 429 waits for `Retry-After` (capped) and
  * retries; after the last attempt it throws like any other refusal, so the
- * caller gives up for this tick and the next one tries again.
+ * caller gives up for this tick and the next one tries again. An OAuth
+ * connector sends a bearer token, and a 401 on one renews it once (#557).
  */
 export async function figmaGet<T>(ctx: FigmaContext, path: string, query: Record<string, string> = {}): Promise<T> {
   const url = `${FIGMA_API}${path}${Object.keys(query).length ? `?${new URLSearchParams(query)}` : ''}`;
+  let renewed = false;
   for (let attempt = 1; ; attempt++) {
+    const auth: Record<string, string> = ctx.bearer
+      ? { Authorization: `Bearer ${ctx.credential ?? ''}` }
+      : { 'X-Figma-Token': ctx.credential ?? '' };
     try {
-      const res = await connectorFetch(
-        url,
-        { headers: { 'X-Figma-Token': ctx.credential ?? '', Accept: 'application/json' }, signal: ctx.signal },
-        ctx,
-      );
+      const res = await connectorFetch(url, { headers: { ...auth, Accept: 'application/json' }, signal: ctx.signal }, ctx);
       return (await res.json()) as T;
     } catch (err) {
+      if (err instanceof ConnectorRequestError && err.status === 401 && ctx.renewCredential && !renewed) {
+        renewed = true;
+        const next = await ctx.renewCredential(ctx.credential ?? '');
+        if (next) {
+          // Kept on the context, so the rest of this sweep uses the new token.
+          ctx.credential = next;
+          continue;
+        }
+      }
       if (!(err instanceof ConnectorRequestError) || err.status !== 429 || attempt >= MAX_ATTEMPTS) throw err;
       const wait = Math.min(MAX_WAIT_MS, (Number(err.retryAfter) || 2 ** attempt) * 1000);
       ctx.debug('figma 429', { attempt, waitMs: wait });

@@ -79,14 +79,14 @@ export interface OauthState {
  * workspace, the user and an expiry, so a captured state is neither replayable
  * into a different workspace nor usable tomorrow.
  */
-export function signState(state: OauthState, key: Buffer): string {
+export function signState<T extends OauthState>(state: T, key: Buffer): string {
   const body = b64url(JSON.stringify(state));
   const mac = b64url(createHmac('sha256', key).update(body).digest());
   return `${body}.${mac}`;
 }
 
 /** Null for anything that does not verify — wrong signature, malformed, or expired. */
-export function verifyState(raw: string, key: Buffer, now = Date.now()): OauthState | null {
+export function verifyState<T extends OauthState = OauthState>(raw: string, key: Buffer, now = Date.now()): T | null {
   const parts = raw.split('.');
   if (parts.length !== 2) return null;
   const [body, mac] = parts;
@@ -98,7 +98,7 @@ export function verifyState(raw: string, key: Buffer, now = Date.now()): OauthSt
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
 
   try {
-    const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as OauthState;
+    const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as T;
     if (typeof parsed.exp !== 'number' || parsed.exp * 1000 < now) return null;
     if (!parsed.workspaceId || !parsed.userId) return null;
     return parsed;

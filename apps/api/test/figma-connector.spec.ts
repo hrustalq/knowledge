@@ -101,6 +101,22 @@ describe('figmaGet', () => {
     await expect(figmaGet(ctx(), '/v1/me')).rejects.toMatchObject({ status: 403 });
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
+
+  it('sends an OAuth connector’s token as Bearer, and renews it once on 401 (#557)', async () => {
+    const renewCredential = vi.fn(async () => 'fresh');
+    const oauth = { ...ctx(), credential: 'stale', bearer: true, renewCredential };
+    mockFetch.mockResolvedValueOnce(json({ status: 401 }, 401)).mockResolvedValueOnce(json({ handle: 'ada' }));
+    await expect(figmaGet(oauth, '/v1/me')).resolves.toEqual({ handle: 'ada' });
+    const headers = mockFetch.mock.calls.map(([, init]) => init!.headers as Record<string, string>);
+    expect(headers.map((h) => h.Authorization)).toEqual(['Bearer stale', 'Bearer fresh']);
+    expect(headers.every((h) => !('X-Figma-Token' in h))).toBe(true);
+    expect(renewCredential).toHaveBeenCalledExactlyOnceWith('stale');
+
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue(json({ status: 401 }, 401));
+    await expect(figmaGet(oauth, '/v1/me')).rejects.toMatchObject({ status: 401 });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('figmaAllowedFiles', () => {

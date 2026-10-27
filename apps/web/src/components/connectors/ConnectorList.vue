@@ -8,7 +8,7 @@ import { toast } from 'vue-sonner'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { CircleCheck, CircleDashed, CircleX, Plug, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-vue-next'
 import { connectorKindInfo, figmaTokenExpiry, FIGMA_TOKEN_EXPIRES_CONFIG_KEY } from '@knowledge/contracts'
-import type { ConnectorSummary, ListConnectorsResponse } from '@knowledge/contracts'
+import type { ConnectorSummary, ListConnectionsResponse, ListConnectorsResponse } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +19,7 @@ import { PageState } from '@/components/layout/page'
 import { getWorkspaceId } from '@/lib/api'
 import { relativeTime } from '@/lib/api'
 import { formatDate } from '@/lib/format'
+import ConnectDialog from './ConnectDialog.vue'
 import ConnectorSetupDialog from './ConnectorSetupDialog.vue'
 
 const props = defineProps<{ canManage: boolean; projectId?: string }>()
@@ -41,9 +42,13 @@ const open = ref(false)
 const editing = ref<ConnectorSummary | null>(null)
 const testing = ref<string | null>(null)
 
+// A new connector comes from the connect flow (#564): an account, then its
+// resources linked to projects. The setup wizard below only edits.
+const adding = ref(false)
+const connections = useQuery(computed(() => ({ ...apiQueryOptions('/v1/connections', { query: { workspaceId } }), enabled: props.canManage })))
+const connectionData = computed(() => connections.data.value as ListConnectionsResponse | undefined)
 function openNew() {
-  editing.value = null
-  open.value = true
+  adding.value = true
 }
 function openEdit(connector: ConnectorSummary) {
   editing.value = connector
@@ -265,5 +270,13 @@ function tokenExpiry(connector: ConnectorSummary) {
     </ul>
 
     <ConnectorSetupDialog v-model:open="open" :editing="editing" :project-id="projectId" />
+    <ConnectDialog
+      v-if="canManage"
+      v-model:open="adding"
+      :methods="connectionData?.methods ?? { app: false, oauth: false }"
+      :can-store-secrets="connectionData?.canStoreSecrets ?? false"
+      :connections="connectionData?.connections ?? []"
+      :project-id="projectId"
+    />
   </div>
 </template>

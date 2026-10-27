@@ -947,6 +947,7 @@
       "steps": {
         "provider": "Service",
         "signin": "Sign in",
+        "resources": "Resources",
         "done": "Done"
       },
       "addTitle": "Add a connection",
@@ -986,7 +987,43 @@
       "checkAgain": "Check again",
       "ready": "Connected",
       "readyBody": "Connectors of a matching kind can use this account now.",
-      "methodUnavailable": "This way of connecting is not available on this server."
+      "methodUnavailable": "This way of connecting is not available on this server.",
+      "pickerLabel": "Connection",
+      "pickerPaste": "Paste a token for this connector instead",
+      "pickerHint": "The account this connector signs in with. Switching takes effect from its next sync."
+    },
+    "link": {
+      "kindLabel": "What to read",
+      "alreadyLinked": "Nothing linked yet | {count} connector already reads through this account | {count} connectors already read through this account",
+      "search": "Search",
+      "namespaceLabel": "Account or group",
+      "allNamespaces": "All",
+      "loading": "Loading what this account can reach…",
+      "none": "Nothing matches. Try another search, or check what this account may read.",
+      "private": "Private",
+      "destinations": "Where each one goes",
+      "typedEntry": "Entry {n}",
+      "removePick": "Remove",
+      "branch": "Branch",
+      "followDefault": "Follow the default ({branch})",
+      "project": "Project",
+      "pickProject": "Choose a project",
+      "folder": "Folder (optional)",
+      "folderPlaceholder": "whole repository",
+      "removeDestination": "Remove this project",
+      "addDestination": "Another project",
+      "addTyped": "Add another",
+      "skip": "Not now",
+      "submit": "Link | Create {count} connector | Create {count} connectors",
+      "results": {
+        "created": "Connector created",
+        "exists": "Already linked — nothing changed"
+      },
+      "open": "Open",
+      "finishHint": "Each connector syncs on demand. Open one to set a schedule, the direction or review mode.",
+      "jql": "JQL",
+      "noProjects": "This workspace has no projects yet, and every connector lands in one.",
+      "createProject": "Create a project"
     }
   },
   "workflow": {

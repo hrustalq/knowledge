@@ -8653,6 +8653,11 @@ export interface components {
             };
             /** @description Write-only. null clears the stored credential. */
             credential?: string | null;
+            /**
+             * Format: uuid
+             * @description Dial through this workspace connection (#564); its provider and site must match the connector
+             */
+            connectionId?: string;
             /** Format: uuid */
             parentId?: string | null;
             /** @enum {string} */

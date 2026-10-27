@@ -24,6 +24,13 @@ in the pull request that introduces them — see
   with Figma in another tab; the dialog moves on by itself when that tab finishes, without needing focus.
   An account already connected is offered first, and once you have signed in through OAuth or the App
   you are not asked for a token. The connectors list tab is now called **Connectors**.
+- **Add connector** now connects an account and then links what it reaches to projects in one pass
+  (#564): repositories (GitHub, GitLab) with a branch and an optional folder, Confluence spaces, Jira
+  projects and Notion databases are picked from a searchable list; other kinds keep their typed fields.
+  Each resource can go to several projects, and each pair becomes its own connector — one repository
+  into two projects from two folders, or several spaces into one project. Pairs already linked are shown
+  rather than duplicated, and the result lists every connector created with a link to finish its
+  settings. Editing a connector picks which connection it signs in with instead of re-pasting a token.
 - `/v1/connections` (#564): a workspace's connections — one account's access to GitHub, GitLab, an
   Atlassian site, Notion, Google Drive, Linear, Zendesk, Intercom or Figma — shared by every compatible
   connector. Saving a token asks the provider whose it is and shows the login; saving the same account

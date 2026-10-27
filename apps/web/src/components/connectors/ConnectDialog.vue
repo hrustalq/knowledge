@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * Connect an account (#564): provider → sign in → done.
+ * Connect an account and link what it reaches to projects (#564):
+ * service → sign in → resources → done.
  *
  * One flow for every provider. A token is pasted and identified on save; a
  * GitHub App install or a Figma authorisation happens in another tab, and
@@ -11,8 +12,8 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { ArrowLeft, CircleCheck, Figma, Github, Loader2, Plus } from 'lucide-vue-next'
-import { connectionKindsFor, connectorKindInfo, type ConnectionMethod, type ConnectionProvider, type ConnectionSummary, type GithubInstallationsResponse, type ListConnectionsResponse } from '@knowledge/contracts'
+import { ArrowLeft, CircleAlert, CircleCheck, Figma, Github, Link2, Loader2, Plus } from 'lucide-vue-next'
+import { connectionKindsFor, connectorKindInfo, type ConnectionLinkResult, type ConnectionMethod, type ConnectionProvider, type ConnectionSummary, type GithubInstallationsResponse, type ListConnectionsResponse } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
@@ -26,7 +27,9 @@ import { getWorkspaceId } from '@/lib/api'
 import { INTERCOM_REGIONS, PROVIDER_GROUPS, PROVIDERS, offeredMethods, providerMeta } from '@/lib/connection-providers'
 import { openOauthTab } from '@/lib/oauth-tab'
 import { useConnectionsWait } from '@/lib/use-connections-wait'
+import { useProjectsStore } from '@/stores/projects'
 import ConnectionAccount from './ConnectionAccount.vue'
+import ConnectionLinkStep from './ConnectionLinkStep.vue'
 
 const props = defineProps<{
   open: boolean
@@ -34,6 +37,8 @@ const props = defineProps<{
   methods: { app: boolean; oauth: boolean }
   canStoreSecrets: boolean
   connections: ConnectionSummary[]
+  /** Started from a project's page: new links land there unless changed. */
+  projectId?: string
 }>()
 const emit = defineEmits<{ 'update:open': [boolean]; connected: [ConnectionSummary] }>()
 
@@ -43,14 +48,20 @@ const workspaceId = getWorkspaceId()
 /** Where a provider tab's landing page offers to go back to. */
 const RETURN_TO = '/settings/connectors?tab=connections'
 
-type Step = 'provider' | 'signin' | 'done'
+type Step = 'provider' | 'signin' | 'resources' | 'done'
 const step = ref<Step>('provider')
 const provider = ref<ConnectionProvider | null>(null)
 const method = ref<ConnectionMethod>('token')
 const result = ref<ConnectionSummary | null>(null)
+const links = ref<ConnectionLinkResult[]>([])
 
-const steps = computed(() => [t('connectors.connections.steps.provider'), t('connectors.connections.steps.signin'), t('connectors.connections.steps.done')])
-const current = computed(() => ['provider', 'signin', 'done'].indexOf(step.value))
+const steps = computed(() => [
+  t('connectors.connections.steps.provider'),
+  t('connectors.connections.steps.signin'),
+  t('connectors.connections.steps.resources'),
+  t('connectors.connections.steps.done'),
+])
+const current = computed(() => ['provider', 'signin', 'resources', 'done'].indexOf(step.value))
 const meta = computed(() => (provider.value ? providerMeta(provider.value) : null))
 const providerName = computed(() => meta.value?.label ?? t('connectors.connections.providers.git'))
 
@@ -81,8 +92,16 @@ function choose(next: ConnectionProvider) {
 function finish(connection: ConnectionSummary) {
   wait.stop()
   result.value = connection
-  step.value = 'done'
+  links.value = []
+  step.value = 'resources'
   emit('connected', connection)
+}
+
+function linked(results: ConnectionLinkResult[]) {
+  links.value = results
+  step.value = 'done'
+  void queryClient.invalidateQueries({ queryKey: ['/v1/connectors'] })
+  void queryClient.invalidateQueries({ queryKey: ['/v1/connections'] })
 }
 
 function back() {
@@ -193,6 +212,9 @@ const connectFigma = () =>
   openProvider(async () => (await api.get('/v1/connectors/figma/authorize', { query: { workspaceId, returnTo: RETURN_TO } })).url)
 const signInGithub = () => openProvider(async () => githubState.value?.authorizeUrl)
 const installGithub = () => openProvider(async () => githubState.value?.installUrl)
+
+const projects = useProjectsStore()
+const projectNameOf = (id: string) => projects.items.find((p) => p.projectId === id)?.name ?? id
 
 function close() {
   emit('update:open', false)
@@ -352,13 +374,33 @@ function close() {
         </div>
       </div>
 
-      <!-- 3. Done -->
+      <!-- 3. What it reaches, and where each lands. -->
+      <div v-else-if="step === 'resources' && result" class="space-y-4">
+        <div class="rounded-lg border p-3"><ConnectionAccount :connection="result" /></div>
+        <ConnectionLinkStep :connection="result" :project-id="projectId" @linked="linked" @skip="step = 'done'" />
+      </div>
+
+      <!-- 4. Done: one line per pair, each to its connector, where schedule and direction are finished. -->
       <div v-else-if="step === 'done' && result" class="space-y-4">
         <p class="flex items-center gap-2 text-sm font-medium">
           <CircleCheck class="text-primary size-4 shrink-0" aria-hidden="true" /> {{ t('connectors.connections.ready') }}
         </p>
         <div class="rounded-lg border p-3"><ConnectionAccount :connection="result" /></div>
-        <p class="text-muted-foreground text-sm">{{ t('connectors.connections.readyBody') }}</p>
+        <ul v-if="links.length" class="divide-y rounded-lg border text-sm">
+          <li v-for="(r, i) in links" :key="i" class="flex min-w-0 items-start gap-2.5 px-3 py-2">
+            <component :is="r.status === 'failed' ? CircleAlert : r.status === 'created' ? CircleCheck : Link2" class="mt-0.5 size-4 shrink-0" :class="r.status === 'failed' ? 'text-destructive' : r.status === 'created' ? 'text-primary' : 'text-muted-foreground'" aria-hidden="true" />
+            <span class="min-w-0 flex-1">
+              <span class="block truncate" :title="r.label">{{ r.label }} → {{ projectNameOf(r.projectId) }}</span>
+              <span class="text-muted-foreground block text-xs">
+                {{ r.status === 'failed' ? r.error : t(`connectors.link.results.${r.status}`) }}
+              </span>
+            </span>
+            <RouterLink v-if="r.connectorId" :to="`/settings/connectors/${r.connectorId}`" class="shrink-0 text-xs underline-offset-2 hover:underline" @click="close">
+              {{ t('connectors.link.open') }}
+            </RouterLink>
+          </li>
+        </ul>
+        <p class="text-muted-foreground text-sm">{{ links.length ? t('connectors.link.finishHint') : t('connectors.connections.readyBody') }}</p>
         <div class="flex justify-end">
           <Button @click="close">{{ t('common.close') }}</Button>
         </div>

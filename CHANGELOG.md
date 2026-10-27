@@ -47,6 +47,12 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- With `AUTH_MODE=none`, pages in the default workspace never finished indexing (#544): they stayed
+  *finalized*, and their ingestion jobs failed with "workspace deleted" whenever `make auth-bootstrap`
+  had not created that workspace's row. Since 0.33.0 the worker had read a missing row as a deleted
+  workspace. Only a deleted workspace (#479) now stops indexing, the same rule the API applies. A job
+  refused for a deleted workspace is no longer retried by the stale sweeper on every tick, where it
+  could crowd out the retry of genuinely failed jobs.
 - The Figma connector's **Test connection** failed with "the token needs the `projects:read` scope"
   for a token created with the scopes Figma offers today (#549). Figma has renamed projects to folders, and a
   token issued with the new `folders:read` scope cannot call the old project endpoints. The allowlist is

@@ -6,8 +6,8 @@
  *
  * Shown only where Connect with Figma is offered (or the connector already
  * uses it), so a deployment without the OAuth app sees the page it always did.
- * Connecting opens a new tab and rereads the connector when this one regains
- * focus, the GitHub card's rule.
+ * Connecting opens a new tab and rereads the connector once the connections
+ * long poll sees the grant land, or this tab regains focus.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,6 +20,7 @@ import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { Button } from '@/components/ui/button'
 import { openOauthTab } from '@/lib/oauth-tab'
+import { useConnectionsWait } from '@/lib/use-connections-wait'
 
 const props = defineProps<{ connector: ConnectorSummary }>()
 const { t } = useI18n()
@@ -32,6 +33,12 @@ const configured = computed(() => (status.data.value as FigmaOauthStatusResponse
 const handle = computed(() => props.connector.config[FIGMA_HANDLE_CONFIG_KEY] ?? null)
 
 const refresh = () => queryClient.invalidateQueries({ queryKey: ['/v1/connectors'] })
+// A finished authorisation touches the workspace's Figma connection (#564):
+// the long poll sees it whether or not this tab has focus.
+const wait = useConnectionsWait(() => {
+  wait.stop()
+  void refresh()
+})
 const connecting = ref(false)
 
 async function connect() {
@@ -43,7 +50,8 @@ async function connect() {
         query: { returnTo: `/settings/connectors/${props.connector.id}` },
       })
       return res.url
-    }, refresh)
+    }, () => undefined)
+    wait.start()
   } catch (e) {
     toast.error(errorMessage(e, t))
   } finally {

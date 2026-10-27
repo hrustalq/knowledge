@@ -916,6 +916,77 @@
       "closing": "This tab closes on its own.",
       "closeHint": "You can close this tab.",
       "back": "Go back"
+    },
+    "tabConnectors": "Connectors",
+    "connections": {
+      "intro": "The accounts your connectors sign in with. One token, App installation or Figma authorisation serves every connector of a matching kind, and is rotated in one place.",
+      "add": "Add connection",
+      "emptyTitle": "No connections yet",
+      "emptyBody": "Connect an account once — GitHub, GitLab, an Atlassian site, Notion, Figma — and every connector that reads from it uses the same sign-in.",
+      "deleteTitle": "Delete this connection?",
+      "deleteBody": "{account} will no longer be offered to connectors. Nothing upstream changes.",
+      "deleted": "Connection deleted",
+      "providers": {
+        "git": "Other git host"
+      },
+      "rotated": "Token replaced | Token replaced; {count} connector uses it from its next sync | Token replaced; {count} connectors use it from their next sync",
+      "usedBy": "Not used | Used by {count} connector | Used by {count} connectors",
+      "unused": "Not used by any connector",
+      "rotate": "Replace token",
+      "inUse": "Connectors still use this connection. Move or delete them first.",
+      "rotateTitle": "Replace the token for {account}",
+      "rotateBody": "Paste a new token for the same account. | Paste a new token for the same account. The {count} connector on it uses the new one from its next sync. | Paste a new token for the same account. The {count} connectors on it use the new one from their next sync.",
+      "newToken": "New token",
+      "rotateSave": "Replace token",
+      "unidentified": "Unidentified account",
+      "methods": {
+        "token": "Token",
+        "app": "GitHub App",
+        "oauth": "OAuth"
+      },
+      "steps": {
+        "provider": "Service",
+        "signin": "Sign in",
+        "done": "Done"
+      },
+      "addTitle": "Add a connection",
+      "addBody": "Sign in to a service once; connectors then read through this account.",
+      "groups": {
+        "code": "Code",
+        "docs": "Documentation",
+        "support": "Support",
+        "design": "Design"
+      },
+      "connectedCount": "Not connected | {count} connected | {count} connected",
+      "otherProvider": "Choose another service",
+      "alreadyConnected": "Already connected to {provider}",
+      "use": "Use",
+      "orAnother": "Or connect another account below.",
+      "methodLabel": "How to connect",
+      "methodChoice": {
+        "token": "Paste a token",
+        "app": "Install the GitHub App",
+        "oauth": "Sign in with Figma"
+      },
+      "site": "Site",
+      "siteOptional": "Leave empty for {site}.",
+      "region": "Data region",
+      "regions": {
+        "us": "United States",
+        "eu": "Europe",
+        "au": "Australia"
+      },
+      "identifyHint": "Saving asks the service whose token this is. The same account again replaces its token.",
+      "noKey": "Tokens cannot be saved until an administrator sets SETTINGS_ENCRYPTION_KEY on the server.",
+      "checking": "Checking with {provider}…",
+      "connect": "Connect",
+      "installHint": "Choose the account or organisation on GitHub, and which repositories it may read. This dialog moves on by itself when GitHub sends you back.",
+      "oauthHint": "Approve read access on figma.com. This dialog moves on by itself when Figma sends you back.",
+      "waiting": "Waiting for {provider} in the other tab…",
+      "checkAgain": "Check again",
+      "ready": "Connected",
+      "readyBody": "Connectors of a matching kind can use this account now.",
+      "methodUnavailable": "This way of connecting is not available on this server."
     }
   },
   "workflow": {

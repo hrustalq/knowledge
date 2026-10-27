@@ -29,7 +29,7 @@ interface Conn {
 type Row = BindableConnector & { connectionId: string | null; createdAt: Date };
 
 /** Just enough of Prisma for the binding, over two arrays. */
-function fakeDb(connectors: Row[]) {
+function fakeDb(connectors: Row[], installations: Array<Record<string, unknown>> = []) {
   const connections: Conn[] = [];
   const matches = (c: Conn, where: Record<string, unknown>) =>
     Object.entries(where).every(([k, v]) => (c as Record<string, unknown>)[k] === v);
@@ -59,6 +59,7 @@ function fakeDb(connectors: Row[]) {
     },
     githubInstallation: {
       findUnique: vi.fn(async () => ({ accountLogin: 'acme', accountAvatarUrl: null })),
+      findMany: vi.fn(async () => installations),
     },
   };
   return db;
@@ -157,6 +158,14 @@ describe('bindConnection and the boot backfill', () => {
       ['github', 'app', '42', 'acme'],
       ['figma', 'oauth', 'fu-1', 'ann'],
     ]);
+  });
+
+  it('lists a recorded installation no connector uses yet, once', async () => {
+    const install = { workspaceId: WS, installationId: 77n, accountLogin: 'acme', accountAvatarUrl: null, createdBy: null };
+    const db = fakeDb([], [install]);
+    await backfill(db).run();
+    await backfill(db).run();
+    expect(db.connections.map((x) => [x.provider, x.method, x.externalRef, x.accountLabel])).toEqual([['github', 'app', '77', 'acme']]);
   });
 
   it('rebinds when the token changes', async () => {

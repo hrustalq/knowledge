@@ -45,6 +45,7 @@ import { Collapse } from '@/components/ui/collapse'
 import { Skeleton } from '@/components/ui/skeleton'
 import { labelFor } from '@/lib/labels'
 import { useLayoutStore } from '@/stores/layout'
+import { useConnectionsWait } from '@/lib/use-connections-wait'
 
 const props = defineProps<{ connectorId: string }>()
 const { t } = useI18n()
@@ -111,14 +112,20 @@ function purposes(list: GithubAccessPurpose[]): string {
   return list.map((p) => t(`connectors.githubAccess.purpose.${p}`)).join(', ')
 }
 
+/**
+ * Reconnecting changes the person's GitHub identity, which the connections
+ * long poll answers to (#564), so the card updates without this tab regaining
+ * focus. A permission accepted on GitHub changes nothing here: regaining
+ * focus still rereads the card. Either way, once.
+ */
+const wait = useConnectionsWait(() => {
+  wait.stop()
+  void query.refetch()
+})
 function openAndWatch(url: string | null | undefined) {
   if (!url) return
   window.open(url, '_blank', 'noopener')
-  const refetch = () => {
-    void query.refetch()
-    window.removeEventListener('focus', refetch)
-  }
-  window.addEventListener('focus', refetch)
+  wait.start()
 }
 
 async function forget() {

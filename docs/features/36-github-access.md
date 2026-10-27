@@ -56,9 +56,10 @@ is shown, muted; a grant nothing here uses is listed as *extra*.
 already-authorised browser straight through as whichever account it is signed
 in to, which is the wrong behaviour for a reconnect whose point may be to
 switch accounts. `prompt=select_account` makes GitHub ask. The OAuth state
-carries this page as its return path, so the callback lands the person back on
-the card, which says how it went (`?github=connected | auth-failed |
-install-failed | error`) once as a toast and removes the parameter.
+carries this page as its return path. Since #564 the callback lands the new
+tab on `/oauth/github` ([69](69-connections.md)), which says how it went and
+closes itself; this card rereads itself through the connections long poll
+(`useConnectionsWait`) without the page regaining focus.
 
 **Disconnect is per-person.** `DELETE /v1/connectors/github/identity` has no
 `@Access`: the identity row is keyed by user, so there is no workspace to check

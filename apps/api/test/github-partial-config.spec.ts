@@ -60,3 +60,27 @@ describe('GET /v1/connectors/github/installations, not configured', () => {
     expect(res.missing).toEqual(['GITHUB_APP_PRIVATE_KEY']);
   });
 });
+
+describe('the GitHub callback lands on /oauth/github (#564)', () => {
+  const env = { SETTINGS_ENCRYPTION_KEY: randomBytes(32).toString('base64'), WEB_BASE_URL: 'https://kb.test/' };
+  const config = { get: (key: keyof Env) => (env as Record<string, string>)[key] ?? '' } as unknown as ConfigService<Env, true>;
+
+  it('sends a forged state to the error outcome, and an install to `installed` with the signed return path', async () => {
+    const oauth = new GithubOauthService(config, {} as PrismaService);
+    const recorded: string[] = [];
+    const browse = { recordInstallation: async (_ws: string, id: string) => (recorded.push(id), true) } as unknown as GithubBrowseService;
+    const controller = new GithubController(new GithubAppService(config), oauth, browse, config);
+    const redirect = (url: string) => urls.push(url);
+    const urls: string[] = [];
+
+    await controller.callback({ redirect } as never, 'forged');
+    const state = oauth.sign(WORKSPACE, 'u', '/projects/p1')!;
+    await controller.callback({ redirect } as never, state, undefined, '42');
+
+    expect(recorded).toEqual(['42']);
+    expect(urls).toEqual([
+      'https://kb.test/oauth/github?outcome=error',
+      'https://kb.test/oauth/github?outcome=installed&returnTo=%2Fprojects%2Fp1',
+    ]);
+  });
+});

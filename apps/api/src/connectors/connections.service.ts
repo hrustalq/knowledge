@@ -18,7 +18,7 @@ import {
 import { decryptSecret, encryptSecret, maskSecret, MissingEncryptionKeyError, parseKey } from '../ai/secret-box.js';
 import { assertSafeExternalUrl } from '../common/safe-url.js';
 import type { Env } from '../config/env.js';
-import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
+import { FigmaOauthService, pruneFigmaGrants } from '../embeds/figma-oauth.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { identify, listBranches, listResources, type ProbeContext } from './adapters/connection-providers.js';
@@ -143,6 +143,8 @@ export class ConnectionsService {
       });
     }
     await this.prisma.connection.delete({ where: { id: row.id } });
+    // A Figma grant nothing references any more goes with its last connection.
+    if (row.method === 'oauth') await pruneFigmaGrants(this.prisma);
   }
 
   /**

@@ -198,6 +198,14 @@ export class GithubBrowseService {
       create: { workspaceId, installationId: BigInt(installationId), createdBy: userId, ...data },
       update: data,
     });
+    // The installation is the workspace's `app` connection (#564): it syncs as the installation and browses as the person.
+    const ref = { workspaceId, provider: 'github', method: 'app', externalRef: installationId };
+    const owner = { accountId: installationId, accountLabel: account.accountLogin, accountAvatarUrl: account.accountAvatarUrl };
+    await this.prisma.connection.upsert({
+      where: { workspaceId_provider_method_externalRef: ref },
+      create: { ...ref, ...owner, createdBy: userId },
+      update: owner,
+    });
     return true;
   }
 

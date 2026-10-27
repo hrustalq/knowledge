@@ -14,7 +14,7 @@
  * issues is a column of links nobody follows from here.
  */
 import { computed, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
@@ -56,7 +56,6 @@ import { formatDateTime } from '@/lib/format'
 type TabKey = 'work-items' | 'tracker' | 'wiki' | 'releases' | 'links' | 'runs' | 'access'
 
 const route = useRoute()
-const router = useRouter()
 const { t } = useI18n()
 const auth = useAuthStore()
 
@@ -150,36 +149,6 @@ async function startSync(direction: 'pull' | 'push') {
 // The connector kinds a repository archive is read from (REPO_CONNECTOR_KINDS on the API).
 const isRepository = computed(() => connector.value?.kind === 'codebase' || connector.value?.kind === 'markdown-git')
 const onGithub = computed(() => /^https:\/\/github\.com\//i.test(connector.value?.config.repoUrl ?? ''))
-
-/**
- * GitHub's OAuth callback lands the browser back here with `?github=<outcome>`
- * (the card's Reconnect sets this page as the return path). Said once as a
- * toast, then removed from the URL so a reload does not say it again.
- */
-watch(
-  () => route.query.github,
-  (outcome) => {
-    if (typeof outcome !== 'string') return
-    if (outcome === 'connected') toast.success(t('connectors.githubAccess.returned.connected'))
-    else toast.error(t(`connectors.githubAccess.returned.${outcome === 'auth-failed' || outcome === 'install-failed' ? outcome : 'error'}`))
-    const { github: _dropped, ...rest } = route.query
-    void router.replace({ query: rest })
-  },
-  { immediate: true },
-)
-
-// The same for Figma's callback (#557), which lands a connect or reconnect here.
-watch(
-  () => route.query.figma,
-  (outcome) => {
-    if (typeof outcome !== 'string') return
-    if (outcome === 'connected') toast.success(t('connectors.figmaAccess.returned.connected'))
-    else toast.error(t(`connectors.figmaAccess.returned.${outcome === 'auth-failed' ? outcome : 'error'}`))
-    const { figma: _dropped, ...rest } = route.query
-    void router.replace({ query: rest })
-  },
-  { immediate: true },
-)
 
 // The route component is reused across ids, so a navigation between two
 // connectors has to reset the tab-scoped queries rather than show the last one's.

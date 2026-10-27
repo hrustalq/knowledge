@@ -177,3 +177,20 @@ describe('wait', () => {
     expect(prisma.connection.findMany).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('an App installation is a connection', () => {
+  it('records the installation and upserts the workspace’s app connection', async () => {
+    const { GithubBrowseService } = await import('../src/connectors/github/github-browse.service.js');
+    const prisma = { githubInstallation: { upsert: vi.fn(async () => ({})) }, connection: { upsert: vi.fn(async () => ({ id: 'conn-1' })) } };
+    const app = {
+      installation: vi.fn(async () => ({ accountLogin: 'acme', accountType: 'Organization', accountAvatarUrl: 'a.png', repositorySelection: 'all', suspended: false })),
+    };
+    const browse = new GithubBrowseService(prisma as never, app as never, {} as never);
+    await expect(browse.recordInstallation(WS, '42', 'u1')).resolves.toBe(true);
+    expect(prisma.connection.upsert).toHaveBeenCalledWith({
+      where: { workspaceId_provider_method_externalRef: { workspaceId: WS, provider: 'github', method: 'app', externalRef: '42' } },
+      create: { workspaceId: WS, provider: 'github', method: 'app', externalRef: '42', accountId: '42', accountLabel: 'acme', accountAvatarUrl: 'a.png', createdBy: 'u1' },
+      update: { accountId: '42', accountLabel: 'acme', accountAvatarUrl: 'a.png' },
+    });
+  });
+});

@@ -2,7 +2,7 @@ import { BadRequestException, Controller, Delete, Get, Param, Query, Res } from 
 import { ConfigService } from '@nestjs/config';
 import { ApiExcludeEndpoint, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import type { FigmaAuthorizeResponse, FigmaOauthStatusResponse } from '@knowledge/contracts';
+import { oauthLandingPath, type FigmaAuthorizeResponse, type FigmaOauthStatusResponse } from '@knowledge/contracts';
 import { Access, CurrentPrincipal, Public } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { Returns } from '../common/returns.decorator.js';
@@ -37,6 +37,23 @@ export class FigmaOauthController {
   }
 
   /** Where to send the browser to connect (or reconnect) this connector. */
+  /** Connect Figma for the workspace, from the connect flow (#564): the grant becomes a connection, no connector yet. */
+  @Get('figma/authorize')
+  @Returns('FigmaAuthorizeResponse')
+  @Access('admin', 'query')
+  @ApiOperation({ summary: 'The Figma authorization URL for a new workspace connection' })
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiQuery({ name: 'returnTo', required: false })
+  authorizeConnection(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
+    @Query('returnTo') returnTo?: string,
+  ): FigmaAuthorizeResponse {
+    const url = this.oauth.authorizeUrl(workspaceId, principal.userId, null, safeReturnTo(returnTo, '/settings/connectors'));
+    if (!url) throw new BadRequestException(t('error.connector.figmaOauthOff'));
+    return { url };
+  }
+
   @Get(':id/figma/authorize')
   @Returns('FigmaAuthorizeResponse')
   @Access('admin', 'connector')
@@ -77,12 +94,11 @@ export class FigmaOauthController {
     const web = this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
     const state = rawState ? this.oauth.verify(rawState) : null;
     if (!state) {
-      res.redirect(`${web}/settings/connectors?figma=error`);
+      res.redirect(`${web}${oauthLandingPath('figma', 'error')}`);
       return;
     }
     // No code: the person pressed Cancel on figma.com.
     const ok = code ? await this.oauth.completeAuthorization(state, code) : false;
-    const sep = state.returnTo.includes('?') ? '&' : '?';
-    res.redirect(`${web}${state.returnTo}${sep}figma=${ok ? 'connected' : 'auth-failed'}`);
+    res.redirect(`${web}${oauthLandingPath('figma', ok ? 'connected' : 'auth-failed', state.returnTo)}`);
   }
 }

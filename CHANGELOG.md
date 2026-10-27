@@ -39,6 +39,21 @@ in the pull request that introduces them — see
   reads, so they no longer read a restricted project's repository at all. Starting one against such a
   repository is refused when you press Run.
 
+### Fixed
+
+- A git connector's repository step fell back to the Repository URL and token fields with no explanation
+  when the GitHub App was only partly configured, so it looked like a deliberate PAT-only setup (#552).
+  An admin now sees which keys are missing (the App's ID, private key and slug, or OAuth's client ID,
+  secret and `SETTINGS_ENCRYPTION_KEY`) above those fields, and the API logs the same at boot. With
+  every `GITHUB_APP_*` key empty the step looks as it did before: PAT fields, no hint.
+
+### Operations
+
+- Production now carries the GitHub App keys (#552): `GH_APP_ID`, `GH_APP_SLUG`, `GH_APP_CLIENT_ID`,
+  `GH_APP_CLIENT_SECRET` and `GH_APP_PRIVATE_KEY` (base64 of the `.pem` on one line) in the GitHub
+  `production` environment. The App must allow installation on **Any account**, or no organisation can
+  install it. Existing token-based connectors are unaffected.
+
 ## [0.35.0] — 2026-10-26
 
 ### Added

@@ -150,8 +150,12 @@ function openAndWatch(url: string | null) {
       {{ t('connectors.github.loading') }}
     </div>
 
-    <!-- No App registered: the picker simply is not part of this deployment. -->
+    <!-- No App registered: the picker simply is not part of this deployment.
+         Half registered (#552): say which keys, or the fallback looks chosen. -->
     <template v-else-if="!state?.configured">
+      <p v-if="state?.missing?.length" class="text-panel-warning-ink text-xs" role="status">
+        {{ t('connectors.github.partialConfig', { keys: state.missing.join(', ') }) }}
+      </p>
       <slot name="fallback" />
     </template>
 

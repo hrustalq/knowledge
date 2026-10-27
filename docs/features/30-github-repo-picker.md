@@ -126,16 +126,25 @@ Register at `https://github.com/settings/apps/new`:
 | Callback URL **and** Setup URL            | `$API_PUBLIC_URL/v1/connectors/github/callback`     |
 | Request user authorization during install | on                                                  |
 | Redirect on update                        | on                                                  |
-| Webhook → Active                          | **off**                                             |
-| Repository permissions → Contents         | Read-only (Read and write to push back)             |
+| Where can this GitHub App be installed?   | **Any account** — "Only on this account" lets no org install it |
+| Webhook                                   | per [32](32-connector-work-items.md#setup): on, with `GITHUB_APP_WEBHOOK_SECRET` |
+| Permissions                               | the catalogue in `connectors/github/github-access.ts`; Contents: Read-only is the minimum for sync |
 
 Then fill the `GITHUB_APP_*` block in `.env`. The private key is a multi-line
 PEM and `.env` cannot hold newlines, so pass base64 of the whole file:
 `base64 -i your-app.private-key.pem | tr -d '\n'`.
 
-Webhooks are unrelated to this feature and unchanged: they stay per-connector at
-`/v1/connectors/:id/webhook` with that connector's own HMAC secret, because an
-App-level webhook has no way to know which connector an event belongs to.
+The picker needs both halves: the App (`GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY`,
+plus `GITHUB_APP_SLUG` for Install) and OAuth (`GITHUB_APP_CLIENT_ID` +
+`GITHUB_APP_CLIENT_SECRET` + `SETTINGS_ENCRYPTION_KEY`). With every
+`GITHUB_APP_*` key empty the PAT fields show silently — the supported off state.
+With some set but not all, the repository step names the missing keys to the
+admin above the PAT fields (#552), and each service logs a warning at boot.
+`GITHUB_APP_WEBHOOK_SECRET` does not count: tracker webhooks use it alone.
+
+Per-connector webhooks are unchanged: they stay at `/v1/connectors/:id/webhook`
+with that connector's own HMAC secret. The App-level webhook that features 32
+and 35 added is a separate route, `/v1/connectors/github/webhook`.
 
 ## What #28 changed underneath
 

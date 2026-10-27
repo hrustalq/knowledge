@@ -49,6 +49,12 @@ export class GithubOauthService {
     this.clientId = this.config.get('GITHUB_APP_CLIENT_ID', { infer: true }).trim();
     this.clientSecret = this.config.get('GITHUB_APP_CLIENT_SECRET', { infer: true }).trim();
     this.key = parseKey(this.config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
+
+    if ((this.clientId || this.clientSecret) && !this.configured) {
+      // The OAuth twin of GithubAppService's warning: half a client means no
+      // Connect GitHub button, and the picker falls back to the PAT fields.
+      this.logger.warn(`GitHub OAuth is half-configured, missing: ${this.missing.join(', ')}`);
+    }
   }
 
   /**
@@ -58,6 +64,15 @@ export class GithubOauthService {
    */
   get configured(): boolean {
     return Boolean(this.clientId && this.clientSecret && this.key);
+  }
+
+  /** The OAuth-half keys still unset or unreadable, for the picker's admin hint (#552). */
+  get missing(): string[] {
+    return [
+      !this.clientId && 'GITHUB_APP_CLIENT_ID',
+      !this.clientSecret && 'GITHUB_APP_CLIENT_SECRET',
+      !this.key && 'SETTINGS_ENCRYPTION_KEY',
+    ].filter((key): key is string => Boolean(key));
   }
 
   // --- the state parameter ---

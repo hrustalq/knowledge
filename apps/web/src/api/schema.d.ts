@@ -8224,6 +8224,11 @@ export interface components {
              * @description The repository connector a connector-scoped agent (the archaeologist) reads. Required when the workspace has more than one; the only one is used otherwise.
              */
             connectorId?: string;
+            /**
+             * Format: uuid
+             * @description Narrow a connector-scoped agent to the repositories connected to this project. With no connectorId, the project's only repository is read; a project with none or several is refused, naming them.
+             */
+            projectId?: string;
             /** @description Restrict a page-reading agent (curator, reviewer, glossarist) to these pages instead of the most recent ones. Pages the caller cannot open are skipped. */
             documentIds?: string[];
         };
@@ -12236,6 +12241,7 @@ export interface components {
             installUrl: string | null;
             installations: components["schemas"]["GithubInstallationSummary"][];
             error?: string;
+            missing?: string[];
         };
         GithubPermissionRow: {
             name: string;

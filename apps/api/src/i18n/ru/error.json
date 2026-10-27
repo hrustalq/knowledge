@@ -349,7 +349,7 @@
     "pullNotSupported": "Коннекторы {kind} не умеют загружать",
     "pushNotSupported": "Коннекторы {kind} не умеют выгружать",
     "figmaAllowlistInvalid": "Не команда и не проект Figma: {entries}",
-    "figmaListRefused": "Figma отказала в доступе к {entry} (403): токену нужен scope {scope}, а его владелец должен иметь доступ к {entry} в Figma",
+    "figmaListRefused": "Figma отказала в доступе к {entry} (403: {reason}): токену нужен scope {scope}, а его владелец должен иметь доступ к {entry} в Figma",
     "directionNotAllowed": "Коннектор не настроен на действие «{direction}»",
     "runInFlight": "Синхронизация этого коннектора уже выполняется",
     "webhookNotConfigured": "Для коннектора не задан секрет вебхука",

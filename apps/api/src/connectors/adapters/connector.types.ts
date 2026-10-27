@@ -335,7 +335,8 @@ export class ConnectorRequestError extends Error {
   constructor(
     readonly status: number,
     readonly url: string,
-    body: string,
+    /** The response body as sent, for an adapter that reads the service's own reason. */
+    readonly body: string,
     /** `Retry-After` as sent, for an adapter that backs off on 429. */
     readonly retryAfter: string | null = null,
   ) {

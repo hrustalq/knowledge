@@ -123,13 +123,17 @@ refused.
   `Connector.credential` (`ai/secret-box.ts`, write-only over the API). It is
   read through `ConnectorsService.credentialFor`, like every other connector's.
   It needs three scopes, and its owner must be able to open every allowlisted
-  team and project:
+  team and folder:
 
-  | Scope                | For                                                              |
-  | -------------------- | ---------------------------------------------------------------- |
-  | `projects:read`      | `GET /v1/teams/:id/projects`, `GET /v1/projects/:id/files`       |
-  | `file_content:read`  | `GET /v1/files/:key`, `/v1/files/:key/nodes`, `/v1/images/:key`  |
-  | `file_metadata:read` | `GET /v1/files/:key/meta`                                        |
+  | Scope                | For                                                                                   |
+  | -------------------- | ------------------------------------------------------------------------------------- |
+  | `folders:read`       | `GET /v2/teams/:id/folders`, `GET /v2/folders/:id/folders`, `GET /v2/folders/:id/files` |
+  | `file_content:read`  | `GET /v1/files/:key`, `/v1/files/:key/nodes`, `/v1/images/:key`                       |
+  | `file_metadata:read` | `GET /v1/files/:key/meta`                                                             |
+
+  Figma renamed projects to folders and deprecated `projects:read` with the
+  `/v1` project endpoints; a token issued with `folders:read` cannot call
+  them, so the listing uses only the `/v2` folder endpoints (#549).
 
   Test connection also asks `GET /v1/me` for the owner's handle. That needs
   `current_user:read`, which embedding never does, so a `403` there only drops
@@ -137,16 +141,25 @@ refused.
 - **Token expiry is a config field**, typed in by the admin. Figma's API does
   not report a PAT's expiry, so the card shows the date the admin entered. From
   14 days before it, the card warns. A bad token is a `401`. A `403` on a
-  listing is a missing `projects:read` or an entry the owner cannot open, and
-  Test connection names that entry (`team:<id>` / `project:<id>`); it is never
+  listing is a missing `folders:read` or an entry the owner cannot open, and
+  Test connection names that entry (`team:<id>` / `project:<id>`) along with
+  Figma's own `err` text, which is what tells those two apart; it is never
   read as expiry.
-- **The allowlist** is one config field holding Figma team and project URLs or
-  ids, one per line. Figma's file metadata does not name a file's project, so
+- **The allowlist** is one config field holding Figma team and folder URLs or
+  ids (`team:<id>`, `folder:<id>`). A folder is what Figma used to call a
+  project, with the same id, so `project:<id>` and `/files/project/<id>` links
+  read as folders too. Figma's file metadata does not name a file's folder, so
   membership is resolved by listing:
-  - `GET /v1/teams/:id/projects` expands a team into its projects;
-  - `GET /v1/projects/:id/files` lists a project's files.
+  - `GET /v2/teams/:id/folders` expands a team into its top-level folders;
+  - `GET /v2/folders/:id/folders` lists a folder's subfolders, walked
+    recursively with a visited set (folders nest, and a team listing stops at
+    the top level);
+  - `GET /v2/folders/:id/files` lists each folder's files.
   - The result goes into a mutable `embed_files` row: `fileKey`, `projectId`,
-    `teamId`, `name` and `connectorId`.
+    `teamId`, `name` and `connectorId`. `projectId` is the folder the
+    allowlist reached the file through (the allowlisted folder, or the team's
+    top-level one), not the subfolder it sits in, so `embedFileAllowed`
+    answers from the allowlist alone.
 - **The check runs three times:** when an item is added (the picker and the
   API's warning pass), when the worker snapshots, and **on every snapshot
   read**. The read check is a PG lookup: the file's row, its connector enabled,

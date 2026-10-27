@@ -42,42 +42,75 @@ export async function figmaGet<T>(ctx: FigmaContext, path: string, query: Record
 export interface FigmaFileEntry {
   fileKey: string;
   name: string;
+  /**
+   * The folder the allowlist reached this file through (the allowlisted one, or
+   * the team's top-level one), not the subfolder it sits in, so
+   * `embedFileAllowed` answers from the allowlist alone.
+   */
   projectId: string;
   teamId: string | null;
 }
 
 /**
  * Every file the connector's allowlist reaches: teams expand to their
- * projects, projects to their files. Figma's file metadata does not name a
- * file's project, so membership can only be answered by listing.
+ * top-level folders, every folder to its subfolders (Figma nests them now, and
+ * a team listing stops at the top level), and every folder to its files.
+ * Figma's file metadata does not name a file's folder, so membership can only
+ * be answered by listing. A folder is what Figma used to call a project, with
+ * the same id, so the `project:` entries stand (#549).
  */
 export async function figmaAllowedFiles(ctx: FigmaContext & Pick<ConnectorContext, 'config'>): Promise<FigmaFileEntry[]> {
   const allowlist = parseFigmaAllowlist(String(ctx.config[FIGMA_ALLOWLIST_CONFIG_KEY] ?? ''));
-  const projects = new Map<string, string | null>(allowlist.projects.map((id) => [id, null]));
+  type Reached = { folderId: string; projectId: string; teamId: string | null };
+  const queue: Reached[] = [];
   for (const teamId of allowlist.teams) {
-    const { projects: listed } = await listing<{ projects?: { id: string | number }[] }>(ctx, `/v1/teams/${teamId}/projects`, `team:${teamId}`);
-    for (const p of listed ?? []) projects.set(String(p.id), teamId);
+    const { folders } = await listing<FolderList>(ctx, `/v2/teams/${teamId}/folders`, `team:${teamId}`);
+    for (const f of folders ?? []) queue.push({ folderId: String(f.id), projectId: String(f.id), teamId });
+  }
+  for (const id of allowlist.projects) queue.push({ folderId: id, projectId: id, teamId: null });
+  // Also the visited set: a folder reached twice is walked once, the first way.
+  const walked = new Map<string, Reached>();
+  for (let next = queue.shift(); next; next = queue.shift()) {
+    if (walked.has(next.folderId)) continue;
+    walked.set(next.folderId, next);
+    const { folders } = await listing<FolderList>(ctx, `/v2/folders/${next.folderId}/folders`, `project:${next.folderId}`);
+    for (const f of folders ?? []) queue.push({ ...next, folderId: String(f.id) });
   }
   const files: FigmaFileEntry[] = [];
-  for (const [projectId, teamId] of projects) {
-    const { files: listed } = await listing<{ files?: { key: string; name: string }[] }>(ctx, `/v1/projects/${projectId}/files`, `project:${projectId}`);
+  for (const { folderId, projectId, teamId } of walked.values()) {
+    const { files: listed } = await listing<{ files?: { key: string; name: string }[] }>(ctx, `/v2/folders/${folderId}/files`, `project:${folderId}`);
     for (const f of listed ?? []) files.push({ fileKey: f.key, name: f.name, projectId, teamId });
   }
   return files;
 }
 
+type FolderList = { folders?: { id: string | number }[] };
+
 /**
  * One allowlist listing. Figma answers a bad token with 401, so a 403 here is
- * a token without `projects:read` or an owner who cannot open the entry —
- * named, so the admin knows which of their entries to fix (#545).
+ * a token without `folders:read` or an owner who cannot open the entry. The
+ * message names the entry and carries Figma's own `err`, the one clue that
+ * tells those two apart (#545, #549).
  */
 async function listing<T>(ctx: FigmaContext, path: string, entry: string): Promise<T> {
   try {
     return await figmaGet<T>(ctx, path);
   } catch (err) {
     if (err instanceof ConnectorRequestError && err.status === 403) {
-      throw new Error(t('error.connector.figmaListRefused', { entry, scope: 'projects:read' }));
+      throw new Error(t('error.connector.figmaListRefused', { entry, scope: 'folders:read', reason: figmaReason(err.body) }));
     }
     throw err;
   }
+}
+
+/** Figma's reason from an error body (`{ status, err }`, sometimes `message`), else the body itself. */
+function figmaReason(body: string): string {
+  let reason = body;
+  try {
+    const parsed = JSON.parse(body) as { err?: unknown; message?: unknown };
+    reason = String(parsed.err ?? parsed.message ?? body);
+  } catch {
+    // not JSON: the body is the reason
+  }
+  return reason.trim().slice(0, 200) || 'Forbidden';
 }

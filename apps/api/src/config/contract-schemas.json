@@ -7718,6 +7718,296 @@
       "superseded"
     ]
   },
+  "ConnectionBranchesResponse": {
+    "type": "object",
+    "properties": {
+      "branches": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "isDefault": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "isDefault"
+          ]
+        }
+      },
+      "error": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "branches",
+      "error"
+    ]
+  },
+  "ConnectionLinkResult": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "$ref": "#/components/schemas/ConnectorKind"
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "label": {
+        "type": "string"
+      },
+      "connectorId": {
+        "type": "string",
+        "nullable": true
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "created",
+          "exists",
+          "failed"
+        ]
+      },
+      "error": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "kind",
+      "projectId",
+      "label",
+      "connectorId",
+      "status",
+      "error"
+    ]
+  },
+  "ConnectionLinksResponse": {
+    "type": "object",
+    "properties": {
+      "results": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ConnectionLinkResult"
+        }
+      }
+    },
+    "required": [
+      "results"
+    ]
+  },
+  "ConnectionMethod": {
+    "type": "string",
+    "enum": [
+      "token",
+      "app",
+      "oauth"
+    ]
+  },
+  "ConnectionProvider": {
+    "type": "string",
+    "enum": [
+      "github",
+      "gitlab",
+      "git",
+      "atlassian",
+      "confluence-server",
+      "notion",
+      "google",
+      "linear",
+      "zendesk",
+      "intercom",
+      "figma"
+    ]
+  },
+  "ConnectionResource": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "label": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string",
+        "nullable": true
+      },
+      "namespace": {
+        "type": "string",
+        "nullable": true
+      },
+      "private": {
+        "type": "boolean"
+      },
+      "defaultBranch": {
+        "type": "string",
+        "nullable": true
+      },
+      "updatedAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "url": {
+        "type": "string",
+        "nullable": true
+      },
+      "config": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "label",
+      "description",
+      "namespace",
+      "private",
+      "defaultBranch",
+      "updatedAt",
+      "url",
+      "config"
+    ]
+  },
+  "ConnectionResourcesResponse": {
+    "type": "object",
+    "properties": {
+      "listable": {
+        "type": "boolean"
+      },
+      "resources": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ConnectionResource"
+        }
+      },
+      "error": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "listable",
+      "resources",
+      "error"
+    ]
+  },
+  "ConnectionResponse": {
+    "type": "object",
+    "properties": {
+      "connection": {
+        "$ref": "#/components/schemas/ConnectionSummary"
+      }
+    },
+    "required": [
+      "connection"
+    ]
+  },
+  "ConnectionSummary": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "workspaceId": {
+        "type": "string"
+      },
+      "provider": {
+        "$ref": "#/components/schemas/ConnectionProvider"
+      },
+      "method": {
+        "$ref": "#/components/schemas/ConnectionMethod"
+      },
+      "site": {
+        "type": "string",
+        "nullable": true
+      },
+      "accountId": {
+        "type": "string",
+        "nullable": true
+      },
+      "accountLabel": {
+        "type": "string",
+        "nullable": true
+      },
+      "accountAvatarUrl": {
+        "type": "string",
+        "nullable": true
+      },
+      "credentialHint": {
+        "type": "string",
+        "nullable": true
+      },
+      "connectors": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "kind": {
+              "$ref": "#/components/schemas/ConnectorKind"
+            },
+            "projectId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "kind",
+            "projectId"
+          ]
+        }
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "workspaceId",
+      "provider",
+      "method",
+      "site",
+      "accountId",
+      "accountLabel",
+      "accountAvatarUrl",
+      "credentialHint",
+      "connectors",
+      "createdAt",
+      "updatedAt"
+    ]
+  },
+  "ConnectionsWaitResponse": {
+    "type": "object",
+    "properties": {
+      "fingerprint": {
+        "type": "string"
+      },
+      "changed": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "fingerprint",
+      "changed"
+    ]
+  },
   "ConnectorAclMode": {
     "type": "string",
     "enum": [
@@ -8451,6 +8741,10 @@
         "type": "string",
         "nullable": true
       },
+      "connectionId": {
+        "type": "string",
+        "nullable": true
+      },
       "canStoreSecrets": {
         "type": "boolean"
       },
@@ -8531,6 +8825,7 @@
       "config",
       "hasCredential",
       "credentialHint",
+      "connectionId",
       "canStoreSecrets",
       "projectId",
       "parentId",
@@ -14054,6 +14349,44 @@
     },
     "required": [
       "conflicts"
+    ]
+  },
+  "ListConnectionsResponse": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "connections": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ConnectionSummary"
+        }
+      },
+      "methods": {
+        "type": "object",
+        "properties": {
+          "app": {
+            "type": "boolean"
+          },
+          "oauth": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "app",
+          "oauth"
+        ]
+      },
+      "canStoreSecrets": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "connections",
+      "methods",
+      "canStoreSecrets"
     ]
   },
   "ListConnectorLinksResponse": {

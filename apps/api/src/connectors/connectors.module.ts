@@ -13,6 +13,8 @@ import { ProjectsModule } from '../projects/projects.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { ConnectorConflictSweeper } from './connector-conflict.sweeper.js';
 import { ConnectionsBackfill } from './connections.backfill.js';
+import { ConnectionsController } from './connections.controller.js';
+import { ConnectionsService } from './connections.service.js';
 import { ConnectorItemAiService } from './connector-item-ai.service.js';
 import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorQueueModule } from './connector-queue.module.js';
@@ -77,7 +79,16 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
   // ParseUuidPipe would 400 on the literal `github`. The three picker GETs on
   // GithubController need no such care — they are one segment longer than
   // anything `:id` declares.
-  controllers: [GithubWebhookController, ConnectorsController, ConnectorWebhookController, GithubController, WorkItemsController, TrackerRoutesController],
+  controllers: [
+    GithubWebhookController,
+    ConnectorsController,
+    ConnectorWebhookController,
+    GithubController,
+    WorkItemsController,
+    TrackerRoutesController,
+    // #564: workspace connections and the link screen.
+    ConnectionsController,
+  ],
   providers: [
     ConnectorConflictSweeper,
     // #424: API-only, here rather than in WorkItemHandoffModule (which MCP imports).
@@ -99,6 +110,7 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
     RepoGuidanceListener,
     // #564: binds existing connectors to connections once per boot, in one process.
     ConnectionsBackfill,
+    ConnectionsService,
   ],
   exports: [ConnectorsCoreModule, ConnectorWorkItemsModule],
 })

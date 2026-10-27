@@ -391,6 +391,12 @@ export class AccessService {
     return job.workspaceId;
   }
 
+  async workspaceOfConnection(connectionId: string): Promise<string> {
+    const row = await this.prisma.connection.findUnique({ where: { id: connectionId }, select: { workspaceId: true } });
+    if (!row) throw new NotFoundException(t('error.connection.notFound', { id: connectionId }));
+    return row.workspaceId;
+  }
+
   async workspaceOfConnector(connectorId: string): Promise<string> {
     const connector = await this.prisma.connector.findUnique({
       where: { id: connectorId },

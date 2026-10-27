@@ -2312,6 +2312,86 @@
     },
     {
       "method": "GET",
+      "path": "/v1/connections",
+      "tag": "connections",
+      "summary": "List the workspace's connections and the connectors using each",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connections",
+      "tag": "connections",
+      "summary": "Save a token as a connection; the same account again rotates it",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/connections/{id}",
+      "tag": "connections",
+      "summary": "Delete a connection no connector uses (409 names the ones that do)",
+      "role": "admin",
+      "source": "connection",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/connections/{id}",
+      "tag": "connections",
+      "summary": "Rotate a token connection's token (same account only)",
+      "role": "admin",
+      "source": "connection",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connections/{id}/branches",
+      "tag": "connections",
+      "summary": "A repository's branches, default first",
+      "role": "admin",
+      "source": "connection",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connections/{id}/links",
+      "tag": "connections",
+      "summary": "Link resources to projects: one connector per pair, duplicates reported, never deletes",
+      "role": "admin",
+      "source": "connection",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connections/{id}/resources",
+      "tag": "connections",
+      "summary": "What this connection can reach for a connector kind, newest activity first",
+      "role": "admin",
+      "source": "connection",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connections/wait",
+      "tag": "connections",
+      "summary": "Answer when connections change, or after about 25 s",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/code-usages",
       "tag": "connectors",
       "summary": "Where a file, directory or glob is used in one of the workspace's code connectors, the pages documenting each usage site, and the component pages covering the path. Pages the caller may not open are counted, never titled",

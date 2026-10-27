@@ -107,16 +107,17 @@ export interface FigmaAllowlist {
 }
 
 /**
- * The allowlist field: team and project links or `team:<id>` / `project:<id>`,
+ * The allowlist field: team and folder links or `team:<id>` / `folder:<id>`,
  * separated by whitespace or commas. Figma's links are
- * `/files/team/<id>/…`, `/files/project/<id>/…`, and either one under an
+ * `/files/team/<id>/…`, `/files/folder/<id>/…`, and either one under an
  * organization (`/files/<org>/team/<id>/…`), so the id is the number after
- * the word.
+ * the word. A folder is what Figma used to call a project, with the same id,
+ * so `project:` and `/project/` links still read as folders (#549).
  */
 export function parseFigmaAllowlist(text: string | null | undefined): FigmaAllowlist {
   const out: FigmaAllowlist = { teams: [], projects: [], invalid: [] };
   for (const entry of (text ?? '').split(/[\s,]+/).filter(Boolean)) {
-    const match = /^(team|project):(\d+)$/.exec(entry) ?? /^https:\/\/(?:www\.)?figma\.com\/files\/(?:[^/?#]+\/)*?(team|project)\/(\d+)(?:[/?#]|$)/.exec(entry);
+    const match = /^(team|project|folder):(\d+)$/.exec(entry) ?? /^https:\/\/(?:www\.)?figma\.com\/files\/(?:[^/?#]+\/)*?(team|project|folder)\/(\d+)(?:[/?#]|$)/.exec(entry);
     if (!match) out.invalid.push(entry);
     else (match[1] === 'team' ? out.teams : out.projects).push(match[2]);
   }

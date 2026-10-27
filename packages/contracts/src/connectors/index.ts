@@ -601,11 +601,11 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
     fields: [
       {
         key: FIGMA_ALLOWLIST_CONFIG_KEY,
-        label: 'Teams and projects',
+        label: 'Teams and folders',
         kind: 'text',
         required: true,
         placeholder: 'https://www.figma.com/files/team/1234567890/Design',
-        help: 'Figma team or project links (or team:<id>, project:<id>), separated by spaces or commas. Only their files can be embedded.',
+        help: 'Figma team or folder links (or team:<id>, folder:<id>), separated by spaces or commas. Only their files can be embedded.',
       },
       {
         key: FIGMA_TOKEN_EXPIRES_CONFIG_KEY,

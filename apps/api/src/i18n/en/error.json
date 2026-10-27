@@ -347,7 +347,7 @@
     "pullNotSupported": "{kind} connectors cannot pull",
     "pushNotSupported": "{kind} connectors cannot push",
     "figmaAllowlistInvalid": "Not a Figma team or project: {entries}",
-    "figmaListRefused": "Figma refused {entry} (403): the token needs the {scope} scope, and its owner must be able to open {entry} in Figma",
+    "figmaListRefused": "Figma refused {entry} (403: {reason}): the token needs the {scope} scope, and its owner must be able to open {entry} in Figma",
     "directionNotAllowed": "This connector is not configured to {direction}",
     "runInFlight": "A sync for this connector is already running",
     "webhookNotConfigured": "This connector has no webhook secret",

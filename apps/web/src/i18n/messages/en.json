@@ -824,14 +824,14 @@
     "kindText": {
       "figma": {
         "allowlist": {
-          "label": "Teams and projects",
-          "help": "Figma team or project links (or team:<id>, project:<id>), separated by spaces or commas. Only their files can be embedded; removing one hides its embeds everywhere until it is added back."
+          "label": "Teams and folders",
+          "help": "Figma team or folder links (or team:<id>, folder:<id>), separated by spaces or commas. Only their files can be embedded; removing one hides its embeds everywhere until it is added back."
         },
         "tokenExpiresAt": {
           "label": "Token expires on",
           "help": "The expiry you chose when creating the token, as YYYY-MM-DD. Figma does not report it, so the card warns from this date."
         },
-        "credential": "A personal access token from Figma (Settings → Security → Personal access tokens) with the scopes file_content:read, file_metadata:read and projects:read. Its owner must be able to open every team and project listed below."
+        "credential": "A personal access token from Figma (Settings → Security → Personal access tokens) with the scopes file_content:read, file_metadata:read and folders:read. Its owner must be able to open every team and folder listed below."
       },
       "googleDrive": {
         "credential": "Paste the whole JSON key file of a Google Cloud service account with the Drive API enabled. Then share the folder with the service account's email, or add it to the shared drive.",

@@ -41,6 +41,13 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- The Figma connector's **Test connection** failed with "the token needs the `projects:read` scope"
+  for a token created with the scopes Figma offers today (#549). Figma has renamed projects to folders, and a
+  token issued with the new `folders:read` scope cannot call the old project endpoints. The allowlist is
+  now listed through Figma's folder endpoints, which also reach files in nested subfolders that were
+  previously reported as outside the allowlist. When Figma refuses an entry, the message now includes
+  Figma's own reason. The form asks for `folders:read`, and the allowlist accepts `folder:<id>` and
+  `…/files/folder/<id>` links beside the existing `project:` ones.
 - A git connector's repository step fell back to the Repository URL and token fields with no explanation
   when the GitHub App was only partly configured, so it looked like a deliberate PAT-only setup (#552).
   An admin now sees which keys are missing (the App's ID, private key and slug, or OAuth's client ID,

@@ -663,7 +663,7 @@ export class McpService {
       },
       async ({ workspaceId }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.connectors.list(workspaceId));
+        return this.json(await this.connectors.list(await guard.scope(workspaceId)));
       },
     );
 
@@ -2587,8 +2587,15 @@ export class McpService {
         }
         return this.permissions.scopeFor(principal, workspaceId);
       },
-      connector: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnector(id), role),
-      connectorRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnectorRun(id), role),
+      // Then the connector's project visibility, as AclGuard does (#555).
+      connector: async (id: string, role: WorkspaceRole) => {
+        await check(() => this.access.workspaceOfConnector(id), role);
+        await this.permissions.requireConnectorVisible(principal, { connectorId: id });
+      },
+      connectorRun: async (id: string, role: WorkspaceRole) => {
+        await check(() => this.access.workspaceOfConnectorRun(id), role);
+        await this.permissions.requireConnectorVisible(principal, { runId: id });
+      },
       workflowRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfWorkflowRun(id), role),
       exportJob: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfExport(id), role),
     };

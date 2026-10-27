@@ -44,6 +44,11 @@ in the pull request that introduces them — see
   agent runs (archaeologist, component drafts, the PR drift sentinel) write findings the whole workspace
   reads, so they no longer read a restricted project's repository at all. Starting one against such a
   repository is refused when you press Run.
+- Any member could see the connectors of a restricted project, with their names, repository URLs and
+  run errors, in *Settings → Connectors*, through `GET /v1/connectors` and `knowledge_list_connectors`,
+  and by opening the connector or its runs by id (#555). Those connectors are now left out of the list
+  for anyone who cannot open the project, and their connector and run routes and MCP tools answer
+  *not found*. A member granted the project, and a workspace admin, see them as before.
 
 ### Fixed
 

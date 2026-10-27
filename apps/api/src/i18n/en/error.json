@@ -351,6 +351,7 @@
     "figmaOauthOff": "Connect with Figma is not set up on this deployment, or this is not a Figma connector",
     "directionNotAllowed": "This connector is not configured to {direction}",
     "runInFlight": "A sync for this connector is already running",
+    "connectionForeign": "This connector points at a connection that belongs to another workspace",
     "webhookNotConfigured": "This connector has no webhook secret",
     "webhookInvalidSignature": "The webhook signature did not verify",
     "notLinked": "This page is not linked to any connector",

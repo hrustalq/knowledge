@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type Connector, type ConnectorRun } from '@prisma/client';
 import {
@@ -34,6 +34,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { ConnectorRegistry } from './adapters/connector.registry.js';
 import { releaseMirroredAccess } from './connector-acl-release.js';
+import { bindConnection } from './connection-binding.js';
 import { GithubAppService } from './github/github-app.service.js';
 import { FigmaOauthService, pruneFigmaGrants } from '../embeds/figma-oauth.service.js';
 import type { ConnectorContext } from './adapters/connector.types.js';
@@ -197,6 +198,7 @@ export class ConnectorsService {
         createdBy: userId ?? null,
       },
     });
+    await bindConnection(this.prisma, row, this.key);
     return this.toSummary(row);
   }
 
@@ -245,6 +247,8 @@ export class ConnectorsService {
         ...(input.webhookSecret === undefined ? {} : { webhookSecret: this.encrypt(input.webhookSecret) }),
       },
     });
+    // A new token, installation or repository host can mean another account.
+    if (input.credential !== undefined || input.config !== undefined) await bindConnection(this.prisma, updated, this.key);
     return this.toSummary(updated);
   }
 
@@ -302,13 +306,40 @@ export class ConnectorsService {
    * suspended org. The adapter then behaves exactly as it would for a missing
    * token, and the 404 classifier in `repo-archive.ts` says so in words.
    */
-  private async credentialFor(row: Connector): Promise<string | null> {
+  private async credentialFor(row: Connector): Promise<Pick<ConnectorContext, 'credential' | 'bearer' | 'renewCredential'>> {
+    // The connection (#564) wins; the inline fallbacks below stay for one
+    // release, for a connector the boot backfill has not reached yet.
+    if (row.connectionId) {
+      const connection = await this.prisma.connection.findUnique({ where: { id: row.connectionId } });
+      // Only the server binds a connection, but a binding across workspaces
+      // would dial with someone else's account: refuse it rather than trust it.
+      if (!connection || connection.workspaceId !== row.workspaceId) {
+        throw new ForbiddenException(t('error.connector.connectionForeign'));
+      }
+      if (connection.method === 'app') {
+        return { credential: connection.externalRef ? await this.githubApp.installationToken(connection.externalRef) : null };
+      }
+      if (connection.method === 'oauth') return this.figmaGrant(connection.externalRef ?? '');
+      return { credential: decryptSecret(connection.credential, this.key) };
+    }
+
     const config = (row.config ?? {}) as Record<string, unknown>;
+    // A Figma connector connected over OAuth dials with its grant (#557).
+    const grant = row.kind === 'figma' ? config[FIGMA_GRANT_CONFIG_KEY] : undefined;
+    if (typeof grant === 'string' && grant) return this.figmaGrant(grant);
     const installationId = config[GITHUB_INSTALLATION_CONFIG_KEY];
     if (typeof installationId === 'string' && installationId.trim() !== '') {
-      return this.githubApp.installationToken(installationId.trim());
+      return { credential: await this.githubApp.installationToken(installationId.trim()) };
     }
-    return decryptSecret(row.credential, this.key);
+    return { credential: decryptSecret(row.credential, this.key) };
+  }
+
+  private async figmaGrant(grant: string): Promise<Pick<ConnectorContext, 'credential' | 'bearer' | 'renewCredential'>> {
+    return {
+      credential: grant ? await this.figmaOauth.tokenFor(grant) : null,
+      bearer: true,
+      renewCredential: (rejected: string) => this.figmaOauth.tokenFor(grant, rejected),
+    };
   }
 
   async contextFor(
@@ -333,22 +364,11 @@ export class ConnectorsService {
         }
       : () => undefined;
 
-    // A Figma connector connected over OAuth dials with its grant (#557).
-    const grant = row.kind === 'figma' ? (row.config as Record<string, unknown> | null)?.[FIGMA_GRANT_CONFIG_KEY] : undefined;
-    const oauth =
-      typeof grant === 'string' && grant
-        ? {
-            credential: await this.figmaOauth.tokenFor(grant),
-            bearer: true,
-            renewCredential: (rejected: string) => this.figmaOauth.tokenFor(grant, rejected),
-          }
-        : { credential: await this.credentialFor(row) };
-
     return {
       connectorId: row.id,
       workspaceId: row.workspaceId,
       config: (row.config ?? {}) as Record<string, string>,
-      ...oauth,
+      ...(await this.credentialFor(row)),
       webhookSecret: decryptSecret(row.webhookSecret, this.key),
       onStage,
       debug,

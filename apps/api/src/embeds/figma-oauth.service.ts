@@ -7,6 +7,7 @@ import { decryptSecret, encryptSecret, parseKey } from '../ai/secret-box.js';
 import { safeFetch } from '../common/safe-fetch.js';
 import type { Env } from '../config/env.js';
 import { FIGMA_API } from '../connectors/adapters/figma.js';
+import { bindConnection } from '../connectors/connection-binding.js';
 import { signState, verifyState, type OauthState } from '../connectors/github/github-jwt.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -142,10 +143,11 @@ export class FigmaOauthService {
         delete config[FIGMA_TOKEN_EXPIRES_CONFIG_KEY];
         config[FIGMA_GRANT_CONFIG_KEY] = figmaUserId;
         config[FIGMA_HANDLE_CONFIG_KEY] = handle;
-        await tx.connector.update({
+        const bound = await tx.connector.update({
           where: { id: state.connectorId },
           data: { config: config as Prisma.InputJsonValue, credential: null, credentialHint: null },
         });
+        await bindConnection(tx, bound, this.key);
       }
       await pruneFigmaGrants(tx);
       return Boolean(connector);
@@ -185,7 +187,8 @@ export class FigmaOauthService {
       const config = { ...((row.config ?? {}) as Record<string, unknown>) };
       delete config[FIGMA_GRANT_CONFIG_KEY];
       delete config[FIGMA_HANDLE_CONFIG_KEY];
-      await tx.connector.update({ where: { id: connectorId }, data: { config: config as Prisma.InputJsonValue } });
+      const unbound = await tx.connector.update({ where: { id: connectorId }, data: { config: config as Prisma.InputJsonValue } });
+      await bindConnection(tx, unbound, this.key);
       await pruneFigmaGrants(tx);
     });
   }

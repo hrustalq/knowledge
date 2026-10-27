@@ -52,6 +52,10 @@ function setup(env: Record<string, unknown> = {}) {
       },
       update: async ({ where, data }: { where: { id: string }; data: object }) => Object.assign(connectors.get(where.id)!, data),
     },
+    // #564: a bound grant becomes the connector's `oauth` connection.
+    connection: {
+      upsert: async ({ create }: { create: { externalRef: string } }) => ({ id: `conn-${create.externalRef}` }),
+    },
     $executeRaw: async () => 0,
     $transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn(prisma),
   };
@@ -131,6 +135,7 @@ describe('FigmaOauthService', () => {
     expect(connectors.get('c1')).toMatchObject({
       credential: null,
       config: { allowlist: 'team:1', [FIGMA_GRANT_CONFIG_KEY]: 'fig-1', [FIGMA_HANDLE_CONFIG_KEY]: 'ada' },
+      connectionId: 'conn-fig-1',
     });
     expect(connectors.get('c1')!.config).not.toHaveProperty(FIGMA_TOKEN_EXPIRES_CONFIG_KEY);
   });

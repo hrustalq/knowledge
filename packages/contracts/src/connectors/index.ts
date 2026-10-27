@@ -623,6 +623,88 @@ export function connectorKindInfo(kind: string): ConnectorKindInfo | null {
   return CONNECTOR_KIND_INFO.find((k) => k.kind === kind) ?? null;
 }
 
+// ---------------------------------------------------------------------------
+// Connections (#564): one account's access to one upstream system, shared by
+// every connector of a compatible kind in the workspace.
+// ---------------------------------------------------------------------------
+
+/**
+ * Who a connection authenticates against. Derived from the connector kind (and
+ * the host, for git kinds) by `connectionProviderFor`, never chosen: that is
+ * what lets one Atlassian token serve Confluence and Jira on the same site.
+ */
+export const CONNECTION_PROVIDERS = [
+  'github',
+  'gitlab',
+  'git',
+  'atlassian',
+  'confluence-server',
+  'notion',
+  'google',
+  'linear',
+  'zendesk',
+  'intercom',
+  'figma',
+] as const;
+export type ConnectionProvider = (typeof CONNECTION_PROVIDERS)[number];
+
+/**
+ * How a connection authenticates: a pasted secret, a GitHub App installation
+ * (`external_ref` = installation id), or a user grant with refresh
+ * (`external_ref` = the Figma grant).
+ */
+export const CONNECTION_METHODS = ['token', 'app', 'oauth'] as const;
+export type ConnectionMethod = (typeof CONNECTION_METHODS)[number];
+
+export interface ConnectionTarget {
+  provider: ConnectionProvider;
+  /** The upstream origin when the provider is not one fixed host: an Atlassian site, a GitLab instance. */
+  site: string | null;
+}
+
+/** github.com, anything calling itself GitLab, or a plain git host — `repoHost` in the API reads the same rule. */
+export function gitProviderOf(hostname: string): 'github' | 'gitlab' | 'git' {
+  return hostname === 'github.com' ? 'github' : hostname.includes('gitlab') ? 'gitlab' : 'git';
+}
+
+function originOf(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    return new URL(value.trim()).origin.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/** The provider a connector of `kind` with `config` authenticates against. */
+export function connectionProviderFor(kind: ConnectorKind, config: Record<string, unknown>): ConnectionTarget {
+  switch (kind) {
+    case 'markdown-git':
+    case 'codebase': {
+      const site = originOf(config.repoUrl);
+      const provider = site ? gitProviderOf(new URL(site).hostname) : 'git';
+      // GitHub Enterprise is out of scope, so github.com needs no site.
+      return { provider, site: provider === 'github' ? null : site };
+    }
+    case 'confluence':
+    case 'jira':
+      return { provider: 'atlassian', site: originOf(config.baseUrl) };
+    case 'confluence-server':
+      return { provider: 'confluence-server', site: originOf(config.baseUrl) };
+    case 'zendesk':
+      return { provider: 'zendesk', site: originOf(config.baseUrl) };
+    case 'google-drive':
+      return { provider: 'google', site: null };
+    case 'intercom':
+      // A token belongs to one region's API host.
+      return { provider: 'intercom', site: `https://api.${config.region === 'eu' || config.region === 'au' ? `${config.region}.` : ''}intercom.io` };
+    case 'notion':
+    case 'linear':
+    case 'figma':
+      return { provider: kind, site: null };
+  }
+}
+
 // GET /v1/connectors?workspaceId=
 export interface ConnectorSummary {
   id: string;

@@ -2101,11 +2101,17 @@ model Connector {
   /// read Accept-Language from (same reasoning as import_jobs.locale).
   locale String @default("en")
 
+  /// The account this connector dials as (#564). Null until the API boot step
+  /// backfills it; `credential` above stays the fallback for one release, so
+  /// the previous image still syncs against a migrated database.
+  connectionId String? @map("connection_id") @db.Uuid
+
   createdBy String?  @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   project               Project                @relation(fields: [projectId], references: [id])
+  connection            Connection?            @relation(fields: [connectionId], references: [id], onDelete: Restrict)
   links                 ConnectorLink[]
   runs                  ConnectorRun[]
   conflicts             ConnectorConflict[]
@@ -2120,6 +2126,50 @@ model Connector {
   @@unique([workspaceId, name])
   @@index([workspaceId, kind])
   @@map("connectors")
+}
+
+/// One account's access to one upstream system (#564, CONNECTION_PROVIDERS):
+/// shared by every connector of a compatible kind in the workspace, so a token
+/// is pasted once and rotated once. Exactly one `method`:
+/// - `token` — `credential` holds the pasted secret;
+/// - `app` — `external_ref` is a GitHub App installation id;
+/// - `oauth` — `external_ref` is a Figma grant (`figma_oauth_grants`).
+///
+/// No FK on workspace_id or created_by, per house policy.
+model Connection {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  /// ConnectionProvider, derived from the connector kind by `connectionProviderFor`.
+  provider    String
+  /// ConnectionMethod — 'token' | 'app' | 'oauth'.
+  method      String
+  /// The upstream origin for providers that are not one fixed host (an
+  /// Atlassian site, a GitLab instance); null otherwise.
+  site        String?
+
+  /// Who the credential belongs to upstream, from the provider's identify
+  /// probe. Null for a connection backfilled from a connector (never probed).
+  accountId        String? @map("account_id")
+  accountLabel     String? @map("account_label")
+  accountAvatarUrl String? @map("account_avatar_url")
+
+  /// secret-box envelope ("gcm$iv$tag$ct"), `token` only. Never leaves the API.
+  credential     String?
+  /// Last-4 hint, as on connectors.
+  credentialHint String? @map("credential_hint")
+  /// Installation id (`app`) or Figma grant id (`oauth`).
+  externalRef    String? @map("external_ref")
+
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  connectors Connector[]
+
+  /// One row per installation or grant in a workspace. Token rows carry a
+  /// null external_ref, which Postgres never counts as a duplicate.
+  @@unique([workspaceId, provider, method, externalRef])
+  @@map("connections")
 }
 
 /// The identity map between an external item and a page. Without it a second

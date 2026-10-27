@@ -57,6 +57,8 @@ export const WORKSPACE_TEARDOWN = {
   CodeFile: 'workspace',
   ProjectTrackerRoute: 'workspace',
   Connector: 'workspace',
+  // RESTRICTed by connectors.connection_id, so after them.
+  Connection: 'workspace',
   GithubInstallation: 'workspace',
   // Chat, leaves to root.
   ChatMessage: 'workspace',

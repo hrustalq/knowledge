@@ -13,6 +13,17 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Operations
+
+- Migration `20261218100000_connections` adds the `connections` table and `connectors.connection_id`
+  (#564). It is additive: `connectors.credential` stays populated and is still read when a connector has
+  no connection, so rolling back to the previous image keeps every connector syncing. Existing
+  connectors are bound to connections by the API on boot (logged as `bound N connector(s) to a
+  connection`), and connectors that hold the same token, App installation or Figma grant share one.
+  Nothing to run by hand.
+
 ## [0.36.0] — 2026-10-27
 
 ### Added

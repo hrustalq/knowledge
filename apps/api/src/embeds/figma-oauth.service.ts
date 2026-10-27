@@ -7,6 +7,7 @@ import { decryptSecret, encryptSecret, parseKey } from '../ai/secret-box.js';
 import { safeFetch } from '../common/safe-fetch.js';
 import type { Env } from '../config/env.js';
 import { FIGMA_API } from '../connectors/adapters/figma.js';
+import { bindConnection } from '../connectors/connection-binding.js';
 import { signState, verifyState, type OauthState } from '../connectors/github/github-jwt.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -35,7 +36,8 @@ const WAIT_STEP_MS = 250;
 const STATE_TTL_SECONDS = 600;
 
 export interface FigmaOauthState extends OauthState {
-  connectorId: string;
+  /** The connector to bind, when the flow started from one; null connects the workspace only (#564). */
+  connectorId: string | null;
   /** The PKCE verifier, sealed: the state travels through figma.com in a URL. */
   pkce: string;
 }
@@ -69,7 +71,7 @@ export class FigmaOauthService {
     return `${this.config.get('API_PUBLIC_URL', { infer: true }).replace(/\/+$/, '')}/v1/connectors/figma/callback`;
   }
 
-  authorizeUrl(workspaceId: string, userId: string, connectorId: string, returnTo: string): string | null {
+  authorizeUrl(workspaceId: string, userId: string, connectorId: string | null, returnTo: string): string | null {
     if (!this.configured) return null;
     const verifier = randomBytes(32).toString('base64url');
     const state: FigmaOauthState = {
@@ -97,11 +99,12 @@ export class FigmaOauthService {
   verify(raw: string): FigmaOauthState | null {
     if (!this.key) return null;
     const state = verifyState<FigmaOauthState>(raw, this.key);
-    return state?.connectorId && state.pkce ? state : null;
+    return state?.pkce ? state : null;
   }
 
   /**
-   * Exchanges the code, stores the grant and points the connector at it.
+   * Exchanges the code, stores the grant as the workspace's `oauth`
+   * connection (#564), and points the connector at it when the flow named one.
    * False rather than a throw: the caller is a public callback whose only
    * honest answer is a redirect. A replayed state fails here too: its code is
    * spent, and a fresh code was issued for another state's PKCE challenge.
@@ -131,6 +134,18 @@ export class FigmaOauthService {
     };
     return this.prisma.$transaction(async (tx) => {
       await tx.figmaOauthGrant.upsert({ where: { figmaUserId }, create: { figmaUserId, ...data }, update: data });
+      const ref = { workspaceId: state.workspaceId, provider: 'figma', method: 'oauth', externalRef: figmaUserId };
+      const account = { accountId: figmaUserId, accountLabel: handle };
+      await tx.connection.upsert({
+        where: { workspaceId_provider_method_externalRef: ref },
+        create: { ...ref, ...account, createdBy: state.userId },
+        // A reconnect touches the row, which is what the waiting tab's long poll sees.
+        update: account,
+      });
+      if (!state.connectorId) {
+        await pruneFigmaGrants(tx);
+        return true;
+      }
       // The state names the workspace, so a connector moved or deleted since is not bound.
       const connector = await tx.connector.findFirst({
         where: { id: state.connectorId, workspaceId: state.workspaceId, kind: 'figma' },
@@ -142,10 +157,11 @@ export class FigmaOauthService {
         delete config[FIGMA_TOKEN_EXPIRES_CONFIG_KEY];
         config[FIGMA_GRANT_CONFIG_KEY] = figmaUserId;
         config[FIGMA_HANDLE_CONFIG_KEY] = handle;
-        await tx.connector.update({
+        const bound = await tx.connector.update({
           where: { id: state.connectorId },
           data: { config: config as Prisma.InputJsonValue, credential: null, credentialHint: null },
         });
+        await bindConnection(tx, bound, this.key);
       }
       await pruneFigmaGrants(tx);
       return Boolean(connector);
@@ -185,7 +201,8 @@ export class FigmaOauthService {
       const config = { ...((row.config ?? {}) as Record<string, unknown>) };
       delete config[FIGMA_GRANT_CONFIG_KEY];
       delete config[FIGMA_HANDLE_CONFIG_KEY];
-      await tx.connector.update({ where: { id: connectorId }, data: { config: config as Prisma.InputJsonValue } });
+      const unbound = await tx.connector.update({ where: { id: connectorId }, data: { config: config as Prisma.InputJsonValue } });
+      await bindConnection(tx, unbound, this.key);
       await pruneFigmaGrants(tx);
     });
   }
@@ -247,13 +264,15 @@ export class FigmaOauthService {
 }
 
 /**
- * Deletes every grant no connector references: after a disconnect, a rebind,
- * a connector's deletion and a workspace teardown. One statement, so it is
- * idempotent and safe to run from anywhere.
+ * Deletes every grant neither a connector nor a connection references: after
+ * a disconnect, a rebind, a connector's or connection's deletion and a
+ * workspace teardown. One statement, so it is idempotent and safe to run from anywhere.
  */
 export async function pruneFigmaGrants(db: Pick<PrismaClient, '$executeRaw'>): Promise<void> {
   await db.$executeRaw`DELETE FROM figma_oauth_grants g WHERE NOT EXISTS (
-    SELECT 1 FROM connectors c WHERE c.kind = 'figma' AND c.config->>${FIGMA_GRANT_CONFIG_KEY} = g.figma_user_id)`;
+    SELECT 1 FROM connectors c WHERE c.kind = 'figma' AND c.config->>${FIGMA_GRANT_CONFIG_KEY} = g.figma_user_id)
+    AND NOT EXISTS (
+    SELECT 1 FROM connections n WHERE n.provider = 'figma' AND n.method = 'oauth' AND n.external_ref = g.figma_user_id)`;
 }
 
 /** Figma's `expires_in` is seconds; 90 days when it says nothing. */

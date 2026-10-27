@@ -2,10 +2,11 @@ import { Controller, Delete, Get, Query, Res } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
-import type {
-  GithubBranchesResponse,
-  GithubInstallationsResponse,
-  GithubReposResponse,
+import {
+  oauthLandingPath,
+  type GithubBranchesResponse,
+  type GithubInstallationsResponse,
+  type GithubReposResponse,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal, Public } from '../../auth/access.decorator.js';
 import type { Principal } from '../../auth/principal.js';
@@ -175,7 +176,7 @@ export class GithubController {
     if (!state) {
       // Deliberately not specific: a forged or replayed state should learn
       // nothing about why it was rejected.
-      res.redirect(`${web}/settings/connectors?github=error`);
+      res.redirect(`${web}${oauthLandingPath('github', 'error')}`);
       return;
     }
 
@@ -183,7 +184,7 @@ export class GithubController {
     if (code) {
       const ok = await this.oauth.completeAuthorization(code, state.userId, this.redirectUri());
       if (!ok) {
-        res.redirect(`${web}${state.returnTo}?github=auth-failed`);
+        res.redirect(`${web}${oauthLandingPath('github', 'auth-failed', state.returnTo)}`);
         return;
       }
     }
@@ -193,12 +194,12 @@ export class GithubController {
     if (installationId && isNumericId(installationId)) {
       const recorded = await this.browse.recordInstallation(state.workspaceId, installationId, state.userId);
       if (!recorded) {
-        res.redirect(`${web}${state.returnTo}?github=install-failed`);
+        res.redirect(`${web}${oauthLandingPath('github', 'install-failed', state.returnTo)}`);
         return;
       }
     }
 
-    res.redirect(`${web}${state.returnTo}?github=connected`);
+    res.redirect(`${web}${oauthLandingPath('github', installationId ? 'installed' : 'connected', state.returnTo)}`);
   }
 
   private redirectUri(): string {

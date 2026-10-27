@@ -167,7 +167,10 @@ matched — a different failure, correctly worded.
 ## Deliberate deferrals
 
 - **GitHub only.** GitLab and self-hosted remotes keep the URL + token path.
-  They still get the better error messages.
+  They still get the better error messages. *Lifted by #564*
+  ([69](69-connections.md)): a GitHub token and a GitLab connection (gitlab.com
+  or self-hosted) list repositories and branches too, and an installation is
+  now the workspace's `app` connection.
 - **No migration of existing PAT connectors.** Repointing one at an installation
   is a re-pick in the wizard, and doing it automatically would mean guessing
   which installation an existing URL belongs to.

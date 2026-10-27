@@ -985,6 +985,14 @@ export type I18nTranslations = {
             "emptyPage": string;
             "noDraft": string;
         };
+        "connection": {
+            "notFound": string;
+            "notToken": string;
+            "otherAccount": string;
+            "inUse": string;
+            "siteRequired": string;
+            "refused": string;
+        };
         "connector": {
             "notFound": string;
             "runNotFound": string;
@@ -1013,6 +1021,8 @@ export type I18nTranslations = {
             "figmaOauthOff": string;
             "directionNotAllowed": string;
             "runInFlight": string;
+            "connectionMismatch": string;
+            "connectionForeign": string;
             "webhookNotConfigured": string;
             "webhookInvalidSignature": string;
             "notLinked": string;
@@ -1764,6 +1774,7 @@ export type I18nTranslations = {
         "workflow": string;
         "workflowRun": string;
         "connector": string;
+        "connection": string;
         "connectorRun": string;
         "id": string;
         "savedFilter": string;

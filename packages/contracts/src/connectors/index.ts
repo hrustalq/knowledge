@@ -623,6 +623,260 @@ export function connectorKindInfo(kind: string): ConnectorKindInfo | null {
   return CONNECTOR_KIND_INFO.find((k) => k.kind === kind) ?? null;
 }
 
+// ---------------------------------------------------------------------------
+// Connections (#564): one account's access to one upstream system, shared by
+// every connector of a compatible kind in the workspace.
+// ---------------------------------------------------------------------------
+
+/**
+ * Who a connection authenticates against. Derived from the connector kind (and
+ * the host, for git kinds) by `connectionProviderFor`, never chosen: that is
+ * what lets one Atlassian token serve Confluence and Jira on the same site.
+ */
+export const CONNECTION_PROVIDERS = [
+  'github',
+  'gitlab',
+  'git',
+  'atlassian',
+  'confluence-server',
+  'notion',
+  'google',
+  'linear',
+  'zendesk',
+  'intercom',
+  'figma',
+] as const;
+export type ConnectionProvider = (typeof CONNECTION_PROVIDERS)[number];
+
+/**
+ * How a connection authenticates: a pasted secret, a GitHub App installation
+ * (`external_ref` = installation id), or a user grant with refresh
+ * (`external_ref` = the Figma grant).
+ */
+export const CONNECTION_METHODS = ['token', 'app', 'oauth'] as const;
+export type ConnectionMethod = (typeof CONNECTION_METHODS)[number];
+
+export interface ConnectionTarget {
+  provider: ConnectionProvider;
+  /** The upstream origin when the provider is not one fixed host: an Atlassian site, a GitLab instance. */
+  site: string | null;
+}
+
+/** github.com, anything calling itself GitLab, or a plain git host — `repoHost` in the API reads the same rule. */
+export function gitProviderOf(hostname: string): 'github' | 'gitlab' | 'git' {
+  return hostname === 'github.com' ? 'github' : hostname.includes('gitlab') ? 'gitlab' : 'git';
+}
+
+function originOf(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    return new URL(value.trim()).origin.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/** The provider a connector of `kind` with `config` authenticates against. */
+export function connectionProviderFor(kind: ConnectorKind, config: Record<string, unknown>): ConnectionTarget {
+  switch (kind) {
+    case 'markdown-git':
+    case 'codebase': {
+      const site = originOf(config.repoUrl);
+      const provider = site ? gitProviderOf(new URL(site).hostname) : 'git';
+      // GitHub Enterprise is out of scope, so github.com needs no site.
+      return { provider, site: provider === 'github' ? null : site };
+    }
+    case 'confluence':
+    case 'jira':
+      return { provider: 'atlassian', site: originOf(config.baseUrl) };
+    case 'confluence-server':
+      return { provider: 'confluence-server', site: originOf(config.baseUrl) };
+    case 'zendesk':
+      return { provider: 'zendesk', site: originOf(config.baseUrl) };
+    case 'google-drive':
+      return { provider: 'google', site: null };
+    case 'intercom':
+      // A token belongs to one region's API host.
+      return { provider: 'intercom', site: `https://api.${config.region === 'eu' || config.region === 'au' ? `${config.region}.` : ''}intercom.io` };
+    case 'notion':
+    case 'linear':
+    case 'figma':
+      return { provider: kind, site: null };
+  }
+}
+
+/**
+ * How an OAuth or App round trip ended (#564). Every callback lands on the web
+ * page `/oauth/:provider?outcome=…&returnTo=…`, which says it in words.
+ */
+export const OAUTH_OUTCOMES = ['connected', 'installed', 'auth-failed', 'install-failed', 'error'] as const;
+export type OauthOutcome = (typeof OAUTH_OUTCOMES)[number];
+
+/** The landing URL a callback redirects to. `returnTo` is already a signed, same-origin path, or absent for a forged state. */
+export function oauthLandingPath(provider: 'github' | 'figma', outcome: OauthOutcome, returnTo?: string): string {
+  const params = new URLSearchParams({ outcome, ...(returnTo ? { returnTo } : {}) });
+  return `/oauth/${provider}?${params.toString()}`;
+}
+
+/** The kinds a connection of `provider` can feed — the inverse of `connectionProviderFor`. */
+export function connectionKindsFor(provider: ConnectionProvider): ConnectorKind[] {
+  switch (provider) {
+    case 'github':
+    case 'gitlab':
+    case 'git':
+      return ['codebase', 'markdown-git'];
+    case 'atlassian':
+      return ['confluence', 'jira'];
+    case 'google':
+      return ['google-drive'];
+    default:
+      return [provider];
+  }
+}
+
+/** How a provider can be connected. `app` and `oauth` also need their env keys; the server says which are live. */
+export function connectionMethodsFor(provider: ConnectionProvider): ConnectionMethod[] {
+  return provider === 'github' ? ['token', 'app'] : provider === 'figma' ? ['token', 'oauth'] : ['token'];
+}
+
+/**
+ * The config keys that say *what* a connector reads, as opposed to how. Two
+ * connectors of one kind in one project with equal values here are the same
+ * link, which `POST /v1/connections/:id/links` refuses (#564).
+ */
+export const CONNECTOR_RESOURCE_KEYS: Record<ConnectorKind, readonly string[]> = {
+  confluence: ['baseUrl', 'spaceKey', 'rootPageId'],
+  'confluence-server': ['baseUrl', 'spaceKey', 'rootPageId'],
+  jira: ['baseUrl', 'jql', 'projectKey'],
+  notion: ['databaseId'],
+  'markdown-git': ['repoUrl', 'subdir'],
+  codebase: ['repoUrl', 'subdir'],
+  'google-drive': ['folderId'],
+  linear: ['harvestLabel'],
+  zendesk: ['baseUrl', 'harvestLabel'],
+  intercom: ['region', 'harvestLabel'],
+  figma: [FIGMA_ALLOWLIST_CONFIG_KEY],
+};
+
+/** The duplicate-link key: the resource keys, trimmed, case-folded, without a trailing `/` or `.git`. */
+export function connectorResourceKey(kind: ConnectorKind, config: Record<string, unknown>): string {
+  return [
+    kind,
+    ...CONNECTOR_RESOURCE_KEYS[kind].map((key) =>
+      String(config[key] ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/\.git$/, '')
+        .replace(/^\/+|\/+$/g, ''),
+    ),
+  ].join('\n');
+}
+
+// GET /v1/connections?workspaceId=
+export interface ConnectionSummary {
+  id: string;
+  workspaceId: string;
+  provider: ConnectionProvider;
+  method: ConnectionMethod;
+  site: string | null;
+  accountId: string | null;
+  /** The upstream login or name the identify probe returned; null for a connection made by the backfill. */
+  accountLabel: string | null;
+  accountAvatarUrl: string | null;
+  /** Last-4 hint of a `token` connection. */
+  credentialHint: string | null;
+  /** The connectors dialing through it — what a delete would strand. */
+  connectors: Array<{ id: string; name: string; kind: ConnectorKind; projectId: string }>;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ListConnectionsResponse {
+  workspaceId: string;
+  connections: ConnectionSummary[];
+  /** Methods the server can complete now: `app` needs the GitHub App keys, `oauth` the Figma OAuth keys. */
+  methods: { app: boolean; oauth: boolean };
+  /** False when SETTINGS_ENCRYPTION_KEY is unset — no token can be saved. */
+  canStoreSecrets: boolean;
+}
+export interface ConnectionResponse {
+  connection: ConnectionSummary;
+}
+
+// POST /v1/connections — identify the token's account; the same account again rotates it.
+export interface CreateTokenConnectionRequest {
+  workspaceId: string;
+  provider: ConnectionProvider;
+  /** Required for providers that are not one fixed host (an Atlassian site, a GitLab instance). */
+  site?: string | null;
+  credential: string;
+}
+// PATCH /v1/connections/:id — rotate. A token for another account is refused.
+export interface UpdateConnectionRequest {
+  credential: string;
+}
+
+// GET /v1/connections/wait?workspaceId=&since=
+export interface ConnectionsWaitResponse {
+  /** Pass back as `since`; it moves when the workspace's connections or the caller's OAuth identities change. */
+  fingerprint: string;
+  changed: boolean;
+}
+
+/** Something a connection can reach and a connector can read: a repository, a space, a project, a database, a folder. */
+export interface ConnectionResource {
+  /** Stable upstream id (a repo's full path, a space key, a database id). */
+  id: string;
+  label: string;
+  description: string | null;
+  /** GitHub owner or GitLab group path, for the namespace switcher. */
+  namespace: string | null;
+  private: boolean;
+  /** Repositories only. */
+  defaultBranch: string | null;
+  /** Newest activity, ISO; the list is sorted by it. */
+  updatedAt: string | null;
+  url: string | null;
+  /** The connector config keys this resource fills in. */
+  config: Record<string, string>;
+}
+// GET /v1/connections/:id/resources?kind=&q=
+export interface ConnectionResourcesResponse {
+  /** False when this kind has no listing: the link screen shows its typed fields instead. */
+  listable: boolean;
+  resources: ConnectionResource[];
+  /** Upstream's refusal, in its words, when the listing failed. */
+  error: string | null;
+}
+// GET /v1/connections/:id/branches?repo=
+export interface ConnectionBranchesResponse {
+  branches: Array<{ name: string; isDefault: boolean }>;
+  error: string | null;
+}
+
+// POST /v1/connections/:id/links — each resource↔project pair becomes its own connector.
+export interface CreateConnectionLinksRequest {
+  links: Array<{
+    kind: ConnectorKind;
+    projectId: string;
+    /** The resource's own label, for the connector name `<label> · <project>`. */
+    label: string;
+    /** The resource's `config` plus kind settings (branch, subdir, JQL…). */
+    config: Record<string, string>;
+  }>;
+}
+export interface ConnectionLinkResult {
+  kind: ConnectorKind;
+  projectId: string;
+  label: string;
+  /** The connector created, or the one that already links this pair. */
+  connectorId: string | null;
+  status: 'created' | 'exists' | 'failed';
+  error: string | null;
+}
+export interface ConnectionLinksResponse {
+  results: ConnectionLinkResult[];
+}
+
 // GET /v1/connectors?workspaceId=
 export interface ConnectorSummary {
   id: string;
@@ -634,6 +888,8 @@ export interface ConnectorSummary {
   /** Secrets are write-only: the value never leaves the API. */
   hasCredential: boolean;
   credentialHint: string | null;
+  /** The connection it dials through (#564); null while it holds only an inline credential. */
+  connectionId: string | null;
   /** False when SETTINGS_ENCRYPTION_KEY is unset — the UI must disable credential entry. */
   canStoreSecrets: boolean;
   projectId: string;

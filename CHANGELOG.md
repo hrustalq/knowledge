@@ -13,6 +13,54 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.37.0] — 2026-10-27
+
+### Added
+
+- **Connectors → Connections** (#564): a tab listing the accounts connectors sign in with — provider,
+  account, how it authenticates, and which connectors use it — with **Add connection**, **Replace token**
+  and Delete (refused, with the reason, while connectors still use it). Adding one is a short flow:
+  pick the service, then paste a token (the service says whose it is) or install the GitHub App / sign in
+  with Figma in another tab; the dialog moves on by itself when that tab finishes, without needing focus.
+  An account already connected is offered first, and once you have signed in through OAuth or the App
+  you are not asked for a token. The connectors list tab is now called **Connectors**.
+- **Add connector** now connects an account and then links what it reaches to projects in one pass
+  (#564): repositories (GitHub, GitLab) with a branch and an optional folder, Confluence spaces, Jira
+  projects and Notion databases are picked from a searchable list; other kinds keep their typed fields.
+  Each resource can go to several projects, and each pair becomes its own connector — one repository
+  into two projects from two folders, or several spaces into one project. Pairs already linked are shown
+  rather than duplicated, and the result lists every connector created with a link to finish its
+  settings. Editing a connector picks which connection it signs in with instead of re-pasting a token.
+- `/v1/connections` (#564): a workspace's connections — one account's access to GitHub, GitLab, an
+  Atlassian site, Notion, Google Drive, Linear, Zendesk, Intercom or Figma — shared by every compatible
+  connector. Saving a token asks the provider whose it is and shows the login; saving the same account
+  again rotates the token for every connector on it, and a token for another account is refused on
+  rotate. A connection still used by connectors cannot be deleted (the 409 names them).
+  `GET :id/resources` lists what a connection reaches (GitHub and GitLab repositories, Confluence spaces,
+  Jira projects, Notion databases) and `POST :id/links` turns resource↔project pairs into one connector
+  each, reporting pairs that are already linked instead of duplicating them. `GET /v1/connections/wait`
+  is a long poll that answers when the workspace's connections change.
+
+### Changed
+
+- Finishing a GitHub authorisation, installing the GitHub App or connecting Figma now ends in the tab the
+  provider opened on one page that says what happened (#564), and closes that tab itself where the
+  browser allows. A failure stays open with the reason and a way back to the page the flow started from.
+  An expired or forged link says so there instead of landing on the connectors list with no message.
+  An App installation and a Figma grant each become a connection in the workspace, so they can be
+  reused by any connector of a matching kind.
+
+### Operations
+
+- Migration `20261218100000_connections` adds the `connections` table and `connectors.connection_id`
+  (#564). It is additive: `connectors.credential` stays populated and is still read when a connector has
+  no connection, so rolling back to the previous image keeps every connector syncing. Existing
+  connectors are bound to connections by the API on boot (logged as `bound N connector(s) to a
+  connection`), and connectors that hold the same token, App installation or Figma grant share one;
+  every recorded GitHub App installation also becomes a connection. Nothing to run by hand. The
+  inline `connectors.credential` is dropped in a later release, after which a rollback past this one
+  would need the column restored — see [docs/features/69](docs/features/69-connections.md).
+
 ## [0.36.0] — 2026-10-27
 
 ### Added
@@ -5109,7 +5157,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.36.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.37.0...HEAD
+[0.37.0]: https://github.com/hrustalq/knowledge/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/hrustalq/knowledge/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/hrustalq/knowledge/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/hrustalq/knowledge/compare/v0.33.1...v0.34.0

@@ -187,6 +187,14 @@ export class UpdateConnectorDto {
   @MaxLength(8000, { message: vmsg('maxLength') })
   credential?: string | null;
 
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'Dial through this workspace connection (#564); its provider and site must match the connector',
+  })
+  @IsOptional()
+  @IsUUID()
+  connectionId?: string;
+
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true })
   @IsOptional()
   @NULLABLE<UpdateConnectorDto>('parentId')

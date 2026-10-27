@@ -52,6 +52,10 @@ function setup(env: Record<string, unknown> = {}) {
       },
       update: async ({ where, data }: { where: { id: string }; data: object }) => Object.assign(connectors.get(where.id)!, data),
     },
+    // #564: a bound grant becomes the connector's `oauth` connection.
+    connection: {
+      upsert: vi.fn(async ({ create }: { create: { externalRef: string } }) => ({ id: `conn-${create.externalRef}` })),
+    },
     $executeRaw: async () => 0,
     $transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn(prisma),
   };
@@ -65,7 +69,7 @@ function setup(env: Record<string, unknown> = {}) {
   };
   const config = { get: (k: string) => settings[k] };
   const service = new FigmaOauthService(config as never, prisma as never);
-  return { service, grants, connectors, config };
+  return { service, grants, connectors, config, prisma };
 }
 
 const stateOf = (url: string) => new URL(url).searchParams;
@@ -131,8 +135,26 @@ describe('FigmaOauthService', () => {
     expect(connectors.get('c1')).toMatchObject({
       credential: null,
       config: { allowlist: 'team:1', [FIGMA_GRANT_CONFIG_KEY]: 'fig-1', [FIGMA_HANDLE_CONFIG_KEY]: 'ada' },
+      connectionId: 'conn-fig-1',
     });
     expect(connectors.get('c1')!.config).not.toHaveProperty(FIGMA_TOKEN_EXPIRES_CONFIG_KEY);
+  });
+
+  it('connects the workspace without a connector: the grant becomes an oauth connection', async () => {
+    const { service, grants, prisma } = setup();
+    const state = service.verify(stateOf(service.authorizeUrl('ws', 'user', null, '/x')!).get('state')!)!;
+    expect(state.connectorId).toBeNull();
+    mockFetch
+      .mockResolvedValueOnce(json({ access_token: 'at', refresh_token: 'rt', expires_in: 7_776_000, user_id_string: 'fig-1' }))
+      .mockResolvedValueOnce(json({ handle: 'ada' }));
+    await expect(service.completeAuthorization(state, 'code-1')).resolves.toBe(true);
+    expect(grants.has('fig-1')).toBe(true);
+    expect(prisma.connection.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workspaceId_provider_method_externalRef: { workspaceId: 'ws', provider: 'figma', method: 'oauth', externalRef: 'fig-1' } },
+        update: { accountId: 'fig-1', accountLabel: 'ada' },
+      }),
+    );
   });
 
   it('stores nothing when Figma refuses the code (a replayed state)', async () => {
@@ -178,8 +200,18 @@ describe('the callback', () => {
     const redirect = vi.fn();
     await controller.callback({ redirect } as never, 'forged.state', 'code');
     await controller.callback({ redirect } as never, undefined, 'code');
-    expect(redirect.mock.calls).toEqual([['https://kb.test/settings/connectors?figma=error'], ['https://kb.test/settings/connectors?figma=error']]);
+    expect(redirect.mock.calls).toEqual([['https://kb.test/oauth/figma?outcome=error'], ['https://kb.test/oauth/figma?outcome=error']]);
     expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('lands a completed flow on /oauth/figma with the signed return path', async () => {
+    const { service, config } = setup();
+    vi.spyOn(service, 'completeAuthorization').mockResolvedValue(true);
+    const controller = new FigmaOauthController(service, {} as never, config as never);
+    const redirect = vi.fn();
+    const state = stateOf(service.authorizeUrl('ws', 'user', null, '/settings/connectors?add=1')!).get('state')!;
+    await controller.callback({ redirect } as never, state, 'code');
+    expect(redirect).toHaveBeenCalledWith('https://kb.test/oauth/figma?outcome=connected&returnTo=%2Fsettings%2Fconnectors%3Fadd%3D1');
   });
 });
 

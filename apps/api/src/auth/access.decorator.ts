@@ -39,6 +39,7 @@ export type WorkspaceSource =
   | 'export' // :id path param is an export job id (docs/features/45)
   | 'connector' // :id path param is a connector id (docs/features/19)
   | 'connector-run' // :runId path param is a connector run id (docs/features/19)
+  | 'connection' // :id path param is a connection id (#564)
   | 'chat-integration' // :id path param is a chat bot id (issue #71)
   | 'chat-binding' // :id path param is a chat channel binding id (issue #71)
   | 'chat-subscription' // :id path param is a chat subscription id (issue #71, phase 3)

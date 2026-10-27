@@ -609,12 +609,7 @@
       "disconnect": "Disconnect",
       "disconnected": "Figma disconnected. Embeds stop refreshing until you connect again or paste a token.",
       "usesToken": "Uses a personal access token. Connect with Figma to stop renewing it by hand.",
-      "noCredential": "No credential: connect with Figma or paste a personal access token.",
-      "returned": {
-        "connected": "Figma connected.",
-        "auth-failed": "Figma did not complete the connection. Try again.",
-        "error": "That Figma link had expired or was not ours. Start again from the connector."
-      }
+      "noCredential": "No credential: connect with Figma or paste a personal access token."
     },
     "githubAccess": {
       "title": "GitHub access",
@@ -677,13 +672,7 @@
       "accountHint": "Used to browse repositories when setting up a connector. Syncs run as the installation and keep working without it.",
       "reconnect": "Reconnect",
       "disconnect": "Disconnect",
-      "disconnected": "GitHub account disconnected.",
-      "returned": {
-        "connected": "GitHub account connected.",
-        "auth-failed": "GitHub did not complete the authorisation. Try again.",
-        "install-failed": "GitHub did not confirm the installation. Try again.",
-        "error": "That GitHub link had expired or was not ours. Start again from this page."
-      }
+      "disconnected": "GitHub account disconnected."
     },
     "overview": "Overview",
     "never": "Never",
@@ -905,7 +894,137 @@
     "tokenExpiresSoon": "Token expires {date}",
     "tokenExpired": "Token expired {date}",
     "harvestWebhookZendesk": "In Zendesk, create a webhook pointed at the address below, then a trigger: Ticket status changed to Solved, Tags contain the harvest tag, action Notify webhook with this JSON body. Paste the webhook’s signing secret above.",
-    "harvestWebhookIntercom": "In the Developer Hub, open your app’s Webhooks, point them at the address below and subscribe to conversation.admin.closed. Paste the app’s client secret (Basic information) above: Intercom signs every delivery with it."
+    "harvestWebhookIntercom": "In the Developer Hub, open your app’s Webhooks, point them at the address below and subscribe to conversation.admin.closed. Paste the app’s client secret (Basic information) above: Intercom signs every delivery with it.",
+    "landing": {
+      "title": {
+        "connected": "{provider} is connected",
+        "installed": "{provider} App installed",
+        "failed": "Nothing was connected"
+      },
+      "body": {
+        "github": {
+          "connected": "Your GitHub account is linked. The repositories it can reach now show in the picker.",
+          "installed": "The installation is now a connection in this workspace. Pick its repositories in the tab you started from."
+        },
+        "figma": {
+          "connected": "Figma is now a connection in this workspace."
+        },
+        "auth-failed": "{provider} did not complete the authorisation. Go back and try again.",
+        "install-failed": "{provider} did not confirm the installation. Go back and try again.",
+        "error": "This link had expired or was not ours, so nothing was saved. Start again from the page you came from."
+      },
+      "closing": "This tab closes on its own.",
+      "closeHint": "You can close this tab.",
+      "back": "Go back"
+    },
+    "tabConnectors": "Connectors",
+    "connections": {
+      "intro": "The accounts your connectors sign in with. One token, App installation or Figma authorisation serves every connector of a matching kind, and is rotated in one place.",
+      "add": "Add connection",
+      "emptyTitle": "No connections yet",
+      "emptyBody": "Connect an account once — GitHub, GitLab, an Atlassian site, Notion, Figma — and every connector that reads from it uses the same sign-in.",
+      "deleteTitle": "Delete this connection?",
+      "deleteBody": "{account} will no longer be offered to connectors. Nothing upstream changes.",
+      "deleted": "Connection deleted",
+      "providers": {
+        "git": "Other git host"
+      },
+      "rotated": "Token replaced | Token replaced; {count} connector uses it from its next sync | Token replaced; {count} connectors use it from their next sync",
+      "usedBy": "Not used | Used by {count} connector | Used by {count} connectors",
+      "unused": "Not used by any connector",
+      "rotate": "Replace token",
+      "inUse": "Connectors still use this connection. Move or delete them first.",
+      "rotateTitle": "Replace the token for {account}",
+      "rotateBody": "Paste a new token for the same account. | Paste a new token for the same account. The {count} connector on it uses the new one from its next sync. | Paste a new token for the same account. The {count} connectors on it use the new one from their next sync.",
+      "newToken": "New token",
+      "rotateSave": "Replace token",
+      "unidentified": "Unidentified account",
+      "methods": {
+        "token": "Token",
+        "app": "GitHub App",
+        "oauth": "OAuth"
+      },
+      "steps": {
+        "provider": "Service",
+        "signin": "Sign in",
+        "resources": "Resources",
+        "done": "Done"
+      },
+      "addTitle": "Add a connection",
+      "addBody": "Sign in to a service once; connectors then read through this account.",
+      "groups": {
+        "code": "Code",
+        "docs": "Documentation",
+        "support": "Support",
+        "design": "Design"
+      },
+      "connectedCount": "Not connected | {count} connected | {count} connected",
+      "otherProvider": "Choose another service",
+      "alreadyConnected": "Already connected to {provider}",
+      "use": "Use",
+      "orAnother": "Or connect another account below.",
+      "methodLabel": "How to connect",
+      "methodChoice": {
+        "token": "Paste a token",
+        "app": "Install the GitHub App",
+        "oauth": "Sign in with Figma"
+      },
+      "site": "Site",
+      "siteOptional": "Leave empty for {site}.",
+      "region": "Data region",
+      "regions": {
+        "us": "United States",
+        "eu": "Europe",
+        "au": "Australia"
+      },
+      "identifyHint": "Saving asks the service whose token this is. The same account again replaces its token.",
+      "noKey": "Tokens cannot be saved until an administrator sets SETTINGS_ENCRYPTION_KEY on the server.",
+      "checking": "Checking with {provider}…",
+      "connect": "Connect",
+      "installHint": "Choose the account or organisation on GitHub, and which repositories it may read. This dialog moves on by itself when GitHub sends you back.",
+      "oauthHint": "Approve read access on figma.com. This dialog moves on by itself when Figma sends you back.",
+      "waiting": "Waiting for {provider} in the other tab…",
+      "checkAgain": "Check again",
+      "ready": "Connected",
+      "readyBody": "Connectors of a matching kind can use this account now.",
+      "methodUnavailable": "This way of connecting is not available on this server.",
+      "pickerLabel": "Connection",
+      "pickerPaste": "Paste a token for this connector instead",
+      "pickerHint": "The account this connector signs in with. Switching takes effect from its next sync."
+    },
+    "link": {
+      "kindLabel": "What to read",
+      "alreadyLinked": "Nothing linked yet | {count} connector already reads through this account | {count} connectors already read through this account",
+      "search": "Search",
+      "namespaceLabel": "Account or group",
+      "allNamespaces": "All",
+      "loading": "Loading what this account can reach…",
+      "none": "Nothing matches. Try another search, or check what this account may read.",
+      "private": "Private",
+      "destinations": "Where each one goes",
+      "typedEntry": "Entry {n}",
+      "removePick": "Remove",
+      "branch": "Branch",
+      "followDefault": "Follow the default ({branch})",
+      "project": "Project",
+      "pickProject": "Choose a project",
+      "folder": "Folder (optional)",
+      "folderPlaceholder": "whole repository",
+      "removeDestination": "Remove this project",
+      "addDestination": "Another project",
+      "addTyped": "Add another",
+      "skip": "Not now",
+      "submit": "Link | Create {count} connector | Create {count} connectors",
+      "results": {
+        "created": "Connector created",
+        "exists": "Already linked — nothing changed"
+      },
+      "open": "Open",
+      "finishHint": "Each connector syncs on demand. Open one to set a schedule, the direction or review mode.",
+      "jql": "JQL",
+      "noProjects": "This workspace has no projects yet, and every connector lands in one.",
+      "createProject": "Create a project"
+    }
   },
   "workflow": {
     "nodeStatus": {

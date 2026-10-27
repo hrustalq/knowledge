@@ -1,9 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type Connector, type ConnectorRun } from '@prisma/client';
 import {
   connectorKindInfo,
   CHANGELOG_CONFIG_KEY,
+  connectionProviderFor,
   FIGMA_GRANT_CONFIG_KEY,
   FIGMA_HANDLE_CONFIG_KEY,
   GITHUB_INSTALLATION_CONFIG_KEY,
@@ -34,6 +35,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { ConnectorRegistry } from './adapters/connector.registry.js';
 import { releaseMirroredAccess } from './connector-acl-release.js';
+import { bindConnection } from './connection-binding.js';
 import { GithubAppService } from './github/github-app.service.js';
 import { FigmaOauthService, pruneFigmaGrants } from '../embeds/figma-oauth.service.js';
 import type { ConnectorContext } from './adapters/connector.types.js';
@@ -48,6 +50,8 @@ export interface CreateConnectorInput {
   projectId: string;
   config?: Record<string, string>;
   credential?: string;
+  /** Dial through this connection (#564) instead of `credential`. */
+  connectionId?: string;
   parentId?: string | null;
   category?: DocumentCategory;
   direction?: ConnectorDirection;
@@ -59,9 +63,11 @@ export interface CreateConnectorInput {
   webhookSecret?: string | null;
   enabled?: boolean;
 }
-export type UpdateConnectorInput = Partial<Omit<CreateConnectorInput, 'workspaceId' | 'kind' | 'credential'>> & {
+export type UpdateConnectorInput = Partial<Omit<CreateConnectorInput, 'workspaceId' | 'kind' | 'credential' | 'connectionId'>> & {
   /** `null` clears the stored credential; absent keeps it. */
   credential?: string | null;
+  /** Switch to this connection (#564); absent keeps the current one. */
+  connectionId?: string;
 };
 
 /**
@@ -168,6 +174,7 @@ export class ConnectorsService {
 
     const config = withServerKeys(input.config ?? {}, {});
     await this.validateConfig(info.kind, config);
+    const via = input.connectionId ? await this.viaConnection(input.workspaceId, info.kind, input.connectionId, config) : null;
 
     const taken = await this.prisma.connector.findUnique({
       where: { workspaceId_name: { workspaceId: input.workspaceId, name: input.name } },
@@ -185,6 +192,7 @@ export class ConnectorsService {
         config: config as Prisma.InputJsonValue,
         credential: this.encrypt(input.credential ?? null),
         credentialHint: input.credential ? maskSecret(input.credential) : null,
+        ...via,
         direction: this.checkDirection(info.kind, input.direction ?? 'pull'),
         conflict: input.conflict ?? 'manual',
         pushOnPublish: input.pushOnPublish ?? false,
@@ -197,6 +205,7 @@ export class ConnectorsService {
         createdBy: userId ?? null,
       },
     });
+    if (!via) await bindConnection(this.prisma, row, this.key);
     return this.toSummary(row);
   }
 
@@ -208,6 +217,10 @@ export class ConnectorsService {
       await this.projects.requireProjectInWorkspace(input.projectId, row.workspaceId);
     }
     if (input.config !== undefined) await this.validateConfig(kind, input.config);
+    const config = input.config === undefined ? null : withServerKeys(input.config, row.config);
+    const via = input.connectionId
+      ? await this.viaConnection(row.workspaceId, kind, input.connectionId, config ?? { ...(row.config as Record<string, string>) })
+      : null;
     if (input.name !== undefined && input.name !== row.name) {
       const taken = await this.prisma.connector.findUnique({
         where: { workspaceId_name: { workspaceId: row.workspaceId, name: input.name } },
@@ -232,9 +245,7 @@ export class ConnectorsService {
         ...keep('preserveHierarchy'),
         ...keep('syncIntervalMinutes'),
         ...keep('enabled'),
-        ...(input.config === undefined
-          ? {}
-          : { config: withServerKeys(input.config, row.config) as Prisma.InputJsonValue }),
+        ...(config === null ? {} : { config: config as Prisma.InputJsonValue }),
         ...(input.direction === undefined ? {} : { direction: this.checkDirection(kind, input.direction) }),
         ...(input.credential === undefined
           ? {}
@@ -243,8 +254,13 @@ export class ConnectorsService {
               credentialHint: input.credential ? maskSecret(input.credential) : null,
             }),
         ...(input.webhookSecret === undefined ? {} : { webhookSecret: this.encrypt(input.webhookSecret) }),
+        ...via,
       },
     });
+    // A new token, installation or repository host can mean another account.
+    if (!via && (input.credential !== undefined || input.config !== undefined)) {
+      await bindConnection(this.prisma, updated, this.key);
+    }
     return this.toSummary(updated);
   }
 
@@ -302,13 +318,40 @@ export class ConnectorsService {
    * suspended org. The adapter then behaves exactly as it would for a missing
    * token, and the 404 classifier in `repo-archive.ts` says so in words.
    */
-  private async credentialFor(row: Connector): Promise<string | null> {
+  private async credentialFor(row: Connector): Promise<Pick<ConnectorContext, 'credential' | 'bearer' | 'renewCredential'>> {
+    // The connection (#564) wins; the inline fallbacks below stay for one
+    // release, for a connector the boot backfill has not reached yet.
+    if (row.connectionId) {
+      const connection = await this.prisma.connection.findUnique({ where: { id: row.connectionId } });
+      // Only the server binds a connection, but a binding across workspaces
+      // would dial with someone else's account: refuse it rather than trust it.
+      if (!connection || connection.workspaceId !== row.workspaceId) {
+        throw new ForbiddenException(t('error.connector.connectionForeign'));
+      }
+      if (connection.method === 'app') {
+        return { credential: connection.externalRef ? await this.githubApp.installationToken(connection.externalRef) : null };
+      }
+      if (connection.method === 'oauth') return this.figmaGrant(connection.externalRef ?? '');
+      return { credential: decryptSecret(connection.credential, this.key) };
+    }
+
     const config = (row.config ?? {}) as Record<string, unknown>;
+    // A Figma connector connected over OAuth dials with its grant (#557).
+    const grant = row.kind === 'figma' ? config[FIGMA_GRANT_CONFIG_KEY] : undefined;
+    if (typeof grant === 'string' && grant) return this.figmaGrant(grant);
     const installationId = config[GITHUB_INSTALLATION_CONFIG_KEY];
     if (typeof installationId === 'string' && installationId.trim() !== '') {
-      return this.githubApp.installationToken(installationId.trim());
+      return { credential: await this.githubApp.installationToken(installationId.trim()) };
     }
-    return decryptSecret(row.credential, this.key);
+    return { credential: decryptSecret(row.credential, this.key) };
+  }
+
+  private async figmaGrant(grant: string): Promise<Pick<ConnectorContext, 'credential' | 'bearer' | 'renewCredential'>> {
+    return {
+      credential: grant ? await this.figmaOauth.tokenFor(grant) : null,
+      bearer: true,
+      renewCredential: (rejected: string) => this.figmaOauth.tokenFor(grant, rejected),
+    };
   }
 
   async contextFor(
@@ -333,22 +376,11 @@ export class ConnectorsService {
         }
       : () => undefined;
 
-    // A Figma connector connected over OAuth dials with its grant (#557).
-    const grant = row.kind === 'figma' ? (row.config as Record<string, unknown> | null)?.[FIGMA_GRANT_CONFIG_KEY] : undefined;
-    const oauth =
-      typeof grant === 'string' && grant
-        ? {
-            credential: await this.figmaOauth.tokenFor(grant),
-            bearer: true,
-            renewCredential: (rejected: string) => this.figmaOauth.tokenFor(grant, rejected),
-          }
-        : { credential: await this.credentialFor(row) };
-
     return {
       connectorId: row.id,
       workspaceId: row.workspaceId,
       config: (row.config ?? {}) as Record<string, string>,
-      ...oauth,
+      ...(await this.credentialFor(row)),
       webhookSecret: decryptSecret(row.webhookSecret, this.key),
       onStage,
       debug,
@@ -552,6 +584,43 @@ export class ConnectorsService {
 
   // --- internals ---
 
+  /**
+   * The columns that bind a connector to a chosen connection (#564). The
+   * inline fields it replaces are written too, for one release: the previous
+   * image reads only them, and `bindConnection` re-derives the same
+   * connection from them. Mutates `config` to carry the installation or grant.
+   */
+  private async viaConnection(
+    workspaceId: string,
+    kind: ConnectorKind,
+    connectionId: string,
+    config: Record<string, string>,
+  ): Promise<{ connectionId: string; credential: string | null; credentialHint: string | null; config: Prisma.InputJsonValue }> {
+    const connection = await this.prisma.connection.findUnique({ where: { id: connectionId } });
+    if (!connection || connection.workspaceId !== workspaceId) {
+      throw new ForbiddenException(t('error.connector.connectionForeign'));
+    }
+    // A GitHub token on a GitLab repository, or one Atlassian site's token on another, could never dial.
+    const target = connectionProviderFor(kind, config);
+    if (target.provider !== connection.provider || target.site !== connection.site) {
+      throw new BadRequestException(t('error.connector.connectionMismatch', { provider: connection.provider }));
+    }
+    delete config[GITHUB_INSTALLATION_CONFIG_KEY];
+    delete config[FIGMA_GRANT_CONFIG_KEY];
+    delete config[FIGMA_HANDLE_CONFIG_KEY];
+    if (connection.method === 'app' && connection.externalRef) config[GITHUB_INSTALLATION_CONFIG_KEY] = connection.externalRef;
+    if (connection.method === 'oauth' && connection.externalRef) {
+      config[FIGMA_GRANT_CONFIG_KEY] = connection.externalRef;
+      config[FIGMA_HANDLE_CONFIG_KEY] = connection.accountLabel ?? '';
+    }
+    return {
+      connectionId,
+      credential: connection.method === 'token' ? connection.credential : null,
+      credentialHint: connection.method === 'token' ? connection.credentialHint : null,
+      config: config as Prisma.InputJsonValue,
+    };
+  }
+
   private encrypt(plaintext: string | null): string | null {
     if (plaintext === null || plaintext === '') return null;
     try {
@@ -608,8 +677,9 @@ export class ConnectorsService {
       name: row.name,
       enabled: row.enabled,
       config: (row.config ?? {}) as Record<string, string>,
-      hasCredential: row.credential !== null,
+      hasCredential: row.credential !== null || row.connectionId !== null,
       credentialHint: row.credentialHint,
+      connectionId: row.connectionId,
       canStoreSecrets: this.canStoreSecrets,
       projectId: row.projectId,
       parentId: row.parentId,

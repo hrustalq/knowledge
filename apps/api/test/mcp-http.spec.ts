@@ -192,6 +192,8 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
       requireCreateUnder: vi.fn(async () => undefined),
       // Every branch is open here; private branches are pinned in branch-access.spec.ts (#474).
       requireBranches: vi.fn(async () => undefined),
+      // Every connector's project is open here; hidden ones are pinned in connector-visibility.spec.ts (#555).
+      requireConnectorVisible: vi.fn(async () => undefined),
       scopeForDocument: vi.fn(async () => ({ workspaceId: '', bypass: true, guest: false, denied: new Set(), granted: new Set() })),
     },
     history: {},

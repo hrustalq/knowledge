@@ -128,6 +128,12 @@ export class AclGuard implements CanActivate {
         capture: spec.capture === true,
         capability: spec.capability,
       });
+      // A connector follows its project's visibility (#555).
+      if (spec.source === 'connector') {
+        await this.permissions.requireConnectorVisible(principal, { connectorId: req.params.id });
+      } else if (spec.source === 'connector-run') {
+        await this.permissions.requireConnectorVisible(principal, { runId: req.params.runId });
+      }
     }
     return true;
   }

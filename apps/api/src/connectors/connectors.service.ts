@@ -29,6 +29,7 @@ import { assertSafeExternalUrl } from '../common/safe-url.js';
 import type { Env } from '../config/env.js';
 import { currentLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
+import { canSeeProject, type AccessScope } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { ConnectorRegistry } from './adapters/connector.registry.js';
@@ -97,12 +98,14 @@ export class ConnectorsService {
 
   // --- reads ---
 
-  async list(workspaceId: string): Promise<ConnectorSummary[]> {
+  /** The workspace's connectors in projects `scope` can open (#555), as `RepoSnapshotService.listRepos` reads them. */
+  async list(scope: AccessScope): Promise<ConnectorSummary[]> {
     const rows = await this.prisma.connector.findMany({
-      where: { workspaceId },
+      where: { workspaceId: scope.workspaceId },
+      include: { project: { select: { id: true, restricted: true } } },
       orderBy: { createdAt: 'asc' },
     });
-    return Promise.all(rows.map((row) => this.toSummary(row)));
+    return Promise.all(rows.filter((row) => canSeeProject(scope, row.project)).map((row) => this.toSummary(row)));
   }
 
   async get(connectorId: string): Promise<ConnectorSummary> {

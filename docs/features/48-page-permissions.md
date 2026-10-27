@@ -166,7 +166,7 @@ pending requests expire after `ACCESS_REQUEST_TTL_DAYS`.
 | Notifications, activity, live events | Delivered or listed only for people who can open the page. Live connections get `acl.changed`, which names no page, after any grant, restriction or group change, and refetch. |
 | Share links, published sites, llms.txt, export | A restricted page cannot be shared publicly, and an existing link to it 404s. It is left out of site snapshots and of the workspace and project `llms.txt`. An export holds only what the requester may open. |
 | Connectors | With mirroring on, a page private at the source arrives restricted the same way. See [19 §Access mirroring](19-connectors.md#access-mirroring-76-phase-6). |
-| Connected repositories | A repository follows its connector's project (#553, `canSeeProject`): the assistant's repository list, `code_*` and the work-item tools treat one in a project the caller cannot open as not found, checked on every call. Agent runs are clamped, so none reads a restricted project's repository. The connector settings list is not filtered yet. |
+| Connected repositories | A repository follows its connector's project (#553, `canSeeProject`): the assistant's repository list, `code_*` and the work-item tools treat one in a project the caller cannot open as not found, checked on every call. Agent runs are clamped, so none reads a restricted project's repository. The connector routes follow it too (#555): the list (REST and `knowledge_list_connectors`) drops such a connector, and its id and run routes answer 404. |
 
 ## API
 

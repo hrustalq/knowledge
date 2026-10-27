@@ -313,6 +313,15 @@ New `WorkspaceSource` values `connector` / `connector-run`. MCP gained
 `knowledge_list_connectors`, `knowledge_sync_connector`,
 `knowledge_get_connector_run`.
 
+A connector belongs to its destination project and follows that project's
+visibility (#555, the `canSeeProject` rule of #553). The list — REST and
+`knowledge_list_connectors` — drops connectors in a project the caller cannot
+open, and every `connector` / `connector-run` route and tool answers one with
+404 after the role check (`PermissionService.requireConnectorVisible`, called by
+`AclGuard` and the MCP guard), naming neither the project nor the connector. A
+workspace admin bypasses restrictions and sees them all; an unrestricted
+project costs one indexed read and no scope.
+
 ## Deliberate deferrals
 
 - **Jira is pull-only.** Authoring Atlassian Document Format is its own piece of

@@ -18,6 +18,7 @@ import { AuditService } from '../auth/audit.service.js';
 import { ROLE_ORDER, type Principal } from '../auth/principal.js';
 import { t } from '../i18n/t.js';
 import {
+  canSeeProject,
   clampToAudience,
   hidesAnything,
   levelOn,
@@ -180,6 +181,36 @@ export class PermissionService {
       return;
     }
     throw this.refusal(scope, resource, level, needed);
+  }
+
+  /**
+   * The guard's half for a route whose `:id` is a connector or one of its runs,
+   * after the workspace role passed (#555). A connector belongs to its project
+   * (#553), so one in a project the caller cannot open reads as not found — the
+   * code tools' rule, and no project id or name in the answer. Builds a scope
+   * only when the project is restricted, so an unrestricted workspace pays one
+   * indexed read.
+   */
+  async requireConnectorVisible(principal: Principal, ref: { connectorId: string } | { runId: string }): Promise<void> {
+    if (principal.mode === 'dev') return;
+    const project = { select: { id: true, restricted: true } } as const;
+    const row =
+      'connectorId' in ref
+        ? await this.prisma.connector.findUnique({
+            where: { id: ref.connectorId },
+            select: { workspaceId: true, project },
+          })
+        : await this.prisma.connectorRun
+            .findUnique({ where: { id: ref.runId }, select: { workspaceId: true, connector: { select: { project } } } })
+            .then((run) => run && { workspaceId: run.workspaceId, project: run.connector.project });
+    if (row && (!row.project.restricted || canSeeProject(await this.scopeFor(principal, row.workspaceId), row.project))) {
+      return;
+    }
+    throw new NotFoundException(
+      'connectorId' in ref
+        ? t('error.connector.notFound', { id: ref.connectorId })
+        : t('error.connector.runNotFound', { id: ref.runId }),
+    );
   }
 
   /**

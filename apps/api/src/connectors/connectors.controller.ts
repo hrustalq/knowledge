@@ -88,8 +88,11 @@ export class ConnectorsController {
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'List the connectors configured in a workspace' })
   @ApiQuery({ name: 'workspaceId', required: true })
-  async list(@Query('workspaceId', ParseUUIDPipe) workspaceId: string): Promise<ListConnectorsResponse> {
-    return { workspaceId, connectors: await this.connectors.list(workspaceId) };
+  async list(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ListConnectorsResponse> {
+    return { workspaceId, connectors: await this.connectors.list(await this.permissions.scopeFor(principal, workspaceId)) };
   }
 
   @Post()

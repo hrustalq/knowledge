@@ -15,6 +15,18 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- `/v1/connections` (#564): a workspace's connections — one account's access to GitHub, GitLab, an
+  Atlassian site, Notion, Google Drive, Linear, Zendesk, Intercom or Figma — shared by every compatible
+  connector. Saving a token asks the provider whose it is and shows the login; saving the same account
+  again rotates the token for every connector on it, and a token for another account is refused on
+  rotate. A connection still used by connectors cannot be deleted (the 409 names them).
+  `GET :id/resources` lists what a connection reaches (GitHub and GitLab repositories, Confluence spaces,
+  Jira projects, Notion databases) and `POST :id/links` turns resource↔project pairs into one connector
+  each, reporting pairs that are already linked instead of duplicating them. `GET /v1/connections/wait`
+  is a long poll that answers when the workspace's connections change.
+
 ### Operations
 
 - Migration `20261218100000_connections` adds the `connections` table and `connectors.connection_id`

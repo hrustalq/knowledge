@@ -68,6 +68,11 @@ import type {
   CompareResponse,
   CompleteAttachmentResponse,
   CompleteAvatarUploadResponse,
+  ConnectionBranchesResponse,
+  ConnectionLinksResponse,
+  ConnectionResourcesResponse,
+  ConnectionResponse,
+  ConnectionsWaitResponse,
   ConnectorAclResponse,
   ConnectorGithubAccessResponse,
   ConnectorItemEventResponse,
@@ -179,6 +184,7 @@ import type {
   ListCollabDraftsResponse,
   ListCommunitiesResponse,
   ListConflictsResponse,
+  ListConnectionsResponse,
   ListConnectorLinksResponse,
   ListConnectorRunItemsResponse,
   ListConnectorRunsResponse,
@@ -391,6 +397,11 @@ export interface ContractResponses {
   CompareResponse: CompareResponse;
   CompleteAttachmentResponse: CompleteAttachmentResponse;
   CompleteAvatarUploadResponse: CompleteAvatarUploadResponse;
+  ConnectionBranchesResponse: ConnectionBranchesResponse;
+  ConnectionLinksResponse: ConnectionLinksResponse;
+  ConnectionResourcesResponse: ConnectionResourcesResponse;
+  ConnectionResponse: ConnectionResponse;
+  ConnectionsWaitResponse: ConnectionsWaitResponse;
   ConnectorAclResponse: ConnectorAclResponse;
   ConnectorGithubAccessResponse: ConnectorGithubAccessResponse;
   ConnectorItemEventResponse: ConnectorItemEventResponse;
@@ -502,6 +513,7 @@ export interface ContractResponses {
   ListCollabDraftsResponse: ListCollabDraftsResponse;
   ListCommunitiesResponse: ListCommunitiesResponse;
   ListConflictsResponse: ListConflictsResponse;
+  ListConnectionsResponse: ListConnectionsResponse;
   ListConnectorLinksResponse: ListConnectorLinksResponse;
   ListConnectorRunItemsResponse: ListConnectorRunItemsResponse;
   ListConnectorRunsResponse: ListConnectorRunsResponse;

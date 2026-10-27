@@ -22159,6 +22159,572 @@
         ]
       }
     },
+    "/v1/connections": {
+      "get": {
+        "operationId": "ConnectionsController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListConnectionsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the workspace's connections and the connectors using each",
+        "tags": [
+          "connections"
+        ]
+      },
+      "post": {
+        "operationId": "ConnectionsController_create",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTokenConnectionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Save a token as a connection; the same account again rotates it",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/wait": {
+      "get": {
+        "operationId": "ConnectionsController_wait",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "required": false,
+            "in": "query",
+            "description": "The last fingerprint seen; omit to read the current one at once",
+            "schema": {}
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionsWaitResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Answer when connections change, or after about 25 s",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/{id}": {
+      "patch": {
+        "operationId": "ConnectionsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConnectionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rotate a token connection's token (same account only)",
+        "tags": [
+          "connections"
+        ]
+      },
+      "delete": {
+        "operationId": "ConnectionsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a connection no connector uses (409 names the ones that do)",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/{id}/resources": {
+      "get": {
+        "operationId": "ConnectionsController_resources",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "confluence",
+                "confluence-server",
+                "jira",
+                "notion",
+                "markdown-git",
+                "codebase",
+                "google-drive",
+                "linear",
+                "zendesk",
+                "intercom",
+                "figma"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionResourcesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What this connection can reach for a connector kind, newest activity first",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/{id}/branches": {
+      "get": {
+        "operationId": "ConnectionsController_branches",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repo",
+            "required": true,
+            "in": "query",
+            "description": "The resource id: owner/name, or a GitLab project path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionBranchesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A repository's branches, default first",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/{id}/links": {
+      "post": {
+        "operationId": "ConnectionsController_link",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConnectionLinksDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionLinksResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Link resources to projects: one connector per pair, duplicates reported, never deletes",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
     "/v1/lint-policy": {
       "get": {
         "operationId": "LintController_policy",
@@ -37398,7 +37964,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.35.0",
+    "version": "0.36.0",
     "contact": {}
   },
   "tags": [],
@@ -41869,6 +42435,112 @@
         },
         "required": [
           "connectorId"
+        ]
+      },
+      "CreateTokenConnectionDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "github",
+              "gitlab",
+              "git",
+              "atlassian",
+              "confluence-server",
+              "notion",
+              "google",
+              "linear",
+              "zendesk",
+              "intercom",
+              "figma"
+            ]
+          },
+          "site": {
+            "type": "string",
+            "nullable": true,
+            "description": "The site for providers that are not one fixed host: an Atlassian site, a GitLab instance (gitlab.com when empty)"
+          },
+          "credential": {
+            "type": "string",
+            "description": "Write-only. Encrypted at rest; never returned."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "provider",
+          "credential"
+        ]
+      },
+      "UpdateConnectionDto": {
+        "type": "object",
+        "properties": {
+          "credential": {
+            "type": "string",
+            "description": "A new token for the same account. Write-only."
+          }
+        },
+        "required": [
+          "credential"
+        ]
+      },
+      "ConnectionLinkDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "confluence",
+              "confluence-server",
+              "jira",
+              "notion",
+              "markdown-git",
+              "codebase",
+              "google-drive",
+              "linear",
+              "zendesk",
+              "intercom",
+              "figma"
+            ]
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "description": "The resource label, for the connector name"
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "label",
+          "config"
+        ]
+      },
+      "CreateConnectionLinksDto": {
+        "type": "object",
+        "properties": {
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionLinkDto"
+            }
+          }
+        },
+        "required": [
+          "links"
         ]
       },
       "UpdateLintPolicyDto": {
@@ -52083,6 +52755,296 @@
           "superseded"
         ]
       },
+      "ConnectionBranchesResponse": {
+        "type": "object",
+        "properties": {
+          "branches": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "isDefault": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "isDefault"
+              ]
+            }
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "branches",
+          "error"
+        ]
+      },
+      "ConnectionLinkResult": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ConnectorKind"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "connectorId": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "created",
+              "exists",
+              "failed"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "label",
+          "connectorId",
+          "status",
+          "error"
+        ]
+      },
+      "ConnectionLinksResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionLinkResult"
+            }
+          }
+        },
+        "required": [
+          "results"
+        ]
+      },
+      "ConnectionMethod": {
+        "type": "string",
+        "enum": [
+          "token",
+          "app",
+          "oauth"
+        ]
+      },
+      "ConnectionProvider": {
+        "type": "string",
+        "enum": [
+          "github",
+          "gitlab",
+          "git",
+          "atlassian",
+          "confluence-server",
+          "notion",
+          "google",
+          "linear",
+          "zendesk",
+          "intercom",
+          "figma"
+        ]
+      },
+      "ConnectionResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "namespace": {
+            "type": "string",
+            "nullable": true
+          },
+          "private": {
+            "type": "boolean"
+          },
+          "defaultBranch": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "namespace",
+          "private",
+          "defaultBranch",
+          "updatedAt",
+          "url",
+          "config"
+        ]
+      },
+      "ConnectionResourcesResponse": {
+        "type": "object",
+        "properties": {
+          "listable": {
+            "type": "boolean"
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionResource"
+            }
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "listable",
+          "resources",
+          "error"
+        ]
+      },
+      "ConnectionResponse": {
+        "type": "object",
+        "properties": {
+          "connection": {
+            "$ref": "#/components/schemas/ConnectionSummary"
+          }
+        },
+        "required": [
+          "connection"
+        ]
+      },
+      "ConnectionSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ConnectionProvider"
+          },
+          "method": {
+            "$ref": "#/components/schemas/ConnectionMethod"
+          },
+          "site": {
+            "type": "string",
+            "nullable": true
+          },
+          "accountId": {
+            "type": "string",
+            "nullable": true
+          },
+          "accountLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "accountAvatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "credentialHint": {
+            "type": "string",
+            "nullable": true
+          },
+          "connectors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "kind": {
+                  "$ref": "#/components/schemas/ConnectorKind"
+                },
+                "projectId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "kind",
+                "projectId"
+              ]
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspaceId",
+          "provider",
+          "method",
+          "site",
+          "accountId",
+          "accountLabel",
+          "accountAvatarUrl",
+          "credentialHint",
+          "connectors",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ConnectionsWaitResponse": {
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "fingerprint",
+          "changed"
+        ]
+      },
       "ConnectorAclMode": {
         "type": "string",
         "enum": [
@@ -52816,6 +53778,10 @@
             "type": "string",
             "nullable": true
           },
+          "connectionId": {
+            "type": "string",
+            "nullable": true
+          },
           "canStoreSecrets": {
             "type": "boolean"
           },
@@ -52896,6 +53862,7 @@
           "config",
           "hasCredential",
           "credentialHint",
+          "connectionId",
           "canStoreSecrets",
           "projectId",
           "parentId",
@@ -58419,6 +59386,44 @@
         },
         "required": [
           "conflicts"
+        ]
+      },
+      "ListConnectionsResponse": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "connections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionSummary"
+            }
+          },
+          "methods": {
+            "type": "object",
+            "properties": {
+              "app": {
+                "type": "boolean"
+              },
+              "oauth": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "app",
+              "oauth"
+            ]
+          },
+          "canStoreSecrets": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "connections",
+          "methods",
+          "canStoreSecrets"
         ]
       },
       "ListConnectorLinksResponse": {

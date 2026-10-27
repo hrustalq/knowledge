@@ -4084,6 +4084,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the workspace's connections and the connectors using each */
+        get: operations["ConnectionsController_list"];
+        put?: never;
+        /** Save a token as a connection; the same account again rotates it */
+        post: operations["ConnectionsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/wait": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Answer when connections change, or after about 25 s */
+        get: operations["ConnectionsController_wait"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a connection no connector uses (409 names the ones that do) */
+        delete: operations["ConnectionsController_remove"];
+        options?: never;
+        head?: never;
+        /** Rotate a token connection's token (same account only) */
+        patch: operations["ConnectionsController_update"];
+        trace?: never;
+    };
+    "/v1/connections/{id}/resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What this connection can reach for a connector kind, newest activity first */
+        get: operations["ConnectionsController_resources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{id}/branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A repository's branches, default first */
+        get: operations["ConnectionsController_branches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{id}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link resources to projects: one connector per pair, duplicates reported, never deletes */
+        post: operations["ConnectionsController_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/lint-policy": {
         parameters: {
             query?: never;
@@ -8659,6 +8763,34 @@ export interface components {
             /** @description A GitHub organization board URL; the card follows the issue */
             boardUrl?: string | null;
         };
+        CreateTokenConnectionDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @enum {string} */
+            provider: "github" | "gitlab" | "git" | "atlassian" | "confluence-server" | "notion" | "google" | "linear" | "zendesk" | "intercom" | "figma";
+            /** @description The site for providers that are not one fixed host: an Atlassian site, a GitLab instance (gitlab.com when empty) */
+            site?: string | null;
+            /** @description Write-only. Encrypted at rest; never returned. */
+            credential: string;
+        };
+        UpdateConnectionDto: {
+            /** @description A new token for the same account. Write-only. */
+            credential: string;
+        };
+        ConnectionLinkDto: {
+            /** @enum {string} */
+            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma";
+            /** Format: uuid */
+            projectId: string;
+            /** @description The resource label, for the connector name */
+            label: string;
+            config: {
+                [key: string]: string;
+            };
+        };
+        CreateConnectionLinksDto: {
+            links: components["schemas"]["ConnectionLinkDto"][];
+        };
         UpdateLintPolicyDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -11391,6 +11523,73 @@ export interface components {
         };
         /** @enum {string} */
         ConflictStatus: "open" | "resolved" | "dismissed" | "superseded";
+        ConnectionBranchesResponse: {
+            branches: {
+                name: string;
+                isDefault: boolean;
+            }[];
+            error: string | null;
+        };
+        ConnectionLinkResult: {
+            kind: components["schemas"]["ConnectorKind"];
+            projectId: string;
+            label: string;
+            connectorId: string | null;
+            /** @enum {string} */
+            status: "created" | "exists" | "failed";
+            error: string | null;
+        };
+        ConnectionLinksResponse: {
+            results: components["schemas"]["ConnectionLinkResult"][];
+        };
+        /** @enum {string} */
+        ConnectionMethod: "token" | "app" | "oauth";
+        /** @enum {string} */
+        ConnectionProvider: "github" | "gitlab" | "git" | "atlassian" | "confluence-server" | "notion" | "google" | "linear" | "zendesk" | "intercom" | "figma";
+        ConnectionResource: {
+            id: string;
+            label: string;
+            description: string | null;
+            namespace: string | null;
+            private: boolean;
+            defaultBranch: string | null;
+            updatedAt: string | null;
+            url: string | null;
+            config: {
+                [key: string]: string;
+            };
+        };
+        ConnectionResourcesResponse: {
+            listable: boolean;
+            resources: components["schemas"]["ConnectionResource"][];
+            error: string | null;
+        };
+        ConnectionResponse: {
+            connection: components["schemas"]["ConnectionSummary"];
+        };
+        ConnectionSummary: {
+            id: string;
+            workspaceId: string;
+            provider: components["schemas"]["ConnectionProvider"];
+            method: components["schemas"]["ConnectionMethod"];
+            site: string | null;
+            accountId: string | null;
+            accountLabel: string | null;
+            accountAvatarUrl: string | null;
+            credentialHint: string | null;
+            connectors: {
+                id: string;
+                name: string;
+                kind: components["schemas"]["ConnectorKind"];
+                projectId: string;
+            }[];
+            createdAt: string;
+            updatedAt: string;
+        };
+        ConnectionsWaitResponse: {
+            fingerprint: string;
+            changed: boolean;
+        };
         /** @enum {string} */
         ConnectorAclMode: "off" | "mirror" | "mirror_strict";
         ConnectorAclResponse: {
@@ -11556,6 +11755,7 @@ export interface components {
             };
             hasCredential: boolean;
             credentialHint: string | null;
+            connectionId: string | null;
             canStoreSecrets: boolean;
             projectId: string;
             parentId: string | null;
@@ -12841,6 +13041,15 @@ export interface components {
         };
         ListConflictsResponse: {
             conflicts: components["schemas"]["KnowledgeConflictDto"][];
+        };
+        ListConnectionsResponse: {
+            workspaceId: string;
+            connections: components["schemas"]["ConnectionSummary"][];
+            methods: {
+                app: boolean;
+                oauth: boolean;
+            };
+            canStoreSecrets: boolean;
         };
         ListConnectorLinksResponse: {
             connectorId: string;
@@ -28639,6 +28848,358 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectionsController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListConnectionsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectionsController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTokenConnectionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectionsController_wait: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description The last fingerprint seen; omit to read the current one at once */
+                since?: unknown;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionsWaitResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectionsController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectionsController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateConnectionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectionsController_resources: {
+        parameters: {
+            query: {
+                kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma";
+                q?: unknown;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionResourcesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectionsController_branches: {
+        parameters: {
+            query: {
+                /** @description The resource id: owner/name, or a GitLab project path */
+                repo: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionBranchesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectionsController_link: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConnectionLinksDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionLinksResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {

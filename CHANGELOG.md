@@ -17,6 +17,13 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **Connectors → Connections** (#564): a tab listing the accounts connectors sign in with — provider,
+  account, how it authenticates, and which connectors use it — with **Add connection**, **Replace token**
+  and Delete (refused, with the reason, while connectors still use it). Adding one is a short flow:
+  pick the service, then paste a token (the service says whose it is) or install the GitHub App / sign in
+  with Figma in another tab; the dialog moves on by itself when that tab finishes, without needing focus.
+  An account already connected is offered first, and once you have signed in through OAuth or the App
+  you are not asked for a token. The connectors list tab is now called **Connectors**.
 - `/v1/connections` (#564): a workspace's connections — one account's access to GitHub, GitLab, an
   Atlassian site, Notion, Google Drive, Linear, Zendesk, Intercom or Figma — shared by every compatible
   connector. Saving a token asks the provider whose it is and shows the login; saving the same account

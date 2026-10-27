@@ -6,7 +6,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { bindConnection } from './connection-binding.js';
 
 /**
- * Gives every connector that has none its connection (#564), at API boot.
+ * Gives every connector that has none its connection, and every recorded
+ * GitHub App installation its `app` connection (#564), at API boot.
  *
  * Here rather than in the migration: the provider comes from
  * `connectionProviderFor` and equal tokens are found by decrypting, and SQL
@@ -35,6 +36,22 @@ export class ConnectionsBackfill implements OnApplicationBootstrap {
     let bound = 0;
     for (const row of rows) if (await bindConnection(this.prisma, row, key)) bound++;
     if (bound) this.logger.log(`bound ${bound} connector(s) to a connection`);
+    // An installation recorded before connections existed, and used by no
+    // connector yet, is still an account the workspace connected: list it.
+    for (const install of await this.prisma.githubInstallation.findMany()) {
+      const ref = { workspaceId: install.workspaceId, provider: 'github', method: 'app', externalRef: String(install.installationId) };
+      await this.prisma.connection.upsert({
+        where: { workspaceId_provider_method_externalRef: ref },
+        create: {
+          ...ref,
+          accountId: ref.externalRef,
+          accountLabel: install.accountLogin,
+          accountAvatarUrl: install.accountAvatarUrl,
+          createdBy: install.createdBy,
+        },
+        update: {},
+      });
+    }
     return bound;
   }
 }

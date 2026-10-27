@@ -218,6 +218,8 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfSourcePolicy(uuid(req.params?.id, 'sourcePolicy'));
       case 'import':
         return this.access.workspaceOfImport(uuid(req.params?.id, 'import'));
+      case 'memo':
+        return this.access.workspaceOfMemo(uuid(req.params?.id, 'memo'));
       case 'workflow-definition':
         return this.access.workspaceOfWorkflowDefinition(uuid(req.params?.id, 'workflow'));
       case 'workflow-run':

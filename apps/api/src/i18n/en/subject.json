@@ -15,6 +15,7 @@
   "agentLearning": "agent learning id",
   "glossaryTerm": "glossary term id",
   "import": "import id",
+  "memo": "memo id",
   "workflow": "workflow id",
   "workflowRun": "workflow run id",
   "connector": "connector id",

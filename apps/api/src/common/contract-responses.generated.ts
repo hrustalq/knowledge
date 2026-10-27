@@ -90,6 +90,7 @@ import type {
   CreateDocumentResponse,
   CreateDocumentThreadResponse,
   CreateImportResponse,
+  CreateMemoResponse,
   CreateMergeRequestResponse,
   CreateMergeRequestThreadResponse,
   CreatePageFromFindingResponse,
@@ -230,6 +231,9 @@ import type {
   MarkNotificationsReadResponse,
   McpConnectionInfo,
   MeResponse,
+  MemoDetailResponse,
+  MemoListResponse,
+  MemoResponse,
   MergeMergeRequestResponse,
   MergeRequestApiChangesResponse,
   MergeRequestDiffResponse,
@@ -419,6 +423,7 @@ export interface ContractResponses {
   CreateDocumentResponse: CreateDocumentResponse;
   CreateDocumentThreadResponse: CreateDocumentThreadResponse;
   CreateImportResponse: CreateImportResponse;
+  CreateMemoResponse: CreateMemoResponse;
   CreateMergeRequestResponse: CreateMergeRequestResponse;
   CreateMergeRequestThreadResponse: CreateMergeRequestThreadResponse;
   CreatePageFromFindingResponse: CreatePageFromFindingResponse;
@@ -559,6 +564,9 @@ export interface ContractResponses {
   MarkNotificationsReadResponse: MarkNotificationsReadResponse;
   McpConnectionInfo: McpConnectionInfo;
   MeResponse: MeResponse;
+  MemoDetailResponse: MemoDetailResponse;
+  MemoListResponse: MemoListResponse;
+  MemoResponse: MemoResponse;
   MergeMergeRequestResponse: MergeMergeRequestResponse;
   MergeRequestApiChangesResponse: MergeRequestApiChangesResponse;
   MergeRequestDiffResponse: MergeRequestDiffResponse;

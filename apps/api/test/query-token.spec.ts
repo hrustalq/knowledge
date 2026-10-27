@@ -208,13 +208,14 @@ describe('opt-in allowlists', () => {
     expect(await routesWith(QUERY_TOKEN_OK_META)).toEqual(['EventsController.events']);
   }, 30_000);
 
-  it('@CookieTokenOk is exactly the <img> / <object> redirects', async () => {
+  it('@CookieTokenOk is exactly the <img> / <object> / <audio> redirects', async () => {
     expect(await routesWith(COOKIE_TOKEN_OK_META)).toEqual([
       'AttachmentsController.content',
       'AvatarsController.projectAvatar',
       'AvatarsController.userAvatar',
       'EmbedsController.snapshot',
       'ImportController.image',
+      'MemosController.audio',
     ]);
   }, 30_000);
 });

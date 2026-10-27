@@ -30,6 +30,7 @@ import { LintModule } from './documents/lint/lint.module.js';
 import { AiModule } from './ai/ai.module.js';
 import { GlossaryModule } from './glossary/glossary.module.js';
 import { ImportModule } from './import/import.module.js';
+import { MemosModule } from './memos/memos.module.js';
 import { WorkflowsModule } from './workflows/workflows.module.js';
 import { WorkflowMaterializeModule } from './workflows/workflow-materialize.module.js';
 import { TemplatesModule } from './templates/templates.module.js';
@@ -87,6 +88,7 @@ import { ChatModule } from './chat/chat.module.js';
     LintModule,
     GlossaryModule,
     ImportModule,
+    MemosModule,
     WorkflowsModule,
     // API-only: materialisation writes pages, so it runs here and not in the
     // MCP process, which imports WorkflowsModule for its read/start tools.

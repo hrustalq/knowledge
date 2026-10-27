@@ -29,6 +29,7 @@ export type WorkspaceSource =
   | 'source-policy' // :id path param is a web source policy id (docs/features/25)
   | 'saved-filter' // :filterId path param is a saved merge-request filter id (integer)
   | 'import' // :id path param is an import job id (docs/features/16)
+  | 'memo' // :id path param is a memo id (#551; ownership is the service's)
   | 'workflow-definition' // :id path param is a workflow definition id (docs/features/17)
   | 'workflow-run' // :id path param is a workflow run id (docs/features/17)
   | 'template' // :id path param is a page template id (issue #69)

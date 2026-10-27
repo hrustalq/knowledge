@@ -9247,6 +9247,47 @@
       "upload"
     ]
   },
+  "CreateMemoResponse": {
+    "type": "object",
+    "properties": {
+      "memo": {
+        "$ref": "#/components/schemas/MemoInfo"
+      },
+      "upload": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "PUT"
+            ]
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "method",
+          "headers",
+          "expiresAt"
+        ]
+      }
+    },
+    "required": [
+      "memo",
+      "upload"
+    ]
+  },
   "CreateMergeRequestResponse": {
     "type": "object",
     "properties": {
@@ -15495,6 +15536,201 @@
       "jit",
       "group",
       "scim"
+    ]
+  },
+  "MemoDetailResponse": {
+    "type": "object",
+    "properties": {
+      "memo": {
+        "$ref": "#/components/schemas/MemoInfo"
+      },
+      "transcript": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoSegment"
+        }
+      },
+      "summary": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "memo",
+      "transcript",
+      "summary"
+    ]
+  },
+  "MemoInfo": {
+    "type": "object",
+    "properties": {
+      "memoId": {
+        "type": "string"
+      },
+      "workspaceId": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "filename": {
+        "type": "string"
+      },
+      "contentType": {
+        "type": "string"
+      },
+      "sizeBytes": {
+        "type": "number"
+      },
+      "durationSeconds": {
+        "type": "number",
+        "nullable": true
+      },
+      "language": {
+        "type": "string",
+        "nullable": true
+      },
+      "status": {
+        "$ref": "#/components/schemas/MemoStatus"
+      },
+      "stage": {
+        "type": "string",
+        "nullable": true
+      },
+      "error": {
+        "type": "string",
+        "nullable": true
+      },
+      "audioAvailable": {
+        "type": "boolean"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "memoId",
+      "workspaceId",
+      "projectId",
+      "title",
+      "filename",
+      "contentType",
+      "sizeBytes",
+      "durationSeconds",
+      "language",
+      "status",
+      "stage",
+      "error",
+      "audioAvailable",
+      "createdAt",
+      "updatedAt"
+    ]
+  },
+  "MemoListResponse": {
+    "type": "object",
+    "properties": {
+      "memos": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoInfo"
+        }
+      },
+      "transcription": {
+        "$ref": "#/components/schemas/MemoTranscriptionState"
+      },
+      "limits": {
+        "type": "object",
+        "properties": {
+          "maxBytes": {
+            "type": "number"
+          },
+          "maxMinutes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "maxBytes",
+          "maxMinutes"
+        ]
+      }
+    },
+    "required": [
+      "memos",
+      "transcription",
+      "limits"
+    ]
+  },
+  "MemoResponse": {
+    "type": "object",
+    "properties": {
+      "memo": {
+        "$ref": "#/components/schemas/MemoInfo"
+      }
+    },
+    "required": [
+      "memo"
+    ]
+  },
+  "MemoSegment": {
+    "type": "object",
+    "properties": {
+      "i": {
+        "type": "number"
+      },
+      "start": {
+        "type": "number"
+      },
+      "end": {
+        "type": "number"
+      },
+      "text": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "i",
+      "start",
+      "end",
+      "text"
+    ]
+  },
+  "MemoStatus": {
+    "type": "string",
+    "enum": [
+      "pending",
+      "uploaded",
+      "transcribing",
+      "transcribed",
+      "analysing",
+      "done",
+      "failed"
+    ]
+  },
+  "MemoTranscriptionState": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean"
+      },
+      "missing": {
+        "type": "string",
+        "enum": [
+          "TRANSCRIPTION_PROVIDER",
+          "TRANSCRIPTION_BASE_URL",
+          null
+        ],
+        "nullable": true
+      }
+    },
+    "required": [
+      "enabled",
+      "missing"
     ]
   },
   "MergeMergeRequestResponse": {

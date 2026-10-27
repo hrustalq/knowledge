@@ -83,12 +83,20 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     }
     if (jobRow.status === 'completed') return; // idempotent retry guard
     // A deleted workspace (#479): fail the row and stop, without a throw that
-    // would retry — anything written now would outlive the teardown.
+    // would retry — anything written now would outlive the teardown. Gone means
+    // the tombstone, not a missing row (#544): the dev principal writes to
+    // workspaces that have none, and the teardown deletes job rows before the
+    // workspace row, so a torn-down workspace's job already stopped above.
     const workspace = await this.prisma.workspace.findUnique({ where: { id: jobRow.workspaceId }, select: { deletedAt: true } });
-    if (!workspace || workspace.deletedAt) {
+    if (workspace?.deletedAt) {
       await this.prisma.ingestionJob.updateMany({
         where: { id: ingestionJobId },
-        data: { status: 'failed', error: { message: 'workspace deleted' } },
+        // Attempts at the sweeper's ceiling: terminal, so `StaleSweeper.retryFailed` never re-queues it.
+        data: {
+          status: 'failed',
+          attempts: this.config.get('STALE_MAX_ATTEMPTS', { infer: true }),
+          error: { message: 'workspace deleted' },
+        },
       });
       return;
     }

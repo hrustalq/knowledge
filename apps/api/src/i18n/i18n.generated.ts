@@ -972,8 +972,6 @@ export type I18nTranslations = {
             "runsInFlight": {
                 "one": string;
                 "other": string;
-                "few": string;
-                "many": string;
             };
             "disabled": string;
             "differentProject": string;

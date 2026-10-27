@@ -23,6 +23,8 @@ const { compileSearch, globToRegExp, listTree, normalizeRepoPath, windowLines } 
   '../src/connectors/code-research/code-research.service.js'
 );
 const { RepoSnapshotService, lineAnchor } = await import('../src/connectors/code-research/repo-snapshot.service.js');
+const { systemScope } = await import('../src/permissions/access-scope.js');
+type AccessScope = import('../src/permissions/access-scope.js').AccessScope;
 
 const enc = new TextEncoder();
 const files = (entries: Record<string, string>) =>
@@ -155,7 +157,13 @@ describe('lineAnchor', () => {
 describe('RepoSnapshotService', () => {
   const download = vi.mocked(archive.downloadRepoArchive);
 
-  function service(opts: { ttlMs?: number; maxBytes?: number; rows: Array<Record<string, unknown>> }) {
+  function service(opts: {
+    ttlMs?: number;
+    maxBytes?: number;
+    rows: Array<Record<string, unknown>>;
+    /** projectId → restricted; every other project is open. */
+    projects?: Record<string, boolean>;
+  }) {
     const rows = new Map(opts.rows.map((r) => [r.id as string, r]));
     const connectors = {
       require: vi.fn(async (id: string) => {
@@ -165,7 +173,14 @@ describe('RepoSnapshotService', () => {
       }),
       contextFor: vi.fn(async (row: { id: string }) => ({ connectorId: row.id, config: {}, credential: 'secret' })),
     };
-    const prisma = { connector: { findMany: vi.fn(async () => [...rows.values()]) } };
+    const projects = new Map(Object.entries(opts.projects ?? {}));
+    const project = (id: string) => ({ id, name: `Project ${id}`, restricted: projects.get(id) ?? false });
+    const prisma = {
+      connector: {
+        findMany: vi.fn(async () => [...rows.values()].map((r) => ({ ...r, project: project(r.projectId as string) }))),
+      },
+      project: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => project(where.id)) },
+    };
     const config = {
       get: (key: string) => (key === 'CODE_SNAPSHOT_TTL_MS' ? (opts.ttlMs ?? 60_000) : (opts.maxBytes ?? 1 << 30)),
     };
@@ -173,9 +188,16 @@ describe('RepoSnapshotService', () => {
     return new RepoSnapshotService(prisma as never, connectors as never, config as never);
   }
 
+  const w1 = systemScope('w1');
+  /** A member of w1 who holds no grant on the restricted project `pb`. */
+  const outsider: AccessScope = { ...w1, bypass: false, role: 'viewer', denied: new Set(['pb']) };
+  /** The same member once granted `pb`: nothing is denied any more. */
+  const insider: AccessScope = { ...outsider, denied: new Set() };
+
   const row = (id: string, extra: Record<string, unknown> = {}) => ({
     id,
     workspaceId: 'w1',
+    projectId: 'pa',
     kind: 'codebase',
     name: `repo-${id}`,
     enabled: true,
@@ -191,8 +213,8 @@ describe('RepoSnapshotService', () => {
     const rows = [row('c1')];
     const svc = service({ rows });
 
-    const first = await svc.open('c1', 'w1');
-    const second = await svc.open('c1', 'w1');
+    const first = await svc.open('c1', w1);
+    const second = await svc.open('c1', w1);
     expect(second).toBe(first);
     expect(download).toHaveBeenCalledTimes(1);
     expect(first.blobUrl('a.ts', [3, 4])).toBe('https://github.com/acme/svc/blob/main/a.ts#L3-L4');
@@ -200,7 +222,7 @@ describe('RepoSnapshotService', () => {
     expect(JSON.stringify(first)).not.toContain('secret');
 
     rows[0].updatedAt = new Date('2026-02-01T00:00:00Z');
-    await svc.open('c1', 'w1');
+    await svc.open('c1', w1);
     expect(download).toHaveBeenCalledTimes(2);
   });
 
@@ -212,9 +234,9 @@ describe('RepoSnapshotService', () => {
     });
     // Outside a request there is no locale, so `t()` returns the key itself —
     // which is also what makes the reason checkable here.
-    await expect(svc.open('c1', 'w2')).rejects.toThrow(/error\.connector\.notFound/);
-    await expect(svc.open('c2', 'w1')).rejects.toThrow(/error\.code\.notARepository/);
-    await expect(svc.open('c3', 'w1')).rejects.toThrow(/error\.code\.connectorDisabled/);
+    await expect(svc.open('c1', systemScope('w2'))).rejects.toThrow(/error\.connector\.notFound/);
+    await expect(svc.open('c2', w1)).rejects.toThrow(/error\.code\.notARepository/);
+    await expect(svc.open('c3', w1)).rejects.toThrow(/error\.code\.connectorDisabled/);
     expect(download).not.toHaveBeenCalled();
   });
 
@@ -224,8 +246,8 @@ describe('RepoSnapshotService', () => {
       .mockRejectedValueOnce(new Error('404'))
       .mockResolvedValue({ files: files({ 'a.ts': 'x' }), skipped: { oversize: 0, binary: 0 }, branch: 'main', headSha: null });
     const svc = service({ rows: [row('c1')] });
-    await expect(svc.open('c1', 'w1')).rejects.toThrow('404');
-    await expect(svc.open('c1', 'w1')).resolves.toMatchObject({ branch: 'main' });
+    await expect(svc.open('c1', w1)).rejects.toThrow('404');
+    await expect(svc.open('c1', w1)).resolves.toMatchObject({ branch: 'main' });
     expect(download).toHaveBeenCalledTimes(2);
   });
 
@@ -238,10 +260,10 @@ describe('RepoSnapshotService', () => {
       headSha: null,
     }));
     const svc = service({ rows: [row('c1'), row('c2')], maxBytes: 1_000 });
-    await svc.open('c1', 'w1');
-    await svc.open('c2', 'w1');
+    await svc.open('c1', w1);
+    await svc.open('c2', w1);
     // c1 was least recently used and the two together exceed the cap.
-    await svc.open('c1', 'w1');
+    await svc.open('c1', w1);
     expect(download).toHaveBeenCalledTimes(3);
   });
 
@@ -249,10 +271,33 @@ describe('RepoSnapshotService', () => {
     const svc = service({
       rows: [row('c1'), row('c2', { config: { repoUrl: 'https://gitlab.com/a/b', branch: 'dev', subdir: '/docs/' } })],
     });
-    const repos = await svc.listRepos('w1');
+    const repos = await svc.listRepos(w1);
     expect(repos).toEqual([
-      { id: 'c1', name: 'repo-c1', repoUrl: 'https://github.com/acme/svc', branch: null, subdir: '' },
-      { id: 'c2', name: 'repo-c2', repoUrl: 'https://gitlab.com/a/b', branch: 'dev', subdir: 'docs' },
+      { id: 'c1', name: 'repo-c1', repoUrl: 'https://github.com/acme/svc', branch: null, subdir: '', projectId: 'pa', projectName: 'Project pa' },
+      { id: 'c2', name: 'repo-c2', repoUrl: 'https://gitlab.com/a/b', branch: 'dev', subdir: 'docs', projectId: 'pa', projectName: 'Project pa' },
+    ]);
+  });
+
+  it('follows project visibility: a restricted project hides its repository from the list and from open (#553)', async () => {
+    download.mockReset();
+    download.mockResolvedValue({ files: files({ 'a.ts': 'x' }), skipped: { oversize: 0, binary: 0 }, branch: 'main', headSha: null });
+    const svc = service({ rows: [row('c1'), row('c2', { projectId: 'pb' })], projects: { pb: true } });
+
+    expect((await svc.listRepos(outsider)).map((r) => r.id)).toEqual(['c1']);
+    // Not found, the same answer as a connector that does not exist.
+    await expect(svc.open('c2', outsider)).rejects.toThrow(/error\.connector\.notFound/);
+    expect(download).not.toHaveBeenCalled();
+
+    expect((await svc.listRepos(insider)).map((r) => r.id)).toEqual(['c1', 'c2']);
+    await expect(svc.open('c2', insider)).resolves.toMatchObject({ connectorId: 'c2' });
+  });
+
+  it('ranks the turn’s own project first and changes nothing else when nothing is restricted', async () => {
+    const svc = service({ rows: [row('c1'), row('c2', { projectId: 'pb' })] });
+    expect((await svc.listRepos(outsider)).map((r) => r.id)).toEqual(['c1', 'c2']);
+    expect((await svc.listRepos(outsider, 'pb')).map((r) => [r.id, r.projectName])).toEqual([
+      ['c2', 'Project pb'],
+      ['c1', 'Project pa'],
     ]);
   });
 });

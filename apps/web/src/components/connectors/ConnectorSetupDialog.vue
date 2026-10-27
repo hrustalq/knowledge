@@ -62,7 +62,17 @@ import {
 import GithubBranchPicker from './GithubBranchPicker.vue'
 import GithubRepoPicker from './GithubRepoPicker.vue'
 
-const props = defineProps<{ open: boolean; editing: ConnectorSummary | null }>()
+const props = defineProps<{
+  open: boolean
+  editing: ConnectorSummary | null
+  /**
+   * A new connection started from a project's page (#553): a repository
+   * (`codebase`) whose destination is that project. The destination step still
+   * shows it, so it can be changed, and a setup parked elsewhere is not resumed
+   * into it.
+   */
+  projectId?: string
+}>()
 const emit = defineEmits<{ 'update:open': [boolean] }>()
 
 const { t, te } = useI18n()
@@ -248,7 +258,9 @@ function boot(resume: boolean) {
             preserveHierarchy: editing.preserveHierarchy,
             editingId: editing.id,
           }
-        : {}),
+        : props.projectId
+          ? { projectId: props.projectId }
+          : {}),
     },
     { test: testConnection, save: (ctx) => saveConnector(ctx) },
     snapshot,
@@ -279,8 +291,8 @@ watch(
   ([open, editing]) => {
     if (!open) return
     if (!projects.loaded) void projects.fetchList()
-    kind.value = editing ? editing.kind : kind.value
-    boot(!editing)
+    kind.value = editing ? editing.kind : props.projectId ? 'codebase' : kind.value
+    boot(!editing && !props.projectId)
   },
   { immediate: true },
 )

@@ -713,6 +713,7 @@ export class AiController {
     return this.runs.start(dto.workspaceId, key, principal, {
       note: dto.note,
       connectorId: dto.connectorId,
+      projectId: dto.projectId,
       documentIds: dto.documentIds,
     });
   }

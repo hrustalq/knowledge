@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthCoreModule } from '../../auth/auth-core.module.js';
 import { PrismaModule } from '../../prisma/prisma.module.js';
+import { PermissionsCoreModule } from '../../permissions/permissions-core.module.js';
 import { ConnectorAdaptersModule } from '../adapters/adapters.module.js';
 import { ConnectorsCoreModule } from '../connectors-core.module.js';
 import { ApiDriftService } from './api-drift.service.js';
@@ -26,7 +27,7 @@ import { RepoSnapshotService } from './repo-snapshot.service.js';
  * commenting on one does not — and why the spec ↔ code drift check (#78) does.
  */
 @Module({
-  imports: [PrismaModule, AuthCoreModule, ConnectorsCoreModule, ConnectorAdaptersModule],
+  imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, ConnectorsCoreModule, ConnectorAdaptersModule],
   providers: [RepoSnapshotService, CodeResearchService, PullRequestService, ApiDriftService],
   exports: [RepoSnapshotService, CodeResearchService, PullRequestService, ApiDriftService],
 })

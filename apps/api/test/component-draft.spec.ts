@@ -147,7 +147,8 @@ describe('the archaeologist documenting a component', () => {
       {} as never,
       {} as never,
       { get: () => undefined } as never,
-      {} as never,
+      // The run opens the repository under its owner's clamped scope (#553).
+      { scopeFor: async () => ({ workspaceId: 'w' }), audienceScope: async (scope: unknown) => scope } as never,
       { promptFor: async () => ({ prompt: '', learningIds: [] }), dismissedPrompt: async () => '' } as never,
       {} as never,
       templates,

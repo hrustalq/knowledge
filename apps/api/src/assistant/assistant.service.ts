@@ -186,13 +186,15 @@ const WEB_RESEARCH_CLAUSE =
   'try mirrors, caches or variations of the address to get around it.';
 
 /**
- * Appended when the workspace has a repository the model may read
- * (docs/features/31). Built per turn rather than baked into the agent for the
- * web clause's reason: which repositories exist is a per-workspace fact, and a
- * workspace with none sends byte-identical bytes to what it sent before.
+ * Appended when the asker may read a repository (docs/features/31). Built per
+ * turn rather than baked into the agent for the web clause's reason: which
+ * repositories exist depends on who asks — a repository follows its project's
+ * visibility (#553) — and a workspace with none sends byte-identical bytes to
+ * what it sent before.
  *
  * The list is the point. `connectorId` is how every code tool names its
- * repository, and an id the model has to guess is an id it will invent.
+ * repository, and an id the model has to guess is an id it will invent. Each
+ * line names its project, and the turn's own project's come first.
  */
 function codeResearchClause(repos: RepoSummary[]): string {
   if (repos.length === 0) return '';
@@ -200,7 +202,7 @@ function codeResearchClause(repos: RepoSummary[]): string {
     .map((r) => {
       const branch = r.branch ? `branch ${r.branch}` : 'default branch';
       const scope = r.subdir ? `, only under ${r.subdir}/` : '';
-      return `- ${r.name} — ${r.repoUrl} (${branch}${scope}; connectorId ${r.id})`;
+      return `- ${r.name} — ${r.repoUrl} (project ${JSON.stringify(r.projectName)}; ${branch}${scope}; connectorId ${r.id})`;
     })
     .join('\n');
   return (
@@ -1280,10 +1282,10 @@ export class AssistantService {
     // title and nothing about where it lives, so "what section is this in"
     // could only be answered by hunting for it.
     let turnTrail = '';
+    const scope = await this.permissions.scopeFor(principal, thread.workspaceId);
     if (groundingDocumentId) {
       const doc = await this.prisma.document.findUnique({ where: { id: groundingDocumentId } });
       // Grounding is reading: a page the caller may not open grounds nothing (#76).
-      const scope = await this.permissions.scopeFor(principal, thread.workspaceId);
       if (doc && doc.workspaceId === thread.workspaceId && canSee(scope, doc)) {
         groundingDoc = doc;
         const trail = await this.documents.breadcrumbsFor(scope, [doc.id]);
@@ -1326,12 +1328,14 @@ export class AssistantService {
       )
       .join('\n\n');
 
-    // Which repositories the model may read (docs/features/31). One query per
-    // turn, no network — the archive is downloaded only when a tool is called.
-    const repos = await this.code.repositories(thread.workspaceId);
+    // Which repositories the model may read (docs/features/31): those in
+    // projects the asker can open, the grounding page's project first (#553).
+    // One query per turn, no network — the archive is downloaded only when a
+    // tool is called.
+    const repos = await this.code.repositories(scope, groundingDoc?.projectId);
     // And which of those carry issues (docs/features/32). One indexed query,
     // no network, for the same reason.
-    const taskRepos = await this.tasks.repositories(thread.workspaceId);
+    const taskRepos = await this.tasks.repositories(scope);
     // And whether any group's chat is searchable (#339): one indexed query.
     const chat = await this.tools.chatAvailable(thread.workspaceId);
 

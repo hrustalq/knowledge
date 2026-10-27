@@ -44,6 +44,7 @@ import ProjectAvatar from '@/components/projects/ProjectAvatar.vue'
 import ExportDialog from '@/components/knowledge/ExportDialog.vue'
 import QualityDistribution from '@/components/quality/QualityDistribution.vue'
 import ProjectAnalyticsSection from '@/components/analytics/ProjectAnalyticsSection.vue'
+import ConnectorList from '@/components/connectors/ConnectorList.vue'
 import { scoreTone } from '@/components/quality/quality-ui'
 import { useProjectsStore } from '@/stores/projects'
 import { useAuthStore } from '@/stores/auth'
@@ -131,7 +132,8 @@ const visibleWidgets = computed(() => {
     if (!c) return w.id === 'overview'
     if (w.id === 'glossary') return c.glossaryTerms > 0
     if (w.id === 'quality') return (quality.value?.scoredPages ?? 0) > 0
-    if (w.id === 'connectors') return c.connectors > 0
+    // The project's repositories (#553), or the place to connect the first one.
+    if (w.id === 'connectors') return c.connectors > 0 || auth.canAdminWorkspace
     if (w.id === 'workflows') return c.workflows > 0
     if (w.id === 'merge-requests') return c.openMergeRequests > 0
     // A site is worth a row once it exists, or for someone who could set one up.
@@ -341,6 +343,12 @@ const isActive = computed(() => projectId.value === projects.activeId)
               {{ t('quality.project.open') }}
             </RouterLink>
           </div>
+
+          <ConnectorList
+            v-else-if="w.id === 'connectors'"
+            :can-manage="auth.canAdminWorkspace"
+            :project-id="projectId"
+          />
 
           <div v-else-if="w.id === 'site'" class="space-y-2 text-sm">
             <a

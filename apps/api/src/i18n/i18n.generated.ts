@@ -912,6 +912,8 @@ export type I18nTranslations = {
             "agentRunInFlight": string;
             "agentNeedsConnector": string;
             "agentConnectorInvalid": string;
+            "agentProjectNoRepository": string;
+            "agentProjectManyRepositories": string;
             "agentTriggerNotFound": string;
             "agentLearningNotFound": string;
             "agentLearningText": string;

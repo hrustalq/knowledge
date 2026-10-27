@@ -60,6 +60,15 @@ see but their workspace never recorded is dropped, and vice versa. Connecting a
 personal GitHub account must not silently widen a workspace to every org that
 person happens to belong to.
 
+**Installations stay per workspace; the project is where a repository is bound
+(#553).** `github_installations` is keyed by workspace, and a repository picked
+from one is connected to a project like any other connector. An org owner's
+grant is a credential for the workspace — the same install feeds the frontend
+project and the infra project — so a per-project copy would ask the owner to
+grant the same thing twice and would still need the workspace intersection
+above. What the project decides is who may read the repository through the
+assistant (see [31](31-code-research.md)), not what GitHub granted.
+
 **One seam, no adapter changes.** `ConnectorsService.contextFor` resolves
 `credential` to a freshly minted installation token when `config.githubInstallationId`
 is set, and to the stored PAT otherwise. Every adapter already reads

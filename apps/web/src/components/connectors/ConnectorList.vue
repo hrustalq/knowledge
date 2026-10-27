@@ -1,5 +1,7 @@
 <script setup lang="ts">
 // The Connections tab (docs/features/19): one card per configured connection.
+// Also a project's own list (#553): `projectId` narrows the same cached list to
+// the connectors that feed it, and Add becomes Connect repository into it.
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -19,14 +21,17 @@ import { relativeTime } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import ConnectorSetupDialog from './ConnectorSetupDialog.vue'
 
-defineProps<{ canManage: boolean }>()
+const props = defineProps<{ canManage: boolean; projectId?: string }>()
 
 const { t } = useI18n()
 const workspaceId = getWorkspaceId()
 const queryClient = useQueryClient()
 
 const query = useQuery(apiQueryOptions('/v1/connectors', { query: { workspaceId } }))
-const connectors = computed(() => (query.data.value as ListConnectorsResponse | undefined)?.connectors ?? [])
+const connectors = computed(() => {
+  const all = (query.data.value as ListConnectorsResponse | undefined)?.connectors ?? []
+  return props.projectId ? all.filter((c) => c.projectId === props.projectId) : all
+})
 
 const invalidates = () => [['/v1/connectors']]
 const remove = useApiMutation('delete', '/v1/connectors/{id}', { invalidates })
@@ -88,6 +93,13 @@ function statusIcon(connector: ConnectorSummary) {
   return { icon: CircleDashed, class: 'text-muted-foreground' }
 }
 
+/** Where a git connector reads from, for the line under its name: the repository and its branch. */
+function repoLine(connector: ConnectorSummary): string | null {
+  const repoUrl = connector.config.repoUrl
+  if (!repoUrl) return null
+  return `${repoUrl.replace(/^https?:\/\//, '')} · ${connector.config.branch || t('connectors.defaultBranch')}`
+}
+
 function tokenExpiry(connector: ConnectorSummary) {
   return connector.kind === 'figma' ? figmaTokenExpiry(connector.config[FIGMA_TOKEN_EXPIRES_CONFIG_KEY]) : null
 }
@@ -100,7 +112,7 @@ function tokenExpiry(connector: ConnectorSummary) {
         {{ t('connectors.count', { count: connectors.length }, connectors.length) }}
       </p>
       <Button v-if="canManage && connectors.length" size="sm" @click="openNew">
-        <Plus class="size-3.5" /> {{ t('connectors.add') }}
+        <Plus class="size-3.5" /> {{ t(projectId ? 'connectors.connectRepository' : 'connectors.add') }}
       </Button>
     </div>
 
@@ -115,6 +127,14 @@ function tokenExpiry(connector: ConnectorSummary) {
         <Button size="sm" variant="outline" @click="query.refetch()">{{ t('common.retry') }}</Button>
       </template>
     </PageState>
+
+    <!-- A project's empty list is a line in a rail, not the workspace's first-run card. -->
+    <div v-else-if="!connectors.length && projectId" class="space-y-2 text-sm">
+      <p class="text-muted-foreground">{{ t('connectors.projectEmpty') }}</p>
+      <Button v-if="canManage" size="sm" variant="outline" @click="openNew">
+        <Plus class="size-3.5" /> {{ t('connectors.connectRepository') }}
+      </Button>
+    </div>
 
     <AiEmptyState
       v-else-if="!connectors.length"
@@ -164,6 +184,13 @@ function tokenExpiry(connector: ConnectorSummary) {
                 }}
               </Badge>
             </div>
+            <p
+              v-if="repoLine(connector)"
+              class="text-muted-foreground mt-1 truncate font-mono text-xs"
+              :title="repoLine(connector) ?? undefined"
+            >
+              {{ repoLine(connector) }}
+            </p>
             <p class="text-muted-foreground mt-1 text-xs">
               <template v-if="connector.capabilities.embeds">{{ t('connectors.directionEmbeds') }}</template>
               <template v-else>
@@ -237,6 +264,6 @@ function tokenExpiry(connector: ConnectorSummary) {
       </li>
     </ul>
 
-    <ConnectorSetupDialog v-model:open="open" :editing="editing" />
+    <ConnectorSetupDialog v-model:open="open" :editing="editing" :project-id="projectId" />
   </div>
 </template>

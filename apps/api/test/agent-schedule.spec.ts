@@ -428,3 +428,66 @@ describe('page-scoped runs (AgentRunInput.documentIds)', async () => {
     expect(created[0]?.input).toBeUndefined();
   });
 });
+
+describe('connector-scoped runs named by project (#553)', async () => {
+  const { AgentRunsService } = await import('../src/ai/ai-agents.service.js');
+  const { vi } = await import('vitest');
+  const ws = '11111111-1111-4111-8111-111111111111';
+  const repos = [
+    { id: 'c1', name: 'api', projectId: 'pa' },
+    { id: 'c2', name: 'web', projectId: 'pb' },
+    { id: 'c3', name: 'infra', projectId: 'pb' },
+  ];
+
+  function service() {
+    const created: Record<string, unknown>[] = [];
+    const findMany = vi.fn(async ({ where }: { where: { projectId?: string } }) =>
+      repos.filter((r) => !where.projectId || r.projectId === where.projectId),
+    );
+    const prisma = {
+      connector: { findMany },
+      agentRun: {
+        count: vi.fn(async () => 0),
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+          created.push(data);
+          return { id: 'run', status: 'pending', createdAt: new Date(), updatedAt: new Date(), ...data };
+        }),
+      },
+      aiAgent: { findUnique: vi.fn(async () => null) },
+    };
+    const registry = {
+      resolve: vi.fn(async () => ({ key: 'archaeologist', name: 'archaeologist', enabled: true, surfaces: ['background'] })),
+    };
+    const svc = new AgentRunsService(
+      prisma as never,
+      registry as never,
+      { assertWithinBudget: vi.fn(async () => undefined) } as never,
+      { enqueue: vi.fn(async () => undefined) } as never,
+    );
+    return { svc, created, findMany };
+  }
+  const principal = { userId: '00000000-0000-4000-8000-000000000001', locale: 'en' } as never;
+
+  it("reads the project's only repository", async () => {
+    const { svc, created, findMany } = service();
+    await svc.start(ws, 'archaeologist', principal, { projectId: 'pa' }).catch(() => undefined);
+    expect(created[0]?.input).toEqual({ connectorId: 'c1' });
+    // A restricted project's repository is never a candidate: the run could not read it.
+    expect(findMany.mock.calls[0][0].where).toMatchObject({ projectId: 'pa', project: { restricted: false } });
+  });
+
+  it('refuses a project with several repositories, naming them', async () => {
+    const { svc, created } = service();
+    await expect(svc.start(ws, 'archaeologist', principal, { projectId: 'pb' })).rejects.toThrow(
+      'agentProjectManyRepositories',
+    );
+    expect(created).toHaveLength(0);
+  });
+
+  it('refuses a project with none', async () => {
+    const { svc } = service();
+    await expect(svc.start(ws, 'archaeologist', principal, { projectId: 'pz' })).rejects.toThrow(
+      'agentProjectNoRepository',
+    );
+  });
+});

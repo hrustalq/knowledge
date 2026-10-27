@@ -13,6 +13,32 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- A project's page lists the connectors that feed it (#553), with each repository's URL and branch, and
+  a workspace admin can **Connect repository** from there: the setup wizard opens with the project
+  already chosen as the destination.
+- `POST /v1/ai/agents/archaeologist/run` takes `projectId` (#553). Without a `connectorId` it reads that
+  project's only repository, and refuses a project with none or several, naming them.
+
+### Changed
+
+- A connected repository now belongs to its project for the assistant (#553). The *Connected
+  repositories* list names each repository's project and puts the current page's project first. In a
+  workspace with no restricted projects, the same repositories are listed as before.
+
+### Security
+
+- A repository connected to a restricted project could be listed and read through the assistant's code
+  tools (`code_tree`, `code_search`, `code_outline`, `code_read`) and its work-item tools by any member,
+  including people who cannot open a page of that project (#553). It is now left out of the list, and
+  calling a tool with its connector id answers *not found*. This is checked on every call. Background
+  agent runs (archaeologist, component drafts, the PR drift sentinel) write findings the whole workspace
+  reads, so they no longer read a restricted project's repository at all. Starting one against such a
+  repository is refused when you press Run.
+
 ## [0.35.0] — 2026-10-26
 
 ### Added

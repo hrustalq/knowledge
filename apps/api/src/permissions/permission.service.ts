@@ -363,6 +363,16 @@ export class PermissionService {
   }
 
   /**
+   * A tool call's scope: the caller's, asked afresh per call so a grant
+   * revoked mid-turn holds from the next one, and clamped to the run's
+   * audience when its output is read by more people than the caller (#76).
+   */
+  async toolScope(ctx: { principal: Principal; workspaceId: string; audience?: Audience }): Promise<AccessScope> {
+    const scope = await this.scopeFor(ctx.principal, ctx.workspaceId);
+    return ctx.audience ? this.audienceScope(scope, ctx.audience) : scope;
+  }
+
+  /**
    * The scope as a store filter for ArcadeDB and OpenSearch (#76): the pages a
    * member may not open, or the pages a guest may. Read from PG on every call,
    * so a grant changed a second ago already holds in the stores' predicates —

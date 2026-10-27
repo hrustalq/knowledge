@@ -4,6 +4,7 @@ import { ASSISTANT_TASK_TOOL_NAMES, connectorKindInfo } from '@knowledge/contrac
 import type { ConnectorWorkItemInfo } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
 import { wrapUntrusted } from '../common/untrusted.js';
+import { canSeeProject, type AccessScope } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { AssistantToolContext, AssistantToolResult } from '../assistant/assistant-tool-types.js';
@@ -44,19 +45,20 @@ export class WorkItemToolsService {
   ) {}
 
   /**
-   * The connectors in this workspace that have work items at all.
+   * The connectors in this workspace that have work items at all, in projects
+   * `scope` can open (#553).
    *
    * Called on every turn to decide whether the tools are offered, so it is one
    * indexed query and no network — the `RepoSnapshotService.listRepos` contract.
    */
-  async repositories(workspaceId: string): Promise<Array<{ id: string; name: string }>> {
+  async repositories(scope: AccessScope): Promise<Array<{ id: string; name: string }>> {
     const rows = await this.prisma.connector.findMany({
-      where: { workspaceId, enabled: true },
-      select: { id: true, name: true, kind: true },
+      where: { workspaceId: scope.workspaceId, enabled: true },
+      select: { id: true, name: true, kind: true, project: { select: { id: true, restricted: true } } },
       orderBy: { createdAt: 'asc' },
     });
     return rows
-      .filter((row) => connectorKindInfo(row.kind)?.capabilities.tasks)
+      .filter((row) => connectorKindInfo(row.kind)?.capabilities.tasks && canSeeProject(scope, row.project))
       .map((row) => ({ id: row.id, name: row.name }));
   }
 
@@ -183,8 +185,14 @@ export class WorkItemToolsService {
 
     const row = await this.connectors.require(connectorId);
     // A 404 rather than a 403: answering "forbidden" would confirm to the model
-    // that the id it guessed exists somewhere. The RepoSnapshotService rule.
-    if (row.workspaceId !== ctx.workspaceId) return this.fail(`connector ${connectorId} was not found`);
+    // that the id it guessed exists somewhere. The RepoSnapshotService rule,
+    // which a connector in a project the caller cannot open follows too (#553).
+    const scope = await this.permissions.toolScope(ctx);
+    const project =
+      row.workspaceId === ctx.workspaceId
+        ? await this.prisma.project.findUnique({ where: { id: row.projectId }, select: { id: true, restricted: true } })
+        : null;
+    if (!project || !canSeeProject(scope, project)) return this.fail(`connector ${connectorId} was not found`);
     if (!row.enabled) return this.fail(`connector ${row.name} is disabled`);
     if (!connectorKindInfo(row.kind)?.capabilities.tasks) {
       return this.fail(`connector ${row.name} has no issues or pull requests`);
@@ -193,9 +201,9 @@ export class WorkItemToolsService {
     try {
       switch (name) {
         case 'task_list':
-          return await this.list(row.id, args, ctx);
+          return await this.list(row.id, args, scope);
         case 'task_read':
-          return await this.read(row.id, args, ctx);
+          return await this.read(row.id, args, scope);
         case 'task_create':
           return await this.create(row.id, args);
         case 'task_comment':
@@ -215,10 +223,10 @@ export class WorkItemToolsService {
   private async list(
     connectorId: string,
     args: Record<string, unknown>,
-    ctx: AssistantToolContext,
+    scope: AccessScope,
   ): Promise<AssistantToolResult> {
     const row = await this.connectors.require(connectorId);
-    const all = await this.workItems.list(await this.permissions.scopeFor(ctx.principal, ctx.workspaceId), row);
+    const all = await this.workItems.list(scope, row);
     const state = typeof args.state === 'string' ? args.state : 'open';
     const documentId = typeof args.documentId === 'string' ? args.documentId.trim() : '';
     const limit = clamp(args.limit, DEFAULT_LIMIT, MAX_LIMIT);
@@ -234,13 +242,12 @@ export class WorkItemToolsService {
   private async read(
     connectorId: string,
     args: Record<string, unknown>,
-    ctx: AssistantToolContext,
+    scope: AccessScope,
   ): Promise<AssistantToolResult> {
     const row = await this.connectors.require(connectorId);
     const number = Number(args.number);
     if (!Number.isInteger(number) || number < 1) return this.fail('number must be a positive integer');
 
-    const scope = await this.permissions.scopeFor(ctx.principal, ctx.workspaceId);
     const all = await this.prisma.connectorWorkItem.findMany({ where: { connectorId, number } });
     if (all.length > 0) {
       // Stored but on a page this caller cannot open: answered as not found,

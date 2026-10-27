@@ -250,6 +250,8 @@
     "agentRunInFlight": "A run of \"{key}\" is already in progress.",
     "agentNeedsConnector": "Agent \"{key}\" reads one repository — pick which connector it should run against.",
     "agentConnectorInvalid": "{id} is not an enabled repository connector in this workspace.",
+    "agentProjectNoRepository": "This project has no enabled repository connector for agent \"{key}\" to read.",
+    "agentProjectManyRepositories": "This project has several repositories — pick which one agent \"{key}\" should read: {names}.",
     "agentTriggerNotFound": "Unknown agent trigger {id}",
     "agentLearningNotFound": "Unknown agent learning {id}",
     "agentLearningText": "A learning is between 1 and {max} characters of text.",

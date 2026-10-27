@@ -357,7 +357,8 @@ export class AgentRunsService {
     workspaceId: string,
     agentKey: string,
     principal: Principal,
-    input: AgentRunInput = {},
+    // `projectId` only narrows which repository is chosen; the run stores the connector.
+    input: AgentRunInput & { projectId?: string } = {},
   ): Promise<AgentRunSummary> {
     const agent = await this.registry.resolve(workspaceId, agentKey);
     if (!agent.enabled) throw new BadRequestException(t('error.ai.agentDisabled', { key: agentKey }));
@@ -368,8 +369,9 @@ export class AgentRunsService {
     // scope is settled here, where the person who pressed Run can be told what
     // is wrong, rather than in the worker where the run would simply fail:
     // a named connector must be an enabled repository in this workspace, and
-    // an unnamed one is fine only when there is exactly one to choose.
-    const connectorId = await this.resolveScope(workspaceId, agentKey, input.connectorId);
+    // an unnamed one is fine only when there is exactly one to choose — in
+    // the named project, when there is one (#553).
+    const connectorId = await this.resolveScope(workspaceId, agentKey, input.connectorId, input.projectId);
     // Pages only mean something to an executor that reads pages; anything else
     // would ignore them and run workspace-wide, which is not what was asked.
     const documentIds = input.documentIds?.length ? [...new Set(input.documentIds)] : null;
@@ -420,18 +422,44 @@ export class AgentRunsService {
    * The repository a connector-scoped run reads, or null for an agent that
    * takes no scope. Read through prisma rather than ConnectorsService — this
    * module has no edge to the connectors layer and needs only four columns.
+   *
+   * A restricted project's repository is never eligible: the run reads as its
+   * owner clamped to the workspace (its findings are read by everyone), so
+   * the worker would refuse it as not found (#553). Leaving it out here also
+   * keeps its name out of the error that lists a project's candidates.
    */
-  private async resolveScope(workspaceId: string, agentKey: string, requested?: string): Promise<string | null> {
+  private async resolveScope(
+    workspaceId: string,
+    agentKey: string,
+    requested?: string,
+    projectId?: string,
+  ): Promise<string | null> {
     if (!isConnectorScopedAgent(agentKey)) return null;
-    const eligible = { workspaceId, enabled: true, kind: { in: ['codebase', 'markdown-git'] } };
+    const eligible = {
+      workspaceId,
+      enabled: true,
+      kind: { in: ['codebase', 'markdown-git'] },
+      project: { restricted: false },
+      ...(projectId ? { projectId } : {}),
+    };
     if (requested) {
       const row = await this.prisma.connector.findFirst({ where: { id: requested, ...eligible }, select: { id: true } });
       if (!row) throw new BadRequestException(t('error.ai.agentConnectorInvalid', { id: requested }));
       return row.id;
     }
-    const rows = await this.prisma.connector.findMany({ where: eligible, select: { id: true }, take: 2 });
-    if (rows.length !== 1) throw new BadRequestException(t('error.ai.agentNeedsConnector', { key: agentKey }));
-    return rows[0].id;
+    const rows = await this.prisma.connector.findMany({
+      where: eligible,
+      select: { id: true, name: true },
+      orderBy: { createdAt: 'asc' },
+      take: projectId ? 10 : 2,
+    });
+    if (rows.length === 1) return rows[0].id;
+    if (!projectId) throw new BadRequestException(t('error.ai.agentNeedsConnector', { key: agentKey }));
+    throw new BadRequestException(
+      rows.length === 0
+        ? t('error.ai.agentProjectNoRepository', { key: agentKey })
+        : t('error.ai.agentProjectManyRepositories', { key: agentKey, names: rows.map((r) => r.name).join(', ') }),
+    );
   }
 
   async list(

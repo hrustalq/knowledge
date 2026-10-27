@@ -230,9 +230,25 @@ which reads its own archive at effort `high`:
 | `code_read`    | `connectorId`, `path`, `startLine?`, `endLine?`                             | a numbered window of the file; cites the blob URL with a line anchor                        |
 
 The per-turn system prompt gains a _Connected repositories_ list — name, URL,
-branch, `connectorId` — when the workspace has any, beside the web clause and
-for the same reason: which repositories exist is a per-workspace fact, and a
-workspace with none sends byte-identical bytes to what it sent before.
+project, branch, `connectorId` — when the asker may read any, beside the web
+clause, and a workspace with none sends byte-identical bytes to what it sent
+before.
+
+**A repository belongs to its project (#553).** `connectors.project_id` is
+where its pages land, and it is also whose visibility the repository follows:
+`RepoSnapshotService.listRepos(scope, projectId?)` keeps only connectors whose
+project `canSeeProject(scope, …)` passes — the predicate a group chat's binding
+already used — and ranks the grounding page's project first. `open(id, scope)`
+re-checks it on every call, so `code_*` with the id of a repository in a
+project the caller cannot open answers *not found*, like a connector in another
+workspace. The work-item tools apply the same check to their list and to every
+call. A run's audience clamps it like page reads: an agent run's scope denies
+every restricted node, so the archaeologist, a component draft and the drift
+sentinel cannot read a restricted project's repository, and the run's API
+refuses one at enqueue. Internal readers that never show code to a model (the
+pull request import overlay, the spec ↔ code drift inventory) pass
+`systemScope`. A workspace with no restricted projects lists exactly what it
+listed before; only the order and the project label are new.
 
 The tools are named in the `researcher` and `author` allowlists and in
 `ASSISTANT_CODE_TOOL_NAMES` in contracts, the write-set precedent: one list for
@@ -246,7 +262,7 @@ CODE_SNAPSHOT_MAX_BYTES=268435456  # every snapshot in one process, together
 The agent's surface:
 
 ```
-POST /v1/ai/agents/archaeologist/run      editor   body { workspaceId, connectorId?, note? }
+POST /v1/ai/agents/archaeologist/run      editor   body { workspaceId, connectorId?, projectId?, note? }
 POST /v1/ai/agents/runs/:id/findings/:index/create-page   editor   → { documentId, title }
 ```
 
@@ -258,8 +274,10 @@ values are `snapshot`, `docs`, `candidates`, `reading`.
 
 - **A scope column on schedules.** A scheduled run carries only a note, so a
   scheduled archaeologist works in a one-repository workspace and fails, with
-  the reason, in any other. `scheduleConnectorId` is the obvious column and
-  earns itself when someone schedules one.
+  the reason, in any other. The run route now takes `projectId` and reads that
+  project's only repository (#553), so the column a schedule needs is a
+  project id resolved the same way, and it earns itself when someone
+  schedules one.
 - **Batching by module.** One loop per file is the honest unit today; a module
   with six small files that share one rule would be better read together.
 - **An evaluator pass.** Feature 29's separate generate-and-evaluate prompts

@@ -7,6 +7,7 @@ import { diffApiSpecs } from '../../api-specs/api-diff.js';
 import { parseApiSpec, type ParsedApiSpec } from '../../api-specs/api-spec.parser.js';
 import type { Env } from '../../config/env.js';
 import { t } from '../../i18n/t.js';
+import { systemScope } from '../../permissions/access-scope.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ConnectorsService } from '../connectors.service.js';
 import type { PullRequestFile } from '../adapters/pull-request.js';
@@ -222,7 +223,7 @@ export class ApiDriftService {
   /** The whole repository: the cached snapshot when it is the whole repository, a fresh archive when it is a `subdir`. */
   private async archive(row: Connector): Promise<Map<string, Uint8Array>> {
     const ctx = await this.connectors.contextFor(row, async () => undefined);
-    if (!repoSubdir(ctx)) return (await this.snapshots.open(row.id, row.workspaceId)).files;
+    if (!repoSubdir(ctx)) return (await this.snapshots.open(row.id, systemScope(row.workspaceId))).files;
     return (await downloadRepoArchive(ctx)).files;
   }
 

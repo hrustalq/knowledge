@@ -2,6 +2,8 @@ import { HttpException, Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import { globToRegExp } from '../../common/glob.js';
 import { AccessService } from '../../auth/access.service.js';
+import type { AccessScope } from '../../permissions/access-scope.js';
+import { PermissionService } from '../../permissions/permission.service.js';
 import { CODE_TOOLS } from '../../assistant/assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from '../../assistant/assistant-tool-types.js';
 import type { CodeSymbol } from '../adapters/code-symbols.js';
@@ -36,6 +38,7 @@ export class CodeResearchService {
   constructor(
     private readonly access: AccessService,
     private readonly snapshots: RepoSnapshotService,
+    private readonly permissions: PermissionService,
     treeSitter: TreeSitterService,
   ) {
     this.tools = new SnapshotCodeTools(treeSitter);
@@ -43,9 +46,9 @@ export class CodeResearchService {
 
   private readonly tools: SnapshotCodeTools;
 
-  /** The repositories a workspace may read — what decides whether the tools are offered. */
-  repositories(workspaceId: string): Promise<RepoSummary[]> {
-    return this.snapshots.listRepos(workspaceId);
+  /** The repositories `scope` may read, `projectId`'s first — what decides whether the tools are offered. */
+  repositories(scope: AccessScope, projectId?: string): Promise<RepoSummary[]> {
+    return this.snapshots.listRepos(scope, projectId);
   }
 
   definitions(): ChatCompletionFunctionTool[] {
@@ -57,9 +60,10 @@ export class CodeResearchService {
    *
    * Authorises on every call, the read-tools rule: the other caller is a
    * background agent with no guard in front of it. The connector is then
-   * re-resolved by RepoSnapshotService, which is where workspace, kind and
-   * enabled are checked — on execution, not on offer, because a turn outlives
-   * a settings change.
+   * re-resolved by RepoSnapshotService, which is where workspace, project
+   * visibility, kind and enabled are checked — on execution, not on offer,
+   * because a turn outlives a settings change. A run's audience clamps the
+   * project check like it clamps page reads (#553).
    */
   async execute(
     name: string,
@@ -71,7 +75,7 @@ export class CodeResearchService {
       await this.access.requireRole(ctx.principal, ctx.workspaceId, 'viewer');
       const connectorId = typeof args.connectorId === 'string' ? args.connectorId.trim() : '';
       if (!connectorId) return this.fail('connectorId is required — pick one from the connected repositories list');
-      const snapshot = await this.snapshots.open(connectorId, ctx.workspaceId);
+      const snapshot = await this.snapshots.open(connectorId, await this.permissions.toolScope(ctx));
       return await this.tools.run(name, args, snapshot);
     } catch (error) {
       // A refused connector, a vanished file, a bad pattern: the model gets the

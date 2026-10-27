@@ -30,6 +30,7 @@ import {
   FIGMA_HANDLE_CONFIG_KEY,
   FIGMA_TOKEN_EXPIRES_CONFIG_KEY,
   connectorKindInfo,
+  connectionProviderFor,
   driftCheckMode,
   driftFlagPages,
   ZENDESK_TRIGGER_BODY,
@@ -41,6 +42,7 @@ import type {
   ConnectorSummary,
   ConnectorSyncMode,
   FigmaOauthStatusResponse,
+  ListConnectionsResponse,
 } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
@@ -238,12 +240,39 @@ async function testConnection(ctx: SetupContext) {
   return res
 }
 
+// --- the connection a connector dials through, when editing (#564) ---
+
+const PASTE_TOKEN = '__paste__'
+const connectionList = useQuery(
+  computed(() => ({ ...apiQueryOptions('/v1/connections', { query: { workspaceId } }), enabled: props.open && !!props.editing })),
+)
+/** Connections this connector could dial through: same provider, same site. */
+const matchingConnections = computed(() => {
+  const target = connectionProviderFor(kind.value, context.value?.config ?? props.editing?.config ?? {})
+  return ((connectionList.data.value as ListConnectionsResponse | undefined)?.connections ?? []).filter(
+    (c) => c.provider === target.provider && c.site === target.site,
+  )
+})
+const connectionChoice = ref<string>(PASTE_TOKEN)
+watch(
+  () => [props.editing?.id, matchingConnections.value.length] as const,
+  () => {
+    const current = props.editing?.connectionId
+    connectionChoice.value = current && matchingConnections.value.some((c) => c.id === current) ? current : PASTE_TOKEN
+  },
+  { immediate: true },
+)
+
 async function saveConnector(ctx: SetupContext, draft = false): Promise<string> {
   const body = {
     name: ctx.name.trim(),
     config: ctx.config,
     ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
     ...(ctx.credential ? { credential: ctx.credential } : {}),
+    // Another connection picked while editing (#564); a pasted token rebinds on its own.
+    ...(!ctx.credential && props.editing && connectionChoice.value !== PASTE_TOKEN && connectionChoice.value !== props.editing.connectionId
+      ? { connectionId: connectionChoice.value }
+      : {}),
     ...(draft
       ? // A draft exists only so the connection can be tested; it must not sync.
         { enabled: false }
@@ -584,7 +613,25 @@ function startOver() {
             </template>
           </div>
 
-          <label v-if="stepMeta?.credential && !pickedInstallation && !figmaHandle" class="block space-y-1.5">
+          <!-- Editing (#564): the account this connector dials as is a workspace
+               connection. Pick another one, or paste a token for this connector. -->
+          <label v-if="stepMeta?.credential && editing && matchingConnections.length" class="block space-y-1.5">
+            <span class="text-sm font-medium">{{ t('connectors.connections.pickerLabel') }}</span>
+            <Select v-model="connectionChoice">
+              <SelectTrigger class="w-full min-w-0"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="c in matchingConnections" :key="c.id" :value="c.id">
+                  {{ (c.accountLabel ?? c.credentialHint ?? '') + ' · ' + t(`connectors.connections.methods.${c.method}`) }}
+                </SelectItem>
+                <SelectItem :value="PASTE_TOKEN">{{ t('connectors.connections.pickerPaste') }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <span class="text-muted-foreground block text-xs">{{ t('connectors.connections.pickerHint') }}</span>
+          </label>
+          <label
+            v-if="stepMeta?.credential && !pickedInstallation && !figmaHandle && (!editing || !matchingConnections.length || connectionChoice === PASTE_TOKEN)"
+            class="block space-y-1.5"
+          >
             <span class="text-sm font-medium">{{ kind === 'figma' && figmaOffered ? t('connectors.figmaAccess.or') : t('connectors.credential') }}</span>
             <Input
               :model-value="context?.credential ?? ''"

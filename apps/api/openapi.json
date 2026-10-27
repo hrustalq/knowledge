@@ -42171,6 +42171,11 @@
             "nullable": true,
             "description": "Write-only. null clears the stored credential."
           },
+          "connectionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Dial through this workspace connection (#564); its provider and site must match the connector"
+          },
           "parentId": {
             "type": "string",
             "format": "uuid",

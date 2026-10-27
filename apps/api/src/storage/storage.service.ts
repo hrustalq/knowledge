@@ -69,6 +69,11 @@ export class StorageService {
     return `workspaces/${workspaceId}/imports/${importId}/${safeSegment(filename)}`;
   }
 
+  /** A memo's audio (#551). Under the workspace prefix, so teardown's `purgePrefix` takes it. */
+  memoObjectKey(workspaceId: string, memoId: string, name: string): string {
+    return `workspaces/${workspaceId}/memos/${memoId}/${safeSegment(name)}`;
+  }
+
   /**
    * Staged connector items (docs/features/26). Same reasoning as imports: the
    * markdown exists before any document does, and for a skipped item there will

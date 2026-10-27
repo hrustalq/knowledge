@@ -855,6 +855,16 @@ export type I18nTranslations = {
             "failed": string;
             "timedOut": string;
         };
+        "memo": {
+            "notFound": string;
+            "disabled": string;
+            "unsupportedFormat": string;
+            "tooLarge": string;
+            "tooLong": string;
+            "uploadMissing": string;
+            "alreadyUploaded": string;
+            "audioGone": string;
+        };
         "ingestionJob": {
             "notFound": string;
         };
@@ -1773,6 +1783,7 @@ export type I18nTranslations = {
         "agentLearning": string;
         "glossaryTerm": string;
         "import": string;
+        "memo": string;
         "workflow": string;
         "workflowRun": string;
         "connector": string;

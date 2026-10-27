@@ -3891,6 +3891,46 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/memos",
+      "tag": "memos",
+      "summary": "My memos, newest first, and whether this server can transcribe",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memos",
+      "tag": "memos",
+      "summary": "Reserve a memo and get a presigned upload URL",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memos/{id}",
+      "tag": "memos",
+      "summary": "A memo with its transcript and summary",
+      "role": "viewer",
+      "source": "memo",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memos/{id}/finalize",
+      "tag": "memos",
+      "summary": "Confirm the recording landed and queue its transcription",
+      "role": "editor",
+      "source": "memo",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/documents/{id}/branches/{branchId}/publish",
       "tag": "merge-requests",

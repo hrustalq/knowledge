@@ -13,6 +13,24 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **Memos** (#551, in progress): `POST /v1/memos` reserves an audio recording (mp3, m4a, wav, ogg, webm)
+  in a project and hands back a presigned upload, `POST /v1/memos/:id/finalize` confirms it, and
+  `GET /v1/memos`, `GET /v1/memos/:id` and `GET /v1/memos/:id/audio` read it back. A memo is visible
+  only to the person who uploaded it; anyone else gets a 404. Reserving is refused, with the variable
+  to set, until a speech-to-text endpoint is configured. Transcription and proposals follow.
+
+### Operations
+
+- Migration `20261219100000_memos` adds the `memos` table and a nullable `ai_usage.audio_seconds`
+  column. Both survive a rollback; the previous image never reads them.
+- New env, all defaulted and off: `TRANSCRIPTION_PROVIDER` (`none`), `TRANSCRIPTION_BASE_URL`,
+  `TRANSCRIPTION_MODEL` (`whisper-1`), `TRANSCRIPTION_API_KEY`, `MEMO_MAX_BYTES` (200 MB),
+  `MEMO_MAX_MINUTES` (120). See docs/features/68.
+
 ## [0.37.0] — 2026-10-27
 
 ### Added

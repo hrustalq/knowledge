@@ -32,6 +32,7 @@ import { applyTemplateDefaults } from '../templates/apply-defaults.js';
 import { ImportProducer } from './import.producer.js';
 import type { CreateImportDto, SubmitImportDto } from './dto/imports.dto.js';
 import { t } from '../i18n/t.js';
+import { formatBytes } from '../common/format-bytes.js';
 import { currentLocale } from '../i18n/locale.js';
 
 /** Author fallback in AUTH_MODE=none, the same stub the rest of the API uses. */
@@ -520,16 +521,4 @@ function readError(value: unknown): string | null {
   if (!value || typeof value !== 'object') return null;
   const message = (value as { message?: unknown }).message;
   return typeof message === 'string' ? message : null;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ['KB', 'MB', 'GB'];
-  let value = bytes / 1024;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
 }

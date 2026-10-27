@@ -193,6 +193,16 @@
     "failed": "Import failed",
     "timedOut": "Parsing {filename} took longer than {seconds}s and was stopped"
   },
+  "memo": {
+    "notFound": "Memo not found",
+    "disabled": "Memos are off on this server: set {variable} to turn on transcription.",
+    "unsupportedFormat": "{filename} is not a recording memos take. Accepted: {accepted}.",
+    "tooLarge": "That recording is {size}; the limit is {limit}.",
+    "tooLong": "That recording is {minutes} minutes long; the limit is {limit} minutes.",
+    "uploadMissing": "The recording did not arrive in object storage. Try again.",
+    "alreadyUploaded": "This memo's recording is already uploaded.",
+    "audioGone": "The recording is no longer stored; the transcript is kept."
+  },
   "ingestionJob": {
     "notFound": "Ingestion job {id} not found"
   },

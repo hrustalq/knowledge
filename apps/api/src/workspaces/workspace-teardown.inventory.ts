@@ -103,6 +103,7 @@ export const WORKSPACE_TEARDOWN = {
   EntityAlias: 'workspace',
   ExportJob: 'workspace',
   ImportJob: 'workspace',
+  Memo: 'workspace',
   KnowledgeCapture: 'workspace',
   KnowledgeConflict: 'workspace',
   KnowledgeHealthSettings: 'workspace',

@@ -597,6 +597,25 @@
       "noneGranted": "This installation has no repositories.",
       "noneGrantedHint": "The GitHub App is installed on this account but was granted access to zero repositories, so there is nothing to search. Choose which ones it may read."
     },
+    "figmaAccess": {
+      "title": "Figma access",
+      "connect": "Connect with Figma",
+      "connectHint": "Opens Figma in a new tab to approve read access. Come back here when it is done — no token to paste or renew.",
+      "needsAllowlist": "Add a team or folder first: connecting saves this setup as a draft.",
+      "or": "Or paste a personal access token instead",
+      "connectedAs": "Connected as {handle}",
+      "connectedHint": "Figma renews this connection itself.",
+      "reconnect": "Reconnect",
+      "disconnect": "Disconnect",
+      "disconnected": "Figma disconnected. Embeds stop refreshing until you connect again or paste a token.",
+      "usesToken": "Uses a personal access token. Connect with Figma to stop renewing it by hand.",
+      "noCredential": "No credential: connect with Figma or paste a personal access token.",
+      "returned": {
+        "connected": "Figma connected.",
+        "auth-failed": "Figma did not complete the connection. Try again.",
+        "error": "That Figma link had expired or was not ours. Start again from the connector."
+      }
+    },
     "githubAccess": {
       "title": "GitHub access",
       "notConfigured": "No GitHub App is registered on this deployment, so there are no grants to show.",

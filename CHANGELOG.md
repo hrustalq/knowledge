@@ -17,6 +17,12 @@ in the pull request that introduces them — see
 
 ### Added
 
+- A Figma connector can **Connect with Figma** instead of taking a pasted personal access token (#557).
+  The admin approves read access on figma.com and lands back in the setup; the connection renews itself,
+  so there is no token to rotate or expiry date to type in. The connector page's *Figma access* card
+  shows which Figma account it acts as, with Reconnect and Disconnect, and an existing token connector
+  can switch from there. Without the OAuth app configured, the setup and the connector page are exactly
+  as before.
 - A project's page lists the connectors that feed it (#553), with each repository's URL and branch, and
   a workspace admin can **Connect repository** from there: the setup wizard opens with the project
   already chosen as the destination.
@@ -56,6 +62,14 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Connect with Figma (#557) needs a **private** Figma OAuth app (a draft app works only for its developer
+  and plan admins) with the redirect URL `$API_PUBLIC_URL/v1/connectors/figma/callback` and the scopes
+  `folders:read file_content:read file_metadata:read current_user:read`. Set `FIGMA_OAUTH_CLIENT_ID` as a
+  GH `production` variable and `FIGMA_OAUTH_CLIENT_SECRET` as a secret; both default to empty, which
+  keeps the feature off. It also needs `SETTINGS_ENCRYPTION_KEY`. Migration
+  `20261217100000_figma_oauth_grants` only adds a table, so it survives a rollback; a rolled-back image
+  cannot read the grants, and an OAuth-connected connector then fails Test connection until it is rolled
+  forward or given a token.
 - Production now carries the GitHub App keys (#552): `GH_APP_ID`, `GH_APP_SLUG`, `GH_APP_CLIENT_ID`,
   `GH_APP_CLIENT_SECRET` and `GH_APP_PRIVATE_KEY` (base64 of the `.pem` on one line) in the GitHub
   `production` environment. The App must allow installation on **Any account**, or no organisation can

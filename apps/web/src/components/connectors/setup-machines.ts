@@ -25,7 +25,7 @@
  * localStorage, which is per-viewer and needs no schema.
  */
 import { assign, createActor, fromPromise, sendParent, sendTo, setup, type Snapshot } from 'xstate'
-import { connectorKindInfo, FIGMA_ALLOWLIST_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY } from '@knowledge/contracts'
+import { connectorKindInfo, FIGMA_ALLOWLIST_CONFIG_KEY, FIGMA_GRANT_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY } from '@knowledge/contracts'
 import type {
   ConnectorConflictPolicy,
   ConnectorDirection,
@@ -347,7 +347,9 @@ export const connectorSetupMachine = setup({
     hasDestination: ({ context }) => context.projectId !== '',
     // Editing an existing connector keeps its stored credential, so an empty
     // box is legitimate there and only a new connector must be tested blind.
-    canTest: ({ context }) => context.credential !== '' || context.editingId !== null,
+    // A Figma OAuth grant (#557) is a credential the API holds, not the form.
+    canTest: ({ context }) =>
+      context.credential !== '' || context.editingId !== null || !!context.config[FIGMA_GRANT_CONFIG_KEY],
     skipsDestination: ({ context }) => !createsPages(context.kind),
   },
   actions: {

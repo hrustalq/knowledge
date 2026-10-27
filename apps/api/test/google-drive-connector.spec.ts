@@ -423,6 +423,7 @@ describe('Test connection', () => {
       { resolve: () => adapter } as never,
       {} as never,
       {} as never,
+      {} as never,
     );
   };
 

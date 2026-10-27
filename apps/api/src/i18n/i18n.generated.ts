@@ -1012,6 +1012,7 @@ export type I18nTranslations = {
             "pushNotSupported": string;
             "figmaAllowlistInvalid": string;
             "figmaListRefused": string;
+            "figmaOauthOff": string;
             "directionNotAllowed": string;
             "runInFlight": string;
             "webhookNotConfigured": string;

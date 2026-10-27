@@ -11625,6 +11625,12 @@
       },
       "error": {
         "type": "string"
+      },
+      "missing": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
       }
     },
     "required": [

@@ -577,6 +577,7 @@
       "connectHint": "Opens GitHub in a new tab. You stay on this step — come back when you're done and the list refreshes itself.",
       "install": "Install on an account or organisation",
       "installHint": "Choose which repositories this workspace may read. You can grant all of them, or pick a few and change it later.",
+      "partialConfig": "GitHub sign-in is only half set up on this server. Missing: {keys}. Until those are set, connect with a repository URL and token below.",
       "addAccount": "Add account",
       "repository": "Repository",
       "searchPlaceholder": "Search repositories…",

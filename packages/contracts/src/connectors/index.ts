@@ -1151,6 +1151,11 @@ export interface GithubInstallationsResponse {
   installUrl: string | null;
   installations: GithubInstallationSummary[];
   error?: string;
+  /**
+   * Env keys a half-configured deployment still needs (#552). Absent when the
+   * App is fully set up or deliberately off (every GITHUB_APP_* key empty).
+   */
+  missing?: string[];
 }
 
 export interface GithubReposResponse {

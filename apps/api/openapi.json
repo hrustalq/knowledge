@@ -37205,7 +37205,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.34.0",
+    "version": "0.35.0",
     "contact": {}
   },
   "tags": [],
@@ -40715,6 +40715,11 @@
             "type": "string",
             "format": "uuid",
             "description": "The repository connector a connector-scoped agent (the archaeologist) reads. Required when the workspace has more than one; the only one is used otherwise."
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Narrow a connector-scoped agent to the repositories connected to this project. With no connectorId, the project's only repository is read; a project with none or several is refused, naming them."
           },
           "documentIds": {
             "description": "Restrict a page-reading agent (curator, reviewer, glossarist) to these pages instead of the most recent ones. Pages the caller cannot open are skipped.",
@@ -55792,6 +55797,12 @@
           },
           "error": {
             "type": "string"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [

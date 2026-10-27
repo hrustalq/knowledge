@@ -108,6 +108,8 @@ describe('connectionProviderFor', () => {
     expect(connectionProviderFor('confluence-server', { baseUrl: 'https://wiki.acme.io' }).provider).toBe('confluence-server');
     expect(connectionProviderFor('google-drive', {})).toEqual({ provider: 'google', site: null });
     expect(connectionProviderFor('figma', {})).toEqual({ provider: 'figma', site: null });
+    expect(connectionProviderFor('intercom', { region: 'eu' }).site).toBe('https://api.eu.intercom.io');
+    expect(connectionProviderFor('intercom', {}).site).toBe('https://api.intercom.io');
   });
 });
 

@@ -695,9 +695,11 @@ export function connectionProviderFor(kind: ConnectorKind, config: Record<string
       return { provider: 'zendesk', site: originOf(config.baseUrl) };
     case 'google-drive':
       return { provider: 'google', site: null };
+    case 'intercom':
+      // A token belongs to one region's API host.
+      return { provider: 'intercom', site: `https://api.${config.region === 'eu' || config.region === 'au' ? `${config.region}.` : ''}intercom.io` };
     case 'notion':
     case 'linear':
-    case 'intercom':
     case 'figma':
       return { provider: kind, site: null };
   }

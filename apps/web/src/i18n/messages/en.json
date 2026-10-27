@@ -609,12 +609,7 @@
       "disconnect": "Disconnect",
       "disconnected": "Figma disconnected. Embeds stop refreshing until you connect again or paste a token.",
       "usesToken": "Uses a personal access token. Connect with Figma to stop renewing it by hand.",
-      "noCredential": "No credential: connect with Figma or paste a personal access token.",
-      "returned": {
-        "connected": "Figma connected.",
-        "auth-failed": "Figma did not complete the connection. Try again.",
-        "error": "That Figma link had expired or was not ours. Start again from the connector."
-      }
+      "noCredential": "No credential: connect with Figma or paste a personal access token."
     },
     "githubAccess": {
       "title": "GitHub access",
@@ -677,13 +672,7 @@
       "accountHint": "Used to browse repositories when setting up a connector. Syncs run as the installation and keep working without it.",
       "reconnect": "Reconnect",
       "disconnect": "Disconnect",
-      "disconnected": "GitHub account disconnected.",
-      "returned": {
-        "connected": "GitHub account connected.",
-        "auth-failed": "GitHub did not complete the authorisation. Try again.",
-        "install-failed": "GitHub did not confirm the installation. Try again.",
-        "error": "That GitHub link had expired or was not ours. Start again from this page."
-      }
+      "disconnected": "GitHub account disconnected."
     },
     "overview": "Overview",
     "never": "Never",
@@ -905,7 +894,29 @@
     "tokenExpiresSoon": "Token expires {date}",
     "tokenExpired": "Token expired {date}",
     "harvestWebhookZendesk": "In Zendesk, create a webhook pointed at the address below, then a trigger: Ticket status changed to Solved, Tags contain the harvest tag, action Notify webhook with this JSON body. Paste the webhook’s signing secret above.",
-    "harvestWebhookIntercom": "In the Developer Hub, open your app’s Webhooks, point them at the address below and subscribe to conversation.admin.closed. Paste the app’s client secret (Basic information) above: Intercom signs every delivery with it."
+    "harvestWebhookIntercom": "In the Developer Hub, open your app’s Webhooks, point them at the address below and subscribe to conversation.admin.closed. Paste the app’s client secret (Basic information) above: Intercom signs every delivery with it.",
+    "landing": {
+      "title": {
+        "connected": "{provider} is connected",
+        "installed": "{provider} App installed",
+        "failed": "Nothing was connected"
+      },
+      "body": {
+        "github": {
+          "connected": "Your GitHub account is linked. The repositories it can reach now show in the picker.",
+          "installed": "The installation is now a connection in this workspace. Pick its repositories in the tab you started from."
+        },
+        "figma": {
+          "connected": "Figma is now a connection in this workspace."
+        },
+        "auth-failed": "{provider} did not complete the authorisation. Go back and try again.",
+        "install-failed": "{provider} did not confirm the installation. Go back and try again.",
+        "error": "This link had expired or was not ours, so nothing was saved. Start again from the page you came from."
+      },
+      "closing": "This tab closes on its own.",
+      "closeHint": "You can close this tab.",
+      "back": "Go back"
+    }
   },
   "workflow": {
     "nodeStatus": {

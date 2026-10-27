@@ -705,6 +705,19 @@ export function connectionProviderFor(kind: ConnectorKind, config: Record<string
   }
 }
 
+/**
+ * How an OAuth or App round trip ended (#564). Every callback lands on the web
+ * page `/oauth/:provider?outcome=…&returnTo=…`, which says it in words.
+ */
+export const OAUTH_OUTCOMES = ['connected', 'installed', 'auth-failed', 'install-failed', 'error'] as const;
+export type OauthOutcome = (typeof OAUTH_OUTCOMES)[number];
+
+/** The landing URL a callback redirects to. `returnTo` is already a signed, same-origin path, or absent for a forged state. */
+export function oauthLandingPath(provider: 'github' | 'figma', outcome: OauthOutcome, returnTo?: string): string {
+  const params = new URLSearchParams({ outcome, ...(returnTo ? { returnTo } : {}) });
+  return `/oauth/${provider}?${params.toString()}`;
+}
+
 /** The kinds a connection of `provider` can feed — the inverse of `connectionProviderFor`. */
 export function connectionKindsFor(provider: ConnectionProvider): ConnectorKind[] {
   switch (provider) {

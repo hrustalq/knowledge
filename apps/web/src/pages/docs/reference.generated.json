@@ -2692,6 +2692,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/connectors/figma/authorize",
+      "tag": "connectors",
+      "summary": "The Figma authorization URL for a new workspace connection",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/connectors/figma/oauth",
       "tag": "connectors",
       "summary": "Whether Connect with Figma is offered on this deployment",

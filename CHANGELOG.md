@@ -27,6 +27,15 @@ in the pull request that introduces them — see
   each, reporting pairs that are already linked instead of duplicating them. `GET /v1/connections/wait`
   is a long poll that answers when the workspace's connections change.
 
+### Changed
+
+- Finishing a GitHub authorisation, installing the GitHub App or connecting Figma now ends in the tab the
+  provider opened on one page that says what happened (#564), and closes that tab itself where the
+  browser allows. A failure stays open with the reason and a way back to the page the flow started from.
+  An expired or forged link says so there instead of landing on the connectors list with no message.
+  An App installation and a Figma grant each become a connection in the workspace, so they can be
+  reused by any connector of a matching kind.
+
 ### Operations
 
 - Migration `20261218100000_connections` adds the `connections` table and `connectors.connection_id`

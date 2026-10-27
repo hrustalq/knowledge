@@ -12,6 +12,7 @@ import { EventsSubscriberModule } from '../events/events-subscriber.module.js';
 import { ProjectsModule } from '../projects/projects.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { ConnectorConflictSweeper } from './connector-conflict.sweeper.js';
+import { ConnectionsBackfill } from './connections.backfill.js';
 import { ConnectorItemAiService } from './connector-item-ai.service.js';
 import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorQueueModule } from './connector-queue.module.js';
@@ -96,6 +97,8 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
     // person, so API-side — the manual route and the after-sync listener.
     RepoGuidanceService,
     RepoGuidanceListener,
+    // #564: binds existing connectors to connections once per boot, in one process.
+    ConnectionsBackfill,
   ],
   exports: [ConnectorsCoreModule, ConnectorWorkItemsModule],
 })

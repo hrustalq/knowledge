@@ -1,4 +1,5 @@
 import { unzipSync } from 'fflate';
+import { gitProviderOf } from '@knowledge/contracts';
 import { safeFetch } from '../../common/safe-fetch.js';
 import { t } from '../../i18n/t.js';
 import {
@@ -90,7 +91,8 @@ export function repoHost(ctx: ConnectorContext): RepoHost {
   const segments = url.pathname.replace(/^\/+|\/+$/g, '').split('/');
   const [owner, repo] = segments;
   if (!owner || !repo) throw new Error(t('error.connector.repoUrlShape', {}, ctx.locale));
-  const kind = url.hostname === 'github.com' ? 'github' : url.hostname.includes('gitlab') ? 'gitlab' : 'other';
+  const provider = gitProviderOf(url.hostname);
+  const kind = provider === 'git' ? 'other' : provider;
   return { kind, origin: url.origin, owner, repo, path: segments.join('/') };
 }
 

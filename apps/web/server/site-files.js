@@ -4,8 +4,8 @@
 // A request is a site's when its host is `<slug>.<PUBLISH_BASE_DOMAIN>` (by
 // shape) or a custom domain the API says belongs to a site (looked up and
 // cached). The host is the `Host` header, or `X-Forwarded-Host` when the peer
-// is internal — the front proxy's, which is how a site host reaches this
-// process through an edge that rewrites `Host` (production's Worker -> Funnel).
+// is internal — the front proxy's (production's Caddy), which is how a site
+// host reaches this process through a proxy that rewrites `Host`.
 //
 // On a site, these paths go to the API instead of the SSR reader, as a
 // pass-through (the bytes, status and ETag are the API's):

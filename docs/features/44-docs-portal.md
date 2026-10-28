@@ -195,8 +195,8 @@ most `SITE_MAX_DOMAINS` = 5 per site, unique across the deployment).
   deployment routes custom hostnames at all. Off: the tab says so, adding or
   checking a domain is 403 `site.customDomainsOff`, no custom host resolves,
   the sweeper skips them, and canonical URLs fall back to the subdomain or
-  path. Production runs it **off**: TLS there ends at a Cloudflare Worker in
-  front of Tailscale Funnel, so Caddy can issue no certificates.
+  path. Production runs it **off**: its Caddy faces the internet (#587) but
+  does not carry the on-demand TLS block from `Caddyfile.sites.example` yet.
 - **Trying it locally.** `make dev`'s web server refuses a custom host: Vite's
   dev server answers only hosts it knows (`localhost`, `.PUBLISH_BASE_DOMAIN`).
   Run the built web instead (`pnpm --filter @knowledge/web build`, then

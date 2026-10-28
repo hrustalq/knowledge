@@ -1,10 +1,10 @@
 # Published sites on their own hostnames (docs/features/44, issue #77 phase 2b)
 # — for an install where Caddy itself faces the internet on :80/:443.
 #
-# NOT what production runs: knowledge.hrustalq.dev ends TLS at a Cloudflare
-# Worker in front of Tailscale Funnel, so its Caddy is plain HTTP and can issue
-# no certificates (see Caddyfile). There, sites stay in path mode (/pub/<slug>)
-# and SITE_CUSTOM_DOMAINS=false until the edge routes other hosts.
+# Production's Caddy faces the internet too (#587), but runs without this
+# block: sites stay in path mode (/pub/<slug>) and SITE_CUSTOM_DOMAINS=false
+# until it is merged into Caddyfile. Keep that file's global block (the PROXY
+# protocol listener) when merging.
 #
 # What this gives:
 #   - the app at its own name, as today;

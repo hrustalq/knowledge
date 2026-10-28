@@ -105,9 +105,9 @@ from another's copy. Nothing authenticated is `public` or carries `s-maxage`
 (`test/http-cache.spec.ts` pins it).
 
 **Between the browser and the API**, neither proxy stores anything. Caddy's
-`encode` only appends `Accept-Encoding` to `Vary`. The edge Worker
-(`deploy/edge/worker.js`) fetches a `ts.net` origin that is not on Cloudflare,
-so Cloudflare caches nothing and `Vary` passes through.
+`encode` only appends `Accept-Encoding` to `Vary`. In front of Caddy there is
+only the home router's TCP relay (`deploy/router/haproxy.cfg`), and DNS is not
+proxied by Cloudflare, so no shared cache sits on the path.
 
 The web process sets its own headers on what it serves: hashed assets are
 `immutable` for a year, and the HTML shells, `sw.js` and the manifest are

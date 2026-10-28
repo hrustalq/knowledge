@@ -136,9 +136,9 @@ or PDF ([45](45-export.md)) without signing in (#161).
 
 `clientIp` trusts `X-Forwarded-For` only from an internal peer. Caddy and the
 web SSR are the only things that reach the API, and both are internal. In
-production Caddy writes that header from the Worker's `X-Knowledge-Client-IP`,
-believed only alongside the edge secret, because Funnel replaces the Worker's
-own `X-Forwarded-For` with Cloudflare's egress address (#174).
+production Caddy writes that header from the PROXY protocol header the home
+router's HAProxy adds, because Colima's port forwarder hides the visitor's
+address from Caddy (#587).
 
 ## The public reader (web)
 

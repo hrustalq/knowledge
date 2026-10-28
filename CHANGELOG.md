@@ -13,6 +13,57 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Changed
+
+- **Production is reached directly, not through Cloudflare and Tailscale
+  Funnel** (#587). HAProxy on the home router relays TCP 80/443 from the static
+  address to the Mac mini, with a PROXY v2 header carrying the visitor's address
+  (`deploy/router/haproxy.cfg`, replacing the `deploy/edge/` Worker). The prod
+  Caddy now ends TLS itself with a Let's Encrypt certificate and reads the
+  visitor from that header, because Colima's port forwarder hides it. Per-IP
+  limits and access logs see the visitor without the #174 edge secret, Russian
+  visitors no longer go through Cloudflare's throttled path, and the Funnel
+  outages that needed a manual `funnel reset` are gone. HTTP/3 is not
+  advertised, because the relay carries TCP only.
+
+### Removed
+
+- `EDGE_SECRET`, `S3_PUBLIC_HOST`, the `X-Knowledge-*` edge headers and the
+  `127.0.0.1:8088` Funnel port. The request's own `Host` is now the one presigned
+  URLs are signed for. (#587)
+
+### Operations
+
+- **Cut over in this order.** Each step leaves the previous path working until
+  step 3.
+  1. Configure the router's WAN with the ISP's static address, then apply
+     `deploy/router/haproxy.cfg` by following its header. LuCI moves to
+     `https://192.168.2.1:8443`. Nothing deploys the router file.
+  2. Push the release tag and watch the run.
+  3. When the run reaches **Roll out** (port 8088 closes there), open the Cloudflare
+     dashboard. Remove the `knowledge-edge` Worker's custom domain, then add an
+     `A knowledge.hrustalq.dev → <static IP>` record, **DNS only** (grey), with
+     TTL 1 min. Downtime runs from rollout until the certificate is issued.
+     The home address becomes public.
+  4. If `docker --context colima logs knowledge-caddy-1` does not say
+     `certificate obtained successfully` within a few minutes of the DNS
+     change, restart the container to retry ACME now instead of after its
+     back-off. The deploy's *Verify public endpoint* step fails if it ran
+     before DNS moved; the rollout itself is fine.
+  5. Verify from the laptop **and** the mini that `/api/docs-json` reports the
+     version, that the certificate is Let's Encrypt, and that Caddy's log shows
+     a public `client_ip`.
+  6. Once the new path has held for a few days, clean up: on the mini,
+     `Tailscale funnel reset`; delete the `knowledge-edge`
+     Worker; `gh secret delete EDGE_SECRET --env production` (and
+     `S3_PUBLIC_HOST` if it was ever set).
+- **Rollback:** re-add the Worker's custom domain, which replaces the A record,
+  run `Tailscale funnel --bg 8088` on the mini, and redeploy the previous tag.
+  Its compose file still requires `EDGE_SECRET`, so keep that secret until the
+  new path has held for a while.
+
 ## [0.38.0] — 2026-10-28
 
 ### Added

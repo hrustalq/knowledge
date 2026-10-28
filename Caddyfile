@@ -1,9 +1,11 @@
-# Reverse proxy for knowledge.hrustalq.dev on the Mac mini.
+# Reverse proxy for knowledge.hrustalq.dev on the Mac mini (#587).
 #
-# The public path is a Cloudflare Worker on knowledge.hrustalq.dev, which
-# forwards to this Mac mini's Tailscale Funnel URL, which Funnel delivers to
-# 127.0.0.1:8088 -> this container. TLS ends at Cloudflare and again at Funnel,
-# so Caddy serves plain HTTP and issues no certificates.
+# The public path is the home router (deploy/router/haproxy.cfg): HAProxy on
+# the static WAN address relays TCP 80/443 to this Mac mini, prefixed with a
+# PROXY v2 header, and Colima forwards the published ports into this container.
+# Caddy faces the internet: it ends TLS with an ACME certificate (HTTP-01 on
+# :80 or TLS-ALPN-01 on :443, both reach it through the relay) kept in the
+# caddy_data volume. DNS is a plain A record to the static address, not proxied.
 #
 # The whole browser surface of this app is /api/* — verified in three places:
 #   apps/web/src/api/http.ts:86-88   baseURL defaults to '/api'
@@ -14,46 +16,44 @@
 # /<S3_BUCKET>/, which goes straight to MinIO (#144, route below).
 # Production server.js installs NO such proxy, so stripping it is this file's job
 # and `handle_path` must mirror Vite's rewrite exactly.
-
 {
-	auto_https off
 	servers {
-		# Funnel reaches Caddy through Docker's loopback port forward, so the
-		# peer is always private. Trusting it is what makes reverse_proxy pass
-		# the X-Forwarded-For / X-Forwarded-Host written below to the API and
-		# web (appending the peer) instead of replacing them.
-		#
-		# Caddy resolves {client_ip} before any handler runs, so the access
-		# log's client_ip is Funnel's view (Cloudflare's egress), never the
-		# visitor; the visitor is the logged X-Knowledge-Client-IP header.
-		trusted_proxies static private_ranges
-		client_ip_headers X-Forwarded-For
+		listener_wrappers {
+			# The visitor's address. Colima publishes ports through an ssh
+			# forwarder, so the TCP peer here is always the VM's, never the
+			# visitor; the router's PROXY header carries the real one. It is
+			# believed from private peers only, which is every connection
+			# that can arrive here, and is optional, so a request without
+			# one (a LAN or loopback check) is served as its peer.
+			# Once accepted, it is the client address everywhere: the access
+			# log's client_ip and the X-Forwarded-For reverse_proxy writes,
+			# which clientIp (public-rate-limit.ts) reads. Nothing upstream of
+			# Caddy is a trusted HTTP proxy, so a visitor's own X-Forwarded-*
+			# headers are replaced, never appended to.
+			#
+			# ponytail: any LAN host may send a PROXY header too; restrict
+			# the mini's 80/443 to the router (pf) if the LAN stops being ours.
+			proxy_protocol {
+				allow 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.0/8
+			}
+			tls
+		}
+		# The router relays TCP only, so HTTP/3 (UDP 443) would never connect;
+		# not advertising it saves browsers a failed QUIC attempt per visit.
+		protocols h1 h2
 	}
 }
 
-# Any Host: requests arrive with the Funnel hostname, and a bare :80 also
-# answers the loopback smoke check on 127.0.0.1:8088.
-:80 {
-	encode zstd gzip
+# Automatic HTTPS would add this redirect itself, but on a :80 server it makes
+# after the global options above apply — so without the PROXY listener, and
+# every relayed request there would be a 400. Spelled out, the server exists
+# when they apply. ACME's HTTP-01 challenge is still answered on it.
+http://knowledge.hrustalq.dev {
+	redir https://{host}{uri} 308
+}
 
-	# The visitor (#174). Funnel overwrites X-Forwarded-For with Cloudflare's
-	# egress address and X-Forwarded-Host with the *.ts.net name, so the Worker
-	# (deploy/edge/worker.js) carries the visitor's address and host in
-	# X-Knowledge-Client-IP / X-Knowledge-Host, which Funnel leaves alone. The
-	# *.ts.net URL is public, so those are believed only alongside the shared
-	# secret; then they become the X-Forwarded-For / X-Forwarded-Host that
-	# clientIp (public-rate-limit.ts) and requestHost (server/site-files.js)
-	# already read. Anything else keeps Funnel's values, so a forged header on a
-	# direct request is ignored, and all three are dropped before any upstream.
-	#
-	# Same-directive order: the @edge rewrites sort ahead of the unmatched
-	# deletes, so the placeholders are read before their headers go.
-	@edge header X-Knowledge-Edge {$EDGE_SECRET}
-	request_header @edge X-Forwarded-For {header.X-Knowledge-Client-IP}
-	request_header @edge X-Forwarded-Host {header.X-Knowledge-Host}
-	request_header -X-Knowledge-Edge
-	request_header -X-Knowledge-Client-IP
-	request_header -X-Knowledge-Host
+knowledge.hrustalq.dev {
+	encode zstd gzip
 
 	# handle_path strips the matched prefix before proxying: /api/v1/documents
 	# reaches the API as /v1/documents. WebSocket upgrades (/api/v1/events/ws)
@@ -70,16 +70,10 @@
 	# segment. Nothing else of MinIO is routed — no console, no admin API, and
 	# the bucket is private, so an unsigned request is refused by MinIO itself.
 	# No SSR route starts with /knowledge/ (/knowledge-health does not match).
-	#
-	# SigV4 signs the Host, and every URL is signed for S3_PUBLIC_ENDPOINT's
-	# host, so MinIO must see exactly that or it answers SignatureDoesNotMatch.
-	# Neither request header can say it: the Worker reaches Funnel as the
-	# *.ts.net name, and Funnel overwrites the X-Forwarded-Host the Worker sets
-	# with that same name. So the host is configuration, not a header.
+	# SigV4 signs the Host, and reverse_proxy passes the visitor's Host — this
+	# site's name, the one S3_PUBLIC_ENDPOINT names — through unchanged.
 	handle /{$S3_BUCKET:knowledge}/* {
-		reverse_proxy minio:9000 {
-			header_up Host {$S3_PUBLIC_HOST}
-		}
+		reverse_proxy minio:9000
 	}
 
 	# Everything else is the SSR app.
@@ -90,8 +84,7 @@
 	# `?token=` still authenticates SSE and <img> requests (the @QueryTokenOk
 	# routes, #102), and a presigned object URL is a bearer credential until it
 	# expires, so mask both before the URI reaches the access log.
-	# Authorization and Cookie headers are already redacted by Caddy's default;
-	# the edge secret is not, and the log records headers as they arrived.
+	# Authorization and Cookie headers are already redacted by Caddy's default.
 	log {
 		output stderr
 		format filter {
@@ -101,7 +94,6 @@
 					replace token REDACTED
 					replace X-Amz-Signature REDACTED
 				}
-				request>headers>X-Knowledge-Edge replace REDACTED
 			}
 		}
 	}

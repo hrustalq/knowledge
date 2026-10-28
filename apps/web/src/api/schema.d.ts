@@ -13492,7 +13492,7 @@ export interface components {
         MemoTranscriptionState: {
             enabled: boolean;
             /** @enum {string|null} */
-            missing: "TRANSCRIPTION_PROVIDER" | "TRANSCRIPTION_BASE_URL" | null;
+            missing: "TRANSCRIPTION_PROVIDER" | "TRANSCRIPTION_BASE_URL" | "TRANSCRIPTION_API_KEY" | null;
         };
         MergeMergeRequestResponse: {
             mergeRequest: components["schemas"]["MergeRequestInfo"];

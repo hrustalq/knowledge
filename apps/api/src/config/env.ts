@@ -709,9 +709,11 @@ export const envSchema = z.object({
    * `/audio/transcriptions` endpoint — hosted Whisper, whisper.cpp, speaches.
    * Env only, the operator's URL, so it is fetched plainly (as EMBEDDING_* is)
    * rather than through safe-url.ts. `none`, or an empty base URL, turns memos
-   * off: /memos says which variable to set and reserve refuses.
+   * off: /memos says which variable to set and reserve refuses. `gen-api`
+   * (#584) calls gen-api's `gen-stt` at a fixed URL and needs only the key;
+   * TRANSCRIPTION_BASE_URL and TRANSCRIPTION_MODEL are then unread.
    */
-  TRANSCRIPTION_PROVIDER: z.enum(['none', 'openai-compatible']).default('none'),
+  TRANSCRIPTION_PROVIDER: z.enum(['none', 'openai-compatible', 'gen-api']).default('none'),
   TRANSCRIPTION_BASE_URL: z.string().optional().default(''),
   TRANSCRIPTION_MODEL: z.string().min(1).default('whisper-1'),
   TRANSCRIPTION_API_KEY: z.string().optional().default(''),

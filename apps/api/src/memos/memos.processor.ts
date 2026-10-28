@@ -14,7 +14,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
-import { CHUNK_SECONDS, probeSeconds, splitAudio } from './audio.js';
+import { detectPauses, fixedCuts, pauseCuts, probeSeconds, splitAudio } from './audio.js';
 import { MEMO_QUEUE } from './memos.constants.js';
 import { TranscriptionClient } from './transcription.client.js';
 import { stitchTranscript, type ChunkTranscript } from './transcript.js';
@@ -22,7 +22,8 @@ import { stitchTranscript, type ChunkTranscript } from './transcript.js';
 /**
  * A memo's transcription (#551, docs/features/68): download → ffprobe the
  * length (the ceiling is enforced here, on the file, not on the browser's
- * word) → ffmpeg into ten-minute mp3 chunks → one speech call per chunk →
+ * word) → ffmpeg into ten-minute mp3 chunks (≤ 60 s, cut at pauses, for
+ * gen-api) → one speech call per chunk →
  * stitched and masked → written once. The unmasked text lives only in this
  * job's memory; the temp dir goes whatever happens.
  */
@@ -81,9 +82,11 @@ export class MemosProcessor extends WorkerHost {
       if (seconds > this.maxMinutes * 60) {
         throw new Error(t('error.memo.tooLong', { minutes: Math.ceil(seconds / 60), limit: this.maxMinutes }));
       }
+      // gen-api returns no timestamps (#584), so its pieces are short and end at pauses.
+      const cuts = this.stt.provider === 'gen-api' ? pauseCuts(await detectPauses(source), seconds) : fixedCuts(seconds);
       const chunks: ChunkTranscript[] = [];
-      for (const chunk of await splitAudio(source, dir)) {
-        chunks.push(await this.stt.transcribe(chunk.path, chunk.offset, Math.min(CHUNK_SECONDS, seconds - chunk.offset)));
+      for (const chunk of await splitAudio(source, dir, cuts, seconds)) {
+        chunks.push(await this.stt.transcribe(chunk.path, chunk.offset, chunk.duration));
       }
       const { segments, language } = stitchTranscript(chunks);
       await this.prisma.memo.update({

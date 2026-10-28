@@ -5,6 +5,7 @@ import { computed, defineAsyncComponent, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
+  AudioLines,
   BookmarkPlus,
   ChartColumn,
   FlaskConical,
@@ -73,6 +74,8 @@ const links = computed<NavLink[]>(() => [
   // What agents proposed from their sessions (issue #73): page captures are
   // decided on merge requests, but terms and stranded captures only here.
   { to: '/captures', label: t('nav.captures'), icon: BookmarkPlus },
+  // Recordings of your own (#551): like captures, proposals you then review.
+  { to: '/memos', label: t('nav.memos'), icon: AudioLines },
   // Contradictions the arbiter found between pages (#81).
   { to: '/conflicts', label: t('nav.conflicts'), icon: Scale },
   { to: '/assistant', label: t('nav.assistant'), icon: Sparkles },

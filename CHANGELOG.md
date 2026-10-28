@@ -31,7 +31,13 @@ in the pull request that introduces them — see
   (by time only, never the memo's title or words). A new page stays out of the tree and search until it
   merges. A proposal citing a moment the recording does not have, or rewriting a page the agent never
   read or the uploader cannot open, is dropped and listed as dropped. The uploader gets one notification
-  when the proposals are open; a memo that settles nothing ends with none. The page for memos follows.
+  when the proposals are open; a memo that settles nothing ends with none.
+- **Memos** in the sidebar (#551): upload a recording (pick or drop it; an over-long or oversized file
+  is refused before it uploads), then follow it from Transcribing to Done. A memo's page shows the
+  transcript beside a player, the summary, each proposal with its merge request, and the proposals that
+  were dropped and why. Clicking a line plays from it, and a proposal's timestamps play the moments it
+  rests on and mark them in the transcript; the links in its merge request open the same place. When the
+  server has no speech endpoint, the page says which setting to add instead of offering an upload.
 
 ### Fixed
 

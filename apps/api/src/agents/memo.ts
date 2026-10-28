@@ -1,4 +1,4 @@
-import type { AgentFinding, AssistantWebSource, MemoDropped, MemoSegment } from '@knowledge/contracts';
+import { memoClock as clock, type AgentFinding, type AssistantWebSource, type MemoDropped, type MemoSegment } from '@knowledge/contracts';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { MIN_DRAFT_CHARS } from './coverage.js';
 
@@ -32,15 +32,6 @@ export function memoOutputContract(max: number): string {
     'new page). Never invent behaviour, never name who said what, and never copy a [EMAIL_1]-style placeholder ' +
     'into a page.'
   );
-}
-
-/** `12:03`, or `1:02:03` past the hour. */
-export function clock(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds));
-  const hh = Math.floor(s / 3600);
-  const mm = String(Math.floor((s % 3600) / 60)).padStart(hh ? 2 : 1, '0');
-  const ss = String(s % 60).padStart(2, '0');
-  return hh ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 /**

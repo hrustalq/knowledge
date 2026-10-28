@@ -133,6 +133,9 @@ export function createRouter() {
       { path: '/analytics', component: () => import('@/pages/AnalyticsPage.vue') },
       // What coding agents proposed from their sessions (issue #73).
       { path: '/captures', component: () => import('@/pages/CapturesPage.vue') },
+      // Recordings, transcribed and read against the knowledge base (#551).
+      { path: '/memos', component: () => import('@/pages/MemosPage.vue') },
+      { path: '/memos/:id', component: () => import('@/pages/MemoDetailPage.vue') },
       // Contradictions between pages (#81).
       { path: '/conflicts', component: () => import('@/pages/ConflictsPage.vue') },
       // meta.fill: the chat owns the viewport — see App.vue's two content modes.

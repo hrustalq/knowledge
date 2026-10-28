@@ -1,3 +1,6 @@
+import { createWriteStream } from 'node:fs';
+import type { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { Injectable } from '@nestjs/common';
 import { apiSpecSyntaxOf } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
@@ -169,6 +172,13 @@ export class StorageService {
   async getObjectBytes(objectKey: string): Promise<Uint8Array> {
     const res = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: objectKey }));
     return (await res.Body?.transformToByteArray()) ?? new Uint8Array();
+  }
+
+  /** Streamed to disk, for a file too large to hold in memory (a memo's recording, #551). */
+  async downloadToFile(objectKey: string, path: string): Promise<void> {
+    const res = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: objectKey }));
+    if (!res.Body) throw new Error(`Object ${objectKey} has no body`);
+    await pipeline(res.Body as Readable, createWriteStream(path));
   }
 
   async deleteObject(objectKey: string): Promise<void> {

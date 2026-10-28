@@ -21,7 +21,11 @@ in the pull request that introduces them — see
   in a project and hands back a presigned upload, `POST /v1/memos/:id/finalize` confirms it, and
   `GET /v1/memos`, `GET /v1/memos/:id` and `GET /v1/memos/:id/audio` read it back. A memo is visible
   only to the person who uploaded it; anyone else gets a 404. Reserving is refused, with the variable
-  to set, until a speech-to-text endpoint is configured. Transcription and proposals follow.
+  to set, until a speech-to-text endpoint is configured. Once uploaded, the worker transcribes the
+  recording through that endpoint in ten-minute pieces and stores one transcript with timestamps, in the
+  language spoken, with emails, phone numbers, card and identity numbers and credentials masked before
+  it is written. Each transcription is a `transcription` row on the AI usage page, with the audio's
+  length. Proposals follow.
 
 ### Fixed
 
@@ -35,6 +39,7 @@ in the pull request that introduces them — see
 - New env, all defaulted and off: `TRANSCRIPTION_PROVIDER` (`none`), `TRANSCRIPTION_BASE_URL`,
   `TRANSCRIPTION_MODEL` (`whisper-1`), `TRANSCRIPTION_API_KEY`, `MEMO_MAX_BYTES` (200 MB),
   `MEMO_MAX_MINUTES` (120). See docs/features/68.
+- The `api` image now carries `ffmpeg`/`ffprobe` (Debian package). The memo worker shells out to them.
 
 ## [0.37.0] — 2026-10-27
 

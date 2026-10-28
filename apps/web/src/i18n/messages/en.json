@@ -2598,7 +2598,8 @@
       "community": "Community summary",
       "harvest": "Chat harvest",
       "coach": "Learner coach",
-      "citation_check": "Citation check"
+      "citation_check": "Citation check",
+      "transcription": "Memo transcription"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",

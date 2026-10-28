@@ -201,7 +201,10 @@
     "tooLong": "That recording is {minutes} minutes long; the limit is {limit} minutes.",
     "uploadMissing": "The recording did not arrive in object storage. Try again.",
     "alreadyUploaded": "This memo's recording is already uploaded.",
-    "audioGone": "The recording is no longer stored; the transcript is kept."
+    "audioGone": "The recording is no longer stored; the transcript is kept.",
+    "transcriptionFailed": "The recording could not be transcribed.",
+    "speechServerDown": "The speech server could not be reached. Try again later, or ask an admin to check it.",
+    "speechServerRefused": "The speech server refused the recording (HTTP {status})."
   },
   "ingestionJob": {
     "notFound": "Ingestion job {id} not found"

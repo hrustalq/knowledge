@@ -3,7 +3,7 @@ import { HttpException } from '@nestjs/common';
 import type { CreateCaptureRequest } from '@knowledge/contracts';
 import { CaptureService } from '../src/captures/capture.service.js';
 import { captureContentHash, decidePage, dedupeText, foldTermKeys, rankSimilar } from '../src/captures/capture-dedupe.js';
-import { findSecret } from '../src/captures/secret-scan.js';
+import { findSecret } from '../src/common/secret-scan.js';
 import { parseMarkdown } from '../src/common/frontmatter.js';
 import type { Principal } from '../src/auth/principal.js';
 

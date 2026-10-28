@@ -48013,7 +48013,8 @@
           "extraction",
           "public_ask",
           "test-suite",
-          "test-fixture-ranking"
+          "test-fixture-ranking",
+          "transcription"
         ]
       },
       "AiUsageResponse": {

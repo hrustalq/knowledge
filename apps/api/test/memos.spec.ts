@@ -3,6 +3,7 @@ import { NotFoundException, PayloadTooLargeException, ServiceUnavailableExceptio
 import { memoExtensionFor } from '@knowledge/contracts';
 import { MemosService, transcriptionState } from '../src/memos/memos.service.js';
 import type { Principal } from '../src/auth/principal.js';
+import { stitchTranscript } from '../src/memos/transcript.js';
 
 /**
  * Memos (#551): what is pinned here is the door — which files are taken, that
@@ -44,7 +45,7 @@ describe('MemosService', () => {
     const config = { get: (key: string) => ({ ...env, ...overrides })[key] };
     return {
       prisma,
-      memos: new MemosService(prisma as never, {} as never, {} as never, {} as never, config as never),
+      memos: new MemosService(prisma as never, {} as never, {} as never, {} as never, {} as never, config as never),
     };
   }
 
@@ -78,5 +79,45 @@ describe('MemosService', () => {
         durationSeconds: 61,
       }),
     ).rejects.toBeInstanceOf(PayloadTooLargeException);
+  });
+});
+
+describe('stitchTranscript', () => {
+  it('shifts each chunk by its offset, numbers segments across chunks and drops silence', () => {
+    const { segments, language } = stitchTranscript([
+      { offset: 0, duration: 600, language: 'russian', text: '', segments: [{ start: 1.234, end: 4, text: ' Привет ' }, { start: 4, end: 5, text: '  ' }] },
+      { offset: 600, duration: 30, language: 'english', text: '', segments: [{ start: 2, end: 6.5, text: 'Ship it on Friday.' }] },
+    ]);
+    expect(segments).toEqual([
+      { i: 0, start: 1.23, end: 4, text: 'Привет' },
+      { i: 1, start: 602, end: 606.5, text: 'Ship it on Friday.' },
+    ]);
+    expect(language).toBe('russian');
+  });
+
+  it('keeps a chunk the server answered without segments as one span', () => {
+    const { segments } = stitchTranscript([{ offset: 1200, duration: 42, language: null, text: 'Только текст', segments: [] }]);
+    expect(segments).toEqual([{ i: 0, start: 1200, end: 1242, text: 'Только текст' }]);
+  });
+
+  it('masks a secret or an address before it is stored, with one placeholder per value across segments', () => {
+    const { segments } = stitchTranscript([
+      {
+        offset: 0,
+        duration: 60,
+        language: 'english',
+        text: '',
+        segments: [
+          { start: 0, end: 5, text: 'Write to anna@example.com about it' },
+          { start: 5, end: 9, text: 'the key is ghp_0123456789abcdefghijABCDEFGHIJ012345' },
+          { start: 9, end: 12, text: 'and cc anna@example.com again' },
+        ],
+      },
+    ]);
+    expect(segments.map((s) => s.text)).toEqual([
+      'Write to [EMAIL_1] about it',
+      'the key is [SECRET_1]',
+      'and cc [EMAIL_1] again',
+    ]);
   });
 });

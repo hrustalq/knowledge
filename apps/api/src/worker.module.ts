@@ -14,6 +14,7 @@ import { AclWorkerModule } from './permissions/acl-worker.module.js';
 import { AnalyticsWorkerModule } from './analytics/analytics-worker.module.js';
 import { ChatWorkerModule } from './chat/chat-worker.module.js';
 import { ApiTestRunWorkerModule } from './api-specs/api-test-run-worker.module.js';
+import { MemosWorkerModule } from './memos/memos-worker.module.js';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { ApiTestRunWorkerModule } from './api-specs/api-test-run-worker.module.j
     AnalyticsWorkerModule,
     ChatWorkerModule,
     ApiTestRunWorkerModule,
+    MemosWorkerModule,
   ],
 })
 export class WorkerModule {}

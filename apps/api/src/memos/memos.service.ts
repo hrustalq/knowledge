@@ -27,6 +27,7 @@ import { AiUsageService } from '../ai/ai-usage.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
+import { MemosProducer } from './memos.producer.js';
 import { formatBytes } from '../common/format-bytes.js';
 import { currentLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
@@ -62,6 +63,7 @@ export class MemosService {
     private readonly storage: StorageService,
     private readonly permissions: PermissionService,
     private readonly usage: AiUsageService,
+    private readonly producer: MemosProducer,
     config: ConfigService<Env, true>,
   ) {
     this.maxBytes = config.get('MEMO_MAX_BYTES', { infer: true });
@@ -183,6 +185,7 @@ export class MemosService {
       data: { status: 'uploaded', sizeBytes: head.contentLength },
     });
     if (claimed.count === 0) throw new ConflictException(t('error.memo.alreadyUploaded'));
+    await this.producer.enqueue(row.id);
     return toInfo({ ...row, status: 'uploaded', sizeBytes: head.contentLength });
   }
 

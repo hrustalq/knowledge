@@ -402,6 +402,26 @@ original id and a plain re-enqueue would silently do nothing.
 `reindexDrifted()` uses plain `enqueue` instead, because it creates new job
 rows with ids of their own.
 
+## Audio: memos (#551)
+
+A second write path that starts from bytes, not markdown, and ends in merge requests, never in an indexed
+revision. A memo's transcript is never chunked, embedded or searched. The full record is
+[doc 68](../features/68-memos.md); what belongs here is how it sits beside ingestion:
+
+- **Same upload shape.** Reserve (`POST /v1/memos`), presigned PUT straight to MinIO, then finalize. The
+  size is re-read from the bucket. The API never streams the bytes, and the audio sits under
+  `workspaces/{ws}/memos/{id}/`.
+- **Its own queue.** `memo` (`MemosQueueModule`, producer in both processes). jobId = memo id, removed on
+  either outcome so Retry can queue it again. `MemosProcessor` lives in `MemosWorkerModule`, imported only
+  by `worker.module.ts`, beside `MemoRetentionSweeper`.
+- **The only shell-out in the worker.** `ffprobe` / `ffmpeg` (in the `api` image) normalise to 16 kHz mono
+  mp3 in 10-minute chunks. Each chunk goes to the operator's OpenAI-compatible `/audio/transcriptions`
+  endpoint over a plain `fetch`, with env as the only source of the URL. The stitched segments are masked
+  by one `createMasker()` before the single write.
+- **Then an agent run, then the API.** The processor creates the `secretary` run itself, and
+  `MemoPublishSweeper` (API-only) opens its proposals as merge requests: the house "worker generates, API
+  publishes" split, with the sweeper doubling as recovery.
+
 ## Data model
 
 | Table                | Notes                                                                                                                                                           |
@@ -440,6 +460,9 @@ workspace.
 | `IngestionAdminModule`  | `IngestionController`, `IngestionAdminService`          | `AppModule` and `McpModule`    |
 | `EmbedsCoreModule`      | `EmbedsService`, the `embeds` queue (#470)              | API, worker, MCP, public       |
 | `EmbedsWorkerModule`    | `EmbedSnapshotService`, `EmbedsProcessor`, `EmbedChangeSweeper` | the worker entrypoint **only** |
+| `MemosCoreModule`       | `MemosService`, imports `MemosQueueModule` (#551)        | API, MCP                       |
+| `MemosModule`           | `MemosController`, `MemoPublishSweeper`                 | `AppModule` only               |
+| `MemosWorkerModule`     | `MemosProcessor`, `TranscriptionClient`, `MemoRetentionSweeper` | the worker entrypoint **only** |
 
 `IngestionWorkerModule` must never be imported into `AppModule` — the API
 process would start consuming jobs. This is verifiable rather than a convention:

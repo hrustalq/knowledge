@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { Logger } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
-import { Prisma } from '@prisma/client';
+import { Prisma, type Memo } from '@prisma/client';
+import type { AgentRunInput } from '@knowledge/contracts';
+import { AgentProducer } from '../agents/agent.producer.js';
 import { Job } from 'bullmq';
 import type { Env } from '../config/env.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
@@ -34,6 +36,7 @@ export class MemosProcessor extends WorkerHost {
     private readonly storage: StorageService,
     private readonly stt: TranscriptionClient,
     private readonly usage: AiUsageService,
+    private readonly agents: AgentProducer,
     config: ConfigService<Env, true>,
   ) {
     super();
@@ -50,10 +53,11 @@ export class MemosProcessor extends WorkerHost {
       data: { status: 'transcribing', stage: null, error: null },
     });
     if (claimed.count === 0) return;
-    await withLocale(asLocale(row.locale), () => this.transcribe(row.id, row.workspaceId, row.createdBy, row.audioKey));
+    await withLocale(asLocale(row.locale), () => this.transcribe(row));
   }
 
-  private async transcribe(memoId: string, workspaceId: string, userId: string, audioKey: string): Promise<void> {
+  private async transcribe(row: Memo): Promise<void> {
+    const { id: memoId, workspaceId, createdBy: userId, audioKey } = row;
     const dir = await mkdtemp(join(tmpdir(), 'memo-'));
     const started = Date.now();
     let seconds = 0;
@@ -81,11 +85,6 @@ export class MemosProcessor extends WorkerHost {
       });
     } catch (error) {
       failure = (error as Error).message || t('error.memo.transcriptionFailed');
-      this.logger.warn(`Memo ${memoId} was not transcribed: ${failure}`);
-      await this.prisma.memo.update({
-        where: { id: memoId },
-        data: { status: 'failed', stage: 'transcribing', error: failure.slice(0, 1000) },
-      });
     } finally {
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
       // One row per attempt that reached the speech server's input: a file
@@ -102,5 +101,46 @@ export class MemosProcessor extends WorkerHost {
         });
       }
     }
+    if (failure) return this.fail(memoId, 'transcribing', failure);
+    await this.analyse(row).catch((error: unknown) => this.fail(memoId, 'analysing', (error as Error).message));
+  }
+
+  /**
+   * Hand the transcript to the `secretary` (#551): a run in the uploader's
+   * name, created here because the worker already creates runs (the
+   * schedule sweeper) and a run brings retries, budget and attribution with
+   * it. Its findings are published API-side by `MemoPublishSweeper`.
+   */
+  async analyse(row: Pick<Memo, 'id' | 'workspaceId' | 'createdBy' | 'locale'>): Promise<void> {
+    const override = await this.prisma.aiAgent.findUnique({
+      where: { workspaceId_key: { workspaceId: row.workspaceId, key: 'secretary' } },
+      select: { id: true },
+    });
+    const input: AgentRunInput = { memo: { memoId: row.id } };
+    const run = await this.prisma.agentRun.create({
+      data: {
+        workspaceId: row.workspaceId,
+        agentKey: 'secretary',
+        agentId: override?.id ?? null,
+        trigger: 'manual',
+        subjectKey: `memo:${row.id}`,
+        createdBy: row.createdBy,
+        locale: row.locale,
+        input: input as unknown as Prisma.InputJsonValue,
+      },
+    });
+    await this.prisma.memo.update({
+      where: { id: row.id },
+      data: { status: 'analysing', stage: null, error: null, agentRunId: run.id, publishedAt: null },
+    });
+    await this.agents.enqueue(run.id);
+  }
+
+  private async fail(memoId: string, stage: 'transcribing' | 'analysing', message: string): Promise<void> {
+    this.logger.warn(`Memo ${memoId} failed at ${stage}: ${message}`);
+    await this.prisma.memo.update({
+      where: { id: memoId },
+      data: { status: 'failed', stage, error: message.slice(0, 1000) },
+    });
   }
 }

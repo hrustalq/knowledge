@@ -719,6 +719,8 @@ export const envSchema = z.object({
   MEMO_MAX_BYTES: z.coerce.number().int().positive().default(209_715_200),
   /** Length ceiling: the browser's claim at reserve, ffprobe's in the worker. */
   MEMO_MAX_MINUTES: z.coerce.number().int().positive().default(120),
+  /** Proposals kept from one memo; each is a merge request somebody reviews. */
+  MEMO_MAX_PROPOSALS: z.coerce.number().int().min(0).default(3),
 
   /**
    * Connectors (docs/features/19). Allow connector base URLs and git remotes on

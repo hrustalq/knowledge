@@ -16,6 +16,7 @@ import type {
   AuthorableRelationType,
   ApiTestCaseFill,
   Locale,
+  MemoSegment,
   RelationInput,
 } from '@knowledge/contracts';
 import { buildTestSuite, operationFingerprint, testCasesFor } from '@knowledge/contracts';
@@ -27,6 +28,7 @@ import {
   buildPageRefResolver,
   builtInTemplateRef,
   isAuthorableRelationType,
+  isPageSource,
   isTicketScopedAgent,
   type PageRefResolver,
   type QualityDimensionScores,
@@ -169,6 +171,7 @@ import {
 } from './digest.js';
 import { TrackerRegistry } from '../connectors/tracker-registry.service.js';
 import { MAX_SCRIBE_PAGES, SCRIBE_OUTPUT_CONTRACT, readScribeDrafts, scribeCitedIds, scribePrompt } from './scribe.js';
+import { memoCitedIds, memoOutputContract, memoPrompt, readMemoProposals } from './memo.js';
 import {
   TESTER_OUTPUT_CONTRACT,
   TESTER_RANKING_CONTRACT,
@@ -494,6 +497,9 @@ export class AgentExecutor {
       // Not in RUNNABLE_AGENTS: only a `work-item.updated` trigger names a ticket (#433).
       case 'scribe':
         return this.scribe(run, agent, principal, report);
+      // Not in RUNNABLE_AGENTS: only the memo worker names a transcribed memo (#551).
+      case 'secretary':
+        return this.minute(run, agent, principal, report);
       // Not in RUNNABLE_AGENTS: only Generate (#468) or Ask tester (#483) on an operation card names an operation.
       case 'tester':
         return ((run.input ?? {}) as AgentRunInput).apiFixtureRanking
@@ -2804,6 +2810,90 @@ ${page.markdown}`, files);
         summary ?? t('agent.scribeRun.summary', { key: ticket.key, count: findings.length, max: MAX_SCRIBE_PAGES }),
       findings,
     };
+  }
+
+  // ---------------------------------------------------------------- secretary
+
+  /**
+   * The secretary (#551, docs/features/68): what a memo's transcript changes.
+   * The transcript is masked already and shown only wrapped untrusted. The
+   * model searches as the uploader; an update is kept only for a page one of
+   * this run's own tool calls returned **and** the uploader may read — the
+   * check is here, not in the prompt. Dropped proposals land on the memo
+   * with their reason; `MemoPublishSweeper` opens the kept ones API-side.
+   */
+  private async minute(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const memoId = ((run.input ?? {}) as AgentRunInput).memo?.memoId;
+    const memo = memoId ? await this.prisma.memo.findFirst({ where: { id: memoId, workspaceId: run.workspaceId } }) : null;
+    const segments = Array.isArray(memo?.transcript) ? (memo.transcript as unknown as MemoSegment[]) : [];
+    if (!memo) throw new Error(t('agent.memoRun.noMemo'));
+
+    const max = this.config.get('MEMO_MAX_PROPOSALS', { infer: true });
+    const blocking = agent.missing.filter((capability) => capability !== 'tools');
+    if (!agent.config.enabled || blocking.length > 0 || segments.length === 0 || max === 0) {
+      const summary = segments.length === 0 ? null : t('agent.memoRun.noModel');
+      await this.prisma.memo.update({ where: { id: memo.id }, data: { summary, dropped: [] } });
+      return { summary: summary ?? t('agent.memoRun.summary', { count: 0, max }), findings: [] };
+    }
+
+    await report({ stage: 'thinking', progress: 0.2 });
+    const call = { config: agent.config, userId: run.createdBy, operation: 'memo' as const, locale: run.locale as Locale };
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: `${agent.instructions}\n\n${memoOutputContract(max)}${await this.guidance(run, agent)}` },
+      { role: 'user', content: runBrief((run.input ?? {}) as AgentRunInput) + memoPrompt(memo.title, segments) },
+    ];
+    // Every page a tool result carried, as the run saw it: the only pages an
+    // update may name.
+    const retrieved = new Set<string>();
+    const raw = agent.missing.includes('tools')
+      ? await this.client.chat(call, messages, { json: true })
+      : (
+          await this.client.runWithTools(
+            call,
+            messages,
+            this.readTools.definitions(),
+            async (name, args) => {
+              const result = await this.readTools.execute(name, args, this.toolCtx(run, principal));
+              for (const source of result.sources) if (isPageSource(source)) retrieved.add(source.documentId);
+              return result;
+            },
+            { jsonFinalRound: true },
+          )
+        ).content;
+    const parsed = safeJson(raw);
+
+    const cited = memoCitedIds(parsed).filter((id) => UUID.test(id) && retrieved.has(id));
+    const scope = await this.runScope(run, principal);
+    const visible = new Map(
+      cited.length
+        ? (
+            await this.prisma.document.findMany({
+              where: { id: { in: cited }, workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
+              select: { id: true, title: true },
+            })
+          ).map((d) => [d.id, d.title])
+        : [],
+    );
+    const web = this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
+    const { summary, findings, dropped } = readMemoProposals(parsed, {
+      retrieved,
+      visible,
+      segments,
+      max,
+      linkAt: (seconds) => `${web}/memos/${memo.id}?t=${seconds}`,
+      label: (time) => t('agent.memoRun.sourceLabel', { time }),
+    });
+    const text = summary ?? t('agent.memoRun.summary', { count: findings.length, max });
+    await this.prisma.memo.update({
+      where: { id: memo.id },
+      data: { summary: text, dropped: dropped as unknown as Prisma.InputJsonValue },
+    });
+    return { summary: text, findings };
   }
 
   // ------------------------------------------------------------------- tester

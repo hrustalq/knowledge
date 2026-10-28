@@ -25,7 +25,13 @@ in the pull request that introduces them — see
   recording through that endpoint in ten-minute pieces and stores one transcript with timestamps, in the
   language spoken, with emails, phone numbers, card and identity numbers and credentials masked before
   it is written. Each transcription is a `transcription` row on the AI usage page, with the audio's
-  length. Proposals follow.
+  length. The new **Secretary** agent then reads the transcript against the knowledge base, searching as
+  the uploader, and proposes at most `MEMO_MAX_PROPOSALS` pages to create or update. Each opens as an
+  ordinary merge request in the uploader's name, linking back to the moments of the recording it rests on
+  (by time only, never the memo's title or words). A new page stays out of the tree and search until it
+  merges. A proposal citing a moment the recording does not have, or rewriting a page the agent never
+  read or the uploader cannot open, is dropped and listed as dropped. The uploader gets one notification
+  when the proposals are open; a memo that settles nothing ends with none. The page for memos follows.
 
 ### Fixed
 
@@ -38,7 +44,7 @@ in the pull request that introduces them — see
   column. Both survive a rollback; the previous image never reads them.
 - New env, all defaulted and off: `TRANSCRIPTION_PROVIDER` (`none`), `TRANSCRIPTION_BASE_URL`,
   `TRANSCRIPTION_MODEL` (`whisper-1`), `TRANSCRIPTION_API_KEY`, `MEMO_MAX_BYTES` (200 MB),
-  `MEMO_MAX_MINUTES` (120). See docs/features/68.
+  `MEMO_MAX_MINUTES` (120), `MEMO_MAX_PROPOSALS` (3). See docs/features/68.
 - The `api` image now carries `ffmpeg`/`ffprobe` (Debian package). The memo worker shells out to them.
 
 ## [0.37.0] — 2026-10-27

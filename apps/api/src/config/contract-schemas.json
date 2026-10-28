@@ -438,6 +438,28 @@
       "conflictId": {
         "type": "string"
       },
+      "memo": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "create",
+              "update"
+            ]
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "action",
+          "segments"
+        ]
+      },
       "learningId": {
         "type": "string",
         "nullable": true
@@ -1182,6 +1204,17 @@
           "documentId",
           "entityKey",
           "candidatesHash"
+        ]
+      },
+      "memo": {
+        "type": "object",
+        "properties": {
+          "memoId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memoId"
         ]
       },
       "coverage": {
@@ -2594,7 +2627,8 @@
       "public_ask",
       "test-suite",
       "test-fixture-ranking",
-      "transcription"
+      "transcription",
+      "memo"
     ]
   },
   "AiUsageResponse": {
@@ -15554,12 +15588,51 @@
       "summary": {
         "type": "string",
         "nullable": true
+      },
+      "proposals": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoProposal"
+        }
+      },
+      "dropped": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoDropped"
+        }
       }
     },
     "required": [
       "memo",
       "transcript",
-      "summary"
+      "summary",
+      "proposals",
+      "dropped"
+    ]
+  },
+  "MemoDropReason": {
+    "type": "string",
+    "enum": [
+      "unknown-segment",
+      "unknown-page",
+      "too-short",
+      "duplicate",
+      "over-limit"
+    ]
+  },
+  "MemoDropped": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string"
+      },
+      "reason": {
+        "$ref": "#/components/schemas/MemoDropReason"
+      }
+    },
+    "required": [
+      "title",
+      "reason"
     ]
   },
   "MemoInfo": {
@@ -15665,6 +15738,51 @@
       "memos",
       "transcription",
       "limits"
+    ]
+  },
+  "MemoProposal": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "create",
+          "update"
+        ]
+      },
+      "title": {
+        "type": "string"
+      },
+      "detail": {
+        "type": "string"
+      },
+      "documentId": {
+        "type": "string",
+        "nullable": true
+      },
+      "documentTitle": {
+        "type": "string",
+        "nullable": true
+      },
+      "segments": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        }
+      },
+      "mergeRequestId": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "action",
+      "title",
+      "detail",
+      "documentId",
+      "documentTitle",
+      "segments",
+      "mergeRequestId"
     ]
   },
   "MemoResponse": {

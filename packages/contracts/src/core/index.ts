@@ -420,6 +420,10 @@ export const KNOWN_EVENT_TYPES = [
   // who resolved it. A directed row to them; `title` is the item's key and
   // title, metadata carries counts only.
   'connector.harvest.proposed',
+  // A memo's proposals are open, or its analysis failed (#551). Directed to
+  // the uploader alone; `title` is their own memo's, metadata carries counts.
+  'memo.done',
+  'memo.failed',
   'connector.created',
   'connector.updated',
   'connector.deleted',

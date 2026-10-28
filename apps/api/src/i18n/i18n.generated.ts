@@ -293,6 +293,8 @@ export type I18nTranslations = {
         "scribeDesc": string;
         "tester": string;
         "testerDesc": string;
+        "secretary": string;
+        "secretaryDesc": string;
         "testerRun": {
             "noOperation": string;
             "summary": string;
@@ -308,6 +310,12 @@ export type I18nTranslations = {
             "summary": string;
             "ticketComment": string;
             "ticketCommentEnd": string;
+        };
+        "memoRun": {
+            "noMemo": string;
+            "noModel": string;
+            "summary": string;
+            "sourceLabel": string;
         };
         "charting": {
             "disabled": string;
@@ -867,6 +875,7 @@ export type I18nTranslations = {
             "transcriptionFailed": string;
             "speechServerDown": string;
             "speechServerRefused": string;
+            "analysisFailed": string;
         };
         "ingestionJob": {
             "notFound": string;

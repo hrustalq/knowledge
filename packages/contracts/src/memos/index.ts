@@ -76,8 +76,29 @@ export interface MemoResponse {
   memo: MemoInfo;
 }
 
+/** Why the code refused a proposal the analysis made — shown on the memo page. */
+export type MemoDropReason = 'unknown-segment' | 'unknown-page' | 'too-short' | 'duplicate' | 'over-limit';
+
+export interface MemoDropped {
+  title: string;
+  reason: MemoDropReason;
+}
+
+/** A kept proposal, and the merge request it became once published. */
+export interface MemoProposal {
+  action: 'create' | 'update';
+  title: string;
+  detail: string;
+  documentId: string | null;
+  documentTitle: string | null;
+  segments: number[];
+  mergeRequestId: string | null;
+}
+
 export interface MemoDetailResponse {
   memo: MemoInfo;
   transcript: MemoSegment[];
   summary: string | null;
+  proposals: MemoProposal[];
+  dropped: MemoDropped[];
 }

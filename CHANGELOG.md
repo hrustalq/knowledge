@@ -17,7 +17,7 @@ in the pull request that introduces them — see
 
 ### Added
 
-- **Memos** (#551, in progress): `POST /v1/memos` reserves an audio recording (mp3, m4a, wav, ogg, webm)
+- **Memos** (#551): `POST /v1/memos` reserves an audio recording (mp3, m4a, wav, ogg, webm)
   in a project and hands back a presigned upload, `POST /v1/memos/:id/finalize` confirms it, and
   `GET /v1/memos`, `GET /v1/memos/:id` and `GET /v1/memos/:id/audio` read it back. A memo is visible
   only to the person who uploaded it; anyone else gets a 404. Reserving is refused, with the variable
@@ -58,6 +58,9 @@ in the pull request that introduces them — see
   `MEMO_MAX_MINUTES` (120), `MEMO_MAX_PROPOSALS` (3), `MEMO_AUDIO_RETENTION_DAYS` (30; 0 keeps audio). See
   docs/features/68.
 - The `api` image now carries `ffmpeg`/`ffprobe` (Debian package). The memo worker shells out to them.
+- To turn memos on, set `TRANSCRIPTION_PROVIDER=openai-compatible` and `TRANSCRIPTION_BASE_URL` (plus
+  `TRANSCRIPTION_API_KEY` for a hosted server) in the GitHub `production` environment before tagging.
+  Left unset, memos stay off and the page says so.
 
 ## [0.37.0] — 2026-10-27
 

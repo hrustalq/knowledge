@@ -216,6 +216,44 @@ export class MemosService {
     };
   }
 
+  /**
+   * Resume a failed memo from the step it failed in: one with a transcript
+   * is read again (a new `secretary` run), one without is transcribed again.
+   * Guarded on `failed`, so a double press queues once.
+   */
+  async retry(principal: Principal, memoId: string): Promise<MemoInfo> {
+    const row = await this.require(principal, memoId);
+    const transcribed = Array.isArray(row.transcript);
+    if (!transcribed && !this.transcription.enabled) {
+      throw new ServiceUnavailableException({
+        statusCode: 503,
+        message: t('error.memo.disabled', { variable: this.transcription.missing }),
+        reason: 'transcription-disabled',
+        missing: this.transcription.missing,
+      });
+    }
+    const status = transcribed ? 'transcribed' : 'uploaded';
+    const claimed = await this.prisma.memo.updateMany({
+      where: { id: row.id, status: 'failed' },
+      data: { status, stage: null, error: null, publishedAt: null },
+    });
+    if (claimed.count === 0) throw new ConflictException(t('error.memo.notRetryable'));
+    await this.producer.enqueue(row.id);
+    return toInfo({ ...row, status, stage: null, error: null });
+  }
+
+  /**
+   * The audio — every version of it, since the bucket is versioned — and the
+   * row with its transcript. Merge requests it opened are ordinary merge
+   * requests and stay; their links to the memo then 404 like any other.
+   */
+  async remove(principal: Principal, memoId: string): Promise<{ deleted: true }> {
+    const row = await this.require(principal, memoId);
+    await this.prisma.memo.delete({ where: { id: row.id } });
+    if (row.audioKey) await this.storage.purgeObjectVersions(row.audioKey).catch(() => undefined);
+    return { deleted: true };
+  }
+
   /** A short-lived read URL: `<audio>` cannot send an Authorization header. */
   async audioUrl(principal: Principal, memoId: string): Promise<string> {
     const row = await this.require(principal, memoId);

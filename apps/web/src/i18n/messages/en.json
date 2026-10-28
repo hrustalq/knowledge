@@ -7249,7 +7249,11 @@
         "too-short": "was too short to be a page",
         "duplicate": "repeated a change to the same page",
         "over-limit": "went past the limit of proposals per memo"
-      }
+      },
+      "retry": "Retry",
+      "delete": "Delete",
+      "deleteTitle": "Delete this memo?",
+      "deleteBody": "The recording and its transcript are deleted for good. Merge requests it opened stay open for review."
     }
   }
 }

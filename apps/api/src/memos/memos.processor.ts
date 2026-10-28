@@ -46,6 +46,18 @@ export class MemosProcessor extends WorkerHost {
   async process(job: Job<{ memoId: string }>): Promise<void> {
     const row = await this.prisma.memo.findUnique({ where: { id: job.data.memoId } });
     if (!row) return;
+    // A retried analysis (#551): the transcript is kept, only the reading runs again.
+    if (Array.isArray(row.transcript)) {
+      const resumed = await this.prisma.memo.updateMany({
+        where: { id: row.id, status: 'transcribed' },
+        data: { status: 'analysing' },
+      });
+      if (resumed.count === 0) return;
+      await withLocale(asLocale(row.locale), () =>
+        this.analyse(row).catch((error: unknown) => this.fail(row.id, 'analysing', (error as Error).message)),
+      );
+      return;
+    }
     // Claimed in one statement: a redelivered job, or a memo already past this
     // step, transcribes nothing.
     const claimed = await this.prisma.memo.updateMany({

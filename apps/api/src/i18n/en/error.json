@@ -205,7 +205,8 @@
     "transcriptionFailed": "The recording could not be transcribed.",
     "speechServerDown": "The speech server could not be reached. Try again later, or ask an admin to check it.",
     "speechServerRefused": "The speech server refused the recording (HTTP {status}).",
-    "analysisFailed": "The memo could not be analysed."
+    "analysisFailed": "The memo could not be analysed.",
+    "notRetryable": "Only a failed memo can be retried."
   },
   "ingestionJob": {
     "notFound": "Ingestion job {id} not found"

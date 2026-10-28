@@ -876,6 +876,7 @@ export type I18nTranslations = {
             "speechServerDown": string;
             "speechServerRefused": string;
             "analysisFailed": string;
+            "notRetryable": string;
         };
         "ingestionJob": {
             "notFound": string;

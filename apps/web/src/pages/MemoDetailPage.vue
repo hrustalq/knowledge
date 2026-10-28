@@ -17,11 +17,16 @@
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRoute } from 'vue-router'
-import { useQuery } from '@tanstack/vue-query'
-import { ArrowLeft, FilePlus2, FilePen, GitPullRequestArrow, Lock } from 'lucide-vue-next'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { toast } from 'vue-sonner'
+import { ArrowLeft, FilePlus2, FilePen, GitPullRequestArrow, Lock, RotateCcw, Trash2 } from 'lucide-vue-next'
 import { memoClock, type MemoDetailResponse, type MemoProposal } from '@knowledge/contracts'
+import { request } from '@/api/client'
+import { errorMessage } from '@/api/errors'
 import { apiQueryOptions } from '@/api/queries'
+import { Button } from '@/components/ui/button'
+import { confirm } from '@/components/ui/confirm'
 import { apiUrl } from '@/lib/api'
 import { formatDateTime, formatDuration } from '@/lib/format'
 import { PageLayout, PageState } from '@/components/layout/page'
@@ -99,6 +104,39 @@ watch(id, () => {
 })
 
 const segmentStart = (i: number) => transcript.value.find((s) => s.i === i)?.start ?? 0
+
+const router = useRouter()
+const queryClient = useQueryClient()
+const acting = ref(false)
+
+async function act(run: () => Promise<unknown>) {
+  if (acting.value) return
+  acting.value = true
+  try {
+    await run()
+    await queryClient.invalidateQueries({ queryKey: ['/v1/memos'] })
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  } finally {
+    acting.value = false
+  }
+}
+
+const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { id: id.value } }))
+
+async function remove() {
+  const ok = await confirm({
+    title: t('memos.detail.deleteTitle'),
+    description: t('memos.detail.deleteBody'),
+    action: t('memos.detail.delete'),
+    destructive: true,
+  })
+  if (!ok) return
+  await act(async () => {
+    await request('delete', '/v1/memos/{id}', { path: { id: id.value } })
+    await router.push('/memos')
+  })
+}
 </script>
 
 <template>
@@ -116,6 +154,14 @@ const segmentStart = (i: number) => transcript.value.find((s) => s.i === i)?.sta
         />
         {{ t(`memos.status.${memo.status}`) }}
       </span>
+    </template>
+    <template #actions>
+      <Button v-if="memo.status === 'failed'" size="sm" :disabled="acting" @click="retry">
+        <RotateCcw class="size-4" aria-hidden="true" />{{ t('memos.detail.retry') }}
+      </Button>
+      <Button size="sm" variant="ghost" :disabled="acting" @click="remove">
+        <Trash2 class="size-4" aria-hidden="true" />{{ t('memos.detail.delete') }}
+      </Button>
     </template>
     <template #meta>
       <p class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">

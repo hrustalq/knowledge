@@ -38,6 +38,11 @@ in the pull request that introduces them — see
   were dropped and why. Clicking a line plays from it, and a proposal's timestamps play the moments it
   rests on and mark them in the transcript; the links in its merge request open the same place. When the
   server has no speech endpoint, the page says which setting to add instead of offering an upload.
+- A failed memo can be **retried** from the step it failed in (`POST /v1/memos/:id/retry`), and any memo
+  **deleted** (`DELETE /v1/memos/:id`) with its audio and transcript; merge requests it opened stay. Audio
+  is purged after `MEMO_AUDIO_RETENTION_DAYS`; the transcript and proposals are kept and the page says the
+  recording was removed. Agents can read their own memos over MCP with `knowledge_list_memos` and
+  `knowledge_get_memo` (the transcript comes wrapped as untrusted data).
 
 ### Fixed
 
@@ -50,7 +55,8 @@ in the pull request that introduces them — see
   column. Both survive a rollback; the previous image never reads them.
 - New env, all defaulted and off: `TRANSCRIPTION_PROVIDER` (`none`), `TRANSCRIPTION_BASE_URL`,
   `TRANSCRIPTION_MODEL` (`whisper-1`), `TRANSCRIPTION_API_KEY`, `MEMO_MAX_BYTES` (200 MB),
-  `MEMO_MAX_MINUTES` (120), `MEMO_MAX_PROPOSALS` (3). See docs/features/68.
+  `MEMO_MAX_MINUTES` (120), `MEMO_MAX_PROPOSALS` (3), `MEMO_AUDIO_RETENTION_DAYS` (30; 0 keeps audio). See
+  docs/features/68.
 - The `api` image now carries `ffmpeg`/`ffprobe` (Debian package). The memo worker shells out to them.
 
 ## [0.37.0] — 2026-10-27

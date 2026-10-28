@@ -4,6 +4,7 @@ import { AiCoreModule } from '../ai/ai-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { MemosQueueModule } from './memos-queue.module.js';
+import { MemoRetentionSweeper } from './memo-retention.sweeper.js';
 import { MemosProcessor } from './memos.processor.js';
 import { TranscriptionClient } from './transcription.client.js';
 
@@ -13,6 +14,6 @@ import { TranscriptionClient } from './transcription.client.js';
  */
 @Module({
   imports: [PrismaModule, StorageModule, AiCoreModule, AgentQueueModule, MemosQueueModule],
-  providers: [MemosProcessor, TranscriptionClient],
+  providers: [MemosProcessor, TranscriptionClient, MemoRetentionSweeper],
 })
 export class MemosWorkerModule {}

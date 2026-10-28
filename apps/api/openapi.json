@@ -61381,6 +61381,7 @@
             "enum": [
               "TRANSCRIPTION_PROVIDER",
               "TRANSCRIPTION_BASE_URL",
+              "TRANSCRIPTION_API_KEY",
               null
             ],
             "nullable": true

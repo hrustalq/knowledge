@@ -73,6 +73,7 @@ export class MemosService {
     this.transcription = transcriptionState(
       config.get('TRANSCRIPTION_PROVIDER', { infer: true }),
       config.get('TRANSCRIPTION_BASE_URL', { infer: true }),
+      config.get('TRANSCRIPTION_API_KEY', { infer: true }),
     );
   }
 
@@ -274,8 +275,10 @@ export class MemosService {
   }
 }
 
-export function transcriptionState(provider: string, baseUrl: string): MemoTranscriptionState {
+export function transcriptionState(provider: string, baseUrl: string, apiKey: string): MemoTranscriptionState {
   if (provider === 'none') return { enabled: false, missing: 'TRANSCRIPTION_PROVIDER' };
+  // gen-api's URL is fixed (#584); only the key is the operator's.
+  if (provider === 'gen-api') return apiKey.trim() ? { enabled: true, missing: null } : { enabled: false, missing: 'TRANSCRIPTION_API_KEY' };
   if (!baseUrl.trim()) return { enabled: false, missing: 'TRANSCRIPTION_BASE_URL' };
   return { enabled: true, missing: null };
 }

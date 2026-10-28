@@ -43,6 +43,11 @@ in the pull request that introduces them — see
   is purged after `MEMO_AUDIO_RETENTION_DAYS`; the transcript and proposals are kept and the page says the
   recording was removed. Agents can read their own memos over MCP with `knowledge_list_memos` and
   `knowledge_get_memo` (the transcript comes wrapped as untrusted data).
+- Memos can be transcribed by **gen-api** (#584): `TRANSCRIPTION_PROVIDER=gen-api` with
+  `TRANSCRIPTION_API_KEY` sends each piece of a recording to gen-api's `gen-stt` (0.45 ₽ a minute, built for
+  Russian) without a base URL. `gen-stt` returns text without timestamps, so for gen-api a recording is cut
+  at pauses into pieces of at most a minute, and a proposal's timestamps still point at the right minute.
+  The Memos page names `TRANSCRIPTION_API_KEY` when the key is missing.
 
 ### Fixed
 
@@ -60,7 +65,8 @@ in the pull request that introduces them — see
 - The `api` image now carries `ffmpeg`/`ffprobe` (Debian package). The memo worker shells out to them.
 - To turn memos on, set `TRANSCRIPTION_PROVIDER=openai-compatible` and `TRANSCRIPTION_BASE_URL` (plus
   `TRANSCRIPTION_API_KEY` for a hosted server) in the GitHub `production` environment before tagging.
-  Left unset, memos stay off and the page says so.
+  Left unset, memos stay off and the page says so. Or set `TRANSCRIPTION_PROVIDER=gen-api` and
+  `TRANSCRIPTION_API_KEY` (a gen-api key) alone (#584).
 
 ## [0.37.0] — 2026-10-27
 

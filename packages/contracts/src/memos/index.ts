@@ -52,7 +52,7 @@ export function memoClock(seconds: number): string {
 /** Whether this deployment can transcribe, and the variable to set when it cannot. */
 export interface MemoTranscriptionState {
   enabled: boolean;
-  missing: 'TRANSCRIPTION_PROVIDER' | 'TRANSCRIPTION_BASE_URL' | null;
+  missing: 'TRANSCRIPTION_PROVIDER' | 'TRANSCRIPTION_BASE_URL' | 'TRANSCRIPTION_API_KEY' | null;
 }
 
 export interface MemoInfo {

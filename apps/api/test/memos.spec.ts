@@ -4,6 +4,7 @@ import { memoExtensionFor } from '@knowledge/contracts';
 import { MemosService, transcriptionState } from '../src/memos/memos.service.js';
 import type { Principal } from '../src/auth/principal.js';
 import { stitchTranscript } from '../src/memos/transcript.js';
+import { fixedCuts, parsePauses, pauseCuts } from '../src/memos/audio.js';
 import { MemoRetentionSweeper } from '../src/memos/memo-retention.sweeper.js';
 
 /**
@@ -26,9 +27,38 @@ describe('memoExtensionFor', () => {
 
 describe('transcriptionState', () => {
   it('names the variable that is missing', () => {
-    expect(transcriptionState('none', 'http://x')).toEqual({ enabled: false, missing: 'TRANSCRIPTION_PROVIDER' });
-    expect(transcriptionState('openai-compatible', ' ')).toEqual({ enabled: false, missing: 'TRANSCRIPTION_BASE_URL' });
-    expect(transcriptionState('openai-compatible', 'http://x')).toEqual({ enabled: true, missing: null });
+    expect(transcriptionState('none', 'http://x', 'k')).toEqual({ enabled: false, missing: 'TRANSCRIPTION_PROVIDER' });
+    expect(transcriptionState('openai-compatible', ' ', 'k')).toEqual({ enabled: false, missing: 'TRANSCRIPTION_BASE_URL' });
+    expect(transcriptionState('openai-compatible', 'http://x', '')).toEqual({ enabled: true, missing: null });
+  });
+
+  it('asks gen-api for its key only (#584)', () => {
+    expect(transcriptionState('gen-api', '', ' ')).toEqual({ enabled: false, missing: 'TRANSCRIPTION_API_KEY' });
+    expect(transcriptionState('gen-api', '', 'k')).toEqual({ enabled: true, missing: null });
+  });
+});
+
+describe('memo chunk cuts (#584)', () => {
+  it('reads the middle of each pause from silencedetect', () => {
+    const log = [
+      '[silencedetect @ 0x1] silence_start: -0.01',
+      '[silencedetect @ 0x1] silence_end: 0.5 | silence_duration: 0.51',
+      '[silencedetect @ 0x1] silence_start: 41',
+      '[silencedetect @ 0x1] silence_end: 42 | silence_duration: 1',
+      '[silencedetect @ 0x1] silence_start: 99.5',
+    ].join('\n');
+    expect(parsePauses(log)).toEqual([0.25, 41.5]);
+  });
+
+  it('cuts at the latest pause in the second half of each minute, hard where there is none', () => {
+    // 10 and 70 sit in a first half; 45 and 55 share a window (55 wins); 170–200 has no pause.
+    expect(pauseCuts([10, 45, 55, 70, 100, 140], 250)).toEqual([55, 100, 140, 200]);
+    expect(pauseCuts([30], 60)).toEqual([]);
+  });
+
+  it('keeps ten-minute pieces for a server that times its own segments', () => {
+    expect(fixedCuts(599)).toEqual([]);
+    expect(fixedCuts(1300)).toEqual([600, 1200]);
   });
 });
 

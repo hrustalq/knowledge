@@ -56,6 +56,22 @@ names no host.
 chunk becomes one segment spanning it. No `language` is sent, so each chunk is detected on its own and a
 recording that switches between ru and en keeps both. Nothing is translated.
 
+### gen-api: text only, so the pieces are short
+
+`TRANSCRIPTION_PROVIDER=gen-api` (#584) calls gen-api's own speech network, `gen-stt` (0.45 ₽ a minute,
+billed per second, built for Russian): `POST https://api.gen-api.ru/api/v1/networks/gen-stt`, multipart
+`audio_url` (the chunk itself) and `is_sync=true`, answered with `{ request_id, cost, response: [text] }`.
+Only `TRANSCRIPTION_API_KEY` is read; the URL is fixed and the model is recorded as `gen-stt`. gen-api's
+OpenAI-shaped proxy has no `/audio/transcriptions` route, which is why this is its own branch in
+`TranscriptionClient` and not a base URL.
+
+`gen-stt` returns no timestamps: a `timestamps` parameter is accepted and dropped. Each chunk therefore
+becomes one segment, so for gen-api the worker cuts pieces of at most `SHORT_CHUNK_SECONDS` (60) instead of
+600, each ending at the latest pause in the second half of its minute (`detectPauses` reads ffmpeg's
+`silencedetect`, `pauseCuts` picks the points) and cut hard only where a minute has no pause. A proposal
+then points at the right minute. A 2-hour memo is about 120 calls of ≈ 6 s each. `language` is not sent; it
+defaults to `ru`, a hint gen-api says its main path barely reads, and the memo's language stays empty.
+
 ### Audio is normalised, then chunked, in the worker
 
 `MemosProcessor` (in `MemosWorkerModule`, imported only by `worker.module.ts`):
@@ -66,7 +82,8 @@ recording that switches between ru and en keeps both. Nothing is translated.
 3. Runs `ffprobe` to get the length. `MEMO_MAX_MINUTES` is enforced here, on the file. The browser's
    reading at reserve is only an early refusal.
 4. Runs `ffmpeg` to write 16 kHz mono mp3 at 32 kbit/s in 600-second segments (≈ 2.4 MB each, under any
-   server's cap). Then it transcribes chunk by chunk and stitches.
+   server's cap), or in pieces of at most 60 s cut at pauses for gen-api. Then it transcribes chunk by
+   chunk and stitches.
 5. Removes the temp dir, whatever the outcome.
 
 `ffmpeg` is in `Dockerfile.api`'s runtime stage; its `-version` calls fail the image build, not the
@@ -196,10 +213,11 @@ Web (`/memos` after Captures in the sidebar; design brief on #551):
 
 - Migration `20261219100000_memos`: the `memos` table and nullable `ai_usage.audio_seconds`. Both survive
   a rollback.
-- Env, all defaulted and off: `TRANSCRIPTION_PROVIDER` (`none` | `openai-compatible`),
+- Env, all defaulted and off: `TRANSCRIPTION_PROVIDER` (`none` | `openai-compatible` | `gen-api`),
   `TRANSCRIPTION_BASE_URL`, `TRANSCRIPTION_MODEL` (`whisper-1`), `TRANSCRIPTION_API_KEY`, `MEMO_MAX_BYTES`
   (200 MB), `MEMO_MAX_MINUTES` (120), `MEMO_MAX_PROPOSALS` (3), `MEMO_AUDIO_RETENTION_DAYS` (30). To turn
-  memos on, set the first two in the GitHub `production` environment (and the key for a hosted server).
+  memos on, set the first two in the GitHub `production` environment (and the key for a hosted server), or
+  `TRANSCRIPTION_PROVIDER=gen-api` with `TRANSCRIPTION_API_KEY` alone.
   deploy.yml refuses variables missing from that environment.
 - The `api` image carries `ffmpeg` / `ffprobe`; the build checks them.
 

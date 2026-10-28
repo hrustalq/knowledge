@@ -23,6 +23,11 @@ in the pull request that introduces them — see
   only to the person who uploaded it; anyone else gets a 404. Reserving is refused, with the variable
   to set, until a speech-to-text endpoint is configured. Transcription and proposals follow.
 
+### Fixed
+
+- Merge request pages load again (#576). Since v0.30.1 opening one failed in the browser with
+  `ReferenceError: Cannot access '…' before initialization`.
+
 ### Operations
 
 - Migration `20261219100000_memos` adds the `memos` table and a nullable `ai_usage.audio_seconds`

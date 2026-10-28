@@ -71,7 +71,7 @@ export function panelId(key: string, scope?: string): string {
  * people paste to each other.
  */
 export function usePageTabs<K extends string>(
-  tabs: MaybeRefOrGetter<readonly PageTab<K>[]>,
+  tabs: MaybeRefOrGetter<readonly Pick<PageTab<K>, 'key'>[]>,
   fallback: K,
   param = 'tab',
 ): WritableComputedRef<K> {

@@ -11,7 +11,7 @@
 // Overview is one timeline. State changes come from the activity log, threads
 // from the review API, and they are sorted together — see MrActivityFeed.
 import { useI18n } from 'vue-i18n'
-import { computed, ref, type WritableComputedRef } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { warnMentionedWithoutAccess } from '@/components/access/mention-access'
 import { useMembers } from '@/components/merge-requests/use-members'
@@ -70,14 +70,6 @@ const queryClient = useQueryClient()
 const auth = useAuthStore()
 const id = computed(() => String(route.params.id))
 
-// A getter, not the computed itself: `pageTabs` is declared below, beside the
-// counts it reads. Annotated because those counts come from queries `tab`
-// enables, which TypeScript would otherwise chase in a circle.
-const tab: WritableComputedRef<Tab> = usePageTabs<Tab>((): readonly PageTab<Tab>[] => pageTabs.value, 'overview')
-function setTab(next: Tab) {
-  tab.value = next
-}
-
 // --- queries -----------------------------------------------------------------
 const detailQuery = useQuery(
   computed(() => apiQueryOptions('/v1/merge-requests/{id}', { path: { id: id.value } })),
@@ -101,6 +93,14 @@ const apiChanges = computed(
 const visibleTabs = computed<readonly Tab[]>(() =>
   apiChanges.value?.applicable ? TABS : TABS.filter((t) => t !== 'api'),
 )
+
+// Validated against the keys only, never `pageTabs`: its counts come from the
+// queries below that `tab` enables, and useQuery reads `tab` as it is created —
+// before `pageTabs` exists (#576).
+const tab = usePageTabs<Tab>(() => visibleTabs.value.map((key) => ({ key })), 'overview')
+function setTab(next: Tab) {
+  tab.value = next
+}
 
 const diffQuery = useQuery(
   computed(() => ({

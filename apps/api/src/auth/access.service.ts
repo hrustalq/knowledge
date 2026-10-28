@@ -296,6 +296,16 @@ export class AccessService {
   }
 
   /**
+   * A memo (#551). Only the workspace: whether the caller is its uploader is
+   * the service's question, answered with a 404 that names nothing.
+   */
+  async workspaceOfMemo(memoId: string): Promise<string> {
+    const memo = await this.prisma.memo.findUnique({ where: { id: memoId }, select: { workspaceId: true } });
+    if (!memo) throw new NotFoundException(t('error.memo.notFound'));
+    return memo.workspaceId;
+  }
+
+  /**
    * An import job carries its own workspaceId and exists before any document
    * does, so this is the only thing standing between one tenant's import id and
    * another tenant's staged file.

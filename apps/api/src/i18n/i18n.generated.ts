@@ -293,6 +293,8 @@ export type I18nTranslations = {
         "scribeDesc": string;
         "tester": string;
         "testerDesc": string;
+        "secretary": string;
+        "secretaryDesc": string;
         "testerRun": {
             "noOperation": string;
             "summary": string;
@@ -308,6 +310,12 @@ export type I18nTranslations = {
             "summary": string;
             "ticketComment": string;
             "ticketCommentEnd": string;
+        };
+        "memoRun": {
+            "noMemo": string;
+            "noModel": string;
+            "summary": string;
+            "sourceLabel": string;
         };
         "charting": {
             "disabled": string;
@@ -854,6 +862,21 @@ export type I18nTranslations = {
             "noParser": string;
             "failed": string;
             "timedOut": string;
+        };
+        "memo": {
+            "notFound": string;
+            "disabled": string;
+            "unsupportedFormat": string;
+            "tooLarge": string;
+            "tooLong": string;
+            "uploadMissing": string;
+            "alreadyUploaded": string;
+            "audioGone": string;
+            "transcriptionFailed": string;
+            "speechServerDown": string;
+            "speechServerRefused": string;
+            "analysisFailed": string;
+            "notRetryable": string;
         };
         "ingestionJob": {
             "notFound": string;
@@ -1771,6 +1794,7 @@ export type I18nTranslations = {
         "agentLearning": string;
         "glossaryTerm": string;
         "import": string;
+        "memo": string;
         "workflow": string;
         "workflowRun": string;
         "connector": string;

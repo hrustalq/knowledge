@@ -4397,6 +4397,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/memos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My memos, newest first, and whether this server can transcribe */
+        get: operations["MemosController_list"];
+        put?: never;
+        /** Reserve a memo and get a presigned upload URL */
+        post: operations["MemosController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memos/{id}/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm the recording landed and queue its transcription */
+        post: operations["MemosController_finalize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memos/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume a failed memo from the step it failed in */
+        post: operations["MemosController_retry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A memo with its transcript and summary */
+        get: operations["MemosController_get"];
+        put?: never;
+        post?: never;
+        /** Delete a memo: its audio and transcript; merge requests it opened stay */
+        delete: operations["MemosController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workflows/draft": {
         parameters: {
             query?: never;
@@ -8924,6 +8994,24 @@ export interface components {
              */
             templateRef?: string;
         };
+        CreateMemoDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description The project the memo belongs to; its proposals are filed there
+             */
+            projectId: string;
+            /** @description Original filename — its extension decides the format */
+            filename: string;
+            contentType: string;
+            /** @description Claimed size; re-checked against the bucket at finalize */
+            sizeBytes: number;
+            /** @description Shown in the list; defaults to the filename without its extension */
+            title?: string;
+            /** @description Length the browser read from the file, refused early when over the ceiling */
+            durationSeconds?: number;
+        };
         WorkflowDraftMessageDto: {
             /** @enum {string} */
             role: "user" | "assistant";
@@ -9873,6 +9961,11 @@ export interface components {
             dismissedAt?: string | null;
             dismissedBy?: string | null;
             conflictId?: string;
+            memo?: {
+                /** @enum {string} */
+                action: "create" | "update";
+                segments: number[];
+            };
             learningId?: string | null;
             issueId?: string;
             relations?: components["schemas"]["RelationInput"][];
@@ -10049,6 +10142,9 @@ export interface components {
                 documentId: string;
                 entityKey: string;
                 candidatesHash: string;
+            };
+            memo?: {
+                memoId: string;
             };
             coverage?: {
                 windowDays: number;
@@ -10370,7 +10466,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -11899,6 +11995,18 @@ export interface components {
                 expiresAt: string;
             };
         };
+        CreateMemoResponse: {
+            memo: components["schemas"]["MemoInfo"];
+            upload: {
+                url: string;
+                /** @enum {string} */
+                method: "PUT";
+                headers: {
+                    [key: string]: string;
+                };
+                expiresAt: string;
+            };
+        };
         CreateMergeRequestResponse: {
             mergeRequest: components["schemas"]["MergeRequestInfo"];
         };
@@ -13322,6 +13430,70 @@ export interface components {
         MemberCapability: "api-test-suites.generate" | "api-test-suites.run";
         /** @enum {string} */
         MembershipSource: "manual" | "jit" | "group" | "scim";
+        MemoDetailResponse: {
+            memo: components["schemas"]["MemoInfo"];
+            transcript: components["schemas"]["MemoSegment"][];
+            summary: string | null;
+            proposals: components["schemas"]["MemoProposal"][];
+            dropped: components["schemas"]["MemoDropped"][];
+        };
+        /** @enum {string} */
+        MemoDropReason: "unknown-segment" | "unknown-page" | "too-short" | "duplicate" | "over-limit";
+        MemoDropped: {
+            title: string;
+            reason: components["schemas"]["MemoDropReason"];
+        };
+        MemoInfo: {
+            memoId: string;
+            workspaceId: string;
+            projectId: string;
+            title: string;
+            filename: string;
+            contentType: string;
+            sizeBytes: number;
+            durationSeconds: number | null;
+            language: string | null;
+            status: components["schemas"]["MemoStatus"];
+            stage: string | null;
+            error: string | null;
+            audioAvailable: boolean;
+            createdAt: string;
+            updatedAt: string;
+        };
+        MemoListResponse: {
+            memos: components["schemas"]["MemoInfo"][];
+            transcription: components["schemas"]["MemoTranscriptionState"];
+            limits: {
+                maxBytes: number;
+                maxMinutes: number;
+            };
+        };
+        MemoProposal: {
+            /** @enum {string} */
+            action: "create" | "update";
+            title: string;
+            detail: string;
+            documentId: string | null;
+            documentTitle: string | null;
+            segments: number[];
+            mergeRequestId: string | null;
+        };
+        MemoResponse: {
+            memo: components["schemas"]["MemoInfo"];
+        };
+        MemoSegment: {
+            i: number;
+            start: number;
+            end: number;
+            text: string;
+        };
+        /** @enum {string} */
+        MemoStatus: "pending" | "uploaded" | "transcribing" | "transcribed" | "analysing" | "done" | "failed";
+        MemoTranscriptionState: {
+            enabled: boolean;
+            /** @enum {string|null} */
+            missing: "TRANSCRIPTION_PROVIDER" | "TRANSCRIPTION_BASE_URL" | "TRANSCRIPTION_API_KEY" | null;
+        };
         MergeMergeRequestResponse: {
             mergeRequest: components["schemas"]["MergeRequestInfo"];
             mergedRevision: components["schemas"]["RevisionInfo"] | null;
@@ -29953,6 +30125,259 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SubmitImportResponse"];
                 };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                projectId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoListResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMemoDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateMemoResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_finalize: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_retry: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoDetailResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {

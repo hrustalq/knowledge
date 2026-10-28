@@ -705,6 +705,28 @@ export const envSchema = z.object({
   IMPORT_OCR_MAX_PAGES: z.coerce.number().int().positive().default(20),
 
   /**
+   * Memos (#551, docs/features/68): speech-to-text over any OpenAI-compatible
+   * `/audio/transcriptions` endpoint — hosted Whisper, whisper.cpp, speaches.
+   * Env only, the operator's URL, so it is fetched plainly (as EMBEDDING_* is)
+   * rather than through safe-url.ts. `none`, or an empty base URL, turns memos
+   * off: /memos says which variable to set and reserve refuses. `gen-api`
+   * (#584) calls gen-api's `gen-stt` at a fixed URL and needs only the key;
+   * TRANSCRIPTION_BASE_URL and TRANSCRIPTION_MODEL are then unread.
+   */
+  TRANSCRIPTION_PROVIDER: z.enum(['none', 'openai-compatible', 'gen-api']).default('none'),
+  TRANSCRIPTION_BASE_URL: z.string().optional().default(''),
+  TRANSCRIPTION_MODEL: z.string().min(1).default('whisper-1'),
+  TRANSCRIPTION_API_KEY: z.string().optional().default(''),
+  /** Upload ceiling, enforced at reserve and again from the bucket's HEAD. */
+  MEMO_MAX_BYTES: z.coerce.number().int().positive().default(209_715_200),
+  /** Length ceiling: the browser's claim at reserve, ffprobe's in the worker. */
+  MEMO_MAX_MINUTES: z.coerce.number().int().positive().default(120),
+  /** Proposals kept from one memo; each is a merge request somebody reviews. */
+  MEMO_MAX_PROPOSALS: z.coerce.number().int().min(0).default(3),
+  /** Days a memo's audio is kept; the transcript stays. 0 keeps audio until the memo is deleted. */
+  MEMO_AUDIO_RETENTION_DAYS: z.coerce.number().int().min(0).default(30),
+
+  /**
    * Connectors (docs/features/19). Allow connector base URLs and git remotes on
    * private/loopback ranges — an on-prem Confluence or a self-hosted GitLab is a
    * legitimate target, but the default refuses them because a URL typed into a

@@ -169,6 +169,7 @@
     "exports": "Exports",
     "chatBots": "Chat bots",
     "captures": "Captures",
+    "memos": "Memos",
     "newApiSpec": "API spec",
     "newTestFixture": "Test fixture",
     "apiReference": "API reference",
@@ -2598,7 +2599,8 @@
       "community": "Community summary",
       "harvest": "Chat harvest",
       "coach": "Learner coach",
-      "citation_check": "Citation check"
+      "citation_check": "Citation check",
+      "transcription": "Memo transcription"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",
@@ -4476,7 +4478,9 @@
       "access.expired": "Your access request expired",
       "access.granted": "gave you access",
       "work-item.closed": "closed the tracker ticket for this",
-      "connector.harvest.proposed": "a resolved item you closed was harvested into captures for review"
+      "connector.harvest.proposed": "a resolved item you closed was harvested into captures for review",
+      "memo.done": "your memo was read and its proposals opened for review",
+      "memo.failed": "your memo could not be analysed"
     }
   },
   "connect": {
@@ -7179,5 +7183,77 @@
     "reload": "Reload",
     "offline": "You’re offline",
     "offlineDescription": "Pages already open stay readable. Anything that needs the server will fail until the connection returns."
+  },
+  "memos": {
+    "title": "Memos",
+    "subtitle": "Recordings you uploaded, transcribed and read against the knowledge base. Only you can see them.",
+    "disabled": {
+      "title": "Transcription is off on this server",
+      "body": "Memos need a speech-to-text endpoint. An operator sets {variable} in the server's environment; until then no recording can be uploaded."
+    },
+    "empty": "No memos yet. Upload a meeting recording, and what it changes arrives here as merge requests for review.",
+    "noProject": "Pick a project first — a memo's proposals are filed in it.",
+    "upload": {
+      "cta": "Upload recording",
+      "drop": "or drop it here",
+      "hint": "mp3, m4a, wav, ogg or webm · up to {size} and {minutes} min",
+      "reading": "Checking {name}…",
+      "uploading": "Uploading {name}",
+      "cancel": "Cancel",
+      "tooLong": "{name} is {minutes} min long; the limit is {limit} min.",
+      "tooLarge": "{name} is {size}; the limit is {limit}.",
+      "unsupported": "{name} is not a recording memos take: use mp3, m4a, wav, ogg or webm."
+    },
+    "status": {
+      "pending": "Uploading",
+      "uploaded": "Queued",
+      "transcribing": "Transcribing",
+      "transcribed": "Transcribed",
+      "analysing": "Reading",
+      "done": "Done",
+      "failed": "Failed"
+    },
+    "detail": {
+      "back": "All memos",
+      "private": "Only you can see this memo.",
+      "transcript": "Transcript",
+      "summary": "Summary",
+      "proposals": "Proposals",
+      "dropped": "Dropped",
+      "noProposals": "Nothing in this recording changes the knowledge base, so no merge request was opened.",
+      "audioGone": "The recording was removed; the transcript is kept.",
+      "seek": "Play from {time}",
+      "cites": "Rests on",
+      "create": "New page",
+      "update": "Update",
+      "openMr": "Merge request",
+      "notOpened": "Not opened",
+      "language": "Detected language: {language}",
+      "failed": "This memo failed while {stage}.",
+      "stage": {
+        "transcribing": "transcribing",
+        "analysing": "reading the transcript",
+        "publishing": "opening merge requests"
+      },
+      "inFlight": {
+        "pending": "The recording is still uploading.",
+        "uploaded": "Waiting for a worker to transcribe it.",
+        "transcribing": "Transcribing the recording. This takes a fraction of its length.",
+        "transcribed": "Transcribed. Reading it against the knowledge base next.",
+        "analysing": "Reading the transcript against the knowledge base."
+      },
+      "noTranscript": "The transcript appears here once the recording is transcribed.",
+      "dropReason": {
+        "unknown-segment": "cited a moment the recording does not have",
+        "unknown-page": "would change a page it never read, or one you cannot open",
+        "too-short": "was too short to be a page",
+        "duplicate": "repeated a change to the same page",
+        "over-limit": "went past the limit of proposals per memo"
+      },
+      "retry": "Retry",
+      "delete": "Delete",
+      "deleteTitle": "Delete this memo?",
+      "deleteBody": "The recording and its transcript are deleted for good. Merge requests it opened stay open for review."
+    }
   }
 }

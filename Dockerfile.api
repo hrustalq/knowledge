@@ -116,6 +116,14 @@ COPY --chown=node:node apps/api/prisma/ ./apps/api/prisma/
 
 COPY --from=builder --chown=node:node /app/apps/api/dist ./apps/api/dist
 
+# ffmpeg/ffprobe: the memo worker normalises and chunks recordings (#551,
+# docs/features/68). Runtime only; the -version calls fail the build, not the
+# first memo, if the binaries ever go missing.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/* \
+ && ffmpeg -version >/dev/null && ffprobe -version >/dev/null
+
 RUN mkdir -p /app/logs && chown node:node /app/logs
 
 USER node

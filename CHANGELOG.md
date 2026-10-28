@@ -13,6 +13,61 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.38.0] — 2026-10-28
+
+### Added
+
+- **Memos** (#551): `POST /v1/memos` reserves an audio recording (mp3, m4a, wav, ogg, webm)
+  in a project and hands back a presigned upload, `POST /v1/memos/:id/finalize` confirms it, and
+  `GET /v1/memos`, `GET /v1/memos/:id` and `GET /v1/memos/:id/audio` read it back. A memo is visible
+  only to the person who uploaded it; anyone else gets a 404. Reserving is refused, with the variable
+  to set, until a speech-to-text endpoint is configured. Once uploaded, the worker transcribes the
+  recording through that endpoint in ten-minute pieces and stores one transcript with timestamps, in the
+  language spoken, with emails, phone numbers, card and identity numbers and credentials masked before
+  it is written. Each transcription is a `transcription` row on the AI usage page, with the audio's
+  length. The new **Secretary** agent then reads the transcript against the knowledge base, searching as
+  the uploader, and proposes at most `MEMO_MAX_PROPOSALS` pages to create or update. Each opens as an
+  ordinary merge request in the uploader's name, linking back to the moments of the recording it rests on
+  (by time only, never the memo's title or words). A new page stays out of the tree and search until it
+  merges. A proposal citing a moment the recording does not have, or rewriting a page the agent never
+  read or the uploader cannot open, is dropped and listed as dropped. The uploader gets one notification
+  when the proposals are open; a memo that settles nothing ends with none.
+- **Memos** in the sidebar (#551): upload a recording (pick or drop it; an over-long or oversized file
+  is refused before it uploads), then follow it from Transcribing to Done. A memo's page shows the
+  transcript beside a player, the summary, each proposal with its merge request, and the proposals that
+  were dropped and why. Clicking a line plays from it, and a proposal's timestamps play the moments it
+  rests on and mark them in the transcript; the links in its merge request open the same place. When the
+  server has no speech endpoint, the page says which setting to add instead of offering an upload.
+- A failed memo can be **retried** from the step it failed in (`POST /v1/memos/:id/retry`), and any memo
+  **deleted** (`DELETE /v1/memos/:id`) with its audio and transcript; merge requests it opened stay. Audio
+  is purged after `MEMO_AUDIO_RETENTION_DAYS`; the transcript and proposals are kept and the page says the
+  recording was removed. Agents can read their own memos over MCP with `knowledge_list_memos` and
+  `knowledge_get_memo` (the transcript comes wrapped as untrusted data).
+- Memos can be transcribed by **gen-api** (#584): `TRANSCRIPTION_PROVIDER=gen-api` with
+  `TRANSCRIPTION_API_KEY` sends each piece of a recording to gen-api's `gen-stt` (0.45 ₽ a minute, built for
+  Russian) without a base URL. `gen-stt` returns text without timestamps, so for gen-api a recording is cut
+  at pauses into pieces of at most a minute, and a proposal's timestamps still point at the right minute.
+  The Memos page names `TRANSCRIPTION_API_KEY` when the key is missing.
+
+### Fixed
+
+- Merge request pages load again (#576). Since v0.30.1 opening one failed in the browser with
+  `ReferenceError: Cannot access '…' before initialization`.
+
+### Operations
+
+- Migration `20261219100000_memos` adds the `memos` table and a nullable `ai_usage.audio_seconds`
+  column. Both survive a rollback; the previous image never reads them.
+- New env, all defaulted and off: `TRANSCRIPTION_PROVIDER` (`none`), `TRANSCRIPTION_BASE_URL`,
+  `TRANSCRIPTION_MODEL` (`whisper-1`), `TRANSCRIPTION_API_KEY`, `MEMO_MAX_BYTES` (200 MB),
+  `MEMO_MAX_MINUTES` (120), `MEMO_MAX_PROPOSALS` (3), `MEMO_AUDIO_RETENTION_DAYS` (30; 0 keeps audio). See
+  docs/features/68.
+- The `api` image now carries `ffmpeg`/`ffprobe` (Debian package). The memo worker shells out to them.
+- To turn memos on, set `TRANSCRIPTION_PROVIDER=openai-compatible` and `TRANSCRIPTION_BASE_URL` (plus
+  `TRANSCRIPTION_API_KEY` for a hosted server) in the GitHub `production` environment before tagging.
+  Left unset, memos stay off and the page says so. Or set `TRANSCRIPTION_PROVIDER=gen-api` and
+  `TRANSCRIPTION_API_KEY` (a gen-api key) alone (#584).
+
 ## [0.37.0] — 2026-10-27
 
 ### Added
@@ -5157,7 +5212,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.37.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.38.0...HEAD
+[0.38.0]: https://github.com/hrustalq/knowledge/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/hrustalq/knowledge/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/hrustalq/knowledge/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/hrustalq/knowledge/compare/v0.34.0...v0.35.0

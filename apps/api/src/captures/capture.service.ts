@@ -55,7 +55,7 @@ import { ActivityService } from '../activity/activity.service.js';
 import { composeFrontmatter } from '../common/frontmatter.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
 import { t } from '../i18n/t.js';
-import { findSecret } from './secret-scan.js';
+import { findSecret } from '../common/secret-scan.js';
 import {
   captureContentHash,
   cleanCaptureTitle,

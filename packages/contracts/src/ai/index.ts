@@ -1210,7 +1210,14 @@ export type AiUsageOperation =
   /** The `tester` filling one operation's QA test suite (#468). One row per Generate; a cached suite costs none. */
   | 'test-suite'
   /** The `tester` ranking one operation's fixture candidates (#483). One row per Ask tester on a new candidate set. */
-  | 'test-fixture-ranking';
+  | 'test-fixture-ranking'
+  /**
+   * Transcribing one memo's recording (#551). One row per memo, billed to its
+   * uploader; tokens are zero and `audioSeconds` carries the length.
+   */
+  | 'transcription'
+  /** The `secretary` reading one memo's transcript and proposing pages (#551). */
+  | 'memo';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {
@@ -1371,6 +1378,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'scribe',
   /** Fills one API operation's QA test suite (#468). Started only by Generate on the operation card. */
   'tester',
+  /** Proposes the pages a memo's transcript changes, as merge requests (#551). Started only by the memo worker. */
+  'secretary',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -1434,6 +1443,8 @@ export interface AgentRunInput {
   apiTestSuite?: { documentId: string; entityKey: string; revisionId: string };
   /** The operation whose fixture candidates a `tester` run ranks (#483), and the candidate set it was asked about. */
   apiFixtureRanking?: { documentId: string; entityKey: string; candidatesHash: string };
+  /** The memo a `secretary` run reads (#551). Set only by the memo worker once the transcript is written. */
+  memo?: { memoId: string };
   /**
    * How far back a surveyor run reads answer feedback (docs/features/38,
    * phase 4). Absent, the worker uses `COVERAGE_WINDOW_DAYS`.
@@ -2517,6 +2528,12 @@ export interface AgentFinding {
    * conflict row as it finds it; the finding is the run's view of the same thing.
    */
   conflictId?: string;
+  /**
+   * A memo proposal (#551): what it asked for — kept here because publishing a
+   * create writes the new page into `documentIds` — and the transcript
+   * segments (`MemoSegment.i`) it rests on, checked before it was kept.
+   */
+  memo?: { action: 'create' | 'update'; segments: number[] };
   /** The proposed learning written with the dismissal ("Remember why"), if any. */
   learningId?: string | null;
   /**

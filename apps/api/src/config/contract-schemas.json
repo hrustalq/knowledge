@@ -438,6 +438,28 @@
       "conflictId": {
         "type": "string"
       },
+      "memo": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "create",
+              "update"
+            ]
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "action",
+          "segments"
+        ]
+      },
       "learningId": {
         "type": "string",
         "nullable": true
@@ -1182,6 +1204,17 @@
           "documentId",
           "entityKey",
           "candidatesHash"
+        ]
+      },
+      "memo": {
+        "type": "object",
+        "properties": {
+          "memoId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memoId"
         ]
       },
       "coverage": {
@@ -2593,7 +2626,9 @@
       "extraction",
       "public_ask",
       "test-suite",
-      "test-fixture-ranking"
+      "test-fixture-ranking",
+      "transcription",
+      "memo"
     ]
   },
   "AiUsageResponse": {
@@ -9247,6 +9282,47 @@
       "upload"
     ]
   },
+  "CreateMemoResponse": {
+    "type": "object",
+    "properties": {
+      "memo": {
+        "$ref": "#/components/schemas/MemoInfo"
+      },
+      "upload": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "PUT"
+            ]
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "method",
+          "headers",
+          "expiresAt"
+        ]
+      }
+    },
+    "required": [
+      "memo",
+      "upload"
+    ]
+  },
   "CreateMergeRequestResponse": {
     "type": "object",
     "properties": {
@@ -15495,6 +15571,286 @@
       "jit",
       "group",
       "scim"
+    ]
+  },
+  "MemoDetailResponse": {
+    "type": "object",
+    "properties": {
+      "memo": {
+        "$ref": "#/components/schemas/MemoInfo"
+      },
+      "transcript": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoSegment"
+        }
+      },
+      "summary": {
+        "type": "string",
+        "nullable": true
+      },
+      "proposals": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoProposal"
+        }
+      },
+      "dropped": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoDropped"
+        }
+      }
+    },
+    "required": [
+      "memo",
+      "transcript",
+      "summary",
+      "proposals",
+      "dropped"
+    ]
+  },
+  "MemoDropReason": {
+    "type": "string",
+    "enum": [
+      "unknown-segment",
+      "unknown-page",
+      "too-short",
+      "duplicate",
+      "over-limit"
+    ]
+  },
+  "MemoDropped": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string"
+      },
+      "reason": {
+        "$ref": "#/components/schemas/MemoDropReason"
+      }
+    },
+    "required": [
+      "title",
+      "reason"
+    ]
+  },
+  "MemoInfo": {
+    "type": "object",
+    "properties": {
+      "memoId": {
+        "type": "string"
+      },
+      "workspaceId": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "filename": {
+        "type": "string"
+      },
+      "contentType": {
+        "type": "string"
+      },
+      "sizeBytes": {
+        "type": "number"
+      },
+      "durationSeconds": {
+        "type": "number",
+        "nullable": true
+      },
+      "language": {
+        "type": "string",
+        "nullable": true
+      },
+      "status": {
+        "$ref": "#/components/schemas/MemoStatus"
+      },
+      "stage": {
+        "type": "string",
+        "nullable": true
+      },
+      "error": {
+        "type": "string",
+        "nullable": true
+      },
+      "audioAvailable": {
+        "type": "boolean"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "memoId",
+      "workspaceId",
+      "projectId",
+      "title",
+      "filename",
+      "contentType",
+      "sizeBytes",
+      "durationSeconds",
+      "language",
+      "status",
+      "stage",
+      "error",
+      "audioAvailable",
+      "createdAt",
+      "updatedAt"
+    ]
+  },
+  "MemoListResponse": {
+    "type": "object",
+    "properties": {
+      "memos": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoInfo"
+        }
+      },
+      "transcription": {
+        "$ref": "#/components/schemas/MemoTranscriptionState"
+      },
+      "limits": {
+        "type": "object",
+        "properties": {
+          "maxBytes": {
+            "type": "number"
+          },
+          "maxMinutes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "maxBytes",
+          "maxMinutes"
+        ]
+      }
+    },
+    "required": [
+      "memos",
+      "transcription",
+      "limits"
+    ]
+  },
+  "MemoProposal": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "create",
+          "update"
+        ]
+      },
+      "title": {
+        "type": "string"
+      },
+      "detail": {
+        "type": "string"
+      },
+      "documentId": {
+        "type": "string",
+        "nullable": true
+      },
+      "documentTitle": {
+        "type": "string",
+        "nullable": true
+      },
+      "segments": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        }
+      },
+      "mergeRequestId": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "action",
+      "title",
+      "detail",
+      "documentId",
+      "documentTitle",
+      "segments",
+      "mergeRequestId"
+    ]
+  },
+  "MemoResponse": {
+    "type": "object",
+    "properties": {
+      "memo": {
+        "$ref": "#/components/schemas/MemoInfo"
+      }
+    },
+    "required": [
+      "memo"
+    ]
+  },
+  "MemoSegment": {
+    "type": "object",
+    "properties": {
+      "i": {
+        "type": "number"
+      },
+      "start": {
+        "type": "number"
+      },
+      "end": {
+        "type": "number"
+      },
+      "text": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "i",
+      "start",
+      "end",
+      "text"
+    ]
+  },
+  "MemoStatus": {
+    "type": "string",
+    "enum": [
+      "pending",
+      "uploaded",
+      "transcribing",
+      "transcribed",
+      "analysing",
+      "done",
+      "failed"
+    ]
+  },
+  "MemoTranscriptionState": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean"
+      },
+      "missing": {
+        "type": "string",
+        "enum": [
+          "TRANSCRIPTION_PROVIDER",
+          "TRANSCRIPTION_BASE_URL",
+          "TRANSCRIPTION_API_KEY",
+          null
+        ],
+        "nullable": true
+      }
+    },
+    "required": [
+      "enabled",
+      "missing"
     ]
   },
   "MergeMergeRequestResponse": {

@@ -1694,6 +1694,9 @@ model AiUsage {
   error         String?
   threadId      String? @map("thread_id") @db.Uuid
   toolCallCount Int     @default(0) @map("tool_call_count")
+  /// Seconds of audio a `transcription` row transcribed (#551); null on every
+  /// other operation, which bills by tokens.
+  audioSeconds  Int?    @map("audio_seconds")
   /// The agent run this call was made for (#305), from the run context; null
   /// for a call outside a background run. No FK: usage outlives its run.
   agentKey      String? @map("agent_key")
@@ -4304,4 +4307,53 @@ model EmbedNodeHead {
 
   @@unique([workspaceId, provider, fileKey, nodeId])
   @@map("embed_node_heads")
+}
+
+/// A recording uploaded for transcription (#551, docs/features/68). A row of
+/// its own, never a document: not indexed, not searchable, and read only by
+/// its uploader (`created_by`; platform admins bypass) and its own analysis
+/// run. No FK on workspace_id / created_by, house policy.
+model Memo {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  projectId   String  @map("project_id") @db.Uuid
+  createdBy   String  @map("created_by") @db.Uuid
+  title       String
+  filename    String
+  contentType String  @map("content_type")
+  sizeBytes   Int     @default(0) @map("size_bytes")
+  /// `workspaces/{ws}/memos/{id}/source.<ext>`; kept after a purge so the
+  /// delete path never has to guess it.
+  audioKey      String    @map("audio_key")
+  /// Set when the retention sweeper (or a delete) removed the audio; the
+  /// transcript stays.
+  audioPurgedAt DateTime? @map("audio_purged_at") @db.Timestamptz
+  /// The browser's claim until the worker's ffprobe replaces it.
+  durationSeconds Int?    @map("duration_seconds")
+  /// The language the speech server detected first; never a translation target.
+  language        String?
+
+  /// MemoStatus: pending → uploaded → transcribing → transcribed → analysing → done | failed.
+  status String  @default("pending")
+  /// The step a failed memo failed in — what Retry resumes from.
+  stage  String?
+  error  String?
+
+  /// MemoSegment[] — masked before it is written. Never selected by the list.
+  transcript   Json?
+  summary      String?
+  /// MemoDropped[] — proposals the analysis made and the code refused, with why.
+  dropped      Json?
+  agentRunId   String?   @map("agent_run_id") @db.Uuid
+  /// Claimed by MemoPublishSweeper before it opens anything, so it publishes once.
+  publishedAt  DateTime? @map("published_at") @db.Timestamptz
+  /// The uploader's language, frozen for the worker and the sweeper.
+  locale       String    @default("en")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([workspaceId, createdBy, createdAt])
+  @@index([status])
+  @@map("memos")
 }

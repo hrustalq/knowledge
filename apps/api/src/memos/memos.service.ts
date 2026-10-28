@@ -13,8 +13,10 @@ import type { Memo } from '@prisma/client';
 import {
   MEMO_FORMATS,
   memoExtensionFor,
+  type AgentFinding,
   type CreateMemoResponse,
   type MemoDetailResponse,
+  type MemoDropped,
   type MemoInfo,
   type MemoListResponse,
   type MemoSegment,
@@ -191,10 +193,26 @@ export class MemosService {
 
   async get(principal: Principal, memoId: string): Promise<MemoDetailResponse> {
     const row = await this.require(principal, memoId);
+    // The kept proposals are the run's findings — the one copy the publisher
+    // writes merge request ids into.
+    const run = row.agentRunId
+      ? await this.prisma.agentRun.findFirst({ where: { id: row.agentRunId, workspaceId: row.workspaceId }, select: { findings: true } })
+      : null;
+    const findings = Array.isArray(run?.findings) ? (run.findings as unknown as AgentFinding[]) : [];
     return {
       memo: toInfo(row),
       transcript: Array.isArray(row.transcript) ? (row.transcript as unknown as MemoSegment[]) : [],
       summary: row.summary,
+      proposals: findings.map((f) => ({
+        action: f.memo?.action ?? (f.documentIds[0] ? 'update' : 'create'),
+        title: f.title,
+        detail: f.detail,
+        documentId: f.documentIds[0] ?? null,
+        documentTitle: f.documentTitles[0] ?? null,
+        segments: f.memo?.segments ?? [],
+        mergeRequestId: f.mergeRequestId ?? null,
+      })),
+      dropped: Array.isArray(row.dropped) ? (row.dropped as unknown as MemoDropped[]) : [],
     };
   }
 

@@ -276,6 +276,8 @@
   "scribeDesc": "Drafts the pages a tracker ticket asks for and opens each as a merge request, with a comment on the ticket linking them. Started by a trigger on a labelled ticket.",
   "tester": "Tester",
   "testerDesc": "Writes the QA test requests for one API operation — positive and negative cases derived from the spec — with realistic values. Started by Generate test requests on the operation, for members allowed to generate.",
+  "secretary": "Secretary",
+  "secretaryDesc": "Reads a memo's transcript against the knowledge base and proposes the pages it changes, each as a merge request citing the moments it rests on. Started when a memo you uploaded is transcribed.",
   "testerRun": {
     "noOperation": "The tester was started without an operation; only Generate test requests on an operation can start it.",
     "summary": "Wrote {count} test cases for {method} {path}.",
@@ -291,6 +293,12 @@
     "summary": "Proposed {count} of at most {max} pages for {key}.",
     "ticketComment": "The knowledge base drafted this for review:",
     "ticketCommentEnd": "Each is a merge request; nothing is published until a person merges it."
+  },
+  "memoRun": {
+    "noMemo": "The secretary was started without a memo; only a transcribed memo starts it.",
+    "noModel": "No model is configured for the secretary, so the memo was transcribed but not read.",
+    "summary": "Proposed {count} of at most {max} changes.",
+    "sourceLabel": "Memo · {time}"
   },
   "charting": {
     "disabled": "Community summaries are off on this server (COMMUNITY_SUMMARIES_ENABLED).",

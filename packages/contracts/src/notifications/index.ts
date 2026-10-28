@@ -160,6 +160,9 @@ const NOTIFIED_JOB_TYPES: readonly string[] = [
   'chat.harvest.proposed',
   // The same, for an item you resolved in a tracker or help desk (#382).
   'connector.harvest.proposed',
+  // Your memo was read and its proposals opened, or it failed (#551).
+  'memo.done',
+  'memo.failed',
 ];
 
 /**

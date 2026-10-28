@@ -9943,6 +9943,11 @@ export interface components {
             dismissedAt?: string | null;
             dismissedBy?: string | null;
             conflictId?: string;
+            memo?: {
+                /** @enum {string} */
+                action: "create" | "update";
+                segments: number[];
+            };
             learningId?: string | null;
             issueId?: string;
             relations?: components["schemas"]["RelationInput"][];
@@ -10119,6 +10124,9 @@ export interface components {
                 documentId: string;
                 entityKey: string;
                 candidatesHash: string;
+            };
+            memo?: {
+                memoId: string;
             };
             coverage?: {
                 windowDays: number;
@@ -10440,7 +10448,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -13408,6 +13416,14 @@ export interface components {
             memo: components["schemas"]["MemoInfo"];
             transcript: components["schemas"]["MemoSegment"][];
             summary: string | null;
+            proposals: components["schemas"]["MemoProposal"][];
+            dropped: components["schemas"]["MemoDropped"][];
+        };
+        /** @enum {string} */
+        MemoDropReason: "unknown-segment" | "unknown-page" | "too-short" | "duplicate" | "over-limit";
+        MemoDropped: {
+            title: string;
+            reason: components["schemas"]["MemoDropReason"];
         };
         MemoInfo: {
             memoId: string;
@@ -13433,6 +13449,16 @@ export interface components {
                 maxBytes: number;
                 maxMinutes: number;
             };
+        };
+        MemoProposal: {
+            /** @enum {string} */
+            action: "create" | "update";
+            title: string;
+            detail: string;
+            documentId: string | null;
+            documentTitle: string | null;
+            segments: number[];
+            mergeRequestId: string | null;
         };
         MemoResponse: {
             memo: components["schemas"]["MemoInfo"];

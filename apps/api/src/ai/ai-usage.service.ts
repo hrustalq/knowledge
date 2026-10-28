@@ -112,6 +112,39 @@ export class AiUsageService {
     }
   }
 
+  /**
+   * A memo's transcription (#551): env-configured, so there is no resolved
+   * config to read a provider from, and billed by audio length, not tokens.
+   * Fire-and-forget like `record`.
+   */
+  async recordTranscription(input: {
+    workspaceId: string;
+    userId: string;
+    model: string;
+    audioSeconds: number;
+    durationMs: number;
+    ok: boolean;
+    error?: string;
+  }): Promise<void> {
+    try {
+      await this.prisma.aiUsage.create({
+        data: {
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          operation: 'transcription',
+          provider: 'openai-compatible',
+          model: input.model,
+          audioSeconds: input.audioSeconds,
+          durationMs: input.durationMs,
+          ok: input.ok,
+          error: input.error?.slice(0, 500) ?? null,
+        },
+      });
+    } catch (e) {
+      this.logger.warn(`AI usage record failed (non-fatal): ${(e as Error).message}`);
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Budgets
   // -------------------------------------------------------------------------

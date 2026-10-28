@@ -1,4 +1,4 @@
-import { SECRET_PATTERNS } from '../captures/secret-scan.js';
+import { SECRET_PATTERNS } from '../common/secret-scan.js';
 
 /**
  * What a harvest (#82) masks before any model reads a chat thread: emails,

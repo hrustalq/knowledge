@@ -1210,7 +1210,12 @@ export type AiUsageOperation =
   /** The `tester` filling one operation's QA test suite (#468). One row per Generate; a cached suite costs none. */
   | 'test-suite'
   /** The `tester` ranking one operation's fixture candidates (#483). One row per Ask tester on a new candidate set. */
-  | 'test-fixture-ranking';
+  | 'test-fixture-ranking'
+  /**
+   * Transcribing one memo's recording (#551). One row per memo, billed to its
+   * uploader; tokens are zero and `audioSeconds` carries the length.
+   */
+  | 'transcription';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {

@@ -864,6 +864,9 @@ export type I18nTranslations = {
             "uploadMissing": string;
             "alreadyUploaded": string;
             "audioGone": string;
+            "transcriptionFailed": string;
+            "speechServerDown": string;
+            "speechServerRefused": string;
         };
         "ingestionJob": {
             "notFound": string;

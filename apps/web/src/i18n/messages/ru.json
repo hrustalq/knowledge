@@ -2598,7 +2598,8 @@
       "community": "Сводка сообщества",
       "harvest": "Сбор из чата",
       "coach": "Наставник (обучение)",
-      "citation_check": "Проверка цитат"
+      "citation_check": "Проверка цитат",
+      "transcription": "Расшифровка записи"
     },
     "anyOutcome": "Любой",
     "failedOnly": "Только ошибки",

@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NotFoundException, PayloadTooLargeException, ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, NotFoundException, PayloadTooLargeException, ServiceUnavailableException } from '@nestjs/common';
 import { memoExtensionFor } from '@knowledge/contracts';
 import { MemosService, transcriptionState } from '../src/memos/memos.service.js';
 import type { Principal } from '../src/auth/principal.js';
 import { stitchTranscript } from '../src/memos/transcript.js';
+import { MemoRetentionSweeper } from '../src/memos/memo-retention.sweeper.js';
 
 /**
  * Memos (#551): what is pinned here is the door — which files are taken, that
@@ -121,3 +122,68 @@ describe('stitchTranscript', () => {
     ]);
   });
 });
+
+describe('MemoRetentionSweeper', () => {
+  function sweeper(days: number) {
+    const purged: string[] = []
+    const prisma = {
+      memo: {
+        findMany: vi.fn(async ({ where }: { where: { status: unknown } }) =>
+          where.status === 'pending' ? [{ id: 'p1', audioKey: 'k/p1' }] : [{ id: 'd1', audioKey: 'k/d1' }],
+        ),
+        update: vi.fn(async () => ({})),
+        deleteMany: vi.fn(async () => ({ count: 1 })),
+      },
+    }
+    const storage = { purgeObjectVersions: vi.fn(async (key: string) => void purged.push(key)) }
+    const config = { get: () => days }
+    return { prisma, purged, run: new MemoRetentionSweeper(prisma as never, storage as never, config as never) }
+  }
+
+  it('purges every version of settled audio past retention, keeps the transcript, and drops stale reservations', async () => {
+    const { prisma, purged, run } = sweeper(30)
+    const now = new Date('2026-12-01T00:00:00Z')
+    await run.sweep(now)
+    const settled = prisma.memo.findMany.mock.calls[0]![0] as { where: Record<string, unknown> }
+    expect(settled.where).toMatchObject({ audioPurgedAt: null, status: { in: ['done', 'failed'] } })
+    expect(purged).toEqual(['k/d1', 'k/p1'])
+    expect(prisma.memo.update).toHaveBeenCalledWith({ where: { id: 'd1' }, data: { audioPurgedAt: now } })
+    expect(prisma.memo.deleteMany).toHaveBeenCalledWith({ where: { id: 'p1', status: 'pending' } })
+  })
+
+  it('keeps audio forever at 0 days, but still clears abandoned reservations', async () => {
+    const { prisma, purged, run } = sweeper(0)
+    await run.sweep()
+    expect(prisma.memo.update).not.toHaveBeenCalled()
+    expect(purged).toEqual(['k/p1'])
+  })
+})
+
+describe('MemosService.retry', () => {
+  function service(row: Record<string, unknown>, claimed = 1) {
+    const prisma = {
+      memo: { findFirst: vi.fn(async () => row), updateMany: vi.fn(async () => ({ count: claimed })) },
+    }
+    const producer = { enqueue: vi.fn(async () => undefined) }
+    const config = { get: (k: string) => ({ MEMO_MAX_BYTES: 1, MEMO_MAX_MINUTES: 1, TRANSCRIPTION_PROVIDER: 'openai-compatible', TRANSCRIPTION_BASE_URL: 'http://stt' })[k] }
+    return { prisma, producer, memos: new MemosService(prisma as never, {} as never, {} as never, {} as never, producer as never, config as never) }
+  }
+  const base = { id: 'm1', status: 'failed', createdBy: 'u1', audioPurgedAt: null, createdAt: new Date(), updatedAt: new Date() }
+
+  it('re-reads a memo that has its transcript, and re-transcribes one that has none', async () => {
+    const withTranscript = service({ ...base, transcript: [{ i: 0, start: 0, end: 1, text: 'x' }] })
+    await withTranscript.memos.retry({ userId: 'u1', isAdmin: false } as Principal, 'm1')
+    expect(withTranscript.prisma.memo.updateMany.mock.calls[0]![0]).toMatchObject({ where: { status: 'failed' }, data: { status: 'transcribed' } })
+    expect(withTranscript.producer.enqueue).toHaveBeenCalledWith('m1')
+
+    const bare = service({ ...base, transcript: null })
+    await bare.memos.retry({ userId: 'u1', isAdmin: false } as Principal, 'm1')
+    expect(bare.prisma.memo.updateMany.mock.calls[0]![0]).toMatchObject({ data: { status: 'uploaded' } })
+  })
+
+  it('refuses a memo that is not failed, and queues nothing', async () => {
+    const { memos, producer } = service({ ...base, status: 'done', transcript: null }, 0)
+    await expect(memos.retry({ userId: 'u1', isAdmin: false } as Principal, 'm1')).rejects.toBeInstanceOf(ConflictException)
+    expect(producer.enqueue).not.toHaveBeenCalled()
+  })
+})

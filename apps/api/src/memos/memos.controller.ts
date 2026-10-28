@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Redirect } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Redirect } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { CreateMemoResponse, MemoDetailResponse, MemoListResponse, MemoResponse } from '@knowledge/contracts';
 import { Access, CookieTokenOk, CurrentPrincipal } from '../auth/access.decorator.js';
@@ -40,6 +40,21 @@ export class MemosController {
   @ApiOperation({ summary: 'Confirm the recording landed and queue its transcription' })
   async finalize(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<MemoResponse> {
     return { memo: await this.memos.finalize(principal, id) };
+  }
+
+  @Post(':id/retry')
+  @Returns('MemoResponse')
+  @Access('editor', 'memo')
+  @ApiOperation({ summary: 'Resume a failed memo from the step it failed in' })
+  async retry(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<MemoResponse> {
+    return { memo: await this.memos.retry(principal, id) };
+  }
+
+  @Delete(':id')
+  @Access('editor', 'memo')
+  @ApiOperation({ summary: 'Delete a memo: its audio and transcript; merge requests it opened stay' })
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<{ deleted: true }> {
+    return this.memos.remove(principal, id);
   }
 
   @Get(':id')

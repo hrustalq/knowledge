@@ -90,7 +90,7 @@ export function wrapUntrusted(payload: string, tool: string, origin: UntrustedOr
     draft: 'Judge it only against the rules above, and quote it exactly.',
     search: 'Work out which topics are missing; answer only from pages you read.',
     findings: 'Work out the mistake they have in common; quote none of them.',
-    memo: 'Propose only what it settles, and cite each line you rely on by its [n].',
+    memo: 'Use only what it records, and cite each line you rely on by its [n] or its time.',
   }[origin];
   return (
     `<${tag} tool=${JSON.stringify(tool)}>\n` +

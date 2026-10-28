@@ -22,6 +22,7 @@ import { VerificationCoreModule } from '../verification/verification-core.module
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { PublishingCoreModule } from '../publishing/publishing-core.module.js';
 import { ExportCoreModule } from '../export/export-core.module.js';
+import { MemosCoreModule } from '../memos/memos-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { CapturesCoreModule } from '../captures/captures-core.module.js';
 import { ComponentsCoreModule } from '../components/components-core.module.js';
@@ -91,6 +92,8 @@ import { McpService } from './mcp.service.js';
     // knowledge_export / knowledge_get_export (docs/features/45). Controller-free;
     // queues the job, which the worker builds.
     ExportCoreModule,
+    // knowledge_list_memos / knowledge_get_memo (#551). Controller-free, read-only, uploader-only.
+    MemosCoreModule,
     // knowledge_list_agent_learnings / knowledge_propose_agent_learning (#70). Controller-free.
     AiCoreModule,
     // The agent-memory tools (issue #73). Controller-free; API-side, as it opens merge requests.

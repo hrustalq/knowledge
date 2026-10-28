@@ -721,6 +721,8 @@ export const envSchema = z.object({
   MEMO_MAX_MINUTES: z.coerce.number().int().positive().default(120),
   /** Proposals kept from one memo; each is a merge request somebody reviews. */
   MEMO_MAX_PROPOSALS: z.coerce.number().int().min(0).default(3),
+  /** Days a memo's audio is kept; the transcript stays. 0 keeps audio until the memo is deleted. */
+  MEMO_AUDIO_RETENTION_DAYS: z.coerce.number().int().min(0).default(30),
 
   /**
    * Connectors (docs/features/19). Allow connector base URLs and git remotes on

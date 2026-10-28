@@ -36,6 +36,19 @@ export interface MemoSegment {
   text: string;
 }
 
+/**
+ * A moment in a recording as people read it: `12:03`, or `1:02:03` past the
+ * hour. One spelling for the merge request links the API writes and the
+ * timestamps the memo page shows.
+ */
+export function memoClock(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const hh = Math.floor(s / 3600);
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(hh ? 2 : 1, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  return hh ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
 /** Whether this deployment can transcribe, and the variable to set when it cannot. */
 export interface MemoTranscriptionState {
   enabled: boolean;

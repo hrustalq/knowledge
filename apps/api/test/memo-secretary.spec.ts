@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MemoSegment } from '@knowledge/contracts';
-import { clock, memoCitedIds, memoPrompt, readMemoProposals, type MemoProposalContext } from '../src/agents/memo.js';
+import { memoClock as clock } from '@knowledge/contracts';
+import { memoCitedIds, memoPrompt, readMemoProposals, type MemoProposalContext } from '../src/agents/memo.js';
 
 /**
  * The secretary (#551): what is pinned here is what a confident model answer

@@ -2835,8 +2835,12 @@ ${page.markdown}`, files);
 
     const max = this.config.get('MEMO_MAX_PROPOSALS', { infer: true });
     const blocking = agent.missing.filter((capability) => capability !== 'tools');
-    if (!agent.config.enabled || blocking.length > 0 || segments.length === 0 || max === 0) {
-      const summary = segments.length === 0 ? null : t('agent.memoRun.noModel');
+    const unavailable = !agent.config.enabled || blocking.length > 0;
+    if (unavailable || segments.length === 0 || max === 0) {
+      // Silence has nothing to summarise; a missing model says so; proposals
+      // switched off (MEMO_MAX_PROPOSALS=0) is zero of zero, not an error.
+      const summary =
+        segments.length === 0 ? null : unavailable ? t('agent.memoRun.noModel') : t('agent.memoRun.summary', { count: 0, max });
       await this.prisma.memo.update({ where: { id: memo.id }, data: { summary, dropped: [] } });
       return { summary: summary ?? t('agent.memoRun.summary', { count: 0, max }), findings: [] };
     }

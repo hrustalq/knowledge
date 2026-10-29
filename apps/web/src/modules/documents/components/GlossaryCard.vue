@@ -18,8 +18,8 @@ import { useI18n } from 'vue-i18n'
 import { ArrowRight } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import type { GlossaryTerm } from '@knowledge/contracts'
-import MarkdownView from './MarkdownView.vue'
-import { glossaryHref } from '@/modules/documents/model/glossary'
+import { MarkdownView } from '@/entities/document'
+import { glossaryHref } from '@/entities/document'
 
 const props = defineProps<{
   term: GlossaryTerm

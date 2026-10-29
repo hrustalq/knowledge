@@ -12,7 +12,7 @@ import type { AiSkillSummary, CompareResponse, ListAiSkillsResponse } from '@kno
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { lineDiff } from '@/core/line-diff'
-import DiffView from '@/modules/documents/components/DiffView.vue'
+import { DiffView } from '@/entities/document'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'

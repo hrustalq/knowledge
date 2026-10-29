@@ -21,7 +21,7 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 import { PageState } from '@/shared/layout'
-import MarkdownView from '@/modules/documents/components/MarkdownView.vue'
+import { MarkdownView } from '@/entities/document'
 import VerificationBar from '@/modules/documents/components/VerificationBar.vue'
 
 const props = defineProps<{ row: KnowledgeHealthRow | null }>()

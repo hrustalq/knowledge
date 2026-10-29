@@ -27,7 +27,7 @@ import type { AssistantFlowAnswer, AssistantMessageInfo } from '@knowledge/contr
 import type { LiveTurn } from '@/modules/assistant/model/assistant.store'
 import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
-import MarkdownView from '@/modules/documents/components/MarkdownView.vue'
+import { MarkdownView } from '@/entities/document'
 import GenerativeUiBlock from '@/modules/documents/components/GenerativeUiBlock.vue'
 import ChatMessage from './ChatMessage.vue'
 import { decorateCitations } from '@/modules/assistant/model/citations'

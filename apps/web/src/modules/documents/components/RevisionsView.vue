@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from '@/shared/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
-import DiffView from '@/modules/documents/components/DiffView.vue'
+import { DiffView } from '@/entities/document'
 import { UserChip } from '@/entities/person'
 import ApiChangesPanel from '@/modules/api-reference/components/ApiChangesPanel.vue'
 

@@ -64,7 +64,7 @@ import type {
   RenderTemplateResponse,
 } from '@knowledge/contracts'
 import { useTemplatesStore } from '@/entities/template'
-import type { PageRefResolver } from '@/modules/documents/model/page-refs'
+import type { PageRefResolver } from '@/entities/document'
 import { fromWatch } from '@/shared/composables/rx-vue'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/core/markdown/nodes'
 import { Layout, LayoutColumn, Expand, Panel, TableOfContents } from './extensions/blocks'

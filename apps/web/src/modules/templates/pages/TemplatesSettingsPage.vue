@@ -54,7 +54,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog'
-import MarkdownView from '@/modules/documents/components/MarkdownView.vue'
+import { MarkdownView } from '@/entities/document'
 import TemplateEditor from '@/modules/templates/components/TemplateEditor.vue'
 import TemplateHistory from '@/modules/templates/components/TemplateHistory.vue'
 import { PageTabs, panelId, tabId, type PageTab } from '@/shared/layout'

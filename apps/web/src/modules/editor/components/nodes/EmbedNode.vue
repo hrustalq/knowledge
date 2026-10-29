@@ -13,7 +13,7 @@ import { getWorkspaceId, resolveAssetUrl } from '@/shared/api/api'
 import { api } from '@/shared/api/client'
 import { toast } from 'vue-sonner'
 import { errorMessage } from '@/shared/api/errors'
-import { embedTile, figmaLiveUrl } from '@/modules/editor/model/embeds'
+import { embedTile, figmaLiveUrl } from '@/entities/document'
 import { useEmbedStatus } from '../../model/use-embed-status'
 
 const { t } = useI18n()

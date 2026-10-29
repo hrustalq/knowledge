@@ -33,7 +33,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useGlossaryStore } from '@/modules/documents/model/glossary.store'
-import { MAX_LINKS_PER_TERM, buildMatcher } from '@/modules/documents/model/glossary'
+import { MAX_LINKS_PER_TERM, buildMatcher } from '@/entities/document'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
@@ -57,7 +57,7 @@ import {
 } from '@/shared/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import RichEditor from '@/modules/editor/components/RichEditor.vue'
-import MarkdownView from '@/modules/documents/components/MarkdownView.vue'
+import { MarkdownView } from '@/entities/document'
 
 const { t } = useI18n()
 

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import type { DocumentTreeNode, DocumentTreeResponse } from '@knowledge/contracts'
 import { apiQueryOptions, bindStoreQuery } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
-import { buildPageRefResolver, type PageRef, type PageRefResolver } from '@/modules/documents/model/page-refs'
+import { buildPageRefResolver, type PageRef, type PageRefResolver } from '@/entities/document/model/page-refs'
 
 /**
  * Every page title in the workspace, for resolving references written as a

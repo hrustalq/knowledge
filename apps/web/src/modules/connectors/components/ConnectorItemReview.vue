@@ -35,7 +35,7 @@ import type { CompareResponse, ConnectorRunItemInfo } from '@knowledge/contracts
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
 import { Collapse } from '@/shared/ui/collapse'
-import DiffView from '@/modules/documents/components/DiffView.vue'
+import { DiffView } from '@/entities/document'
 import RichEditor from '@/modules/editor/components/RichEditor.vue'
 import { useDocumentsStore } from '@/stores/documents'
 import { lineDiff } from '@/core/line-diff'

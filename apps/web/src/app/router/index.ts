@@ -10,6 +10,7 @@ import type { Pinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import { AI_PANEL_SECTIONS, DEFAULT_AI_SECTION, isAiSection } from '@/modules/assistant/model/ai-sections'
 import { reauthKindOf } from '@/modules/auth/model/sso'
+import * as help from '@/modules/help'
 
 export function createRouter() {
   return createVueRouter({
@@ -266,15 +267,7 @@ export function createRouter() {
           // /403 for following their own bookmark is worse than landing them on
           // the members list.
           { path: 'users', redirect: '/settings/access?tab=accounts' },
-          // Docs: the product manual, bundled with the build it describes.
-          // Same shell-plus-roster shape as projects — the rail lives here, the
-          // article in the child, so switching articles replaces one pane.
-          // Open to everyone: documentation nobody may read documents nothing.
-          {
-            path: 'docs',
-            component: () => import('@/modules/help/pages/DocsPage.vue'),
-            children: [{ path: ':slug?', component: () => import('@/modules/help/pages/DocsArticlePage.vue') }],
-          },
+          ...help.settingsRoutes,
         ],
       },
       // A project as something you read (docs/features/24) — the counterpart to
@@ -288,7 +281,7 @@ export function createRouter() {
       { path: '/activity', redirect: '/settings/activity' },
       { path: '/access', redirect: '/settings/access' },
       { path: '/admin/users', redirect: '/settings/access?tab=accounts' },
-      { path: '/docs', redirect: '/settings/docs' },
+      ...help.routes,
     ],
   })
 }

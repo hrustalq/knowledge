@@ -17,7 +17,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next'
-import MarkdownView from '@/modules/documents/components/MarkdownView.vue'
+import { MarkdownView } from '@/entities/document'
 import { Button } from '@/shared/ui/button'
 import { PageState } from '@/shared/layout'
 import { operationRowKey, serversOf } from '@/modules/api-reference/model/api-spec'

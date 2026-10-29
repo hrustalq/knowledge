@@ -28,7 +28,7 @@ import { useTemplatesStore } from '@/entities/template'
 import { useMembers } from '@/entities/person'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import DiffView from '@/modules/documents/components/DiffView.vue'
+import { DiffView } from '@/entities/document'
 
 const props = defineProps<{ template: TemplateSummary }>()
 

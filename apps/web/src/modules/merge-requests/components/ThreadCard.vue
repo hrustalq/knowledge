@@ -49,7 +49,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog'
-import MarkdownView from '@/modules/documents/components/MarkdownView.vue'
+import { MarkdownView } from '@/entities/document'
 import { excerpt } from '@/core/markdown/plain'
 import CommentComposer from './CommentComposer.vue'
 import { UserChip } from '@/entities/person'

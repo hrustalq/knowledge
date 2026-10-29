@@ -18,14 +18,7 @@ import { Decoration, Extension } from '@tiptap/core'
 import type { GlossaryExclusion, GlossaryTerm } from '@knowledge/contracts'
 import { findAnchor } from '@/core/anchor-match'
 import { projectDoc } from './comment-anchors'
-import {
-  GLOSSARY_AT_ATTR,
-  GLOSSARY_ATTR,
-  buildMatcher,
-  glossaryHref,
-  linkCap,
-  spellingMatches,
-} from '@/modules/documents/model/glossary'
+import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR, buildMatcher, glossaryHref, linkCap, spellingMatches } from '@/entities/document'
 
 /**
  * Nodes whose text is not prose, or is already doing another job.

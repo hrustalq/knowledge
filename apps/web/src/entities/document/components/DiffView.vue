@@ -6,7 +6,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import type { CompareResponse, MergeRequestThread, MergeRequestThreadAnchor } from '@knowledge/contracts'
-import { matchAnchoredThreads } from '@/modules/merge-requests/model/thread-anchors'
+import { matchAnchoredThreads } from '@/entities/document/model/thread-anchors'
 
 const { t } = useI18n()
 

@@ -51,7 +51,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/dialog'
-import MarkdownView from '@/modules/documents/components/MarkdownView.vue'
+import { MarkdownView } from '@/entities/document'
 import TemplatePlaceholderForm from './TemplatePlaceholderForm.vue'
 
 const { t, locale } = useI18n()

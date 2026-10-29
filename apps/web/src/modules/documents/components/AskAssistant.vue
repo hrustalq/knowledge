@@ -26,7 +26,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { nativeEl } from '@/shared/utils/cn'
-import MarkdownView from '@/modules/documents/components/MarkdownView.vue'
+import { MarkdownView } from '@/entities/document'
 import AnswerFeedback from '@/modules/assistant/components/AnswerFeedback.vue'
 
 const { t } = useI18n()

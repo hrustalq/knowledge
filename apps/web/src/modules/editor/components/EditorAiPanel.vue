@@ -15,13 +15,13 @@
 import { useI18n } from 'vue-i18n'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { History, PanelRightClose, Sparkles, SquarePen } from 'lucide-vue-next'
-import { useAssistantStore } from '@/modules/assistant/model/assistant.store'
+import { useAssistantStore } from '@/entities/assistant'
 import { Button } from '@/shared/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip'
-import ChatPane from '@/modules/assistant/components/ChatPane.vue'
-import ChatRail from '@/modules/assistant/components/ChatRail.vue'
-import ThreadDialogs from '@/modules/assistant/components/ThreadDialogs.vue'
-import { threadLabel } from '@/modules/assistant/model/thread-label'
+import { ChatPane } from '@/entities/assistant'
+import { ChatRail } from '@/entities/assistant'
+import { ThreadDialogs } from '@/entities/assistant'
+import { threadLabel } from '@/entities/assistant'
 
 const { t } = useI18n()
 

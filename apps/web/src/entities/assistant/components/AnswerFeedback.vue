@@ -19,8 +19,8 @@ import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { getWorkspaceId } from '@/shared/api/api'
-import { useFeedbackStore } from '@/modules/assistant/model/feedback.store'
-import { hasDraftBridge } from '@/modules/assistant/model/assistant.store'
+import { useFeedbackStore } from '@/entities/assistant/model/feedback.store'
+import { hasDraftBridge } from '@/entities/assistant/model/assistant.store'
 import {
   canSend,
   reportKindFor,
@@ -29,7 +29,7 @@ import {
   voteSurface,
   type FeedbackTarget,
   type VoteDraft,
-} from '@/modules/assistant/model/answer-feedback'
+} from '@/entities/assistant/model/answer-feedback'
 
 const props = defineProps<{
   target: FeedbackTarget

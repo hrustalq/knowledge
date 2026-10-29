@@ -57,7 +57,7 @@ import { useMembers } from '@/entities/person'
 import { useAgentNames } from '@/entities/person'
 import { fullTime, timelineTime } from '../model/mr-ui'
 import { useAuthStore } from '@/stores/auth'
-import TeachAgentDialog from '@/modules/assistant/components/TeachAgentDialog.vue'
+import { TeachAgentDialog } from '@/entities/assistant'
 
 const { t } = useI18n()
 

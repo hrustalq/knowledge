@@ -511,7 +511,7 @@ through these steps:
 
 **The reader** (`SiteAsk.vue`) is the same panel in both places: the reader's
 sheet and the widget's frame. It loads the markdown parser, DOMPurify and the
-citation pass (`modules/assistant/model/citations.ts`, shared with the app's assistant, as are the
+citation pass (`entities/assistant/model/citations.ts`, shared with the app's assistant, as are the
 chip styles in `assets/styles/citations.css`) only on the first answer. A chip or a
 source opens the page at the passage's heading. In the reader it asks with
 the reader's cookie, so a signed-in reader's answers may draw on pages others

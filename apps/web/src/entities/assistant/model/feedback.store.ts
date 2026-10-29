@@ -9,7 +9,7 @@ import type {
   ReportKnowledgeIssueResponse,
 } from '@knowledge/contracts'
 import { api } from '@/shared/api/queries'
-import { issueReportBody, optimisticVote, voteBody, type FeedbackTarget, type VoteDraft } from '@/modules/assistant/model/answer-feedback'
+import { issueReportBody, optimisticVote, voteBody, type FeedbackTarget, type VoteDraft } from '@/entities/assistant/model/answer-feedback'
 
 /**
  * The caller's votes on answers (docs/features/38, phase 2).

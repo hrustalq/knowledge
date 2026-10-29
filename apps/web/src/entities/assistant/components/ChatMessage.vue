@@ -17,7 +17,7 @@ import type { AssistantFlowAnswer, AssistantMessageInfo, AssistantUiBlock, Captu
 import { assistantSourceHref, assistantSourceKey, isChatSource, isPageSource, isWebSource } from '@knowledge/contracts'
 import { Button } from '@/shared/ui/button'
 import { MarkdownView } from '@/entities/document'
-import GenerativeUiBlock from '@/modules/documents/components/GenerativeUiBlock.vue'
+import GenerativeUiBlock from '@/entities/assistant/components/GenerativeUiBlock.vue'
 import AssistantPrompt from './AssistantPrompt.vue'
 import AnswerConfidence from './AnswerConfidence.vue'
 import AnswerFeedback from './AnswerFeedback.vue'
@@ -31,10 +31,10 @@ import {
   sourceByCite,
   sourceHref,
   unsupportedMarkers,
-} from '@/modules/assistant/model/citations'
+} from '@/entities/assistant/model/citations'
 import { api } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
-import { answerText, type AnswerTurn, type FlowStep } from '@/modules/assistant/model/flow-steps'
+import { answerText, type AnswerTurn, type FlowStep } from '@/entities/assistant/model/flow-steps'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()

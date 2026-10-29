@@ -27,8 +27,9 @@ import type {
 import { assistantSourceKey } from '@knowledge/contracts'
 import { api, fetchApi } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { streamAssistantTurn } from '@/modules/assistant/model/assistant-stream'
-import { useFeedbackStore } from '@/modules/assistant/model/feedback.store'
+import { streamAssistantTurn } from '@/entities/assistant/model/assistant-stream'
+import { useFeedbackStore } from '@/entities/assistant/model/feedback.store'
+import { onKnowledgeEvent } from '@/stores/events'
 
 /**
  * The editor's side of a turn (docs/features/34): what the page says right now,
@@ -576,4 +577,10 @@ export const useAssistantStore = defineStore('assistant', {
       }
     },
   },
+})
+
+// Reconciles a chat this tab stopped watching (Stop, or a dropped connection)
+// and mirrors turns taken in another tab.
+onKnowledgeEvent((event) => {
+  if (event.type === 'assistant.turn.finished' && event.subjectId) useAssistantStore().onTurnFinished(event.subjectId)
 })

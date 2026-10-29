@@ -33,9 +33,9 @@ import { assistantSourceHref, isChatSource, isPageSource, isWebSource } from '@k
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/shared/ui/hover-card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { UserAvatar } from '@/entities/person'
-import { displayPath, siteColor, siteInitial } from '@/modules/assistant/model/web-source'
+import { displayPath, siteColor, siteInitial } from '@/entities/assistant/model/web-source'
 import { formatDateTime, formatRelative } from '@/shared/utils/format'
-import { citeNumber, sourceHref, verificationTone } from '@/modules/assistant/model/citations'
+import { citeNumber, sourceHref, verificationTone } from '@/entities/assistant/model/citations'
 
 const props = defineProps<{
   source: AssistantSource

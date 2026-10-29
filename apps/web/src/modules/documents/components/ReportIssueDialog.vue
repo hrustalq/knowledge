@@ -31,7 +31,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
 import { useAuthStore } from '@/stores/auth'
-import { useFeedbackStore } from '@/modules/assistant/model/feedback.store'
+import { useFeedbackStore } from '@/entities/assistant'
 
 const props = defineProps<{
   documentId: string

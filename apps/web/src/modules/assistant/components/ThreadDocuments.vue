@@ -16,8 +16,8 @@ import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { isChatSource, isPageSource, isWebSource } from '@knowledge/contracts'
 import { assistantSourceKey } from '@knowledge/contracts'
-import { useAssistantStore } from '@/modules/assistant/model/assistant.store'
-import SourceChip from './SourceChip.vue'
+import { useAssistantStore } from '@/entities/assistant'
+import { SourceChip } from '@/entities/assistant'
 
 const { t } = useI18n()
 

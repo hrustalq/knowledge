@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
-import { useAssistantStore } from '@/modules/assistant/model/assistant.store'
+import { useAssistantStore } from '@/entities/assistant/model/assistant.store'
 
 const { t } = useI18n()
 

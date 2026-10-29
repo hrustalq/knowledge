@@ -22,6 +22,7 @@ import {
 } from '@knowledge/contracts/publishing'
 import { isApiErrorPayload } from '@knowledge/contracts'
 import { Button } from '@/shared/ui/button'
+import { loadCitations } from '@/entities/assistant'
 import '@/assets/styles/citations.css'
 
 const props = defineProps<{
@@ -58,7 +59,7 @@ function hrefOf(source: PublicSiteAskSource): string {
 async function render(res: PublicSiteAskResponse) {
   const [{ markdownToHtml, SANITIZE_CONFIG }, cites, { default: DOMPurify }] = await Promise.all([
     import('@/core/markdown/render'),
-    import('@/modules/assistant/model/citations'),
+    loadCitations(),
     import('dompurify'),
   ])
   anchorOf = (path) => cites.headingAnchor(path)

@@ -38,7 +38,7 @@ import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { PageTabs, panelId, tabId, type PageTab } from '@/shared/layout'
 import { AiEmptyState } from '@/shared/ui/empty-state'
-import TeachAgentDialog from './TeachAgentDialog.vue'
+import { TeachAgentDialog } from '@/entities/assistant'
 
 defineProps<{ canManage: boolean }>()
 const { t } = useI18n()

@@ -140,7 +140,7 @@ import CollabPresence from '@/modules/editor/components/CollabPresence.vue'
 import { DiffView } from '@/entities/document'
 import EditorAiPanel from '@/modules/editor/components/EditorAiPanel.vue'
 import { PageAccessDialog } from '@/entities/access'
-import { connectDraft } from '@/modules/assistant/model/assistant.store'
+import { connectDraft } from '@/entities/assistant'
 import { useSidebarStore } from '@/stores/sidebar'
 
 const { t } = useI18n()

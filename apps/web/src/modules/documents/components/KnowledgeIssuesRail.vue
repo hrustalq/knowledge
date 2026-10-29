@@ -25,7 +25,7 @@ import { labelFor } from '@/shared/i18n/labels'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { useAuthStore } from '@/stores/auth'
-import { useFeedbackStore } from '@/modules/assistant/model/feedback.store'
+import { useFeedbackStore } from '@/entities/assistant'
 import ReportIssueDialog from './ReportIssueDialog.vue'
 import WorkItemChips from './WorkItemChips.vue'
 

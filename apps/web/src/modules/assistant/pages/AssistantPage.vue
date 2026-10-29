@@ -15,13 +15,13 @@
 import { useI18n } from 'vue-i18n'
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { useAssistantStore } from '@/modules/assistant/model/assistant.store'
+import { useAssistantStore } from '@/entities/assistant'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 import { PageLayout } from '@/shared/layout'
-import ChatRail from '@/modules/assistant/components/ChatRail.vue'
-import ChatPane from '@/modules/assistant/components/ChatPane.vue'
+import { ChatRail } from '@/entities/assistant'
+import { ChatPane } from '@/entities/assistant'
 import ThreadDocuments from '@/modules/assistant/components/ThreadDocuments.vue'
-import ThreadDialogs from '@/modules/assistant/components/ThreadDialogs.vue'
+import { ThreadDialogs } from '@/entities/assistant'
 
 const { t } = useI18n()
 

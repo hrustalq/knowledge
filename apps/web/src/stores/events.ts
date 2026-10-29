@@ -1,14 +1,14 @@
 // Feature 04 (docs/features/04): one EventSource per session; invalidates
 // stores and toasts on revision lifecycle events. A module that reacts to an
-// event of its own watches `lastEvent` (NotificationBell does), so this store
-// never imports a module (docs/architecture/11).
+// event of its own watches `lastEvent` (NotificationBell does), and a store
+// outside stores/ subscribes with onKnowledgeEvent, so this store never imports
+// a module or an entity (docs/architecture/11).
 import { defineStore } from 'pinia'
 import { toast } from 'vue-sonner'
 import type { ComposerTranslation } from 'vue-i18n'
 import type { KnowledgeEvent } from '@knowledge/contracts'
 import { api, isApiRequestError } from '@/shared/api/queries'
 import { getToken, getWorkspaceId } from '@/shared/api/api'
-import { useAssistantStore } from '@/modules/assistant/model/assistant.store'
 import { useDocumentsStore } from '@/stores/documents'
 
 /** Reconnect backoff after the stream drops: 1 s, doubling, capped at 30 s. */
@@ -26,6 +26,15 @@ export async function eventsStreamUrl(workspaceId: string): Promise<string> {
   if (!getToken()) return url
   const { ticket } = await api.post('/v1/auth/url-ticket')
   return `${url}&token=${encodeURIComponent(ticket)}`
+}
+
+/**
+ * Stores outside stores/ that react to an event: each subscribes once at
+ * module load, the way registerProjectScoped works for a project switch.
+ */
+const listeners = new Set<(event: KnowledgeEvent) => void>()
+export function onKnowledgeEvent(listener: (event: KnowledgeEvent) => void): void {
+  listeners.add(listener)
 }
 
 let source: EventSource | null = null
@@ -77,6 +86,7 @@ export const useEventsStore = defineStore('events', {
         if (event.type === 'ping') return
         this.lastEvent = event
         this.revision++
+        for (const listener of listeners) listener(event)
         const documents = useDocumentsStore()
         if (event.type === 'revision.indexed') {
           void documents.invalidate()
@@ -89,10 +99,6 @@ export const useEventsStore = defineStore('events', {
           // A restriction or grant moved (#76): the tree and lists may now
           // show more or less. Pages watching `lastEvent` re-read themselves.
           void documents.invalidate()
-        } else if (event.type === 'assistant.turn.finished' && event.subjectId) {
-          // Reconciles a chat this tab stopped watching (Stop, or a dropped
-          // connection) and mirrors turns taken in another tab.
-          useAssistantStore().onTurnFinished(event.subjectId)
         } else if (event.type.startsWith('document.') || event.type.startsWith('merge-request.')) {
           void documents.invalidate()
         }

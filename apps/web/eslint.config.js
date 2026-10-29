@@ -118,4 +118,17 @@ export default [
     files: ['src/lib/format.ts'],
     rules: { 'no-restricted-syntax': 'off' },
   },
+  {
+    // core/ is plain TypeScript (#566, docs/architecture/11): the import half
+    // of that is `core-is-pure` in .dependency-cruiser.cjs, the DOM half is here.
+    files: ['src/core/**/*.ts'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        ...['window', 'document', 'navigator', 'location', 'localStorage', 'sessionStorage', 'matchMedia', 'requestAnimationFrame'].map(
+          (name) => ({ name, message: 'core/ runs without a DOM — take the value as an argument, or move this to shared/.' }),
+        ),
+      ],
+    },
+  },
 ]

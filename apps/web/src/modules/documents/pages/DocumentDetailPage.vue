@@ -105,7 +105,7 @@ import { useApiReference } from '@/modules/api-reference/model/use-api-reference
 import MergeRequestList from '@/modules/merge-requests/components/MergeRequestList.vue'
 import GraphLightbox from '@/modules/documents/components/GraphLightbox.vue'
 import ActivityFeed from '@/modules/documents/components/ActivityFeed.vue'
-import WorkflowRail from '@/modules/workflows/components/WorkflowRail.vue'
+import { WorkflowRail } from '@/entities/workflow'
 import ConnectorRail from '@/modules/connectors/components/ConnectorRail.vue'
 import ConflictsRail from '@/modules/documents/components/ConflictsRail.vue'
 import KnowledgeIssuesRail from '@/modules/documents/components/KnowledgeIssuesRail.vue'

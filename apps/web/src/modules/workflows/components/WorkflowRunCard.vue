@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import { FileText } from 'lucide-vue-next'
 import type { WorkflowRunInfo } from '@knowledge/contracts'
 import { relativeTime } from '@/shared/api/api'
-import { isBusyStatus, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from '../model/workflow-ui'
+import { isBusyStatus, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from '@/entities/workflow'
 
 const { t } = useI18n()
 

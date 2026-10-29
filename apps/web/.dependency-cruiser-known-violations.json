@@ -851,23 +851,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/app/shell/AppBreadcrumbs.vue",
-    "to": "src/modules/workflows/model/workflows.store.ts",
-    "unresolvedTo": "@/modules/workflows/model/workflows.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/app/shell/AppShell.vue",
     "to": "src/modules/documents/components/SearchSheet.vue",
     "unresolvedTo": "@/modules/documents/components/SearchSheet.vue",
@@ -922,23 +905,6 @@
     "from": "src/app/shell/breadcrumbs.ts",
     "to": "src/modules/assistant/model/ai-sections.ts",
     "unresolvedTo": "@/modules/assistant/model/ai-sections",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/shell/breadcrumbs.ts",
-    "to": "src/modules/workflows/model/workflows.store.ts",
-    "unresolvedTo": "@/modules/workflows/model/workflows.store",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -2221,23 +2187,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/workflows/components/WorkflowRail.vue",
-    "unresolvedTo": "@/modules/workflows/components/WorkflowRail.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/documents/pages/GlossaryPage.vue",
     "to": "src/modules/editor/components/RichEditor.vue",
     "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
@@ -3272,23 +3221,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/workflows/components/WorkflowMap.vue",
-    "to": "src/modules/documents/model/graph-theme.ts",
-    "unresolvedTo": "@/modules/documents/model/graph-theme",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/workflows/components/WorkflowNodePanel.vue",
     "to": "src/modules/api-reference/components/ApiOperationRef.vue",
     "unresolvedTo": "@/modules/api-reference/components/ApiOperationRef.vue",
@@ -3343,23 +3275,6 @@
     "from": "src/stores/projects.ts",
     "to": "src/modules/documents/model/glossary.store.ts",
     "unresolvedTo": "@/modules/documents/model/glossary.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "stores-import-only-shared"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/stores/projects.ts",
-    "to": "src/modules/workflows/model/workflows.store.ts",
-    "unresolvedTo": "@/modules/workflows/model/workflows.store",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",

@@ -17,7 +17,7 @@ import { Input } from '@/shared/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
 import { useTemplatesStore } from '@/entities/template'
-import { STEP_KINDS, stepKind } from '../model/workflow-ui'
+import { STEP_KINDS, stepKind } from '@/entities/workflow'
 
 const { t } = useI18n()
 

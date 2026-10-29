@@ -17,7 +17,7 @@ import { Handle, Position } from '@vue-flow/core'
 import { Layers, TriangleAlert } from 'lucide-vue-next'
 import type { WorkflowStep } from '@knowledge/contracts'
 import { labelFor } from '@/shared/i18n/labels'
-import { stepKind } from '../model/workflow-ui'
+import { stepKind } from '@/entities/workflow'
 
 const props = defineProps<{
   data: { step: WorkflowStep; invalid: boolean; connectable: boolean }

@@ -26,10 +26,10 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vu
 import { useI18n } from 'vue-i18n'
 import { useResizeObserver } from '@vueuse/core'
 import type { WorkflowGraph, WorkflowNodeStatus, WorkflowStep } from '@knowledge/contracts'
-import { readPalette, rgba, type GraphPalette, type Rgb } from '@/modules/documents/model/graph-theme'
+import { readPalette, rgba, type GraphPalette, type Rgb } from '@/entities/graph'
 import { labelFor } from '@/shared/i18n/labels'
 import { edgeCurve, layoutWorkflow, type WorkflowLayout } from '../model/workflow-layout'
-import { stepKind } from '../model/workflow-ui'
+import { stepKind } from '@/entities/workflow'
 
 const props = withDefaults(
   defineProps<{

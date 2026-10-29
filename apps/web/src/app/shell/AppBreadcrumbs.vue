@@ -14,7 +14,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { ChevronRight, Lock } from 'lucide-vue-next'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
-import { useWorkflowsStore } from '@/modules/workflows/model/workflows.store'
+import { useWorkflowsStore } from '@/entities/workflow'
 import type { Crumb } from './breadcrumbs'
 
 defineProps<{ crumbs: Crumb[] }>()

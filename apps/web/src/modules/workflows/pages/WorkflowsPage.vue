@@ -10,7 +10,7 @@ import { apiQueryOptions, fetchApi, useApiMutation } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
-import { useWorkflowsStore } from '@/modules/workflows/model/workflows.store'
+import { useWorkflowsStore } from '@/entities/workflow'
 import {
   FilterBar,
   filterRows,

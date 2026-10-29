@@ -14,7 +14,7 @@
  */
 import { useI18n } from 'vue-i18n'
 import type { WorkflowStepKind } from '@knowledge/contracts'
-import { STEP_KINDS } from '../model/workflow-ui'
+import { STEP_KINDS } from '@/entities/workflow'
 
 withDefaults(
   defineProps<{

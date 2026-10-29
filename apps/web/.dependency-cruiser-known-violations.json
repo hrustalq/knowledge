@@ -648,40 +648,6 @@
   {
     "type": "dependency",
     "from": "src/app/router/index.ts",
-    "to": "src/modules/help/pages/DocsArticlePage.vue",
-    "unresolvedTo": "@/modules/help/pages/DocsArticlePage.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/router/index.ts",
-    "to": "src/modules/help/pages/DocsPage.vue",
-    "unresolvedTo": "@/modules/help/pages/DocsPage.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/router/index.ts",
     "to": "src/modules/insights/pages/AnalyticsPage.vue",
     "unresolvedTo": "@/modules/insights/pages/AnalyticsPage.vue",
     "dependencyTypes": [

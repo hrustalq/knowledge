@@ -16,7 +16,7 @@
 import { inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, Repeat2 } from 'lucide-vue-next'
-import type { SchemaCount, SchemaNode } from '@/modules/api-reference/model/api-spec'
+import type { SchemaCount, SchemaNode } from '@/entities/api-operation/model/api-spec'
 import { Collapse } from '@/shared/ui/collapse'
 import { SCHEMA_TREE } from '../model/schema-tree'
 

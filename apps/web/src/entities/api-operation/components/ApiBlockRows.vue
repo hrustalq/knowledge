@@ -2,14 +2,14 @@
 /**
  * A hand-written API block section, read (#78): the author's table drawn in
  * the same key → value grammar as the spec's live rows, with every column's
- * meaning labelled in the reader's language (`modules/api-reference/model/api-block-rows.ts`). The
+ * meaning labelled in the reader's language (`entities/api-operation/model/api-block-rows.ts`). The
  * cell values are the author's and are never translated; only what the
  * interface says about them is.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { locationOf, requiredValue, type ApiBlockRow, type ApiSectionKind } from '@/modules/api-reference/model/api-block-rows'
-import { statusTone } from '@/modules/api-reference/model/api-spec'
+import { locationOf, requiredValue, type ApiBlockRow, type ApiSectionKind } from '@/entities/api-operation/model/api-block-rows'
+import { statusTone } from '@/entities/api-operation/model/api-spec'
 import ApiTone from './ApiTone.vue'
 
 const props = defineProps<{ kind: ApiSectionKind; rows: ApiBlockRow[] }>()

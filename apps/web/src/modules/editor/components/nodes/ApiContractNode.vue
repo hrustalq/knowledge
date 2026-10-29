@@ -16,11 +16,11 @@ import { ArrowUpRight, Check, Copy, Route, Unlink } from 'lucide-vue-next'
 import { HTTP_METHODS, isHttpMethod, type HttpMethod } from '@/core/markdown/nodes'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useCopy } from '@/shared/composables/use-copy'
-import { pathSegments } from '@/modules/api-reference/model/api-spec'
+import { pathSegments } from '@/entities/api-operation'
 import { writtenText } from './api-block-text'
-import ApiOperationPicker, { type PickedOperation } from '@/modules/api-reference/components/ApiOperationPicker.vue'
-import ApiOperationEmbed from '@/modules/api-reference/components/ApiOperationEmbed.vue'
-import { operationHref, useOperation } from '@/modules/api-reference/model/use-operation'
+import { ApiOperationPicker, type PickedOperation } from '@/entities/api-operation'
+import { ApiOperationEmbed } from '@/entities/api-operation'
+import { operationHref, useOperation } from '@/entities/api-operation'
 
 const { t } = useI18n()
 const props = defineProps(nodeViewProps)

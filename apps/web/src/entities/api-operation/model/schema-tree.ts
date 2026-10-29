@@ -1,5 +1,5 @@
 import type { InjectionKey } from 'vue'
-import type { SchemaNode } from '@/modules/api-reference/model/api-spec'
+import type { SchemaNode } from '@/entities/api-operation/model/api-spec'
 
 /** What ApiSchema shares with every level of its ApiSchemaTree: open rows by path, and children (a recursion's once loaded). */
 export interface SchemaTreeState {

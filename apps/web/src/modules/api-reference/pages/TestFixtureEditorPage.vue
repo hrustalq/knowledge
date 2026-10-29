@@ -38,10 +38,10 @@ import { Label } from '@/shared/ui/label'
 import { Textarea } from '@/shared/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { PageLayout, PageState } from '@/shared/layout'
-import ApiTabs from '@/modules/api-reference/components/ApiTabs.vue'
+import { ApiTabs } from '@/entities/api-operation'
 import FixtureRows from '@/modules/api-reference/components/FixtureRows.vue'
 import FixtureStepCard from '@/modules/api-reference/components/FixtureStepCard.vue'
-import type { PickedOperation } from '@/modules/api-reference/components/ApiOperationPicker.vue'
+import type { PickedOperation } from '@/entities/api-operation'
 import {
   BodyError,
   emptyCall,

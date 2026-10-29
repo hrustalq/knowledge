@@ -6,7 +6,7 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { methodTone, pathSegments } from '@/modules/api-reference/model/api-spec'
+import { methodTone, pathSegments } from '@/entities/api-operation/model/api-spec'
 import ApiTone from './ApiTone.vue'
 
 const props = withDefaults(

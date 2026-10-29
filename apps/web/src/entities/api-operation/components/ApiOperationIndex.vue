@@ -10,7 +10,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown } from 'lucide-vue-next'
 import type { ApiOperationInfo } from '@knowledge/contracts'
-import { methodTone, operationRowKey } from '@/modules/api-reference/model/api-spec'
+import { methodTone, operationRowKey } from '@/entities/api-operation/model/api-spec'
 import ApiTone from './ApiTone.vue'
 import type { ApiReferenceState } from '../model/use-api-reference'
 

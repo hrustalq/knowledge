@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { locationOf, readApiBlockRows, requiredValue } from '@/modules/api-reference/model/api-block-rows'
+import { locationOf, readApiBlockRows, requiredValue } from '@/entities/api-operation/model/api-block-rows'
 
 describe('reading an API block table for display', () => {
   it('recognises the template headers in either language', () => {

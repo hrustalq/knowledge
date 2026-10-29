@@ -16,7 +16,7 @@
 import { computed, provide, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next'
-import { expandRecursive, type SchemaNode } from '@/modules/api-reference/model/api-spec'
+import { expandRecursive, type SchemaNode } from '@/entities/api-operation/model/api-spec'
 import ApiSchemaTree from './ApiSchemaTree.vue'
 import { SCHEMA_TREE, type SchemaTreeState } from '../model/schema-tree'
 

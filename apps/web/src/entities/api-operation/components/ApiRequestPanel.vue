@@ -20,7 +20,7 @@ import {
   type ApiOperationInfo,
   type SampleInputs,
 } from '@knowledge/contracts'
-import type { OperationView } from '@/modules/api-reference/model/api-spec'
+import type { OperationView } from '@/entities/api-operation/model/api-spec'
 import { Button } from '@/shared/ui/button'
 import { Collapse } from '@/shared/ui/collapse'
 import ApiCodeSamples from './ApiCodeSamples.vue'

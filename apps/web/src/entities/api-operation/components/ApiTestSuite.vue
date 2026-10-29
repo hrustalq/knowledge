@@ -20,7 +20,7 @@ import { ChevronRight, Download, Loader2, Play, RefreshCw, X } from 'lucide-vue-
 import { renderCodeSample, type ApiOperationInfo, type ApiTestCase, type ApiTestSuiteFormat, type ApiTestSuiteResponse } from '@knowledge/contracts'
 import { Button } from '@/shared/ui/button'
 import { Collapse } from '@/shared/ui/collapse'
-import { statusTone } from '@/modules/api-reference/model/api-spec'
+import { statusTone } from '@/entities/api-operation/model/api-spec'
 import { requestFile } from '@/shared/api/client'
 import { saveFile } from '@/shared/api/api'
 import { formatDateTime } from '@/shared/utils/format'

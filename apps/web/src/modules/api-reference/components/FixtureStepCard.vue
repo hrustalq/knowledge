@@ -15,8 +15,8 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Textarea } from '@/shared/ui/textarea'
 import { pathParams, type StepDraft } from '@/modules/api-reference/model/test-fixture'
-import ApiEndpoint from './ApiEndpoint.vue'
-import ApiOperationPicker, { type PickedOperation } from './ApiOperationPicker.vue'
+import { ApiEndpoint } from '@/entities/api-operation'
+import { ApiOperationPicker, type PickedOperation } from '@/entities/api-operation'
 import FixtureRows from './FixtureRows.vue'
 
 const step = defineModel<StepDraft>({ required: true })

@@ -26,7 +26,7 @@ import {
 import { Loader2, Search } from 'lucide-vue-next'
 import type { ApiOperationInfo } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
-import { operationRowKey } from '@/modules/api-reference/model/api-spec'
+import { operationRowKey } from '@/entities/api-operation/model/api-spec'
 import ApiEndpoint from './ApiEndpoint.vue'
 import ApiTone from './ApiTone.vue'
 

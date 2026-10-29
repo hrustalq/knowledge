@@ -251,7 +251,7 @@ extraction phase confirms its entity's contents against the import graph.
 | `person`         | **done:** UserChip, UserCard, UserAvatar (out of `widgets/`: they read the members composable), use-members and use-agent-names, the actor helpers split out of `mr-ui`, AvatarPicker |
 | `merge-request`  | merge-requests' MergeRequestList, ThreadCard, CommentComposer, thread-anchors, mr-ui                                                          |
 | `rich-editor`    | editor's RichEditor with its extensions and nodes, CollabDraftBadge, embeds, working-copy, use-embed-status; ImportStepper/ParseProgress      |
-| `api-operation`  | api-reference's operation embed/picker/ref/index, ApiReferenceView, ApiChangesPanel, ApiDriftCheck, TestFixtureView, api-spec, api-block-rows, use-operation, use-api-reference |
+| `api-operation`  | **done:** the operation embed/picker/ref/index/endpoint, ApiReferenceView and TestFixtureView (lazy), ApiChangesPanel, ApiDriftCheck, the try console and suite runner they open, api-spec, api-block-rows, schema-tree, use-operation, use-api-reference; the module keeps its pages, the fixture editor rows and QaEnvironments |
 | `assistant`      | assistant's ChatPane, ChatRail, ThreadDialogs, thread-label, the assistant and feedback stores, AnswerFeedback, TeachAgentDialog, citations   |
 | `template`       | the templates store, SaveAsTemplateDialog                                                                                                    |
 | `access`         | access's PageAccessDialog, RequestAccessCard, mention-access, mcp-clients                                                                    |

@@ -16,7 +16,7 @@ import { Input } from '@/shared/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
 import { MarkdownView } from '@/entities/document'
-import ApiOperationRef from '@/modules/api-reference/components/ApiOperationRef.vue'
+import { ApiOperationRef } from '@/entities/api-operation'
 import { getWorkspaceId } from '@/shared/api/api'
 import { isBusyStatus, NODE_STATUS_CLASS, NODE_STATUS_ICON, NODE_STATUS_LABEL } from '@/entities/workflow'
 

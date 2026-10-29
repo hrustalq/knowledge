@@ -14,7 +14,7 @@
  * Without a tone it is a neutral chip on the muted surface.
  */
 import { computed } from 'vue'
-import type { ApiTone } from '@/modules/api-reference/model/api-spec'
+import type { ApiTone } from '@/entities/api-operation/model/api-spec'
 
 const props = withDefaults(
   defineProps<{ tone: ApiTone | null; variant?: 'solid' | 'wash' | 'text'; size?: 'sm' | 'md' }>(),

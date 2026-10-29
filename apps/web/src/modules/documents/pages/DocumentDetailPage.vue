@@ -100,8 +100,9 @@ import { PageLayout, PageRail, PageState } from '@/shared/layout'
 import TocRail from '@/modules/documents/components/TocRail.vue'
 import DocumentCanvas from '@/modules/documents/components/DocumentCanvas.vue'
 import ThreadCard from '@/modules/merge-requests/components/ThreadCard.vue'
-import ApiOperationIndex from '@/modules/api-reference/components/ApiOperationIndex.vue'
-import { useApiReference } from '@/modules/api-reference/model/use-api-reference'
+import { ApiOperationIndex } from '@/entities/api-operation'
+import { useApiReference } from '@/entities/api-operation'
+import { ApiReferenceView, TestFixtureView } from '@/entities/api-operation'
 import MergeRequestList from '@/modules/merge-requests/components/MergeRequestList.vue'
 import GraphLightbox from '@/modules/documents/components/GraphLightbox.vue'
 import ActivityFeed from '@/modules/documents/components/ActivityFeed.vue'
@@ -125,8 +126,6 @@ import VerificationBar from '@/modules/documents/components/VerificationBar.vue'
 // never needs the force layout, the revision table or the API reference, so
 // none of them rides in this page's chunk. SSR still renders them (it awaits
 // async components), and hydration waits for the chunk before it adopts the DOM.
-const ApiReferenceView = defineAsyncComponent(() => import('@/modules/api-reference/components/ApiReferenceView.vue'))
-const TestFixtureView = defineAsyncComponent(() => import('@/modules/api-reference/components/TestFixtureView.vue'))
 const RevisionsView = defineAsyncComponent(() => import('@/modules/documents/components/RevisionsView.vue'))
 const GraphView = defineAsyncComponent(() => import('@/modules/documents/components/GraphView.vue'))
 

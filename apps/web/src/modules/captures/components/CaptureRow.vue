@@ -31,15 +31,8 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Collapse } from '@/shared/ui/collapse'
 import UserChip from '@/widgets/person/UserChip.vue'
-import CaptureOriginParts from './CaptureOriginParts.vue'
-import {
-  captureKindIcon,
-  clientLabel,
-  formatScore,
-  isApprovable,
-  isRejectable,
-  repoAtCommit,
-} from '../model/capture-ui'
+import { CaptureOriginParts } from '@/entities/capture'
+import { captureKindIcon, clientLabel, formatScore, isApprovable, isRejectable, repoAtCommit } from '@/entities/capture'
 
 const { t } = useI18n()
 

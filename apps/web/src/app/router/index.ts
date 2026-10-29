@@ -10,10 +10,10 @@ import type { Pinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import { AI_PANEL_SECTIONS, DEFAULT_AI_SECTION, isAiSection } from '@/modules/assistant/model/ai-sections'
 import { reauthKindOf } from '@/modules/auth/model/sso'
-import * as captures from '@/modules/captures'
-import * as help from '@/modules/help'
-import * as notifications from '@/modules/notifications'
-import * as publishing from '@/modules/publishing'
+import * as captures from '@/modules/captures/routes'
+import * as help from '@/modules/help/routes'
+import * as notifications from '@/modules/notifications/routes'
+import * as publishing from '@/modules/publishing/routes'
 
 export function createRouter() {
   return createVueRouter({

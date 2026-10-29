@@ -2563,23 +2563,6 @@
   {
     "type": "dependency",
     "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/notifications/index.ts",
-    "unresolvedTo": "@/modules/notifications",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
     "to": "src/modules/templates/components/SaveAsTemplateDialog.vue",
     "unresolvedTo": "@/modules/templates/components/SaveAsTemplateDialog.vue",
     "dependencyTypes": [
@@ -3310,43 +3293,9 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/merge-requests/components/MrProvenance.vue",
-    "to": "src/modules/captures/index.ts",
-    "unresolvedTo": "@/modules/captures",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/merge-requests/components/MrSidebar.vue",
     "to": "src/modules/editor/components/CollabDraftBadge.vue",
     "unresolvedTo": "@/modules/editor/components/CollabDraftBadge.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/components/MrSidebar.vue",
-    "to": "src/modules/notifications/index.ts",
-    "unresolvedTo": "@/modules/notifications",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",

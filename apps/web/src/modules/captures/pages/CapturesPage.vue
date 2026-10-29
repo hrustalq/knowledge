@@ -55,7 +55,7 @@ import {
 } from '@/shared/ui/alert-dialog'
 import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/widgets/page'
 import CaptureRow from '@/modules/captures/components/CaptureRow.vue'
-import { CAPTURE_TABS, type CaptureTab } from '@/modules/captures/model/capture-ui'
+import { CAPTURE_TABS, type CaptureTab } from '@/entities/capture'
 
 const { t } = useI18n()
 const route = useRoute()

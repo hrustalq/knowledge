@@ -6,6 +6,7 @@ import { createRouter, installAuthGuard, installViewTransitions } from './app/ro
 import { createQueryClient } from './shared/api/queries'
 import { createI18nFor } from './shared/i18n'
 import { getLocale } from './shared/api/api'
+import { featureDirective } from './stores/features'
 import './assets/style.css'
 
 // Fresh app/router/pinia/query-client per request (SSR) or per page load (client).
@@ -25,6 +26,8 @@ export function createApp() {
   app.use(pinia)
   app.use(router)
   app.use(VueQueryPlugin, { queryClient })
+  // v-feature (#604): hides what the workspace switched off.
+  app.directive('feature', featureDirective(pinia))
   installAuthGuard(router, pinia)
   installViewTransitions(router)
   return { app, router, pinia, i18n, queryClient }

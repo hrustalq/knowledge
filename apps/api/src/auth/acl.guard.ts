@@ -6,8 +6,10 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ACCESS_META, PLATFORM_ADMIN_META, PUBLIC_META, READ_KEY_OK_META, type AccessSpec } from './access.decorator.js';
+import { ACCESS_META, FEATURE_META, PLATFORM_ADMIN_META, PUBLIC_META, READ_KEY_OK_META, type AccessSpec } from './access.decorator.js';
 import { AccessService } from './access.service.js';
+import { FeaturesService } from './features.service.js';
+import type { WorkspaceFeature } from '@knowledge/contracts';
 import { PermissionService, type AccessResource, type BranchRefs } from '../permissions/permission.service.js';
 import type { Principal } from './principal.js';
 import { t } from '../i18n/t.js';
@@ -58,6 +60,7 @@ export class AclGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly access: AccessService,
     private readonly permissions: PermissionService,
+    private readonly features: FeaturesService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -91,7 +94,11 @@ export class AclGuard implements CanActivate {
       }
       return true;
     }
+    // A switched-off section (#604) is absent for everyone, the dev principal
+    // included — so the dev shortcut resolves the workspace when a route has one.
+    const feature = this.reflector.getAllAndOverride<WorkspaceFeature | undefined>(FEATURE_META, [ctx.getHandler(), ctx.getClass()]);
     if (principal.mode === 'dev') {
+      if (feature) await this.features.require((await this.resolveTarget(spec, req)).workspaceId, feature);
       // AUTH_MODE=none returns before the workspace is ever resolved, so for
       // logging take whatever the request declared. Deliberately no DB lookup:
       // adding a query to the hot path to populate a log field is not a trade
@@ -135,6 +142,8 @@ export class AclGuard implements CanActivate {
         await this.permissions.requireConnectorVisible(principal, { runId: req.params.runId });
       }
     }
+    // After the membership check, so a 404 here tells only a member that the section is off.
+    if (feature) await this.features.require(workspaceId, feature);
     return true;
   }
 

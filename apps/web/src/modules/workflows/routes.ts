@@ -12,12 +12,12 @@ export const routes: RouteRecordRaw[] = [
   {
     path: '/settings/workflows/new',
     component: () => import('./pages/WorkflowWizardPage.vue'),
-    meta: { fill: true, bare: true },
+    meta: { fill: true, bare: true, feature: 'workflows' },
   },
 
   // Workflows (docs/features/17): the run list, and one run's node tree.
-  { path: '/workflows', component: () => import('./pages/WorkflowsPage.vue') },
-  { path: '/workflows/:id', component: () => import('./pages/WorkflowRunPage.vue') },
+  { path: '/workflows', component: () => import('./pages/WorkflowsPage.vue'), meta: { feature: 'workflows' } },
+  { path: '/workflows/:id', component: () => import('./pages/WorkflowRunPage.vue'), meta: { feature: 'workflows' } },
 ]
 
 export const settingsRoutes: RouteRecordRaw[] = [
@@ -30,6 +30,8 @@ export const settingsRoutes: RouteRecordRaw[] = [
   {
     path: 'workflows',
     component: () => import('./pages/WorkflowSettingsPage.vue'),
+    // Switched off (#604) with its children: the router reads every matched record.
+    meta: { feature: 'workflows' },
     // Third rail, exactly as projects: the roster lives in the shell,
     // the selection here. The builder gave up the viewport to get the
     // app trail and the roster back — a chain you navigate to like

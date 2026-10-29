@@ -714,6 +714,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{id}/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The sections switched off in this workspace */
+        get: operations["WorkspacesController_getFeatures"];
+        /** Switch sections off or back on (workspace admin): hides them in the app, 404s their routes and MCP tools */
+        put: operations["WorkspacesController_setFeatures"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{id}": {
         parameters: {
             query?: never;
@@ -7467,6 +7485,10 @@ export interface components {
         CreateWorkspaceDto: {
             /** @example Platform Team */
             name: string;
+        };
+        UpdateWorkspaceFeaturesDto: {
+            /** @description The sections to switch off; every one not listed is on. An empty list turns everything back on. */
+            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant")[];
         };
         UpdateWorkspaceDto: {
             /** @example Platform Team */
@@ -15251,6 +15273,12 @@ export interface components {
             name: string;
             counts: components["schemas"]["WorkspaceDeletionCounts"];
         };
+        /** @enum {string} */
+        WorkspaceFeature: "workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant";
+        WorkspaceFeaturesResponse: {
+            workspaceId: string;
+            disabled: components["schemas"]["WorkspaceFeature"][];
+        };
         WorkspaceGraphNode: {
             id: string;
             /** @enum {string} */
@@ -17524,6 +17552,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceDeletionPreviewResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkspacesController_getFeatures: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceFeaturesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkspacesController_setFeatures: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkspaceFeaturesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceFeaturesResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

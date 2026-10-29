@@ -327,6 +327,7 @@ import type {
   WorkflowRunResponse,
   WorkspaceAuthPolicyView,
   WorkspaceDeletionPreviewResponse,
+  WorkspaceFeaturesResponse,
   WorkspaceGraphResponse,
   WorkspaceShareLinksResponse,
 } from '@knowledge/contracts';
@@ -660,6 +661,7 @@ export interface ContractResponses {
   WorkflowRunResponse: WorkflowRunResponse;
   WorkspaceAuthPolicyView: WorkspaceAuthPolicyView;
   WorkspaceDeletionPreviewResponse: WorkspaceDeletionPreviewResponse;
+  WorkspaceFeaturesResponse: WorkspaceFeaturesResponse;
   WorkspaceGraphResponse: WorkspaceGraphResponse;
   WorkspaceShareLinksResponse: WorkspaceShareLinksResponse;
 }

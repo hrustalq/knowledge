@@ -27,7 +27,7 @@ import type {
   TestRunPlan,
 } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
-import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { ApiDriftCheckService } from './api-drift-check.service.js';
@@ -137,6 +137,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/test-suite')
+  @Feature('qa')
   @Access('viewer', 'document')
   @ApiProduces('application/json', 'text/x-shellscript')
   @ApiOkResponse({ description: 'The suite as JSON; with format, a file to download' })
@@ -163,6 +164,7 @@ export class ApiSpecsController {
   // Viewer, not editor: generating writes no page. The capability is the gate,
   // and the tester run checks it again when it executes.
   @Post(':id/test-suite')
+  @Feature('qa')
   @Returns('GenerateApiTestSuiteResponse')
   @HttpCode(200)
   @Access('viewer', 'document', { capability: 'api-test-suites.generate' })
@@ -181,6 +183,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/test-bindings')
+  @Feature('qa')
   @Returns('ApiTestBindingsResponse')
   @Access('viewer', 'document')
   @ApiOperation({
@@ -198,6 +201,7 @@ export class ApiSpecsController {
 
   // Viewer + capability, like Generate: binding writes no page.
   @Put(':id/test-bindings')
+  @Feature('qa')
   @Returns('ApiTestBindingsResponse')
   @Access('viewer', 'document', { capability: 'api-test-suites.generate' })
   @ApiOperation({
@@ -217,6 +221,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/test-fixture-candidates')
+  @Feature('qa')
   @Returns('ApiTestFixtureCandidatesResponse')
   @Access('viewer', 'document')
   @ApiOperation({
@@ -234,6 +239,7 @@ export class ApiSpecsController {
   }
 
   @Post(':id/test-fixture-candidates/rank')
+  @Feature('qa')
   @Returns('RankApiTestFixturesResponse')
   @HttpCode(200)
   @Access('viewer', 'document', { capability: 'api-test-suites.generate' })
@@ -268,6 +274,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/test-run-plan')
+  @Feature('qa')
   @Returns('TestRunPlan')
   @Access('viewer', 'document', { capability: 'api-test-suites.run' })
   @ApiOperation({
@@ -289,6 +296,7 @@ export class ApiSpecsController {
   // cannot express as role-or-capability. `:id` is the spec defining the
   // step's operation, so a step in another spec is checked against that one.
   @Post(':id/test-run/send')
+  @Feature('qa')
   @Returns('ApiTryResponse')
   @HttpCode(200)
   @Access('viewer', 'document', { capability: 'api-test-suites.run' })
@@ -310,6 +318,7 @@ export class ApiSpecsController {
   // capability on top of viewer, like the browser runner's proxied step; the
   // records are readable by every viewer of the spec.
   @Post(':id/test-runs')
+  @Feature('qa')
   @Returns('ApiTestRunSummary')
   @HttpCode(202)
   @Access('viewer', 'document', { capability: 'api-test-suites.run' })
@@ -329,6 +338,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/test-runs')
+  @Feature('qa')
   @Returns('ListApiTestRunsResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: "One operation's server runs, newest first (the last 20 are kept)" })
@@ -337,6 +347,7 @@ export class ApiSpecsController {
   }
 
   @Get(':id/test-runs/:runId')
+  @Feature('qa')
   @Returns('ApiTestRunDetail')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'One server run: the plan it walked and each step and case result. Captures named like secrets are never stored' })
@@ -371,6 +382,7 @@ export class ApiSettingsController {
   // Test environments for the QA server runner (#483, phase 5). Editors manage
   // them; a viewer sees names, servers and inputs. Secrets are write-only.
   @Get(':id/test-environments')
+  @Feature('qa')
   @Returns('ListApiTestEnvironmentsResponse')
   @Access('viewer', 'workspace')
   @ApiOperation({ summary: "The workspace's QA test environments: server, inputs, and the names of the secrets set (never a value)" })
@@ -379,6 +391,7 @@ export class ApiSettingsController {
   }
 
   @Post(':id/test-environments')
+  @Feature('qa')
   @Returns('ApiTestEnvironment')
   @Access('editor', 'workspace')
   @ApiOperation({ summary: 'Create a QA test environment. Secrets are encrypted at rest and never returned' })
@@ -391,6 +404,7 @@ export class ApiSettingsController {
   }
 
   @Patch(':id/test-environments/:environmentId')
+  @Feature('qa')
   @Returns('ApiTestEnvironment')
   @Access('editor', 'workspace')
   @ApiOperation({ summary: 'Change a QA test environment. inputs replaces the set; a secret set to null is removed, one left out is kept' })
@@ -404,6 +418,7 @@ export class ApiSettingsController {
   }
 
   @Delete(':id/test-environments/:environmentId')
+  @Feature('qa')
   @HttpCode(204)
   @Access('editor', 'workspace')
   @ApiOperation({ summary: 'Delete a QA test environment; its past runs keep their results' })
@@ -466,6 +481,7 @@ export class ApiOperationsController {
  * library and one fixture checked against today's specs.
  */
 @ApiTags('api-specs')
+@Feature('qa')
 @Controller('v1/test-fixtures')
 export class TestFixturesController {
   constructor(
@@ -505,6 +521,7 @@ export class TestFixturesController {
 
 /** The QA view (#483, phase 4): workspace-level and scope-filtered, so a guest may call it. */
 @ApiTags('api-specs')
+@Feature('qa')
 @Controller('v1/qa')
 export class QaController {
   constructor(

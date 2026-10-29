@@ -8,6 +8,8 @@ import {
 } from 'vue-router'
 import type { Pinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
+import { useFeaturesStore } from '@/stores/features'
+import { isWorkspaceFeature } from '@knowledge/contracts'
 import { reauthKindOf } from '@/modules/auth'
 import * as access from '@/modules/access/routes'
 import * as apiReference from '@/modules/api-reference/routes'
@@ -87,6 +89,7 @@ export function createRouter() {
  * - non-platform-admin on an admin route → /403 (RBAC)
  * - unconfirmed address under AUTH_REQUIRE_VERIFIED_EMAIL → /verify-email
  *   (docs/features/41); every other route would only answer 403 anyway
+ * - a route whose `meta.feature` the workspace switched off (#604) → /documents
  */
 export function installAuthGuard(router: Router, pinia: Pinia) {
   router.beforeEach(async (to) => {
@@ -101,6 +104,12 @@ export function installAuthGuard(router: Router, pinia: Pinia) {
     }
     if (auth.verificationPending) return { path: '/verify-email' }
     if (to.meta.platformAdmin && !auth.isAdmin && !auth.isDev) return { path: '/403' }
+    // A section the workspace switched off (#604) is not there: home, not a 404,
+    // since the link that led here was the app's own until the switch.
+    const features = useFeaturesStore(pinia)
+    await features.ensureLoaded()
+    const feature = to.matched.map((r) => r.meta.feature).find(isWorkspaceFeature)
+    if (feature && !features.isOn(feature)) return { path: '/documents' }
     return true
   })
 }

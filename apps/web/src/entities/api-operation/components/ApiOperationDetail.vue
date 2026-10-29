@@ -15,7 +15,7 @@
  * Descriptions are the spec author's markdown, so they go through MarkdownView
  * and its sanitizer; nothing here uses `v-html`.
  */
-import { computed, ref, toRef, useId } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, ChevronDown, Copy, FlaskConical, LockKeyhole, RefreshCw } from 'lucide-vue-next'
 import type { ApiOperationInfo } from '@knowledge/contracts'
@@ -34,6 +34,7 @@ import ApiTestSuite from './ApiTestSuite.vue'
 import ApiTone from './ApiTone.vue'
 import { useTestSuite } from '../model/use-test-suite'
 import { useSuiteFixtures } from '../model/use-suite-fixtures'
+import { useFeaturesStore } from '@/stores/features'
 
 const props = withDefaults(
   defineProps<{
@@ -65,15 +66,22 @@ const openResponses = ref(new Set((view.value?.responses ?? []).filter((r) => r.
  * open; Generate opens the card so its progress and result are in view.
  */
 const auth = useAuthStore()
-const canGenerate = computed(() => auth.can('api-test-suites.generate'))
-const canRun = computed(() => auth.can('api-test-suites.run'))
-const tests = useTestSuite(() => props.workspaceId, () => props.operation.documentId, () => props.operation.entityKey, toRef(props, 'open'))
+// QA switched off in the workspace (#604): no suite read, nothing to generate or run.
+const qaOn = computed(() => useFeaturesStore().isOn('qa'))
+const canGenerate = computed(() => qaOn.value && auth.can('api-test-suites.generate'))
+const canRun = computed(() => qaOn.value && auth.can('api-test-suites.run'))
+const tests = useTestSuite(
+  () => props.workspaceId,
+  () => props.operation.documentId,
+  () => props.operation.entityKey,
+  computed(() => props.open && qaOn.value),
+)
 /** The suite's fixtures (#483): read with the suite, for an open HTTP card only. */
 const fixtures = useSuiteFixtures(
   () => props.workspaceId,
   () => props.operation.documentId,
   () => props.operation.entityKey,
-  computed(() => props.open && view.value?.protocol === 'http'),
+  computed(() => props.open && qaOn.value && view.value?.protocol === 'http'),
   tests.queryKey,
 )
 function generateTests(regenerate: boolean) {
@@ -117,7 +125,7 @@ function toggleResponse(r: ResponseView) {
           </span>
         </button>
         <!-- A sibling of the toggle, never inside it: a button in a button is invalid and unreachable. -->
-        <DropdownMenu v-if="view.protocol === 'http'">
+        <DropdownMenu v-if="view.protocol === 'http' && qaOn">
           <DropdownMenuTrigger as-child>
             <button type="button" class="kn-op-iconbtn kn-op-actions" :aria-label="t('apiTests.menu')" :title="t('apiTests.menu')">
               <FlaskConical class="size-4" aria-hidden="true" />
@@ -274,6 +282,7 @@ function toggleResponse(r: ResponseView) {
           <ApiTestSuite
             v-if="
               view.protocol === 'http' &&
+              qaOn &&
               (tests.suite.value || tests.generating.value || tests.failure.value !== null || tests.loadError.value || fixtures.hasAny.value)
             "
             :document="document"

@@ -48,11 +48,13 @@ import { ConnectorList } from '@/entities/connector'
 import { scoreTone } from '@/entities/insight'
 import { useProjectsStore } from '@/stores/projects'
 import { useAuthStore } from '@/stores/auth'
+import { useFeaturesStore } from '@/stores/features'
 
 const { t } = useI18n()
 const route = useRoute()
 const projects = useProjectsStore()
 const auth = useAuthStore()
+const features = useFeaturesStore()
 /** "Export project" (docs/features/45): open to every reader of the project. */
 const exportOpen = ref(false)
 
@@ -251,7 +253,8 @@ const isActive = computed(() => projectId.value === projects.activeId)
         </section>
 
         <!-- Which pages are read and which nobody needs (#79): curation, so editors only. -->
-        <ProjectAnalyticsSection v-if="auth.canEdit" :project-id="projectId" />
+        <!-- v-if, not v-feature: hidden would still mount it, and its query would 404 (#604). -->
+        <ProjectAnalyticsSection v-if="auth.canEdit && features.isOn('analytics')" :project-id="projectId" />
       </div>
 
       <!-- Same rail, same bound as the document page's: sticky and

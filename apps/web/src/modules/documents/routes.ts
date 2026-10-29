@@ -8,7 +8,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/documents/:id', component: () => import('./pages/DocumentDetailPage.vue') },
   { path: '/search', component: () => import('./pages/SearchPage.vue') },
   // Contradictions between pages (#81).
-  { path: '/conflicts', component: () => import('./pages/ConflictsPage.vue') },
+  { path: '/conflicts', component: () => import('./pages/ConflictsPage.vue'), meta: { feature: 'conflicts' } },
   // Legacy top-level paths → their settings home
   { path: '/glossary', redirect: '/settings/glossary' },
   { path: '/activity', redirect: '/settings/activity' },

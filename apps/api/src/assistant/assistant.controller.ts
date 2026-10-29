@@ -20,7 +20,7 @@ import {
   type AssistantLintResponse,
   type AssistantStreamFrame,
 } from '@knowledge/contracts';
-import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { AssistantService } from './assistant.service.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
@@ -115,6 +115,7 @@ export class AssistantController {
   // -------------------------------------------------------------------------
 
   @Post('threads')
+  @Feature('assistant')
   @Returns('CreateAssistantThreadResponse')
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'Start a new chat pane thread, optionally pinned to a document' })
@@ -123,6 +124,7 @@ export class AssistantController {
   }
 
   @Get('threads')
+  @Feature('assistant')
   @Returns('ListAssistantThreadsResponse')
   @Access('viewer', 'query')
   @ApiOperation({
@@ -137,6 +139,7 @@ export class AssistantController {
   // to be a member of and have the ACL pass.
 
   @Get('threads/:id')
+  @Feature('assistant')
   @Returns('GetAssistantThreadResponse')
   @Access('viewer', 'assistant-thread')
   @ApiOperation({ summary: 'A thread with its full message history, each reply carrying your own vote on it' })
@@ -145,6 +148,7 @@ export class AssistantController {
   }
 
   @Patch('threads/:id')
+  @Feature('assistant')
   @Returns('UpdateAssistantThreadResponse')
   @Access('viewer', 'assistant-thread')
   @ApiOperation({ summary: 'Rename a chat thread (null title restores the auto-derived one)' })
@@ -153,6 +157,7 @@ export class AssistantController {
   }
 
   @Delete('threads/:id')
+  @Feature('assistant')
   @Returns('DeleteAssistantThreadResponse')
   @Access('viewer', 'assistant-thread')
   @ApiOperation({ summary: 'Delete a chat thread and its whole message history' })
@@ -165,6 +170,7 @@ export class AssistantController {
    * truncating one cannot need more than removing all of it.
    */
   @Delete('threads/:id/messages/:messageId')
+  @Feature('assistant')
   @Returns('TruncateAssistantThreadResponse')
   @Access('viewer', 'assistant-thread')
   @ApiOperation({
@@ -178,6 +184,7 @@ export class AssistantController {
   }
 
   @Post('threads/:id/messages')
+  @Feature('assistant')
   @Returns('PostAssistantMessageResponse')
   @Access('viewer', 'assistant-thread')
   @ApiOperation({
@@ -203,6 +210,7 @@ export class AssistantController {
    * there is no `?token=` in a URL.
    */
   @Post('threads/:id/messages/stream')
+  @Feature('assistant')
   @Access('viewer', 'assistant-thread')
   @ApiOperation({
     summary: 'Streamed chat turn (text/event-stream of AssistantStreamFrame) — same turn as POST .../messages',

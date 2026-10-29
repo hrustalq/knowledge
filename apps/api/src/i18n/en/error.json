@@ -866,5 +866,8 @@
     "boardNotFound": "No board with a Status field at {url}, or the connector cannot see it",
     "boardNeedsGithub": "Only a GitHub connector can move cards on a GitHub board",
     "routeConnectorWorkspace": "The connector belongs to another workspace"
+  },
+  "feature": {
+    "disabled": "The {feature} feature is switched off in this workspace."
   }
 }

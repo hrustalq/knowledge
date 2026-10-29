@@ -868,5 +868,8 @@
     "boardNotFound": "По адресу {url} нет доски с полем Status, или коннектор её не видит",
     "boardNeedsGithub": "Двигать карточки на доске GitHub может только коннектор GitHub",
     "routeConnectorWorkspace": "Коннектор принадлежит другому пространству"
+  },
+  "feature": {
+    "disabled": "Раздел «{feature}» отключён в этом пространстве."
   }
 }

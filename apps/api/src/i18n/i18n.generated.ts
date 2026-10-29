@@ -1539,6 +1539,9 @@ export type I18nTranslations = {
             "boardNeedsGithub": string;
             "routeConnectorWorkspace": string;
         };
+        "feature": {
+            "disabled": string;
+        };
     };
     "export": {
         "docx": {

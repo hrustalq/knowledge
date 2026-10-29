@@ -16,6 +16,7 @@ import { ApiExceptionFilter } from '../src/common/api-exception.filter.js';
 import { Access } from '../src/auth/access.decorator.js';
 import { AccessService } from '../src/auth/access.service.js';
 import { AclGuard } from '../src/auth/acl.guard.js';
+import { FeaturesService } from '../src/auth/features.service.js';
 import { AuthGuard } from '../src/auth/auth.guard.js';
 import { TokenAuthService } from '../src/auth/token-auth.service.js';
 import { PermissionService } from '../src/permissions/permission.service.js';
@@ -243,6 +244,8 @@ describe('enforced SSO through the real transports (#75 criterion 11)', () => {
         { provide: TokenAuthService, useValue: tokenAuth },
         { provide: AccessService, useValue: accessWith(policy, role) },
         { provide: PermissionService, useValue: {} },
+        // The probe route belongs to no section (#604), so the toggles are never read.
+        { provide: FeaturesService, useValue: {} },
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: APP_GUARD, useClass: AclGuard },
       ],

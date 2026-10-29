@@ -14,16 +14,19 @@ import { Bot } from 'lucide-vue-next'
 import type { CaptureInfo, MergeRequestInfo } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { CaptureOriginParts, clientLabel, repoAtCommit } from '@/entities/capture'
+import { useFeaturesStore } from '@/stores/features'
 
 const { t } = useI18n()
 
 const props = defineProps<{ mergeRequest: MergeRequestInfo }>()
 
 const captureId = computed(() => props.mergeRequest.captureId ?? null)
+const features = useFeaturesStore()
 const captureQuery = useQuery(
   computed(() => ({
     ...apiQueryOptions('/v1/captures/{id}', { path: { id: captureId.value ?? '' } }),
-    enabled: !!captureId.value,
+    // With captures switched off (#604) the MR still says it was captured, without the session.
+    enabled: !!captureId.value && features.isOn('captures'),
   })),
 )
 const capture = computed(() => captureQuery.data.value as CaptureInfo | undefined)

@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { BulkRejectCapturesResponse, CaptureInfo, CaptureResult, ListCapturesResponse } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
-import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { CaptureService } from './capture.service.js';
@@ -27,6 +27,7 @@ import { Returns } from '../common/returns.decorator.js';
  * the same decision over one key's captures, and is not flagged either.
  */
 @ApiTags('captures')
+@Feature('captures')
 @Controller('v1/captures')
 export class CapturesController {
   constructor(

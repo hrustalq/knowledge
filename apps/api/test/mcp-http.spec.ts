@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -11,7 +12,7 @@ import { READ_KEY_OK_META, type AccessSpec } from '../src/auth/access.decorator.
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { McpService, type McpExtras } from '../src/mcp/mcp.service.js';
 import type { AgentLearning } from '@prisma/client';
-import { CAPTURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, settleTools } from '../src/mcp/mcp-tools.js';
+import { CAPTURE_TOOLS, FEATURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, settleTools } from '../src/mcp/mcp-tools.js';
 import { choosePromptLearnings } from '../src/ai/agent-learnings.service.js';
 import { renderSkill } from '../src/mcp/skill.js';
 import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
@@ -205,6 +206,8 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     connectorProducer: { enqueue: vi.fn(async () => undefined) },
     agents: {},
     access,
+    // Feature toggles (#604): every section on unless a test switches one off.
+    features: { require: vi.fn(async () => undefined) },
     config,
     aiReadable,
     provenance: { decorateResults: vi.fn(async (_ws: string, results: unknown[]) => results) },
@@ -369,6 +372,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     quality: deps.quality,
     analyticsQuery: deps.analyticsQuery,
     chatSearch: deps.chatSearch,
+    features: deps.features,
   };
 }
 
@@ -396,6 +400,21 @@ describe('McpService over a principal', () => {
     const names = new Set(mcp.toolsFor(DEV_PRINCIPAL, { drafts: fakeDrafts() }).map((t) => t.name));
     for (const name of WRITE_TOOLS) expect(names, name).toContain(name);
     for (const name of CAPTURE_TOOLS) expect(names, name).toContain(name);
+    for (const tools of Object.values(FEATURE_TOOLS)) for (const name of tools ?? []) expect(names, name).toContain(name);
+  });
+
+  it('refuses a tool of a switched-off section, after the membership check (#604)', async () => {
+    const { mcp, features, analyticsQuery } = service(accessWith('editor'));
+    features.require.mockRejectedValueOnce(new NotFoundException({ statusCode: 404, message: 'off', feature: 'analytics' }));
+    const client = await connect(mcp, keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }));
+    const refused = await client.callTool({ name: 'knowledge_list_search_gaps', arguments: { workspaceId: WS_A } });
+    expect(refused.isError).toBe(true);
+    expect(features.require).toHaveBeenCalledWith(WS_A, 'analytics');
+    expect(analyticsQuery.searchGaps).not.toHaveBeenCalled();
+    // A tool of no section never asks.
+    features.require.mockClear();
+    await client.callTool({ name: 'knowledge_whoami', arguments: {} });
+    expect(features.require).not.toHaveBeenCalled();
   });
 
   it('annotates reads read-only, and hides writes from a read-only key', async () => {

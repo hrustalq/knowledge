@@ -36,7 +36,7 @@ import {
 import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { errorMessage } from '@/shared/api/errors'
-import { canWriteTemplate, templateSourceFields, unescapePlaceholders } from '@/modules/templates/model/templates'
+import { canWriteTemplate, templateSourceFields, unescapePlaceholders } from '@/entities/template'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/shared/ui/button'
@@ -46,7 +46,7 @@ import { Textarea } from '@/shared/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import RichEditor from '@/modules/editor/components/RichEditor.vue'
-import TemplatePlaceholdersEditor from './TemplatePlaceholdersEditor.vue'
+import { TemplatePlaceholdersEditor } from '@/entities/template'
 
 const props = defineProps<{
   mode: 'create' | 'edit' | 'customise'

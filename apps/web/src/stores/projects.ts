@@ -5,8 +5,20 @@ import { getProjectId, getWorkspaceId, setActiveProject } from '@/shared/api/api
 import { useDocumentsStore } from '@/stores/documents'
 import { useGlossaryStore } from '@/modules/documents/model/glossary.store'
 import { useWorkflowsStore } from '@/modules/workflows/model/workflows.store'
-import { useTemplatesStore } from '@/modules/templates/model/templates.store'
 import { useSidebarNavStore } from '@/stores/sidebar-nav'
+
+/**
+ * A project-scoped store outside stores/ registers its `use…Store` here, at
+ * module load, and switchProject rescopes it with the rest
+ * (docs/architecture/11): a cross-cutting store never imports a feature. The
+ * definition is registered, not an instance, so this is the same for every
+ * request a server renders — and a store whose module never loaded has no
+ * instance to rescope.
+ */
+const projectScoped = new Set<() => { rescope(): Promise<void> }>()
+export function registerProjectScoped(useStore: () => { rescope(): Promise<void> }): void {
+  projectScoped.add(useStore)
+}
 
 /**
  * Workspace > Project > Document. The active project is remembered the same
@@ -76,7 +88,7 @@ export const useProjectsStore = defineStore('projects', {
         useDocumentsStore().rescope(),
         useGlossaryStore().rescope(),
         useWorkflowsStore().rescope(),
-        useTemplatesStore().rescope(),
+        ...[...projectScoped].map((useStore) => useStore().rescope()),
       ])
     },
   },

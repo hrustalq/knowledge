@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
 import { useDocumentsStore } from '@/stores/documents'
-import { useTemplatesStore } from '@/modules/templates/model/templates.store'
+import { useTemplatesStore } from '@/entities/template'
 
 /**
  * Every row used to carry all three dialogs, mounted closed, and with them their

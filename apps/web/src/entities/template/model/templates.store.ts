@@ -9,7 +9,8 @@ import {
 } from '@knowledge/contracts'
 import { apiQueryOptions, bindStoreQuery, fetchApi, unbindStoreQuery } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
-import { offeredTemplates } from '@/modules/templates/model/templates'
+import { registerProjectScoped } from '@/stores/projects'
+import { offeredTemplates } from '@/entities/template/model/templates'
 
 /** Where a page started from the gallery goes. */
 export interface GalleryTarget {
@@ -45,7 +46,7 @@ let insertHandler: ((rendered: RenderTemplateResponse) => void) | null = null
  * Project-scoped for the reason the workflow roster is: a template may belong
  * to one project, and offering it under another would start that project's
  * pages there. `rescope()` is called from the projects store beside the
- * glossary's and the workflows'.
+ * glossary's and the workflows' (registered at the bottom of this file).
  *
  * The roster includes archived templates and hidden built-ins, because a page
  * created from one still names it ("From template: ADR v3"); `offered` is
@@ -180,3 +181,5 @@ export const useTemplatesStore = defineStore('templates', {
     },
   },
 })
+
+registerProjectScoped(useTemplatesStore)

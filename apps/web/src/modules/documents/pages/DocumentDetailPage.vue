@@ -78,7 +78,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useEventsStore } from '@/stores/events'
 import { useLayoutStore } from '@/stores/layout'
-import { useTemplatesStore } from '@/modules/templates/model/templates.store'
+import { useTemplatesStore } from '@/entities/template'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
@@ -94,7 +94,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
-import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/modules/templates/components/SaveAsTemplateDialog.vue'
+import { SaveAsTemplateDialog, type SaveAsTemplatePage } from '@/entities/template'
 import ExportDialog from '@/modules/documents/components/ExportDialog.vue'
 import { PageLayout, PageRail, PageState } from '@/shared/layout'
 import TocRail from '@/modules/documents/components/TocRail.vue'

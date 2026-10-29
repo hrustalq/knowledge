@@ -63,7 +63,7 @@ import type {
   GlossaryTerm,
   RenderTemplateResponse,
 } from '@knowledge/contracts'
-import { useTemplatesStore } from '@/modules/templates/model/templates.store'
+import { useTemplatesStore } from '@/entities/template'
 import type { PageRefResolver } from '@/modules/documents/model/page-refs'
 import { fromWatch } from '@/shared/composables/rx-vue'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/core/markdown/nodes'

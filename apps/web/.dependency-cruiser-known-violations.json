@@ -902,40 +902,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/app/shell/AppShell.vue",
-    "to": "src/modules/templates/components/TemplateGalleryDialog.vue",
-    "unresolvedTo": "@/modules/templates/components/TemplateGalleryDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/shell/AppShell.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/app/shell/AppTopbar.vue",
     "to": "src/modules/documents/model/search-ui.store.ts",
     "unresolvedTo": "@/modules/documents/model/search-ui.store",
@@ -1007,23 +973,6 @@
     "from": "src/app/shell/SidebarPagesPane.vue",
     "to": "src/modules/documents/model/tree-dnd.ts",
     "unresolvedTo": "@/modules/documents/model/tree-dnd",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/shell/SidebarPagesPane.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -1969,23 +1918,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/documents/components/TreeRowMenu.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/documents/model/ai-actions.ts",
     "to": "src/modules/access/model/mcp-clients.ts",
     "unresolvedTo": "../../access/model/mcp-clients",
@@ -2290,41 +2222,6 @@
   {
     "type": "dependency",
     "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/templates/components/SaveAsTemplateDialog.vue",
-    "unresolvedTo": "@/modules/templates/components/SaveAsTemplateDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
     "to": "src/modules/workflows/components/WorkflowRail.vue",
     "unresolvedTo": "@/modules/workflows/components/WorkflowRail.vue",
     "dependencyTypes": [
@@ -2446,23 +2343,6 @@
     "from": "src/modules/editor/components/extensions/glossary-terms.ts",
     "to": "src/modules/documents/model/glossary.ts",
     "unresolvedTo": "@/modules/documents/model/glossary",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/ImportReview.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -2615,23 +2495,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/editor/components/RichEditor.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/editor/model/use-working-copy.ts",
     "to": "src/modules/documents/model/page-source.ts",
     "unresolvedTo": "@/modules/documents/model/page-source",
@@ -2766,76 +2629,6 @@
     "from": "src/modules/editor/pages/EditorPage.vue",
     "to": "src/modules/documents/model/page-source.ts",
     "unresolvedTo": "@/modules/documents/model/page-source",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/templates/components/SaveAsTemplateDialog.vue",
-    "unresolvedTo": "@/modules/templates/components/SaveAsTemplateDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/ImportPage.vue",
-    "to": "src/modules/templates/components/SaveAsTemplateDialog.vue",
-    "unresolvedTo": "@/modules/templates/components/SaveAsTemplateDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/ImportPage.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -3530,23 +3323,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/workflows/components/WorkflowStepForm.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/stores/events.ts",
     "to": "src/modules/assistant/model/assistant.store.ts",
     "unresolvedTo": "@/modules/assistant/model/assistant.store",
@@ -3567,23 +3343,6 @@
     "from": "src/stores/projects.ts",
     "to": "src/modules/documents/model/glossary.store.ts",
     "unresolvedTo": "@/modules/documents/model/glossary.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "stores-import-only-shared"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/stores/projects.ts",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",

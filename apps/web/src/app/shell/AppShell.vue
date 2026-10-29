@@ -21,7 +21,8 @@ import { useSidebarStore } from '@/stores/sidebar'
 import { useLayoutStore } from '@/stores/layout'
 import { useSearchUiStore } from '@/modules/documents/model/search-ui.store'
 import { useAuthStore } from '@/stores/auth'
-import { useTemplatesStore } from '@/modules/templates/model/templates.store'
+import { useTemplatesStore } from '@/entities/template'
+import { TemplateGalleryDialog } from '@/modules/templates'
 import AppSidebar from './AppSidebar.vue'
 import VerifyEmailBanner from './VerifyEmailBanner.vue'
 import AppTopbar from './AppTopbar.vue'
@@ -37,7 +38,6 @@ const { t } = useI18n()
  * open and kept after, so its preview pipeline is not in every page's bundle
  * and closing it still animates.
  */
-const TemplateGalleryDialog = defineAsyncComponent(() => import('@/modules/templates/components/TemplateGalleryDialog.vue'))
 const templates = useTemplatesStore()
 const galleryMounted = ref(false)
 watch(

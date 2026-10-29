@@ -12,7 +12,7 @@ import {
   type PublicSiteFacetsResponse,
   type PublicSiteSearchResponse,
 } from '@knowledge/contracts/publishing'
-import { SearchNotice, type SearchSnapshot, type SearchSource } from '@/modules/documents/model/use-search'
+import { SearchNotice, type SearchSnapshot, type SearchSource } from '@/entities/search'
 import { siteHomeId, siteHref, type PublicSiteChrome } from './reader-state'
 
 export interface SiteSearchMessages {

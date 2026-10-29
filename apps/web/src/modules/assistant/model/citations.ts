@@ -3,7 +3,7 @@ import { isWebSource } from '@knowledge/contracts'
 import { slugifyHeading } from '@/core/markdown/render'
 
 // In a leaf of its own so the tree rows' dots do not pull in the markdown renderer (#279).
-export { verificationTone } from '@/modules/documents/model/verification-tone'
+export { verificationTone } from '@/entities/document'
 
 /**
  * Sentence-level citations on the read side (docs/features/38).

@@ -22,7 +22,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useSidebarStore } from '@/stores/sidebar'
 import TreeRowMenu from './TreeRowMenu.vue'
-import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@/modules/documents/model/verification-ui'
+import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@/entities/document'
 
 const { t } = useI18n()
 defineOptions({ name: 'DocumentTreeNode' })

@@ -8,9 +8,9 @@
 import type { AssistantUiBlock } from '@knowledge/contracts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { useI18n } from 'vue-i18n'
-import GraphView from '@/modules/documents/components/GraphView.vue'
-import ActivityFeed from '@/modules/documents/components/ActivityFeed.vue'
-import SearchWidget from '@/modules/documents/components/SearchWidget.vue'
+import { GraphView } from '@/entities/graph'
+import { ActivityFeed } from '@/entities/document'
+import { SearchWidget } from '@/entities/search'
 
 const props = defineProps<{ block: AssistantUiBlock }>()
 const { t } = useI18n()

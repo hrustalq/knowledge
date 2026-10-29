@@ -5,7 +5,7 @@
 import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatDateTimeRange } from '@/shared/utils/format'
-import type { SearchSource } from './use-search'
+import type { SearchSource } from '@/entities/search'
 
 type Translate = (key: string, params?: Record<string, unknown>, plural?: number) => string
 

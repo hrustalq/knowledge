@@ -15,7 +15,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { DOCUMENT_CATEGORIES } from '@knowledge/contracts'
-import { tagLabel, useTagOptions } from '@/modules/documents/model/tag-options'
+import { tagLabel, useTagOptions } from '@/entities/document'
 import { useProjectsStore } from '@/stores/projects'
 import type { AutocompleteOption } from '@/shared/ui/autocomplete'
 import FacetFields from './FacetFields.vue'

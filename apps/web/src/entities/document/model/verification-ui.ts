@@ -8,7 +8,7 @@
  * chips read it too — and is re-exported rather than copied.
  */
 import type { SourceVerificationState, VerificationSource } from '@knowledge/contracts'
-import { verificationTone } from '@/modules/documents/model/verification-tone'
+import { verificationTone } from '@/entities/document/model/verification-tone'
 
 export { verificationTone }
 

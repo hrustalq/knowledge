@@ -39,11 +39,11 @@ import DocumentTreeNode from '@/modules/documents/components/DocumentTreeNode.vu
 import TreeDragLayer from '@/modules/documents/components/TreeDragLayer.vue'
 import { provideTreeDnd } from '@/modules/documents/model/tree-dnd'
 import { toast } from 'vue-sonner'
-import DocumentFacets from '@/modules/documents/components/DocumentFacets.vue'
-import GraphCanvas from '@/modules/documents/components/GraphCanvas.vue'
-import { toGraphNodes } from '@/modules/documents/model/graph-model'
-import { useGraphTime } from '@/modules/documents/model/use-graph-time'
-import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@/modules/documents/model/verification-ui'
+import { DocumentFacets } from '@/entities/search'
+import { GraphCanvas } from '@/entities/graph'
+import { toGraphNodes } from '@/entities/graph'
+import { useGraphTime } from '@/entities/graph'
+import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@/entities/document'
 
 const { t } = useI18n()
 

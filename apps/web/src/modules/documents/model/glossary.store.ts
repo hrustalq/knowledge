@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import type { GlossaryTerm, ListGlossaryResponse } from '@knowledge/contracts'
 import { apiQueryOptions, bindStoreQuery, unbindStoreQuery } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
+import { registerProjectScoped } from '@/stores/projects'
 
 /**
  * The active project's vocabulary, held once for the whole app
@@ -80,3 +81,5 @@ export const useGlossaryStore = defineStore('glossary', {
     },
   },
 })
+
+registerProjectScoped(useGlossaryStore)

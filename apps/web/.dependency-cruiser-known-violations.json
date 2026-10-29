@@ -1020,23 +1020,6 @@
     }
   },
   {
-    "type": "dependency",
-    "from": "src/app/shell/SidebarTreeNode.vue",
-    "to": "src/modules/documents/model/verification-ui.ts",
-    "unresolvedTo": "@/modules/documents/model/verification-ui",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
     "type": "cycle",
     "from": "src/entities/rich-editor/components/PagePickerDialog.vue",
     "to": "src/entities/rich-editor/components/RichEditor.vue",
@@ -1258,40 +1241,6 @@
     "from": "src/modules/assistant/components/ChatTranscript.vue",
     "to": "src/modules/documents/components/GenerativeUiBlock.vue",
     "unresolvedTo": "@/modules/documents/components/GenerativeUiBlock.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/assistant/model/citations.ts",
-    "to": "src/modules/documents/model/verification-tone.ts",
-    "unresolvedTo": "@/modules/documents/model/verification-tone",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "export"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ChatSubscriptionEditor.vue",
-    "to": "src/modules/documents/model/tag-options.ts",
-    "unresolvedTo": "@/modules/documents/model/tag-options",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -1578,43 +1527,9 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/insights/components/HealthBulkBar.vue",
-    "to": "src/modules/documents/model/verification-ui.ts",
-    "unresolvedTo": "@/modules/documents/model/verification-ui",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/insights/components/HealthPreviewSheet.vue",
     "to": "src/modules/documents/components/VerificationBar.vue",
     "unresolvedTo": "@/modules/documents/components/VerificationBar.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/insights/components/HealthTable.vue",
-    "to": "src/modules/documents/components/VerificationBadge.vue",
-    "unresolvedTo": "@/modules/documents/components/VerificationBadge.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -1681,23 +1596,6 @@
   {
     "type": "dependency",
     "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
-    "to": "src/modules/documents/components/ActivityFeed.vue",
-    "unresolvedTo": "@/modules/documents/components/ActivityFeed.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
     "to": "src/modules/documents/components/ExportDialog.vue",
     "unresolvedTo": "@/modules/documents/components/ExportDialog.vue",
     "dependencyTypes": [
@@ -1748,57 +1646,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/reader/components/SiteSearch.vue",
-    "to": "src/modules/documents/components/FacetFields.vue",
-    "unresolvedTo": "@/modules/documents/components/FacetFields.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/reader/components/SiteSearch.vue",
-    "to": "src/modules/documents/components/SearchSheetFrame.vue",
-    "unresolvedTo": "@/modules/documents/components/SearchSheetFrame.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/reader/components/SiteSearch.vue",
-    "to": "src/modules/documents/model/use-search.ts",
-    "unresolvedTo": "@/modules/documents/model/use-search",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/reader/components/SiteTreeNode.vue",
     "to": "src/modules/documents/components/TreeBranch.vue",
     "unresolvedTo": "@/modules/documents/components/TreeBranch.vue",
@@ -1833,60 +1680,9 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/reader/model/site-search-source.spec.ts",
-    "to": "src/modules/documents/model/use-search.ts",
-    "unresolvedTo": "@/modules/documents/model/use-search",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/reader/model/site-search-source.ts",
-    "to": "src/modules/documents/model/use-search.ts",
-    "unresolvedTo": "@/modules/documents/model/use-search",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/stores/events.ts",
     "to": "src/modules/assistant/model/assistant.store.ts",
     "unresolvedTo": "@/modules/assistant/model/assistant.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "stores-import-only-shared"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/stores/projects.ts",
-    "to": "src/modules/documents/model/glossary.store.ts",
-    "unresolvedTo": "@/modules/documents/model/glossary.store",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",

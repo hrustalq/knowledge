@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import ActivityFeed from '@/modules/documents/components/ActivityFeed.vue'
+import { ActivityFeed } from '@/entities/document'
 
 const { t } = useI18n()
 </script>

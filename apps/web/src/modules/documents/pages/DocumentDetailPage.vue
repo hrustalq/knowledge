@@ -105,7 +105,8 @@ import { useApiReference } from '@/entities/api-operation'
 import { ApiReferenceView, TestFixtureView } from '@/entities/api-operation'
 import MergeRequestList from '@/modules/merge-requests/components/MergeRequestList.vue'
 import GraphLightbox from '@/modules/documents/components/GraphLightbox.vue'
-import ActivityFeed from '@/modules/documents/components/ActivityFeed.vue'
+import { ActivityFeed } from '@/entities/document'
+import { LazyGraphView as GraphView } from '@/entities/graph'
 import { WorkflowRail } from '@/entities/workflow'
 import ConnectorRail from '@/modules/connectors/components/ConnectorRail.vue'
 import ConflictsRail from '@/modules/documents/components/ConflictsRail.vue'
@@ -127,7 +128,6 @@ import VerificationBar from '@/modules/documents/components/VerificationBar.vue'
 // none of them rides in this page's chunk. SSR still renders them (it awaits
 // async components), and hydration waits for the chunk before it adopts the DOM.
 const RevisionsView = defineAsyncComponent(() => import('@/modules/documents/components/RevisionsView.vue'))
-const GraphView = defineAsyncComponent(() => import('@/modules/documents/components/GraphView.vue'))
 
 const { t } = useI18n()
 

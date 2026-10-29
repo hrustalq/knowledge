@@ -10,7 +10,7 @@ import { History, SearchX } from 'lucide-vue-next'
 import { Badge } from '@/shared/ui/badge'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { formatDate, formatDateTime } from '@/shared/utils/format'
-import VerificationBadge from '@/modules/documents/components/VerificationBadge.vue'
+import { VerificationBadge } from '@/entities/document'
 import type { SearchCopy, SearchFailure, SearchHit, SearchView } from '../model/use-search'
 
 const { t } = useI18n()

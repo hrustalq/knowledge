@@ -36,7 +36,7 @@ import {
   type Simulation,
 } from 'd3-force'
 import { DEFAULT_OPTIONS, project, radiusOf, type EdgeChange, type GraphEdgeInput, type GraphNodeInput, type GraphOptions } from '../model/graph-model'
-import { communityColor, entityColor, isOperationType, mix, readPalette, rgba, type GraphPalette } from '@/entities/graph'
+import { communityColor, entityColor, isOperationType, mix, readPalette, rgba, type GraphPalette } from '../model/graph-theme'
 
 const props = withDefaults(
   defineProps<{

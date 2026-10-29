@@ -45,7 +45,7 @@ import { Label } from '@/shared/ui/label'
 import { Textarea } from '@/shared/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import RichEditor from '@/modules/editor/components/RichEditor.vue'
+import { RichEditor } from '@/entities/rich-editor'
 import { TemplatePlaceholdersEditor } from '@/entities/template'
 
 const props = defineProps<{

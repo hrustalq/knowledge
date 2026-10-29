@@ -4,7 +4,7 @@
 // banner — the page stays the loudest thing on screen.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { CollabStatus } from '../model/use-collab'
+import type { CollabStatus } from '@/entities/rich-editor'
 
 const props = defineProps<{ status: CollabStatus }>()
 const { t } = useI18n()

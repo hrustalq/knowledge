@@ -29,7 +29,7 @@ import {
 } from '@/shared/ui/dropdown-menu'
 import { useQuery } from '@tanstack/vue-query'
 import type { ListAiAgentChoicesResponse } from '@knowledge/contracts'
-import RichEditor from '@/modules/editor/components/RichEditor.vue'
+import { RichEditor } from '@/entities/rich-editor'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useDocumentsStore } from '@/stores/documents'

@@ -13,7 +13,7 @@
  * markdown, the write has to be synchronous to survive `pagehide`, and every
  * access is guarded because private modes and full quotas throw.
  */
-import { isTemplateProvenance, type PageFields } from '../../documents/model/page-source'
+import { isTemplateProvenance, type PageFields } from '@/entities/document'
 
 export interface WorkingCopy extends PageFields {
   v: 1

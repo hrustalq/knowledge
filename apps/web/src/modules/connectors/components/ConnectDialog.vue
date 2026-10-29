@@ -22,7 +22,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/shared/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
-import ImportStepper from '@/modules/editor/components/ImportStepper.vue'
+import { ImportStepper } from '@/entities/rich-editor'
 import { getWorkspaceId } from '@/shared/api/api'
 import { INTERCOM_REGIONS, PROVIDER_GROUPS, PROVIDERS, offeredMethods, providerMeta } from '@/modules/connectors/model/connection-providers'
 import { openOauthTab } from '@/modules/connectors/model/oauth-tab'

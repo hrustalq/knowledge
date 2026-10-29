@@ -50,7 +50,7 @@ import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 import { AiEmptyState } from '@/shared/ui/empty-state'
-import ParseProgress from '@/modules/editor/components/ParseProgress.vue'
+import { ParseProgress } from '@/entities/rich-editor'
 import ConnectorItemReview from '@/modules/connectors/components/ConnectorItemReview.vue'
 import ConnectorRunTree from '@/modules/connectors/components/ConnectorRunTree.vue'
 import {

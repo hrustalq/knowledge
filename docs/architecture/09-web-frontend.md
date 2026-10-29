@@ -318,8 +318,8 @@ cytoscape because cytoscape nodes cannot be Vue components;
 neither an `EventSource` nor a `WebSocket` has any meaning during a render.
 
 Co-editing ([56](../features/56-realtime-coediting.md)) goes one step further:
-`modules/editor/model/use-collab.ts` (Yjs, the Hocuspocus provider, IndexedDB) is
-a **dynamic import** that `EditorPage` makes in `onMounted`, and only after
+`entities/rich-editor/model/use-collab.ts` (Yjs, the Hocuspocus provider, IndexedDB) is
+a **dynamic import** behind the entity's `loadCollab()`, which `EditorPage` calls in `onMounted`, and only after
 `GET /v1/collab/capabilities` says `enabled`. The server render and a
 deployment with the flag off never load Yjs at all; the SSR pass renders the
 editor's existing skeleton. In collab mode the editor never calls

@@ -13,7 +13,7 @@
  * page where every instance of a word is a link is a page nobody can read.
  *
  * This module is the matcher only. Drawing the links is the caller's job —
- * today that is one caller, `modules/editor/components/extensions/glossary-terms.ts`,
+ * today that is one caller, `entities/rich-editor/components/extensions/glossary-terms.ts`,
  * which draws them as ProseMirror decorations because the read view *is* the
  * editor since docs/features/15. The DOM-walking pass this file used to carry
  * was deleted with the `MarkdownView` prop that was its only entry point.

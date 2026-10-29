@@ -1038,8 +1038,8 @@
   },
   {
     "type": "cycle",
-    "from": "src/modules/editor/components/PagePickerDialog.vue",
-    "to": "src/modules/editor/components/RichEditor.vue",
+    "from": "src/entities/rich-editor/components/PagePickerDialog.vue",
+    "to": "src/entities/rich-editor/components/RichEditor.vue",
     "unresolvedTo": "./RichEditor.vue",
     "dependencyTypes": [
       "local",
@@ -1052,7 +1052,7 @@
     },
     "cycle": [
       {
-        "name": "src/modules/editor/components/RichEditor.vue",
+        "name": "src/entities/rich-editor/components/RichEditor.vue",
         "dependencyTypes": [
           "local",
           "type-only",
@@ -1060,7 +1060,7 @@
         ]
       },
       {
-        "name": "src/modules/editor/components/PagePickerDialog.vue",
+        "name": "src/entities/rich-editor/components/PagePickerDialog.vue",
         "dependencyTypes": [
           "local",
           "import"
@@ -1306,57 +1306,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectDialog.vue",
-    "to": "src/modules/editor/components/ImportStepper.vue",
-    "unresolvedTo": "@/modules/editor/components/ImportStepper.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectorItemReview.vue",
-    "to": "src/modules/editor/components/RichEditor.vue",
-    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectorSetupDialog.vue",
-    "to": "src/modules/editor/components/ImportStepper.vue",
-    "unresolvedTo": "@/modules/editor/components/ImportStepper.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/connectors/components/ConnectorTrackerSettings.vue",
     "to": "src/modules/documents/components/OwnerPicker.vue",
     "unresolvedTo": "@/modules/documents/components/OwnerPicker.vue",
@@ -1374,77 +1323,9 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/connectors/pages/ConnectorRunPage.vue",
-    "to": "src/modules/editor/components/ParseProgress.vue",
-    "unresolvedTo": "@/modules/editor/components/ParseProgress.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/documents/components/AskAssistant.vue",
     "to": "src/modules/assistant/components/AnswerFeedback.vue",
     "unresolvedTo": "@/modules/assistant/components/AnswerFeedback.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/DocumentCanvas.vue",
-    "to": "src/modules/editor/components/extensions/comment-anchors.ts",
-    "unresolvedTo": "@/modules/editor/components/extensions/comment-anchors",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/DocumentCanvas.vue",
-    "to": "src/modules/editor/components/RichEditor.vue",
-    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/DocumentCanvas.vue",
-    "to": "src/modules/editor/model/use-embed-status.ts",
-    "unresolvedTo": "@/modules/editor/model/use-embed-status",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -1545,40 +1426,6 @@
   {
     "type": "dependency",
     "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/editor/components/CollabDraftBadge.vue",
-    "unresolvedTo": "@/modules/editor/components/CollabDraftBadge.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/editor/model/working-copy.ts",
-    "unresolvedTo": "@/modules/editor/model/working-copy",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
     "to": "src/modules/merge-requests/components/MergeRequestList.vue",
     "unresolvedTo": "@/modules/merge-requests/components/MergeRequestList.vue",
     "dependencyTypes": [
@@ -1598,23 +1445,6 @@
     "from": "src/modules/documents/pages/DocumentDetailPage.vue",
     "to": "src/modules/merge-requests/components/ThreadCard.vue",
     "unresolvedTo": "@/modules/merge-requests/components/ThreadCard.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/GlossaryPage.vue",
-    "to": "src/modules/editor/components/RichEditor.vue",
-    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -1714,71 +1544,9 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/editor/model/use-working-copy.ts",
-    "to": "src/modules/documents/model/page-source.ts",
-    "unresolvedTo": "@/modules/documents/model/page-source",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/model/working-copy.spec.ts",
-    "to": "src/modules/documents/model/page-source.ts",
-    "unresolvedTo": "../../documents/model/page-source",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/model/working-copy.ts",
-    "to": "src/modules/documents/model/page-source.ts",
-    "unresolvedTo": "../../documents/model/page-source",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/editor/pages/EditorPage.vue",
     "to": "src/modules/assistant/model/assistant.store.ts",
     "unresolvedTo": "@/modules/assistant/model/assistant.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/documents/model/page-source.ts",
-    "unresolvedTo": "@/modules/documents/model/page-source",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -1847,40 +1615,6 @@
     "from": "src/modules/insights/components/HealthTable.vue",
     "to": "src/modules/documents/components/VerificationBadge.vue",
     "unresolvedTo": "@/modules/documents/components/VerificationBadge.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/components/CommentComposer.vue",
-    "to": "src/modules/editor/components/RichEditor.vue",
-    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/components/MrSidebar.vue",
-    "to": "src/modules/editor/components/CollabDraftBadge.vue",
-    "unresolvedTo": "@/modules/editor/components/CollabDraftBadge.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -2119,23 +1853,6 @@
     "from": "src/modules/reader/model/site-search-source.ts",
     "to": "src/modules/documents/model/use-search.ts",
     "unresolvedTo": "@/modules/documents/model/use-search",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/templates/components/TemplateEditor.vue",
-    "to": "src/modules/editor/components/RichEditor.vue",
-    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",

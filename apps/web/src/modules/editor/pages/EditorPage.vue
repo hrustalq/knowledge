@@ -78,21 +78,8 @@ import { presignedPut } from '@/shared/api/presigned-put'
 import { labelFor } from '@/shared/i18n/labels'
 import { formatDateTime } from '@/shared/utils/format'
 import { lineDiff } from '@/core/line-diff'
-import {
-  buildSource,
-  mergeTemplateDefaults,
-  readFrontmatter,
-  samePage,
-  type PageFields,
-  type RelationRow,
-  type TemplateProvenance,
-} from '@/modules/documents/model/page-source'
-import {
-  readWorkingCopy,
-  removeWorkingCopy,
-  workingCopyKey,
-  type WorkingCopy,
-} from '@/modules/editor/model/working-copy'
+import { buildSource, mergeTemplateDefaults, readFrontmatter, samePage, type PageFields, type RelationRow, type TemplateProvenance } from '@/entities/document'
+import { readWorkingCopy, removeWorkingCopy, workingCopyKey, type WorkingCopy } from '@/entities/rich-editor'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useTemplatesStore } from '@/entities/template'
@@ -139,14 +126,15 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
-import RichEditor from '@/modules/editor/components/RichEditor.vue'
-import { EMBED_DOCUMENT } from '@/modules/editor/model/use-embed-status'
+import { RichEditor } from '@/entities/rich-editor'
+import { EMBED_DOCUMENT } from '@/entities/rich-editor'
 import { ApiOperationPicker, type PickedOperation } from '@/entities/api-operation'
 import { ApiOperationRef } from '@/entities/api-operation'
 import { SaveAsTemplateDialog, type SaveAsTemplatePage } from '@/entities/template'
 import { useWorkingCopy } from '@/modules/editor/model/use-working-copy'
-import { docToMarkdown } from '@/modules/editor/model/editor-streams'
-import type { CollabHandle } from '@/modules/editor/model/use-collab'
+import { docToMarkdown } from '@/entities/rich-editor'
+import type { CollabHandle } from '@/entities/rich-editor'
+import { loadCollab } from '@/entities/rich-editor'
 import CollabStatus from '@/modules/editor/components/CollabStatus.vue'
 import CollabPresence from '@/modules/editor/components/CollabPresence.vue'
 import { DiffView } from '@/entities/document'
@@ -468,7 +456,7 @@ async function startCollab(
 ) {
   const doc = detail.document
   // Loaded only here: a deployment that does not co-edit never fetches Yjs.
-  const { createCollab, bindPageFields, META_FIELD } = await import('@/modules/editor/model/use-collab')
+  const { createCollab, bindPageFields, META_FIELD } = await loadCollab()
   const handle = createCollab({
     name: collabDocName(doc.workspaceId, doc.documentId, on.branchId),
     schemaMatches: caps.schemaVersion === SCHEMA_VERSION,

@@ -28,7 +28,7 @@ import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { confirm } from '@/shared/ui/confirm'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 import FixtureRows from '@/modules/api-reference/components/FixtureRows.vue'
 
 const props = defineProps<{ workspaceId: string; runnerOn: boolean }>()

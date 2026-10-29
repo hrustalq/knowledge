@@ -9,7 +9,7 @@ import type { ListMergeRequestsResponse, MergeRequestInfo } from '@knowledge/con
 import { apiQueryOptions } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 import MergeRequestCard from './MergeRequestCard.vue'
 
 const { t } = useI18n()

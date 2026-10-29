@@ -10,7 +10,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/widgets/page'
+import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
 import AuditLogTable from '@/modules/access/components/AuditLogTable.vue'
 import AuthPolicyPanel from '@/modules/access/components/AuthPolicyPanel.vue'
 import GroupMappingsPanel from '@/modules/access/components/GroupMappingsPanel.vue'

@@ -8,7 +8,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { Badge } from '@/shared/ui/badge'
-import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/widgets/page'
+import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
 import { useAuthStore } from '@/stores/auth'
 import ConnectorList from '@/modules/connectors/components/ConnectorList.vue'
 import ConnectionList from '@/modules/connectors/components/ConnectionList.vue'

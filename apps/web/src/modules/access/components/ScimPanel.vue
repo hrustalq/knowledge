@@ -25,7 +25,7 @@ import CopyBlock from '@/modules/access/components/CopyBlock.vue'
 import { Button } from '@/shared/ui/button'
 import { confirm } from '@/shared/ui/confirm'
 import { Input } from '@/shared/ui/input'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 
 const { t } = useI18n()

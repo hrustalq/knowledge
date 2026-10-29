@@ -39,7 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog'
-import { PageTabs, panelId, tabId, type PageTab } from '@/widgets/page'
+import { PageTabs, panelId, tabId, type PageTab } from '@/shared/layout'
 import AgentSelect from './AgentSelect.vue'
 import ChatBindingTable from './ChatBindingTable.vue'
 

@@ -38,8 +38,8 @@ import {
   panelId,
   tabId,
   usePageTabs,
-} from '@/widgets/page'
-import type { PageTab } from '@/widgets/page'
+} from '@/shared/layout'
+import type { PageTab } from '@/shared/layout'
 import ConnectorAccessMirroring from '@/modules/connectors/components/ConnectorAccessMirroring.vue'
 import ConnectorReleases from '@/modules/connectors/components/ConnectorReleases.vue'
 import ConnectorWiki from '@/modules/connectors/components/ConnectorWiki.vue'

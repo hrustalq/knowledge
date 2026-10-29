@@ -9,6 +9,8 @@ export { default as PageScrollList } from './PageScrollList.vue'
 export {
   isCanvas,
   panelId,
+  RAIL_MEMORY,
+  type RailMemory,
   tabId,
   usePageTabs,
   type PageTab,

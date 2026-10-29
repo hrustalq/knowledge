@@ -20,7 +20,7 @@ import type { DocumentContentResponse, DocumentDetailResponse, KnowledgeHealthRo
 import { apiQueryOptions } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 import MarkdownView from '@/modules/documents/components/MarkdownView.vue'
 import VerificationBar from '@/modules/documents/components/VerificationBar.vue'
 

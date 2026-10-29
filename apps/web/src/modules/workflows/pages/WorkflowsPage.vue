@@ -19,7 +19,7 @@ import {
   type FilterField,
 } from '@/shared/ui/filter-bar'
 import { Autocomplete } from '@/shared/ui/autocomplete'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
 import { Skeleton } from '@/shared/ui/skeleton'

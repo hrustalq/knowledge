@@ -22,7 +22,7 @@ import { Button } from '@/shared/ui/button'
 import { confirm } from '@/shared/ui/confirm'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { Input } from '@/shared/ui/input'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 
 const { t } = useI18n()
 const workspaceId = getWorkspaceId()

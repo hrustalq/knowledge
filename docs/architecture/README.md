@@ -33,4 +33,4 @@ here. If a rule fits on one line and applies everywhere, it belongs there.
 | 08  | [Events & live updates](08-events-live.md)                   | Redis pub/sub, SSE, the WS gateway, optimistic cache updates                           |
 | 09  | [Web frontend](09-web-frontend.md)                           | The SSR shell, per-request isolation, cookies, hydration hazards                       |
 | 10  | [Caching](10-caching.md)                                     | Query cache, `Cache-Control` and 304s, the Redis read cache, the service worker        |
-| 11  | [Web layers & modules](11-web-modules.md)                    | `app → modules → entities → widgets → stores → shared → core`; modules never import each other |
+| 11  | [Web layers & modules](11-web-modules.md)                    | `app → widgets → modules → entities → stores → shared → core`; modules never import each other |

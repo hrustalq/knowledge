@@ -42,7 +42,7 @@ import { formatBytes, formatNumber } from '@/shared/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@/shared/ui/badge'
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 
 const { t } = useI18n()
 const auth = useAuthStore()

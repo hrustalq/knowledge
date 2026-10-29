@@ -34,7 +34,7 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 
 const props = defineProps<{ connectorId: string }>()
 const { t } = useI18n()

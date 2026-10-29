@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/vue-query'
 import type { ChatSearchAvailability } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { PageLayout, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/widgets/page'
+import { PageLayout, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
 import SearchWidget from '@/modules/documents/components/SearchWidget.vue'
 import ChatSearchWidget from '@/modules/documents/components/ChatSearchWidget.vue'
 

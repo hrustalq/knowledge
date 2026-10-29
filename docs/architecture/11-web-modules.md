@@ -20,27 +20,28 @@ cycles.
 > `captures`, `notifications`, `publishing` and `reader` have their
 > `routes.ts`. Midway the design tightened: **modules never import each
 > other**, and what they share moves down into a new `entities/` layer. The
-> rules below are the tightened ones; the 240 violations of them in the tree
+> rules below are the tightened ones (and widgets moved above the modules); the 240 violations of them in the tree
 > are in the baseline (152 of them a module importing another module). Each
 > later phase extracts one entity, leaves first, and shrinks the baseline.
 > Sections marked _(planned)_ describe the end state, not the tree today.
 
 ## The layers
 
-Left may import right, never the reverse.
+Left may import right, never the reverse — except that a widget never imports
+a module either.
 
 ```
-app → modules → entities → widgets → stores → shared → core        assets/ from anywhere
+app → widgets → modules → entities → stores → shared → core        assets/ from anywhere
 ```
 
 | Layer       | Holds                                                                                                                                                             | May import                                                         |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `app/`      | `App.vue`, the shell (sidebar, topbar, breadcrumbs, switchers, the settings shell), app-wide composables and providers, `app/router/`                             | everything below; a module by its `index.ts` or `routes.ts`        |
-| `modules/`  | one folder per feature, each owning routes (the map below)                                                                                                        | entities (by index), widgets, stores, shared, core — **never another module** |
-| `entities/` | one folder per domain: the components, stores and composables two or more modules share (the entity test below)                                                  | another entity by its `index.ts`, no cycles; widgets, stores, shared, core |
-| `widgets/`  | blocks used by two or more modules that own no route and belong to no domain                                                                                      | stores, shared, core                                               |
+| `app/`      | `App.vue`, the shell (sidebar, topbar, breadcrumbs, switchers, the settings shell), app-wide composables and providers, `app/router/`                             | everything below; a widget by its `index.ts`, a module by its `index.ts` or `routes.ts` |
+| `widgets/`  | composite blocks `app/` mounts, one folder each: its own implementation, entities and `shared/`; module content arrives through slots and props                  | entities (by index), stores, shared, core — **never a module**     |
+| `modules/`  | one folder per feature, each owning routes (the map below)                                                                                                        | entities (by index), stores, shared, core — **never another module**, never a widget |
+| `entities/` | one folder per domain: the components, stores and composables two or more modules share (the entity test below)                                                  | another entity by its `index.ts`, no cycles; stores, shared, core  |
 | `stores/`   | cross-cutting Pinia stores only (the list below)                                                                                                                  | shared, core                                                       |
-| `shared/`   | business-agnostic: `api/` (generated client, `schema.d.ts`, query helpers), `composables/`, `constants/`, `types/`, `utils/`, `ui/` (the shadcn-vue kit), `i18n/` | core                                                               |
+| `shared/`   | business-agnostic: `api/` (generated client, `schema.d.ts`, query helpers), `composables/`, `constants/`, `types/`, `utils/`, `ui/` (the shadcn-vue kit), `layout/` (the page chrome), `i18n/` | core                                                               |
 | `core/`     | pure TypeScript: no Vue, no Pinia, no DOM, nothing from `src/` outside `core/`                                                                                    | `@knowledge/*` packages only                                       |
 | `assets/`   | static assets and global styles (`style.css`, `styles/`)                                                                                                          | —                                                                  |
 
@@ -106,8 +107,8 @@ entities/<domain>/
   two or more modules use it, it owns no route, and it has a domain — it would
   have to change when that domain's rules change: `RichEditor`, the document
   tree row, the verification badge, the members composable, the templates
-  store. With no domain it is a widget (the page chrome, the filter rail).
-  With one user it stays in that module.
+  store. With no domain it goes to `shared/` (the page chrome is
+  `shared/layout/`). With one user it stays in that module.
 - **`index.ts` is the only door**, for modules, `app/` and other entities
   alike. Explicit named re-exports; everything not exported is private.
 - An entity may import another entity through its index (a document's owner
@@ -115,10 +116,27 @@ entities/<domain>/
   Two entities that need each other are one entity, or share a piece that
   belongs further down.
 
+## A widget
+
+A widget is a composite block that `app/` mounts — above the modules, never
+importing one. It is built from its own implementation, entities and
+`shared/`; whatever a module contributes reaches it through slots and props
+from `app/`. One folder per widget with an `index.ts`, imported only through it
+(`widget-via-index-only`). `widgets/` is empty today: the page chrome that sat
+there in phase 1 is domain-less and every module renders it, so it moved down
+to `shared/layout/`, and the person chip and hover card have a domain, so they
+are `entities/person`. A shell block becomes a widget when it is composed from
+more than one place in `app/`.
+
+`shared/layout/` may not import a store either. The one piece of app state the
+chrome needs — which `PageRail` widgets are open, remembered per surface — is a
+`RailMemory` interface declared in `shared/layout/page-chrome.ts`; `App.vue`
+provides `stores/layout` under `RAIL_MEMORY`, and `PageRail` injects it.
+
 ## Indexes are side-effect free, and the build is told so
 
-An `index.ts` (module or entity) holds only named re-exports from its own
-files: an ESLint rule on `src/{modules,entities}/*/index.ts` refuses anything
+An `index.ts` (module, entity or widget) holds only named re-exports from its own
+files: an ESLint rule on `src/{modules,entities,widgets}/*/index.ts` refuses anything
 else, `export *` and a declaration of its own included. A Vite plugin in
 `vite.config.ts` marks those files `moduleSideEffects: false`, which lets the
 bundler bind an importer straight to the files it uses.
@@ -141,10 +159,10 @@ A component that loads on demand is declared as
 
 | Rule (`.dependency-cruiser.cjs`)                                                                                                         | Fails on                                                                                               |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `modules-import-no-app`, `entities-import-no-module`, `widgets-import-no-domain`, `stores-import-only-shared`, `shared-is-business-agnostic` | any import pointing left in the layer line                                                             |
+| `modules-import-no-app`, `entities-import-no-module`, `widgets-import-no-module`, `stores-import-only-shared`, `shared-is-business-agnostic` | any import pointing left in the layer line, and a widget importing a module                            |
 | `no-module-to-module`                                                                                                                    | `modules/a/**` importing anything in `modules/b/**`, index included                                    |
 | `app-via-module-index`                                                                                                                   | `app/` or an entry file importing a module file other than its `index.ts` or `routes.ts`               |
-| `entity-via-index-only`, `entity-via-index-only-outside`                                                                                 | anything outside `entities/a/` importing an `entities/a/` file other than `index.ts`                   |
+| `entity-via-index-only`, `entity-via-index-only-outside`, `widget-via-index-only`                                                        | anything outside `entities/a/` (`widgets/a/`) importing a file there other than `index.ts`             |
 | `no-entity-cycles`                                                                                                                       | entity `a` imports `b` and `b` imports `a` (or a longer ring), at folder level                         |
 | `core-is-pure`                                                                                                                           | `core/` (specs aside) importing anything in `src/` outside `core/`, any package with `vue` in its name, or Pinia |
 
@@ -206,7 +224,8 @@ forbids:
 | a page                                                  | `modules/<m>/pages/`, routed from `modules/<m>/routes.ts`    |
 | a component one module uses                             | `modules/<m>/components/`                                    |
 | a component several modules use, with a domain          | `entities/<d>/components/`, exported from its `index.ts`     |
-| a component several modules use, without a domain       | `widgets/`                                                   |
+| a component several modules use, without a domain       | `shared/` (`shared/layout/` for page chrome, `shared/ui/` for a primitive) |
+| a composite block the shell mounts                      | `widgets/<w>/`, exported from its `index.ts`                 |
 | a component the shell mounts from a module              | the module, exported from its `index.ts`                     |
 | a shadcn-vue primitive                                  | `shared/ui/` (`pnpm exec shadcn-vue add` writes there)       |
 | a composable for one feature                            | `modules/<m>/model/`                                         |
@@ -229,7 +248,7 @@ extraction phase confirms its entity's contents against the import graph.
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `document`       | documents' MarkdownView, DiffView, DocumentCanvas, TreeRow/TreeBranch, the verification badge/bar/tone/OwnerPicker, page-refs, glossary, page-source, tag-options, ActivityFeed, the export dialog and picker, GenerativeUiBlock, DocumentPickerWidget |
 | `search`         | documents' use-search, SearchSheetFrame, FacetFields (also the reader's)                                                                     |
-| `person`         | `widgets/person` (UserChip, UserCard, UserAvatar — they import the members composable, so they have a domain), merge-requests' use-members and use-agent-names, access's AvatarPicker |
+| `person`         | **done:** UserChip, UserCard, UserAvatar (out of `widgets/`: they read the members composable), use-members and use-agent-names, the actor helpers split out of `mr-ui`, AvatarPicker |
 | `merge-request`  | merge-requests' MergeRequestList, ThreadCard, CommentComposer, thread-anchors, mr-ui                                                          |
 | `rich-editor`    | editor's RichEditor with its extensions and nodes, CollabDraftBadge, embeds, working-copy, use-embed-status; ImportStepper/ParseProgress      |
 | `api-operation`  | api-reference's operation embed/picker/ref/index, ApiReferenceView, ApiChangesPanel, ApiDriftCheck, TestFixtureView, api-spec, api-block-rows, use-operation, use-api-reference |
@@ -242,7 +261,7 @@ extraction phase confirms its entity's contents against the import graph.
 | `capture`        | CaptureOriginParts, clientLabel, repoAtCommit                                                                                                |
 | `workflow`       | WorkflowRail, graph-theme                                                                                                                    |
 
-`DailyBars` and `AiEmptyState` have no domain and become widgets.
+`DailyBars` and `AiEmptyState` have no domain and move to `shared/`.
 
 ## The module map
 
@@ -287,8 +306,8 @@ Outside the modules:
 | From                                                              | To                                                                                                        |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `components/layout` (minus `page/`), `SettingsPage`, `App.vue`    | `app/` (the shell; SettingsPage is the settings shell)                                                    |
-| `components/layout/page/`, `components/knowledge/RailSection.vue` | `widgets/page/` — every module's page chrome, so in `app/` it would be an upward import from every module |
-| `people/UserChip`, `people/UserCard`, `merge-requests/UserAvatar` | `widgets/person/` for now; `entities/person` in its phase                                                 |
+| `components/layout/page/`, `components/knowledge/RailSection.vue` | `widgets/page/` in phase 1, now `shared/layout/` — every module renders it                                |
+| `people/UserChip`, `people/UserCard`, `merge-requests/UserAvatar` | `widgets/person/` in phase 1, now `entities/person`                                                        |
 | `components/ui/`                                                  | `shared/ui/`                                                                                              |
 | `api/`                                                            | `shared/api/`                                                                                             |
 | `i18n/`                                                           | `shared/i18n/`                                                                                            |

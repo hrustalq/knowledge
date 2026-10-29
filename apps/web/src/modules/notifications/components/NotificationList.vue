@@ -11,7 +11,7 @@ import { CircleAlert } from 'lucide-vue-next'
 import type { NotificationEntry } from '@knowledge/contracts'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { Button } from '@/shared/ui/button'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 import { errorMessage } from '@/shared/api/errors'
 import NotificationRow from './NotificationRow.vue'
 

@@ -19,7 +19,7 @@ import { formatDateTime } from '@/shared/utils/format'
 import { labelFor } from '@/shared/i18n/labels'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/shared/ui/button'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 

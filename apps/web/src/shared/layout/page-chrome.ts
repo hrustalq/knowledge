@@ -1,4 +1,4 @@
-import { computed, toValue, type Component, type MaybeRefOrGetter, type WritableComputedRef } from 'vue'
+import { computed, toValue, type Component, type InjectionKey, type MaybeRefOrGetter, type WritableComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 /**
@@ -92,6 +92,18 @@ export function usePageTabs<K extends string>(
     },
   })
 }
+
+/**
+ * Which rail widgets are open, per surface. `PageRail` remembers it across
+ * pages; the store that holds it is app state (stores/layout), which shared/
+ * may not import, so the app provides it under this key (docs/architecture/11).
+ * `null` means nobody has touched that surface's rail yet.
+ */
+export interface RailMemory {
+  openWidgets(surface: string): string[] | null
+  setWidgetOpen(surface: string, id: string, open: boolean, current: string[]): void
+}
+export const RAIL_MEMORY: InjectionKey<RailMemory> = Symbol('rail-memory')
 
 export interface RailWidget<K extends string = string> {
   id: K

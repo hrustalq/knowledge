@@ -16,19 +16,21 @@ module.exports = {
   forbidden: [
     // ---------------------------------------------------------------- layers (#566, docs/architecture/11)
     //
-    //   app → modules → entities → widgets → stores → shared → core     (assets/ from anywhere)
+    //   app → widgets → modules → entities → stores → shared → core     (assets/ from anywhere)
     //
-    // Left may import right, never the reverse. Within a layer: a module never
-    // imports another module; an entity imports another only through its
-    // index.ts, without cycles. The entry files at the src/ root sit above app/.
+    // Left may import right, never the reverse — except that a widget never imports
+    // a module either. Within a layer: a module never imports another module; an
+    // entity imports another only through its index.ts, without cycles. The entry
+    // files at the src/ root sit above app/.
     {
       name: 'modules-import-no-app',
       comment:
-        'app/ composes the modules (the shell, the router). A module reaching back into app/ ' +
-        'makes the shell a dependency of every feature it hosts.',
+        'app/ composes the modules (the shell, the router), and widgets are blocks app/ mounts. ' +
+        'A module reaching back into either makes the shell a dependency of every feature it ' +
+        'hosts. What a module needs from a widget belongs further down (an entity, shared/).',
       severity: 'error',
       from: { path: '^src/modules/' },
-      to: { path: '^src/app/' },
+      to: { path: '^src/(app|widgets)/' },
     },
     {
       name: 'no-module-to-module',
@@ -48,16 +50,17 @@ module.exports = {
         'module (or the shell) is that module\'s internals, misfiled.',
       severity: 'error',
       from: { path: '^src/entities/' },
-      to: { path: '^src/(app|modules)/' },
+      to: { path: '^src/(app|widgets|modules)/' },
     },
     {
-      name: 'widgets-import-no-domain',
+      name: 'widgets-import-no-module',
       comment:
-        'A widget is a domain-less block used by two or more modules. One that imports an entity ' +
-        'or a module has a domain: it is an entity.',
+        'A widget is a block app/ mounts, above the modules, and it never imports one: it is ' +
+        'built from its own parts, entities and shared/, and module content reaches it through ' +
+        'slots and props.',
       severity: 'error',
       from: { path: '^src/widgets/' },
-      to: { path: '^src/(app|modules|entities)/' },
+      to: { path: '^src/(app|modules)/' },
     },
     {
       name: 'stores-import-only-shared',
@@ -67,7 +70,7 @@ module.exports = {
         'registers with it instead.',
       severity: 'error',
       from: { path: '^src/stores/' },
-      to: { path: '^src/(app|modules|entities|widgets)/' },
+      to: { path: '^src/(app|widgets|modules|entities)/' },
     },
     {
       name: 'shared-is-business-agnostic',
@@ -110,6 +113,13 @@ module.exports = {
       severity: 'error',
       from: { path: '^src/', pathNot: '^src/entities/' },
       to: { path: '^src/entities/', pathNot: '^src/entities/[^/]+/index\\.ts$' },
+    },
+    {
+      name: 'widget-via-index-only',
+      comment: "A widget's index.ts is its only public surface, as an entity's is.",
+      severity: 'error',
+      from: { path: '^src/', pathNot: '^src/widgets/' },
+      to: { path: '^src/widgets/', pathNot: '^src/widgets/[^/]+/index\\.ts$' },
     },
     {
       name: 'app-via-module-index',

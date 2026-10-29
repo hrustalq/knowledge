@@ -33,7 +33,7 @@ the same page, and a live invalidation ([08](08-events-live.md)) reaches both.
 **Raw `fetch` is a lint error.** `apps/web/eslint.config.js` (`RAW_FETCH`)
 flags `fetch(`, `window.fetch(`, `globalThis.fetch(` and `self.fetch(`
 everywhere except `RAW_FETCH_OK`. Each entry there names why XHR cannot do the
-job: a streamed body (`modules/assistant/model/assistant-stream.ts`), a keepalive beacon that
+job: a streamed body (`entities/assistant/model/assistant-stream.ts`), a keepalive beacon that
 outlives the tab (`modules/insights/model/use-page-view.ts`), the try-it console and browser suite
 runs (the request is the reader's own), the public SSR entry (no member client,
 no credential), and the service worker. File downloads go through

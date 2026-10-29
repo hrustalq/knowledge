@@ -28,7 +28,7 @@ import { ArrowRight, Check, Sparkles, Wand2 } from 'lucide-vue-next'
 import type { AssistantFlowAnswer, AssistantPrompt, AssistantPromptField } from '@knowledge/contracts'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import type { FlowStep } from '@/modules/assistant/model/flow-steps'
+import type { FlowStep } from '@/entities/assistant/model/flow-steps'
 
 const { t } = useI18n()
 

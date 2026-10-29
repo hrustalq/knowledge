@@ -567,12 +567,12 @@ with `make backtest`, and nothing in search reads `answer_feedback`.
   `/ask` and both chat paths
 - `apps/api/src/documents/documents.service.ts` — `verifyDocument`,
   `unverifyDocument`
-- `apps/web/src/modules/assistant/model/citations.ts`, `modules/assistant/components/SourceChip.vue`,
+- `apps/web/src/entities/assistant/model/citations.ts`, `entities/assistant/components/SourceChip.vue`,
   `AnswerConfidence.vue`, `ChatMessage.vue`, `modules/documents/pages/DocumentDetailPage.vue`
 - `apps/api/src/feedback/answer-feedback.service.ts`, `answer-feedback.dto.ts`,
   `answer-feedback.controller.ts`, `feedback.module.ts` (API-only)
-- `apps/web/src/modules/assistant/components/AnswerFeedback.vue`, `modules/assistant/model/feedback.store.ts`,
-  `modules/assistant/model/answer-feedback.ts`
+- `apps/web/src/entities/assistant/components/AnswerFeedback.vue`, `entities/assistant/model/feedback.store.ts`,
+  `entities/assistant/model/answer-feedback.ts`
 - `apps/api/src/feedback/knowledge-issues.service.ts`, `knowledge-issues.dto.ts`,
   `knowledge-issues.controller.ts`, `knowledge-issues.module.ts`,
   `report-publish.sweeper.ts`; `documents/draft-merge-request.ts` (shared with
@@ -580,8 +580,8 @@ with `make backtest`, and nothing in search reads `answer_feedback`.
   `reportJudgementPrompt`, `readReportVerdict`), `agents/agent.executor.ts`
   (`checkReport`); `common/untrusted.ts` (`report` origin)
 - `apps/web/src/modules/documents/components/KnowledgeIssuesRail.vue`,
-  `ReportIssueDialog.vue`; `modules/assistant/model/feedback.store.ts` (`reportIssue`,
-  `reportCitedPages`, `closeIssue`), `modules/assistant/model/answer-feedback.ts` (`reportKindFor`,
+  `ReportIssueDialog.vue`; `entities/assistant/model/feedback.store.ts` (`reportIssue`,
+  `reportCitedPages`, `closeIssue`), `entities/assistant/model/answer-feedback.ts` (`reportKindFor`,
   `reportablePages`, `issueReportBody`)
 - `apps/api/src/agents/coverage.ts` (`clusterSignals`, `coveragePrompt`,
   `readCoverageVerdict`), `agents/agent.executor.ts` (`surveyCoverage`),
@@ -600,4 +600,4 @@ with `make backtest`, and nothing in search reads `answer_feedback`.
 - Specs: `apps/api/test/answer-citations.spec.ts`, `answer-confidence.spec.ts`,
   `provenance.spec.ts`, `answer-feedback.spec.ts`, `knowledge-issues.spec.ts`,
   `coverage.spec.ts`, `feedback-dataset.spec.ts`, `mcp-http.spec.ts`;
-  `apps/web/src/modules/assistant/model/citations.spec.ts`, `modules/assistant/model/answer-feedback.spec.ts`
+  `apps/web/src/entities/assistant/model/citations.spec.ts`, `entities/assistant/model/answer-feedback.spec.ts`

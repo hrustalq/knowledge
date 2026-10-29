@@ -76,7 +76,7 @@ modules/<name>/
 - **When one module must affect another,** it does not call it. It raises an
   event (`stores/events`' `lastEvent`, watched by the module that reacts),
   registers a callback with a cross-cutting store (`registerProjectScoped`,
-  below), or leaves the wiring to `app/` — the router nests one module's route
+  `onKnowledgeEvent`, below), or leaves the wiring to `app/` — the router nests one module's route
   inside another's record (`/settings/projects/:id/site` is `publishing`'s page
   under `projects`' record) _(planned for projects)_.
 - **`routes.ts`** exports the module's `routes` (top-level records) and, if it
@@ -199,23 +199,25 @@ Confirmed against the import graph on 2026-10-29:
 
 Feature stores live in their module's `model/`, or in an entity's when several
 modules read them (the templates store, the assistant's). Two cross-cutting
-stores call feature stores by name today, which `stores-import-only-shared`
-forbids:
+stores used to call feature stores by name, which `stores-import-only-shared`
+forbids. Both now take registrations instead:
 
 - **`projects.switchProject()`** awaits `rescope()` on every project-scoped
-  store _(planned)_. `documents` is cross-cutting and stays a direct call; a
-  feature store instead calls `registerProjectScoped(useXStore)` (from
-  `stores/projects`) once, at the bottom of its own file, and `switchProject`
-  rescopes whatever is registered alongside. What is registered is the store's
-  definition, not an instance, so the set is the same for every request a
-  server renders; a store whose module never loaded has no instance and
-  nothing to rescope.
-- **`events`** dispatches into `assistant` and `documents`, and did into
-  `notifications`. It already exposes the last event as reactive state
-  (`lastEvent`), so no registry is needed: the module that owns the reaction
-  watches `lastEvent` from a component that is mounted while the stream is
-  connected. `notification.created` moved into `NotificationBell` (in the
-  shell's topbar, which renders whenever the stream does) this way.
+  store. `documents` is cross-cutting and stays a direct call; a feature store
+  (templates, workflows, glossary) instead calls
+  `registerProjectScoped(useXStore)` (from `stores/projects`) once, at the
+  bottom of its own file, and `switchProject` rescopes whatever is registered
+  alongside. What is registered is the store's definition, not an instance, so
+  the set is the same for every request a server renders; a store whose module
+  never loaded has no instance and nothing to rescope.
+- **`events`** exposes the last event as reactive state (`lastEvent`). A
+  reaction that belongs to a component watches it from a component that is
+  mounted while the stream is connected: `notification.created` is handled in
+  `NotificationBell` (in the shell's topbar, which renders whenever the stream
+  does). A reaction that belongs to a store subscribes with
+  `onKnowledgeEvent(listener)` at the bottom of its file, because it has to run
+  whether or not a component is mounted: the assistant store reconciles
+  `assistant.turn.finished` for a thread the tab stopped watching.
 
 ## Where a new thing goes
 
@@ -252,7 +254,7 @@ extraction phase confirms its entity's contents against the import graph.
 | `merge-request`  | merge-requests' MergeRequestList, ThreadCard, CommentComposer, thread-anchors, mr-ui                                                          |
 | `rich-editor`    | **done:** RichEditor with its extensions, nodes, menus and dialogs, CollabDraftBadge, use-collab (behind `loadCollab()`), editor-streams, working-copy, use-embed-status, use-attachments, ImportStepper/ParseProgress; the module keeps EditorPage, ImportPage, the import wizard parts, CollabPresence/CollabStatus, EditorAiPanel and use-working-copy; page-source went to `document` |
 | `api-operation`  | **done:** the operation embed/picker/ref/index/endpoint, ApiReferenceView and TestFixtureView (lazy), ApiChangesPanel, ApiDriftCheck, the try console and suite runner they open, api-spec, api-block-rows, schema-tree, use-operation, use-api-reference; the module keeps its pages, the fixture editor rows and QaEnvironments |
-| `assistant`      | assistant's ChatPane, ChatRail, ThreadDialogs, thread-label, the assistant and feedback stores, AnswerFeedback, TeachAgentDialog, citations   |
+| `assistant`      | **done:** ChatPane, ChatRail, ThreadDialogs and the transcript, composer and pickers they render, thread-label, the assistant and feedback stores, AnswerFeedback, TeachAgentDialog, SourceChip, citations (the reader loads it through `loadCitations()`), GenerativeUiBlock and DocumentPickerWidget (out of documents); the module keeps the AI settings panels and AssistantPage |
 | `template`       | the templates store, SaveAsTemplateDialog                                                                                                    |
 | `access`         | access's PageAccessDialog, RequestAccessCard, mention-access, mcp-clients                                                                    |
 | `connector`      | connectors' ConnectorRail, UsedByRail, ComponentDeclarationNotice, ConnectorList                                                             |

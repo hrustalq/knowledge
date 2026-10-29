@@ -56,7 +56,7 @@ import { labelFor } from '@/shared/i18n/labels'
 // The same chip the assistant cites with (docs/features/25). A finding's web
 // sources are citations of exactly that kind, and rendering them a second way
 // here would make one thing look like two.
-import SourceChip from '@/modules/assistant/components/SourceChip.vue'
+import { SourceChip } from '@/entities/assistant'
 import { AiEmptyState } from '@/shared/ui/empty-state'
 
 const { t } = useI18n()

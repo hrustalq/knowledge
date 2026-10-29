@@ -13,7 +13,7 @@ import type {
   AssistantMessageInfo,
   AssistantThreadSummary,
 } from '@knowledge/contracts'
-import { useAssistantStore } from '@/modules/assistant/model/assistant.store'
+import { useAssistantStore } from '@/entities/assistant/model/assistant.store'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/shared/ui/button'
 import {

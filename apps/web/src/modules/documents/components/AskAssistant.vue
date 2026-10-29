@@ -27,7 +27,7 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { nativeEl } from '@/shared/utils/cn'
 import { MarkdownView } from '@/entities/document'
-import AnswerFeedback from '@/modules/assistant/components/AnswerFeedback.vue'
+import { AnswerFeedback } from '@/entities/assistant'
 
 const { t } = useI18n()
 

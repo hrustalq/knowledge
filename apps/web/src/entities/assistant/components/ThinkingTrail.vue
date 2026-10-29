@@ -16,7 +16,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { Check, ChevronRight, Square, X } from 'lucide-vue-next'
-import type { LiveTurn } from '@/modules/assistant/model/assistant.store'
+import type { LiveTurn } from '@/entities/assistant/model/assistant.store'
 import { toolVocabulary } from '../model/tool-vocabulary'
 
 const { t } = useI18n()

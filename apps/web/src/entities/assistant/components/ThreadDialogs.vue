@@ -7,7 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
 import type { AssistantThreadSummary } from '@knowledge/contracts'
-import { useAssistantStore } from '@/modules/assistant/model/assistant.store'
+import { useAssistantStore } from '@/entities/assistant/model/assistant.store'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import {

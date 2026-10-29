@@ -50,7 +50,7 @@ const RAW_FETCH = [
   },
 ]
 const RAW_FETCH_OK = [
-  'src/modules/assistant/model/assistant-stream.ts', // a streamed response body
+  'src/entities/assistant/model/assistant-stream.ts', // a streamed response body
   'src/entities/insight/model/use-page-view.ts', // a keepalive beacon that outlives the tab
   'src/sw.ts', // the service worker passes a navigation through; there is no client in it
   'src/entities/api-operation/components/ApiTryConsole.vue', // try-it: the request is the reader's own

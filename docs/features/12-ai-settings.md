@@ -153,7 +153,7 @@ workspace cannot edit another's.
 **Web** — `/settings/ai` (`AiSettingsPage.vue` + `components/ai/*Panel.vue`),
 gated on workspace admin in the page. Since issue #182 the tabs are a grouped
 section rail, each section its own URL — `/settings/ai/<section>`, rendered by
-`pages/ai/AiSectionPage.vue` from the registry in `lib/ai-sections.ts` — and
+`modules/assistant/pages/AiSectionPage.vue` from the registry in `modules/assistant/model/ai-sections.ts` — and
 Connect AI (feature 33) is the first section. `/settings/ai?tab=<x>` and
 `/settings/connect` redirect, and bare `/settings/ai` opens Connect, the one
 section every role can use. The usage chart is inline markup rather

@@ -137,4 +137,4 @@ fallback, recorded installations), `test/connections-api.spec.ts` (identify, rot
 refusal, in-use delete, the links duplicate rule including 1-M / M-1 / in-request duplicates, wait
 change / timeout / disconnect, install → connection), `test/figma-oauth.spec.ts` and
 `test/github-partial-config.spec.ts` (callbacks land on `/oauth/:provider`), and on the web
-`lib/oauth-landing.spec.ts` and `lib/connection-providers.spec.ts` (no token once signed in).
+`modules/connectors/model/oauth-landing.spec.ts` and `modules/connectors/model/connection-providers.spec.ts` (no token once signed in).

@@ -21,7 +21,7 @@ graph, the drift check and the knowledge-health dashboard.
   component:
     name: ResponsivePopover        # optional; else the DESCRIBES relation, else the title
     repository: owner/repo         # optional with exactly one codebase connector
-    paths: [apps/web/src/components/ui/popover/ResponsivePopover.vue]  # files, dirs (`dir/`) or globs
+    paths: [apps/web/src/shared/ui/popover/ResponsivePopover.vue]  # files, dirs (`dir/`) or globs
     symbols: [ResponsivePopover]   # optional; narrows "used" to these exports
   ```
 
@@ -171,7 +171,7 @@ waiting for the next pull.
 | `knowledge_document_component({ workspaceId, paths, connectorId?, symbols?, name?, projectId?, parentId? })` | editor; in `WRITE_TOOLS`, hidden from read-only keys |
 | `knowledge_impact_analysis("component:<name>")` | unchanged; now walks `code` edges too |
 
-Web: `components/code/UsedByRail.vue` (the panel, and **Document** on an
+Web: `modules/connectors/components/UsedByRail.vue` (the panel, and **Document** on an
 undocumented row for editors), `ComponentDeclarationNotice.vue` (the warning,
 and the missing paths), `ComponentDraftStatus.vue` (polls the run until its
 merge request exists), and the **Missing code** preset with a per-row chip on

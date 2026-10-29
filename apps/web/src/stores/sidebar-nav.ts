@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { getSidebarPane, setSidebarPane, type SidebarPane } from '@/lib/api'
+import { getSidebarPane, setSidebarPane, type SidebarPane } from '@/shared/api/api'
 
 /**
  * The sidebar's navigation stack: Projects → Pages, one column deep.

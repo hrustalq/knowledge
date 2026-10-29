@@ -49,7 +49,7 @@ make env-check                 # compare .env files against .env.example
 make auth-bootstrap email=<e>  # create user + API key + workspace membership (AUTH_MODE=api-key)
 
 make api-schema         # emit apps/api/openapi.json from the Nest app (no server/infra; env file required)
-make api-client         # api-schema + docs-reference + openapi-typescript → apps/web/src/api/schema.d.ts
+make api-client         # api-schema + docs-reference + openapi-typescript → apps/web/src/shared/api/schema.d.ts
 ```
 
 **Use `make verify`, not `make check`, while a dev server is running.** `check` rebuilds `apps/api/dist` under the running `nest start --watch` and takes :3000 and :5173 down with it. `verify` is everything in `check` except `build`, and is what `.husky/pre-push` runs.
@@ -238,12 +238,13 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 
 **Web**
 
+- `apps/web/src` is layered `app → modules → widgets → stores → shared → core` ([11](docs/architecture/11-web-modules.md) says where a new page, component, composable, store or API call goes). Another module is imported **only through its `index.ts`**; `make deps` fails a deep import, a module cycle or an upward import.
 - Tab strips are hand-rolled (no tab library is installed), and `?tab=` is an **opening instruction, not two-way state**.
 - **Never call `editor.isActive()`/`editor.can()` in a template.** `@tiptap/vue-3` makes editor state reactive, so it re-renders the component on every transaction. Editor chrome renders from `editorStreams(editor).format$`, and anything that reads layout listens to `frame$` (once per animation frame).
 - Project-scoped Pinia stores expose `rescope()`, called from `projects.switchProject()`.
 - Search filters are applied post-ranking against PG under the existing 5× over-fetch.
 - `createI18nFor(locale)` is called **inside `createApp()`**, never at module scope, or concurrent SSR renders share a locale.
-- Use the `lib/format.ts` Intl wrappers — a locale-less `toLocale*` follows the host, which during SSR is the server: a hydration mismatch.
+- Use the `shared/utils/format.ts` Intl wrappers — a locale-less `toLocale*` follows the host, which during SSR is the server: a hydration mismatch.
 - A preference the SSR pass must read before any JS runs is mirrored into a cookie (`kn_ws`, `kn_proj`, `kn_lang`, `kn_filterrail`).
 - The client's first render must use what the **server rendered with**, not what the client would pick: the locale comes from `<html lang>` (the server falls back to `Accept-Language`, which storage cannot see), and a component that renders *before* a later `onServerPrefetch` fills the store it reads (the rail's tree vs. a page's prefetch) waits for `onMounted` — the serialized state is the end of the render, not the moment it drew (#278). Data the shell needs is loaded *before* the render instead (`prefetchShell` in `entry-server.ts`, #279).
 - A map converted to hold message keys is only half the change — the render site must resolve them. A value from a known set still needs a fallback when the column is free text (`labelFor`).
@@ -257,11 +258,11 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 ## Gotchas
 
 - `apps/api` is **ESM** (`"type": "module"`, NodeNext): relative imports need the `.js` suffix (`./app.module.js`), including from `.ts` sources. There is no `__dirname` — use `import.meta.dirname`.
-- class-validator `@IsUUID()` rejects nil-style UUIDs (the version digit must be 1–5). The demo workspace is `11111111-1111-4111-8111-111111111111` (`DEMO_WORKSPACE_ID` in `apps/web/src/lib/api.ts`).
+- class-validator `@IsUUID()` rejects nil-style UUIDs (the version digit must be 1–5). The demo workspace is `11111111-1111-4111-8111-111111111111` (`DEMO_WORKSPACE_ID` in `apps/web/src/shared/api/api.ts`).
 - `openapi-typescript` promotes any property declaring a `default:` in its Swagger decorator to **required** in the generated client. Describe the default in `description:` instead.
 - A nullable DTO field needs an explicit `type:` in its Swagger decorator — `@ApiPropertyOptional({ nullable: true })` alone emits a typeless schema that becomes `Record<string, never>` and silently breaks the web typecheck at every call site.
 - A **buildless workspace package consumed from source may not use relative cross-file imports, and may not use TS-only runtime syntax** (the **buildless package constraints**). Node will not resolve `./x.js` into a sibling `.ts`; an explicit `./x.ts` is rejected by any consumer that emits (TS5097); strip-only mode rejects parameter properties and enums. The escape is **package self-reference** (`@knowledge/contracts/core`). This fails **only at runtime** — `make check` passes clean either way, which is why `Dockerfile.api` ends with a real `import()` of every package entry.
-- `pnpm dlx` can hang on interactive prompts in non-TTY runs — use `pnpm exec shadcn-vue add <component>` from `apps/web`.
+- `pnpm dlx` can hang on interactive prompts in non-TTY runs — use `pnpm exec shadcn-vue add <component>` from `apps/web`. It writes into `src/shared/ui/`, but (2.8.2, with these aliases or the old ones) spells the helper `import { cn } from "cn"` and adds a bogus `cn` npm dependency: point the import at `@/shared/utils/cn` and revert `package.json` + `pnpm-lock.yaml`.
 - `corepack` does not exist on this Node install; pnpm is pinned only via the `packageManager` field.
 - Reindexing is idempotent by design: `GraphService.upsertRevisionChunks` deletes the revision's chunks and vertex before recreating them, and the processor skips jobs already `completed`.
 - **Relation edges are never deleted on reindex or by a person** (#81): a fact a re-extraction drops is expired, one a person removes is retracted (`retractedBy: user:<id>`), and the old revision's rows are closed by their `validTo`. Only `deleteDocumentGraph` hard-deletes. A new edge writer must go through `createRelationEdge` (it stamps `ingestedAt`) and must never revive an expired row.

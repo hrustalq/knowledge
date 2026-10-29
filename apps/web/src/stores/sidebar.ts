@@ -8,8 +8,8 @@ import {
   setAiPanelOpen,
   setRailOpen,
   setRailWidth,
-} from '@/lib/api'
-import { treeDepthBudget } from '@/lib/tree-window'
+} from '@/shared/api/api'
+import { treeDepthBudget } from '@/shared/utils/tree-window'
 
 /**
  * The rail's geometry: how wide it is, whether it is open, and — derived from

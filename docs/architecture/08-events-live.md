@@ -228,7 +228,7 @@ sites, so SSE and WS cannot disagree:
 
 ## The client: LiveClient and the live cache
 
-`apps/web/src/api/live.ts` holds `LiveClient`: connect, replay every desired
+`apps/web/src/shared/api/live.ts` holds `LiveClient`: connect, replay every desired
 subscription on open, exponential backoff from 1s to 30s on close — except
 **4401**, where reconnecting with the same token is pointless and it stops.
 
@@ -259,13 +259,13 @@ readings are invalidated, since a key nobody holds costs nothing and a key built
 from the wrong id silently never matches.
 
 `startLive({ queryClient, tracking?, rules?, workspaceId? })` is the idempotent
-bootstrap, called from `App.vue` beside the SSE store once the user is
+bootstrap, called from `app/App.vue` beside the SSE store once the user is
 authenticated; calling it again retunes the subscription live.
 
 ## Optimistic writes
 
 `useApiMutation(method, url, { patches, invalidates })` in
-`apps/web/src/api/queries.ts` is the write-side counterpart, and its contract is
+`apps/web/src/shared/api/queries.ts` is the write-side counterpart, and its contract is
 fixed: **cancel in-flight queries on the patched keys → snapshot → patch →
 roll back the snapshots on error → invalidate on settle**, so server truth
 always wins in the end. Patched keys are always invalidated; `invalidates` adds

@@ -142,7 +142,7 @@ through a small reader on js-yaml with the same normalize and dereference.
 
 **`GET /v1/api-specs/:id` keeps internal `$ref`s.** A recursive schema
 dereferences to a cyclic object, which JSON cannot carry. The reader resolves
-refs one hop at a time (`lib/api-spec.ts`) and marks a recursive type instead
+refs one hop at a time (`modules/api-reference/model/api-spec.ts`) and marks a recursive type instead
 of following it. `GET /v1/documents/:id/content` returns a spec verbatim,
 because gray-matter would take a YAML `---` for frontmatter.
 
@@ -583,9 +583,9 @@ client, so no request an agent writes is sent through us.
 Web: `components/api-reference/` (`ApiReferenceView`, `ApiOperationDetail`,
 `ApiSchemaTree`, `ApiCodeSamples`, `ApiTryConsole`, `ApiChangesPanel`,
 `ApiDriftCheck`, `ApiTestSuite` with `use-test-suite.ts`, `ApiSuiteSetup` with `use-suite-fixtures.ts` and the runner `ApiTestRun`, `ApiOperationPicker`, `ApiOperationEmbed`, and the shared
-`ApiTabs`, `ApiCode`, `ApiTone`, `ApiMediaContent`), `pages/ApiSpecEditorPage.vue`
-(`/create/spec`, `/documents/:id/spec`), `pages/ApiSettingsPage.vue`
-(`/settings/api`), `pages/QaPage.vue` (`/qa`), and the **API changes** tab on `MergeRequestDetailPage`,
+`ApiTabs`, `ApiCode`, `ApiTone`, `ApiMediaContent`), `modules/api-reference/pages/ApiSpecEditorPage.vue`
+(`/create/spec`, `/documents/:id/spec`), `modules/api-reference/pages/ApiSettingsPage.vue`
+(`/settings/api`), `modules/api-reference/pages/QaPage.vue` (`/qa`), and the **API changes** tab on `MergeRequestDetailPage`,
 shown only when the merge request is on a spec. In the graph view, `op:` and
 `channel:` entities are squares that open their card in the spec.
 

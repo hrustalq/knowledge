@@ -6,8 +6,8 @@ import { QueryClient } from '@tanstack/vue-query'
 
 // The stores read through the query cache (#472); its queryFn is `api.get`.
 const apiFetch = vi.hoisted(() => vi.fn())
-vi.mock('@/api/client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/api/client')>()),
+vi.mock('@/shared/api/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/shared/api/client')>()),
   api: { get: (...args: unknown[]) => apiFetch(...args) },
 }))
 

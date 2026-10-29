@@ -16,7 +16,7 @@
  * path mode, before the reader claims either path as a page.
  */
 
-/** Kept in step with MESSAGE_SOURCE in src/pages/public/SiteWidget.vue. */
+/** Kept in step with MESSAGE_SOURCE in src/modules/publishing/reader/SiteWidget.vue. */
 export const WIDGET_MESSAGE_SOURCE = 'kn-site-ask'
 
 const PATH_MODE = /^\/pub\/[a-z0-9-]+\/widget\.js$/

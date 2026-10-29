@@ -261,9 +261,9 @@ The share reader's public entry (`entry-public.ts`, `reader.html`,
   page is in the snapshot (anything else loses its link), and attachments go
   through the site attachment route.
 - **Chrome.** The nav is drawn by the app rail's own row and branch
-  (`components/tree/TreeRow.vue`, `TreeBranch.vue`; `SidebarTreeNode` is the
+  (`modules/documents/components/TreeRow.vue`, `TreeBranch.vue`; `SidebarTreeNode` is the
   app's wrapper around them, `SiteTreeNode` the reader's), with the same
-  indent rails and horizontal tree window (`lib/tree-window.ts`). It first
+  indent rails and horizontal tree window (`shared/utils/tree-window.ts`). It first
   renders what `resolve` sent — the top level and the open path, as plain
   links — and expanding any other branch asks the tree route for that one
   level, with a spinner on the row meanwhile (`site-tree.ts`); a collapsed
@@ -339,7 +339,7 @@ have been a second copy of the snapshot to keep in step).
   a build that swapped in meanwhile is not overwritten. It never rebuilds a
   version, so a frozen version stays frozen. A row with no tags yet is never a
   source for the per-revision text copy.
-- **Reader.** `pages/public/SiteSearch.vue` renders the app's own search
+- **Reader.** `modules/publishing/reader/SiteSearch.vue` renders the app's own search
   components (#205): `SearchSheetFrame` (the sheet, focus handling, the
   re-run on a facet change), `SearchPanel`, `SearchResults` and `FacetFields`,
   all store-free. The app's `SearchSheet` mounts the same frame over its
@@ -350,7 +350,7 @@ have been a second copy of the snapshot to keep in step).
   field. Failures from the public route (too short, 429, offline) are
   `SearchNotice`s shown as written. Results follow the typing, as before; the
   same "/" and ⌘K shortcut and focus return on close
-  (`lib/search-shortcut.ts`). It needs JavaScript; nothing else in the reader
+  (`shared/utils/search-shortcut.ts`). It needs JavaScript; nothing else in the reader
   does.
 
 ## The render cache
@@ -511,8 +511,8 @@ through these steps:
 
 **The reader** (`SiteAsk.vue`) is the same panel in both places: the reader's
 sheet and the widget's frame. It loads the markdown parser, DOMPurify and the
-citation pass (`lib/citations.ts`, shared with the app's assistant, as are the
-chip styles in `styles/citations.css`) only on the first answer. A chip or a
+citation pass (`modules/assistant/model/citations.ts`, shared with the app's assistant, as are the
+chip styles in `assets/styles/citations.css`) only on the first answer. A chip or a
 source opens the page at the passage's heading. In the reader it asks with
 the reader's cookie, so a signed-in reader's answers may draw on pages others
 cannot see.

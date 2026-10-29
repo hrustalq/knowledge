@@ -263,7 +263,7 @@ vocabulary.
 
 | Where | What |
 | --- | --- |
-| `stores/templates.ts` | Project-scoped roster (archived and hidden included, so a chip can still name them); `offered` for pickers; gallery open state; one-shot `rendered` and `fill`. `rescope()` is called from `projects.switchProject()`. Call `ensureLoaded()` on mount, never in setup: a pending Promise hydrates as `{}` and the store would never load |
+| `modules/templates/model/templates.store.ts` | Project-scoped roster (archived and hidden included, so a chip can still name them); `offered` for pickers; gallery open state; one-shot `rendered` and `fill`. `rescope()` is called from `projects.switchProject()`. Call `ensureLoaded()` on mount, never in setup: a pending Promise hydrates as `{}` and the store would never load |
 | `/settings/templates/:ref?` | `TemplatesSettingsPage.vue`: list by scope, `TemplateEditor.vue` (form + rich editor, no YAML), `TemplateHistory.vue` (diff between any two versions), customise / hide / reset built-ins, archive custom ones. Write controls follow `canWriteTemplate`, the API's role rule |
 | `SaveAsTemplateDialog.vue` | Document view and editor ⋯ menus, and import's "Save as template instead". Placeholders are detected from `{{…}}` (`detectPlaceholders`); `unescapePlaceholders` undoes turndown's `{{due\_date}}` |
 | `WorkflowStepForm.vue` | "Written into template" on `ai.draft` steps; picking one sets the category. The starter patterns use `builtin:use-case` and `builtin:api-spec` |

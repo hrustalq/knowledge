@@ -567,27 +567,27 @@ with `make backtest`, and nothing in search reads `answer_feedback`.
   `/ask` and both chat paths
 - `apps/api/src/documents/documents.service.ts` — `verifyDocument`,
   `unverifyDocument`
-- `apps/web/src/lib/citations.ts`, `components/assistant/SourceChip.vue`,
-  `AnswerConfidence.vue`, `ChatMessage.vue`, `pages/DocumentDetailPage.vue`
+- `apps/web/src/modules/assistant/model/citations.ts`, `modules/assistant/components/SourceChip.vue`,
+  `AnswerConfidence.vue`, `ChatMessage.vue`, `modules/documents/pages/DocumentDetailPage.vue`
 - `apps/api/src/feedback/answer-feedback.service.ts`, `answer-feedback.dto.ts`,
   `answer-feedback.controller.ts`, `feedback.module.ts` (API-only)
-- `apps/web/src/components/assistant/AnswerFeedback.vue`, `stores/feedback.ts`,
-  `lib/answer-feedback.ts`
+- `apps/web/src/modules/assistant/components/AnswerFeedback.vue`, `modules/assistant/model/feedback.store.ts`,
+  `modules/assistant/model/answer-feedback.ts`
 - `apps/api/src/feedback/knowledge-issues.service.ts`, `knowledge-issues.dto.ts`,
   `knowledge-issues.controller.ts`, `knowledge-issues.module.ts`,
   `report-publish.sweeper.ts`; `documents/draft-merge-request.ts` (shared with
   `AgentFindingsService.propose`); `agents/drift.ts` (`REPORT_OUTPUT_CONTRACT`,
   `reportJudgementPrompt`, `readReportVerdict`), `agents/agent.executor.ts`
   (`checkReport`); `common/untrusted.ts` (`report` origin)
-- `apps/web/src/components/knowledge/KnowledgeIssuesRail.vue`,
-  `ReportIssueDialog.vue`; `stores/feedback.ts` (`reportIssue`,
-  `reportCitedPages`, `closeIssue`), `lib/answer-feedback.ts` (`reportKindFor`,
+- `apps/web/src/modules/documents/components/KnowledgeIssuesRail.vue`,
+  `ReportIssueDialog.vue`; `modules/assistant/model/feedback.store.ts` (`reportIssue`,
+  `reportCitedPages`, `closeIssue`), `modules/assistant/model/answer-feedback.ts` (`reportKindFor`,
   `reportablePages`, `issueReportBody`)
 - `apps/api/src/agents/coverage.ts` (`clusterSignals`, `coveragePrompt`,
   `readCoverageVerdict`), `agents/agent.executor.ts` (`surveyCoverage`),
   `agents/built-in-agents.ts` (`surveyor`), `agents/agent-worker.module.ts`
   (imports `EmbeddingModule`); `common/untrusted.ts` (`feedback` origin)
-- `apps/web/src/components/ai/AiCoveragePanel.vue`, `pages/AiSettingsPage.vue`
+- `apps/web/src/modules/assistant/components/AiCoveragePanel.vue`, `modules/assistant/pages/AiSettingsPage.vue`
   (tab `coverage`)
 - `packages/contracts/src/observability/index.ts` — `FeedbackBacktestCase`,
   `feedbackCaseFromVote`, `scoreFeedbackCase`, `summarizeFeedbackScores`;
@@ -595,9 +595,9 @@ with `make backtest`, and nothing in search reads `answer_feedback`.
   `cases`, `linkMergedFixes`), `answer-feedback-admin.controller.ts`
   (`GET /v1/ai/feedback`, `/summary`, `/export`); `scripts/backtest.main.ts`
   (`--export-feedback`, `--feedback`)
-- `apps/web/src/components/ai/AiFeedbackPanel.vue`, `pages/AiSettingsPage.vue`
-  (tab `feedback`), `api/client.ts` (`requestFile`)
+- `apps/web/src/modules/assistant/components/AiFeedbackPanel.vue`, `modules/assistant/pages/AiSettingsPage.vue`
+  (tab `feedback`), `shared/api/client.ts` (`requestFile`)
 - Specs: `apps/api/test/answer-citations.spec.ts`, `answer-confidence.spec.ts`,
   `provenance.spec.ts`, `answer-feedback.spec.ts`, `knowledge-issues.spec.ts`,
   `coverage.spec.ts`, `feedback-dataset.spec.ts`, `mcp-http.spec.ts`;
-  `apps/web/src/lib/citations.spec.ts`, `lib/answer-feedback.spec.ts`
+  `apps/web/src/modules/assistant/model/citations.spec.ts`, `modules/assistant/model/answer-feedback.spec.ts`

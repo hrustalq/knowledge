@@ -1,0 +1,232 @@
+<script setup lang="ts">
+// The AI check, as a pane rather than a card.
+//
+// Shaped like the assistant chat: findings scroll, the actions dock at the
+// bottom and never move. That matters more here than it looks — a review with
+// eight findings used to push its own "Re-run" button off the bottom of the
+// sidebar, so the control you reach for after reading was the one reading
+// took away.
+//
+// Findings are a dead end unless they can become review feedback, so the dock
+// carries a second action that posts them into the discussion as a thread.
+//
+// Above it sits the style check (#74): not run from here but by the server on
+// every push, so it only reports. Its violations are already threads.
+import { useI18n } from 'vue-i18n'
+import { computed, ref, type Component } from 'vue'
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Lightbulb,
+  MessageSquarePlus,
+  RefreshCw,
+  Sparkles,
+} from 'lucide-vue-next'
+import type {
+  AssistantIssue,
+  AssistantReviewResponse,
+  MergeRequestInfo,
+} from '@knowledge/contracts'
+import { useQueryClient } from '@tanstack/vue-query'
+import { api, fetchApi } from '@/shared/api/queries'
+import { getWorkspaceId } from '@/shared/api/api'
+import { Button } from '@/shared/ui/button'
+import { lintCheckView, useLintChecks } from '../model/lint-check'
+
+const { t } = useI18n()
+const queryClient = useQueryClient()
+
+const props = defineProps<{
+  mergeRequest: MergeRequestInfo
+  /** Findings can be posted as a review thread only on an open MR you can write to. */
+  canComment?: boolean
+  /** Posting is in flight in the parent. */
+  busy?: boolean
+}>()
+
+const emit = defineEmits<{
+  /** Findings, composed as markdown, to open as a review thread. */
+  comment: [body: string]
+  /** Issue counts for the sidebar's tab badge; null once the result is cleared. */
+  result: [counts: { issues: number; errors: number } | null]
+}>()
+
+const { current: lintCheck, shown: lintShown } = useLintChecks(computed(() => props.mergeRequest.mergeRequestId))
+const lintView = computed(() => lintCheckView(lintCheck.value))
+
+const state = ref<'idle' | 'running' | 'done' | 'error'>('idle')
+const review = ref<AssistantReviewResponse | null>(null)
+const errorMessage = ref('')
+const posted = ref(false)
+
+const issues = computed(() => review.value?.issues ?? [])
+const errorCount = computed(() => issues.value.filter((i) => i.severity === 'error').length)
+const passed = computed(() => state.value === 'done' && review.value?.enabled !== false && issues.value.length === 0)
+
+type Severity = AssistantIssue['severity']
+
+// `label` is a message key, resolved with t() at the render site (docs/features/18).
+const SEVERITY: Record<Severity, { icon: Component; tone: string; label: string }> = {
+  error: { icon: AlertCircle, tone: 'text-panel-caution', label: 'mr.severityError' },
+  warning: { icon: AlertTriangle, tone: 'text-panel-warning', label: 'mr.severityWarning' },
+  suggestion: { icon: Lightbulb, tone: 'text-sky-500', label: 'mr.severitySuggestion' },
+}
+
+async function run() {
+  state.value = 'running'
+  errorMessage.value = ''
+  posted.value = false
+  try {
+    const revision = props.mergeRequest.sourceHeadRevisionId
+    // A named revision never changes, so the cache answers it; a head is asked afresh.
+    const content = await fetchApi(
+      queryClient,
+      '/v1/documents/{id}/content',
+      { path: { id: props.mergeRequest.documentId }, query: { revision: revision ?? undefined } },
+      { fresh: !revision },
+    )
+    review.value = await api.post('/v1/assistant/review', {
+      body: {
+        workspaceId: getWorkspaceId(),
+        title: props.mergeRequest.title,
+        markdown: content.markdown,
+      },
+      config: { timeout: 0 },
+    })
+    state.value = 'done'
+    emit('result', { issues: issues.value.length, errors: errorCount.value })
+  } catch (e) {
+    state.value = 'error'
+    errorMessage.value = e instanceof Error ? e.message : 'AI check failed'
+    emit('result', null)
+  }
+}
+
+/** Findings → a review comment someone can actually reply to. */
+function asMarkdown(): string {
+  const lines = [
+    t('mr.aiReviewHeading', { findings: t('count.findings', { n: issues.value.length }, issues.value.length), branch: props.mergeRequest.sourceBranch }),
+    '',
+    ...issues.value.map((i: AssistantIssue) =>
+      `- **${t(SEVERITY[i.severity].label)}** — ${i.message}${i.section ? ` _(${i.section})_` : ''}`,
+    ),
+  ]
+  if (review.value?.summary) lines.push('', review.value.summary)
+  return lines.join('\n')
+}
+
+function postFindings() {
+  if (issues.value.length === 0) return
+  emit('comment', asMarkdown())
+  posted.value = true
+}
+</script>
+
+<template>
+  <div class="flex min-h-0 flex-1 flex-col">
+    <div class="quiet-scroll min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <section v-if="lintShown" class="mb-3 border-b pb-3" :aria-label="t('mr.lint.paneTitle')">
+        <h3 class="mb-1.5 text-xs font-medium text-muted-foreground">{{ t('mr.lint.paneTitle') }}</h3>
+        <p class="flex items-start gap-2 text-xs leading-5">
+          <component :is="lintView.icon" class="mt-0.5 size-3.5 shrink-0" :class="lintView.tone" />
+          <span>{{ t(lintView.label, lintView.args ?? {}, lintView.count ?? 1) }}</span>
+        </p>
+        <ul v-if="lintCheck?.status === 'failed' && lintCheck.counts" class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 pl-5.5 text-xs text-muted-foreground">
+          <li v-for="sev in (['error', 'warning', 'suggestion'] as const)" v-show="lintCheck.counts[sev] > 0" :key="sev" class="flex items-center gap-1">
+            <component :is="SEVERITY[sev].icon" class="size-3" :class="SEVERITY[sev].tone" />
+            {{ lintCheck.counts[sev] }} {{ t(SEVERITY[sev].label) }}
+          </li>
+        </ul>
+        <p v-if="lintCheck?.status === 'failed'" class="mt-1.5 pl-5.5 text-xs text-muted-foreground">{{ t('mr.lint.inDiscussion') }}</p>
+      </section>
+      <!-- Status reads like a check on a pipeline: one line, one colour. -->
+      <p v-if="state === 'idle'" class="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+        <Sparkles class="mt-0.5 size-3.5 shrink-0" />
+        <span>
+          {{ t('mr.aiCheckIdle') }}
+        </span>
+      </p>
+
+      <p v-else-if="state === 'running'" class="flex items-center gap-2 text-xs text-muted-foreground">
+        <span class="size-1.5 animate-pulse rounded-full bg-panel-warning" />
+        {{ t('mr.reviewing') }}&nbsp;<span class="font-mono">{{ mergeRequest.sourceBranch }}</span>…
+      </p>
+
+      <p v-else-if="state === 'error'" class="flex items-start gap-2 text-xs leading-5 text-destructive">
+        <AlertCircle class="mt-0.5 size-3.5 shrink-0" />
+        {{ errorMessage }}
+      </p>
+
+      <template v-else-if="review">
+        <p v-if="!review.enabled" class="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+          <AlertTriangle class="mt-0.5 size-3.5 shrink-0 text-panel-warning" />
+          <i18n-t keypath="mr.aiNotConfigured" tag="span" scope="global">
+            <template #setting><span class="font-mono">ASSISTANT_PROVIDER=none</span></template>
+          </i18n-t>
+        </p>
+
+        <p v-else-if="passed" class="flex items-center gap-2 text-xs font-medium text-panel-tip-ink">
+          <CheckCircle2 class="size-4" /> {{ t('mr.aiPassed') }}
+        </p>
+
+        <template v-else>
+          <p
+            class="text-xs font-medium"
+            :class="errorCount > 0 ? 'text-panel-caution-ink' : 'text-panel-warning-ink'"
+          >
+            {{ t('count.findings', { n: issues.length }, issues.length) }}<template v-if="errorCount > 0">, {{ t('mr.toFix', { n: errorCount }) }}</template>
+          </p>
+
+          <ul class="mt-2.5 space-y-2.5">
+            <li v-for="(issue, i) in issues" :key="i" class="flex gap-2">
+              <component
+                :is="SEVERITY[issue.severity].icon"
+                class="mt-0.5 size-3.5 shrink-0"
+                :class="SEVERITY[issue.severity].tone"
+                :aria-label="t(SEVERITY[issue.severity].label)"
+              />
+              <p class="min-w-0 text-xs leading-5">
+                {{ issue.message }}
+                <span v-if="issue.section" class="text-muted-foreground">— {{ issue.section }}</span>
+              </p>
+            </li>
+          </ul>
+
+          <p v-if="review.summary" class="mt-3 border-t pt-3 text-xs leading-5 text-muted-foreground">
+            {{ review.summary }}
+          </p>
+        </template>
+      </template>
+    </div>
+
+    <!-- Dock: the actions stay put while the findings scroll past them. -->
+    <div class="shrink-0 border-t bg-background px-3 py-2.5">
+      <div class="flex items-center gap-1.5">
+        <Button
+          :variant="state === 'idle' ? 'default' : 'outline'"
+          size="sm"
+          class="flex-1"
+          :disabled="state === 'running'"
+          @click="run"
+        >
+          <RefreshCw v-if="state !== 'idle'" class="size-3.5" :class="state === 'running' ? 'animate-spin' : ''" />
+          <Sparkles v-else class="size-3.5" />
+          {{ state === 'running' ? t('common.reviewing') : state === 'idle' ? t('mr.runReview') : t('mr.rerun') }}
+        </Button>
+
+        <Button
+          v-if="canComment && issues.length > 0"
+          variant="outline"
+          size="sm"
+          :disabled="busy || posted"
+          :title="posted ? t('mr.alreadyPosted') : t('mr.postFindings')"
+          @click="postFindings"
+        >
+          <MessageSquarePlus class="size-3.5" />
+          {{ posted ? t('mr.posted') : t('mr.post') }}
+        </Button>
+      </div>
+    </div>
+  </div>
+</template>

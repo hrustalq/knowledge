@@ -45,7 +45,7 @@ tree and one sidebar. Projects split off the organizational half. They are
 - **MCP**: new `knowledge_list_projects({ workspaceId })`; `knowledge_search`
   gains an optional `projectIds`. Document- and MR-scoped tools are unchanged —
   they derive their scope from the document.
-- **Web**: `getProjectId()` / `setActiveProject()` in `lib/api.ts` mirror the
+- **Web**: `getProjectId()` / `setActiveProject()` in `shared/api/api.ts` mirror the
   active-workspace mechanism (localStorage + a `kn_proj` cookie so SSR renders
   the right tree); `stores/projects.ts` resolves a stored id against the
   roster and falls back to the first project. A project `<select>` sits under

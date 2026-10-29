@@ -244,7 +244,7 @@ this device's copy, read-only until the server answers.
 `draft.changed` (someone joined or left a draft, or it was checkpointed) and
 `draft.reset` travel on `knowledge:events`. They are deliberately not
 `document.*`: everything keyed on `document.*` would fire on every editor join.
-`api/live-cache.ts` refreshes the drafts query on both. Neither raises a toast.
+`shared/api/live-cache.ts` refreshes the drafts query on both. Neither raises a toast.
 
 ### MCP agents in a draft
 
@@ -318,7 +318,7 @@ All have defaults; none is required.
 | `COLLAB_CHECKPOINT_KEEP` | `20` | Versions of the checkpoint key per draft |
 | `COLLAB_DRAFT_RETENTION_DAYS` | `30` | Only drafts with nothing unpublished |
 
-The web derives the socket URL the way `api/live.ts` does. It needs no
+The web derives the socket URL the way `shared/api/live.ts` does. It needs no
 variable of its own.
 
 ## Observability

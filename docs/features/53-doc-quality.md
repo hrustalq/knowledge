@@ -327,7 +327,7 @@ and checks it. Both have a section in the generated SKILL.md.
 
 Web:
 
-- `components/ai/AiStyleguidePanel.vue` (scope picker, rules with severity,
+- `modules/assistant/components/AiStyleguidePanel.vue` (scope picker, rules with severity,
   examples and up/down reorder, **Try it**, the lint policy for the scope with
   requested beside effective);
 - in `components/merge-requests/`: `MergeWidget.vue` (the style row: waiting,

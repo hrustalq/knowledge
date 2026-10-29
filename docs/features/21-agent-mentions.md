@@ -121,7 +121,7 @@ on.
 | Turn + claim + render | `apps/api/src/documents/mention-replies.service.ts` |
 | Recovery | `apps/api/src/documents/mention-reply.sweeper.ts` |
 | Triggers | `merge-request-threads.service.ts`, `document-threads.service.ts` |
-| Attribute | `AGENT_MENTION_ATTR` in contracts, re-exported by `lib/markdown/nodes.ts` |
+| Attribute | `AGENT_MENTION_ATTR` in contracts, re-exported by `core/markdown/nodes.ts` |
 | Editor | `AgentMention` in `extensions/inline.ts`, `nodes/AgentMentionNode.vue` |
 | Menu | `RichEditor.vue` (`kind: 'agent'`), `CommentComposer.vue` (one computed) |
 | Rendering | `ThreadCard.vue`, `use-agent-names.ts`, `.kn-mention-agent` in `editor.css` |

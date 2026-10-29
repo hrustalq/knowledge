@@ -5,8 +5,8 @@ import type { Router } from 'vue-router'
 import { DEFAULT_LOCALE, type Locale } from '@knowledge/contracts'
 import { dehydrate } from '@tanstack/vue-query'
 import { createApp } from './main'
-import { isStoreQuery } from './api/queries'
-import { ensureLocaleMessages } from './i18n'
+import { isStoreQuery } from './shared/api/queries'
+import { ensureLocaleMessages } from './shared/i18n'
 import { useAuthStore } from './stores/auth'
 import { useDocumentsStore } from './stores/documents'
 import { useProjectsStore } from './stores/projects'
@@ -48,7 +48,7 @@ const ssrCtx = new AsyncLocalStorage<SsrRequestContext>()
  */
 async function prefetchShell(router: Router, pinia: Pinia, request: SsrRequestContext) {
   const auth = useAuthStore(pinia)
-  // The same test App.vue makes between the signed-out card and the shell.
+  // The same test app/App.vue makes between the signed-out card and the shell.
   if (router.currentRoute.value.meta.public || !auth.authenticated || auth.verificationPending) return
 
   const projects = useProjectsStore(pinia)

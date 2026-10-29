@@ -15,11 +15,13 @@ imported from nine sibling feature folders, and folder-level cycles such as
 `assistant` went unnoticed because the old rules only knew about file-level
 cycles.
 
-> **Status.** Phase 0: the rules below are in
-> `apps/web/.dependency-cruiser.cjs` and match nothing yet. Phase 1 moves the
-> files and records every violation in the baseline once; each later phase
-> untangles one module and shrinks the baseline. Sections marked _(planned)_
-> describe the end state, not the tree today.
+> **Status.** Phases 0 (the rules) and 1 (the move) have landed: every file is
+> in its layer or module, and the 263 violations the move surfaced are in the
+> baseline. No module has an `index.ts` yet, so every cross-module import is
+> one of them. Each later phase gives one module its `index.ts` and
+> `routes.ts`, untangles it and shrinks the baseline, leaves first (`help`,
+> `captures`, `notifications`, …, `documents` last). Sections marked
+> _(planned)_ describe the end state, not the tree today.
 
 ## The layers
 
@@ -73,7 +75,13 @@ modules/<name>/
   `app/router` only concatenates them. A module whose pages nest under the
   settings shell exports `settingsRoutes` beside `routes`, and `app/router`
   mounts those under `/settings`.
-- Folders a module does not need are not created.
+- A feature store is `model/<name>.store.ts` (`templates.store.ts`), so it
+  never collides with the plain helper of the same name (`templates.ts`).
+- Folders a module does not need are not created. Two modules carry one more:
+  `help/docs/` (the articles, globbed by `registry.ts`, and the generated
+  reference) and `publishing/reader/` (the public reader's pages and parts,
+  the separate SSR entry of features 43–44, allowlisted for raw `fetch` as a
+  whole).
 
 ## The import rules
 
@@ -96,6 +104,13 @@ ring of modules even when no ring of files exists: `a/x.ts` → `b/index.ts` →
 moving the shared piece down (a widget, `shared/`, `core/`), or by inverting the
 call: the module that needs to be told something registers a callback, or
 listens to an event, instead of being called by name.
+
+It sees modules through their `index.ts` only: a folder-level edge points at
+the folder of the imported file, so a deep import (`a` → `b/components/X.vue`)
+lands on `b/components`, not on `b`. A ring made of deep imports is therefore
+invisible to it, but every edge of that ring already fails
+`module-via-index-only`. The cycle surfaces in the phase that routes the second
+side through an `index.ts`, and that phase breaks it.
 
 The known-violations baseline (`make deps-baseline`) stays shrink-only. Phase 1
 re-records it once, with every violation the new layout has; from then on it
@@ -175,8 +190,10 @@ the module it reaches:
 
 ## The module map
 
-From today's folders. `components/X` means `src/components/X`; a page is
-`src/pages/<Name>Page.vue`.
+From the folders before the move (phase 1). `components/X` meant
+`src/components/X`, a page `src/pages/<Name>Page.vue`. In each module a
+`.vue` file went to `components/`, any other file to `model/`, and a subfolder
+(`editor/extensions`, `editor/nodes`) whole under `components/`.
 
 | Module           | From                                                                          | Pages                                                                                         |
 | ---------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -209,6 +226,7 @@ Outside the modules:
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `components/layout` (minus `page/`), `SettingsPage`, `App.vue`    | `app/` (the shell; SettingsPage is the settings shell)                                                    |
 | `components/layout/page/`, `components/knowledge/RailSection.vue` | `widgets/page/` — every module's page chrome, so in `app/` it would be an upward import from every module |
+| `people/UserChip`, `people/UserCard`, `merge-requests/UserAvatar` | `widgets/person/` — the person avatar and hover card |
 | `components/ui/`                                                  | `shared/ui/`                                                                                              |
 | `api/`                                                            | `shared/api/`                                                                                             |
 | `i18n/`                                                           | `shared/i18n/`                                                                                            |
@@ -216,7 +234,7 @@ Outside the modules:
 | `style.css`, `styles/`, `assets/`                                 | `assets/`                                                                                                 |
 | `lib/` pure, no domain                                            | `core/`                                                                                                   |
 | `lib/use-*.ts`, `lib/rx-vue.ts`                                   | `shared/composables/`                                                                                     |
-| `lib/utils.ts`                                                    | `shared/utils/`                                                                                           |
+| `lib/utils.ts`                                                    | `shared/utils/cn.ts` (the shadcn-vue `utils` alias)                                                                                           |
 | `lib/` with a domain                                              | that module's `model/`                                                                                    |
 
 The per-file list for `lib/` is in the phase 1 PR description, which carries

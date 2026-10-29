@@ -15,9 +15,9 @@ import {
   publicSiteSessionPath,
   siteMarkdownPath,
 } from '@knowledge/contracts/publishing'
-import { formatBytes } from './lib/format'
-import { escapeHtml } from './lib/markdown/nodes'
-import { renderPublicMarkdown, type PublicRenderOptions } from './lib/markdown/public-render.server'
+import { formatBytes } from './shared/utils/format'
+import { escapeHtml } from './core/markdown/nodes'
+import { renderPublicMarkdown, type PublicRenderOptions } from './core/markdown/public-render.server'
 import { createPublicApp, readerMessages, siteReaderMessages } from './public-main'
 import {
   shareHref,
@@ -26,8 +26,8 @@ import {
   type PublicReaderState,
   type PublicReaderView,
   type PublicSiteChrome,
-} from './pages/public/reader-state'
-import { siteThemeCss } from './pages/public/site-theme'
+} from './modules/publishing/reader/reader-state'
+import { siteThemeCss } from './modules/publishing/reader/site-theme'
 
 /**
  * The public SSR entry (docs/features/43, 44):

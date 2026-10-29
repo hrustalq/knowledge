@@ -10,7 +10,7 @@ export default defineConfig(({ isSsrBuild }) => ({
     vue(),
     tailwindcss(),
     // The member app's service worker (#472): src/sw.ts, given the client
-    // build's precache list. Registered from lib/pwa.ts; the manifest is a
+    // build's precache list. Registered from shared/utils/pwa.ts; the manifest is a
     // static file in public/, linked from index.html only.
     VitePWA({
       strategies: 'injectManifest',

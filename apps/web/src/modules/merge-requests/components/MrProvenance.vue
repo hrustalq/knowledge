@@ -13,8 +13,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { Bot } from 'lucide-vue-next'
 import type { CaptureInfo, MergeRequestInfo } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
-import { clientLabel, repoAtCommit } from '@/modules/captures/model/capture-ui'
-import CaptureOriginParts from '@/modules/captures/components/CaptureOriginParts.vue'
+import { CaptureOriginParts, clientLabel, repoAtCommit } from '@/modules/captures'
 
 const { t } = useI18n()
 

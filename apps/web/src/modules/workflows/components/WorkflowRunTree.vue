@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import type { WorkflowGraph, WorkflowRunNodeInfo } from '@knowledge/contracts'
-import { isBusyStatus, NODE_STATUS_CLASS, NODE_STATUS_ICON, NODE_STATUS_LABEL } from '../model/workflow-ui'
+import { isBusyStatus, NODE_STATUS_CLASS, NODE_STATUS_ICON, NODE_STATUS_LABEL } from '@/entities/workflow'
 
 const { t } = useI18n()
 

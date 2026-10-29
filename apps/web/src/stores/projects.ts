@@ -4,7 +4,6 @@ import { apiQueryOptions, bindStoreQuery } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId, setActiveProject } from '@/shared/api/api'
 import { useDocumentsStore } from '@/stores/documents'
 import { useGlossaryStore } from '@/modules/documents/model/glossary.store'
-import { useWorkflowsStore } from '@/modules/workflows/model/workflows.store'
 import { useSidebarNavStore } from '@/stores/sidebar-nav'
 
 /**
@@ -87,7 +86,6 @@ export const useProjectsStore = defineStore('projects', {
       await Promise.all([
         useDocumentsStore().rescope(),
         useGlossaryStore().rescope(),
-        useWorkflowsStore().rescope(),
         ...[...projectScoped].map((useStore) => useStore().rescope()),
       ])
     },

@@ -22,7 +22,7 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import WorkflowMap from '@/modules/workflows/components/WorkflowMap.vue'
 import WorkflowNodePanel from '@/modules/workflows/components/WorkflowNodePanel.vue'
 import WorkflowRunTree from '@/modules/workflows/components/WorkflowRunTree.vue'
-import { isBusyStatus, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from '@/modules/workflows/model/workflow-ui'
+import { isBusyStatus, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from '@/entities/workflow'
 
 const { t } = useI18n()
 

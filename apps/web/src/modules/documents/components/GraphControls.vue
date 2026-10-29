@@ -18,7 +18,7 @@ import { ChevronRight, Search, X } from 'lucide-vue-next'
 import { formatDayMonth } from '@/shared/utils/format'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { labelFor } from '@/shared/i18n/labels'
-import { ENTITY_TYPE_ORDER, entityCssVar, isOperationType } from '../model/graph-theme'
+import { ENTITY_TYPE_ORDER, entityCssVar, isOperationType } from '@/entities/graph'
 import { PAGES_GROUP, type GraphOptions } from '../model/graph-model'
 import type { GraphTime } from '../model/use-graph-time'
 

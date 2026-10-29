@@ -18,7 +18,7 @@ import { Textarea } from '@/shared/ui/textarea'
 import MarkdownView from '@/modules/documents/components/MarkdownView.vue'
 import ApiOperationRef from '@/modules/api-reference/components/ApiOperationRef.vue'
 import { getWorkspaceId } from '@/shared/api/api'
-import { isBusyStatus, NODE_STATUS_CLASS, NODE_STATUS_ICON, NODE_STATUS_LABEL } from '../model/workflow-ui'
+import { isBusyStatus, NODE_STATUS_CLASS, NODE_STATUS_ICON, NODE_STATUS_LABEL } from '@/entities/workflow'
 
 const { t } = useI18n()
 

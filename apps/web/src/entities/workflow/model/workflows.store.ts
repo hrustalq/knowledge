@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import type { ListWorkflowsResponse, WorkflowDefinitionInfo } from '@knowledge/contracts'
 import { apiQueryOptions, bindStoreQuery, unbindStoreQuery } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
+import { registerProjectScoped } from '@/stores/projects'
 
 /**
  * The workflow definitions available in the active project (docs/features/17).
@@ -80,3 +81,5 @@ export const useWorkflowsStore = defineStore('workflows', {
     },
   },
 })
+
+registerProjectScoped(useWorkflowsStore)

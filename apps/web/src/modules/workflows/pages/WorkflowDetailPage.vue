@@ -31,7 +31,7 @@ import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { relativeTime } from '@/shared/api/api'
 import { labelFor } from '@/shared/i18n/labels'
 import { useAuthStore } from '@/stores/auth'
-import { useWorkflowsStore } from '@/modules/workflows/model/workflows.store'
+import { useWorkflowsStore } from '@/entities/workflow'
 import { Badge } from '@/shared/ui/badge'
 import { Button, buttonVariants } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
@@ -53,7 +53,7 @@ import {
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog'
 import WorkflowMap from '@/modules/workflows/components/WorkflowMap.vue'
-import { describeChain } from '@/modules/workflows/model/workflow-ui'
+import { describeChain } from '@/entities/workflow'
 
 const { t } = useI18n()
 const route = useRoute()

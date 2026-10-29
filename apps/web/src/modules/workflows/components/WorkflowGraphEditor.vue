@@ -37,7 +37,7 @@ import { useI18n } from 'vue-i18n'
 import type { WorkflowGraph, WorkflowStep, WorkflowStepKind, WorkflowValidationIssue } from '@knowledge/contracts'
 import WorkflowStepNode from './WorkflowStepNode.vue'
 import WorkflowStepEdge from './WorkflowStepEdge.vue'
-import { blankStep, stepKind } from '../model/workflow-ui'
+import { blankStep, stepKind } from '@/entities/workflow'
 import { DEFAULT_LAYOUT, layoutPositions } from '../model/workflow-layout'
 
 const props = defineProps<{

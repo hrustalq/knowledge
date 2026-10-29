@@ -102,12 +102,7 @@ import EditorToolbar from './EditorToolbar.vue'
 import EditorBubble from './EditorBubble.vue'
 import TableControls from './TableControls.vue'
 import TableHandles from './TableHandles.vue'
-
-export interface MentionablePage {
-  documentId: string
-  title: string
-  category?: string
-}
+import type { MentionablePage } from './PagePickerDialog.vue'
 
 /** A workspace member `@` can name. `hint` is shown muted beside the name. */
 export interface MentionablePerson {

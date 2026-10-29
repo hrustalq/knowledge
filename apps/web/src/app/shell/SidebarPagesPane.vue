@@ -31,8 +31,8 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
 import SidebarTreeNode from './SidebarTreeNode.vue'
-import TreeDragLayer from '@/modules/documents/components/TreeDragLayer.vue'
-import { provideTreeDnd } from '@/modules/documents/model/tree-dnd'
+import { TreeDragLayer } from '@/modules/documents'
+import { provideTreeDnd } from '@/modules/documents'
 import { toast } from 'vue-sonner'
 import { TreeWindowKey, treeShift } from '@/shared/utils/tree-window'
 

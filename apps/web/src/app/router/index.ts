@@ -8,154 +8,51 @@ import {
 } from 'vue-router'
 import type { Pinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
-import { AI_PANEL_SECTIONS, DEFAULT_AI_SECTION, isAiSection } from '@/modules/assistant/model/ai-sections'
-import { reauthKindOf } from '@/modules/auth/model/sso'
+import { reauthKindOf } from '@/modules/auth'
+import * as access from '@/modules/access/routes'
+import * as apiReference from '@/modules/api-reference/routes'
+import * as assistant from '@/modules/assistant/routes'
+import * as auth from '@/modules/auth/routes'
 import * as captures from '@/modules/captures/routes'
+import * as connectors from '@/modules/connectors/routes'
+import * as documents from '@/modules/documents/routes'
+import * as editor from '@/modules/editor/routes'
 import * as help from '@/modules/help/routes'
+import * as insights from '@/modules/insights/routes'
+import * as memos from '@/modules/memos/routes'
+import * as mergeRequests from '@/modules/merge-requests/routes'
 import * as notifications from '@/modules/notifications/routes'
 import * as projects from '@/modules/projects/routes'
 import * as publishing from '@/modules/publishing/routes'
+import * as templates from '@/modules/templates/routes'
+import * as workflows from '@/modules/workflows/routes'
 
 export function createRouter() {
   return createVueRouter({
     history: import.meta.env.SSR ? createMemoryHistory() : createWebHistory(),
     routes: [
       { path: '/', redirect: '/documents' },
-      // Auth flow (public). `authCard`: one card in one unchanging shell, so a
-      // move between any two of them animates the card and not the page — see
-      // the cardSwap branch in installViewTransitions().
-      { path: '/login', component: () => import('@/modules/auth/pages/LoginPage.vue'), meta: { public: true, authCard: true } },
-      { path: '/signup', component: () => import('@/modules/auth/pages/SignupPage.vue'), meta: { public: true, authCard: true } },
-      { path: '/forgot-password', component: () => import('@/modules/auth/pages/ForgotPasswordPage.vue'), meta: { public: true, authCard: true } },
-      { path: '/reset-password', component: () => import('@/modules/auth/pages/ResetPasswordPage.vue'), meta: { public: true, authCard: true } },
-      { path: '/verify-email', component: () => import('@/modules/auth/pages/VerifyEmailPage.vue'), meta: { public: true, authCard: true } },
-      // The end of an SSO round trip (#75): trades the fragment code for a session.
-      { path: '/auth/sso/complete', component: () => import('@/modules/auth/pages/SsoCompletePage.vue'), meta: { public: true, authCard: true } },
-      // Where every GitHub / Figma OAuth or App round trip ends (#564). Public:
-      // it shows only the outcome in its own query, and must render in a tab
-      // that is about to close itself.
-      { path: '/oauth/:provider', component: () => import('@/modules/connectors/pages/OauthLandingPage.vue'), meta: { public: true, authCard: true } },
-      { path: '/403', component: () => import('@/modules/auth/pages/ForbiddenPage.vue'), meta: { public: true } },
-      // A member signing in to a published site (issue #77 phase 3): needs the
-      // app's session, so the guard sends anyone signed out through /login.
-      { path: '/site-sign-in', component: () => import('@/modules/auth/pages/SiteSignInPage.vue') },
-      // Where a chat bot's link-your-account link lands (issue #71). Needs the
-      // app's session for the same reason: linking proves which person you are.
-      { path: '/chat/link', component: () => import('@/modules/connectors/pages/ChatLinkPage.vue') },
-      // App (authenticated — guard redirects to /login when AUTH_MODE=api-key)
-      // meta.fill: the pages landing leads with a graph canvas, which needs a
-      // definite height to resolve; the tree and list views scroll inside it.
-      { path: '/documents', component: () => import('@/modules/documents/pages/DocumentsListPage.vue'), meta: { fill: true } },
-      { path: '/documents/:id', component: () => import('@/modules/documents/pages/DocumentDetailPage.vue') },
-      // `fill`: the editor owns the viewport and scrolls its own prose column.
-      // Not `bare` (#441): the trail names the project and the page, and the
-      // editor's actions stand in the page bar beneath it, where the page
-      // view's do — so reading and writing share one chrome stack.
-      {
-        path: '/documents/:id/edit',
-        component: () => import('@/modules/editor/pages/EditorPage.vue'),
-        meta: { fill: true },
-      },
-      {
-        path: '/create',
-        component: () => import('@/modules/editor/pages/EditorPage.vue'),
-        meta: { fill: true },
-      },
-      // API specs (#78) are written as text, not in the page editor.
-      { path: '/create/spec', component: () => import('@/modules/api-reference/pages/ApiSpecEditorPage.vue') },
-      { path: '/documents/:id/spec', component: () => import('@/modules/api-reference/pages/ApiSpecEditorPage.vue') },
-      { path: '/create/fixture', component: () => import('@/modules/api-reference/pages/TestFixtureEditorPage.vue') },
-      { path: '/documents/:id/fixture', component: () => import('@/modules/api-reference/pages/TestFixtureEditorPage.vue') },
-      // /upload keeps its path so every existing link, bookmark and sidebar
-      // shortcut still lands; /import is the name the flow now goes by.
-      // meta.fill: the wizard owns the viewport — its three steps share one
-      // frame with a fixed header and action bar, and step 3 holds an editor
-      // that scrolls itself. Breadcrumbs stay: unlike the editor this is not a
-      // writing surface, and the trail is the only orientation it has.
-      {
-        path: '/upload',
-        alias: '/import',
-        component: () => import('@/modules/editor/pages/ImportPage.vue'),
-        meta: { fill: true },
-      },
-      // One connector sync run (docs/features/26). Top-level rather than a child
-    // of the settings shell for the reason the workflow wizard is: reviewing a
-    // staged tree needs the whole viewport, and a settings nav beside it would
-    // be a column of links nobody is going to follow mid-review. `meta.fill`
-    // because the frame is fixed and the two panes scroll inside it.
-    {
-      path: '/settings/connectors/runs/:runId',
-      component: () => import('@/modules/connectors/pages/ConnectorRunPage.vue'),
-      meta: { fill: true },
-    },
-    // One connector, as something you read and operate (docs/features/32) — the
-    // counterpart to the card on /settings/connectors, which is the form you
-    // configure it in. Top-level rather than a settings child for the reason
-    // the run page is: the work-items table wants the width, and the settings
-    // nav beside it would be a column of links nobody follows from here.
-    //
-    // Declared AFTER `runs/:runId` deliberately. vue-router already scores the
-    // literal higher, so this is habit rather than necessity — but the habit is
-    // what keeps the next literal segment from being claimed by `:id`.
-    { path: '/settings/connectors/:id', component: () => import('@/modules/connectors/pages/ConnectorDetailPage.vue') },
-    { path: '/search', component: () => import('@/modules/documents/pages/SearchPage.vue') },
+      ...auth.routes,
+      ...connectors.routes,
+      ...documents.routes,
+      ...editor.routes,
+      ...apiReference.routes,
       ...notifications.routes,
-
-      // A person, inside this workspace. `/u` with no id is your own — the
-      // avatar menu's target, and a link that stays right after a rename.
-      { path: '/u', component: () => import('@/modules/access/pages/ProfilePage.vue') },
-      { path: '/u/:userId', component: () => import('@/modules/access/pages/ProfilePage.vue') },
-      { path: '/merge-requests', component: () => import('@/modules/merge-requests/pages/MergeRequestsPage.vue') },
-      { path: '/merge-requests/:id', component: () => import('@/modules/merge-requests/pages/MergeRequestDetailPage.vue') },
-      // Creating a workflow (docs/features/17).
-      //
-      // The wizard stays at the top level, full-viewport and trail-less: it is
-      // a three-step conversation that ends by handing you the builder, not a
-      // settings form you land on and leave. The builder itself is a child of
-      // `/settings/workflows` — see there. A static segment outranks a param in
-      // vue-router's scoring, so `new` beats the sibling `:id?` regardless of
-      // declaration order.
-      {
-        path: '/settings/workflows/new',
-        component: () => import('@/modules/workflows/pages/WorkflowWizardPage.vue'),
-        meta: { fill: true, bare: true },
-      },
-
-      // Workflows (docs/features/17): the run list, and one run's node tree.
-      { path: '/workflows', component: () => import('@/modules/workflows/pages/WorkflowsPage.vue') },
-      { path: '/workflows/:id', component: () => import('@/modules/workflows/pages/WorkflowRunPage.vue') },
-
-      // Knowledge health (docs/features/40): the workspace's pages by
-      // verification state, bulk actions and the freshness policy.
-
-      { path: '/knowledge-health', component: () => import('@/modules/insights/pages/KnowledgeHealthPage.vue') },
-      // The QA view (#483): operations by suite state, and the fixture library.
-      { path: '/qa', component: () => import('@/modules/api-reference/pages/QaPage.vue') },
-      // Usage analytics (#79). Gated in the page on auth.canAdminWorkspace; the API enforces admin.
-      { path: '/analytics', component: () => import('@/modules/insights/pages/AnalyticsPage.vue') },
+      ...access.routes,
+      ...mergeRequests.routes,
+      ...workflows.routes,
+      ...insights.routes,
       ...captures.routes,
-      // Recordings, transcribed and read against the knowledge base (#551).
-      { path: '/memos', component: () => import('@/modules/memos/pages/MemosPage.vue') },
-      { path: '/memos/:id', component: () => import('@/modules/memos/pages/MemoDetailPage.vue') },
-      // Contradictions between pages (#81).
-      { path: '/conflicts', component: () => import('@/modules/documents/pages/ConflictsPage.vue') },
-      // meta.fill: the chat owns the viewport — see app/App.vue's two content modes.
-      { path: '/assistant', component: () => import('@/modules/assistant/pages/AssistantPage.vue'), meta: { fill: true } },
+      ...memos.routes,
+      ...assistant.routes,
       // Settings: shell with its own right-hand nav; the sections are nested pages.
       {
         path: '/settings',
         component: () => import('@/app/shell/SettingsPage.vue'),
         children: [
           { path: '', redirect: '/settings/projects' },
-          // Your own account: name, language, password, API key. Open to every
-          // role — it takes no user id, so there is nobody else to act on.
-          { path: 'profile', component: () => import('@/modules/access/pages/ProfileSettingsPage.vue') },
+          ...access.settingsRoutes,
           ...notifications.settingsRoutes,
-          // Connect AI moved into /settings/ai as a section (issue #182). Kept
-          // as a redirect: this URL is printed into every SKILL.md already
-          // handed to a client. A string redirect keeps the query, so
-          // `?client=` still opens the client it named.
-          { path: 'connect', redirect: '/settings/ai/connect' },
           {
             ...projects.settingsRoute,
             // Third rail: the roster lives in the shell, the selection here. A
@@ -163,107 +60,19 @@ export function createRouter() {
             // router's job, since modules never import each other.
             children: [...publishing.projectSiteRoutes, projects.projectDetailRoute],
           },
-          // Glossary: workspace vocabulary; the page gates writes on the
-          // editor role, and reading it is open to any member.
-          { path: 'glossary', component: () => import('@/modules/documents/pages/GlossaryPage.vue') },
-          // Page templates (issue #69). One route for the roster, a template
-          // (by ref, so an untouched built-in with no row id is linkable) and
-          // `new`; the page reads the param, since all three share the rail.
-          { path: 'templates/:ref?', component: () => import('@/modules/templates/pages/TemplatesSettingsPage.vue') },
+          ...documents.settingsRoutes,
+          ...templates.settingsRoutes,
           ...publishing.settingsRoutes,
-          // API reference (#78): the try-it proxy mode. Open to every member to
-          // read, since the console needs to know; the page gates the change on
-          // auth.canAdminWorkspace and the API enforces admin.
-          { path: 'api', component: () => import('@/modules/api-reference/pages/ApiSettingsPage.vue') },
-          // Workflows: like AI settings, deliberately not meta.platformAdmin —
-          // this is workspace administration, so the page gates on
-          // auth.canAdminWorkspace and the API enforces the admin role.
-          // Deliberately not meta.fill: that drops <main>'s padding, which the
-          // settings shell's negative-margin bleed depends on. The builder
-          // bounds its own panes instead.
-          {
-            path: 'workflows',
-            component: () => import('@/modules/workflows/pages/WorkflowSettingsPage.vue'),
-            // Third rail, exactly as projects: the roster lives in the shell,
-            // the selection here. The builder gave up the viewport to get the
-            // app trail and the roster back — a chain you navigate to like
-            // anything else, rather than a place you enter.
-            //
-            // Reading and editing are two routes, not one page with a toggle.
-            // The canvas is a working surface: it holds a dirty draft and arms
-            // an unsaved-changes guard on the way out, so opening it to glance
-            // at a chain armed a confirm dialog for nothing. `/edit` is more
-            // segments than `:id?`, so vue-router scores it first regardless of
-            // declaration order — and Vue Flow only loads on that route.
-            children: [
-              { path: ':id/edit', component: () => import('@/modules/workflows/pages/WorkflowBuilderPage.vue') },
-              { path: ':id?', component: () => import('@/modules/workflows/pages/WorkflowDetailPage.vue') },
-            ],
-          },
-          // Access: workspace members, what each role grants, and — for a
-          // platform admin — the accounts themselves. The page gates mutations
-          // by workspace role, and hides the Accounts tab for anyone the API's
-          // @PlatformAdmin guard would refuse.
-          { path: 'access', component: () => import('@/modules/access/pages/AccessControlPage.vue') },
-          { path: 'activity', component: () => import('@/modules/documents/pages/ActivityPage.vue') },
-          // AI (issue #182): Connect AI plus the assistant's provider config,
-          // agents, skills, plugins, quality, usage and logs. Third rail, as
-          // docs: the section rail lives in the shell, the section here.
-          {
-            path: 'ai',
-            component: () => import('@/modules/assistant/pages/AiSettingsPage.vue'),
-            children: [
-              // Bare `/settings/ai` opens the default section, and the old
-              // `?tab=<x>` links — agent-run notifications among them — open
-              // the section the tab became. Every other query rides along.
-              {
-                path: '',
-                redirect: (to) => {
-                  const { tab, ...query } = to.query
-                  return { path: `/settings/ai/${isAiSection(tab) ? tab : DEFAULT_AI_SECTION}`, query }
-                },
-              },
-              // Yours: API keys, client config snippets and the skill
-              // (docs/features/33). Open to every role — it acts on your own
-              // keys, and each tool a connected client calls is checked on its own.
-              { path: 'connect', component: () => import('@/modules/access/pages/ConnectAiPage.vue') },
-              // Workspace administration. Gated in the page on workspace admin
-              // rather than meta.platformAdmin — these are workspace settings,
-              // not platform ones.
-              {
-                path: `:section(${AI_PANEL_SECTIONS.join('|')})`,
-                component: () => import('@/modules/assistant/pages/AiSectionPage.vue'),
-              },
-              // A section that no longer exists (or never did) opens the
-              // default rather than an empty pane. The wildcard scores below
-              // the pattern above, so it only catches what that refused.
-              { path: ':unknown(.*)', redirect: `/settings/ai/${DEFAULT_AI_SECTION}` },
-            ],
-          },
-          // Connectors (docs/features/19): workspace administration, so like AI
-          // settings it gates on auth.canAdminWorkspace rather than meta.platformAdmin.
-          { path: 'connectors', component: () => import('@/modules/connectors/pages/ConnectorsPage.vue') },
-          // Chat bots (issue #71): workspace administration, gated like connectors.
-          { path: 'chat', component: () => import('@/modules/connectors/pages/ChatSettingsPage.vue') },
-          // Sign-in and the audit trail (#75): workspace administration, so the
-          // page gates on auth.canAdminWorkspace and the API enforces admin.
-          { path: 'security', component: () => import('@/modules/access/pages/SecuritySettingsPage.vue') },
-          // Accounts moved into /settings/access as a tab. Kept as a redirect
-          // rather than deleted: it was a nav row and a bookmark for as long as
-          // the settings shell has existed. No `platformAdmin` meta — the
-          // destination decides what to show, and bouncing a workspace admin to
-          // /403 for following their own bookmark is worse than landing them on
-          // the members list.
-          { path: 'users', redirect: '/settings/access?tab=accounts' },
+          ...apiReference.settingsRoutes,
+          ...workflows.settingsRoutes,
+          // Connect AI is access's page among the assistant's sections: the
+          // same nesting as projects ← publishing above.
+          { ...assistant.aiSettingsRoute, children: [...assistant.aiSectionRoutes, access.connectAiRoute] },
+          ...connectors.settingsRoutes,
           ...help.settingsRoutes,
         ],
       },
       ...projects.routes,
-      // Legacy top-level paths → their settings home
-      { path: '/glossary', redirect: '/settings/glossary' },
-      { path: '/activity', redirect: '/settings/activity' },
-      { path: '/access', redirect: '/settings/access' },
-      { path: '/admin/users', redirect: '/settings/access?tab=accounts' },
       ...help.routes,
     ],
   })

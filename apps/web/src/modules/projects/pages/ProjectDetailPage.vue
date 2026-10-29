@@ -46,7 +46,8 @@ watch(
   () => [route.params.id, store.loaded, project.value] as const,
   async ([id, loaded, found]) => {
     restrictedRefusal.value = false
-    if (typeof id !== 'string' || !loaded || found) return
+    // The bare roster (`:id?`) hands us '' — nothing is selected.
+    if (typeof id !== 'string' || !id || !loaded || found) return
     try {
       await api.get('/v1/projects/{id}', { path: { id } })
     } catch (e) {

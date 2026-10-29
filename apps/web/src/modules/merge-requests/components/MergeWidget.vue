@@ -41,7 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/ui/select'
-import { mrIcon } from '../model/mr-ui'
+import { mrIcon } from '@/entities/merge-request'
 import { actorLabel } from '@/entities/person'
 import { lintCheckView, useLintChecks } from '../model/lint-check'
 

@@ -1220,77 +1220,9 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/documents/components/DocumentCanvas.vue",
-    "to": "src/modules/merge-requests/components/CommentComposer.vue",
-    "unresolvedTo": "@/modules/merge-requests/components/CommentComposer.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/DocumentCanvas.vue",
-    "to": "src/modules/merge-requests/components/ThreadCard.vue",
-    "unresolvedTo": "@/modules/merge-requests/components/ThreadCard.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/documents/pages/DocumentDetailPage.vue",
     "to": "src/modules/connectors/components/ConnectorRail.vue",
     "unresolvedTo": "@/modules/connectors/components/ConnectorRail.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/merge-requests/components/MergeRequestList.vue",
-    "unresolvedTo": "@/modules/merge-requests/components/MergeRequestList.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/merge-requests/components/ThreadCard.vue",
-    "unresolvedTo": "@/modules/merge-requests/components/ThreadCard.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -1325,23 +1257,6 @@
     "from": "src/modules/insights/components/HealthPreviewSheet.vue",
     "to": "src/modules/documents/components/VerificationBar.vue",
     "unresolvedTo": "@/modules/documents/components/VerificationBar.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
-    "to": "src/modules/documents/components/DocumentCanvas.vue",
-    "unresolvedTo": "@/modules/documents/components/DocumentCanvas.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",

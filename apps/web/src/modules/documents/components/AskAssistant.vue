@@ -21,7 +21,7 @@ import type {
 import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
-import { useGlossaryStore } from '@/modules/documents/model/glossary.store'
+import { useGlossaryStore } from '@/entities/document'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'

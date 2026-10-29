@@ -30,11 +30,11 @@ import { useEventsStore } from '@/stores/events'
 import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { UserChip } from '@/entities/person'
-import ThreadCard from './ThreadCard.vue'
-import CommentComposer from './CommentComposer.vue'
+import { ThreadCard } from '@/entities/merge-request'
+import { CommentComposer } from '@/entities/merge-request'
 import { useMembers } from '@/entities/person'
 import { systemNote } from '../model/mr-activity'
-import { fullTime, timelineTime } from '../model/mr-ui'
+import { fullTime, timelineTime } from '@/entities/merge-request'
 
 const { t } = useI18n()
 

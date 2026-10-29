@@ -173,7 +173,7 @@ failed page: the prose is already on screen by then.
 - **Web** — `modules/documents/model/glossary.ts` (the matcher only — the DOM-walking pass and the
   `MarkdownView` prop that was its only entry point are deleted),
   `entities/rich-editor/components/extensions/glossary-terms.ts` (the decorations),
-  `modules/documents/model/glossary.store.ts` (the roster), `modules/documents/components/GlossaryCard.vue`
+  `entities/document/model/glossary.store.ts` (the roster), `entities/document/components/GlossaryCard.vue`
   (the definition), `/settings/glossary` (`GlossaryPage.vue`), and the
   **Build glossary** quick action in `AskAssistant.vue`.
   The card is a canvas-owned floating layer, not a `HoverCard`: that component

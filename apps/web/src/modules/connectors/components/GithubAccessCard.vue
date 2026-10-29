@@ -45,7 +45,7 @@ import { Collapse } from '@/shared/ui/collapse'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { labelFor } from '@/shared/i18n/labels'
 import { useLayoutStore } from '@/stores/layout'
-import { useConnectionsWait } from '@/modules/connectors/model/use-connections-wait'
+import { useConnectionsWait } from '@/entities/connector'
 
 const props = defineProps<{ connectorId: string }>()
 const { t } = useI18n()

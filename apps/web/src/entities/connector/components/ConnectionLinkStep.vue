@@ -34,7 +34,7 @@ import { Checkbox } from '@/shared/ui/checkbox'
 import { Input } from '@/shared/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
-import { INTERCOM_REGIONS } from '@/modules/connectors/model/connection-providers'
+import { INTERCOM_REGIONS } from '@/entities/connector/model/connection-providers'
 import { useProjectsStore } from '@/stores/projects'
 import ConnectionBranchSelect from './ConnectionBranchSelect.vue'
 

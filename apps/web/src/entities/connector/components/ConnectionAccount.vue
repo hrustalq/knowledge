@@ -9,7 +9,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ConnectionSummary } from '@knowledge/contracts'
 import { Badge } from '@/shared/ui/badge'
-import { providerMeta } from '@/modules/connectors/model/connection-providers'
+import { providerMeta } from '@/entities/connector/model/connection-providers'
 
 const props = defineProps<{ connection: Pick<ConnectionSummary, 'provider' | 'method' | 'site' | 'accountLabel' | 'accountAvatarUrl' | 'credentialHint'> }>()
 

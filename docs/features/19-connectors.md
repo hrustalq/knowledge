@@ -79,7 +79,7 @@ markdown → HTML that Confluence's storage format needs on the way out.
 form — every field for every kind at once — and it could not say which half the
 credential had to be right for, so the only way to discover a mistyped token was
 to save and watch a red row appear. It is now a wizard driven by xstate
-(`apps/web/src/modules/connectors/model/setup-machines.ts`), in the two layers
+(`apps/web/src/entities/connector/model/setup-machines.ts`), in the two layers
 `@knowledge/workflow` established:
 
 - **A per-kind machine** declares that kind's own questions and nothing else.

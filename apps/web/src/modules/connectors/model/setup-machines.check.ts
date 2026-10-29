@@ -13,7 +13,7 @@
  * snapshot restoring mid-configure with the child's sub-step intact.
  */
 import assert from 'node:assert/strict'
-import { canWalkTree, createSetupActor, createsPages, kindSteps, stepIndex, stepLabels } from './setup-machines.ts'
+import { canWalkTree, createSetupActor, createsPages, kindSteps, stepIndex, stepLabels } from '@/entities/connector'
 
 const services = {
   test: async () => ({ ok: true, detail: 'Engineering (ENG)' }),

@@ -19,8 +19,8 @@ import { api } from '@/shared/api/client'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/button'
-import { openOauthTab } from '@/modules/connectors/model/oauth-tab'
-import { useConnectionsWait } from '@/modules/connectors/model/use-connections-wait'
+import { openOauthTab } from '@/entities/connector'
+import { useConnectionsWait } from '@/entities/connector'
 
 const props = defineProps<{ connector: ConnectorSummary }>()
 const { t } = useI18n()

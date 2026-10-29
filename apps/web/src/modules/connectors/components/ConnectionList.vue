@@ -22,9 +22,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shar
 import { AiEmptyState } from '@/shared/ui/empty-state'
 import { PageState } from '@/shared/layout'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
-import { providerMeta } from '@/modules/connectors/model/connection-providers'
-import ConnectDialog from './ConnectDialog.vue'
-import ConnectionAccount from './ConnectionAccount.vue'
+import { providerMeta } from '@/entities/connector'
+import { ConnectDialog } from '@/entities/connector'
+import { ConnectionAccount } from '@/entities/connector'
 
 defineProps<{ canManage: boolean }>()
 

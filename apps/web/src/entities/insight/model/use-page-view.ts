@@ -1,7 +1,7 @@
 import { onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiUrl, getLocale, getToken } from '@/shared/api/api'
-import { createPageViewTracker, searchClickOf, TICK_MS, type PageViewTarget } from '@/modules/insights/model/page-view'
+import { createPageViewTracker, searchClickOf, TICK_MS, type PageViewTarget } from '@/entities/insight/model/page-view'
 
 const INPUTS = ['scroll', 'wheel', 'keydown', 'pointerdown', 'pointermove'] as const
 

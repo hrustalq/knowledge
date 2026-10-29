@@ -19,7 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/shared/ui/input'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip'
-import AiEmptyState from '@/modules/assistant/components/AiEmptyState.vue'
+import { AiEmptyState } from '@/shared/ui/empty-state'
 import { PageState } from '@/shared/layout'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 import { providerMeta } from '@/modules/connectors/model/connection-providers'

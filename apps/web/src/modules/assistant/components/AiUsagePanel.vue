@@ -13,7 +13,7 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
-import DailyBars from '@/modules/insights/components/DailyBars.vue'
+import { DailyBars } from '@/shared/ui/daily-bars'
 
 const { t } = useI18n()
 

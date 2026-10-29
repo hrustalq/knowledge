@@ -16,7 +16,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FolderTree } from 'lucide-vue-next'
 import type { ConnectorItemEventType, ConnectorRunItemInfo } from '@knowledge/contracts'
-import AiEmptyState from '@/modules/assistant/components/AiEmptyState.vue'
+import { AiEmptyState } from '@/shared/ui/empty-state'
 import ConnectorRunTreeNode from './ConnectorRunTreeNode.vue'
 import { ACTION_CLASS, ACTION_LABEL, nestItems } from '../model/connector-ui'
 

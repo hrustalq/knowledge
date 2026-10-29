@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/ui/select'
-import AiEmptyState from './AiEmptyState.vue'
+import { AiEmptyState } from '@/shared/ui/empty-state'
 import AiWebAccessSection from './AiWebAccessSection.vue'
 
 const { t } = useI18n()

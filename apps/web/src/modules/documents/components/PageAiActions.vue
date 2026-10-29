@@ -27,7 +27,7 @@ import type { AiPageActionsResponse, McpConnectionInfo } from '@knowledge/contra
 import { api, apiQueryOptions, fetchApi } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useCopy } from '@/shared/composables/use-copy'
-import { mcpClients } from '@/modules/access/model/mcp-clients'
+import { mcpClients } from '@/entities/access'
 import { agentLink, cursorMcpInstallUrl, openInVendor, pageMarkdownUrl, type ExternalVendor } from '@/modules/documents/model/ai-actions'
 import { Button } from '@/shared/ui/button'
 import {

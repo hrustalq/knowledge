@@ -12,6 +12,7 @@ import { AI_PANEL_SECTIONS, DEFAULT_AI_SECTION, isAiSection } from '@/modules/as
 import { reauthKindOf } from '@/modules/auth/model/sso'
 import * as captures from '@/modules/captures'
 import * as help from '@/modules/help'
+import * as notifications from '@/modules/notifications'
 
 export function createRouter() {
   return createVueRouter({
@@ -96,10 +97,7 @@ export function createRouter() {
     // what keeps the next literal segment from being claimed by `:id`.
     { path: '/settings/connectors/:id', component: () => import('@/modules/connectors/pages/ConnectorDetailPage.vue') },
     { path: '/search', component: () => import('@/modules/documents/pages/SearchPage.vue') },
-      // The inbox (docs/features/22). Top-level rather than under /settings:
-      // it is a place you read, not a thing you configure — the preferences
-      // that shape it live at /settings/notifications.
-      { path: '/notifications', component: () => import('@/modules/notifications/pages/NotificationsPage.vue') },
+      ...notifications.routes,
 
       // A person, inside this workspace. `/u` with no id is your own — the
       // avatar menu's target, and a link that stays right after a rename.
@@ -150,9 +148,7 @@ export function createRouter() {
           // Your own account: name, language, password, API key. Open to every
           // role — it takes no user id, so there is nobody else to act on.
           { path: 'profile', component: () => import('@/modules/access/pages/ProfileSettingsPage.vue') },
-          // Also yours rather than the workspace's, though scoped to one
-          // workspace: what you want to hear about here.
-          { path: 'notifications', component: () => import('@/modules/notifications/pages/NotificationSettingsPage.vue') },
+          ...notifications.settingsRoutes,
           // Connect AI moved into /settings/ai as a section (issue #182). Kept
           // as a redirect: this URL is printed into every SKILL.md already
           // handed to a client. A string redirect keeps the query, so

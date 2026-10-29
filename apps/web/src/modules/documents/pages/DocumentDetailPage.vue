@@ -112,7 +112,7 @@ import KnowledgeIssuesRail from '@/modules/documents/components/KnowledgeIssuesR
 import QualityRail from '@/modules/insights/components/QualityRail.vue'
 import PageInsightsRail from '@/modules/insights/components/PageInsightsRail.vue'
 import AskAssistant from '@/modules/documents/components/AskAssistant.vue'
-import WatchButton from '@/modules/notifications/components/WatchButton.vue'
+import { WatchButton } from '@/modules/notifications'
 import PageAiActions from '@/modules/documents/components/PageAiActions.vue'
 import SharePopover from '@/modules/documents/components/SharePopover.vue'
 import PageAccessDialog from '@/modules/access/components/PageAccessDialog.vue'

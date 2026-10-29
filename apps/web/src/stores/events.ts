@@ -1,5 +1,7 @@
 // Feature 04 (docs/features/04): one EventSource per session; invalidates
-// stores and toasts on revision lifecycle events.
+// stores and toasts on revision lifecycle events. A module that reacts to an
+// event of its own watches `lastEvent` (NotificationBell does), so this store
+// never imports a module (docs/architecture/11).
 import { defineStore } from 'pinia'
 import { toast } from 'vue-sonner'
 import type { ComposerTranslation } from 'vue-i18n'
@@ -8,7 +10,6 @@ import { api, isApiRequestError } from '@/shared/api/queries'
 import { getToken, getWorkspaceId } from '@/shared/api/api'
 import { useAssistantStore } from '@/modules/assistant/model/assistant.store'
 import { useDocumentsStore } from '@/stores/documents'
-import { useNotificationsStore } from '@/modules/notifications/model/notifications.store'
 
 /** Reconnect backoff after the stream drops: 1 s, doubling, capped at 30 s. */
 const RETRY_MIN_MS = 1_000
@@ -84,15 +85,6 @@ export const useEventsStore = defineStore('events', {
           toast.error(t('activity.indexingFailed', { name: event.title ?? event.documentId }))
         } else if (event.type === 'revision.dependent-reindex') {
           toast.info(t('activity.reindexingDependent', { name: event.title ?? event.documentId }))
-        } else if (event.type === 'notification.created') {
-          // The badge is the only thing that always needs updating; the panel
-          // and the page refetch through the live-cache rule when they are open.
-          // Toasted only for a mention: everything else is news you will read
-          // when you look, while being named is somebody waiting on you.
-          void useNotificationsStore().refreshCount()
-          if (event.reason === 'mention') {
-            toast.info(t('notifications.toastMention', { name: event.title ?? t('notifications.untitled') }))
-          }
         } else if (event.type === 'acl.changed') {
           // A restriction or grant moved (#76): the tree and lists may now
           // show more or less. Pages watching `lastEvent` re-read themselves.

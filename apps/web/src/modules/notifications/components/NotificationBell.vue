@@ -12,12 +12,14 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 import { Bell, CheckCheck, Settings2 } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { Button } from '@/shared/ui/button'
 import { ResponsivePopover } from '@/shared/ui/popover'
 import { useNotificationsStore } from '@/modules/notifications/model/notifications.store'
 import { useAuthStore } from '@/stores/auth'
+import { useEventsStore } from '@/stores/events'
 import NotificationList from './NotificationList.vue'
 
 const { t } = useI18n()
@@ -39,6 +41,23 @@ onMounted(() => {
 watch(open, (isOpen) => {
   if (isOpen) void store.refresh()
 })
+
+// The bell is mounted wherever the event stream is connected (the app shell),
+// so it is where `notification.created` lands. The badge is the only thing that
+// always needs updating; the panel and the page refetch through the live-cache
+// rule when they are open. Toasted only for a mention: everything else is news
+// you will read when you look, while being named is somebody waiting on you.
+const events = useEventsStore()
+watch(
+  () => events.lastEvent,
+  (event) => {
+    if (event?.type !== 'notification.created') return
+    void store.refreshCount()
+    if (event.reason === 'mention') {
+      toast.info(t('notifications.toastMention', { name: event.title ?? t('notifications.untitled') }))
+    }
+  },
+)
 </script>
 
 <template>

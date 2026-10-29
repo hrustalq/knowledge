@@ -733,40 +733,6 @@
   {
     "type": "dependency",
     "from": "src/app/router/index.ts",
-    "to": "src/modules/notifications/pages/NotificationSettingsPage.vue",
-    "unresolvedTo": "@/modules/notifications/pages/NotificationSettingsPage.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/router/index.ts",
-    "to": "src/modules/notifications/pages/NotificationsPage.vue",
-    "unresolvedTo": "@/modules/notifications/pages/NotificationsPage.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/router/index.ts",
     "to": "src/modules/projects/pages/ProjectDetailPage.vue",
     "unresolvedTo": "@/modules/projects/pages/ProjectDetailPage.vue",
     "dependencyTypes": [
@@ -1110,23 +1076,6 @@
     "from": "src/app/shell/AppTopbar.vue",
     "to": "src/modules/documents/model/search-ui.store.ts",
     "unresolvedTo": "@/modules/documents/model/search-ui.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/shell/AppTopbar.vue",
-    "to": "src/modules/notifications/components/NotificationBell.vue",
-    "unresolvedTo": "@/modules/notifications/components/NotificationBell.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -2617,23 +2566,6 @@
   {
     "type": "dependency",
     "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/notifications/components/WatchButton.vue",
-    "unresolvedTo": "@/modules/notifications/components/WatchButton.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
     "to": "src/modules/templates/components/SaveAsTemplateDialog.vue",
     "unresolvedTo": "@/modules/templates/components/SaveAsTemplateDialog.vue",
     "dependencyTypes": [
@@ -3367,23 +3299,6 @@
     "from": "src/modules/merge-requests/components/MrSidebar.vue",
     "to": "src/modules/editor/components/CollabDraftBadge.vue",
     "unresolvedTo": "@/modules/editor/components/CollabDraftBadge.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/components/MrSidebar.vue",
-    "to": "src/modules/notifications/components/WatchButton.vue",
-    "unresolvedTo": "@/modules/notifications/components/WatchButton.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -4297,23 +4212,6 @@
     "from": "src/stores/events.ts",
     "to": "src/modules/assistant/model/assistant.store.ts",
     "unresolvedTo": "@/modules/assistant/model/assistant.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "stores-import-only-shared"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/stores/events.ts",
-    "to": "src/modules/notifications/model/notifications.store.ts",
-    "unresolvedTo": "@/modules/notifications/model/notifications.store",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",

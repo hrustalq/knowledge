@@ -27,7 +27,7 @@ import { Button } from '@/shared/ui/button'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedbackStore } from '@/entities/assistant'
 import ReportIssueDialog from './ReportIssueDialog.vue'
-import WorkItemChips from './WorkItemChips.vue'
+import { WorkItemChips } from '@/entities/document'
 
 const props = defineProps<{
   documentId: string

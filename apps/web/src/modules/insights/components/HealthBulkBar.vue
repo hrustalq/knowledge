@@ -50,7 +50,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog'
-import OwnerPicker from '@/modules/documents/components/OwnerPicker.vue'
+import { OwnerPicker } from '@/entities/document'
 import { INTERVAL_CHOICES, intervalFromKey, intervalKey } from '@/entities/document'
 import type { HealthBulkRequest } from '../model/health-ui'
 

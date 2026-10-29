@@ -25,7 +25,7 @@ import { publicShareExportPath, publicShareExportsPath } from '@knowledge/contra
 import { exportFormatAvailable } from '@/core/export-formats'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
-import ExportFormatPicker from '@/modules/documents/components/ExportFormatPicker.vue'
+import { ExportFormatPicker } from '@/entities/document'
 
 const props = defineProps<{
   token: string

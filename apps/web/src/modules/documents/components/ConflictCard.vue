@@ -25,7 +25,7 @@ import { formatDateTime, formatNumber, formatRelative } from '@/shared/utils/for
 import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import WorkItemChips from './WorkItemChips.vue'
+import { WorkItemChips } from '@/entities/document'
 
 const props = withDefaults(
   defineProps<{

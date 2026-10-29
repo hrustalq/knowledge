@@ -24,6 +24,7 @@ import {
 import { useDocumentsStore } from '@/stores/documents'
 import { useTemplatesStore } from '@/entities/template'
 import { LazyPageAccessDialog as PageAccessDialog } from '@/entities/access'
+import { LazyExportDialog as ExportDialog } from '@/entities/document'
 
 /**
  * Every row used to carry all three dialogs, mounted closed, and with them their
@@ -31,7 +32,6 @@ import { LazyPageAccessDialog as PageAccessDialog } from '@/entities/access'
  * now loads and mounts on its first open, and stays so closing still animates.
  */
 const MoveToDialog = defineAsyncComponent(() => import('./MoveToDialog.vue'))
-const ExportDialog = defineAsyncComponent(() => import('./ExportDialog.vue'))
 
 /** True from the first time `open` is set. */
 function openedOnce(open: Ref<boolean>): Ref<boolean> {

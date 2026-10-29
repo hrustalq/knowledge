@@ -29,7 +29,7 @@ import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import OwnerPicker from '@/modules/documents/components/OwnerPicker.vue'
+import { OwnerPicker } from '@/entities/document'
 
 const props = defineProps<{ connector: ConnectorSummary }>()
 

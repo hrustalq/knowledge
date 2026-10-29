@@ -28,6 +28,8 @@ in the pull request that introduces them — see
   reads an index by name (`vector.neighbors`, `search_index`, `eval`), which could reach another
   workspace's rows past the scope. A query ArcadeDB
   rejects (a syntax error, an unknown property) is now a 400 carrying ArcadeDB's reason, not a 500.
+- **The project roster no longer logs a failed request** (#619): opening Settings → Projects with no
+  project selected asked the API for a project with an empty id and got a 400 on every visit.
 
 ## [0.38.0] — 2026-10-28
 

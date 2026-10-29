@@ -13,6 +13,7 @@ import { reauthKindOf } from '@/modules/auth/model/sso'
 import * as captures from '@/modules/captures'
 import * as help from '@/modules/help'
 import * as notifications from '@/modules/notifications'
+import * as publishing from '@/modules/publishing'
 
 export function createRouter() {
   return createVueRouter({
@@ -159,9 +160,7 @@ export function createRouter() {
             component: () => import('@/modules/projects/pages/ProjectsPage.vue'),
             // Third rail: the roster lives in the shell, the selection here.
             children: [
-              // A project's published site (docs/features/44). The page gates
-              // its controls on auth.canAdminWorkspace; the API enforces admin.
-              { path: ':id/site', component: () => import('@/modules/publishing/pages/SiteSettingsPage.vue') },
+              ...publishing.projectSiteRoutes,
               { path: ':id?', component: () => import('@/modules/projects/pages/ProjectDetailPage.vue') },
             ],
           },
@@ -172,17 +171,11 @@ export function createRouter() {
           // (by ref, so an untouched built-in with no row id is linkable) and
           // `new`; the page reads the param, since all three share the rail.
           { path: 'templates/:ref?', component: () => import('@/modules/templates/pages/TemplatesSettingsPage.vue') },
-          // Publishing (docs/features/43): the workspace's public-link switches
-          // and the inventory of every link. Gated in the page on
-          // auth.canAdminWorkspace, as AI settings are; the API enforces admin.
-          { path: 'publishing', component: () => import('@/modules/publishing/pages/PublishingSettingsPage.vue') },
+          ...publishing.settingsRoutes,
           // API reference (#78): the try-it proxy mode. Open to every member to
           // read, since the console needs to know; the page gates the change on
           // auth.canAdminWorkspace and the API enforces admin.
           { path: 'api', component: () => import('@/modules/api-reference/pages/ApiSettingsPage.vue') },
-          { path: 'exports', component: () => import('@/modules/publishing/pages/ExportsPage.vue') },
-          // Release tags (#81): open to every role to read, like the timeline they mark.
-          { path: 'releases', component: () => import('@/modules/publishing/pages/ReleasesSettingsPage.vue') },
           // Workflows: like AI settings, deliberately not meta.platformAdmin —
           // this is workspace administration, so the page gates on
           // auth.canAdminWorkspace and the API enforces the admin role.

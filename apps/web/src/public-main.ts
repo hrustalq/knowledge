@@ -6,10 +6,7 @@ import { russianPluralRule } from './shared/i18n/plural'
 // would put both whole app catalogs into the reader's bundle.
 import en from './shared/i18n/reader/en.json'
 import ruCatalog from './shared/i18n/reader/ru.json'
-import SharePage from './modules/publishing/reader/SharePage.vue'
-import SitePage from './modules/publishing/reader/SitePage.vue'
-import SiteWidget from './modules/publishing/reader/SiteWidget.vue'
-import type { PublicReaderState } from './modules/publishing/reader/reader-state'
+import { SharePage, SitePage, SiteWidget, type PublicReaderState } from './modules/reader'
 import './assets/style.css'
 
 /**

@@ -784,74 +784,6 @@
   {
     "type": "dependency",
     "from": "src/app/router/index.ts",
-    "to": "src/modules/publishing/pages/ExportsPage.vue",
-    "unresolvedTo": "@/modules/publishing/pages/ExportsPage.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/router/index.ts",
-    "to": "src/modules/publishing/pages/PublishingSettingsPage.vue",
-    "unresolvedTo": "@/modules/publishing/pages/PublishingSettingsPage.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/router/index.ts",
-    "to": "src/modules/publishing/pages/ReleasesSettingsPage.vue",
-    "unresolvedTo": "@/modules/publishing/pages/ReleasesSettingsPage.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/router/index.ts",
-    "to": "src/modules/publishing/pages/SiteSettingsPage.vue",
-    "unresolvedTo": "@/modules/publishing/pages/SiteSettingsPage.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/router/index.ts",
     "to": "src/modules/templates/pages/TemplatesSettingsPage.vue",
     "unresolvedTo": "@/modules/templates/pages/TemplatesSettingsPage.vue",
     "dependencyTypes": [
@@ -1301,106 +1233,6 @@
       "aliased",
       "aliased-tsconfig",
       "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/entry-public-client.ts",
-    "to": "src/modules/publishing/reader/reader-state.ts",
-    "unresolvedTo": "./modules/publishing/reader/reader-state",
-    "dependencyTypes": [
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/entry-public.ts",
-    "to": "src/modules/publishing/reader/reader-state.ts",
-    "unresolvedTo": "./modules/publishing/reader/reader-state",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/entry-public.ts",
-    "to": "src/modules/publishing/reader/site-theme.ts",
-    "unresolvedTo": "./modules/publishing/reader/site-theme",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/public-main.ts",
-    "to": "src/modules/publishing/reader/reader-state.ts",
-    "unresolvedTo": "./modules/publishing/reader/reader-state",
-    "dependencyTypes": [
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/public-main.ts",
-    "to": "src/modules/publishing/reader/SharePage.vue",
-    "unresolvedTo": "./modules/publishing/reader/SharePage.vue",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/public-main.ts",
-    "to": "src/modules/publishing/reader/SitePage.vue",
-    "unresolvedTo": "./modules/publishing/reader/SitePage.vue",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/public-main.ts",
-    "to": "src/modules/publishing/reader/SiteWidget.vue",
-    "unresolvedTo": "./modules/publishing/reader/SiteWidget.vue",
-    "dependencyTypes": [
       "local",
       "import"
     ],
@@ -2027,40 +1859,6 @@
     "from": "src/modules/documents/components/DocumentCanvas.vue",
     "to": "src/modules/merge-requests/model/use-members.ts",
     "unresolvedTo": "@/modules/merge-requests/model/use-members",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/ExportDialog.vue",
-    "to": "src/modules/publishing/model/export-formats.ts",
-    "unresolvedTo": "@/modules/publishing/model/export-formats",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/ExportFormatPicker.vue",
-    "to": "src/modules/publishing/model/export-formats.ts",
-    "unresolvedTo": "@/modules/publishing/model/export-formats",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -3636,41 +3434,7 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/publishing/pages/SiteSettingsPage.vue",
-    "to": "src/modules/projects/components/SiteAskPanel.vue",
-    "unresolvedTo": "@/modules/projects/components/SiteAskPanel.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/publishing/pages/SiteSettingsPage.vue",
-    "to": "src/modules/projects/components/SiteAudiencePanel.vue",
-    "unresolvedTo": "@/modules/projects/components/SiteAudiencePanel.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/publishing/reader/ShareDownload.vue",
+    "from": "src/modules/reader/components/ShareDownload.vue",
     "to": "src/modules/documents/components/ExportFormatPicker.vue",
     "unresolvedTo": "@/modules/documents/components/ExportFormatPicker.vue",
     "dependencyTypes": [
@@ -3687,41 +3451,7 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/publishing/reader/site-search-source.spec.ts",
-    "to": "src/modules/documents/model/use-search.ts",
-    "unresolvedTo": "@/modules/documents/model/use-search",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/publishing/reader/site-search-source.ts",
-    "to": "src/modules/documents/model/use-search.ts",
-    "unresolvedTo": "@/modules/documents/model/use-search",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/publishing/reader/SiteAsk.vue",
+    "from": "src/modules/reader/components/SiteAsk.vue",
     "to": "src/modules/assistant/model/citations.ts",
     "unresolvedTo": "@/modules/assistant/model/citations",
     "dependencyTypes": [
@@ -3738,7 +3468,7 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/publishing/reader/SiteSearch.vue",
+    "from": "src/modules/reader/components/SiteSearch.vue",
     "to": "src/modules/documents/components/FacetFields.vue",
     "unresolvedTo": "@/modules/documents/components/FacetFields.vue",
     "dependencyTypes": [
@@ -3755,7 +3485,7 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/publishing/reader/SiteSearch.vue",
+    "from": "src/modules/reader/components/SiteSearch.vue",
     "to": "src/modules/documents/components/SearchSheetFrame.vue",
     "unresolvedTo": "@/modules/documents/components/SearchSheetFrame.vue",
     "dependencyTypes": [
@@ -3772,7 +3502,7 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/publishing/reader/SiteSearch.vue",
+    "from": "src/modules/reader/components/SiteSearch.vue",
     "to": "src/modules/documents/model/use-search.ts",
     "unresolvedTo": "@/modules/documents/model/use-search",
     "dependencyTypes": [
@@ -3789,7 +3519,7 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/publishing/reader/SiteTreeNode.vue",
+    "from": "src/modules/reader/components/SiteTreeNode.vue",
     "to": "src/modules/documents/components/TreeBranch.vue",
     "unresolvedTo": "@/modules/documents/components/TreeBranch.vue",
     "dependencyTypes": [
@@ -3806,9 +3536,43 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/publishing/reader/SiteTreeNode.vue",
+    "from": "src/modules/reader/components/SiteTreeNode.vue",
     "to": "src/modules/documents/components/TreeRow.vue",
     "unresolvedTo": "@/modules/documents/components/TreeRow.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "module-via-index-only"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/reader/model/site-search-source.spec.ts",
+    "to": "src/modules/documents/model/use-search.ts",
+    "unresolvedTo": "@/modules/documents/model/use-search",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "module-via-index-only"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/reader/model/site-search-source.ts",
+    "to": "src/modules/documents/model/use-search.ts",
+    "unresolvedTo": "@/modules/documents/model/use-search",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",

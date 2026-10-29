@@ -1,6 +1,6 @@
 // Shared search state for every search surface: the app's sheet (SearchSheet.vue),
 // the standalone /search page (SearchWidget.vue) and a published site's reader
-// (modules/publishing/reader/SiteSearch.vue). Store-free on purpose — the reader has no
+// (modules/reader/components/SiteSearch.vue). Store-free on purpose — the reader has no
 // Pinia, router or auth — so where results come from is a `SearchSource` the
 // caller passes: the app's is app-search-source.ts, the reader's the public
 // site search route.

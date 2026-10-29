@@ -7,7 +7,7 @@
  */
 import { useI18n } from 'vue-i18n'
 import { EXPORT_FORMATS, type ExportFormat } from '@knowledge/contracts'
-import { exportFormatAvailable } from '@/modules/publishing/model/export-formats'
+import { exportFormatAvailable } from '@/core/export-formats'
 import { Label } from '@/shared/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 

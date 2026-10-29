@@ -31,14 +31,14 @@ import type { PublicSiteTreeNode, PublicSiteTreeResponse } from '@knowledge/cont
 import { formatDate } from '@/shared/utils/format'
 import { toggleTheme } from '@/shared/utils/theme'
 import { TreeWindowKey, treeDepthBudget, treeShift } from '@/shared/utils/tree-window'
-import PublicMarkdown from '@/modules/publishing/reader/PublicMarkdown.vue'
+import PublicMarkdown from '@/modules/reader/components/PublicMarkdown.vue'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
-import SiteAsk from './SiteAsk.vue'
-import SiteSearch from './SiteSearch.vue'
-import SiteTreeNode from './SiteTreeNode.vue'
+import SiteAsk from '../components/SiteAsk.vue'
+import SiteSearch from '../components/SiteSearch.vue'
+import SiteTreeNode from '../components/SiteTreeNode.vue'
 import { publicSiteSessionPath, publicSiteTreePath } from '@knowledge/contracts/publishing'
-import { siteHomeId, siteHref, type PublicReaderState } from './reader-state'
-import { createSiteTree, SiteTreeKey } from './site-tree'
+import { siteHomeId, siteHref, type PublicReaderState } from '../model/reader-state'
+import { createSiteTree, SiteTreeKey } from '../model/site-tree'
 
 const props = defineProps<{ state: PublicReaderState }>()
 

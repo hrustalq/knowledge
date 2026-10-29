@@ -23,11 +23,11 @@ import {
   shareHref,
   siteHomeId,
   siteHref,
+  siteThemeCss,
   type PublicReaderState,
   type PublicReaderView,
   type PublicSiteChrome,
-} from './modules/publishing/reader/reader-state'
-import { siteThemeCss } from './modules/publishing/reader/site-theme'
+} from './modules/reader'
 
 /**
  * The public SSR entry (docs/features/43, 44):

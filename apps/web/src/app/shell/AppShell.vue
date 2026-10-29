@@ -28,6 +28,7 @@ import VerifyEmailBanner from './VerifyEmailBanner.vue'
 import AppTopbar from './AppTopbar.vue'
 import AppBreadcrumbs from './AppBreadcrumbs.vue'
 import { useCrumbs } from './breadcrumbs'
+import { slowNavigation } from '@/app/router/navigation'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -234,6 +235,8 @@ function skipToMain() {
            the column grows with the document, and a long page would ask the
            compositor for a texture several thousand pixels tall on every
            navigation. See markChangedPane() in router/index.ts. -->
+      <!-- A navigation still waiting on its chunk (#627); see .kn-route-progress. -->
+      <div v-if="slowNavigation" class="kn-route-progress" role="progressbar" :aria-label="t('nav.loadingPage')" />
       <main
         id="main"
         ref="mainEl"
@@ -256,3 +259,51 @@ function skipToMain() {
     <Toaster />
   </div>
 </template>
+
+<style>
+/*
+ * A navigation still waiting on its route's chunk (#627): a 2px ink run along
+ * the top edge of the content pane. Zero-height host, so drawing it moves
+ * nothing; it fades in, since it only appears once a wait has already lasted.
+ * Reduced motion keeps a still rule — the wait is still worth saying. Here
+ * rather than in style.css, which the public reader ships too.
+ */
+.kn-route-progress {
+  position: relative;
+  z-index: 10;
+  height: 0;
+  pointer-events: none;
+}
+.kn-route-progress::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--primary) 30%, var(--primary) 70%, transparent) no-repeat;
+  background-size: 40% 100%;
+  animation:
+    kn-route-progress-in 160ms ease-out both,
+    kn-route-progress-run 1.1s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes kn-route-progress-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes kn-route-progress-run {
+  from {
+    background-position: -70% 0;
+  }
+  to {
+    background-position: 170% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kn-route-progress::before {
+    background: var(--primary);
+    opacity: 0.5;
+    animation: none;
+  }
+}
+</style>

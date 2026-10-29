@@ -13,6 +13,25 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **The first click on a page no longer sits there on a cold cache** (#627): once the app has loaded and
+  gone idle, the browser fetches the code for the five places you open most — kept per person, in your own
+  browser, as route shapes only (`/documents/:id`, never a page id or a search) — or, in a new browser, for a
+  page and the sidebar's destinations. Hovering or focusing a link starts its code too. On a throttled cold
+  load a sidebar link went from about 0.8 s to 0.1 s and a page in the tree from 2.7 s to 0.1 s. Nothing is
+  fetched for a section the workspace switched off, or on a Save-Data or 2G connection.
+- **A slow navigation now says so** (#627): when a page takes longer than a moment to arrive, a thin bar runs
+  along the top of the content and the link you clicked shows a spinner. A page whose code was removed by a
+  deploy while the tab was open now loads by a full reload instead of doing nothing.
+
+### Changed
+
+- **Workflows and Memos moved under Knowledge base** in the sidebar, and the Knowledge base group now sits
+  right below Home (#627).
+
 ## [0.39.0] — 2026-10-29
 
 ### Added

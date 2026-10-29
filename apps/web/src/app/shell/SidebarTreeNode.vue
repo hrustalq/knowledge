@@ -6,7 +6,7 @@
 import { computed, inject, ref, watch, watchPostEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { Lock, NotepadTextDashed } from 'lucide-vue-next'
+import { Loader2, Lock, NotepadTextDashed } from 'lucide-vue-next'
 import { TreeBranch } from '@/entities/document'
 import { TreeRow } from '@/entities/document'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
@@ -19,6 +19,7 @@ import { useSidebarStore } from '@/stores/sidebar'
 import { TreeRowMenu } from '@/modules/documents'
 import { TREE_INDENT, TreeWindowKey } from '@/shared/utils/tree-window'
 import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@/entities/document'
+import { isSlowTarget } from '@/app/router/navigation'
 
 defineOptions({ name: 'SidebarTreeNode' })
 const { t } = useI18n()
@@ -70,6 +71,8 @@ watch(
   },
 )
 const isActive = computed(() => props.node.documentId === props.activeId)
+/** A click on this row still waiting on the page's chunk (#627). */
+const pending = computed(() => isSlowTarget(`/documents/${props.node.documentId}`))
 
 /** See DocumentTreeNode: a mark only for a state that asks for a look. */
 const attention = computed(() => needsAttention(props.node.verification))
@@ -136,7 +139,7 @@ const dnd = useTreeDndRow({
       :href="`/documents/${node.documentId}`"
       :has-children="hasChildren"
       :open="open"
-      :loading="loading"
+      :loading="loading || pending"
       :active="isActive"
       :class="[
         dnd.isSource.value ? 'opacity-40' : '',
@@ -152,7 +155,9 @@ const dnd = useTreeDndRow({
       @toggle="toggle"
     >
       <template #leaf>
+        <Loader2 v-if="pending" class="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
         <span
+          v-else
           class="size-1.5 rounded-full"
           :class="statusDot(node.headRevisionStatus)"
           role="img"
@@ -165,6 +170,7 @@ const dnd = useTreeDndRow({
           :to="`/documents/${node.documentId}`"
           :class="[link.cls, archived ? 'line-through decoration-current/40 opacity-70' : '']"
           :aria-current="link.current"
+          :aria-busy="pending || undefined"
           :title="archived ? `${node.title} · ${t('verification.archived.badge')}` : node.title"
           draggable="false"
         >

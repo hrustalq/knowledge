@@ -3883,6 +3883,8 @@ model WorkspaceSettings {
   workItemConflicts       String?  @map("work_item_conflicts")
   /// WORK_ITEM_VERIFICATION_RULES — off | outdated | all.
   workItemVerification    String?  @map("work_item_verification")
+  /// #604 feature toggles: WORKSPACE_FEATURES values switched off here; empty (no row) is every feature on.
+  disabledFeatures        String[] @default([]) @map("disabled_features")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 

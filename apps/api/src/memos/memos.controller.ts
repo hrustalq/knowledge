@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, Redirect } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { CreateMemoResponse, MemoDetailResponse, MemoListResponse, MemoResponse } from '@knowledge/contracts';
-import { Access, CookieTokenOk, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CookieTokenOk, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Returns } from '../common/returns.decorator.js';
@@ -14,6 +14,7 @@ import { MemosService } from './memos.service.js';
  * caller uploaded it is `MemosService`'s check, a 404 otherwise.
  */
 @ApiTags('memos')
+@Feature('memos')
 @Controller('v1/memos')
 export class MemosController {
   constructor(private readonly memos: MemosService) {}

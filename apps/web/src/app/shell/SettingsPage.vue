@@ -20,16 +20,19 @@ import {
   Plug,
   ShieldCheck,
   Sparkles,
+  ToggleRight,
   UserRound,
   Workflow,
 } from 'lucide-vue-next'
 import { PageLayout, PageSubRail } from '@/shared/layout'
 import { useAuthStore } from '@/stores/auth'
+import { useFeaturesStore } from '@/stores/features'
 
 const { t } = useI18n()
 
 const route = useRoute()
 const auth = useAuthStore()
+const features = useFeaturesStore()
 
 interface SettingsLink { to: string; label: string; icon: Component; hint: string }
 const links = computed<SettingsLink[]>(() => [
@@ -56,7 +59,10 @@ const links = computed<SettingsLink[]>(() => [
   // Connect AI is a section in here (issue #182): open to every role, so this
   // row is too, though the assistant's own sections are admin-gated.
   { to: '/settings/ai', label: t('nav.ai'), icon: Sparkles, hint: t('settings.aiHint') },
-  { to: '/settings/workflows', label: t('nav.workflows'), icon: Workflow, hint: t('settings.workflowsHint') },
+  // Gone with the section when the workspace switched it off (#604).
+  ...(features.isOn('workflows')
+    ? [{ to: '/settings/workflows', label: t('nav.workflows'), icon: Workflow, hint: t('settings.workflowsHint') }]
+    : []),
   { to: '/settings/connectors', label: t('nav.connectors'), icon: Plug, hint: t('settings.connectorsHint') },
   // Admin-only, so hidden from everyone else: unlike the rows above, the page
   // has nothing to show a member who cannot manage it.
@@ -64,6 +70,7 @@ const links = computed<SettingsLink[]>(() => [
     ? [
         { to: '/settings/chat', label: t('nav.chatBots'), icon: MessagesSquare, hint: t('settings.chatBotsHint') },
         { to: '/settings/security', label: t('nav.security'), icon: LockKeyhole, hint: t('settings.securityHint') },
+        { to: '/settings/features', label: t('nav.features'), icon: ToggleRight, hint: t('settings.featuresHint') },
       ]
     : []),
   // Last, and open to every role: it is the section you go to when one of the

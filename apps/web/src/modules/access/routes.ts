@@ -27,6 +27,9 @@ export const settingsRoutes: RouteRecordRaw[] = [
   // Sign-in and the audit trail (#75): workspace administration, so the
   // page gates on auth.canAdminWorkspace and the API enforces admin.
   { path: 'security', component: () => import('./pages/SecuritySettingsPage.vue') },
+  // Which sections the workspace shows (#604): workspace administration, so
+  // the page gates on auth.canAdminWorkspace and the API enforces admin.
+  { path: 'features', component: () => import('./pages/FeaturesSettingsPage.vue') },
   // Accounts moved into /settings/access as a tab. Kept as a redirect
   // rather than deleted: it was a nav row and a bookmark for as long as
   // the settings shell has existed. No `platformAdmin` meta — the

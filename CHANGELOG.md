@@ -34,6 +34,14 @@ in the pull request that introduces them — see
   `content`. A markdown file without a frontmatter block keeps the page's current tags and relations, as a pasted
   body does. `baseRevisionId` refuses the upload when the branch head has moved, and a spec or fixture that fails
   validation is refused at finalize, with the draft kept for a corrected upload.
+- **A workspace admin can switch sections off** (#604): Settings → Features lists Workflows, Knowledge
+  health, QA, Analytics, Captures, Memos, Contradictions and the Assistant. A section that is switched off
+  disappears for everyone in the workspace: its nav entry, its pages (a link to one lands on Home), its rail
+  widgets on a page, its API routes (404 with `details.feature`) and its MCP tools. Switching it off deletes
+  nothing, and switching it back on brings everything back. Work behind it, such as the arbiter, the
+  harvester and analytics recording, keeps running under its own settings.
+  `GET /v1/workspaces/:id/features` returns the list to any member, and `PUT` (workspace admin) replaces it. See
+  [docs/features/70](docs/features/70-feature-toggles.md).
 
 ### Changed
 
@@ -57,6 +65,12 @@ in the pull request that introduces them — see
   rejects (a syntax error, an unknown property) is now a 400 carrying ArcadeDB's reason, not a 500.
 - **The project roster no longer logs a failed request** (#619): opening Settings → Projects with no
   project selected asked the API for a project with an empty id and got a 400 on every visit.
+
+### Operations
+
+- Migration `20261220100000_workspace_feature_toggles` adds `workspace_settings.disabled_features`
+  (`text[] NOT NULL DEFAULT '{}'`). It is additive and survives a rollback: the previous image never reads the
+  column, so every section is on again until the release is redeployed.
 
 ## [0.38.0] — 2026-10-28
 

@@ -2,7 +2,7 @@ import { Controller, Get, Param } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { DocumentWorkflowRunsResponse } from '@knowledge/contracts';
-import { Access } from '../auth/access.decorator.js';
+import { Access, Feature } from '../auth/access.decorator.js';
 import { WorkflowsService } from './workflows.service.js';
 import { Returns } from '../common/returns.decorator.js';
 
@@ -15,6 +15,7 @@ import { Returns } from '../common/returns.decorator.js';
  * loop into a circular dependency.
  */
 @ApiTags('workflows')
+@Feature('workflows')
 @Controller('v1/documents')
 export class DocumentWorkflowsController {
   constructor(private readonly workflows: WorkflowsService) {}

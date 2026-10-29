@@ -85,6 +85,7 @@ import { useProjectsStore } from '@/stores/projects'
 import { useTemplatesStore } from '@/entities/template'
 import { useEventsStore } from '@/stores/events'
 import { useAuthStore } from '@/stores/auth'
+import { useFeaturesStore } from '@/stores/features'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
@@ -262,8 +263,11 @@ const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
 /* ------------------------------------------------------- assistant */
 
 const sidebar = useSidebarStore()
+const features = useFeaturesStore()
+/** Its chat is the Assistant's threads: switched off with the Assistant (#604). */
+const aiAvailable = computed(() => features.isOn('assistant'))
 /** Cookie-backed, so the server paints the panel where the author left it. */
-const aiOpen = computed(() => sidebar.aiPanelOpen)
+const aiOpen = computed(() => aiAvailable.value && sidebar.aiPanelOpen)
 /**
  * Mounted on first open and kept after: closing keeps the conversation and its
  * scroll where they were, and a page whose panel was never opened never loads
@@ -273,6 +277,7 @@ const aiMounted = ref(aiOpen.value)
 const aiPanel = ref<InstanceType<typeof EditorAiPanel> | null>(null)
 
 function setAiOpen(open: boolean) {
+  if (open && !aiAvailable.value) return
   if (open) aiMounted.value = true
   sidebar.setAiPanel(open)
   if (open) void nextTick(() => aiPanel.value?.focus())
@@ -1438,6 +1443,7 @@ onBeforeUnmount(() => {
           <Button
             variant="ghost"
             size="sm"
+            v-feature="'assistant'"
             class="kn-ai-toggle"
             :aria-pressed="aiOpen"
             :title="`${t('editorAi.toggle')} (${modKey}J)`"

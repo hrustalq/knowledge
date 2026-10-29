@@ -3,7 +3,7 @@ import { AI_PANEL_SECTIONS, DEFAULT_AI_SECTION, isAiSection } from './model/ai-s
 
 export const routes: RouteRecordRaw[] = [
   // meta.fill: the chat owns the viewport — see app/App.vue's two content modes.
-  { path: '/assistant', component: () => import('./pages/AssistantPage.vue'), meta: { fill: true } },
+  { path: '/assistant', component: () => import('./pages/AssistantPage.vue'), meta: { fill: true, feature: 'assistant' } },
 ]
 
 // AI (issue #182): Connect AI plus the assistant's provider config,

@@ -3,6 +3,7 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 import { AccessService } from './access.service.js';
 import { AuditService } from './audit.service.js';
 import { AuthPolicyService } from './auth-policy.service.js';
+import { FeaturesService } from './features.service.js';
 
 /**
  * Controller-free, guard-free half of the auth layer (docs/features/20).
@@ -23,7 +24,8 @@ import { AuthPolicyService } from './auth-policy.service.js';
   // admin's bypass reads from whichever process asked (#76).
   // AuthPolicyService (#75): requireRole enforces a workspace's sign-in policy
   // in every process, so a background tool call meets the same rule.
-  providers: [AccessService, AuditService, AuthPolicyService],
-  exports: [AccessService, AuditService, AuthPolicyService],
+  // FeaturesService (#604): the guard and the MCP tool wrapper read the same toggles.
+  providers: [AccessService, AuditService, AuthPolicyService, FeaturesService],
+  exports: [AccessService, AuditService, AuthPolicyService, FeaturesService],
 })
 export class AuthCoreModule {}

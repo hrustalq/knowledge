@@ -7,7 +7,7 @@ import type {
   KnowledgeHealthSummaryResponse,
 } from '@knowledge/contracts';
 import { HEALTH_ADMIN_BULK_ACTIONS } from '@knowledge/contracts';
-import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import { AccessService } from '../auth/access.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import type { Principal } from '../auth/principal.js';
@@ -31,6 +31,7 @@ import { Returns } from '../common/returns.decorator.js';
  * people's pages is an admin's act, and `@Access` can express one role only.
  */
 @ApiTags('knowledge-health')
+@Feature('knowledge-health')
 @Controller('v1/knowledge-health')
 export class KnowledgeHealthController {
   constructor(

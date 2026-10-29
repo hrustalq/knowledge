@@ -67,6 +67,7 @@ import type {
   ListRevisionsResponse,
   ReviewThreadAnchor,
   DocumentWorkflowRunsResponse,
+  WorkspaceFeature,
 } from '@knowledge/contracts'
 import { getWorkspaceId, relativeTime, statusVariant } from '@/shared/api/api'
 import { EXPORT_FORMATS, isOpenIssueStatus, type ExportFormat } from '@knowledge/contracts'
@@ -75,6 +76,7 @@ import { CollabDraftBadge } from '@/entities/rich-editor'
 import { ComponentDeclarationNotice } from '@/entities/code'
 import { UsedByRail } from '@/entities/code'
 import { useAuthStore } from '@/stores/auth'
+import { useFeaturesStore } from '@/stores/features'
 import { useDocumentsStore } from '@/stores/documents'
 import { useEventsStore } from '@/stores/events'
 import { useLayoutStore } from '@/stores/layout'
@@ -199,9 +201,14 @@ onMounted(() => {
  * Frontmatter is filtered out entirely rather than shown empty: a widget whose
  * answer is "this page has none" is a row that costs a glance to dismiss.
  */
+// A section the workspace switched off (#604) takes its rail row with it.
+const features = useFeaturesStore()
+const WIDGET_FEATURE: Partial<Record<RailWidget, WorkspaceFeature>> = { conflicts: 'conflicts', insights: 'analytics', workflows: 'workflows' }
+
 const visibleWidgets = computed(() =>
   RAIL_WIDGETS.filter(
     (w) =>
+      (!WIDGET_FEATURE[w.id] || features.isOn(WIDGET_FEATURE[w.id]!)) &&
       (w.id !== 'frontmatter' || !!content.value?.frontmatter) &&
       (w.id !== 'used-by' || !!declaration.value) &&
       (w.id !== 'quality' || !!quality.value?.score) &&
@@ -563,9 +570,10 @@ const mergeRequestsPreview = useQuery(
   ),
 )
 const workflowsPreview = useQuery(
-  computed(() =>
-    apiQueryOptions('/v1/documents/{id}/workflow-runs', { path: { id: documentId.value } }),
-  ),
+  computed(() => ({
+    ...apiQueryOptions('/v1/documents/{id}/workflow-runs', { path: { id: documentId.value } }),
+    enabled: features.isOn('workflows'),
+  })),
 )
 const activityPreview = useQuery(
   computed(() =>
@@ -580,7 +588,10 @@ const connectorsPreview = useQuery(
 )
 // #81: the rail row's count, and the same cache entry ConflictsRail reads.
 const conflictsPreview = useQuery(
-  computed(() => apiQueryOptions('/v1/conflicts', { query: { workspaceId: getWorkspaceId(), documentId: documentId.value } })),
+  computed(() => ({
+    ...apiQueryOptions('/v1/conflicts', { query: { workspaceId: getWorkspaceId(), documentId: documentId.value } }),
+    enabled: features.isOn('conflicts'),
+  })),
 )
 const openConflicts = computed(
   () => ((conflictsPreview.data.value as ListConflictsResponse | undefined)?.conflicts ?? []).filter((c) => c.status === 'open').length,
@@ -604,7 +615,10 @@ const quality = computed(() => qualityQuery.data.value as DocumentQualityRespons
 // Usage analytics (#79): the collapsed row previews the view count, so the
 // page owns the query and the widget only draws.
 const insightsQuery = useQuery(
-  computed(() => apiQueryOptions('/v1/documents/{id}/insights', { path: { id: documentId.value } })),
+  computed(() => ({
+    ...apiQueryOptions('/v1/documents/{id}/insights', { path: { id: documentId.value } }),
+    enabled: features.isOn('analytics'),
+  })),
 )
 const insights = computed(() => insightsQuery.data.value as PageInsightsResponse | undefined)
 
@@ -715,7 +729,7 @@ usePageView(
   () =>
     detail.value ? { documentId: documentId.value, revisionId: viewingRevision.value ?? detail.value.revision.revisionId } : null,
   (id) => {
-    if (id === documentId.value) void insightsQuery.refetch()
+    if (id === documentId.value && features.isOn('analytics')) void insightsQuery.refetch()
   },
 )
 

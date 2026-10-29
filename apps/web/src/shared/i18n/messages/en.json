@@ -178,7 +178,8 @@
     "releases": "Releases",
     "conflicts": "Contradictions",
     "skipToContent": "Skip to content",
-    "navigation": "Navigation"
+    "navigation": "Navigation",
+    "features": "Features"
   },
   "role": {
     "guest": "Guest",
@@ -339,7 +340,8 @@
     "chatBotsHint": "Answer questions in chat, citing your pages.",
     "apiReferenceHint": "Try-it proxy for spec pages",
     "securityHint": "Sign-in and the audit trail",
-    "releasesHint": "Named points in time"
+    "releasesHint": "Named points in time",
+    "featuresHint": "Sections this workspace shows"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -7255,6 +7257,23 @@
       "delete": "Delete",
       "deleteTitle": "Delete this memo?",
       "deleteBody": "The recording and its transcript are deleted for good. Merge requests it opened stay open for review."
+    }
+  },
+  "features": {
+    "title": "Features",
+    "subtitle": "Switch off the sections this workspace does not use. An off section disappears from the navigation and its pages for everyone here, and its API routes and MCP tools answer as if it did not exist.",
+    "adminOnly": "Only a workspace admin can change which sections are shown.",
+    "background": "Switching a section off deletes nothing, and switching it back on brings everything back. Background work keeps running under its own settings: the arbiter still looks for contradictions, chats are still harvested, and analytics still records.",
+    "saved": "Features saved",
+    "items": {
+      "workflows": "Workflow runs, their settings and the \"Start workflow\" action on pages.",
+      "knowledge-health": "The knowledge health dashboard: stale, unowned and low-quality pages and their bulk actions.",
+      "qa": "The QA overview, API test suites, fixtures, environments and test runs.",
+      "analytics": "The usage dashboard, page insights and the per-project analytics.",
+      "captures": "The captures inbox and the agent-memory tools that stage them.",
+      "memos": "Uploading meeting recordings and the merge requests proposed from them.",
+      "conflicts": "The list of contradictions between pages and resolving them.",
+      "assistant": "The Assistant page, its saved conversations and the chat panel beside the editor. Review, lint and suggestion helpers stay."
     }
   }
 }

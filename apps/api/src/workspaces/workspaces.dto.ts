@@ -14,7 +14,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { MEMBER_CAPABILITIES, WORKSPACE_ROLES, type MemberCapability } from '@knowledge/contracts';
+import { MEMBER_CAPABILITIES, WORKSPACE_FEATURES, WORKSPACE_ROLES, type MemberCapability, type WorkspaceFeature } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 const ROLES = WORKSPACE_ROLES;
@@ -110,4 +110,17 @@ export class UpdateMemberDto {
   @IsOptional()
   @IsBoolean()
   convertToManual?: boolean;
+}
+
+/** PUT /v1/workspaces/:id/features (#604): the whole list, replacing the last. */
+export class UpdateWorkspaceFeaturesDto {
+  @ApiProperty({
+    enum: WORKSPACE_FEATURES,
+    isArray: true,
+    description: 'The sections to switch off; every one not listed is on. An empty list turns everything back on.',
+  })
+  @IsArray()
+  @ArrayMaxSize(WORKSPACE_FEATURES.length)
+  @IsIn(WORKSPACE_FEATURES, { each: true })
+  disabled!: WorkspaceFeature[];
 }

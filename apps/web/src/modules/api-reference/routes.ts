@@ -7,7 +7,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/create/fixture', component: () => import('./pages/TestFixtureEditorPage.vue') },
   { path: '/documents/:id/fixture', component: () => import('./pages/TestFixtureEditorPage.vue') },
   // The QA view (#483): operations by suite state, and the fixture library.
-  { path: '/qa', component: () => import('./pages/QaPage.vue') },
+  { path: '/qa', component: () => import('./pages/QaPage.vue'), meta: { feature: 'qa' } },
 ]
 
 export const settingsRoutes: RouteRecordRaw[] = [

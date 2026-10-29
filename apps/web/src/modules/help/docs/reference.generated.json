@@ -5342,6 +5342,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/workspaces/{id}/features",
+      "tag": "workspaces",
+      "summary": "The sections switched off in this workspace",
+      "role": "viewer",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/workspaces/{id}/features",
+      "tag": "workspaces",
+      "summary": "Switch sections off or back on (workspace admin): hides them in the app, 404s their routes and MCP tools",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/workspaces/{id}/members",
       "tag": "workspaces",
       "summary": "Workspace member roster (any member)",
@@ -6582,7 +6602,7 @@
     },
     {
       "name": "knowledge_query_graph",
-      "description": "TRUSTED-OPERATOR ONLY (plan.md §9): read-only SQL over the graph store. Single SELECT statement, row-limited, workspace predicate enforced server-side; every call is written to the audit log.",
+      "description": "TRUSTED-OPERATOR ONLY (plan.md §9): read-only SQL over the graph store. Single SELECT statement, row-limited; every call is written to the audit log. Each FROM <Type> is narrowed to the workspace before the query reads it, so count(*), GROUP BY, LIMIT and subqueries work as written. FROM may name a subquery or one of these types (key fields in brackets): Document [documentId, title], DocumentRevision [revisionId, documentId], Chunk [chunkId, documentId, revisionId, idx, text, headingPath, live], Entity [entityKey e.g. op:* / component:* / service:*, entityType, name], Community [communityId, level, parentId, title, summary, members], ChatChunk [chunkId, bindingId], , [documentId, revisionId, targetKey, live, extractor, confidence, snippet; out = Document, in = Entity]. Use @type (not @class) for the type name. Refused: other targets (V, schema:*, record ids), comments, MATCH.",
       "inputs": [
         {
           "name": "workspaceId",

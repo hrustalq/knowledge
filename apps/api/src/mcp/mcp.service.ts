@@ -55,6 +55,7 @@ import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AgentLearningsService } from '../ai/agent-learnings.service.js';
 import { AccessService } from '../auth/access.service.js';
+import { FeaturesService } from '../auth/features.service.js';
 import { AiReadableService } from '../ai-readable/ai-readable.service.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
 import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
@@ -68,7 +69,7 @@ import { keepFrontmatter } from '../common/frontmatter.js';
 import { applyLineEdits } from './line-patch.js';
 import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
-import { CAPTURE_TOOLS, MCP_AS_OF, MCP_INSTRUCTIONS, MCP_KNOWN_AT, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
+import { CAPTURE_TOOLS, MCP_AS_OF, MCP_INSTRUCTIONS, MCP_KNOWN_AT, MCP_SERVER_NAME, featureOfTool, settleTools, trackTools } from './mcp-tools.js';
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderMcpLearnings, renderSkill, type McpLearningGroup, type McpWhoami } from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
@@ -243,6 +244,7 @@ export class McpService {
     private readonly connectorProducer: ConnectorProducer,
     private readonly agents: AgentRegistryService,
     private readonly access: AccessService,
+    private readonly features: FeaturesService,
     private readonly config: ConfigService,
     private readonly aiReadable: AiReadableService,
     private readonly provenance: ProvenanceService,
@@ -332,7 +334,11 @@ export class McpService {
     );
     // Every call is filed as `mcp` traffic (#79), whoever the principal is.
     const caller: AnalyticsCaller = { principal, channel: 'mcp', ...(extras.noTrack ? { noTrack: true } : {}) };
-    const handles = trackTools(server, (call) => void this.analytics.toolCall(caller, call));
+    const handles = trackTools(
+      server,
+      (call) => void this.analytics.toolCall(caller, call),
+      (tool, args) => this.featureGate(principal, tool, args),
+    );
     const guard = this.guardFor(principal);
 
     server.registerTool(
@@ -2850,6 +2856,26 @@ export class McpService {
       if (kept !== text) await this.storage.putObjectText(row.s3Key, kept, row.contentType);
     }
     return this.documents.finalizeRevision(documentId, revisionId);
+  }
+
+  /**
+   * #604: refuse a tool of a section its workspace switched off, as `@Feature`
+   * refuses the REST twin. Membership first, as AclGuard orders it, so the 404
+   * tells only a member that the section is off.
+   */
+  private async featureGate(principal: Principal, tool: string, args: Record<string, unknown>): Promise<void> {
+    const feature = featureOfTool(tool);
+    if (!feature) return;
+    const id = (key: string) => (typeof args[key] === 'string' ? (args[key] as string) : null);
+    const documentId = id('documentId');
+    const runId = tool === 'knowledge_get_workflow_run' ? id('runId') : null;
+    const workspaceId =
+      id('workspaceId') ??
+      (documentId ? await this.access.workspaceOfDocument(documentId) : null) ??
+      (runId ? await this.access.workspaceOfWorkflowRun(runId) : null);
+    if (!workspaceId) return;
+    await this.access.requireRole(principal, workspaceId, 'viewer', false, { allowGuest: true });
+    await this.features.require(workspaceId, feature);
   }
 
   private json(value: unknown) {

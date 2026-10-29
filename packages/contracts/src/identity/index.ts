@@ -1517,3 +1517,36 @@ export interface MentionAccessNote {
 
 // ---------------------------------------------------------------------------
 // Strict error contract
+
+// ---------------------------------------------------------------------------
+// Feature toggles (#604)
+// ---------------------------------------------------------------------------
+
+/**
+ * The sections a workspace admin may switch off. Off hides the section's nav
+ * entry and pages in the web app, answers its API routes with 404 and refuses
+ * its MCP tools. Background work (the arbiter, the harvester, analytics
+ * recording) is not stopped by a toggle: each has its own setting.
+ */
+export const WORKSPACE_FEATURES = [
+  'workflows',
+  'knowledge-health',
+  'qa',
+  'analytics',
+  'captures',
+  'memos',
+  'conflicts',
+  'assistant',
+] as const;
+export type WorkspaceFeature = (typeof WORKSPACE_FEATURES)[number];
+
+export function isWorkspaceFeature(value: unknown): value is WorkspaceFeature {
+  return (WORKSPACE_FEATURES as readonly unknown[]).includes(value);
+}
+
+// GET / PUT /v1/workspaces/:id/features
+export interface WorkspaceFeaturesResponse {
+  workspaceId: string;
+  /** Switched off in this workspace; every other feature is on. */
+  disabled: WorkspaceFeature[];
+}

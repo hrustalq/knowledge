@@ -1,5 +1,5 @@
 import { SetMetadata, createParamDecorator, type ExecutionContext } from '@nestjs/common';
-import type { MemberCapability, WorkspaceRole } from '@knowledge/contracts';
+import type { MemberCapability, WorkspaceFeature, WorkspaceRole } from '@knowledge/contracts';
 
 export const ACCESS_META = 'knowledge:access';
 export const PUBLIC_META = 'knowledge:public';
@@ -8,6 +8,7 @@ export const READ_KEY_OK_META = 'knowledge:read-key-ok';
 export const QUERY_TOKEN_OK_META = 'knowledge:query-token-ok';
 export const COOKIE_TOKEN_OK_META = 'knowledge:cookie-token-ok';
 export const UNVERIFIED_OK_META = 'knowledge:unverified-ok';
+export const FEATURE_META = 'knowledge:feature';
 
 /** Where AclGuard finds the workspace id for a route (resolved in PostgreSQL). */
 export type WorkspaceSource =
@@ -93,6 +94,14 @@ export const Access = (
 
 /** Route reachable without authentication (health checks, login/signup/reset). */
 export const Public = () => SetMetadata(PUBLIC_META, true);
+
+/**
+ * The route belongs to a section a workspace admin may switch off (#604). On a
+ * controller or a handler; AclGuard answers 404 when the route's workspace has
+ * it off. Needs `@Access`, which is how the guard finds the workspace — and
+ * that runs even under AUTH_MODE=none, so a toggle behaves the same in dev.
+ */
+export const Feature = (feature: WorkspaceFeature) => SetMetadata(FEATURE_META, feature);
 
 /** Route restricted to platform admins (users.is_admin) — user management surface. */
 export const PlatformAdmin = () => SetMetadata(PLATFORM_ADMIN_META, true);

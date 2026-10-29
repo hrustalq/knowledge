@@ -21,7 +21,7 @@ import type {
   WorkflowRunNodeInfo,
   WorkflowRunResponse,
 } from '@knowledge/contracts';
-import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { WorkflowsService } from './workflows.service.js';
 import { WorkflowMaterializerService } from './workflow-materializer.service.js';
@@ -53,6 +53,7 @@ import { Returns } from '../common/returns.decorator.js';
  * another tenant is a 403 before the handler runs.
  */
 @ApiTags('workflows')
+@Feature('workflows')
 @Controller('v1/workflows')
 export class WorkflowsController {
   constructor(

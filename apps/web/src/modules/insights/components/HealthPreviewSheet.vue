@@ -22,7 +22,7 @@ import { Button } from '@/shared/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 import { PageState } from '@/shared/layout'
 import { MarkdownView } from '@/entities/document'
-import VerificationBar from '@/modules/documents/components/VerificationBar.vue'
+import { VerificationBar } from '@/entities/document'
 
 const props = defineProps<{ row: KnowledgeHealthRow | null }>()
 const emit = defineEmits<{ close: [] }>()

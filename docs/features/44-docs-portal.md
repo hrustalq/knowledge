@@ -261,7 +261,7 @@ The share reader's public entry (`entry-public.ts`, `reader.html`,
   page is in the snapshot (anything else loses its link), and attachments go
   through the site attachment route.
 - **Chrome.** The nav is drawn by the app rail's own row and branch
-  (`modules/documents/components/TreeRow.vue`, `TreeBranch.vue`; `SidebarTreeNode` is the
+  (`entities/document/components/TreeRow.vue`, `TreeBranch.vue`; `SidebarTreeNode` is the
   app's wrapper around them, `SiteTreeNode` the reader's), with the same
   indent rails and horizontal tree window (`shared/utils/tree-window.ts`). It first
   renders what `resolve` sent — the top level and the open path, as plain

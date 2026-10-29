@@ -95,7 +95,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
 import { SaveAsTemplateDialog, type SaveAsTemplatePage } from '@/entities/template'
-import ExportDialog from '@/modules/documents/components/ExportDialog.vue'
+import { ExportDialog } from '@/entities/document'
 import { PageLayout, PageRail, PageState } from '@/shared/layout'
 import TocRail from '@/modules/documents/components/TocRail.vue'
 import { DocumentCanvas } from '@/entities/merge-request'
@@ -121,7 +121,7 @@ import { PageAccessDialog } from '@/entities/access'
 import { RequestAccessCard } from '@/entities/access'
 import { warnMentionedWithoutAccess } from '@/entities/access'
 import { useMembers } from '@/entities/person'
-import VerificationBar from '@/modules/documents/components/VerificationBar.vue'
+import { VerificationBar } from '@/entities/document'
 
 // Behind a widget, a dialog or a spec page only: a reader of an ordinary page
 // never needs the force layout, the revision table or the API reference, so

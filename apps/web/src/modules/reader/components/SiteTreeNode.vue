@@ -7,8 +7,8 @@
  */
 import { computed, inject } from 'vue'
 import type { PublicSiteTreeNode } from '@knowledge/contracts'
-import TreeBranch from '@/modules/documents/components/TreeBranch.vue'
-import TreeRow from '@/modules/documents/components/TreeRow.vue'
+import { TreeBranch } from '@/entities/document'
+import { TreeRow } from '@/entities/document'
 import { TreeWindowKey } from '@/shared/utils/tree-window'
 import { SiteTreeKey } from '../model/site-tree'
 

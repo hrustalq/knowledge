@@ -45,7 +45,7 @@ WYSIWYG block editor; see Future work.
 The block-based WYSIWYG above shipped (Tiptap, `components/editor/`). Two
 things were added on top of it.
 
-### Editor events as streams — `components/editor/editor-streams.ts`
+### Editor events as streams — `entities/rich-editor/model/editor-streams.ts`
 
 Every Tiptap event the chrome reacts to enters through `editorStreams(editor)`,
 one ref-counted set of RxJS streams per editor instance:
@@ -72,7 +72,7 @@ the whole bar, per keystroke. The chrome now renders from `format$` and no
 template reads editor state. The drag gutter's target is coalesced per frame
 the same way.
 
-### Unstaged changes — `lib/working-copy.ts`, `use-working-copy.ts`
+### Unstaged changes — `entities/rich-editor/model/working-copy.ts`, `modules/editor/model/use-working-copy.ts`
 
 Git's vocabulary: publishing a revision is the commit, and until then the
 edits are *unstaged*. They used to live only in component state, so a reload
@@ -93,7 +93,7 @@ or a crash lost them. Now:
   restoring silently and publishing would undo the revision in between.
 - The header chip opens a review: title/placement changes plus a line diff of
   the source file publishing would write (`buildSource`, now in
-  `lib/page-source.ts`), rendered by the same `DiffView` a revision comparison
+  `entities/document/model/page-source.ts`), rendered by the same `DiffView` a revision comparison
   uses. It carries **Discard all changes**.
 - Leaving in-app no longer asks once the copy is stored. **Cancel** still asks
   (keep and leave / discard / keep editing); the old discard-only prompt and
@@ -146,7 +146,7 @@ grip outlines its target before anything is deleted.
 - **Collab.** A delete or insert is one transaction, so per-peer undo restores
   it for the person who made it.
 
-### Embed groups — `EmbedNode.vue`, `lib/embeds.ts` (#470)
+### Embed groups — `EmbedNode.vue`, `entities/document/model/embeds.ts` (#470)
 
 A `knEmbed` atom holds an ordered group of external items, each
 `{ url, version, caption }`, plus a group caption and a layout (`strip` or
@@ -167,7 +167,7 @@ shows captioned links:
   turndown rule writes the group with no blank line inside, because CommonMark
   ends an HTML block at one. The `<a>` text is the caption, or the URL when
   there is none.
-- **Tested** in `lib/markdown/embed.spec.ts` (URL parsing, canonical
+- **Tested** in `core/markdown/embed.spec.ts` (URL parsing, canonical
   spelling, round trip, escaping, sanitizer) and through a shared draft in
   `markdown-roundtrip-collab.spec.ts`, since `items` is an array attribute.
 - **Rendering.** The node view and the read view build the same tiles from

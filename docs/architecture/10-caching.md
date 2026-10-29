@@ -24,7 +24,7 @@ plan, the section says so.
 ## The web client: one client, one cache
 
 Every call the web app makes to the API goes through the generated client
-(`api/client.ts`, [07](07-api-client-errors.md)), and every read whose data is
+(`shared/api/client.ts`, [07](07-api-client-errors.md)), and every read whose data is
 shown goes through TanStack Query: `apiQueryOptions` in a component, or
 `fetchApi` / `queryClient.fetchQuery` from a store or a route guard. One key
 holds one answer, so a store and a component can no longer show two versions of
@@ -33,16 +33,16 @@ the same page, and a live invalidation ([08](08-events-live.md)) reaches both.
 **Raw `fetch` is a lint error.** `apps/web/eslint.config.js` (`RAW_FETCH`)
 flags `fetch(`, `window.fetch(`, `globalThis.fetch(` and `self.fetch(`
 everywhere except `RAW_FETCH_OK`. Each entry there names why XHR cannot do the
-job: a streamed body (`lib/assistant-stream.ts`), a keepalive beacon that
-outlives the tab (`lib/use-page-view.ts`), the try-it console and browser suite
+job: a streamed body (`entities/assistant/model/assistant-stream.ts`), a keepalive beacon that
+outlives the tab (`modules/insights/model/use-page-view.ts`), the try-it console and browser suite
 runs (the request is the reader's own), the public SSR entry (no member client,
 no credential), and the service worker. File downloads go through
 `requestFile` on the same axios stack. Presigned uploads go to object storage,
-not the API, over XHR (`lib/presigned-put.ts`, the only way to report upload
+not the API, over XHR (`shared/api/presigned-put.ts`, the only way to report upload
 progress).
 
 **Freshness is set per query family** in one map, `queryTimes()` in
-`api/queries.ts`, keyed by the URL template that heads every query key:
+`shared/api/queries.ts`, keyed by the URL template that heads every query key:
 
 - **30 s** (the default) for anything a peer's write moves: lists, pages,
   threads, the tree.
@@ -238,7 +238,7 @@ was turned off because it injects its `<link>` into every HTML input, which
 would have put it in the public reader's shell. Site hosts never register the
 worker.
 
-**`lib/pwa.ts`** is the page half, started from `App.vue` once it mounts:
+**`shared/utils/pwa.ts`** is the page half, started from `app/App.vue` once it mounts:
 
 - **Updates**: `registerSW` in prompt mode. A new deploy changes `sw.js`, the
   new worker installs in the background and waits, and a persistent toast

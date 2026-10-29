@@ -7,7 +7,7 @@
  *   apps/api/src/ ** /*.controller.ts     → the role each endpoint requires
  *   apps/api/src/mcp/mcp.service.ts       → the MCP tools and their inputs
  *                                         ↓
- *   apps/web/src/pages/docs/reference.generated.json   (committed, like schema.d.ts)
+ *   apps/web/src/modules/help/docs/reference.generated.json   (committed, like schema.d.ts)
  *
  * Committed rather than built at page load for the same reason `schema.d.ts` is:
  * the web app does not reach across the workspace boundary into apps/api, and a
@@ -29,7 +29,7 @@ const REPO = resolve(HERE, '../../..')
 const API_SRC = join(REPO, 'apps/api/src')
 const OPENAPI = join(REPO, 'apps/api/openapi.json')
 const MCP_SERVICE = join(API_SRC, 'mcp/mcp.service.ts')
-const OUT = join(REPO, 'apps/web/src/pages/docs/reference.generated.json')
+const OUT = join(REPO, 'apps/web/src/modules/help/docs/reference.generated.json')
 
 /** A parse that stops matching must fail loudly, not quietly empty the page. */
 const MIN_ENDPOINTS = 100

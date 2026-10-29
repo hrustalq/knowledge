@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
@@ -18,9 +19,11 @@ import type {
   ListWorkspacesResponse,
   UpdateWorkspaceResponse,
   WorkspaceDeletionPreviewResponse,
+  WorkspaceFeaturesResponse,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
+import { FeaturesService } from '../auth/features.service.js';
 import {
   AddMemberDto,
   CreateWorkspaceDto,
@@ -28,6 +31,7 @@ import {
   ListCandidatesQueryDto,
   UpdateMemberDto,
   UpdateWorkspaceDto,
+  UpdateWorkspaceFeaturesDto,
 } from './workspaces.dto.js';
 import { WorkspacesService } from './workspaces.service.js';
 import { Returns } from '../common/returns.decorator.js';
@@ -40,7 +44,10 @@ import { Returns } from '../common/returns.decorator.js';
 @ApiTags('workspaces')
 @Controller('v1/workspaces')
 export class WorkspacesController {
-  constructor(private readonly workspaces: WorkspacesService) {}
+  constructor(
+    private readonly workspaces: WorkspacesService,
+    private readonly features: FeaturesService,
+  ) {}
 
   @Get()
   @Returns('ListWorkspacesResponse')
@@ -62,6 +69,28 @@ export class WorkspacesController {
   @ApiOperation({ summary: 'What deleting the workspace would destroy, counted (workspace admin)' })
   deletionPreview(@Param('id', ParseUUIDPipe) id: string): Promise<WorkspaceDeletionPreviewResponse> {
     return this.workspaces.deletionPreview(id);
+  }
+
+  // Feature toggles (#604). Every member and guest reads them — the app hides
+  // what is off — and only a workspace admin changes them.
+  @Get(':id/features')
+  @Returns('WorkspaceFeaturesResponse')
+  @Access('viewer', 'workspace', { guests: true })
+  @ApiOperation({ summary: 'The sections switched off in this workspace' })
+  async getFeatures(@Param('id', ParseUUIDPipe) id: string): Promise<WorkspaceFeaturesResponse> {
+    return { workspaceId: id, disabled: await this.features.disabled(id) };
+  }
+
+  @Put(':id/features')
+  @Returns('WorkspaceFeaturesResponse')
+  @Access('admin', 'workspace')
+  @ApiOperation({ summary: 'Switch sections off or back on (workspace admin): hides them in the app, 404s their routes and MCP tools' })
+  async setFeatures(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateWorkspaceFeaturesDto,
+  ): Promise<WorkspaceFeaturesResponse> {
+    return { workspaceId: id, disabled: await this.features.set(id, dto.disabled, principal.userId) };
   }
 
   @Patch(':id')

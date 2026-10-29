@@ -16,7 +16,7 @@
     "typecheck": "vue-tsc -b",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "generate:api": "openapi-typescript ../api/openapi.json -o src/api/schema.d.ts",
+    "generate:api": "openapi-typescript ../api/openapi.json -o src/shared/api/schema.d.ts",
     "generate:docs": "node scripts/generate-docs-reference.mjs",
     "lint:i18n-baseline": "eslint src --prune-suppressions"
   },

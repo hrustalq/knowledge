@@ -103,6 +103,6 @@ the API validates.
 |---|---|
 | Endpoint | `apps/api/src/projects/project-overview.service.ts`, `GET /v1/projects/:id/overview` |
 | Activity | `activity_log.project_id` + backfill; `projectId` on the filter, DTO and `ActivityFeed.vue` |
-| Page | `apps/web/src/pages/ProjectOverviewPage.vue`, route `/projects/:id` |
-| Face | `components/projects/ProjectAvatar.vue`, used by `SidebarProjectsPane` and both project pages |
+| Page | `apps/web/src/modules/projects/pages/ProjectOverviewPage.vue`, route `/projects/:id` |
+| Face | `modules/projects/components/ProjectAvatar.vue`, used by `SidebarProjectsPane` and both project pages |
 | Trail | `AppBreadcrumbs.vue` — roster, then project, pointed at the read side |

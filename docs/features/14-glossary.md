@@ -36,7 +36,7 @@ authoring.** This is the same split as frontmatter relations versus inferred
 ones, and it is the important decision in the feature. Matching terms is
 mechanical — a model adds nothing to it but latency, cost and nondeterminism —
 whereas *noticing that a term needs defining, and drafting the definition* is
-exactly what a model is good at. So `lib/glossary.ts` does the substitution on
+exactly what a model is good at. So `modules/documents/model/glossary.ts` does the substitution on
 every render with a regex, and the LLM is called once, by a human, from the
 glossary page.
 
@@ -170,10 +170,10 @@ failed page: the prose is already on screen by then.
   — so `@Access(…, 'document')` resolves the workspace from `:id` and no new
   `WorkspaceSource` was needed. Reading is `viewer`: whoever may read a page may
   see which of its words are not vocabulary.
-- **Web** — `lib/glossary.ts` (the matcher only — the DOM-walking pass and the
+- **Web** — `modules/documents/model/glossary.ts` (the matcher only — the DOM-walking pass and the
   `MarkdownView` prop that was its only entry point are deleted),
-  `components/editor/extensions/glossary-terms.ts` (the decorations),
-  `stores/glossary.ts` (the roster), `components/knowledge/GlossaryCard.vue`
+  `entities/rich-editor/components/extensions/glossary-terms.ts` (the decorations),
+  `entities/document/model/glossary.store.ts` (the roster), `entities/document/components/GlossaryCard.vue`
   (the definition), `/settings/glossary` (`GlossaryPage.vue`), and the
   **Build glossary** quick action in `AskAssistant.vue`.
   The card is a canvas-owned floating layer, not a `HoverCard`: that component

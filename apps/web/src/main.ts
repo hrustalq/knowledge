@@ -1,12 +1,13 @@
 import { createSSRApp, markRaw } from 'vue'
 import { createPinia } from 'pinia'
 import { VueQueryPlugin } from '@tanstack/vue-query'
-import App from './App.vue'
-import { createRouter, installAuthGuard, installViewTransitions } from './router'
-import { createQueryClient } from './api/queries'
-import { createI18nFor } from './i18n'
-import { getLocale } from './lib/api'
-import './style.css'
+import App from './app/App.vue'
+import { createRouter, installAuthGuard, installViewTransitions } from './app/router'
+import { createQueryClient } from './shared/api/queries'
+import { createI18nFor } from './shared/i18n'
+import { getLocale } from './shared/api/api'
+import { featureDirective } from './stores/features'
+import './assets/style.css'
 
 // Fresh app/router/pinia/query-client per request (SSR) or per page load (client).
 export function createApp() {
@@ -25,6 +26,8 @@ export function createApp() {
   app.use(pinia)
   app.use(router)
   app.use(VueQueryPlugin, { queryClient })
+  // v-feature (#604): hides what the workspace switched off.
+  app.directive('feature', featureDirective(pinia))
   installAuthGuard(router, pinia)
   installViewTransitions(router)
   return { app, router, pinia, i18n, queryClient }

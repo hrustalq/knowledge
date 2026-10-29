@@ -835,6 +835,10 @@ export type I18nTranslations = {
             "selectOnly": string;
             "singleStatement": string;
             "writeKeyword": string;
+            "unsupportedSyntax": string;
+            "unscopedTarget": string;
+            "noTarget": string;
+            "queryFailed": string;
         };
         "glossary": {
             "notFound": string;
@@ -1532,6 +1536,9 @@ export type I18nTranslations = {
             "boardNotFound": string;
             "boardNeedsGithub": string;
             "routeConnectorWorkspace": string;
+        };
+        "feature": {
+            "disabled": string;
         };
     };
     "export": {

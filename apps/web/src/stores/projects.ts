@@ -1,12 +1,22 @@
 import { defineStore } from 'pinia'
 import type { ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
-import { apiQueryOptions, bindStoreQuery } from '@/api/queries'
-import { getProjectId, getWorkspaceId, setActiveProject } from '@/lib/api'
+import { apiQueryOptions, bindStoreQuery } from '@/shared/api/queries'
+import { getProjectId, getWorkspaceId, setActiveProject } from '@/shared/api/api'
 import { useDocumentsStore } from '@/stores/documents'
-import { useGlossaryStore } from '@/stores/glossary'
-import { useWorkflowsStore } from '@/stores/workflows'
-import { useTemplatesStore } from '@/stores/templates'
 import { useSidebarNavStore } from '@/stores/sidebar-nav'
+
+/**
+ * A project-scoped store outside stores/ registers its `use…Store` here, at
+ * module load, and switchProject rescopes it with the rest
+ * (docs/architecture/11): a cross-cutting store never imports a feature. The
+ * definition is registered, not an instance, so this is the same for every
+ * request a server renders — and a store whose module never loaded has no
+ * instance to rescope.
+ */
+const projectScoped = new Set<() => { rescope(): Promise<void> }>()
+export function registerProjectScoped(useStore: () => { rescope(): Promise<void> }): void {
+  projectScoped.add(useStore)
+}
 
 /**
  * Workspace > Project > Document. The active project is remembered the same
@@ -74,9 +84,7 @@ export const useProjectsStore = defineStore('projects', {
       // project you just left.
       await Promise.all([
         useDocumentsStore().rescope(),
-        useGlossaryStore().rescope(),
-        useWorkflowsStore().rescope(),
-        useTemplatesStore().rescope(),
+        ...[...projectScoped].map((useStore) => useStore().rescope()),
       ])
     },
   },

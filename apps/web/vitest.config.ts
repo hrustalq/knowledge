@@ -9,7 +9,7 @@ export default defineConfig({
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       // The editor's extensions import their node views; a spec only needs the schema.
       { find: /^.*\.vue$/, replacement: fileURLToPath(new URL('./test/sfc-stub.ts', import.meta.url)) },
-      // vite-plugin-pwa's module exists only in a Vite build (lib/pwa.ts).
+      // vite-plugin-pwa's module exists only in a Vite build (shared/utils/pwa.ts).
       { find: 'virtual:pwa-register', replacement: fileURLToPath(new URL('./test/pwa-register-stub.ts', import.meta.url)) },
     ],
   },

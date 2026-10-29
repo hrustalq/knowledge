@@ -13,7 +13,7 @@ import type {
 import { AccessService } from '../auth/access.service.js';
 import { AuditService } from '../auth/audit.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
-import { Access, CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal, Feature, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe } from '../common/validation.js';
 import { PublicRateLimiter } from '../public/public-rate-limit.js';
@@ -59,6 +59,7 @@ export class AnalyticsController {
   ) {}
 
   @Get('analytics/overview')
+  @Feature('analytics')
   @Returns('AnalyticsOverviewResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: "The workspace's headline usage: views by traffic class, searches, click-through, assistant and MCP volume" })
@@ -67,6 +68,7 @@ export class AnalyticsController {
   }
 
   @Get('analytics/pages')
+  @Feature('analytics')
   @Returns('AnalyticsPagesResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: "The workspace's most read, never read and dead pages" })
@@ -75,6 +77,7 @@ export class AnalyticsController {
   }
 
   @Get('analytics/search')
+  @Feature('analytics')
   @Returns('AnalyticsSearchResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: 'Top queries, queries that found nothing, and web searches whose results nobody opened' })
@@ -83,6 +86,7 @@ export class AnalyticsController {
   }
 
   @Get('analytics/agents')
+  @Feature('analytics')
   @Returns('AnalyticsAgentsResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: 'MCP calls by tool and by API key, and the in-app assistant\'s questions and model calls' })
@@ -91,6 +95,7 @@ export class AnalyticsController {
   }
 
   @Get('analytics/export.csv')
+  @Feature('analytics')
   @Access('admin', 'query')
   @ApiProduces('text/csv')
   @ApiOperation({ summary: 'One dashboard table as RFC 4180 CSV (formula cells defused); audited' })
@@ -115,6 +120,7 @@ export class AnalyticsController {
   }
 
   @Get('analytics/settings')
+  @Feature('analytics')
   @Returns('AnalyticsSettingsResponse')
   @Access('admin', 'query')
   @ApiOperation({ summary: "The workspace's analytics settings: what it asks for, the deployment's ceiling, and what applies" })
@@ -123,6 +129,7 @@ export class AnalyticsController {
   }
 
   @Put('analytics/settings')
+  @Feature('analytics')
   @Returns('AnalyticsSettingsResponse')
   @Access('admin', 'body')
   @ApiOperation({ summary: 'Set recording and retention for the workspace; null inherits the env, which is a ceiling' })
@@ -131,6 +138,7 @@ export class AnalyticsController {
   }
 
   @Get('documents/:id/insights')
+  @Feature('analytics')
   @Returns('PageInsightsResponse')
   // Anyone who may open the page may see how often it is read: counts only,
   // never who read it.
@@ -141,6 +149,7 @@ export class AnalyticsController {
   }
 
   @Get('projects/:id/analytics')
+  @Feature('analytics')
   @Returns('ProjectAnalyticsResponse')
   // Editors, like the rest of a project's curation: a viewer reads pages, an
   // editor decides which ones nobody needs.

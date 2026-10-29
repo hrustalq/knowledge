@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import { expect, test, type Page } from '@playwright/test'
-import { mermaidConfig } from '../src/lib/mermaid.ts'
+import { mermaidConfig } from '../src/shared/utils/mermaid.ts'
 
 // The app's Mermaid config through the app's sanitize call (#438). Needs no
 // stack: the installed mermaid and DOMPurify bundles are loaded into a blank

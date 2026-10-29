@@ -16,7 +16,7 @@ import { bindTrace } from '@knowledge/observability';
  * failures are AclGuard's job → 403. Resolution itself lives in
  * TokenAuthService (shared with the live WebSocket gateway).
  */
-/** The cookie the web mirrors its session token into (apps/web/src/lib/api.ts). */
+/** The cookie the web mirrors its session token into (apps/web/src/shared/api/api.ts). */
 const SESSION_COOKIE = 'kn_token';
 
 @Injectable()

@@ -12,9 +12,9 @@ import type {
   SsoProvidersResponse,
   WorkspaceRole,
 } from '@knowledge/contracts'
-import { api, fetchApi, isApiRequestError } from '@/api/queries'
-import { getWorkspaceId, setActiveWorkspace, setToken } from '@/lib/api'
-import { clearPwaCaches } from '@/lib/pwa'
+import { api, fetchApi, isApiRequestError } from '@/shared/api/queries'
+import { getWorkspaceId, setActiveWorkspace, setToken } from '@/shared/api/api'
+import { clearPwaCaches } from '@/shared/utils/pwa'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({

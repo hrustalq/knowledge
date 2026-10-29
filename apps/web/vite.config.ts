@@ -7,10 +7,22 @@ import { VitePWA } from 'vite-plugin-pwa'
 // https://vite.dev/config/
 export default defineConfig(({ isSsrBuild }) => ({
   plugins: [
+    {
+      // A module's, an entity's or a widget's index.ts only re-exports (eslint.config.js holds it to that),
+      // so it is side-effect free — and saying so lets the bundler bind an
+      // importer straight to the files it uses. Without it, every page importing
+      // an index pulled in every module that index re-exports: the bundler
+      // assigns chunks by reachability, and a styled component cannot be
+      // tree-shaken (docs/architecture/11).
+      name: 'module-index-pure',
+      transform(code, id) {
+        if (/\/src\/(modules|entities|widgets)\/[^/]+\/index\.ts$/.test(id)) return { code, moduleSideEffects: false }
+      },
+    },
     vue(),
     tailwindcss(),
     // The member app's service worker (#472): src/sw.ts, given the client
-    // build's precache list. Registered from lib/pwa.ts; the manifest is a
+    // build's precache list. Registered from shared/utils/pwa.ts; the manifest is a
     // static file in public/, linked from index.html only.
     VitePWA({
       strategies: 'injectManifest',

@@ -3,13 +3,13 @@
  *
  * Every node and mark the rich editor stores, as a spec only: name, content,
  * attributes, `parseHTML` and `renderHTML`. The web extends each one with its
- * Vue node view and its commands (`apps/web/src/components/editor/extensions`);
+ * Vue node view and its commands (`apps/web/src/entities/rich-editor/components/extensions`);
  * the API builds the same schema headless to seed a shared draft from the
  * branch head. Two schemas that disagree corrupt a Y.Doc silently —
  * y-prosemirror drops any node or attribute the receiving side does not know —
  * so both sides take the list from here.
  *
- * Each `renderHTML` is the exact shape `apps/web/src/lib/markdown/serialize.ts`
+ * Each `renderHTML` is the exact shape `apps/web/src/core/markdown/serialize.ts`
  * expects and `markdown.ts` produces. Change one, change all three.
  */
 import { Mark, Node, getSchema, mergeAttributes, type AnyExtension } from '@tiptap/core';

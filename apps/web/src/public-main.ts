@@ -1,16 +1,13 @@
 import { createSSRApp, h } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { DEFAULT_LOCALE, type Locale } from '@knowledge/contracts'
-import { russianPluralRule } from './lib/plural'
+import { russianPluralRule } from './shared/i18n/plural'
 // The reader's own catalog, not the app's: a JSON module shared with the app
 // would put both whole app catalogs into the reader's bundle.
-import en from './i18n/reader/en.json'
-import ruCatalog from './i18n/reader/ru.json'
-import SharePage from './pages/public/SharePage.vue'
-import SitePage from './pages/public/SitePage.vue'
-import SiteWidget from './pages/public/SiteWidget.vue'
-import type { PublicReaderState } from './pages/public/reader-state'
-import './style.css'
+import en from './shared/i18n/reader/en.json'
+import ruCatalog from './shared/i18n/reader/ru.json'
+import { SharePage, SitePage, SiteWidget, type PublicReaderState } from './modules/reader'
+import './assets/style.css'
 
 /**
  * The public reader's app (docs/features/43, 44): a share or a published

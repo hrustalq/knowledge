@@ -164,7 +164,11 @@
   "graph": {
     "selectOnly": "Only SELECT queries are allowed",
     "singleStatement": "Multiple statements are not allowed",
-    "writeKeyword": "Query contains a write/DDL keyword — operator queries are read-only"
+    "writeKeyword": "Query contains a write/DDL keyword — operator queries are read-only",
+    "unsupportedSyntax": "\"{syntax}\" is not allowed in an operator query: it could read past the workspace scope (comments, # record ids, backticks, MATCH, eval and the functions that read an index by name, such as vector.neighbors and search_index). String literals are not parsed, so a value containing it is refused too",
+    "unscopedTarget": "Cannot query \"{target}\": FROM must name a subquery or one of the workspace-scoped types: {types}",
+    "noTarget": "An operator query needs a FROM naming one of: {types}",
+    "queryFailed": "Graph query failed: {reason}. Positions refer to the scoped query that ran: {query}"
   },
   "glossary": {
     "notFound": "Glossary term {id} not found",
@@ -862,5 +866,8 @@
     "boardNotFound": "No board with a Status field at {url}, or the connector cannot see it",
     "boardNeedsGithub": "Only a GitHub connector can move cards on a GitHub board",
     "routeConnectorWorkspace": "The connector belongs to another workspace"
+  },
+  "feature": {
+    "disabled": "The {feature} feature is switched off in this workspace."
   }
 }

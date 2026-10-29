@@ -1,0 +1,49 @@
+<script setup lang="ts">
+// Generative UI: dispatches an AssistantUiBlock (produced by the assistant's
+// render_component tool) to the SAME existing components used elsewhere in
+// the product — GraphView/ActivityFeed/SearchWidget on document pages — so
+// a chat reply can show the real interactive view instead of describing it
+// in prose. No bespoke chat-only widget logic lives here, only a label +
+// existing Card chrome around whichever component the backend picked.
+import type { AssistantUiBlock } from '@knowledge/contracts'
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
+import { useI18n } from 'vue-i18n'
+import { GraphView } from '@/entities/graph'
+import { ActivityFeed } from '@/entities/document'
+import { SearchWidget } from '@/entities/search'
+
+const props = defineProps<{ block: AssistantUiBlock }>()
+const { t } = useI18n()
+
+/** Message keys — resolved with `t()` at render. */
+const TITLES: Record<AssistantUiBlock['component'], string> = {
+  graph: 'graph.dependencyGraph',
+  activity: 'assistant.block.activity',
+  search: 'common.search',
+}
+</script>
+
+<template>
+  <Card class="overflow-hidden">
+    <CardHeader class="pb-2">
+      <CardTitle class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {{ t(TITLES[props.block.component]) }}
+      </CardTitle>
+    </CardHeader>
+    <CardContent>
+      <GraphView v-if="props.block.component === 'graph'" :document-id="(props.block.props.documentId as string)" />
+      <!-- Capped and folded: this sits inside the transcript, which owns the
+           scroll. A feed with its own scrollport and infinite paging fights it. -->
+      <ActivityFeed
+        v-else-if="props.block.component === 'activity'"
+        :document-id="(props.block.props.documentId as string | undefined)"
+        :limit="8"
+        collapsible
+      />
+      <SearchWidget
+        v-else-if="props.block.component === 'search'"
+        :initial-query="(props.block.props.initialQuery as string | undefined)"
+      />
+    </CardContent>
+  </Card>
+</template>

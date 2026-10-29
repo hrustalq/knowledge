@@ -103,7 +103,7 @@ a tool only through `ctx.flow`, never from the model's arguments: a
 `projectId` the model restates inside a flow is ignored.
 
 The transcript's step state (answered, changeable, dropped) is derived
-client-side by `apps/web/src/lib/flow-steps.ts` from the same messages, so the
+client-side by `apps/web/src/entities/assistant/model/flow-steps.ts` from the same messages, so the
 prompt frame carries no `dropped` list. An answered step collapses to one line
 ("Project: Platform ✓"). A question, its answer and a flow's outcome are quiet
 turns: no confidence badge, no thumbs, no message actions, and a tool row
@@ -173,7 +173,7 @@ question `validate` refuses it, and the question is asked again.
 | Stale-answer refusal | `apps/api/src/assistant/assistant.service.ts` |
 | Question labels (en, ru) | `apps/api/src/i18n/{en,ru}/flow.json` |
 | MCP mapping | `apps/api/src/mcp/flow-tools.ts`; the tools in `capture-tools.ts` and `mcp.service.ts` |
-| Web form and transcript | `apps/web/src/components/assistant/AssistantPrompt.vue`, `ChatMessage.vue`, `apps/web/src/lib/flow-steps.ts` |
+| Web form and transcript | `apps/web/src/entities/assistant/components/AssistantPrompt.vue`, `ChatMessage.vue`, `apps/web/src/entities/assistant/model/flow-steps.ts` |
 
 ## Not done
 
@@ -203,7 +203,7 @@ question `validate` refuses it, and the question is asked again.
     the capture; a checklist elicited as booleans and folding back to the
     same bulk call an `answers` bag makes; the skill section offered only with
     a flow tool.
-- Web: `apps/web/src/lib/flow-steps.spec.ts` (step state, *Change*, dropped
+- Web: `apps/web/src/entities/assistant/model/flow-steps.spec.ts` (step state, *Change*, dropped
   steps).
 - By hand against the local stack:
   - `POST /v1/mcp` with curl: `needs_input` for the project, the same reply

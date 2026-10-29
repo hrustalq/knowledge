@@ -23366,6 +23366,37 @@
       "counts"
     ]
   },
+  "WorkspaceFeature": {
+    "type": "string",
+    "enum": [
+      "workflows",
+      "knowledge-health",
+      "qa",
+      "analytics",
+      "captures",
+      "memos",
+      "conflicts",
+      "assistant"
+    ]
+  },
+  "WorkspaceFeaturesResponse": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "disabled": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WorkspaceFeature"
+        }
+      }
+    },
+    "required": [
+      "workspaceId",
+      "disabled"
+    ]
+  },
   "WorkspaceGraphNode": {
     "type": "object",
     "properties": {

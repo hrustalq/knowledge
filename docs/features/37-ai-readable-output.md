@@ -31,7 +31,7 @@ private by default, under the same ACL and API-key narrowing as the app.
   copy as Markdown, view as Markdown, open in ChatGPT / Claude / Cursor, copy
   MCP install config per client, copy agent link. `GET /v1/ai/page-actions`
   (viewer) tells the menu which actions to offer; the builders are the pure
-  `apps/web/src/lib/ai-actions.ts`.
+  `apps/web/src/modules/documents/model/ai-actions.ts`.
 - **Admin switch for external actions.** `ai_settings.external_ai_actions`
   (nullable; `null` inherits) turns off "Open in ChatGPT / Claude / Cursor" for a
   workspace. Copy/view as Markdown are never affected.
@@ -136,11 +136,11 @@ and `ai-readable/ai-readable-scope.ts` is the one place that implements it.
 | Module split                                      | `ai-readable-core.module.ts` (both MCP transports, DocumentsModule), `ai-readable.module.ts` (API-only) |
 | Web origin proxy                                  | `apps/web/server/ai-readable.js`                                    |
 | External actions switch                           | `apps/api/src/ai/external-ai-actions.ts`, `GET /v1/ai/page-actions` |
-| Menu builders / menu                              | `apps/web/src/lib/ai-actions.ts`, `PageAiActions.vue`               |
+| Menu builders / menu                              | `apps/web/src/modules/documents/model/ai-actions.ts`, `PageAiActions.vue`               |
 | MCP resources                                     | `apps/api/src/mcp/mcp.service.ts` (`buildServer`)                   |
 | Skill section                                     | `apps/api/src/mcp/skill.ts`                                         |
-| Connect AI card                                   | `apps/web/src/pages/ConnectAiPage.vue`                              |
-| Tests                                             | `apps/api/test/ai-readable.spec.ts`, `external-ai-actions.spec.ts`, `mcp-http.spec.ts`, `apps/web/server/ai-readable.spec.js`, `apps/web/src/lib/ai-actions.spec.ts` |
+| Connect AI card                                   | `apps/web/src/modules/access/pages/ConnectAiPage.vue`                              |
+| Tests                                             | `apps/api/test/ai-readable.spec.ts`, `external-ai-actions.spec.ts`, `mcp-http.spec.ts`, `apps/web/server/ai-readable.spec.js`, `apps/web/src/modules/documents/model/ai-actions.spec.ts` |
 
 ## Configuration
 

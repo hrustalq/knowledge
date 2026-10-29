@@ -1,5 +1,5 @@
 import { createPublicApp } from './public-main'
-import type { PublicReaderState } from './pages/public/reader-state'
+import type { PublicReaderState } from './modules/reader'
 
 declare global {
   interface Window {

@@ -13,6 +13,65 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.39.0] — 2026-10-29
+
+### Added
+
+- **Agents can change a few lines of a page without resending it** (#603): the new MCP tool
+  `knowledge_patch_document` takes a `baseRevisionId` and a list of line-range edits
+  (`startLine`..`endLine`, 1-based and inclusive, replaced by `content`; an empty `content` deletes the range,
+  `endLine = startLine - 1` inserts, and `startLine` one past the last line appends). It writes a new revision
+  just as `knowledge_create_revision` does, and the page keeps its frontmatter. Lines are numbered
+  in the `markdown` that `knowledge_get_document_content` returned for that revision. The call is refused when the
+  branch head has moved past `baseRevisionId`, when edits overlap, or when a line lies outside the page. It is a write tool, so
+  read-only keys do not see it.
+- **Agents can write a page from a file instead of pasting it** (#602): the new MCP tool `knowledge_start_upload`
+  opens a draft revision and returns a presigned PUT URL, valid for 15 minutes, with a ready-to-run
+  `curl --upload-file` command. Once the agent has uploaded the file from its own machine,
+  `knowledge_finalize_upload` makes it the branch head and indexes it. The API still never streams a file
+  body: this is the REST upload flow (`POST :id/uploads` → PUT → finalize) exposed as two tools, and it works
+  over stdio and HTTP alike. For a new page, `knowledge_create_document` takes `upload: true` in place of
+  `content`. A markdown file without a frontmatter block keeps the page's current tags and relations, as a pasted
+  body does. `baseRevisionId` refuses the upload when the branch head has moved, and a spec or fixture that fails
+  validation is refused at finalize, with the draft kept for a corrected upload.
+- **A workspace admin can switch sections off** (#604): Settings → Features lists Workflows, Knowledge
+  health, QA, Analytics, Captures, Memos, Contradictions and the Assistant. A section that is switched off
+  disappears for everyone in the workspace: its nav entry, its pages (a link to one lands on Home), its rail
+  widgets on a page, its API routes (404 with `details.feature`) and its MCP tools. Switching it off deletes
+  nothing, and switching it back on brings everything back. Work behind it, such as the arbiter, the
+  harvester and analytics recording, keeps running under its own settings.
+  `GET /v1/workspaces/:id/features` returns the list to any member, and `PUT` (workspace admin) replaces it. See
+  [docs/features/70](docs/features/70-feature-toggles.md).
+
+### Changed
+
+- **Knowledge health, Analytics, Captures and Contradictions sit under one "Knowledge base" node in
+  the sidebar** (#605). The node opens like a page-tree node, opens on its own when you land on one of
+  its pages, and stays as you left it for the rest of the session. While it is closed, the node is
+  highlighted if the current page is inside it. Analytics is still listed for workspace admins only.
+
+### Fixed
+
+- **Trusted-operator graph queries return what they ask for** (#589): `POST /v1/graph/query` and the
+  `knowledge_query_graph` tool returned no rows for `count(*)`, `GROUP BY` or any query that projected
+  away `workspaceId`, and `SELECT FROM Entity LIMIT 3` could come back empty when the first three
+  entities in the store belonged to another workspace. The workspace scope now narrows each type the
+  query reads, so aggregates, grouping, limits and subqueries behave as written. The tool description
+  lists the queryable types and their key fields (`Entity.entityKey` holds `op:*`, `component:*` and the
+  like). A query naming anything else after `FROM`, such as `V`, `schema:types` or a record id, is
+  refused with a 400 that lists the allowed types. So is a comment, a `#`, `MATCH`, or a function that
+  reads an index by name (`vector.neighbors`, `search_index`, `eval`), which could reach another
+  workspace's rows past the scope. A query ArcadeDB
+  rejects (a syntax error, an unknown property) is now a 400 carrying ArcadeDB's reason, not a 500.
+- **The project roster no longer logs a failed request** (#619): opening Settings → Projects with no
+  project selected asked the API for a project with an empty id and got a 400 on every visit.
+
+### Operations
+
+- Migration `20261220100000_workspace_feature_toggles` adds `workspace_settings.disabled_features`
+  (`text[] NOT NULL DEFAULT '{}'`). It is additive and survives a rollback: the previous image never reads the
+  column, so every section is on again until the release is redeployed.
+
 ## [0.38.0] — 2026-10-28
 
 ### Added
@@ -5212,7 +5271,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.38.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.39.0...HEAD
+[0.39.0]: https://github.com/hrustalq/knowledge/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/hrustalq/knowledge/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/hrustalq/knowledge/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/hrustalq/knowledge/compare/v0.35.0...v0.36.0

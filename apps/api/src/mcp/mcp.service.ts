@@ -24,6 +24,7 @@ import {
   CAPTURE_KIT_CLIENTS,
   MCP_LEARNING_TARGET,
   WORK_ITEM_SOURCE_KINDS,
+  RELATION_EDGE_TYPES,
   type CaptureKitClient,
 } from '@knowledge/contracts';
 import type { AiAgentChoice, CaptureKitResponse, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
@@ -54,6 +55,7 @@ import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AgentLearningsService } from '../ai/agent-learnings.service.js';
 import { AccessService } from '../auth/access.service.js';
+import { FeaturesService } from '../auth/features.service.js';
 import { AiReadableService } from '../ai-readable/ai-readable.service.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
 import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
@@ -64,9 +66,10 @@ import { ShareLinksService } from '../publishing/share-links.service.js';
 import { ExportService } from '../export/export.service.js';
 import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
+import { applyLineEdits } from './line-patch.js';
 import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
-import { CAPTURE_TOOLS, MCP_AS_OF, MCP_INSTRUCTIONS, MCP_KNOWN_AT, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
+import { CAPTURE_TOOLS, MCP_AS_OF, MCP_INSTRUCTIONS, MCP_KNOWN_AT, MCP_SERVER_NAME, featureOfTool, settleTools, trackTools } from './mcp-tools.js';
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderMcpLearnings, renderSkill, type McpLearningGroup, type McpWhoami } from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
@@ -121,7 +124,7 @@ import {
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.38.0';
+export const MCP_SERVER_VERSION = '0.39.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -133,6 +136,7 @@ export const MCP_SERVER_VERSION = '0.38.0';
  *   knowledge_compare_revisions → knowledge.compare_revisions (Phase 2)
  *   knowledge_create_branch     → knowledge.create_branch     (Phase 2)
  *   knowledge_create_revision   → knowledge.create_revision   (Phase 2)
+ *   knowledge_patch_document    → (#603, line-range edits)
  *   knowledge_find_relations    → knowledge.find_relations    (Phase 4)
  *   knowledge_impact_analysis   → knowledge.impact_analysis   (Phase 4)
  *   knowledge_trace_relation    → knowledge.trace_relation    (Phase 4)
@@ -240,6 +244,7 @@ export class McpService {
     private readonly connectorProducer: ConnectorProducer,
     private readonly agents: AgentRegistryService,
     private readonly access: AccessService,
+    private readonly features: FeaturesService,
     private readonly config: ConfigService,
     private readonly aiReadable: AiReadableService,
     private readonly provenance: ProvenanceService,
@@ -329,7 +334,11 @@ export class McpService {
     );
     // Every call is filed as `mcp` traffic (#79), whoever the principal is.
     const caller: AnalyticsCaller = { principal, channel: 'mcp', ...(extras.noTrack ? { noTrack: true } : {}) };
-    const handles = trackTools(server, (call) => void this.analytics.toolCall(caller, call));
+    const handles = trackTools(
+      server,
+      (call) => void this.analytics.toolCall(caller, call),
+      (tool, args) => this.featureGate(principal, tool, args),
+    );
     const guard = this.guardFor(principal);
 
     server.registerTool(
@@ -1829,6 +1838,45 @@ export class McpService {
       },
     );
 
+    // #603: change a few lines without resending the page. The lines are the
+    // base revision's, so the base must still be the branch head.
+    server.registerTool(
+      'knowledge_patch_document',
+      {
+        description:
+          'Change some lines of a page instead of rewriting it: a new revision on a branch, like knowledge_create_revision. ' +
+          'Line numbers are 1-based and count the `markdown` that knowledge_get_document_content returned for baseRevisionId (the body without its frontmatter, which is kept; a spec or fixture is numbered whole). ' +
+          'Each edit replaces startLine..endLine (inclusive) with content; endLine = startLine - 1 inserts before startLine, startLine = line count + 1 appends, empty content deletes. ' +
+          'Number every edit off that one read, not off each other; edits may not overlap. Refused when the branch head has moved past baseRevisionId: read again and renumber.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          baseRevisionId: z.string().uuid().describe('The revision your line numbers come from; must be the branch head'),
+          branch: z.string().optional().describe('The default branch when omitted'),
+          edits: z
+            .array(
+              z.object({
+                startLine: z.number().int().min(1),
+                endLine: z.number().int().min(0),
+                content: z.string(),
+              }),
+            )
+            .min(1)
+            .max(100),
+          message: z.string().optional(),
+        },
+      },
+      async ({ documentId, baseRevisionId, branch, edits, message }) => {
+        await guard.doc(documentId, 'editor');
+        await guard.branches(documentId, { ...(branch ? { branchNames: [branch] } : {}), revisionIds: [baseRevisionId] }, 'editor');
+        const base = await this.documents.getContent(documentId, baseRevisionId);
+        const content = applyLineEdits(base.markdown, edits);
+        if (content.trim() === '') throw new Error('The edits leave the page empty; archive it instead.');
+        // Read only for a spec or fixture: a page's content type is markdown.
+        const syntax = base.contentType.includes('json') ? 'json' : 'yaml';
+        return this.json(await this.createRevision(documentId, { branch, baseRevisionId, content, message, syntax }, principal.userId));
+      },
+    );
+
     server.registerTool(
       'knowledge_create_merge_request',
       {
@@ -1965,10 +2013,22 @@ export class McpService {
       {
         description:
           'TRUSTED-OPERATOR ONLY (plan.md §9): read-only SQL over the graph store. Single SELECT statement, ' +
-          'row-limited, workspace predicate enforced server-side; every call is written to the audit log.',
+          'row-limited; every call is written to the audit log. Each FROM <Type> is narrowed to the workspace ' +
+          'before the query reads it, so count(*), GROUP BY, LIMIT and subqueries work as written. ' +
+          'FROM may name a subquery or one of these types (key fields in brackets): ' +
+          'Document [documentId, title], DocumentRevision [revisionId, documentId], ' +
+          'Chunk [chunkId, documentId, revisionId, idx, text, headingPath, live], ' +
+          'Entity [entityKey e.g. op:* / component:* / service:*, entityType, name], ' +
+          'Community [communityId, level, parentId, title, summary, members], ChatChunk [chunkId, bindingId], ' +
+          `and the relation edges ${RELATION_EDGE_TYPES.join(', ')} ` +
+          '[documentId, revisionId, targetKey, live, extractor, confidence, snippet; out = Document, in = Entity]. ' +
+          'Use @type (not @class) for the type name. Refused: other targets (V, schema:*, record ids), comments, MATCH.',
         inputSchema: {
           workspaceId: z.string().uuid(),
-          query: z.string().min(1).describe('A single read-only SELECT (ArcadeDB SQL)'),
+          query: z
+            .string()
+            .min(1)
+            .describe('A single read-only SELECT (ArcadeDB SQL), e.g. SELECT entityKey FROM Entity WHERE entityKey LIKE \'op:%\''),
           limit: z.number().int().min(1).max(1000).optional(),
         },
       },
@@ -2252,7 +2312,8 @@ export class McpService {
         description:
           'Create a new page from markdown in a project, optionally nested under another page. It is indexed in the background (poll knowledge_get_document for status "indexed"). To change an existing page, branch and open a merge request instead. ' +
           'To start from a template (an ADR, RFC, runbook…), pass templateRef and the placeholder values knowledge_get_template lists — with no content the server fills the template in; with content, yours wins and the template is recorded as where the page came from. ' +
-          'kind test-fixture creates a QA test fixture: content is its YAML or JSON body (fixture: 1, steps with call / manual, optional inputs and teardown; credentials only as {{secret.x}}), validated against the specs you can open; openapi / asyncapi create a spec. None of these take a template.',
+          'kind test-fixture creates a QA test fixture: content is its YAML or JSON body (fixture: 1, steps with call / manual, optional inputs and teardown; credentials only as {{secret.x}}), validated against the specs you can open; openapi / asyncapi create a spec. None of these take a template. ' +
+          'To create the page from a local file instead of pasting it, pass upload: true and no content: the reply carries an upload URL, then call knowledge_finalize_upload.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           projectId: z.string().uuid().describe('From knowledge_whoami or knowledge_list_projects'),
@@ -2261,7 +2322,8 @@ export class McpService {
             .string()
             .min(1)
             .optional()
-            .describe('Markdown body; YAML frontmatter is allowed and indexed. Required unless templateRef is given'),
+            .describe('Markdown body; YAML frontmatter is allowed and indexed. Required unless templateRef or upload is given'),
+          upload: z.boolean().optional().describe('Create the page empty and return an upload URL for its first revision (as knowledge_start_upload)'),
           parentId: z.string().uuid().optional().describe('Nest under this page'),
           category: z.enum(DOCUMENT_CATEGORIES).optional().describe('Defaults to the template’s category'),
           templateRef: z
@@ -2283,32 +2345,82 @@ export class McpService {
             ),
         },
       },
-      async ({ workspaceId, projectId, title, content, parentId, category, templateRef, templateVersion, values, kind, syntax, visibility }) => {
+      async ({ workspaceId, projectId, title, content, upload, parentId, category, templateRef, templateVersion, values, kind, syntax, visibility }) => {
         await guard.ws(workspaceId, 'editor');
-        if (!content && !templateRef) throw new Error('Pass content, or a templateRef to start from.');
+        if (upload && (content || templateRef)) throw new Error('upload replaces content and templateRef: pass one of them.');
+        if (!content && !templateRef && !upload) throw new Error('Pass content, a templateRef to start from, or upload: true.');
         await this.permissions.requireCreateUnder(await guard.scope(workspaceId), {
           projectId,
           ...(parentId ? { parentId } : {}),
         });
-        return this.json(
-          await this.documents.createDocument(
-            {
-              workspaceId,
-              projectId,
-              title,
-              ...(kind ? { kind } : {}),
-              ...(content
-                ? { content: { mode: 'inline', format: isStructuredKind(kind) ? (syntax ?? 'yaml') : 'markdown', text: content } }
-                : {}),
-              ...(parentId ? { parentId } : {}),
-              ...(category ? { category } : {}),
-              ...(templateRef ? { template: { ref: templateRef, version: templateVersion, values } } : {}),
-              // An agent writing for a person starts a private draft, as the REST route does (#474).
-              visibility: visibility ?? 'private',
-            },
-            principal.userId,
-          ),
+        const created = await this.documents.createDocument(
+          {
+            workspaceId,
+            projectId,
+            title,
+            ...(kind ? { kind } : {}),
+            ...(content
+              ? { content: { mode: 'inline', format: isStructuredKind(kind) ? (syntax ?? 'yaml') : 'markdown', text: content } }
+              : {}),
+            ...(parentId ? { parentId } : {}),
+            ...(category ? { category } : {}),
+            ...(templateRef ? { template: { ref: templateRef, version: templateVersion, values } } : {}),
+            // An agent writing for a person starts a private draft, as the REST route does (#474).
+            visibility: visibility ?? 'private',
+          },
+          principal.userId,
         );
+        if (!upload) return this.json(created);
+        // With no content the page is created with an empty draft revision: that is the one to upload into.
+        return this.json({ ...created, ...(await this.uploadTicket(created.documentId, created.revisionId)) });
+      },
+    );
+
+    // #602: a page from a file on the agent's machine. MCP carries no files,
+    // and the API never streams bodies — so the agent PUTs the bytes to a
+    // presigned URL itself and then finalizes, the REST upload flow in two tools.
+    server.registerTool(
+      'knowledge_start_upload',
+      {
+        description:
+          'Write a new revision of a page from a local file instead of pasting it: returns a presigned PUT URL (valid 15 minutes) and a curl command. ' +
+          'Upload the file with it, then call knowledge_finalize_upload with the revisionId. The file is the whole page, as with knowledge_create_revision: ' +
+          'a markdown file without a frontmatter block keeps the current tags and relations. Pass baseRevisionId to be refused when the branch head has moved. ' +
+          'For a new page, use knowledge_create_document with upload: true.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          branch: z.string().optional().describe('The default branch when omitted'),
+          baseRevisionId: z.string().uuid().optional(),
+          message: z.string().optional(),
+          syntax: z.enum(API_SPEC_SYNTAXES).optional().describe('API spec and test fixture documents only: yaml (default) or json'),
+        },
+      },
+      async ({ documentId, branch, baseRevisionId, message, syntax }) => {
+        await guard.doc(documentId, 'editor');
+        await guard.branches(
+          documentId,
+          { ...(branch ? { branchNames: [branch] } : {}), ...(baseRevisionId ? { revisionIds: [baseRevisionId] } : {}) },
+          'editor',
+        );
+        return this.json(await this.startUpload(documentId, { branch, baseRevisionId, message, syntax }, principal.userId));
+      },
+    );
+
+    server.registerTool(
+      'knowledge_finalize_upload',
+      {
+        description:
+          'Finish a knowledge_start_upload (or knowledge_create_document upload: true) once the file is uploaded: the revision becomes the branch head and is indexed. ' +
+          'An API spec or test fixture that does not validate is refused with the validator\'s messages; upload a corrected file to the same URL and call this again.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          revisionId: z.string().uuid(),
+        },
+      },
+      async ({ documentId, revisionId }) => {
+        await guard.doc(documentId, 'editor');
+        await guard.branches(documentId, { revisionIds: [revisionId] }, 'editor');
+        return this.json(await this.finalizeUpload(documentId, revisionId));
       },
     );
 
@@ -2690,6 +2802,80 @@ export class McpService {
     const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
     await this.storage.putObjectText(row.s3Key, content, row.contentType);
     return this.documents.finalizeRevision(documentId, draft.revisionId);
+  }
+
+  /** A draft revision plus a presigned PUT for its object (#602). */
+  private async startUpload(
+    documentId: string,
+    opts: { branch?: string; baseRevisionId?: string; message?: string; syntax?: ApiSpecSyntax },
+    authorId: string,
+  ) {
+    const document = await this.prisma.document.findUniqueOrThrow({ where: { id: documentId }, select: { kind: true } });
+    const draft = await this.documents.createRevision(
+      documentId,
+      {
+        branch: opts.branch,
+        message: opts.message,
+        // A page is markdown; a spec or fixture says its syntax (createRevision's own choice is yaml).
+        ...(isStructuredKind(document.kind) && opts.syntax ? { contentType: `application/${opts.syntax}` } : {}),
+      },
+      opts.baseRevisionId,
+      authorId,
+    );
+    return this.uploadTicket(documentId, draft.revisionId);
+  }
+
+  /** The presigned PUT for an existing draft revision's object. */
+  private async uploadTicket(documentId: string, revisionId: string) {
+    const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revisionId } });
+    const url = await this.storage.presignPut(row.s3Key, row.contentType);
+    return {
+      revisionId: row.id,
+      upload: { method: 'PUT', url, headers: { 'Content-Type': row.contentType }, expiresInSeconds: 900 },
+      curl: `curl -fsS -X PUT -H 'Content-Type: ${row.contentType}' --upload-file <path-to-file> '${url}'`,
+      next: `knowledge_finalize_upload { documentId: "${documentId}", revisionId: "${row.id}" }`,
+    };
+  }
+
+  /**
+   * Finalize an uploaded draft. A markdown file without a frontmatter block
+   * gets its parent's put back first, as `createRevision` does for a pasted
+   * body — otherwise uploading a page's own export would drop its relations.
+   */
+  private async finalizeUpload(documentId: string, revisionId: string) {
+    const row = await this.prisma.documentRevision.findFirst({
+      where: { id: revisionId, documentId },
+      include: { document: { select: { kind: true } }, parents: { select: { parentRevisionId: true }, orderBy: { parentOrder: 'asc' }, take: 1 } },
+    });
+    if (!row) throw new Error(`Revision ${revisionId} not found on document ${documentId}`);
+    const parentId = row.parents[0]?.parentRevisionId;
+    if (row.status === 'draft' && parentId && !isStructuredKind(row.document.kind) && (await this.storage.headObject(row.s3Key))) {
+      const text = await this.storage.getObjectText(row.s3Key);
+      const base = await this.documents.getContent(documentId, parentId).catch(() => null);
+      const kept = keepFrontmatter(text, base?.frontmatter);
+      if (kept !== text) await this.storage.putObjectText(row.s3Key, kept, row.contentType);
+    }
+    return this.documents.finalizeRevision(documentId, revisionId);
+  }
+
+  /**
+   * #604: refuse a tool of a section its workspace switched off, as `@Feature`
+   * refuses the REST twin. Membership first, as AclGuard orders it, so the 404
+   * tells only a member that the section is off.
+   */
+  private async featureGate(principal: Principal, tool: string, args: Record<string, unknown>): Promise<void> {
+    const feature = featureOfTool(tool);
+    if (!feature) return;
+    const id = (key: string) => (typeof args[key] === 'string' ? (args[key] as string) : null);
+    const documentId = id('documentId');
+    const runId = tool === 'knowledge_get_workflow_run' ? id('runId') : null;
+    const workspaceId =
+      id('workspaceId') ??
+      (documentId ? await this.access.workspaceOfDocument(documentId) : null) ??
+      (runId ? await this.access.workspaceOfWorkflowRun(runId) : null);
+    if (!workspaceId) return;
+    await this.access.requireRole(principal, workspaceId, 'viewer', false, { allowGuest: true });
+    await this.features.require(workspaceId, feature);
   }
 
   private json(value: unknown) {

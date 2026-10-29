@@ -1,6 +1,6 @@
 import { HttpException } from '@nestjs/common';
 import type { McpServer, RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { McpToolSummary } from '@knowledge/contracts';
+import type { McpToolSummary, WorkspaceFeature } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { RecordedToolCall } from '../analytics/analytics.recorder.js';
 
@@ -43,6 +43,10 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_create_document',
   'knowledge_create_branch',
   'knowledge_create_revision',
+  'knowledge_patch_document',
+  // A presigned upload of a local file, then its finalize (#602).
+  'knowledge_start_upload',
+  'knowledge_finalize_upload',
   'knowledge_create_merge_request',
   'knowledge_approve_merge_request',
   'knowledge_close_merge_request',
@@ -106,6 +110,39 @@ export const CAPTURE_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * The tools of each section a workspace may switch off (#604): the MCP half of
+ * `@Feature` on their REST twins. A call is refused (404) when the workspace
+ * it names has the feature off — named by `workspaceId`, else `documentId`,
+ * else the tool's own id (the gate in `McpService` resolves it). A tool missing
+ * here keeps working when its section is off, so a new tool of one joins it.
+ */
+export const FEATURE_TOOLS: Readonly<Partial<Record<WorkspaceFeature, readonly string[]>>> = {
+  workflows: ['knowledge_list_workflows', 'knowledge_start_workflow', 'knowledge_get_workflow_run'],
+  qa: [
+    'knowledge_list_test_fixtures',
+    'knowledge_get_test_fixture',
+    'knowledge_get_test_suite',
+    'knowledge_generate_test_suite',
+    'knowledge_suggest_test_fixtures',
+    'knowledge_set_test_fixtures',
+    'knowledge_get_test_run_plan',
+    'knowledge_run_test_suite',
+    'knowledge_get_test_run',
+    'knowledge_qa_overview',
+  ],
+  analytics: ['knowledge_get_page_insights', 'knowledge_list_search_gaps'],
+  captures: [...CAPTURE_TOOLS, 'knowledge_list_captures'],
+  memos: ['knowledge_list_memos', 'knowledge_get_memo'],
+  conflicts: ['knowledge_list_conflicts', 'knowledge_resolve_conflict'],
+};
+
+/** The feature a tool belongs to, if any. */
+export function featureOfTool(tool: string): WorkspaceFeature | null {
+  for (const [feature, tools] of Object.entries(FEATURE_TOOLS)) if (tools.includes(tool)) return feature as WorkspaceFeature;
+  return null;
+}
+
+/**
  * Keep a handle on every tool registered from here on, and time every call
  * through `onCall` (#79).
  *
@@ -116,12 +153,14 @@ export const CAPTURE_TOOLS: ReadonlySet<string> = new Set([
 export function trackTools(
   server: McpServer,
   onCall: (call: RecordedToolCall) => void = () => {},
+  // Runs before every call and may refuse it by throwing (#604's feature gate).
+  gate: (tool: string, args: Record<string, unknown>) => Promise<void> = async () => {},
 ): Map<string, RegisteredTool> {
   const handles = new Map<string, RegisteredTool>();
   const register = server.registerTool.bind(server) as (...args: unknown[]) => RegisteredTool;
   server.registerTool = ((name: string, ...rest: unknown[]) => {
     const cb = rest.at(-1);
-    if (typeof cb === 'function') rest[rest.length - 1] = timed(name, cb as ToolCallback, onCall);
+    if (typeof cb === 'function') rest[rest.length - 1] = timed(name, cb as ToolCallback, onCall, gate);
     const handle = register(name, ...rest);
     handles.set(name, handle);
     return handle;
@@ -131,7 +170,12 @@ export function trackTools(
 
 type ToolCallback = (args: unknown, extra: unknown) => Promise<unknown>;
 
-function timed(tool: string, cb: ToolCallback, onCall: (call: RecordedToolCall) => void): ToolCallback {
+function timed(
+  tool: string,
+  cb: ToolCallback,
+  onCall: (call: RecordedToolCall) => void,
+  gate: (tool: string, args: Record<string, unknown>) => Promise<void>,
+): ToolCallback {
   return async (args, extra) => {
     const startedAt = performance.now();
     const a = (args ?? {}) as Record<string, unknown>;
@@ -151,6 +195,7 @@ function timed(tool: string, cb: ToolCallback, onCall: (call: RecordedToolCall) 
       }
     };
     try {
+      await gate(tool, a);
       const result = await cb(args, extra);
       const isError = (result as { isError?: boolean } | null)?.isError === true;
       finish(!isError, isError ? 'tool-error' : null);

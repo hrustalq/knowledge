@@ -1,8 +1,8 @@
 import type { StateTree } from 'pinia'
 import { hydrate, type DehydratedState } from '@tanstack/vue-query'
 import { createApp } from './main'
-import { ensureLocaleMessages } from './i18n'
-import { getLocale, getProjectId, getWorkspaceId, setActiveProject, setActiveWorkspace } from './lib/api'
+import { ensureLocaleMessages } from './shared/i18n'
+import { getLocale, getProjectId, getWorkspaceId, setActiveProject, setActiveWorkspace } from './shared/api/api'
 import { useProjectsStore } from './stores/projects'
 import { useWorkspacesStore } from './stores/workspaces'
 

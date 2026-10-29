@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { getFullWidth, setFullWidth } from '@/lib/api'
+import { getFullWidth, setFullWidth } from '@/shared/api/api'
 
 /**
  * Chrome state that outlives a route but not a session.
@@ -7,7 +7,7 @@ import { getFullWidth, setFullWidth } from '@/lib/api'
  * The app already has two homes for layout state and this is deliberately a
  * third, because the two that exist answer different questions:
  *
- * - `lib/api.ts` accessors (cookie + localStorage) hold what the *first painted
+ * - `shared/api/api.ts` accessors (cookie + localStorage) hold what the *first painted
  *   frame* depends on — the rail's width and open state. Those earn a cookie
  *   because reading them after hydration means a rail that visibly jumps.
  * - `route.query` holds what a colleague should see when you paste the link —

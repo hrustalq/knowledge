@@ -129,7 +129,7 @@ capture tool gets 403 `capture-not-offered`. The installer never overwrites
 `jq`, or prints them when `jq` is missing. The exact hook behaviour is in
 [50 §The capture kit](50-agent-memory.md#the-capture-kit).
 
-**Per-client snippets, not one JSON blob.** `apps/web/src/lib/mcp-clients.ts`
+**Per-client snippets, not one JSON blob.** `apps/web/src/modules/access/model/mcp-clients.ts`
 has a generator per client because the differences break connections, silently:
 the env-var syntax differs in every client (`${VAR}`, `${env:VAR}`,
 `{env:VAR}`, `$VAR`, a named TOML field) and a wrong one is sent literally;
@@ -157,8 +157,8 @@ drops it in a later release.
 | Key narrowing                                          | `AccessService.requireKeyAllows`, `AclGuard` (read keys on unscoped routes) |
 | Key resolution + `last_used_at`                        | `apps/api/src/auth/token-auth.service.ts`                                   |
 | Key CRUD                                               | `apps/api/src/auth/api-keys.service.ts`, `MeController`                     |
-| Client snippets                                        | `apps/web/src/lib/mcp-clients.ts`                                           |
-| Page                                                   | `apps/web/src/pages/ConnectAiPage.vue`                                      |
+| Client snippets                                        | `apps/web/src/modules/access/model/mcp-clients.ts`                                           |
+| Page                                                   | `apps/web/src/modules/access/pages/ConnectAiPage.vue`                                      |
 | Tests                                                  | `apps/api/test/mcp-http.spec.ts`                                            |
 
 ## Configuration

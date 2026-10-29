@@ -49,7 +49,7 @@ make env-check                 # compare .env files against .env.example
 make auth-bootstrap email=<e>  # create user + API key + workspace membership (AUTH_MODE=api-key)
 
 make api-schema         # emit apps/api/openapi.json from the Nest app (no server/infra; env file required)
-make api-client         # api-schema + docs-reference + openapi-typescript → apps/web/src/api/schema.d.ts
+make api-client         # api-schema + docs-reference + openapi-typescript → apps/web/src/shared/api/schema.d.ts
 ```
 
 **Use `make verify`, not `make check`, while a dev server is running.** `check` rebuilds `apps/api/dist` under the running `nest start --watch` and takes :3000 and :5173 down with it. `verify` is everything in `check` except `build`, and is what `.husky/pre-push` runs.
@@ -88,6 +88,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | [08 events & live](docs/architecture/08-events-live.md)                     | Redis pub/sub, SSE, WS gateway, optimistic cache updates            |
 | [09 web frontend](docs/architecture/09-web-frontend.md)                     | SSR shell, per-request isolation, cookies, hydration hazards        |
 | [10 caching](docs/architecture/10-caching.md)                               | Query cache, Cache-Control + 304s, Redis read cache, service worker |
+| [11 web modules](docs/architecture/11-web-modules.md)                       | Web layers, modules vs entities, where a new web file goes           |
 
 **Features** — [`docs/features/`](docs/README.md):
 
@@ -161,6 +162,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 67 | Decision model eval     | #477 measured Jev via gen-api (network `jev`, `state` must be an object) vs `gpt-6-luna`; rejected for router/auditor/re-rank; not faster (~2.5 s), 2.5–4× cheaper; gen-api keeps request content. #530 shipped it: `decision` purpose routes a **GenAPI** profile only and is **off when unrouted** (never the inline config), `DECISION_PROVIDER` ceiling; `DecisionClient.noul` (controller-free module, both processes) is a pre-filter or a mark, never a verdict — arbiter screens all pairs then caps the judge, harvest skips the harvester below threshold, `checkSupport` sets `AnswerCitation.support` from passages the turn handed out; sparse `decision_*_threshold` pinned to `jev-1-13`; batching via `common/ask-each.ts` |
 | 68 | Memos                 | audio upload (reserve → presigned PUT → finalize) → env-only OpenAI-compatible `/audio/transcriptions` (`TRANSCRIPTION_PROVIDER` default `none`, plain fetch: the URL is the operator's) → `MemosProcessor` (worker) ffprobe + ffmpeg 10-min mp3 chunks → `stitchTranscript` masks with one `createMasker` before the single write to `memos.transcript` jsonb; a memo is a row, never a document, uploader-only via `MemosService.require` (else bare 404, admins bypass); the processor creates the `secretary` run; `readMemoProposals` (pure) drops proposals citing unknown segments or updating a page not both retrieved by the run's tools and visible to the uploader; findings carry `memo: { action, segments }`; API-only `MemoPublishSweeper` claims once (`published_at`), re-checks editor, opens MRs linking timestamps only (`memoClock`), notifies `memo.done`/`memo.failed`; `knowledge_get_memo` wraps untrusted `memo`; `MemoRetentionSweeper` purges audio versions after `MEMO_AUDIO_RETENTION_DAYS` |
 | 69 | Connections          | `connections` (token / `app` / `oauth`) shared per provider; `connectionProviderFor` derives provider + site, never chosen; `credentialFor` dials through `connection_id`, inline `credential` the fallback for one release; `bindConnection` is the one writer (equal tokens compared decrypted) — create/update, Figma bind, `ConnectionsBackfill` at API boot; identify probes per provider in `adapters/connection-providers.ts`; delete refused while in use; `POST :id/links` one connector per pair, duplicates by `connectorResourceKey`; callbacks land on `/oauth/:provider` (`oauthLandingPath`); `GET /v1/connections/wait` long poll; no token offered once signed in via OAuth/App (`offeredMethods`) |
+| 70 | Feature toggles        | `workspace_settings.disabled_features` (`WORKSPACE_FEATURES`, admin `PUT /v1/workspaces/:id/features`); `@Feature` on a route → `AclGuard` 404s **after** membership (dev mode too); MCP `FEATURE_TOOLS` + the `trackTools` gate — a new tool of a toggleable section joins it; web `meta.feature` + `stores/features` (loaded in the router guard) + `v-feature` (hidden, SSR-safe; `v-if` for anything that fetches); background work never stops |
 
 ## Conventions
 
@@ -237,12 +239,13 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 
 **Web**
 
+- `apps/web/src` is layered `app → widgets → modules → entities → stores → shared → core` ([11](docs/architecture/11-web-modules.md) says where a new page, component, composable, store or API call goes). **A module never imports another module**: what two share is an entity (it has a domain) or `shared/` (it has none; page chrome is `shared/layout`), and an entity is imported only through its `index.ts`. A widget is a block `app/` mounts and never imports a module. An index holds named re-exports only (the build marks it side-effect free). `make deps` fails a module-to-module import, a deep entity import, an entity cycle or an upward import.
 - Tab strips are hand-rolled (no tab library is installed), and `?tab=` is an **opening instruction, not two-way state**.
 - **Never call `editor.isActive()`/`editor.can()` in a template.** `@tiptap/vue-3` makes editor state reactive, so it re-renders the component on every transaction. Editor chrome renders from `editorStreams(editor).format$`, and anything that reads layout listens to `frame$` (once per animation frame).
 - Project-scoped Pinia stores expose `rescope()`, called from `projects.switchProject()`.
 - Search filters are applied post-ranking against PG under the existing 5× over-fetch.
 - `createI18nFor(locale)` is called **inside `createApp()`**, never at module scope, or concurrent SSR renders share a locale.
-- Use the `lib/format.ts` Intl wrappers — a locale-less `toLocale*` follows the host, which during SSR is the server: a hydration mismatch.
+- Use the `shared/utils/format.ts` Intl wrappers — a locale-less `toLocale*` follows the host, which during SSR is the server: a hydration mismatch.
 - A preference the SSR pass must read before any JS runs is mirrored into a cookie (`kn_ws`, `kn_proj`, `kn_lang`, `kn_filterrail`).
 - The client's first render must use what the **server rendered with**, not what the client would pick: the locale comes from `<html lang>` (the server falls back to `Accept-Language`, which storage cannot see), and a component that renders *before* a later `onServerPrefetch` fills the store it reads (the rail's tree vs. a page's prefetch) waits for `onMounted` — the serialized state is the end of the render, not the moment it drew (#278). Data the shell needs is loaded *before* the render instead (`prefetchShell` in `entry-server.ts`, #279).
 - A map converted to hold message keys is only half the change — the render site must resolve them. A value from a known set still needs a fallback when the column is free text (`labelFor`).
@@ -256,11 +259,11 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 ## Gotchas
 
 - `apps/api` is **ESM** (`"type": "module"`, NodeNext): relative imports need the `.js` suffix (`./app.module.js`), including from `.ts` sources. There is no `__dirname` — use `import.meta.dirname`.
-- class-validator `@IsUUID()` rejects nil-style UUIDs (the version digit must be 1–5). The demo workspace is `11111111-1111-4111-8111-111111111111` (`DEMO_WORKSPACE_ID` in `apps/web/src/lib/api.ts`).
+- class-validator `@IsUUID()` rejects nil-style UUIDs (the version digit must be 1–5). The demo workspace is `11111111-1111-4111-8111-111111111111` (`DEMO_WORKSPACE_ID` in `apps/web/src/shared/api/api.ts`).
 - `openapi-typescript` promotes any property declaring a `default:` in its Swagger decorator to **required** in the generated client. Describe the default in `description:` instead.
 - A nullable DTO field needs an explicit `type:` in its Swagger decorator — `@ApiPropertyOptional({ nullable: true })` alone emits a typeless schema that becomes `Record<string, never>` and silently breaks the web typecheck at every call site.
 - A **buildless workspace package consumed from source may not use relative cross-file imports, and may not use TS-only runtime syntax** (the **buildless package constraints**). Node will not resolve `./x.js` into a sibling `.ts`; an explicit `./x.ts` is rejected by any consumer that emits (TS5097); strip-only mode rejects parameter properties and enums. The escape is **package self-reference** (`@knowledge/contracts/core`). This fails **only at runtime** — `make check` passes clean either way, which is why `Dockerfile.api` ends with a real `import()` of every package entry.
-- `pnpm dlx` can hang on interactive prompts in non-TTY runs — use `pnpm exec shadcn-vue add <component>` from `apps/web`.
+- `pnpm dlx` can hang on interactive prompts in non-TTY runs — use `pnpm exec shadcn-vue add <component>` from `apps/web`. It writes into `src/shared/ui/`, but (2.8.2, with these aliases or the old ones) spells the helper `import { cn } from "cn"` and adds a bogus `cn` npm dependency: point the import at `@/shared/utils/cn` and revert `package.json` + `pnpm-lock.yaml`.
 - `corepack` does not exist on this Node install; pnpm is pinned only via the `packageManager` field.
 - Reindexing is idempotent by design: `GraphService.upsertRevisionChunks` deletes the revision's chunks and vertex before recreating them, and the processor skips jobs already `completed`.
 - **Relation edges are never deleted on reindex or by a person** (#81): a fact a re-extraction drops is expired, one a person removes is retracted (`retractedBy: user:<id>`), and the old revision's rows are closed by their `validTo`. Only `deleteDocumentGraph` hard-deletes. A new edge writer must go through `createRelationEdge` (it stamps `ingestedAt`) and must never revive an expired row.

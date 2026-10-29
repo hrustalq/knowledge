@@ -17,7 +17,7 @@ import { Returns } from '../common/returns.decorator.js';
  * What a client asks before it opens `/v1/collab` (#80, docs/features/56).
  * Authenticated only: it names no workspace and tells nothing about one, so
  * there is nothing for `@Access` to resolve. The socket URL is not here: the
- * client derives it the way `api/live.ts` does, because behind the proxy the
+ * client derives it the way `shared/api/live.ts` does, because behind the proxy the
  * API cannot see the address the browser used.
  */
 @ApiTags('collab')

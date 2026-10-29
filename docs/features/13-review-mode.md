@@ -4,8 +4,8 @@
 > decorations, and `components/merge-requests/text-anchor.ts` and
 > `ReviewCanvas.vue` have since been deleted as dead code. The quote-based
 > anchoring model, the contract and the reasoning below all still hold — the
-> projection now lives in `components/editor/extensions/comment-anchors.ts`
-> with the shared matcher in `lib/anchor-match.ts`.
+> projection now lives in `entities/rich-editor/components/extensions/comment-anchors.ts`
+> with the shared matcher in `core/anchor-match.ts`.
 
 > Оригинал: «Режим редактора при ревью mr (открывается просмотр документа и
 > дается возможность оставлять комментарии, как в pdf файлах / figma:
@@ -97,7 +97,7 @@ content is exactly what will be merged.
   rendered page, the selection affordance, the discussion popover),
   `MergeRequestDetailPage.vue` (the tab + the source-head content query, only
   fetched on that tab), `ThreadCard.vue` (a text anchor labels itself with its
-  quote), and the annotation styles in `styles/editor.css`.
+  quote), and the annotation styles in `assets/styles/editor.css`.
 
 ## Limits
 

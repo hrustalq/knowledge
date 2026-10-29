@@ -1,0 +1,589 @@
+<script setup lang="ts">
+/**
+ * Glossary (docs/features/14): the project's shared vocabulary, and the one
+ * place a definition is written.
+ *
+ * Two ways in. Someone writes a term by hand, or the assistant reads a page
+ * and drafts the entries the project is missing — and a draft is never a fact:
+ * nothing from the model reaches the glossary until a person accepts it, which
+ * is why "Add" is a separate click on every suggestion rather than a bulk
+ * import.
+ *
+ * The controls are the app's own: the filter bar scopes and narrows the roster
+ * (project is a *pinned* field — it decides what is fetched, not what is
+ * hidden), pages are chosen with the autocomplete rather than a `<select>`
+ * that would list a thousand titles, and a definition is written in the same
+ * editor a page is.
+ */
+import { useI18n } from 'vue-i18n'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { useQuery } from '@tanstack/vue-query'
+import { toast } from 'vue-sonner'
+import { BookMarked, FolderKanban, Plus, Sparkles, Trash2, Type, Wand2 } from 'lucide-vue-next'
+import type {
+  GlossaryTerm,
+  GlossaryTermSuggestion,
+  ListGlossaryResponse,
+  SuggestGlossaryTermsResponse,
+} from '@knowledge/contracts'
+import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
+import { getProjectId, getWorkspaceId } from '@/shared/api/api'
+import { useAuthStore } from '@/stores/auth'
+import { useDocumentsStore } from '@/stores/documents'
+import { useProjectsStore } from '@/stores/projects'
+import { useGlossaryStore } from '@/entities/document'
+import { MAX_LINKS_PER_TERM, buildMatcher } from '@/entities/document'
+import { Badge } from '@/shared/ui/badge'
+import { Button } from '@/shared/ui/button'
+import { Checkbox } from '@/shared/ui/checkbox'
+import { Input } from '@/shared/ui/input'
+import { Skeleton } from '@/shared/ui/skeleton'
+import { Autocomplete } from '@/shared/ui/autocomplete'
+import {
+  FilterBar,
+  filterRows,
+  type ActiveFilter,
+  type FilterAccessors,
+  type FilterField,
+} from '@/shared/ui/filter-bar'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
+import { RichEditor } from '@/entities/rich-editor'
+import { MarkdownView } from '@/entities/document'
+
+const { t } = useI18n()
+
+const route = useRoute()
+const auth = useAuthStore()
+const documents = useDocumentsStore()
+const projects = useProjectsStore()
+const glossaryStore = useGlossaryStore()
+const workspaceId = getWorkspaceId()
+
+const canEdit = computed(() => auth.canEdit)
+
+// --- filters -----------------------------------------------------------------
+// Project is a scope: it decides which roster is fetched. Everything else is a
+// predicate over the rows already in memory — a project glossary is small.
+const PROJECT_KEY = 'project'
+const filters = ref<ActiveFilter[]>([
+  { key: PROJECT_KEY, operator: 'is', values: getProjectId() ? [getProjectId()!] : [] },
+])
+
+const scopedProjectId = computed(
+  () => filters.value.find((f) => f.key === PROJECT_KEY)?.values[0] ?? null,
+)
+
+const filterFields = computed<FilterField[]>(() => [
+  {
+    key: PROJECT_KEY,
+    label: t('filter.project'),
+    icon: FolderKanban,
+    pinned: true,
+    multiple: false,
+    operators: ['is'],
+    options: projects.items.map((p) => ({ value: p.projectId, label: p.name })),
+  },
+  {
+    key: 'source',
+    label: t('filter.source'),
+    icon: Sparkles,
+    options: [
+      { value: 'manual', label: t('filter.writtenByHand') },
+      { value: 'ai', label: t('filter.acceptedFromAi') },
+      // A term an agent session proposed and an editor approved in the
+      // captures inbox (issue #73) — reviewed, but not written here.
+      { value: 'captured', label: t('filter.capturedFromSession') },
+    ],
+  },
+  {
+    key: 'enabled',
+    label: t('filter.linkedInPages'),
+    icon: BookMarked,
+    options: [
+      { value: 'true', label: t('common.yes') },
+      { value: 'false', label: t('common.no') },
+    ],
+  },
+  {
+    key: 'text',
+    label: t('filter.termOrDefinition'),
+    icon: Type,
+    group: t('filter.groupText'),
+    type: 'text',
+    placeholder: t('glossary.searchPlaceholder'),
+  },
+])
+
+const filterAccessors: FilterAccessors<GlossaryTerm> = {
+  source: (t) => t.source,
+  enabled: (t) => t.enabled,
+  text: (t) => [t.term, t.definition, ...t.aliases],
+}
+
+const query = useQuery(
+  computed(() =>
+    apiQueryOptions('/v1/glossary', {
+      query: { workspaceId, ...(scopedProjectId.value ? { projectId: scopedProjectId.value } : {}) },
+    }),
+  ),
+)
+const terms = computed(() => (query.data.value as ListGlossaryResponse | undefined)?.terms ?? [])
+const visibleTerms = computed(() => filterRows(terms.value, filters.value, filterAccessors))
+
+/**
+ * Every write also refreshes the pinia roster, not just the query cache: the
+ * roster is what already-open pages link against, so a definition edited here
+ * has to reach them without a reload.
+ */
+const invalidates = () => [['/v1/glossary']]
+const afterWrite = () => void glossaryStore.refresh()
+const createTerm = useApiMutation('post', '/v1/glossary', { invalidates })
+const updateTerm = useApiMutation('patch', '/v1/glossary/{id}', { invalidates })
+const deleteTerm = useApiMutation('delete', '/v1/glossary/{id}', { invalidates })
+const busy = computed(
+  () => createTerm.isPending.value || updateTerm.isPending.value || deleteTerm.isPending.value,
+)
+
+// --- page picker -------------------------------------------------------------
+const pageOptions = computed(() =>
+  documents.items.map((d) => ({ value: d.documentId, label: d.title, meta: d.category })),
+)
+const pageLabel = (id: string) =>
+  documents.items.find((d) => d.documentId === id)?.title ?? 'page'
+
+// --- editor dialog -----------------------------------------------------------
+const open = ref(false)
+const editing = ref<GlossaryTerm | null>(null)
+const form = ref({
+  term: '',
+  definition: '',
+  aliases: '',
+  enabled: true,
+  matchAliases: true,
+  caseSensitive: false,
+  maxLinksPerPage: '' as string,
+})
+/** Autocomplete carries 0-or-1 entry in single-select mode. */
+const formDocument = ref<string[]>([])
+
+function openNew(seed?: Partial<GlossaryTermSuggestion>) {
+  editing.value = null
+  form.value = {
+    term: seed?.term ?? '',
+    definition: seed?.definition ?? '',
+    aliases: (seed?.aliases ?? []).join(', '),
+    enabled: true,
+    matchAliases: true,
+    caseSensitive: false,
+    maxLinksPerPage: '',
+  }
+  formDocument.value = sourceDocument.value.length ? [...sourceDocument.value] : []
+  open.value = true
+}
+
+function openEdit(term: GlossaryTerm) {
+  if (!canEdit.value) return
+  editing.value = term
+  form.value = {
+    term: term.term,
+    definition: term.definition,
+    aliases: term.aliases.join(', '),
+    enabled: term.enabled,
+    matchAliases: term.matchAliases,
+    caseSensitive: term.caseSensitive,
+    maxLinksPerPage: term.maxLinksPerPage === null ? '' : String(term.maxLinksPerPage),
+  }
+  formDocument.value = term.documentId ? [term.documentId] : []
+  open.value = true
+}
+
+/** New terms land in the scoped project; edits never move an existing one. */
+/**
+ * Spellings two entries both claim, which therefore link to neither.
+ *
+ * Surfaced here because it is a data problem, and a data problem should be
+ * visible where the data is edited rather than silently absorbed by the
+ * matcher. The demo workspace has exactly this: `Order` and `Заказ (Order)`
+ * both list "Order" and "Заказ".
+ */
+const contested = computed(() => buildMatcher(terms.value)?.ambiguous ?? [])
+
+const targetProjectId = computed(() => scopedProjectId.value ?? projects.activeId)
+
+async function submit() {
+  const f = form.value
+  const definition = (definitionEl.value?.flush() ?? f.definition).trim()
+  if (!f.term.trim() || !definition) return
+  const body = {
+    term: f.term.trim(),
+    definition,
+    aliases: f.aliases.split(',').map((a) => a.trim()).filter(Boolean),
+    documentId: formDocument.value[0] ?? null,
+    enabled: f.enabled,
+    matchAliases: f.matchAliases,
+    caseSensitive: f.caseSensitive,
+    // Blank means "use the shared default", which is what null encodes — an
+    // empty box must not become 0, i.e. "never link this".
+    maxLinksPerPage: f.maxLinksPerPage.trim() ? Number(f.maxLinksPerPage) : null,
+  }
+  try {
+    if (editing.value) {
+      await updateTerm.mutateAsync({ path: { id: editing.value.termId }, body })
+      toast.success(t('glossary.termUpdated'))
+    } else {
+      if (!targetProjectId.value) {
+        toast.error(t('glossary.pickProjectFirst'))
+        return
+      }
+      await createTerm.mutateAsync({
+        body: { workspaceId, projectId: targetProjectId.value, ...body },
+      })
+      toast.success(t('glossary.termAdded', { term: body.term }))
+    }
+    afterWrite()
+    open.value = false
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+const definitionEl = ref<InstanceType<typeof RichEditor> | null>(null)
+
+async function toggle(term: GlossaryTerm, enabled: boolean) {
+  try {
+    await updateTerm.mutateAsync({ path: { id: term.termId }, body: { enabled } })
+    afterWrite()
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+async function remove(term: GlossaryTerm) {
+  try {
+    await deleteTerm.mutateAsync({ path: { id: term.termId } })
+    afterWrite()
+    toast.success(t('glossary.termRemoved', { term: term.term }))
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+// --- AI extraction -----------------------------------------------------------
+const sourceDocument = ref<string[]>([])
+const suggestions = ref<GlossaryTermSuggestion[] | null>(null)
+const suggestProjectId = ref<string | null>(null)
+const assistantOff = ref(false)
+const suggest = useApiMutation('post', '/v1/glossary/suggest')
+
+async function runSuggest() {
+  const documentId = sourceDocument.value[0]
+  if (!documentId) return
+  try {
+    const res = (await suggest.mutateAsync({
+      body: { workspaceId, documentId },
+    })) as SuggestGlossaryTermsResponse
+    assistantOff.value = !res.enabled
+    suggestions.value = res.suggestions
+    // The project comes back from the server — it is the source page's, not
+    // whatever the bar happens to be scoped to.
+    suggestProjectId.value = res.projectId
+    if (res.enabled && res.suggestions.length === 0) {
+      toast.info(t('glossary.nothingNew'))
+    }
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+async function accept(suggestion: GlossaryTermSuggestion) {
+  const projectId = suggestProjectId.value ?? targetProjectId.value
+  if (!projectId) return
+  try {
+    await createTerm.mutateAsync({
+      body: {
+        workspaceId,
+        projectId,
+        term: suggestion.term,
+        definition: suggestion.definition,
+        aliases: suggestion.aliases,
+        documentId: sourceDocument.value[0] ?? null,
+        source: 'ai',
+      },
+    })
+    afterWrite()
+    dismiss(suggestion)
+    toast.success(t('glossary.suggestionAdded', { term: suggestion.term }))
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+function dismiss(suggestion: GlossaryTermSuggestion) {
+  suggestions.value = (suggestions.value ?? []).filter((s) => s.term !== suggestion.term)
+}
+
+onMounted(() => {
+  if (!documents.loaded) void documents.fetchList()
+  if (!projects.loaded) void projects.fetchList()
+})
+
+// Glossary links point here with ?term=… so a reader can jump from a word in a
+// page straight to the entry that defines it.
+const highlighted = computed(() => (typeof route.query.term === 'string' ? route.query.term : null))
+watch(highlighted, (id) => {
+  // Arriving at a specific entry must not land on a filtered-out row.
+  if (id) filters.value = filters.value.filter((f) => f.key === PROJECT_KEY)
+})
+</script>
+
+<template>
+  <div class="space-y-4">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('glossary.title') }}</h1>
+        <p class="text-muted-foreground max-w-2xl text-sm">
+          {{ t('glossary.subtitle') }}
+        </p>
+      </div>
+      <Button v-if="canEdit" size="sm" @click="openNew()"><Plus class="size-3.5" /> {{ t('glossary.newTerm') }}</Button>
+    </div>
+
+    <!-- AI extraction -->
+    <section v-if="canEdit" class="space-y-3 rounded-lg border bg-card p-3">
+      <div class="flex flex-wrap items-end gap-2">
+        <Sparkles class="text-primary mb-2 size-4 shrink-0" />
+        <div class="min-w-56 flex-1">
+          <Autocomplete
+            v-model="sourceDocument"
+            :label="t('glossary.buildFromPage')"
+            :placeholder="t('glossary.findPage')"
+            :multiple="false"
+            :options="pageOptions"
+            :fallback-label="pageLabel"
+            :empty-hint="t('glossary.noPagesInProject')"
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          :disabled="!sourceDocument.length || suggest.isPending.value"
+          @click="runSuggest"
+        >
+          <Wand2 class="size-3.5" />
+          {{ suggest.isPending.value ? t('glossary.reading') : t('glossary.suggestTerms') }}
+        </Button>
+      </div>
+
+      <p v-if="assistantOff" class="text-muted-foreground text-xs">
+        {{ t('glossary.assistantOff') }}
+      </p>
+
+      <ul v-if="suggestions?.length" class="divide-y rounded-md border">
+        <li v-for="s in suggestions" :key="s.term" class="flex flex-wrap items-start gap-3 p-3">
+          <div class="min-w-0 flex-1">
+            <p class="flex flex-wrap items-center gap-2 text-sm font-medium">
+              {{ s.term }}
+              <Badge variant="secondary" class="font-normal">{{ t('glossary.occurrencesOnPage', { n: s.occurrences }) }}</Badge>
+              <Badge v-if="s.existingTermId" variant="outline">{{ t('glossary.alreadyDefined') }}</Badge>
+            </p>
+            <p class="text-muted-foreground text-sm">{{ s.definition }}</p>
+            <p v-if="s.aliases.length" class="text-muted-foreground mt-1 text-xs">
+              {{ t('glossary.alsoKnownAs', { aliases: s.aliases.join(', ') }) }}
+            </p>
+          </div>
+          <div class="flex shrink-0 gap-1">
+            <Button size="xs" :disabled="busy || !!s.existingTermId" @click="accept(s)">{{ t('common.add') }}</Button>
+            <Button size="xs" variant="ghost" @click="openNew(s)">{{ t('glossary.editEllipsis') }}</Button>
+            <Button size="xs" variant="ghost" @click="dismiss(s)">{{ t('glossary.skip') }}</Button>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <FilterBar v-model="filters" :fields="filterFields" :empty-label="t('glossary.filterTerms')" />
+
+    <!-- Contested spellings: two entries claiming one word, which therefore
+         links to neither. Shown here so it can be fixed, not just endured. -->
+    <div
+      v-if="contested.length"
+      class="space-y-1 rounded-md border kn-callout-warning p-3 text-sm"
+    >
+      <p class="font-medium">{{ t('glossary.ambiguousTitle') }}</p>
+      <p v-for="clash in contested" :key="clash.spelling" class="text-muted-foreground">
+        {{ t('glossary.ambiguous', { spelling: clash.spelling, n: clash.terms.length }) }}
+        <span class="text-foreground">{{ clash.terms.map((x) => x.term).join(' · ') }}</span>
+      </p>
+    </div>
+
+    <div v-if="query.isPending.value" class="space-y-2">
+      <Skeleton v-for="i in 4" :key="i" class="h-10 w-full" />
+    </div>
+
+    <div v-else-if="visibleTerms.length === 0" class="text-muted-foreground py-12 text-center text-sm">
+      <BookMarked class="mx-auto mb-2 size-6 opacity-50" />
+      <p v-if="terms.length">{{ t('glossary.noTermMatches') }}</p>
+      <p v-else>{{ t('glossary.noTermsYet') }}</p>
+    </div>
+
+    <Table v-else>
+      <TableHeader>
+        <TableRow>
+          <TableHead>{{ t('glossary.term') }}</TableHead>
+          <TableHead>{{ t('glossary.definition') }}</TableHead>
+          <TableHead class="w-40">{{ t('glossary.definedIn') }}</TableHead>
+          <TableHead class="w-24">{{ t('glossary.linked') }}</TableHead>
+          <TableHead class="w-12"></TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow
+          v-for="term in visibleTerms"
+          :key="term.termId"
+          :class="highlighted === term.termId ? 'bg-primary/5' : ''"
+        >
+          <TableCell class="align-top">
+            <button class="text-left" :disabled="!canEdit" @click="openEdit(term)">
+              <span class="font-medium" :class="canEdit && 'hover:text-primary'">{{ term.term }}</span>
+              <span v-if="term.aliases.length" class="text-muted-foreground block text-xs">
+                {{ term.aliases.join(', ') }}
+              </span>
+            </button>
+            <Badge v-if="term.source === 'ai'" variant="outline" class="mt-1 font-normal">{{ t('common.ai') }}</Badge>
+            <Badge v-else-if="term.source === 'captured'" variant="outline" class="mt-1 font-normal">{{ t('captures.badge') }}</Badge>
+          </TableCell>
+          <TableCell class="align-top text-sm">
+            <MarkdownView :markdown="term.definition" />
+          </TableCell>
+          <TableCell class="align-top">
+            <RouterLink
+              v-if="term.documentId"
+              :to="`/documents/${term.documentId}`"
+              class="text-primary text-sm hover:underline"
+            >
+              {{ term.documentTitle ?? 'page' }}
+            </RouterLink>
+            <span v-else class="text-muted-foreground text-xs">—</span>
+          </TableCell>
+          <TableCell class="align-top">
+            <Checkbox
+              :model-value="term.enabled"
+              :disabled="!canEdit"
+              :aria-label="t('glossary.linkTermInDocuments', { term: term.term })"
+              @update:model-value="toggle(term, $event === true)"
+            />
+          </TableCell>
+          <TableCell class="align-top text-right">
+            <Button
+              v-if="canEdit"
+              variant="ghost"
+              size="sm"
+              :aria-label="t('common.deleteNamed', { name: term.term })"
+              @click="remove(term)"
+            >
+              <Trash2 class="size-3.5" />
+            </Button>
+          </TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+
+    <Dialog v-model:open="open">
+      <DialogContent class="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{{ editing ? t('glossary.editTerm') : t('glossary.newTerm') }}</DialogTitle>
+          <DialogDescription>
+            {{ t('glossary.dialogDesc') }}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form id="glossary-form" class="space-y-4" @submit.prevent="submit">
+          <label class="block space-y-1">
+            <span class="text-muted-foreground text-xs font-medium">{{ t('glossary.term') }}</span>
+            <Input v-model="form.term" required :placeholder="t('glossary.termPlaceholder')" />
+          </label>
+          <label class="block space-y-1">
+            <span class="text-muted-foreground text-xs font-medium">{{ t('glossary.aliases') }}</span>
+            <Input v-model="form.aliases" :placeholder="t('glossary.aliasesPlaceholder')" />
+          </label>
+          <div class="space-y-1">
+            <span class="text-muted-foreground text-xs font-medium">{{ t('glossary.definition') }}</span>
+            <div
+              class="focus-within:border-ring focus-within:ring-ring overflow-hidden rounded-md border bg-card shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:ring-3"
+            >
+              <RichEditor
+                ref="definitionEl"
+                v-model="form.definition"
+                compact
+                :placeholder="t('glossary.definitionPlaceholder')"
+              />
+            </div>
+          </div>
+          <Autocomplete
+            v-model="formDocument"
+            :label="t('glossary.definedInOptional')"
+            :placeholder="t('glossary.findPage')"
+            :multiple="false"
+            :options="pageOptions"
+            :fallback-label="pageLabel"
+            :empty-hint="t('hints.noPagesToLink')"
+          />
+          <label class="flex items-center gap-2">
+            <Checkbox :model-value="form.enabled" @update:model-value="form.enabled = $event === true" />
+            <span class="text-sm">{{ t('glossary.linkInDocuments') }}</span>
+          </label>
+
+          <!--
+            Matching rules. Grouped under the master switch and disabled with
+            it: they only describe *how* a term is linked, so offering them for
+            a term that is not linked at all would be a control with no effect.
+          -->
+          <fieldset :disabled="!form.enabled" class="space-y-2 border-t pt-3 disabled:opacity-50">
+            <legend class="sr-only">{{ t('glossary.matching') }}</legend>
+            <p class="text-xs font-medium text-muted-foreground">{{ t('glossary.matching') }}</p>
+            <label class="flex items-center gap-2">
+              <Checkbox
+                :model-value="form.matchAliases"
+                @update:model-value="form.matchAliases = $event === true"
+              />
+              <span class="text-sm">{{ t('glossary.matchAliases') }}</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <Checkbox
+                :model-value="form.caseSensitive"
+                @update:model-value="form.caseSensitive = $event === true"
+              />
+              <span class="text-sm">{{ t('glossary.caseSensitive') }}</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <span class="text-sm">{{ t('glossary.maxLinksPerPage') }}</span>
+              <Input
+                v-model="form.maxLinksPerPage"
+                type="number"
+                min="1"
+                max="50"
+                class="h-8 w-20"
+                :placeholder="String(MAX_LINKS_PER_TERM)"
+              />
+            </label>
+          </fieldset>
+        </form>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" size="sm" @click="open = false">{{ t('common.cancel') }}</Button>
+          <Button type="submit" form="glossary-form" size="sm" :disabled="busy">
+            {{ editing ? t('common.save') : t('common.create') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </div>
+</template>

@@ -1,0 +1,202 @@
+<script setup lang="ts">
+// Feature 05 (docs/features/05): revision DAG + inline compare.
+import { useI18n } from 'vue-i18n'
+import { formatDateTime } from '@/shared/utils/format'
+import { computed, onMounted, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
+import { useQueryClient } from '@tanstack/vue-query'
+import type {
+  CompareResponse,
+  ListBranchesResponse,
+  ListRevisionsResponse,
+  RevisionNode,
+} from '@knowledge/contracts'
+import { fetchApi } from '@/shared/api/queries'
+import { statusVariant } from '@/shared/api/api'
+import { Badge } from '@/shared/ui/badge'
+import { Button } from '@/shared/ui/button'
+import { Skeleton } from '@/shared/ui/skeleton'
+import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui/select'
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
+import { DiffView } from '@/entities/document'
+import { UserChip } from '@/entities/person'
+import { ApiChangesPanel } from '@/entities/api-operation'
+
+const { t } = useI18n()
+
+const props = defineProps<{ documentId: string }>()
+const queryClient = useQueryClient()
+
+const revisions = ref<RevisionNode[] | null>(null)
+const branches = ref<ListBranchesResponse['branches']>([])
+const branchFilter = ref<string>('')
+// reka-ui reserves '' as the Select's "cleared" value and rejects it on an
+// item, so the all-branches choice rides a sentinel.
+const ALL_BRANCHES = '__all__'
+const branchModel = computed({
+  get: () => branchFilter.value || ALL_BRANCHES,
+  set: (v: string) => {
+    branchFilter.value = v === ALL_BRANCHES ? '' : v
+  },
+})
+const from = ref<string>('')
+const to = ref<string>('')
+const compare = ref<CompareResponse | null>(null)
+const busy = ref(false)
+const error = ref<string | null>(null)
+
+async function load() {
+  const path = { id: props.documentId }
+  const [revs, brs] = (await Promise.all([
+    fetchApi(queryClient, '/v1/documents/{id}/revisions', {
+      path,
+      query: branchFilter.value ? { branch: branchFilter.value } : {},
+    }),
+    fetchApi(queryClient, '/v1/documents/{id}/branches', { path }),
+  ])) as [ListRevisionsResponse, ListBranchesResponse]
+  revisions.value = [...revs.revisions].reverse() // newest first
+  branches.value = brs.branches
+}
+
+async function runCompare() {
+  if (!from.value || !to.value || from.value === to.value) return
+  busy.value = true
+  error.value = null
+  try {
+    compare.value = await fetchApi(queryClient, '/v1/documents/{id}/compare', {
+      path: { id: props.documentId },
+      query: { from: from.value, to: to.value, mode: 'merge-base' },
+    })
+  } catch (e) {
+    error.value = (e as Error).message
+    compare.value = null
+  } finally {
+    busy.value = false
+  }
+}
+
+onMounted(() => void load())
+watch(branchFilter, () => void load())
+</script>
+
+<template>
+  <div class="space-y-4">
+    <div class="flex flex-wrap items-center gap-2">
+      <Select v-model="branchModel">
+        <SelectTrigger size="sm" class="text-sm" :aria-label="t('revisions.filterByBranch')">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem :value="ALL_BRANCHES">{{ t('revisions.allBranches') }}</SelectItem>
+          <SelectItem v-for="b in branches" :key="b.branchId" :value="b.name">{{ b.name }}</SelectItem>
+        </SelectContent>
+      </Select>
+      <Button size="sm" :disabled="!from || !to || from === to || busy" @click="runCompare">
+        {{ busy ? t('revisions.comparing') : t('revisions.compareSelected') }}
+      </Button>
+      <span class="text-xs text-muted-foreground">{{ t('revisions.pickFromTo') }}</span>
+    </div>
+
+    <div v-if="!revisions" class="space-y-2">
+      <Skeleton v-for="i in 3" :key="i" class="h-10 w-full" />
+    </div>
+
+    <div v-else class="overflow-x-auto rounded-lg border">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b text-left text-xs text-muted-foreground">
+            <th class="px-2 py-2">{{ t('revisions.from') }}</th>
+            <th class="px-2 py-2">{{ t('revisions.to') }}</th>
+            <th class="px-3 py-2">#</th>
+            <th class="px-3 py-2">{{ t('revisions.revision') }}</th>
+            <th class="px-3 py-2">{{ t('revisions.branch') }}</th>
+            <th class="px-3 py-2">{{ t('revisions.status') }}</th>
+            <th class="px-3 py-2">{{ t('revisions.message') }}</th>
+            <th class="px-3 py-2">{{ t('revisions.parents') }}</th>
+            <th class="px-3 py-2">{{ t('revisions.created') }}</th>
+            <th class="px-3 py-2"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in revisions" :key="r.revisionId" class="border-b last:border-0 hover:bg-muted/40">
+            <td class="px-2 py-2">
+              <RadioGroup v-if="r.contentHash" v-model="from">
+                <RadioGroupItem
+                  :value="r.revisionId"
+                  :aria-label="t('revisions.compareFrom', { n: r.revisionNumber })"
+                />
+              </RadioGroup>
+            </td>
+            <td class="px-2 py-2">
+              <RadioGroup v-if="r.contentHash" v-model="to">
+                <RadioGroupItem
+                  :value="r.revisionId"
+                  :aria-label="t('revisions.compareTo', { n: r.revisionNumber })"
+                />
+              </RadioGroup>
+            </td>
+            <td class="px-3 py-2">{{ r.revisionNumber }}</td>
+            <td class="px-3 py-2 font-mono text-xs">{{ r.revisionId.slice(0, 8) }}</td>
+            <td class="px-3 py-2">{{ r.branch ?? '—' }}</td>
+            <td class="px-3 py-2"><Badge :variant="statusVariant(r.status)">{{ r.status }}</Badge></td>
+            <td class="max-w-48 px-3 py-2 text-muted-foreground">
+              <span class="block truncate">{{ r.message ?? '—' }}</span>
+              <!-- Published from a shared draft (#80): who wrote in it since the publish before. -->
+              <span
+                v-if="r.coAuthorIds.length"
+                class="kn-collab-presence mt-1"
+                role="group"
+                :aria-label="t('revisions.coAuthors', { n: r.coAuthorIds.length }, r.coAuthorIds.length)"
+              >
+                <UserChip v-for="id in r.coAuthorIds" :key="id" :user-id="id" size="sm" avatar-only />
+              </span>
+            </td>
+            <td class="px-3 py-2 font-mono text-xs text-muted-foreground">
+              {{ r.parentRevisionIds.map((p) => p.slice(0, 8)).join(', ') || '—' }}
+            </td>
+            <td class="px-3 py-2 text-xs text-muted-foreground">{{ formatDateTime(r.createdAt) }}</td>
+            <td class="px-3 py-2">
+              <RouterLink
+                v-if="r.contentHash"
+                :to="`/documents/${documentId}?tab=revisions&revision=${r.revisionId}`"
+                class="text-xs hover:underline"
+              >
+                {{ t('revisions.view') }}
+              </RouterLink>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+
+    <Card v-if="compare">
+      <CardHeader>
+        <CardTitle class="text-base">
+          {{ t('revisions.compareTitle', { from: compare.from?.revisionId.slice(0, 8) ?? '∅', to: compare.to.revisionId.slice(0, 8) }) }}
+          <span class="ml-2 text-xs font-normal text-muted-foreground">
+            +{{ compare.summary.additions }} / −{{ compare.summary.deletions }}
+            <template v-if="compare.mergeBaseRevisionId"> · {{ t('revisions.mergeBaseAt', { id: compare.mergeBaseRevisionId.slice(0, 8) }) }}</template>
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <DiffView :compare="compare" />
+      </CardContent>
+    </Card>
+
+    <!-- A spec's classified diff (#78): the verdicts the merge request shows. -->
+    <section v-if="compare?.api" class="space-y-3">
+      <h3 class="text-sm font-semibold">{{ t('revisions.apiChanges') }}</h3>
+      <ApiChangesPanel :diff="compare.api" :document-id="documentId" />
+    </section>
+  </div>
+</template>

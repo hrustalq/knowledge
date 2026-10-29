@@ -34,7 +34,7 @@ const logger = createRootLogger({ service: 'web-ssr', level: envLogLevel() })
 // every render with it. An API refusal (a 4xx — say a workspace that enforces
 // SSO answering a password session, #75) is data about one request, not about
 // this process: log it and carry on; the browser repeats the request after
-// hydration and handles it (lib/reauth.ts). Anything else is a real bug and
+// hydration and handles it (shared/api/reauth.ts). Anything else is a real bug and
 // still crashes, as Node intends.
 process.on('unhandledRejection', (reason) => {
   const status = typeof reason === 'object' && reason !== null ? reason.status : undefined
@@ -55,9 +55,9 @@ configureBacktest({
 
 // In dev, Vite injects CSS through the JS module graph, so the SSR'd HTML would
 // paint unstyled until entry-client loads (FOUC + layout shift). Link the global
-// stylesheet directly — the dev server serves /src/style.css as real CSS. In prod
+// stylesheet directly — the dev server serves /src/assets/style.css as real CSS. In prod
 // `vite build` already stamps a <link> for the entry CSS into index.html.
-const devStyles = isProduction ? '' : '<link rel="stylesheet" href="/src/style.css">'
+const devStyles = isProduction ? '' : '<link rel="stylesheet" href="/src/assets/style.css">'
 
 // Cached production assets
 const templateHtml = isProduction

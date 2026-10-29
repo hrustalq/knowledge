@@ -1,80 +1,11 @@
 [
   {
-    "type": "dependency",
-    "from": "src/components/docs/ApiReferenceTable.vue",
-    "to": "src/pages/docs/bundle.ts",
-    "unresolvedTo": "@/pages/docs/bundle",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "component-imports-no-page"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/components/docs/McpToolTable.vue",
-    "to": "src/pages/docs/bundle.ts",
-    "unresolvedTo": "@/pages/docs/bundle",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "component-imports-no-page"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/components/docs/SkillPanel.vue",
-    "to": "src/pages/docs/bundle.ts",
-    "unresolvedTo": "@/pages/docs/bundle",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "component-imports-no-page"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/components/docs/SkillPanel.vue",
-    "to": "src/pages/docs/registry.ts",
-    "unresolvedTo": "@/pages/docs/registry",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "component-imports-no-page"
-    }
-  },
-  {
     "type": "cycle",
-    "from": "src/components/editor/PagePickerDialog.vue",
-    "to": "src/components/editor/RichEditor.vue",
-    "unresolvedTo": "./RichEditor.vue",
+    "from": "src/shared/api/api.ts",
+    "to": "src/shared/utils/format.ts",
+    "unresolvedTo": "../utils/format",
     "dependencyTypes": [
       "local",
-      "type-only",
       "import"
     ],
     "rule": {
@@ -83,15 +14,14 @@
     },
     "cycle": [
       {
-        "name": "src/components/editor/RichEditor.vue",
+        "name": "src/shared/utils/format.ts",
         "dependencyTypes": [
           "local",
-          "type-only",
           "import"
         ]
       },
       {
-        "name": "src/components/editor/PagePickerDialog.vue",
+        "name": "src/shared/api/api.ts",
         "dependencyTypes": [
           "local",
           "import"
@@ -101,8 +31,8 @@
   },
   {
     "type": "cycle",
-    "from": "src/components/ui/badge/Badge.vue",
-    "to": "src/components/ui/badge/index.ts",
+    "from": "src/shared/ui/badge/Badge.vue",
+    "to": "src/shared/ui/badge/index.ts",
     "unresolvedTo": ".",
     "dependencyTypes": [
       "local",
@@ -114,14 +44,14 @@
     },
     "cycle": [
       {
-        "name": "src/components/ui/badge/index.ts",
+        "name": "src/shared/ui/badge/index.ts",
         "dependencyTypes": [
           "local",
           "import"
         ]
       },
       {
-        "name": "src/components/ui/badge/Badge.vue",
+        "name": "src/shared/ui/badge/Badge.vue",
         "dependencyTypes": [
           "local",
           "export"
@@ -131,8 +61,8 @@
   },
   {
     "type": "cycle",
-    "from": "src/components/ui/button/Button.vue",
-    "to": "src/components/ui/button/index.ts",
+    "from": "src/shared/ui/button/Button.vue",
+    "to": "src/shared/ui/button/index.ts",
     "unresolvedTo": ".",
     "dependencyTypes": [
       "local",
@@ -144,14 +74,14 @@
     },
     "cycle": [
       {
-        "name": "src/components/ui/button/index.ts",
+        "name": "src/shared/ui/button/index.ts",
         "dependencyTypes": [
           "local",
           "import"
         ]
       },
       {
-        "name": "src/components/ui/button/Button.vue",
+        "name": "src/shared/ui/button/Button.vue",
         "dependencyTypes": [
           "local",
           "export"
@@ -161,38 +91,8 @@
   },
   {
     "type": "cycle",
-    "from": "src/components/ui/popover/index.ts",
-    "to": "src/components/ui/popover/ResponsivePopover.vue",
-    "unresolvedTo": "./ResponsivePopover.vue",
-    "dependencyTypes": [
-      "local",
-      "export"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-circular"
-    },
-    "cycle": [
-      {
-        "name": "src/components/ui/popover/ResponsivePopover.vue",
-        "dependencyTypes": [
-          "local",
-          "export"
-        ]
-      },
-      {
-        "name": "src/components/ui/popover/index.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
-      }
-    ]
-  },
-  {
-    "type": "cycle",
-    "from": "src/components/ui/select/index.ts",
-    "to": "src/components/ui/select/SelectContent.vue",
+    "from": "src/shared/ui/select/index.ts",
+    "to": "src/shared/ui/select/SelectContent.vue",
     "unresolvedTo": "./SelectContent.vue",
     "dependencyTypes": [
       "local",
@@ -204,44 +104,14 @@
     },
     "cycle": [
       {
-        "name": "src/components/ui/select/SelectContent.vue",
+        "name": "src/shared/ui/select/SelectContent.vue",
         "dependencyTypes": [
           "local",
           "export"
         ]
       },
       {
-        "name": "src/components/ui/select/index.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
-      }
-    ]
-  },
-  {
-    "type": "cycle",
-    "from": "src/lib/api.ts",
-    "to": "src/lib/format.ts",
-    "unresolvedTo": "./format",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-circular"
-    },
-    "cycle": [
-      {
-        "name": "src/lib/format.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
-      },
-      {
-        "name": "src/lib/api.ts",
+        "name": "src/shared/ui/select/index.ts",
         "dependencyTypes": [
           "local",
           "import"

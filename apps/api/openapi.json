@@ -3422,6 +3422,142 @@
         ]
       }
     },
+    "/v1/workspaces/{id}/features": {
+      "get": {
+        "operationId": "WorkspacesController_getFeatures",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceFeaturesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The sections switched off in this workspace",
+        "tags": [
+          "workspaces"
+        ]
+      },
+      "put": {
+        "operationId": "WorkspacesController_setFeatures",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkspaceFeaturesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceFeaturesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Switch sections off or back on (workspace admin): hides them in the app, 404s their routes and MCP tools",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
     "/v1/workspaces/{id}": {
       "patch": {
         "operationId": "WorkspacesController_update",
@@ -38421,7 +38557,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.37.0",
+    "version": "0.38.0",
     "contact": {}
   },
   "tags": [],
@@ -39108,6 +39244,31 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "UpdateWorkspaceFeaturesDto": {
+        "type": "object",
+        "properties": {
+          "disabled": {
+            "type": "array",
+            "description": "The sections to switch off; every one not listed is on. An empty list turns everything back on.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "workflows",
+                "knowledge-health",
+                "qa",
+                "analytics",
+                "captures",
+                "memos",
+                "conflicts",
+                "assistant"
+              ]
+            }
+          }
+        },
+        "required": [
+          "disabled"
         ]
       },
       "UpdateWorkspaceDto": {
@@ -68903,6 +69064,37 @@
           "workspaceId",
           "name",
           "counts"
+        ]
+      },
+      "WorkspaceFeature": {
+        "type": "string",
+        "enum": [
+          "workflows",
+          "knowledge-health",
+          "qa",
+          "analytics",
+          "captures",
+          "memos",
+          "conflicts",
+          "assistant"
+        ]
+      },
+      "WorkspaceFeaturesResponse": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "disabled": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceFeature"
+            }
+          }
+        },
+        "required": [
+          "workspaceId",
+          "disabled"
         ]
       },
       "WorkspaceGraphNode": {

@@ -334,10 +334,10 @@ line names the pin.
 | Settings resolution (ceiling, override)                  | `apps/api/src/ai/capture-settings.ts`, `AiConfigService.captureSettings`                           |
 | Key scope                                                | `AccessService.requireKeyAllows`, `apiKeyScopeOf` (contracts)                                      |
 | Hidden head-less pages                                   | `apps/api/src/common/listed-page.ts`, `documents/draft-merge-request.ts`                           |
-| Inbox                                                    | `apps/web/src/pages/CapturesPage.vue`, `components/captures/`                                      |
+| Inbox                                                    | `apps/web/src/modules/captures/pages/CapturesPage.vue`, `components/captures/`                                      |
 | Chat Save and harvest (#82)                              | `apps/api/src/chat/chat-captures.service.ts`, `chat/harvest.service.ts`                            |
-| Provenance strip, Save to knowledge base, settings panel | `components/merge-requests/MrProvenance.vue`, `assistant/ChatMessage.vue`, `ai/AiCapturePanel.vue` |
-| Connect AI step 4                                        | `apps/web/src/pages/ConnectAiPage.vue`, `lib/mcp-clients.ts` (`captureKit`)                        |
+| Provenance strip, Save to knowledge base, settings panel | `modules/merge-requests/components/MrProvenance.vue`, `assistant/ChatMessage.vue`, `ai/AiCapturePanel.vue` |
+| Connect AI step 4                                        | `apps/web/src/modules/access/pages/ConnectAiPage.vue`, `modules/access/model/mcp-clients.ts` (`captureKit`)                        |
 
 ## API
 

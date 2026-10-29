@@ -79,12 +79,12 @@ into it from outside.
 
 So the same highlights are expressed the way ProseMirror expects — inline
 decorations over document positions
-(`components/editor/extensions/comment-anchors.ts`, on Tiptap's `addDecorations`
+(`entities/rich-editor/components/extensions/comment-anchors.ts`, on Tiptap's `addDecorations`
 hook with `update: 'manual'`, redrawn by a command when the thread set changes
 rather than on every keystroke). They survive editing for free.
 
 Anchoring itself is unchanged and deliberately shared. The quote-matching
-algorithm moved to `lib/anchor-match.ts` — normalize whitespace, find every
+algorithm moved to `core/anchor-match.ts` — normalize whitespace, find every
 occurrence of the quote, score each by how much of the recorded prefix/suffix
 still matches, take the best. The ProseMirror projection in
 `comment-anchors.ts` feeds it. Feature 13's DOM projection in `text-anchor.ts`

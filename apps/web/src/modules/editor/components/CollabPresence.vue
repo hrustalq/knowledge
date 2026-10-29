@@ -5,7 +5,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UserAvatar } from '@/entities/person'
-import type { CollabPeer } from '../model/use-collab'
+import type { CollabPeer } from '@/entities/rich-editor'
 
 const props = withDefaults(
   defineProps<{ peers: CollabPeer[]; writers?: { agent: string; name: string }[] }>(),

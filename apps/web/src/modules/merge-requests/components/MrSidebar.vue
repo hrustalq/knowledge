@@ -32,7 +32,7 @@ import { Label } from '@/shared/ui/label'
 import { UserAvatar } from '@/entities/person'
 import { WatchButton } from '@/entities/notification'
 import { UserChip } from '@/entities/person'
-import CollabDraftBadge from '@/modules/editor/components/CollabDraftBadge.vue'
+import { CollabDraftBadge } from '@/entities/rich-editor'
 import AiCheckPane from './AiCheckPane.vue'
 import { useMembers } from '@/entities/person'
 

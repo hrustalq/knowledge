@@ -4,7 +4,7 @@
 > decorations, and `components/merge-requests/text-anchor.ts` and
 > `ReviewCanvas.vue` have since been deleted as dead code. The quote-based
 > anchoring model, the contract and the reasoning below all still hold — the
-> projection now lives in `modules/editor/components/extensions/comment-anchors.ts`
+> projection now lives in `entities/rich-editor/components/extensions/comment-anchors.ts`
 > with the shared matcher in `core/anchor-match.ts`.
 
 > Оригинал: «Режим редактора при ревью mr (открывается просмотр документа и

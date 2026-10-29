@@ -3,7 +3,7 @@
  *
  * Every node and mark the rich editor stores, as a spec only: name, content,
  * attributes, `parseHTML` and `renderHTML`. The web extends each one with its
- * Vue node view and its commands (`apps/web/src/modules/editor/components/extensions`);
+ * Vue node view and its commands (`apps/web/src/entities/rich-editor/components/extensions`);
  * the API builds the same schema headless to seed a shared draft from the
  * branch head. Two schemas that disagree corrupt a Y.Doc silently —
  * y-prosemirror drops any node or attribute the receiving side does not know —

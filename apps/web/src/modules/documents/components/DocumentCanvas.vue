@@ -36,19 +36,11 @@ import type {
   ReviewThreadAnchor,
 } from '@knowledge/contracts'
 import { Button } from '@/shared/ui/button'
-import RichEditor from '@/modules/editor/components/RichEditor.vue'
-import { EMBED_DOCUMENT } from '@/modules/editor/model/use-embed-status'
+import { RichEditor } from '@/entities/rich-editor'
+import { EMBED_DOCUMENT } from '@/entities/rich-editor'
 import ImageLightbox from '@/shared/ui/lightbox/ImageLightbox.vue'
 import DiagramLightbox from '@/shared/ui/lightbox/DiagramLightbox.vue'
-import {
-  ANCHOR_ATTR,
-  anchorFromDomSelection,
-  anchorFromRange,
-  anchorsAtEvent,
-  blockRangeAt,
-  type AnchorAuthor,
-  type CommentAnchor,
-} from '@/modules/editor/components/extensions/comment-anchors'
+import { ANCHOR_ATTR, anchorFromDomSelection, anchorFromRange, anchorsAtEvent, blockRangeAt, type AnchorAuthor, type CommentAnchor } from '@/entities/rich-editor'
 import type { TextAnchor } from '@/core/anchor-match'
 import { slugifyHeading } from '@/core/markdown/render'
 import ThreadCard from '@/modules/merge-requests/components/ThreadCard.vue'

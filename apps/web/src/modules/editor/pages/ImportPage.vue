@@ -43,8 +43,8 @@ import { SaveAsTemplateDialog, type SaveAsTemplatePage } from '@/entities/templa
 import DestinationFields from '@/modules/editor/components/DestinationFields.vue'
 import FileDropZone from '@/modules/editor/components/FileDropZone.vue'
 import ImportReview from '@/modules/editor/components/ImportReview.vue'
-import ImportStepper from '@/modules/editor/components/ImportStepper.vue'
-import ParseProgress from '@/modules/editor/components/ParseProgress.vue'
+import { ImportStepper } from '@/entities/rich-editor'
+import { ParseProgress } from '@/entities/rich-editor'
 import { useImport } from '@/modules/editor/model/use-import'
 
 const { t } = useI18n()

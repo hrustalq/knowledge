@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { EMPTY_PAGE } from '../../documents/model/page-source'
+import { EMPTY_PAGE } from '@/entities/document'
 import {
   hasWorkingCopy,
   readWorkingCopy,

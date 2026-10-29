@@ -79,7 +79,7 @@ into it from outside.
 
 So the same highlights are expressed the way ProseMirror expects — inline
 decorations over document positions
-(`modules/editor/components/extensions/comment-anchors.ts`, on Tiptap's `addDecorations`
+(`entities/rich-editor/components/extensions/comment-anchors.ts`, on Tiptap's `addDecorations`
 hook with `update: 'manual'`, redrawn by a command when the thread set changes
 rather than on every keystroke). They survive editing for free.
 

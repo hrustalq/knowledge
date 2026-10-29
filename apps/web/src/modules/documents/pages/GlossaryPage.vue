@@ -56,7 +56,7 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
-import RichEditor from '@/modules/editor/components/RichEditor.vue'
+import { RichEditor } from '@/entities/rich-editor'
 import { MarkdownView } from '@/entities/document'
 
 const { t } = useI18n()

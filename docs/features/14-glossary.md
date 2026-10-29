@@ -172,7 +172,7 @@ failed page: the prose is already on screen by then.
   see which of its words are not vocabulary.
 - **Web** — `modules/documents/model/glossary.ts` (the matcher only — the DOM-walking pass and the
   `MarkdownView` prop that was its only entry point are deleted),
-  `modules/editor/components/extensions/glossary-terms.ts` (the decorations),
+  `entities/rich-editor/components/extensions/glossary-terms.ts` (the decorations),
   `modules/documents/model/glossary.store.ts` (the roster), `modules/documents/components/GlossaryCard.vue`
   (the definition), `/settings/glossary` (`GlossaryPage.vue`), and the
   **Build glossary** quick action in `AskAssistant.vue`.

@@ -25,8 +25,8 @@ import {
   share,
 } from 'rxjs'
 import { fromWatch } from '@/shared/composables/rx-vue'
-import { samePage, type PageFields } from '@/modules/documents/model/page-source'
-import { removeWorkingCopy, writeWorkingCopy } from '@/modules/editor/model/working-copy'
+import { samePage, type PageFields } from '@/entities/document'
+import { removeWorkingCopy, writeWorkingCopy } from '@/entities/rich-editor'
 
 export interface WorkingCopyOptions {
   /** Storage slot; `null` while the page is loading, which suspends writing. */

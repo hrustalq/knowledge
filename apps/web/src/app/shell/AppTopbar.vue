@@ -8,7 +8,7 @@ import { isSearchShortcut } from '@/shared/utils/search-shortcut'
 import { toggleTheme } from '@/shared/utils/theme'
 import { Button } from '@/shared/ui/button'
 import LocaleSwitcher from './LocaleSwitcher.vue'
-import NotificationBell from '@/modules/notifications/components/NotificationBell.vue'
+import { NotificationBell } from '@/modules/notifications'
 import UserMenu from './UserMenu.vue'
 
 defineEmits<{ 'toggle-sidebar': [] }>()

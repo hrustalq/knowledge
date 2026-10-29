@@ -166,8 +166,12 @@ the module it reaches:
   project-scoped store subscribes to when it is created. A store nobody created
   has nothing to rescope, so it loses nothing by not being called (and today it
   is instantiated just to be told).
-- **`events`** dispatches into `assistant`, `documents` and `notifications`. It
-  will let a store register a handler per event type, the same way.
+- **`events`** dispatches into `assistant` and `documents`, and did into
+  `notifications`. It already exposes the last event as reactive state
+  (`lastEvent`), so no registry is needed: the module that owns the reaction
+  watches `lastEvent` from a component that is mounted while the stream is
+  connected. `notification.created` moved into `NotificationBell` (in the
+  shell's topbar, which renders whenever the stream does) this way.
 
 ## Where a new thing goes
 

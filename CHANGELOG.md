@@ -25,6 +25,15 @@ in the pull request that introduces them — see
   in the `markdown` that `knowledge_get_document_content` returned for that revision. The call is refused when the
   branch head has moved past `baseRevisionId`, when edits overlap, or when a line lies outside the page. It is a write tool, so
   read-only keys do not see it.
+- **Agents can write a page from a file instead of pasting it** (#602): the new MCP tool `knowledge_start_upload`
+  opens a draft revision and returns a presigned PUT URL, valid for 15 minutes, with a ready-to-run
+  `curl --upload-file` command. Once the agent has uploaded the file from its own machine,
+  `knowledge_finalize_upload` makes it the branch head and indexes it. The API still never streams a file
+  body: this is the REST upload flow (`POST :id/uploads` → PUT → finalize) exposed as two tools, and it works
+  over stdio and HTTP alike. For a new page, `knowledge_create_document` takes `upload: true` in place of
+  `content`. A markdown file without a frontmatter block keeps the page's current tags and relations, as a pasted
+  body does. `baseRevisionId` refuses the upload when the branch head has moved, and a spec or fixture that fails
+  validation is refused at finalize, with the draft kept for a corrected upload.
 
 ### Changed
 

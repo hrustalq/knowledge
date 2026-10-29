@@ -10,6 +10,7 @@ import type { Pinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import { AI_PANEL_SECTIONS, DEFAULT_AI_SECTION, isAiSection } from '@/modules/assistant/model/ai-sections'
 import { reauthKindOf } from '@/modules/auth/model/sso'
+import * as captures from '@/modules/captures'
 import * as help from '@/modules/help'
 
 export function createRouter() {
@@ -132,8 +133,7 @@ export function createRouter() {
       { path: '/qa', component: () => import('@/modules/api-reference/pages/QaPage.vue') },
       // Usage analytics (#79). Gated in the page on auth.canAdminWorkspace; the API enforces admin.
       { path: '/analytics', component: () => import('@/modules/insights/pages/AnalyticsPage.vue') },
-      // What coding agents proposed from their sessions (issue #73).
-      { path: '/captures', component: () => import('@/modules/captures/pages/CapturesPage.vue') },
+      ...captures.routes,
       // Recordings, transcribed and read against the knowledge base (#551).
       { path: '/memos', component: () => import('@/modules/memos/pages/MemosPage.vue') },
       { path: '/memos/:id', component: () => import('@/modules/memos/pages/MemoDetailPage.vue') },

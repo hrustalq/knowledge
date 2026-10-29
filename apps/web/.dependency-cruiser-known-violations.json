@@ -393,23 +393,6 @@
   {
     "type": "dependency",
     "from": "src/app/router/index.ts",
-    "to": "src/modules/captures/pages/CapturesPage.vue",
-    "unresolvedTo": "@/modules/captures/pages/CapturesPage.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/router/index.ts",
     "to": "src/modules/connectors/pages/ChatLinkPage.vue",
     "unresolvedTo": "@/modules/connectors/pages/ChatLinkPage.vue",
     "dependencyTypes": [
@@ -3367,40 +3350,6 @@
     "from": "src/modules/merge-requests/components/CommentComposer.vue",
     "to": "src/modules/editor/components/RichEditor.vue",
     "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/components/MrProvenance.vue",
-    "to": "src/modules/captures/components/CaptureOriginParts.vue",
-    "unresolvedTo": "@/modules/captures/components/CaptureOriginParts.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/components/MrProvenance.vue",
-    "to": "src/modules/captures/model/capture-ui.ts",
-    "unresolvedTo": "@/modules/captures/model/capture-ui",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",

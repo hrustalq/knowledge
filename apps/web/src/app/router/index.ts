@@ -102,16 +102,31 @@ export function installAuthGuard(router: Router, pinia: Pinia) {
     if (!auth.authenticated) {
       return { path: '/login', query: to.fullPath === '/documents' ? {} : { redirect: to.fullPath } }
     }
+    // Before the features read: a gated account would only collect a 403 for it.
     if (auth.verificationPending) return { path: '/verify-email' }
-    if (to.meta.platformAdmin && !auth.isAdmin && !auth.isDev) return { path: '/403' }
-    // A section the workspace switched off (#604) is not there: home, not a 404,
-    // since the link that led here was the app's own until the switch.
     const features = useFeaturesStore(pinia)
     await features.ensureLoaded()
-    const feature = to.matched.map((r) => r.meta.feature).find(isWorkspaceFeature)
-    if (feature && !features.isOn(feature)) return { path: '/documents' }
-    return true
+    return refusal(to, auth, features) ?? true
   })
+}
+
+/**
+ * Where a signed-in caller who may not open `to` is sent instead, or null.
+ * The guard and the route prefetcher (./navigation.ts) both ask, so a chunk is
+ * never fetched for a route the guard would turn away.
+ */
+export function refusal(
+  to: Pick<RouteLocationNormalized, 'meta' | 'matched'>,
+  auth: ReturnType<typeof useAuthStore>,
+  features: ReturnType<typeof useFeaturesStore>,
+): { path: string } | null {
+  if (auth.verificationPending) return { path: '/verify-email' }
+  if (to.meta.platformAdmin && !auth.isAdmin && !auth.isDev) return { path: '/403' }
+  // A section the workspace switched off (#604) is not there: home, not a 404,
+  // since the link that led here was the app's own until the switch.
+  const feature = to.matched.map((r) => r.meta.feature).find(isWorkspaceFeature)
+  if (feature && !features.isOn(feature)) return { path: '/documents' }
+  return null
 }
 
 /**

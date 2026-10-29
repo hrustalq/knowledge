@@ -1,6 +1,7 @@
 import type { StateTree } from 'pinia'
 import { hydrate, type DehydratedState } from '@tanstack/vue-query'
 import { createApp } from './main'
+import { installNavigation } from './app/router/navigation'
 import { ensureLocaleMessages } from './shared/i18n'
 import { getLocale, getProjectId, getWorkspaceId, setActiveProject, setActiveWorkspace } from './shared/api/api'
 import { useProjectsStore } from './stores/projects'
@@ -43,4 +44,6 @@ if (window.__PINIA__) {
 
 Promise.all([router.isReady(), messagesReady]).then(() => {
   app.mount('#app')
+  // Route prefetch and the pending-navigation state (#627): after hydration.
+  installNavigation(router, pinia)
 })

@@ -15,6 +15,13 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Changed
+
+- **Knowledge health, Analytics, Captures and Contradictions sit under one "Knowledge base" node in
+  the sidebar** (#605). The node opens like a page-tree node, opens on its own when you land on one of
+  its pages, and stays as you left it for the rest of the session. While it is closed, the node is
+  highlighted if the current page is inside it. Analytics is still listed for workspace admins only.
+
 ### Fixed
 
 - **Trusted-operator graph queries return what they ask for** (#589): `POST /v1/graph/query` and the

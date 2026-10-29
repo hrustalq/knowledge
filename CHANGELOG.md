@@ -15,6 +15,17 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- **Agents can change a few lines of a page without resending it** (#603): the new MCP tool
+  `knowledge_patch_document` takes a `baseRevisionId` and a list of line-range edits
+  (`startLine`..`endLine`, 1-based and inclusive, replaced by `content`; an empty `content` deletes the range,
+  `endLine = startLine - 1` inserts, and `startLine` one past the last line appends). It writes a new revision
+  just as `knowledge_create_revision` does, and the page keeps its frontmatter. Lines are numbered
+  in the `markdown` that `knowledge_get_document_content` returned for that revision. The call is refused when the
+  branch head has moved past `baseRevisionId`, when edits overlap, or when a line lies outside the page. It is a write tool, so
+  read-only keys do not see it.
+
 ### Changed
 
 - **Knowledge health, Analytics, Captures and Contradictions sit under one "Knowledge base" node in

@@ -192,6 +192,8 @@ recorded as the page's origin. Either way the template's tags and relations link
    current \`tags\` and \`relations\`; send a \`---\` block only to change them, and then send all of it.
    An API spec (kind \`openapi\` / \`asyncapi\`) has no frontmatter: name what owns it in a top-level
    \`x-knowledge-relations\` list of the same shape (\`- { type: DESCRIBES, target: service:billing }\`).
+   To change only a few lines of a long page, call ${toolRef('knowledge_patch_document')} instead, with the same branch and
+   \`baseRevisionId\` and line ranges numbered off step 1's \`markdown\` (1-based, all from that one read).
 4. ${toolRef('knowledge_create_merge_request')} from your branch to the default branch, with a description of what changed and why.
 5. Give the user the link: \`${webUrl}/merge-requests/<mergeRequestId>\`.
 

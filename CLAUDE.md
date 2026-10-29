@@ -88,7 +88,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | [08 events & live](docs/architecture/08-events-live.md)                     | Redis pub/sub, SSE, WS gateway, optimistic cache updates            |
 | [09 web frontend](docs/architecture/09-web-frontend.md)                     | SSR shell, per-request isolation, cookies, hydration hazards        |
 | [10 caching](docs/architecture/10-caching.md)                               | Query cache, Cache-Control + 304s, Redis read cache, service worker |
-| [11 web modules](docs/architecture/11-web-modules.md)                       | Web layers, module `index.ts` boundaries, where a new web file goes  |
+| [11 web modules](docs/architecture/11-web-modules.md)                       | Web layers, modules vs entities, where a new web file goes           |
 
 **Features** — [`docs/features/`](docs/README.md):
 
@@ -238,7 +238,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 
 **Web**
 
-- `apps/web/src` is layered `app → modules → widgets → stores → shared → core` ([11](docs/architecture/11-web-modules.md) says where a new page, component, composable, store or API call goes). Another module is imported **only through its `index.ts`**; `make deps` fails a deep import, a module cycle or an upward import.
+- `apps/web/src` is layered `app → modules → entities → widgets → stores → shared → core` ([11](docs/architecture/11-web-modules.md) says where a new page, component, composable, store or API call goes). **A module never imports another module**: what two share is an entity (it has a domain) or a widget (it has none), and an entity is imported only through its `index.ts`. An index holds named re-exports only (the build marks it side-effect free). `make deps` fails a module-to-module import, a deep entity import, an entity cycle or an upward import.
 - Tab strips are hand-rolled (no tab library is installed), and `?tab=` is an **opening instruction, not two-way state**.
 - **Never call `editor.isActive()`/`editor.can()` in a template.** `@tiptap/vue-3` makes editor state reactive, so it re-renders the component on every transaction. Editor chrome renders from `editorStreams(editor).format$`, and anything that reads layout listens to `frame$` (once per animation frame).
 - Project-scoped Pinia stores expose `rescope()`, called from `projects.switchProject()`.

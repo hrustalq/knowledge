@@ -25,7 +25,7 @@ import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
-import AiEmptyState from './AiEmptyState.vue'
+import { AiEmptyState } from '@/shared/ui/empty-state'
 
 const { t } = useI18n()
 

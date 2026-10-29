@@ -13,7 +13,7 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { formatDate, formatDuration, formatNumber, formatRelative } from '@/shared/utils/format'
 import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
-import DailyBars from './DailyBars.vue'
+import { DailyBars } from '@/shared/ui/daily-bars'
 import { TRAFFIC_BAR, TRAFFIC_SEGMENTS, trafficPoints } from '../model/traffic'
 
 const props = defineProps<{ projectId: string }>()

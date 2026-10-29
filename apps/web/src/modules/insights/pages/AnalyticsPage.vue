@@ -36,8 +36,8 @@ import { Button } from '@/shared/ui/button'
 import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
 import AnalyticsList, { type AnalyticsListRow } from '@/modules/insights/components/AnalyticsList.vue'
 import AnalyticsSettings from '@/modules/insights/components/AnalyticsSettings.vue'
-import DailyBars from '@/modules/insights/components/DailyBars.vue'
-import { TRAFFIC_BAR, TRAFFIC_SEGMENTS, trafficPoints } from '@/modules/insights/model/traffic'
+import { DailyBars } from '@/shared/ui/daily-bars'
+import { TRAFFIC_BAR, TRAFFIC_SEGMENTS, trafficPoints } from '@/entities/insight'
 
 const { t } = useI18n()
 const auth = useAuthStore()

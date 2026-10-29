@@ -22,10 +22,10 @@ import type { QualitySummaryResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { formatRelative } from '@/shared/utils/format'
 import { PageState } from '@/shared/layout'
-import QualityDistribution from './QualityDistribution.vue'
-import QualityHistoryChart from './QualityHistoryChart.vue'
-import QualityMeter from './QualityMeter.vue'
-import { QUALITY_DIMENSIONS, scoreTone } from '../model/quality-ui'
+import { QualityDistribution } from '@/entities/insight'
+import { QualityHistoryChart } from '@/entities/insight'
+import { QualityMeter } from '@/entities/insight'
+import { QUALITY_DIMENSIONS, scoreTone } from '@/entities/insight'
 
 const props = defineProps<{ workspaceId: string; projectId?: string; scopeLabel: string; canRunAgents: boolean }>()
 

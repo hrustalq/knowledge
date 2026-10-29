@@ -13,7 +13,7 @@ import { Button } from '@/shared/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
-import AiEmptyState from '@/modules/assistant/components/AiEmptyState.vue'
+import { AiEmptyState } from '@/shared/ui/empty-state'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 
 defineProps<{ canManage: boolean }>()

@@ -52,7 +52,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog'
-import AiEmptyState from './AiEmptyState.vue'
+import { AiEmptyState } from '@/shared/ui/empty-state'
 
 const { t } = useI18n()
 const props = defineProps<{ canManage: boolean }>()

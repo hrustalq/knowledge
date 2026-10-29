@@ -25,7 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/dialog'
-import AiEmptyState from './AiEmptyState.vue'
+import { AiEmptyState } from '@/shared/ui/empty-state'
 
 const { t } = useI18n()
 

@@ -41,14 +41,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi, isApiRequestError } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId, saveFile } from '@/shared/api/api'
 import { formatDate, formatRelative } from '@/shared/utils/format'
-import {
-  KEY_ENV,
-  SKILL_NAME,
-  captureKitFileRole,
-  captureKitInstallCommand,
-  mcpClients,
-  skillInstallCommand,
-} from '@/modules/access/model/mcp-clients'
+import { KEY_ENV, SKILL_NAME, captureKitFileRole, captureKitInstallCommand, mcpClients, skillInstallCommand } from '@/entities/access'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/shared/ui/button'

@@ -15,7 +15,7 @@
  */
 
 import { EXTERNAL_AI_ACTIONS, type AiActionId } from '@knowledge/contracts/content'
-import { KEY_ENV } from '../../access/model/mcp-clients'
+import { KEY_ENV } from '@/entities/access'
 
 /** Vendor URLs past this length are refused by some browsers and proxies. */
 export const MAX_VENDOR_URL = 8000

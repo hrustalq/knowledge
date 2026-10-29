@@ -18,8 +18,8 @@ import { Input } from '@/shared/ui/input'
 import { AvatarPicker } from '@/entities/person'
 import DeleteProjectDialog from '@/modules/projects/components/DeleteProjectDialog.vue'
 import ProjectAvatar from '@/modules/projects/components/ProjectAvatar.vue'
-import PageAccessDialog from '@/modules/access/components/PageAccessDialog.vue'
-import RequestAccessCard from '@/modules/access/components/RequestAccessCard.vue'
+import { PageAccessDialog } from '@/entities/access'
+import { RequestAccessCard } from '@/entities/access'
 import { isRestrictedRefusal } from '@/shared/api/errors'
 
 const { t } = useI18n()

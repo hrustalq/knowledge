@@ -23,13 +23,13 @@ import {
 } from '@/shared/ui/dropdown-menu'
 import { useDocumentsStore } from '@/stores/documents'
 import { useTemplatesStore } from '@/entities/template'
+import { LazyPageAccessDialog as PageAccessDialog } from '@/entities/access'
 
 /**
  * Every row used to carry all three dialogs, mounted closed, and with them their
  * pickers, checkboxes and radio groups in the shell's first load (#279). Each
  * now loads and mounts on its first open, and stays so closing still animates.
  */
-const PageAccessDialog = defineAsyncComponent(() => import('@/modules/access/components/PageAccessDialog.vue'))
 const MoveToDialog = defineAsyncComponent(() => import('./MoveToDialog.vue'))
 const ExportDialog = defineAsyncComponent(() => import('./ExportDialog.vue'))
 

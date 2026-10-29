@@ -13,7 +13,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { warnMentionedWithoutAccess } from '@/modules/access/model/mention-access'
+import { warnMentionedWithoutAccess } from '@/entities/access'
 import { useMembers } from '@/entities/person'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'

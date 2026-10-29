@@ -1697,23 +1697,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/documents/components/PageAiActions.vue",
-    "to": "src/modules/access/model/mcp-clients.ts",
-    "unresolvedTo": "@/modules/access/model/mcp-clients",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/documents/components/ReportIssueDialog.vue",
     "to": "src/modules/assistant/model/feedback.store.ts",
     "unresolvedTo": "@/modules/assistant/model/feedback.store",
@@ -1734,88 +1717,6 @@
     "from": "src/modules/documents/components/RevisionsView.vue",
     "to": "src/modules/api-reference/components/ApiChangesPanel.vue",
     "unresolvedTo": "@/modules/api-reference/components/ApiChangesPanel.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/TreeRowMenu.vue",
-    "to": "src/modules/access/components/PageAccessDialog.vue",
-    "unresolvedTo": "@/modules/access/components/PageAccessDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/model/ai-actions.ts",
-    "to": "src/modules/access/model/mcp-clients.ts",
-    "unresolvedTo": "../../access/model/mcp-clients",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/access/components/PageAccessDialog.vue",
-    "unresolvedTo": "@/modules/access/components/PageAccessDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/access/components/RequestAccessCard.vue",
-    "unresolvedTo": "@/modules/access/components/RequestAccessCard.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/access/model/mention-access.ts",
-    "unresolvedTo": "@/modules/access/model/mention-access",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -1899,42 +1800,8 @@
   {
     "type": "dependency",
     "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/connectors/components/ComponentDeclarationNotice.vue",
-    "unresolvedTo": "@/modules/connectors/components/ComponentDeclarationNotice.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
     "to": "src/modules/connectors/components/ConnectorRail.vue",
     "unresolvedTo": "@/modules/connectors/components/ConnectorRail.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/connectors/components/UsedByRail.vue",
-    "unresolvedTo": "@/modules/connectors/components/UsedByRail.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -2320,23 +2187,6 @@
   {
     "type": "dependency",
     "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/access/components/PageAccessDialog.vue",
-    "unresolvedTo": "@/modules/access/components/PageAccessDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
     "to": "src/modules/api-reference/components/ApiOperationPicker.vue",
     "unresolvedTo": "@/modules/api-reference/components/ApiOperationPicker.vue",
     "dependencyTypes": [
@@ -2593,23 +2443,6 @@
   {
     "type": "dependency",
     "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
-    "to": "src/modules/access/model/mention-access.ts",
-    "unresolvedTo": "@/modules/access/model/mention-access",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
     "to": "src/modules/api-reference/components/ApiChangesPanel.vue",
     "unresolvedTo": "@/modules/api-reference/components/ApiChangesPanel.vue",
     "dependencyTypes": [
@@ -2663,40 +2496,6 @@
     "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
     "to": "src/modules/documents/components/MarkdownView.vue",
     "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectDetailPage.vue",
-    "to": "src/modules/access/components/PageAccessDialog.vue",
-    "unresolvedTo": "@/modules/access/components/PageAccessDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectDetailPage.vue",
-    "to": "src/modules/access/components/RequestAccessCard.vue",
-    "unresolvedTo": "@/modules/access/components/RequestAccessCard.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",

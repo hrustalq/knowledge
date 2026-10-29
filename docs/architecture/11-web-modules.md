@@ -257,7 +257,7 @@ extraction phase confirms its entity's contents against the import graph.
 | `assistant`      | **done:** ChatPane, ChatRail, ThreadDialogs and the transcript, composer and pickers they render, thread-label, the assistant and feedback stores, AnswerFeedback, TeachAgentDialog, SourceChip, citations (the reader loads it through `loadCitations()`), GenerativeUiBlock and DocumentPickerWidget (out of documents); the module keeps the AI settings panels and AssistantPage |
 | `template`       | the templates store, SaveAsTemplateDialog                                                                                                    |
 | `access`         | access's PageAccessDialog, RequestAccessCard, mention-access, mcp-clients                                                                    |
-| `connector`      | connectors' ConnectorRail, UsedByRail, ComponentDeclarationNotice, ConnectorList                                                             |
+| `connector`      | **done:** ConnectorRail, ConnectorList with ConnectDialog/ConnectorSetupDialog and the connection steps and pickers they open, connection-providers, oauth-tab, setup-machines, use-connections-wait. UsedByRail and ComponentDeclarationNotice went to `code` (#609) |
 | `insight`        | insights' PageInsightsRail, QualityRail, ProjectAnalyticsSection, QualityDistribution, scoreTone, usePageView                               |
 | `notification`   | WatchButton                                                                                                                                  |
 | `capture`        | CaptureOriginParts, clientLabel, repoAtCommit                                                                                                |

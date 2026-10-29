@@ -1220,23 +1220,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/connectors/components/ConnectorRail.vue",
-    "unresolvedTo": "@/modules/connectors/components/ConnectorRail.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/insights/components/HealthBulkBar.vue",
     "to": "src/modules/documents/components/OwnerPicker.vue",
     "unresolvedTo": "@/modules/documents/components/OwnerPicker.vue",
@@ -1257,23 +1240,6 @@
     "from": "src/modules/insights/components/HealthPreviewSheet.vue",
     "to": "src/modules/documents/components/VerificationBar.vue",
     "unresolvedTo": "@/modules/documents/components/VerificationBar.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
-    "to": "src/modules/connectors/components/ConnectorList.vue",
-    "unresolvedTo": "@/modules/connectors/components/ConnectorList.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",

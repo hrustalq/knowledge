@@ -54,7 +54,7 @@ import { Input } from '@/shared/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { ImportStepper } from '@/entities/rich-editor'
 import { getWorkspaceId } from '@/shared/api/api'
-import { openOauthTab } from '@/modules/connectors/model/oauth-tab'
+import { openOauthTab } from '@/entities/connector/model/oauth-tab'
 import { useProjectsStore } from '@/stores/projects'
 import {
   COULD_NOT_CONNECT,

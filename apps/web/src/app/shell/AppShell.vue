@@ -12,14 +12,14 @@
  * simply wrong on any route without a trail. `--kn-chrome-h` is published from
  * the chrome actually rendered, and the sub-rails read it.
  */
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { FocusScope } from 'reka-ui'
 import { Toaster } from '@/shared/ui/sonner'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useLayoutStore } from '@/stores/layout'
-import { useSearchUiStore } from '@/modules/documents/model/search-ui.store'
+import { SearchSheet, useSearchUiStore } from '@/modules/documents'
 import { useAuthStore } from '@/stores/auth'
 import { useTemplatesStore } from '@/entities/template'
 import { TemplateGalleryDialog } from '@/modules/templates'
@@ -48,11 +48,10 @@ watch(
 )
 
 /**
- * The search sheet, the same way: its filters, comboboxes and result renderer
+ * The search sheet, the same way (the documents index exports it async): its filters, comboboxes and result renderer
  * were a third of the chunks the shell preloaded on every first load (#279),
  * for a surface nobody has opened yet.
  */
-const SearchSheet = defineAsyncComponent(() => import('@/modules/documents/components/SearchSheet.vue'))
 const searchUi = useSearchUiStore()
 const searchMounted = ref(false)
 watch(

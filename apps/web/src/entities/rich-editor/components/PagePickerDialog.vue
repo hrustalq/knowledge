@@ -19,9 +19,15 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import type { MentionablePage } from './RichEditor.vue'
 
 const { t } = useI18n()
+
+/** A page `@` can name (RichEditor passes its `pages` through). */
+export interface MentionablePage {
+  documentId: string
+  title: string
+  category?: string
+}
 
 const props = defineProps<{ open: boolean; pages: MentionablePage[] }>()
 const emit = defineEmits<{ 'update:open': [boolean]; pick: [MentionablePage] }>()

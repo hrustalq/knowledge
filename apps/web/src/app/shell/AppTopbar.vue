@@ -3,7 +3,7 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Moon, PanelLeft, Search, Sun } from 'lucide-vue-next'
-import { useSearchUiStore } from '@/modules/documents/model/search-ui.store'
+import { useSearchUiStore } from '@/modules/documents'
 import { isSearchShortcut } from '@/shared/utils/search-shortcut'
 import { toggleTheme } from '@/shared/utils/theme'
 import { Button } from '@/shared/ui/button'

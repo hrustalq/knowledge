@@ -16,14 +16,13 @@ imported from nine sibling feature folders, and folder-level cycles such as
 `assistant` went unnoticed because the old rules only knew about file-level
 cycles.
 
-> **Status.** Phases 0 (the rules) and 1 (the move) have landed, and `help`,
-> `captures`, `notifications`, `publishing` and `reader` have their
-> `routes.ts`. Midway the design tightened: **modules never import each
-> other**, and what they share moves down into a new `entities/` layer. The
-> rules below are the tightened ones (and widgets moved above the modules); the 240 violations of them in the tree
-> are in the baseline (152 of them a module importing another module). Each
-> later phase extracts one entity, leaves first, and shrinks the baseline.
-> Sections marked _(planned)_ describe the end state, not the tree today.
+> **Status.** As built (#566, PRs #591–#618). Every module has a
+> `routes.ts` and `app/router` only spreads them and nests the records that
+> cross modules; the shell reads modules through their `index.ts`; what
+> modules share lives in `entities/`. Midway the design tightened —
+> **modules never import each other**, and widgets sit above the modules —
+> and the baseline went from 240 violations of the tightened rules to 4
+> justified cycles (see the baseline below).
 
 ## The layers
 
@@ -78,7 +77,8 @@ modules/<name>/
   registers a callback with a cross-cutting store (`registerProjectScoped`,
   `onKnowledgeEvent`, below), or leaves the wiring to `app/` — the router nests one module's route
   inside another's record (`/settings/projects/:id/site` is `publishing`'s page
-  under `projects`' record) _(planned for projects)_.
+  under `projects`' record, and access's Connect AI page is one of the
+  `assistant`'s `/settings/ai` sections).
 - **`routes.ts`** exports the module's `routes` (top-level records) and, if it
   has pages under the settings shell, `settingsRoutes` (children of
   `/settings`); `app/router` spreads them where the records stood. The router
@@ -184,6 +184,19 @@ entries; the only edges it added were three imports earlier phases had routed
 through the `captures` and `notifications` indexes). It only shrinks from
 here, and a new violation of an already-baselined rule still fails.
 
+What is left in it is four cycles, each justified:
+
+- `shared/ui/badge`, `shared/ui/button`, `shared/ui/select`: a component
+  imports its variants (or a sibling part) from its folder's `index.ts`, which
+  re-exports the component. This is how `shadcn-vue add` writes them, and a
+  hand edit would be overwritten by the next `add`. The import is used at
+  render time, never while the module evaluates.
+- `shared/api/api.ts` ↔ `shared/utils/format.ts`: `format` reads the
+  request's locale from `getLocale()`, and `api` keeps `relativeTime()` as a
+  wrapper over `formatRelative` for its ~40 call sites. Both directions are
+  calls inside functions, never at module evaluation. Moving those call sites
+  to `formatRelative` and deleting the wrapper removes it.
+
 ## Cross-cutting stores
 
 `stores/` keeps a store only when several modules **and** the shell read it.
@@ -241,10 +254,11 @@ forbids. Both now take registrations instead:
 | logic the API needs too                                 | `@knowledge/contracts`                                       |
 | a UI string                                             | `shared/i18n/messages/{en,ru}.json`, both locales            |
 
-## The entity map _(planned)_
+## The entity map
 
-From what modules shared when the ban landed (77 files). Provisional: each
-extraction phase confirms its entity's contents against the import graph.
+From what modules shared when the ban landed (77 files), checked against the
+import graph as each entity was extracted. A row marked **done:** says where
+its files went when that differed from the plan; the rest moved as listed.
 
 | Entity           | From                                                                                                                                         |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -263,7 +277,7 @@ extraction phase confirms its entity's contents against the import graph.
 | `capture`        | CaptureOriginParts, clientLabel, repoAtCommit                                                                                                |
 | `workflow`       | **done:** WorkflowRail, the workflows store, workflow-ui. graph-theme went to `graph`, which since took the graph view too: GraphView (also as `LazyGraphView`), GraphCanvas, KnowledgeGraph, GraphControls, GraphTimeSlider, graph-model, graph-time, use-graph-time |
 
-`DailyBars` and `AiEmptyState` have no domain and move to `shared/`.
+`DailyBars` and `AiEmptyState` have no domain and moved to `shared/ui`.
 
 ## The module map
 

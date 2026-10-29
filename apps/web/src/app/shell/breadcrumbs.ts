@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useWorkflowsStore } from '@/entities/workflow'
-import { aiSectionLabel } from '@/modules/assistant/model/ai-sections'
+import { aiSectionLabel } from '@/modules/assistant'
 
 /**
  * The breadcrumb trail, as a value rather than as markup.

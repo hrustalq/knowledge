@@ -21,7 +21,9 @@
 import { ref } from 'vue'
 import { useHydratedMediaQuery } from '@/shared/composables/use-hydrated'
 import type { HTMLAttributes } from 'vue'
-import { Popover, PopoverContent, PopoverTrigger } from '.'
+import Popover from './Popover.vue'
+import PopoverContent from './PopoverContent.vue'
+import PopoverTrigger from './PopoverTrigger.vue'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 
 defineOptions({ inheritAttrs: false })

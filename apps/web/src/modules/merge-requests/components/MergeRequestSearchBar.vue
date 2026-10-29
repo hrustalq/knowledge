@@ -38,7 +38,7 @@ import {
   useMrFilterFields,
   type MrFilterKey,
 } from '../model/mr-filters'
-import { useMembers } from '../model/use-members'
+import { useMembers } from '@/entities/person'
 
 const { t } = useI18n()
 

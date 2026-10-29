@@ -24,9 +24,9 @@ import { computed, ref } from 'vue'
 import { useHydratedMediaQuery } from '@/shared/composables/use-hydrated'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/shared/ui/hover-card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
-import UserAvatar from '@/widgets/person/UserAvatar.vue'
-import { useMembers } from '@/modules/merge-requests/model/use-members'
-import { actorLabel } from '@/modules/merge-requests/model/mr-ui'
+import UserAvatar from '@/entities/person/components/UserAvatar.vue'
+import { useMembers } from '@/entities/person/model/use-members'
+import { actorLabel } from '@/entities/person/model/actor'
 import UserCard from './UserCard.vue'
 
 const props = withDefaults(

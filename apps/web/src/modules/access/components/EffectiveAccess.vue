@@ -19,7 +19,7 @@ import { fetchApi } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { Badge } from '@/shared/ui/badge'
 import { Skeleton } from '@/shared/ui/skeleton'
-import UserChip from '@/widgets/person/UserChip.vue'
+import { UserChip } from '@/entities/person'
 
 const props = defineProps<{ resourceType: AccessResourceType; resourceId: string }>()
 

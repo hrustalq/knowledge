@@ -23,7 +23,7 @@ import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { PageState } from '@/widgets/page'
-import UserChip from '@/widgets/person/UserChip.vue'
+import { UserChip } from '@/entities/person'
 
 const { t } = useI18n()
 const auth = useAuthStore()

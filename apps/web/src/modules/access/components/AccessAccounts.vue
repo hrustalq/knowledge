@@ -26,7 +26,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi } from '@/shared/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@/shared/ui/badge'
-import UserChip from '@/widgets/person/UserChip.vue'
+import { UserChip } from '@/entities/person'
 import AccountSessions from './AccountSessions.vue'
 import { Button } from '@/shared/ui/button'
 import {

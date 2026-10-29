@@ -7,9 +7,9 @@ import { Bot, MessageSquare, ThumbsUp } from 'lucide-vue-next'
 import type { MergeRequestInfo } from '@knowledge/contracts'
 import { relativeTime } from '@/shared/api/api'
 import { Badge } from '@/shared/ui/badge'
-import UserChip from '@/widgets/person/UserChip.vue'
+import { UserChip } from '@/entities/person'
 import { mrIcon } from '../model/mr-ui'
-import { useMembers } from '../model/use-members'
+import { useMembers } from '@/entities/person'
 
 const { t } = useI18n()
 

@@ -4,7 +4,7 @@
 // and which agent is writing into it for one of them right now.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import UserAvatar from '@/widgets/person/UserAvatar.vue'
+import { UserAvatar } from '@/entities/person'
 import type { CollabPeer } from '../model/use-collab'
 
 const props = withDefaults(

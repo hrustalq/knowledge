@@ -33,7 +33,7 @@ import RichEditor from '@/modules/editor/components/RichEditor.vue'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useDocumentsStore } from '@/stores/documents'
-import { useMembers } from '../model/use-members'
+import { useMembers } from '@/entities/person'
 
 const { t } = useI18n()
 

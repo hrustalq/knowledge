@@ -12,9 +12,9 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { NotificationEntry } from '@knowledge/contracts'
 import { formatDateTime, formatRelative } from '@/shared/utils/format'
-import { useMembers } from '@/modules/merge-requests/model/use-members'
-import { actorLabel } from '@/modules/merge-requests/model/mr-ui'
-import UserAvatar from '@/widgets/person/UserAvatar.vue'
+import { useMembers } from '@/entities/person'
+import { actorLabel } from '@/entities/person'
+import { UserAvatar } from '@/entities/person'
 import { notificationLink, notificationLook, notificationMessageKey } from '../model/notification-ui'
 
 const props = defineProps<{ entry: NotificationEntry; compact?: boolean }>()

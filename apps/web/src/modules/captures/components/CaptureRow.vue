@@ -30,7 +30,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Collapse } from '@/shared/ui/collapse'
-import UserChip from '@/widgets/person/UserChip.vue'
+import { UserChip } from '@/entities/person'
 import { CaptureOriginParts } from '@/entities/capture'
 import { captureKindIcon, clientLabel, formatScore, isApprovable, isRejectable, repoAtCommit } from '@/entities/capture'
 

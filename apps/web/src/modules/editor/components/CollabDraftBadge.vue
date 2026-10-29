@@ -10,7 +10,7 @@ import { RouterLink } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import type { ListCollabDraftsResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
-import UserChip from '@/widgets/person/UserChip.vue'
+import { UserChip } from '@/entities/person'
 
 const props = defineProps<{
   documentId: string

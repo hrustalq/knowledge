@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
-import UserAvatar from '@/widgets/person/UserAvatar.vue'
+import { UserAvatar } from '@/entities/person'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()

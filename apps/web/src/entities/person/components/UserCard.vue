@@ -19,9 +19,9 @@ import type { UserProfileResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 import { Badge } from '@/shared/ui/badge'
-import UserAvatar from '@/widgets/person/UserAvatar.vue'
-import { useMembers } from '@/modules/merge-requests/model/use-members'
-import { actorLabel } from '@/modules/merge-requests/model/mr-ui'
+import UserAvatar from '@/entities/person/components/UserAvatar.vue'
+import { useMembers } from '@/entities/person/model/use-members'
+import { actorLabel } from '@/entities/person/model/actor'
 
 const props = defineProps<{ userId: string; open: boolean }>()
 

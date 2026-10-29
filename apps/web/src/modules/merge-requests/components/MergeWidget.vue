@@ -41,7 +41,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/ui/select'
-import { actorLabel, mrIcon } from '../model/mr-ui'
+import { mrIcon } from '../model/mr-ui'
+import { actorLabel } from '@/entities/person'
 import { lintCheckView, useLintChecks } from '../model/lint-check'
 
 const { t } = useI18n()

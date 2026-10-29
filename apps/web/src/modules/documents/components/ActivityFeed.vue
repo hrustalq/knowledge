@@ -31,9 +31,9 @@ import { useEventsStore } from '@/stores/events'
 import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { PageState } from '@/widgets/page'
-import UserChip from '@/widgets/person/UserChip.vue'
-import { useMembers } from '@/modules/merge-requests/model/use-members'
-import { isRealAccount } from '@/modules/merge-requests/model/mr-ui'
+import { UserChip } from '@/entities/person'
+import { useMembers } from '@/entities/person'
+import { isRealAccount } from '@/entities/person'
 
 const { t } = useI18n()
 const { nameOf } = useMembers()

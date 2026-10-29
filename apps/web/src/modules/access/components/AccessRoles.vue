@@ -33,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/ui/select'
-import UserChip from '@/widgets/person/UserChip.vue'
+import { UserChip } from '@/entities/person'
 
 const { t } = useI18n()
 

@@ -19,7 +19,7 @@ import { AGENT_OUTCOME_SPLITS, AGENT_OUTCOMES, type AgentOutcome, type AgentOutc
 import { apiQueryOptions } from '@/shared/api/queries'
 import { formatDate, formatPercent } from '@/shared/utils/format'
 import { PageState } from '@/widgets/page'
-import { useAgentNames } from '@/modules/merge-requests/model/use-agent-names'
+import { useAgentNames } from '@/entities/person'
 import { outcomeShare, outcomesFor, shortHash, totalOf } from '../model/agent-outcomes-ui'
 
 const props = defineProps<{ workspaceId: string; projectId?: string; scopeLabel: string }>()

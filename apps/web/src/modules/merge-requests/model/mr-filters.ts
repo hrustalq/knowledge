@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { Bot, GitBranch, GitMerge, UserRound, UserRoundCheck, UserRoundPlus } from 'lucide-vue-next'
 import type { ActiveFilter, FilterField, FilterOperator } from '@/shared/ui/filter-bar'
 import { MR_PROVENANCES, type MergeRequestStatus, type SavedFilterQuery } from '@knowledge/contracts'
-import { useMembers } from './use-members'
+import { useMembers } from '@/entities/person'
 
 /**
  * The filter bar's fields, mapped onto the `GET /v1/merge-requests` query params.

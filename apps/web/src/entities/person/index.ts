@@ -1,0 +1,6 @@
+export { default as AvatarPicker } from './components/AvatarPicker.vue'
+export { default as UserAvatar } from './components/UserAvatar.vue'
+export { default as UserChip } from './components/UserChip.vue'
+export { actorLabel, isRealAccount } from './model/actor'
+export { useAgentNames } from './model/use-agent-names'
+export { useMembers } from './model/use-members'

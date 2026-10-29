@@ -118,7 +118,7 @@ import SharePopover from '@/modules/documents/components/SharePopover.vue'
 import PageAccessDialog from '@/modules/access/components/PageAccessDialog.vue'
 import RequestAccessCard from '@/modules/access/components/RequestAccessCard.vue'
 import { warnMentionedWithoutAccess } from '@/modules/access/model/mention-access'
-import { useMembers } from '@/modules/merge-requests/model/use-members'
+import { useMembers } from '@/entities/person'
 import VerificationBar from '@/modules/documents/components/VerificationBar.vue'
 
 // Behind a widget, a dialog or a spec page only: a reader of an ordinary page

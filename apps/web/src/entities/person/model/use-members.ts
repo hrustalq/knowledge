@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/vue-query'
 import type { ListWorkspaceMembersResponse, WorkspaceMemberEntry } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { actorLabel } from './mr-ui'
+import { actorLabel } from './actor'
 
 /** Workspace-member lookup shared by the MR surfaces (names + avatars for user ids). */
 export function useMembers() {

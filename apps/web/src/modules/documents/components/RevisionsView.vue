@@ -26,7 +26,7 @@ import {
 } from '@/shared/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import DiffView from '@/modules/documents/components/DiffView.vue'
-import UserChip from '@/widgets/person/UserChip.vue'
+import { UserChip } from '@/entities/person'
 import ApiChangesPanel from '@/modules/api-reference/components/ApiChangesPanel.vue'
 
 const { t } = useI18n()

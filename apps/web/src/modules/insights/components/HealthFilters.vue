@@ -17,7 +17,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { Search } from 'lucide-vue-next'
 import { Input } from '@/shared/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { useMembers } from '@/modules/merge-requests/model/use-members'
+import { useMembers } from '@/entities/person'
 import { HEALTH_SORTS, type HealthSort } from '../model/health-ui'
 
 const props = defineProps<{

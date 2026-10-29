@@ -14,9 +14,9 @@ import { useI18n } from 'vue-i18n'
 import { Check, ChevronDown, UserRound } from 'lucide-vue-next'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { Input } from '@/shared/ui/input'
-import UserAvatar from '@/widgets/person/UserAvatar.vue'
-import UserChip from '@/widgets/person/UserChip.vue'
-import { useMembers } from '@/modules/merge-requests/model/use-members'
+import { UserAvatar } from '@/entities/person'
+import { UserChip } from '@/entities/person'
+import { useMembers } from '@/entities/person'
 
 const props = defineProps<{
   ownerId: string | null

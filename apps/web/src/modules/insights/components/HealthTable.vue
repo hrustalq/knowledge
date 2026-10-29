@@ -25,9 +25,9 @@ import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { PageState } from '@/widgets/page'
-import UserChip from '@/widgets/person/UserChip.vue'
+import { UserChip } from '@/entities/person'
 import VerificationBadge from '@/modules/documents/components/VerificationBadge.vue'
-import { useMembers } from '@/modules/merge-requests/model/use-members'
+import { useMembers } from '@/entities/person'
 import { headerState, type HealthSelection, type SelectModifiers } from '../model/health-selection'
 
 const props = defineProps<{

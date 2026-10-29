@@ -14,7 +14,7 @@ import type { TemplatePlaceholder, TemplateValues } from '@knowledge/contracts'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
-import { useMembers } from '@/modules/merge-requests/model/use-members'
+import { useMembers } from '@/entities/person'
 import { useDocumentsStore } from '@/stores/documents'
 
 const props = defineProps<{

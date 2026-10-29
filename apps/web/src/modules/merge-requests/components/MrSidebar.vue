@@ -29,12 +29,12 @@ import { useApiMutation } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { Label } from '@/shared/ui/label'
-import UserAvatar from '../../../widgets/person/UserAvatar.vue'
+import { UserAvatar } from '@/entities/person'
 import { WatchButton } from '@/entities/notification'
-import UserChip from '@/widgets/person/UserChip.vue'
+import { UserChip } from '@/entities/person'
 import CollabDraftBadge from '@/modules/editor/components/CollabDraftBadge.vue'
 import AiCheckPane from './AiCheckPane.vue'
-import { useMembers } from '../model/use-members'
+import { useMembers } from '@/entities/person'
 
 const { t } = useI18n()
 
